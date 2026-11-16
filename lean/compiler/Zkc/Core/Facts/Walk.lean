@@ -8,6 +8,11 @@ public import Zkc.Core.Facts.State
 The check of facts: one walk over a term of any dialect, with what the dialect tells it of its
 operations.
 
+Inside the walk a value has an identifier that is never reused. The walk carries the identifier
+of each name in scope, a map from names to identifiers (`Ctx Nat`): where the term binds names to
+its context, the walk binds the same names to the new identifiers, a later name hiding an earlier
+one as in the context (`bindIds`).
+
 At an operation that computes, every requirement of its written form is decided from what is
 known there; each that is not known is refused at the place, and the walk goes on as if it were
 known. The results are then those of the table, and what the operation's ranges say of them is
@@ -38,11 +43,24 @@ structure Exit (T Raw : Type) where
   known : Known
   rets : List Nat
 
+/-- The identifier of a name in scope. In the walk every name in scope has one (`InScope` in
+`Growth.lean`), so the `0` of a name without one is never read. -/
+def idOf (ids : Ctx Nat) (name : Name) : Nat := (ids.find? name).getD 0
+
 /-- The identifiers of variables. -/
-def idsOf {α : Type} {Γ : List α} (ids : List Nat) : {items : List α} → HList (Var Γ) items →
+def idsOf {α : Type} {Γ : Ctx α} (ids : Ctx Nat) : {items : List α} → HList (Var Γ) items →
     List Nat
   | [], .nil => []
-  | _ :: _, .cons x rest => ids.getD x.index 0 :: idsOf ids rest
+  | _ :: _, .cons x rest => idOf ids x.name :: idsOf ids rest
+
+/-- The identifiers of the names in scope with the names of a binding bound to identifiers, in
+order, as `Ctx.extend` binds them to their types: a later name hides an earlier one. The walk
+gives as many identifiers as names (`opStep_grows`, `fresh`); names left without one would stay
+as they were. -/
+def bindIds {α : Type} (ids : Ctx Nat) : {types : List α} → Names types → List Nat → Ctx Nat
+  | [], .nil, _ => ids
+  | _ :: _, .cons name rest, i :: is => bindIds (ids.insert name i) rest is
+  | _ :: _, .cons _ _, [] => ids
 
 /-- What a region that runs knows of the value it returns at a position; nothing from a region
 that never runs. -/
@@ -99,31 +117,31 @@ def afterChoice {D : Dialect} {Raw : Type} (rules : FactRules D Raw) (k : Known)
 
 /-- What the index of a loop's body is known to be: below its count, which is written or a
 value. -/
-def indexRange {D : Dialect} {w : D.Who} {Γ : List D.Ty} (k : Known) (ids : List Nat) :
+def indexRange {D : Dialect} {w : D.Who} {Γ : Ctx D.Ty} (k : Known) (ids : Ctx Nat) :
     Times D w Γ → Range
   | .fixed n => Range.below (Range.point n)
-  | .value count _ => (k.rangeOf (ids.getD count.index 0)).elim ⟨0, none⟩ Range.below
+  | .value count _ => (k.rangeOf (idOf ids count.name)).elim ⟨0, none⟩ Range.below
 
 /-- What is known in a loop's body: what is known around it, the range of its index, the order
 below the count, and what the types of the index and the carried values say; dead when the count
 is written and zero. -/
-def bodyKnown {D : Dialect} {Raw : Type} (rules : FactRules D Raw) {w : D.Who} {Γ : List D.Ty}
-    (k : Known) (ids : List Nat) (times : Times D w Γ) (index : Nat) (carriedIds : List Nat)
+def bodyKnown {D : Dialect} {Raw : Type} (rules : FactRules D Raw) {w : D.Who} {Γ : Ctx D.Ty}
+    (k : Known) (ids : Ctx Nat) (times : Times D w Γ) (index : Nat) (carriedIds : List Nat)
     (carried : List D.Ty) : Known :=
   let k₁ := (k.addRange index (indexRange k ids times)).addRange? index (rules.range (D.index w))
   let k₂ := match times with
     | .fixed _ => k₁
-    | .value count _ => k₁.addOrder index (ids.getD count.index 0) true (byLoop := true)
+    | .value count _ => k₁.addOrder index (idOf ids count.name) true (byLoop := true)
   let k₃ := (k₂.addRanges carriedIds (carried.map rules.range)).enter rules (D.index w :: carried)
   match times with
   | .fixed 0 => k₃.kill
   | _ => k₃
 
 /-- How many times a loop runs at most. -/
-def timesBound {D : Dialect} {w : D.Who} {Γ : List D.Ty} (k : Known) (ids : List Nat) :
+def timesBound {D : Dialect} {w : D.Who} {Γ : Ctx D.Ty} (k : Known) (ids : Ctx Nat) :
     Times D w Γ → Option Nat
   | .fixed n => some n
-  | .value count _ => (k.rangeOf (ids.getD count.index 0)).bind (·.hi)
+  | .value count _ => (k.rangeOf (idOf ids count.name)).bind (·.hi)
 
 /-- The term that the body of a loop adds to a carried natural, when it returns it as itself
 plus a term. -/
@@ -204,10 +222,10 @@ def afterLoop {D : Dialect} {Raw : Type} (rules : FactRules D Raw) (body : Exit 
 
 /-- The state after a loop's body, with the loop's bound when the loop runs as often as a count
 whose range has an upper end. -/
-def recordBound {D : Dialect} {Raw : Type} {w : D.Who} {Γ : List D.Ty} (place : Place)
-    (k : Known) (ids : List Nat) (st : St D.Ty Raw) : Times D w Γ → St D.Ty Raw
+def recordBound {D : Dialect} {Raw : Type} {w : D.Who} {Γ : Ctx D.Ty} (place : Place)
+    (k : Known) (ids : Ctx Nat) (st : St D.Ty Raw) : Times D w Γ → St D.Ty Raw
   | .value count _ =>
-      match (k.rangeOf (ids.getD count.index 0)).bind (·.hi) with
+      match (k.rangeOf (idOf ids count.name)).bind (·.hi) with
       | some bound => { st with bounds := (place, bound) :: st.bounds }
       | none => st
   | .fixed _ => st
@@ -235,61 +253,64 @@ def opStep (place : Place) {ins res : List D.Ty} (o : D.Op ins res) (argIds : Li
       (made.1, (k₂.addRanges made.1 (res.map rules.range)).enter rules res, made.2)
 
 mutual
-  /-- The walk of a term, from the identifiers of its context, what is known and the state. -/
+  /-- The walk of a term, from the identifiers of the names in its context, what is known and the
+  state. -/
   def walk (blocks : List (Key × Nat)) :
-      {Γ outs : List D.Ty} → Term D Γ outs → List Nat → Known → St D.Ty Raw → Exit D.Ty Raw
+      {Γ : Ctx D.Ty} → {outs : List D.Ty} → Term D Γ outs → Ctx Nat → Known → St D.Ty Raw →
+        Exit D.Ty Raw
     | _, _, .ret xs, ids, k, st => ⟨st, k, idsOf ids xs⟩
-    | _, _, .op key o args rest, ids, k, st =>
+    | _, _, .op key o args results rest, ids, k, st =>
         let step := opStep rules ⟨definition, blocks, some key, role⟩ o (idsOf ids args) k st
-        walk blocks rest (step.1 ++ ids) step.2.1 step.2.2
+        walk blocks rest (bindIds ids results step.1) step.2.1 step.2.2
     | _, _, .guard _ _ c _ _ rest, ids, k, st =>
-        walk blocks rest ids (assume rules.ops st.table st.next k (ids.getD c.index 0) true) st
-    | _, _, .choose (mid := mid) _ _ c _ _ onTrue onFalse rest, ids, k, st =>
-        let condition := ids.getD c.index 0
+        walk blocks rest ids (assume rules.ops st.table st.next k (idOf ids c.name) true) st
+    | _, _, .choose (mid := mid) _ _ c _ _ onTrue onFalse results rest, ids, k, st =>
+        let condition := idOf ids c.name
         let first := walk blocks onTrue ids
           (assume rules.ops st.table st.next k condition true) st
         let second := walk blocks onFalse ids
           (assume rules.ops first.st.table first.st.next k condition false) first.st
         let made := fresh mid.length second.st
-        walk blocks rest (made.1 ++ ids)
+        walk blocks rest (bindIds ids results made.1)
           ((afterChoice rules k condition first second made.1 mid).enter rules mid) made.2
-    | _, _, .cases (mid := mid) _ _ _ _ _ arms rest, ids, k, st =>
+    | _, _, .cases (mid := mid) _ _ _ _ _ arms results rest, ids, k, st =>
         let regions := walkArms blocks arms ids k st
         let made := fresh mid.length regions.2
-        walk blocks rest (made.1 ++ ids)
+        walk blocks rest (bindIds ids results made.1)
           ((afterRegions rules regions.1 k made.1 mid 0).enter rules mid) made.2
-    | _, _, .loop (carried := carried) (each := each) key _ times _ init body rest, ids, k,
-        st =>
+    | _, _, .loop (carried := carried) (each := each) key _ times _ init inputs body results rest,
+        ids, k, st =>
         let inBody := fresh (carried.length + 1) st
-        let e := walk blocks body (inBody.1 ++ ids)
+        let e := walk blocks body (bindIds ids inputs inBody.1)
           (bodyKnown rules k ids times (inBody.1.headD 0) inBody.1.tail carried) inBody.2
         let made := fresh (carried.length + each.length)
           (recordBound ⟨definition, blocks, some key, role⟩ k ids e.st times)
         let k₁ := afterLoop rules e k (timesBound k ids times) made.1
           ((idsOf ids init).map k.rangeOf) inBody.1.tail e.rets
           (carried ++ each.map (D.collected times.size))
-        walk blocks rest (made.1 ++ ids)
+        walk blocks rest (bindIds ids results made.1)
           (k₁.enter rules (carried ++ each.map (D.collected times.size))) made.2
-    | _, _, .block (mid := mid) key number body rest, ids, k, st =>
+    | _, _, .block (mid := mid) key number body results rest, ids, k, st =>
         let e := walk (blocks ++ [(key, number)]) body ids k st
         let made := fresh mid.length e.st
-        walk blocks rest (made.1 ++ ids) ((afterRegions rules [e] k made.1 mid 0).enter rules mid)
-          made.2
-    | _, _, .attempt (mid := mid) _ w _ body rest, ids, k, st =>
+        walk blocks rest (bindIds ids results made.1)
+          ((afterRegions rules [e] k made.1 mid 0).enter rules mid) made.2
+    | _, _, .attempt (mid := mid) _ w _ inputs body results rest, ids, k, st =>
         let inBody := fresh 1 st
-        let e := walk blocks body (inBody.1 ++ ids)
+        let e := walk blocks body (bindIds ids inputs inBody.1)
           ((k.addRanges inBody.1 [rules.range (D.index w)]).enter rules [D.index w]) inBody.2
         let made := fresh mid.length e.st
-        walk blocks rest (made.1 ++ ids) ((afterRegions rules [e] k made.1 mid 0).enter rules mid)
-          made.2
-  /-- The walk of the arms of a case analysis: each with a new value for its payload. -/
+        walk blocks rest (bindIds ids results made.1)
+          ((afterRegions rules [e] k made.1 mid 0).enter rules mid) made.2
+  /-- The walk of the arms of a case analysis: each with a new value for its payload, bound to
+  the name of the arm's input. -/
   def walkArms (blocks : List (Key × Nat)) :
-      {Γ mid payloads : List D.Ty} → Arms D Γ mid payloads → List Nat → Known → St D.Ty Raw →
-        List (Exit D.Ty Raw) × St D.Ty Raw
+      {Γ : Ctx D.Ty} → {mid payloads : List D.Ty} → Arms D Γ mid payloads → Ctx Nat → Known →
+        St D.Ty Raw → List (Exit D.Ty Raw) × St D.Ty Raw
     | _, _, _, .nil, _, _, st => ([], st)
-    | _, _, _, .cons (payload := payload) arm rest, ids, k, st =>
+    | _, _, _, .cons (payload := payload) inputs arm rest, ids, k, st =>
         let made := fresh 1 st
-        let e := walk blocks arm (made.1 ++ ids)
+        let e := walk blocks arm (bindIds ids inputs made.1)
           ((k.addRanges made.1 [rules.range payload]).enter rules [payload]) made.2
         let others := walkArms blocks rest ids k e.st
         (e :: others.1, others.2)
@@ -300,16 +321,18 @@ end
 end FactCheck
 
 open FactCheck in
-/-- The check of facts of a body: every application that is not known to be inside its
-operation's domain, refused at its place; or, when there is none, the bound of each loop as
-often as a count whose count has an upper bound. -/
+/-- The check of facts of a body in the context of its inputs, which have the first
+identifiers: every application that is not known to be inside its operation's domain, refused at
+its place; or, when there is none, the bound of each loop as often as a count whose count has an
+upper bound. -/
 def checkFacts {D : Dialect} {Raw : Type} (rules : FactRules D Raw) [DecidableEq Raw]
-    (definition : Key) (role : Option Role) {Γ outs : List D.Ty} (body : Term D Γ outs) :
+    (definition : Key) (role : Option Role) {types outs : List D.Ty} (inputs : Names types)
+    (body : Term D (Ctx.empty.extend inputs) outs) :
     Except (List (Refusal D.Ty Raw)) (List (Place × Nat)) :=
-  let ids := List.range Γ.length
-  let e := walk rules definition role [] body ids
-    ((Known.empty.addRanges ids (Γ.map rules.range)).enter rules Γ)
-    ⟨Table.empty rules.place, Γ.length, [], []⟩
+  let first := List.range types.length
+  let e := walk rules definition role [] body (bindIds Ctx.empty inputs first)
+    ((Known.empty.addRanges first (types.map rules.range)).enter rules types)
+    ⟨Table.empty rules.place, types.length, [], []⟩
   match e.st.refusals with
   | [] => .ok e.st.bounds.reverse
   | refusals => .error refusals.reverse

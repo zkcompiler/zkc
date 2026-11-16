@@ -672,7 +672,7 @@ theorem seqSized_defined {item : V.Ty} {size : Nat} {free : Ty.isLinear V item =
 /-- A local operation, applied to valid operands at whose values every requirement of its
 written form holds, does not stop `undefined`, when the functions that it may call do not. -/
 theorem localOp_defined
-    (safe : ∀ hdr (callee : Var fns hdr) (args : HList M.Val hdr.ins), args.All M.Valid →
+    (safe : ∀ hdr (callee : Member fns hdr) (args : HList M.Val hdr.ins), args.All M.Valid →
       (table hdr callee args).Stops (· ≠ .undefined))
     {ins res : List V.Ty} (o : LocalOp V fns ins res) (a : HList M.Val ins)
     (va : a.All M.Valid)

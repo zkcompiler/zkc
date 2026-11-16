@@ -8,42 +8,83 @@ public import Zkc.Core.Facts.Learning
 /-!
 What the walk does to its state, whatever the run: it only adds refusals, it adds bounds only
 at the addresses of the loops it walks, and it makes identifiers and entries above those it
-had, keeping the table well formed.
+had, keeping the table well formed and every name in scope with an identifier below the next
+(`InScope`).
 -/
 
 namespace Zkc.Core
 
-theorem Var.index_lt {T : Type} : ∀ {Γ : List T} {a : T} (x : Var Γ a), x.index < Γ.length
-  | _ :: _, _, .head => by simp [Var.index]
-  | _ :: _, _, .tail x => by simp only [Var.index, List.length_cons]; have := Var.index_lt x; omega
-
 namespace FactCheck
 
-theorem idsOf_length {α : Type} {Γ : List α} (ids : List Nat) :
+theorem idsOf_length {α : Type} {Γ : Ctx α} (ids : Ctx Nat) :
     ∀ {items : List α} (xs : HList (Var Γ) items), (idsOf ids xs).length = items.length
   | [], .nil => rfl
   | _ :: _, .cons _ rest => by simp [idsOf, idsOf_length ids rest]
 
-theorem idsOf_mem {α : Type} {Γ : List α} {ids : List Nat} (hl : ids.length = Γ.length) :
-    ∀ {items : List α} (xs : HList (Var Γ) items) (i : Nat), i ∈ idsOf ids xs → i ∈ ids
+/-! ## The identifiers of the names in scope -/
+
+section
+variable {α : Type}
+
+/-- Every name in scope has an identifier below `next`. -/
+def InScope (Γ : Ctx α) (ids : Ctx Nat) (next : Nat) : Prop :=
+  ∀ name a, Γ.find? name = some a → ∃ i, ids.find? name = some i ∧ i < next
+
+theorem InScope.mono {Γ : Ctx α} {ids : Ctx Nat} {next next' : Nat} (h : InScope Γ ids next)
+    (le : next ≤ next') : InScope Γ ids next' := fun name a found => by
+  obtain ⟨i, hi, lt⟩ := h name a found
+  exact ⟨i, hi, Nat.lt_of_lt_of_le lt le⟩
+
+/-- A name bound to an identifier below `next` keeps every name in scope with one. -/
+theorem InScope.insert {Γ : Ctx α} {ids : Ctx Nat} {next : Nat} (h : InScope Γ ids next)
+    (bound : Name) (a : α) {i : Nat} (lt : i < next) :
+    InScope (Γ.insert bound a) (ids.insert bound i) next := fun name b found => by
+  rw [Ctx.find?_insert] at found
+  rw [Ctx.find?_insert]
+  by_cases same : name = bound
+  · exact ⟨i, by simp [same], lt⟩
+  · simp only [same, ↓reduceIte] at found ⊢
+    exact h name b found
+
+/-- The names of a binding bound to as many identifiers below `next` keep every name in scope
+with one. -/
+theorem InScope.bind {next : Nat} : ∀ {Γ : Ctx α} {ids : Ctx Nat} {types : List α}
+    (names : Names types) (made : List Nat), InScope Γ ids next →
+    made.length = types.length → (∀ i, i ∈ made → i < next) →
+    InScope (Γ.extend names) (bindIds ids names made) next
+  | _, _, [], .nil, _, h, _, _ => h
+  | _, _, _ :: _, .cons _ _, [], _, len, _ => nomatch len
+  | _, _, _ :: _, .cons name rest, i :: is, h, len, lt =>
+      InScope.bind rest is (h.insert name _ (lt i List.mem_cons_self))
+        (Nat.succ.inj len) (fun j m => lt j (List.mem_cons_of_mem _ m))
+
+theorem idsOf_lt {Γ : Ctx α} {ids : Ctx Nat} {next : Nat} (h : InScope Γ ids next) :
+    ∀ {items : List α} (xs : HList (Var Γ) items) (i : Nat), i ∈ idsOf ids xs → i < next
   | [], .nil, _, m => nomatch m
   | _ :: _, .cons x rest, i, m => by
       simp only [idsOf, List.mem_cons] at m
       rcases m with rfl | m
-      · have lt : x.index < ids.length := by have := Var.index_lt x; omega
-        rw [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem lt]
-        exact List.getElem_mem _
-      · exact idsOf_mem hl rest i m
+      · obtain ⟨j, hj, lt⟩ := h x.name _ x.typed
+        simp only [idOf, hj, Option.getD_some]
+        exact lt
+      · exact idsOf_lt h rest i m
+
+end
 
 section
 variable {Raw : Type} [DecidableEq Raw] {T : Type}
 
 /-! ## Steps that keep the table well formed -/
 
-/-- The state and the identifiers in scope are well formed: the table, and every identifier
-below the next. -/
+/-- The state and the identifiers that a region returns are well formed: the table, and every
+identifier below the next. -/
 def WellFormed (ids : List Nat) (st : St T Raw) : Prop :=
   Table.WF st.next st.table ∧ ∀ i, i ∈ ids → i < st.next
+
+/-- The state and the identifiers of the names in scope are well formed: the table, and every
+name in scope with an identifier below the next. -/
+def Scoped (Γ : Ctx T) (ids : Ctx Nat) (st : St T Raw) : Prop :=
+  Table.WF st.next st.table ∧ InScope Γ ids st.next
 
 omit [DecidableEq Raw] in
 theorem St.Grows.refl (st : St T Raw) : St.Grows st st :=
@@ -182,8 +223,8 @@ theorem opStep_state (place : Place) {ins res : List D.Ty} (o : D.Op ins res)
       exact ⟨⟨new, by rw [r2, e]⟩, by rw [b2, b]⟩
 
 omit [DecidableEq Raw] in
-theorem recordBound_state {w : D.Who} {Γ : List D.Ty} (place : Place) (k : Known)
-    (ids : List Nat) (st : St D.Ty Raw) (times : Times D w Γ) :
+theorem recordBound_state {w : D.Who} {Γ : Ctx D.Ty} (place : Place) (k : Known)
+    (ids : Ctx Nat) (st : St D.Ty Raw) (times : Times D w Γ) :
     (recordBound place k ids st times).table = st.table ∧
       (recordBound place k ids st times).next = st.next ∧
       (recordBound place k ids st times).refusals = st.refusals ∧
@@ -206,7 +247,8 @@ def BoundsAt (addresses : List (List (Key × Nat) × Key))
   ∀ q, q ∈ new → ∃ bl key, q.1 = ⟨definition, bl, some key, role⟩ ∧ (bl, key) ∈ addresses
 
 /-- What the walk does to the state: it adds refusals; it adds bounds at the addresses of the
-term; on a well-formed state with the identifiers in scope below the next, it keeps the table
+term; on a well-formed state where every name in scope has an identifier below the next
+(`Scoped`), it keeps the table
 well formed, makes identifiers and entries above the old ones, and returns identifiers below the
 next. -/
 def WalkState (addresses : List (List (Key × Nat) × Key))
@@ -216,66 +258,61 @@ def WalkState (addresses : List (List (Key × Nat) × Key))
 
 mutual
   theorem walk_state (blocks : List (Key × Nat)) :
-      ∀ {Γ outs : List D.Ty} (t : Term D Γ outs) (ids : List Nat) (k : Known)
+      ∀ {Γ : Ctx D.Ty} {outs : List D.Ty} (t : Term D Γ outs) (ids : Ctx Nat) (k : Known)
         (st : St D.Ty Raw),
         WalkState definition role (t.addresses blocks) st
             (walk rules definition role blocks t ids k st).st ∧
-          (ids.length = Γ.length → WellFormed ids st →
+          (Scoped Γ ids st →
             WellFormed (walk rules definition role blocks t ids k st).rets
               (walk rules definition role blocks t ids k st).st ∧
             St.Grows st (walk rules definition role blocks t ids k st).st)
     | _, _, .ret xs, ids, k, st => by
-        refine ⟨⟨⟨[], rfl⟩, [], rfl, fun _ m => nomatch m⟩, fun hl fits => ?_⟩
-        exact ⟨⟨fits.1, fun i m => fits.2 i (idsOf_mem hl xs i m)⟩, St.Grows.refl st⟩
-    | _, _, .op key o args rest, ids, k, st => by
+        refine ⟨⟨⟨[], rfl⟩, [], rfl, fun _ m => nomatch m⟩, fun fits => ?_⟩
+        exact ⟨⟨fits.1, idsOf_lt fits.2 xs⟩, St.Grows.refl st⟩
+    | _, _, .op key o args results rest, ids, k, st => by
         simp only [walk]
         have s1 := opStep_state rules ⟨definition, blocks, some key, role⟩ o (idsOf ids args) k st
         have g1 := opStep_grows rules ⟨definition, blocks, some key, role⟩ o (idsOf ids args) k st
         generalize opStep rules ⟨definition, blocks, some key, role⟩ o (idsOf ids args) k st =
           step at s1 g1 ⊢
         obtain ⟨⟨n1, e1⟩, b1⟩ := s1
-        obtain ⟨⟨⟨n2, e2⟩, n3, e3, at3⟩, inner⟩ := walk_state blocks rest (step.1 ++ ids) step.2.1
-          step.2.2
+        obtain ⟨⟨⟨n2, e2⟩, n3, e3, at3⟩, inner⟩ := walk_state blocks rest
+          (bindIds ids results step.1) step.2.1 step.2.2
         refine ⟨⟨⟨n2 ++ n1, by rw [e2, e1, List.append_assoc]⟩, n3, by rw [e3, b1], ?_⟩,
-          fun hl fits => ?_⟩
+          fun fits => ?_⟩
         · intro q m
           obtain ⟨bl, key', eq, mem⟩ := at3 q m
           exact ⟨bl, key', eq, List.mem_cons_of_mem _ mem⟩
-        · obtain ⟨wf1, gr1, lt1, len1⟩ := g1 fits.1
-            (fun a m => fits.2 a (idsOf_mem hl args a m))
-          obtain ⟨fits2, gr2⟩ := inner (by simp [len1, hl])
-            ⟨wf1, fun i m => by
-              rcases List.mem_append.mp m with m | m
-              · exact lt1 i m
-              · exact Nat.lt_of_lt_of_le (fits.2 i m) gr1.next⟩
+        · obtain ⟨wf1, gr1, lt1, len1⟩ := g1 fits.1 (idsOf_lt fits.2 args)
+          obtain ⟨fits2, gr2⟩ := inner ⟨wf1, (fits.2.mono gr1.next).bind results step.1 len1 lt1⟩
           exact ⟨fits2, gr1.trans gr2⟩
     | _, _, .guard key _ c _ _ rest, ids, k, st => by
         simp only [walk]
         obtain ⟨⟨r, n, e, at_⟩, inner⟩ := walk_state blocks rest ids
-          (assume rules.ops st.table st.next k (ids.getD c.index 0) true) st
+          (assume rules.ops st.table st.next k (idOf ids c.name) true) st
         refine ⟨⟨r, n, e, fun q m => ?_⟩, inner⟩
         obtain ⟨bl, key', eq, mem⟩ := at_ q m
         exact ⟨bl, key', eq, List.mem_cons_of_mem _ mem⟩
-    | _, _, .choose (mid := mid) key _ c _ _ onTrue onFalse rest, ids, k, st => by
+    | _, _, .choose (mid := mid) key _ c _ _ onTrue onFalse results rest, ids, k, st => by
         simp only [walk]
         obtain ⟨⟨⟨ra, ea⟩, na, eba, ata⟩, ga⟩ := walk_state blocks onTrue ids
-          (assume rules.ops st.table st.next k (ids.getD c.index 0) true) st
+          (assume rules.ops st.table st.next k (idOf ids c.name) true) st
         generalize walk rules definition role blocks onTrue ids
-          (assume rules.ops st.table st.next k (ids.getD c.index 0) true) st = first
+          (assume rules.ops st.table st.next k (idOf ids c.name) true) st = first
           at ea eba ata ga ⊢
         obtain ⟨⟨⟨rb, eb⟩, nb, ebb, atb⟩, gb⟩ := walk_state blocks onFalse ids
-          (assume rules.ops first.st.table first.st.next k (ids.getD c.index 0) false) first.st
+          (assume rules.ops first.st.table first.st.next k (idOf ids c.name) false) first.st
         generalize walk rules definition role blocks onFalse ids
-          (assume rules.ops first.st.table first.st.next k (ids.getD c.index 0) false)
+          (assume rules.ops first.st.table first.st.next k (idOf ids c.name) false)
             first.st = second at eb ebb atb gb ⊢
         generalize hm : fresh mid.length second.st = made
-        obtain ⟨⟨⟨rr, er⟩, nr, ebr, atr⟩, gr⟩ := walk_state blocks rest (made.1 ++ ids)
-          ((afterChoice rules k (ids.getD c.index 0) first second made.1 mid).enter rules mid)
+        obtain ⟨⟨⟨rr, er⟩, nr, ebr, atr⟩, gr⟩ := walk_state blocks rest (bindIds ids results made.1)
+          ((afterChoice rules k (idOf ids c.name) first second made.1 mid).enter rules mid)
           made.2
         have m2r : made.2.refusals = second.st.refusals := by rw [← hm]; rfl
         have m2b : made.2.bounds = second.st.bounds := by rw [← hm]; rfl
         refine ⟨⟨⟨rr ++ rb ++ ra, by rw [er, m2r, eb, ea]; simp⟩, nr ++ nb ++ na,
-          by rw [ebr, m2b, ebb, eba]; simp, ?_⟩, fun hl fits => ?_⟩
+          by rw [ebr, m2b, ebb, eba]; simp, ?_⟩, fun fits => ?_⟩
         · intro q m
           simp only [List.mem_append] at m
           rcases m with (m | m) | m
@@ -285,51 +322,46 @@ mutual
             exact ⟨bl, key', eq, by simp [Term.addresses, mem]⟩
           · obtain ⟨bl, key', eq, mem⟩ := ata q m
             exact ⟨bl, key', eq, by simp [Term.addresses, mem]⟩
-        · obtain ⟨fa, gra⟩ := ga hl fits
-          obtain ⟨fb, grb⟩ := gb hl ⟨fa.1, fun i m => Nat.lt_of_lt_of_le (fits.2 i m) gra.next⟩
+        · obtain ⟨fa, gra⟩ := ga fits
+          obtain ⟨fb, grb⟩ := gb ⟨fa.1, fits.2.mono gra.next⟩
           obtain ⟨wfm, grm, ltm⟩ := fresh_grows mid.length second.st fb.1
           rw [hm] at wfm grm ltm
           have len : made.1.length = mid.length := by rw [← hm]; simp [fresh]
-          obtain ⟨fr, grr⟩ := gr (by simp [len, hl]) ⟨wfm, fun i m => by
-            rcases List.mem_append.mp m with m | m
-            · exact ltm i m
-            · exact Nat.lt_of_lt_of_le (fits.2 i m)
-                (Nat.le_trans gra.next (Nat.le_trans grb.next grm.next))⟩
+          obtain ⟨fr, grr⟩ := gr ⟨wfm, (fits.2.mono (Nat.le_trans gra.next
+            (Nat.le_trans grb.next grm.next))).bind results made.1 len ltm⟩
           exact ⟨fr, gra.trans (grb.trans (grm.trans grr))⟩
-    | _, _, .cases (mid := mid) key _ _ _ _ arms rest, ids, k, st => by
+    | _, _, .cases (mid := mid) key _ _ _ _ arms results rest, ids, k, st => by
         simp only [walk]
         obtain ⟨⟨⟨ra, ea⟩, na, eba, ata⟩, ga⟩ := walkArms_state blocks arms ids k st
         generalize walkArms rules definition role blocks arms ids k st = regions
           at ea eba ata ga ⊢
         generalize hm : fresh mid.length regions.2 = made
-        obtain ⟨⟨⟨rr, er⟩, nr, ebr, atr⟩, gr⟩ := walk_state blocks rest (made.1 ++ ids)
+        obtain ⟨⟨⟨rr, er⟩, nr, ebr, atr⟩, gr⟩ := walk_state blocks rest (bindIds ids results made.1)
           ((afterRegions rules regions.1 k made.1 mid 0).enter rules mid) made.2
         have m2r : made.2.refusals = regions.2.refusals := by rw [← hm]; rfl
         have m2b : made.2.bounds = regions.2.bounds := by rw [← hm]; rfl
         refine ⟨⟨⟨rr ++ ra, by rw [er, m2r, ea]; simp⟩, nr ++ na,
-          by rw [ebr, m2b, eba]; simp, ?_⟩, fun hl fits => ?_⟩
+          by rw [ebr, m2b, eba]; simp, ?_⟩, fun fits => ?_⟩
         · intro q m
           rcases List.mem_append.mp m with m | m
           · obtain ⟨bl, key', eq, mem⟩ := atr q m
             exact ⟨bl, key', eq, by simp [Term.addresses, mem]⟩
           · obtain ⟨bl, key', eq, mem⟩ := ata q m
             exact ⟨bl, key', eq, by simp [Term.addresses, mem]⟩
-        · obtain ⟨_, fa, gra⟩ := ga hl fits
+        · obtain ⟨_, fa, gra⟩ := ga fits
           obtain ⟨wfm, grm, ltm⟩ := fresh_grows mid.length regions.2 fa.1
           rw [hm] at wfm grm ltm
           have len : made.1.length = mid.length := by rw [← hm]; simp [fresh]
-          obtain ⟨fr, grr⟩ := gr (by simp [len, hl]) ⟨wfm, fun i m => by
-            rcases List.mem_append.mp m with m | m
-            · exact ltm i m
-            · exact Nat.lt_of_lt_of_le (fits.2 i m) (Nat.le_trans gra.next grm.next)⟩
+          obtain ⟨fr, grr⟩ := gr ⟨wfm, (fits.2.mono (Nat.le_trans gra.next grm.next)).bind
+            results made.1 len ltm⟩
           exact ⟨fr, gra.trans (grm.trans grr)⟩
-    | _, _, .loop (carried := carried) (each := each) key _ times _ init body rest, ids, k, st =>
-        by
+    | _, _, .loop (carried := carried) (each := each) key _ times _ init inputs body results rest,
+        ids, k, st => by
         simp only [walk]
         generalize hin : fresh (carried.length + 1) st = inBody
-        obtain ⟨⟨⟨ra, ea⟩, na, eba, ata⟩, ga⟩ := walk_state blocks body (inBody.1 ++ ids)
+        obtain ⟨⟨⟨ra, ea⟩, na, eba, ata⟩, ga⟩ := walk_state blocks body (bindIds ids inputs inBody.1)
           (bodyKnown rules k ids times (inBody.1.headD 0) inBody.1.tail carried) inBody.2
-        generalize walk rules definition role blocks body (inBody.1 ++ ids)
+        generalize walk rules definition role blocks body (bindIds ids inputs inBody.1)
           (bodyKnown rules k ids times (inBody.1.headD 0) inBody.1.tail carried) inBody.2 = e
           at ea eba ata ga ⊢
         obtain ⟨rbt, rbn, rbr, nbd, ebd, atd⟩ :=
@@ -337,7 +369,7 @@ mutual
         generalize recordBound ⟨definition, blocks, some key, role⟩ k ids e.st times = st₁
           at rbt rbn rbr ebd ⊢
         generalize hm : fresh (carried.length + each.length) st₁ = made
-        obtain ⟨⟨⟨rr, er⟩, nr, ebr, atr⟩, gr⟩ := walk_state blocks rest (made.1 ++ ids)
+        obtain ⟨⟨⟨rr, er⟩, nr, ebr, atr⟩, gr⟩ := walk_state blocks rest (bindIds ids results made.1)
           ((afterLoop rules e k (timesBound k ids times) made.1 ((idsOf ids init).map k.rangeOf)
             inBody.1.tail e.rets (carried ++ each.map (D.collected times.size))).enter rules
             (carried ++ each.map (D.collected times.size))) made.2
@@ -346,7 +378,7 @@ mutual
         have i2r : inBody.2.refusals = st.refusals := by rw [← hin]; rfl
         have i2b : inBody.2.bounds = st.bounds := by rw [← hin]; rfl
         refine ⟨⟨⟨rr ++ ra, by rw [er, m2r, rbr, ea, i2r]; simp⟩, nr ++ nbd ++ na,
-          by rw [ebr, m2b, ebd, eba, i2b]; simp, ?_⟩, fun hl fits => ?_⟩
+          by rw [ebr, m2b, ebd, eba, i2b]; simp, ?_⟩, fun fits => ?_⟩
         · intro q m
           simp only [List.mem_append] at m
           rcases m with (m | m) | m
@@ -358,69 +390,61 @@ mutual
         · obtain ⟨wfi, gri, lti⟩ := fresh_grows (carried.length + 1) st fits.1
           rw [hin] at wfi gri lti
           have leni : inBody.1.length = carried.length + 1 := by rw [← hin]; simp [fresh]
-          obtain ⟨fb, grb⟩ := ga (by simp [leni, hl]; omega) ⟨wfi, fun i m => by
-            rcases List.mem_append.mp m with m | m
-            · exact lti i m
-            · exact Nat.lt_of_lt_of_le (fits.2 i m) gri.next⟩
+          obtain ⟨fb, grb⟩ := ga ⟨wfi, (fits.2.mono gri.next).bind inputs inBody.1
+            (by simp [leni]) lti⟩
           have g1 : St.Grows e.st st₁ :=
             ⟨by rw [rbn]; exact Nat.le_refl _, [], by rw [rbt]; rfl, fun _ m => nomatch m⟩
           have wf1 : Table.WF st₁.next st₁.table := by rw [rbt, rbn]; exact fb.1
           obtain ⟨wfm, grm, ltm⟩ := fresh_grows (carried.length + each.length) st₁ wf1
           rw [hm] at wfm grm ltm
           have len : made.1.length = carried.length + each.length := by rw [← hm]; simp [fresh]
-          obtain ⟨fr, grr⟩ := gr
-            (by simp only [List.length_append, List.length_map, len, hl, Nat.add_assoc])
-            ⟨wfm, fun i m => by
-            rcases List.mem_append.mp m with m | m
-            · exact ltm i m
-            · exact Nat.lt_of_lt_of_le (fits.2 i m)
-                (Nat.le_trans gri.next (Nat.le_trans grb.next (Nat.le_trans g1.next grm.next)))⟩
+          obtain ⟨fr, grr⟩ := gr ⟨wfm, (fits.2.mono (Nat.le_trans gri.next
+            (Nat.le_trans grb.next (Nat.le_trans g1.next grm.next)))).bind results made.1
+            (by simp [len]) ltm⟩
           exact ⟨fr, gri.trans (grb.trans (g1.trans (grm.trans grr)))⟩
-    | _, _, .block (mid := mid) key number body rest, ids, k, st => by
+    | _, _, .block (mid := mid) key number body results rest, ids, k, st => by
         simp only [walk]
         obtain ⟨⟨⟨ra, ea⟩, na, eba, ata⟩, ga⟩ :=
           walk_state (blocks ++ [(key, number)]) body ids k st
         generalize walk rules definition role (blocks ++ [(key, number)]) body ids k st = e
           at ea eba ata ga ⊢
         generalize hm : fresh mid.length e.st = made
-        obtain ⟨⟨⟨rr, er⟩, nr, ebr, atr⟩, gr⟩ := walk_state blocks rest (made.1 ++ ids)
+        obtain ⟨⟨⟨rr, er⟩, nr, ebr, atr⟩, gr⟩ := walk_state blocks rest (bindIds ids results made.1)
           ((afterRegions rules [e] k made.1 mid 0).enter rules mid) made.2
         have m2r : made.2.refusals = e.st.refusals := by rw [← hm]; rfl
         have m2b : made.2.bounds = e.st.bounds := by rw [← hm]; rfl
         refine ⟨⟨⟨rr ++ ra, by rw [er, m2r, ea]; simp⟩, nr ++ na,
-          by rw [ebr, m2b, eba]; simp, ?_⟩, fun hl fits => ?_⟩
+          by rw [ebr, m2b, eba]; simp, ?_⟩, fun fits => ?_⟩
         · intro q m
           rcases List.mem_append.mp m with m | m
           · obtain ⟨bl, key', eq, mem⟩ := atr q m
             exact ⟨bl, key', eq, by simp [Term.addresses, mem]⟩
           · obtain ⟨bl, key', eq, mem⟩ := ata q m
             exact ⟨bl, key', eq, by simp [Term.addresses, mem]⟩
-        · obtain ⟨fa, gra⟩ := ga hl fits
+        · obtain ⟨fa, gra⟩ := ga fits
           obtain ⟨wfm, grm, ltm⟩ := fresh_grows mid.length e.st fa.1
           rw [hm] at wfm grm ltm
           have len : made.1.length = mid.length := by rw [← hm]; simp [fresh]
-          obtain ⟨fr, grr⟩ := gr (by simp [len, hl]) ⟨wfm, fun i m => by
-            rcases List.mem_append.mp m with m | m
-            · exact ltm i m
-            · exact Nat.lt_of_lt_of_le (fits.2 i m) (Nat.le_trans gra.next grm.next)⟩
+          obtain ⟨fr, grr⟩ := gr ⟨wfm, (fits.2.mono (Nat.le_trans gra.next grm.next)).bind
+            results made.1 len ltm⟩
           exact ⟨fr, gra.trans (grm.trans grr)⟩
-    | _, _, .attempt (mid := mid) key w _ body rest, ids, k, st => by
+    | _, _, .attempt (mid := mid) key w _ inputs body results rest, ids, k, st => by
         simp only [walk]
         generalize hin : fresh 1 st = inBody
-        obtain ⟨⟨⟨ra, ea⟩, na, eba, ata⟩, ga⟩ := walk_state blocks body (inBody.1 ++ ids)
+        obtain ⟨⟨⟨ra, ea⟩, na, eba, ata⟩, ga⟩ := walk_state blocks body (bindIds ids inputs inBody.1)
           ((k.addRanges inBody.1 [rules.range (D.index w)]).enter rules [D.index w]) inBody.2
-        generalize walk rules definition role blocks body (inBody.1 ++ ids)
+        generalize walk rules definition role blocks body (bindIds ids inputs inBody.1)
           ((k.addRanges inBody.1 [rules.range (D.index w)]).enter rules [D.index w]) inBody.2 = e
           at ea eba ata ga ⊢
         generalize hm : fresh mid.length e.st = made
-        obtain ⟨⟨⟨rr, er⟩, nr, ebr, atr⟩, gr⟩ := walk_state blocks rest (made.1 ++ ids)
+        obtain ⟨⟨⟨rr, er⟩, nr, ebr, atr⟩, gr⟩ := walk_state blocks rest (bindIds ids results made.1)
           ((afterRegions rules [e] k made.1 mid 0).enter rules mid) made.2
         have m2r : made.2.refusals = e.st.refusals := by rw [← hm]; rfl
         have m2b : made.2.bounds = e.st.bounds := by rw [← hm]; rfl
         have i2r : inBody.2.refusals = st.refusals := by rw [← hin]; rfl
         have i2b : inBody.2.bounds = st.bounds := by rw [← hin]; rfl
         refine ⟨⟨⟨rr ++ ra, by rw [er, m2r, ea, i2r]; simp⟩, nr ++ na,
-          by rw [ebr, m2b, eba, i2b]; simp, ?_⟩, fun hl fits => ?_⟩
+          by rw [ebr, m2b, eba, i2b]; simp, ?_⟩, fun fits => ?_⟩
         · intro q m
           rcases List.mem_append.mp m with m | m
           · obtain ⟨bl, key', eq, mem⟩ := atr q m
@@ -430,47 +454,39 @@ mutual
         · obtain ⟨wfi, gri, lti⟩ := fresh_grows 1 st fits.1
           rw [hin] at wfi gri lti
           have leni : inBody.1.length = 1 := by rw [← hin]; simp [fresh]
-          obtain ⟨fb, grb⟩ := ga
-            (by simp only [List.length_append, List.length_cons, leni, hl]; omega)
-            ⟨wfi, fun i m => by
-            rcases List.mem_append.mp m with m | m
-            · exact lti i m
-            · exact Nat.lt_of_lt_of_le (fits.2 i m) gri.next⟩
+          obtain ⟨fb, grb⟩ := ga ⟨wfi, (fits.2.mono gri.next).bind inputs inBody.1 leni lti⟩
           obtain ⟨wfm, grm, ltm⟩ := fresh_grows mid.length e.st fb.1
           rw [hm] at wfm grm ltm
           have len : made.1.length = mid.length := by rw [← hm]; simp [fresh]
-          obtain ⟨fr, grr⟩ := gr (by simp [len, hl]) ⟨wfm, fun i m => by
-            rcases List.mem_append.mp m with m | m
-            · exact ltm i m
-            · exact Nat.lt_of_lt_of_le (fits.2 i m)
-                (Nat.le_trans gri.next (Nat.le_trans grb.next grm.next))⟩
+          obtain ⟨fr, grr⟩ := gr ⟨wfm, (fits.2.mono (Nat.le_trans gri.next
+            (Nat.le_trans grb.next grm.next))).bind results made.1 len ltm⟩
           exact ⟨fr, gri.trans (grb.trans (grm.trans grr))⟩
   theorem walkArms_state (blocks : List (Key × Nat)) :
-      ∀ {Γ mid payloads : List D.Ty} (arms : Arms D Γ mid payloads) (ids : List Nat)
+      ∀ {Γ : Ctx D.Ty} {mid payloads : List D.Ty} (arms : Arms D Γ mid payloads) (ids : Ctx Nat)
         (k : Known) (st : St D.Ty Raw),
         WalkState definition role (Arms.addresses blocks arms) st
             (walkArms rules definition role blocks arms ids k st).2 ∧
-          (ids.length = Γ.length → WellFormed ids st →
+          (Scoped Γ ids st →
             (∀ e, e ∈ (walkArms rules definition role blocks arms ids k st).1 →
               ∀ i, i ∈ e.rets → i < (walkArms rules definition role blocks arms ids k st).2.next) ∧
-            WellFormed ids (walkArms rules definition role blocks arms ids k st).2 ∧
+            Scoped Γ ids (walkArms rules definition role blocks arms ids k st).2 ∧
             St.Grows st (walkArms rules definition role blocks arms ids k st).2)
     | _, _, _, .nil, _, _, st =>
         ⟨⟨⟨[], rfl⟩, [], rfl, fun _ m => nomatch m⟩,
-          fun _ fits => ⟨fun _ m => (nomatch m), fits, St.Grows.refl st⟩⟩
-    | _, _, _, .cons (payload := payload) arm rest, ids, k, st => by
+          fun fits => ⟨fun _ m => (nomatch m), fits, St.Grows.refl st⟩⟩
+    | _, _, _, .cons (payload := payload) inputs arm rest, ids, k, st => by
         simp only [walkArms]
         generalize hin : fresh 1 st = made
-        obtain ⟨⟨⟨ra, ea⟩, na, eba, ata⟩, ga⟩ := walk_state blocks arm (made.1 ++ ids)
+        obtain ⟨⟨⟨ra, ea⟩, na, eba, ata⟩, ga⟩ := walk_state blocks arm (bindIds ids inputs made.1)
           ((k.addRanges made.1 [rules.range payload]).enter rules [payload]) made.2
-        generalize walk rules definition role blocks arm (made.1 ++ ids)
+        generalize walk rules definition role blocks arm (bindIds ids inputs made.1)
           ((k.addRanges made.1 [rules.range payload]).enter rules [payload]) made.2 = e
           at ea eba ata ga ⊢
         obtain ⟨⟨⟨rr, er⟩, nr, ebr, atr⟩, gr⟩ := walkArms_state blocks rest ids k e.st
         have i2r : made.2.refusals = st.refusals := by rw [← hin]; rfl
         have i2b : made.2.bounds = st.bounds := by rw [← hin]; rfl
         refine ⟨⟨⟨rr ++ ra, by rw [er, ea, i2r]; simp⟩, nr ++ na,
-          by rw [ebr, eba, i2b]; simp, ?_⟩, fun hl fits => ?_⟩
+          by rw [ebr, eba, i2b]; simp, ?_⟩, fun fits => ?_⟩
         · intro q m
           rcases List.mem_append.mp m with m | m
           · obtain ⟨bl, key', eq, mem⟩ := atr q m
@@ -480,14 +496,8 @@ mutual
         · obtain ⟨wfi, gri, lti⟩ := fresh_grows 1 st fits.1
           rw [hin] at wfi gri lti
           have leni : made.1.length = 1 := by rw [← hin]; simp [fresh]
-          obtain ⟨fb, grb⟩ := ga
-            (by simp only [List.length_append, List.length_cons, leni, hl]; omega)
-            ⟨wfi, fun i m => by
-            rcases List.mem_append.mp m with m | m
-            · exact lti i m
-            · exact Nat.lt_of_lt_of_le (fits.2 i m) gri.next⟩
-          obtain ⟨rets, fr, grr⟩ := gr hl ⟨fb.1, fun i m => Nat.lt_of_lt_of_le (fits.2 i m)
-            (Nat.le_trans gri.next grb.next)⟩
+          obtain ⟨fb, grb⟩ := ga ⟨wfi, (fits.2.mono gri.next).bind inputs made.1 leni lti⟩
+          obtain ⟨rets, fr, grr⟩ := gr ⟨fb.1, fits.2.mono (Nat.le_trans gri.next grb.next)⟩
           refine ⟨fun e' m i mi => ?_, fr, gri.trans (grb.trans grr)⟩
           rcases List.mem_cons.mp m with rfl | m
           · exact Nat.lt_of_lt_of_le (fb.2 i mi) grr.next
