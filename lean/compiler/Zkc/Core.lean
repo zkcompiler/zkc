@@ -4,6 +4,7 @@ public import Zkc.Core.Process.Handler
 public import Zkc.Core.Process.Process
 public import Zkc.Core.Program.BitTree
 public import Zkc.Core.Program.Conditions
+public import Zkc.Core.Program.Context
 public import Zkc.Core.Program.Dialects
 public import Zkc.Core.Program.Elaborate
 public import Zkc.Core.Program.ElaborateLocal
@@ -12,7 +13,7 @@ public import Zkc.Core.Program.LocalRules
 public import Zkc.Core.Program.Identity
 public import Zkc.Core.Program.Library
 public import Zkc.Core.Program.Located
-public import Zkc.Core.Program.Print
+public import Zkc.Core.Program.Erase
 public import Zkc.Core.Program.PrintProgram
 public import Zkc.Core.Program.Refusal
 public import Zkc.Core.Program.Requirement

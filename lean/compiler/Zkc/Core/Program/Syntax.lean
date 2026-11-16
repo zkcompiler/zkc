@@ -13,13 +13,11 @@ instructions and an exit. An instruction is an operation (its results, the opera
 operands) or one of the forms of control (a guard, a choice, a case analysis, a loop, a
 block, an attempt), each with its key and its nested regions; the control is written once here, and a
 dialect lists only its operations. The key is the producer's: it is the key of the event, the
-block or the application that the instruction is. A name is a number, resolved lexically: the
-latest binding in scope. A nested region sees the names around it.
+block or the application that the instruction is. A name is a number; a definition binds each of
+its names at one place, and a use refers to that place. A nested region sees the names around it.
 -/
 
 namespace Zkc.Core
-
-abbrev Name := Nat
 
 /-- How often a loop runs, by names: a written number of times, or as often as the value of a
 name says. -/

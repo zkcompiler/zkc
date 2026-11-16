@@ -17,31 +17,33 @@ row keeps validity.
 
 namespace Zkc.Core
 
-/-! ## Contexts and environments -/
+/-! ## Positions in a list -/
 
-inductive Var {α : Type} : List α → α → Type where
-  | head {a : α} {rest : List α} : Var (a :: rest) a
-  | tail {a b : α} {rest : List α} : Var rest a → Var (b :: rest) a
+/-- An item of a list with its place: the definition among the headers before a caller that a
+call names. -/
+inductive Member {α : Type} : List α → α → Type where
+  | head {a : α} {rest : List α} : Member (a :: rest) a
+  | tail {a b : α} {rest : List α} : Member rest a → Member (b :: rest) a
 
 section
 variable {T : Type}
 
-/-- The position of a variable, from the innermost binding. -/
-def Var.index {Γ : List T} {a : T} : Var Γ a → Nat
+/-- The position, from the front. -/
+def Member.index {Γ : List T} {a : T} : Member Γ a → Nat
   | .head => 0
   | .tail x => x.index + 1
 
-/-- The variable at a position, with its type. -/
-def Var.atIndex : (Γ : List T) → Nat → Option ((t : T) × Var Γ t)
+/-- The item at a position. -/
+def Member.atIndex : (Γ : List T) → Nat → Option ((t : T) × Member Γ t)
   | [], _ => none
   | t :: _, 0 => some ⟨t, .head⟩
-  | _ :: Γ, n + 1 => (Var.atIndex Γ n).map fun found => ⟨found.1, .tail found.2⟩
+  | _ :: Γ, n + 1 => (Member.atIndex Γ n).map fun found => ⟨found.1, .tail found.2⟩
 
-theorem Var.atIndex_index : ∀ {Γ : List T} {a : T} (x : Var Γ a),
-    Var.atIndex Γ x.index = some ⟨a, x⟩
+theorem Member.atIndex_index : ∀ {Γ : List T} {a : T} (x : Member Γ a),
+    Member.atIndex Γ x.index = some ⟨a, x⟩
   | _ :: _, _, .head => rfl
   | _ :: _, _, .tail x => by
-      simp only [Var.index, Var.atIndex, Var.atIndex_index x, Option.map_some]
+      simp only [Member.index, Member.atIndex, Member.atIndex_index x, Option.map_some]
 
 end
 
@@ -80,8 +82,6 @@ theorem HList.two {α : Type} {F : α → Type} {a b : α} :
 theorem HList.three {α : Type} {F : α → Type} {a b c : α} :
     ∀ (vs : HList F [a, b, c]), ∃ u v w, vs = .cons u (.cons v (.cons w .nil))
   | .cons u (.cons v (.cons w .nil)) => ⟨u, v, w, rfl⟩
-
-def Env {α : Type} (V : α → Type) (Γ : List α) : Type := ∀ a, Var Γ a → V a
 
 /-! ## Types -/
 
