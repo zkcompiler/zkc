@@ -3,6 +3,9 @@ import Zkc.Tools.Audit
 import Zkc.Tools.Audit.Controls.Axiom
 import Zkc.Tools.Audit.Controls.Extern
 import Zkc.Tools.Audit.Controls.ImplementedBy
+import Zkc.Tools.Audit.Controls.ConstructorIndex
+import Zkc.Tools.Audit.Controls.Generated
+import Zkc.Tools.Audit.Controls.Recognition
 import Zkc.Tools.Audit.Controls.Unchecked
 import Zkc.Tools.Audit.Controls.UsesUnchecked
 import Zkc.Tools.Audit.Controls.Import

@@ -12,4 +12,7 @@ def fastSucc (number : Nat) : Nat := number + 1
 @[implemented_by fastSucc]
 public def slowSucc (number : Nat) : Nat := number + 1
 
+@[implemented_by fastSucc]
+private def privateSlowSucc (number : Nat) : Nat := number + 1
+
 end Zkc.Tools.Audit.Controls

@@ -112,9 +112,10 @@ belongs in the pull request body, which is what survives the squash.
   [status](../docs/status.md).
 - **Proofs.** A theorem of the core, of the formal library or of their tests
   is accepted by Lean's kernel when it is replayed, and uses neither `sorry`
-  nor an axiom beyond Lean's three; the imports between the libraries follow
-  their rules. `just audit` checks these. State what a theorem covers in the
-  guide of its package.
+  nor an axiom beyond its library's stated policy. The active core, vocabulary and their
+  tests permit only `propext` and `Quot.sound`; imports follow their library's rules.
+  `just audit` checks these and the [toolchain boundary](../docs/lean-toolchain.md).
+  State what a theorem covers in the guide of its package.
 - **Formats and identities.** Version persisted or exchanged formats and
   cryptographic byte constructions. Before stabilization, all zkc-owned formats
   stay at version `0`, such as `zkc.core/0`. Publish a schema change in the

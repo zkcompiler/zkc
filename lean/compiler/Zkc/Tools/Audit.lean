@@ -1,4 +1,4 @@
-import Lean
+import Zkc.Tools.Audit.CompilerHelpers
 
 /-!
 # The audit of the libraries
@@ -13,11 +13,13 @@ module of a library:
   particular no proof uses `sorryAx`. The constants that the audited ones use are visited once
   for the whole run (`dependencies`), and a forbidden axiom is traced back to every audited
   constant that reaches it;
-- it carries no `@[extern]` and no `@[implemented_by]`. The executable code that Lean itself
-  makes for a `partial` definition is not a finding; the number of `partial` definitions of each
-  library (the recursive ones, a `where` helper of one included: Lean compiles a `partial`
-  definition that does not recur as an ordinary one) is reported, so that a new one is a
-  visible difference;
+- it carries no `@[extern]` or arbitrary `@[implemented_by]`. Lean's recursive implementations
+  retain their existing exception. Constructor-index native implementations are recognized by
+  their complete logical and native bodies (`CompilerHelpers`), not their names alone. The
+  numbers of recursive implementations and recognized constructor indices are reported for each
+  library, separately from `partial` definitions (the recursive ones, including `where` helpers).
+  Their execution relies on the pinned compiler/runtime; kernel replay checks the logical
+  definitions, not the native code;
 - the kernel accepts it (`replay`). Reading a constant from a built file says nothing of
   whether the kernel checked it: a theorem elaborated under `set_option debug.skipKernelTC` is
   stored with whatever proof the elaborator built. So the declarations of the libraries are
@@ -39,10 +41,11 @@ module that its root module imports, directly or not. Every `.lean` file under t
 a library of tests is a module of the environment that the audit loads, so that no file of the
 tests is left unbuilt and unaudited.
 
-`run` audits the libraries, then the controls (`controls`): modules under
-`Zkc.Tools.Audit.Controls` that the audit must refuse, each audited alone and by one rule. The
-exit code is 0 only when the libraries pass and every control is refused by its rule; every
-finding is one line that names the constant or the module and the rule.
+`run` audits the libraries, accepts the generated-helper fixture, then checks the negative
+controls (`controls`): modules under `Zkc.Tools.Audit.Controls` that the audit must refuse,
+each audited alone and by one rule. The exit code is 0 only when the libraries and generated
+fixture pass and every negative control is refused by its rule; every finding is one line that
+names the constant or the module and the rule.
 -/
 
 set_option autoImplicit false
@@ -119,7 +122,7 @@ inductive Rule where
 def Rule.describe : Rule → String
   | .axiom_ => "no axiom beyond propext and Quot.sound"
   | .extern => "no `@[extern]`"
-  | .implementedBy => "no `@[implemented_by]`"
+  | .implementedBy => "no unrecognized `@[implemented_by]`"
   | .kernel => "the kernel accepts every declaration when it is replayed"
   | .importOfTestsOrTools => "no import of a module of the tests or of the tools"
   | .importOutside => "imports only of the library and of the prefixes that it allows"
@@ -137,11 +140,14 @@ structure Finding where
 /-- What an audit found, and what it did for each library. -/
 structure Report where
   findings : Array Finding := #[]
-  /-- For each library, as lines: its `partial` definitions, and what was replayed through the
-  kernel and what was taken as built. -/
+  /-- For each library: its partial definitions, native implementation categories, what was
+  replayed through the kernel and what was taken as built. -/
   lines : Array String := #[]
   /-- The constants declared in the audited modules, and the constants that they reach. -/
   declarations : Nat := 0
+  /-- Structurally recognized constructor-index native replacements, counted separately from
+  recursive implementations. These rely on the pinned compiler/runtime for execution. -/
+  constructorIndices : Nat := 0
   reached : Nat := 0
   /-- The axioms that the audited constants reach. -/
   axioms : Array Name := #[]
@@ -332,6 +338,8 @@ def audit (env : Environment) (libraries : Array Library) (arts : NameMap Import
   let mut constants : Array Name := #[]
   for library in libraries do
     let mut partials := 0
+    let mut recursiveImplementations := 0
+    let mut constructorIndices := 0
     for (index, _) in modulesOf env library do
       let data := env.header.moduleData[index]!
       for info in data.constants do
@@ -342,11 +350,18 @@ def audit (env : Environment) (libraries : Array Library) (arts : NameMap Import
         if isExtern env name then
           report := report.add name .extern s!"{name}: carries `@[extern]`"
         if let some implementation := Compiler.getImplementedBy? env name then
-          -- the executable code of a `partial` definition is Lean's own
-          unless implementation == Compiler.mkUnsafeRecName name do
+          -- Preserve Lean's recursive implementation policy, and recognize the new generated
+          -- constructor indices by both bodies rather than by their names alone.
+          if implementation == Compiler.mkUnsafeRecName name then
+            recursiveImplementations := recursiveImplementations + 1
+          else if ← isConstructorIndexImplementation env name implementation then
+            constructorIndices := constructorIndices + 1
+          else
             report := report.add name .implementedBy
               s!"{name}: carries `@[implemented_by {implementation}]`"
-    report := { report with lines := report.lines.push s!"{library.name}: {partials} partial definitions" }
+    report := { report with
+      constructorIndices := report.constructorIndices + constructorIndices
+      lines := report.lines.push s!"{library.name}: {partials} partial definitions; {recursiveImplementations} recursive native implementations; {constructorIndices} recognized constructor-index native implementations" }
     if let some reason := library.withoutReplay then
       report := { report with lines := report.lines.push s!"{library.name}: not replayed through the kernel: {reason}" }
   -- the kernel
@@ -443,6 +458,31 @@ def controls (directory : System.FilePath) : Array Control := #[
                  imports := some coreImports, withoutReplay := anotherRule }
     rule := .implementedBy
     isRefusal := fun finding => finding.subject == `Zkc.Tools.Audit.Controls.slowSucc },
+  { description := "a private `@[extern]` definition"
+    library := { name := "private extern", root := `Zkc.Tools.Audit.Controls.Extern
+                 imports := some coreImports, withoutReplay := anotherRule }
+    rule := .extern
+    isRefusal := fun finding => finding.subject matches .str _ "privateExternalAdd" },
+  { description := "a private `@[implemented_by]` definition"
+    library := { name := "private implemented by", root := `Zkc.Tools.Audit.Controls.ImplementedBy
+                 imports := some coreImports, withoutReplay := anotherRule }
+    rule := .implementedBy
+    isRefusal := fun finding => finding.subject matches .str _ "privateSlowSucc" },
+  { description := "a counterfeit constructor index: WrongLogic"
+    library := { name := "counterfeit constructor index", root := `Zkc.Tools.Audit.Controls.ConstructorIndex
+                 imports := some coreImports, withoutReplay := anotherRule }
+    rule := .implementedBy
+    isRefusal := fun finding => finding.subject == `Zkc.Tools.Audit.Controls.WrongLogic.ctorIdx },
+  { description := "a counterfeit constructor index: WrongNative"
+    library := { name := "counterfeit constructor index", root := `Zkc.Tools.Audit.Controls.ConstructorIndex
+                 imports := some coreImports, withoutReplay := anotherRule }
+    rule := .implementedBy
+    isRefusal := fun finding => finding.subject == `Zkc.Tools.Audit.Controls.WrongNative.ctorIdx },
+  { description := "a counterfeit constructor index: WrongTarget"
+    library := { name := "counterfeit constructor index", root := `Zkc.Tools.Audit.Controls.ConstructorIndex
+                 imports := some coreImports, withoutReplay := anotherRule }
+    rule := .implementedBy
+    isRefusal := fun finding => finding.subject == `Zkc.Tools.Audit.Controls.WrongTarget.ctorIdx },
   { description := "a theorem of `False` that the kernel never checked"
     library := { name := "unchecked", root := `Zkc.Tools.Audit.Controls.Unchecked }
     rule := .kernel
@@ -525,8 +565,8 @@ def packageDirectory : IO System.FilePath := do
 /-- Audits libraries whose files are in the package of the running executable, and the
 controls, whose files are in the compiler's package (`compilerDirectory`, from the directory of
 the running executable's package); prints the findings, what was done for each library, the
-counts and the controls. The exit code is 0 only when the libraries pass and the audit refuses
-every control by its rule. -/
+counts and the controls. The exit code is 0 only when the libraries and generated-helper
+fixture pass and the audit refuses every negative control by its rule. -/
 def run (libraries : System.FilePath → Array Library)
     (compilerDirectory : System.FilePath → System.FilePath := id) : IO UInt32 := do
   initSearchPath (← findSysroot)
@@ -549,7 +589,14 @@ def run (libraries : System.FilePath → Array Library)
     let module := control.library.root
     if arts.contains module && !controlModules.any (·.module == module) then
       controlModules := controlModules.push { module }
+  controlModules := controlModules.push { module := `Zkc.Tools.Audit.Controls.Generated }
   let controlEnv ← importModules controlModules {} (loadExts := false) (level := .private) (arts := arts)
+  let generated ← audit controlEnv #[{
+    name := "generated helpers", root := `Zkc.Tools.Audit.Controls.Generated,
+    imports := some coreImports }] arts
+  let generatedAccepted := generated.findings.isEmpty && generated.constructorIndices == 8
+  IO.println s!"control, generated helpers (public, private, empty, indexed, mutual, nested, polymorphic): {if generatedAccepted then "accepted" else "NOT accepted"}; {generated.constructorIndices} recognized constructor indices"
+  for finding in generated.findings do IO.println finding.line
   let mut refused := 0
   for control in controls do
     -- each control is audited alone, so that only its own findings refuse it
@@ -557,6 +604,6 @@ def run (libraries : System.FilePath → Array Library)
     if found then refused := refused + 1
     IO.println s!"control, {control.description}: {if found then "refused" else "NOT refused"} by the rule: {control.rule.describe}"
   IO.println s!"audit: {report.findings.size} findings in {libraries.size} libraries; {refused} of the {controls.size} controls are refused"
-  return if report.findings.isEmpty && refused == controls.size then 0 else 1
+  return if report.findings.isEmpty && generatedAccepted && refused == controls.size then 0 else 1
 
 end Zkc.Tools.Audit

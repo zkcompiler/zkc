@@ -23,6 +23,13 @@
 | `.github/` | the contribution guide, the pull request template and CI |
 
 Lake writes the outputs of each package to its `.lake/` directory, which git ignores.
+Both packages pin Lean 4.36.0. See the [toolchain guide](lean-toolchain.md) for its trust boundary,
+feature choices and upgrade checks. Rebuild artifacts for the exact toolchain; do not reuse
+4.35 `.olean` files.
+
+This branch's active targets are the core, vocabulary, their tests and the audit. The retained
+frontend and formal package await their port to the redesigned core and are not built by the
+root commands. Their matching toolchain pin does not mean that port is complete.
 
 ## Commands
 
@@ -31,48 +38,45 @@ Run every command from the root of the repository.
 | Command | What it does |
 |---|---|
 | `just` | lists the recipes |
-| `just build` | `lake build` in `lean/compiler`, then in `lean/formal` |
-| `just test` | `lake build` and `lake test` in `lean/compiler`, then the same in `lean/formal`, then `just audit` |
-| `just test <arguments>` | `lake test -- <arguments>` in `lean/compiler`: only the frontend's test driver, with its own options |
-| `just audit` | `lake exe zkc-audit` in `lean/compiler`, then `lake exe zkc-formal-audit` in `lean/formal` |
+| `just build` | `lake build` in `lean/compiler`: all active targets |
+| `just test` | `lake build` and `lake test` in `lean/compiler`, then `just audit` |
+| `just audit` | `lake exe zkc-audit` in `lean/compiler`: core, vocabulary and their tests |
 | `just check` | the checks that need no build: `bash .github/scripts/public-tree-guard.sh`, `python3 scripts/check_docs.py --all`, and `python3 lean/compiler/scripts/generate_unicode_tables.py --check` |
 
 Lake builds incrementally, so `just build` after a change rebuilds only the modules that the
-change affects. `just test` with no argument is the whole validation of the Lean packages.
+change affects. `just test` is the whole validation of the active Lean targets.
 
-### The frontend's tests
+### The tests
 
-`just test` with arguments passes them to the test driver of the frontend and runs nothing
-else. The driver has one option, `--trees`, which runs only the second reading of typed trees:
-for every protocol of its corpus (the library, the worked programs, the generators and the
-programs of the run tests), a run of the emitted program is compared with a run read from the
-typed tree. It is not part of the default run because it takes about 25 minutes:
+`lake test` in `lean/compiler` builds `ZkcCoreTests` and the vocabulary tests it requires.
+The checks run during compilation. For a focused change, build the affected module first.
+After the change stabilizes, `just test` also performs the audit.
 
-```sh
-just test --trees
-```
-
-The section Tests of the [frontend guide](../lean/compiler/Zkc/Frontend/README.md) says what
-each part of the tests checks, and what the second reading does not compare.
+The retained frontend's separate driver and its optional `--trees` comparison belong to the
+pending frontend port; they are not the active test driver on this branch. Its
+[guide](../lean/compiler/Zkc/Frontend/README.md) describes those tests.
 
 ### The audit
 
-`just audit` checks the libraries that hold theorems and their tests: the core (`Zkc.Core`) and
-its tests in `lean/compiler`, the formal library (`Zkc.Formal`) and its tests in `lean/formal`.
+`just audit` checks the core, vocabulary and their tests.
 
-- Every declaration is replayed through Lean's kernel, so a declaration that was compiled
-  without the kernel's check is refused. What these libraries import from the project is
-  replayed with them; only Lean's own libraries are taken as built.
-- No declaration uses `sorry` or an axiom beyond Lean's three (`propext`, `Classical.choice`
-  and `Quot.sound`), and none has `@[extern]` or `@[implemented_by]`.
-- The core imports only the core, `Init` and `Std`; the formal library only the core and
-  itself; no library imports a module of the tests or of the tools; every file of a library
-  is imported by its root module, and every file of a library of tests is loaded.
+- Every logical declaration is replayed through Lean's kernel, including its project import
+  closure. Only Lean's own libraries are taken as built; unsafe declarations and compiled
+  partial-definition code are outside kernel replay.
+- The dependency closure uses only `propext` and `Quot.sound`, with no `sorryAx` or
+  `Classical.choice`. Explicit hypotheses of a theorem remain hypotheses.
+- No audited declaration carries `@[extern]` or an unrecognized `@[implemented_by]`.
+  Lean's recursive implementations retain their exception. The new constructor-index native
+  replacements must match both generated bodies exactly. Their execution remains a compiler
+  and runtime trust assumption, and their counts are reported separately.
+- The core imports only itself, `Init` and `Std`; the vocabulary may also import the core.
+  Neither imports tests or tools. Root imports cover every library source file, and every
+  test source is built and loaded.
 
-The frontend (`Zkc.Frontend`) is checked for the same axioms, attributes and imports but is not
-replayed: no theorem rests on it, and admission checks what it emits. The audit runs on
-controls that break each rule and passes only when it refuses all of them. It takes about
-three minutes.
+The audit accepts a positive fixture of generated helpers, refuses all 15 negative controls
+and fails if any expected result changes. Private declarations are loaded from
+`.olean.private`; the controls also check private native attributes. The
+[compiler guide](../lean/compiler/README.md#build-test-and-audit) describes the entry points.
 
 ### The documents
 

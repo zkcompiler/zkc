@@ -76,13 +76,17 @@ scheme Proof = Schnorr<G1>:
 
 ## Build and test
 
+On this branch the active targets are the redesigned core, vocabulary, their tests and the
+audit. The retained frontend and formal package await their port to this core. Both toolchain
+files pin Lean 4.36.0; the [toolchain guide](docs/lean-toolchain.md) describes the upgrade.
+
 The Lean toolchain is named in `lean/compiler/lean-toolchain` and installed by
 [elan](https://github.com/leanprover/elan). With `elan`, [just](https://github.com/casey/just)
 and `python3`, from the root of the repository:
 
 ```sh
-just build   # build the compiler package, then the formal package
-just test    # build and test both packages, then audit them
+just build   # build the active compiler targets
+just test    # build, test and audit the active targets
 just check   # check the public tree, the documents and the generated Unicode tables
 ```
 
