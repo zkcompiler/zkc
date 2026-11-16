@@ -428,16 +428,21 @@ def differenceBelow (first second : Nat) (strict : Bool) : Bool :=
   | some (.difference, [x, u]) => x == second && (!strict || decide (1 ≤ k.low u))
   | _ => false
 
-/-- The index of a range that does not start at zero: `first` is `x + t` and `t < second - x`
-is the order that a loop made for its index `t`. -/
+/-- The index of a range that does not start at zero: `first` is the sum of `x` and `t`, its
+operands in either order, and `t < second - x` is the order that a loop made for its index `t`. -/
 def offsetBelow (first second : Nat) : Bool :=
   match tbl.formOf ops first with
-  | some (.sum, [x, t]) =>
-      (k.orders.find factDepth t).any fun fact =>
-        fact.first == t && fact.strict && fact.byLoop &&
+  | some (.sum, [x, y]) =>
+      ((k.orders.find factDepth y).any fun fact =>
+        fact.first == y && fact.strict && fact.byLoop &&
           (match tbl.formOf ops fact.second with
             | some (.difference, [r, x']) => r == second && x' == x
-            | _ => false)
+            | _ => false)) ||
+      ((k.orders.find factDepth x).any fun fact =>
+        fact.first == x && fact.strict && fact.byLoop &&
+          (match tbl.formOf ops fact.second with
+            | some (.difference, [r, y']) => r == second && y' == y
+            | _ => false))
   | _ => false
 
 /-- Whether the ranges say that the first is at most (below, with `strict`) the second. -/
@@ -460,15 +465,17 @@ def knownLt (first second : Nat) (rf rs : Option Range) : Bool :=
     sumAbove ops tbl k first second true || differenceBelow ops tbl k first second true ||
     offsetBelow ops tbl k first second
 
-/-- Whether the second less the first is the number: both are points, or the second is the
-first plus a value whose range is the point. -/
+/-- Whether the second less the first is the number: both are points, or the second is the sum
+of the first and a value whose range is the point, its operands in either order. -/
 def knownDifference (second first : Nat) (rs rf : Option Range) (number : Nat) : Bool :=
   (match rs, rf with
     | some ⟨p, some p'⟩, some ⟨q, some q'⟩ =>
         decide (p = p' ∧ q = q' ∧ q ≤ p ∧ p - q = number)
     | _, _ => false) ||
   (match tbl.formOf ops second with
-    | some (.sum, [x, c]) => x == first && decide (k.rangeOf c = some (Range.point number))
+    | some (.sum, [x, y]) =>
+        (x == first && decide (k.rangeOf y = some (Range.point number))) ||
+          (y == first && decide (k.rangeOf x = some (Range.point number)))
     | _ => false)
 
 end
@@ -485,12 +492,19 @@ def offsetBound {Raw : Type} (ops : OpFacts Raw) (tbl : Table Raw) (k : Known) (
     else none
 
 /-- What is known of the first result of an application of a written operation to operands
-beyond what the operation's ranges say: for a sum `x + t` below `r` (`offsetBound`), what is
-below the range of `r` (TY10). -/
+beyond what the operation's ranges say: for a sum of `x` and `t` below `r` (`offsetBound`), its
+operands in either order (`x, t` tried first, then `t, x`), what is below the range of `r`
+(TY10). -/
 def offsetRange {Raw : Type} (ops : OpFacts Raw) (tbl : Table Raw) (k : Known) (written : Raw)
     (args : List Nat) : Option Range :=
   match ops.form written, args with
-  | some .sum, [x, t] => (offsetBound ops tbl k x t).bind fun r => (k.rangeOf r).map Range.below
+  | some .sum, [x, t] =>
+      match offsetBound ops tbl k x t with
+      | some r => (k.rangeOf r).map Range.below
+      | none =>
+          match offsetBound ops tbl k t x with
+          | some r => (k.rangeOf r).map Range.below
+          | none => none
   | _, _ => none
 
 /-- What is known after an application of a written operation to operands, whose results are

@@ -6,16 +6,17 @@ import Zkc.Core.Program.ElaborateLocal
 The check of facts on functions written by names, elaborated and walked by the kernel.
 
 The conformance cases of the reference that a function can express are named by their
-identifiers: each is accepted or refused as the case says, and a refusal is compared whole. Then,
-for each operation with a domain and for a restricted row, an application that is accepted and
-one that is refused; then what sharing and the scope of facts must do in sibling regions, in
-loops, after a choice, and for a new name bound where a program would bind a name again, which
-elaboration refuses by the rule `assignment`; a loop over a range whose end is a
-run-time value; a power too large to compute; what the calculus of facts does not conclude;
-then which code does not run: only what is written says so, never what is known; and, for each
-rule of the calculus, a case that only it decides: what a condition teaches, what regions give
-of a natural, the ranges of arithmetic, code that does not run after an operation or a loop,
-places and the order of bounds, and which types have no value.
+identifiers: each is accepted or refused as the case says, and a refusal is compared whole;
+`T-Z8` and `I-4e-total` are also accepted with the operands of a sum exchanged. Then, for each
+operation with a domain and for a restricted row, an application that is accepted and one that
+is refused; then what sharing and the scope of facts must do in sibling regions, in loops, after
+a choice, and for a new name bound where a program would bind a name again, which elaboration
+refuses by the rule `assignment`; a loop over a range whose end is a run-time value, its index
+written as a sum in either order; a power too large to compute; what the calculus of facts does
+not conclude; then which code does not run: only what is written says so, never what is known;
+and, for each rule of the calculus, a case that only it decides: what a condition teaches, what
+regions give of a natural, the ranges of arithmetic, code that does not run after an operation
+or a loop, places and the order of bounds, and which types have no value.
 -/
 
 namespace Zkc.Core.FactsTests
@@ -231,6 +232,20 @@ def «T-Z8» := check [sizedElements 16, .nat] [sizedElements 4] true <| .mk [0,
   .op ⟨7⟩ [15] times [14, 1],
   .op ⟨8⟩ [16] (natural 4) [],
   .op ⟨9⟩ [17] plus [15, 16],
+  .op ⟨10⟩ [18] (slice (sizedElements 16) (sizedElements 4)) [0, 13, 17]] [18]
+
+/-- `T-Z8` with the end of the slice written `4 + 4 * r`: the sum is read with its operands in
+either order. -/
+def stridedSliceExchanged := check [sizedElements 16, .nat] [sizedElements 4] true <| .mk [0, 1] [
+  .op ⟨1⟩ [10] (natural 4) [],
+  .op ⟨2⟩ [11] less [1, 10],
+  .guard ⟨3⟩ () 11 .reject,
+  .op ⟨4⟩ [12] (natural 4) [],
+  .op ⟨5⟩ [13] times [12, 1],
+  .op ⟨6⟩ [14] (natural 4) [],
+  .op ⟨7⟩ [15] times [14, 1],
+  .op ⟨8⟩ [16] (natural 4) [],
+  .op ⟨9⟩ [17] plus [16, 15],
   .op ⟨10⟩ [18] (slice (sizedElements 16) (sizedElements 4)) [0, 13, 17]] [18]
 
 /-- The minimal dynamic read. -/
@@ -455,6 +470,22 @@ def «I-4e-total» := check [.seq elements (some 3)] [F] false <| .mk [0] [
           .op ⟨9⟩ [33] (item elements) [22, 32],
           .op ⟨10⟩ [34] (fieldRow .add) [31, 33]] [34])] [26])] [11]
 
+/-- `I-4e-total` with the index written `t + 0`: the sum is read with its operands in either
+order. -/
+def totalExchanged := check [.seq elements (some 3)] [F] false <| .mk [0] [
+  .op ⟨1⟩ [10] (element 0) [],
+  .loop ⟨2⟩ () (.fixed 3) [10] [11]
+    (.mk [20, 21] [
+      .op ⟨3⟩ [22] (item (.seq elements (some 3))) [0, 20],
+      .op ⟨4⟩ [23] (natural 0) [],
+      .op ⟨5⟩ [24] (length elements) [22],
+      .op ⟨6⟩ [25] minus [24, 23],
+      .loop ⟨7⟩ () (.count 25) [21] [26]
+        (.mk [30, 31] [
+          .op ⟨8⟩ [32] plus [30, 23],
+          .op ⟨9⟩ [33] (item elements) [22, 32],
+          .op ⟨10⟩ [34] (fieldRow .add) [31, 33]] [34])] [26])] [11]
+
 /-- A slice from a position to the end. -/
 def «I-4e-tail» := check [elements, .nat] [elements] true <| .mk [0, 1] [
   .op ⟨1⟩ [10] (length elements) [0],
@@ -594,6 +625,7 @@ example : «R-TY4a» = accepted := by decide +kernel
 example : «V-G2» = accepted := by decide +kernel
 example : «N-TY8d» = accepted := by decide +kernel
 example : «T-Z8» = accepted := by decide +kernel
+example : stridedSliceExchanged = accepted := by decide +kernel
 example : «I-4» = accepted := by decide +kernel
 example : «N-TY4b» = accepted := by decide +kernel
 example : «N-TY4c» = accepted := by decide +kernel
@@ -640,6 +672,7 @@ example : «I-4f» = some (.inl
     [unjustified 9 (item elements) (.lt (.arg 1) lengthOf) [some (Range.point 0), anyNat]]) := by
   decide +kernel
 example : «I-4e-total» = accepted := by decide +kernel
+example : totalExchanged = accepted := by decide +kernel
 example : «I-4e-tail» = accepted := by decide +kernel
 example : «N-TY10e» = accepted := by decide +kernel
 example : «N-TY10g» = accepted := by decide +kernel
@@ -956,6 +989,28 @@ def runtimeEnd (size : Nat) := check [sizedElements size, .fin 6, .fin 11] [.nat
 example : runtimeEnd 10 = some (.inr [(place 7, 10)]) := by decide +kernel
 /-- On `[F; 9]` it is refused: the index is known in `0..9` only. -/
 example : runtimeEnd 9 = some (.inl
+    [unjustified 9 (item (sizedElements 9)) (.below (.arg 1) 9) [some ⟨0, some 9⟩]]) := by
+  decide +kernel
+
+/-- The same loop with the index written `t + a`: the sum is read with its operands in either
+order, and gets the same range. -/
+def runtimeEndExchanged (size : Nat) :=
+  check [sizedElements size, .fin 6, .fin 11] [.nat] true <| .mk [0, 1, 2] [
+    .op ⟨1⟩ [10] (toNat 6) [1],
+    .op ⟨2⟩ [11] (toNat 11) [2],
+    .op ⟨3⟩ [12] less [11, 10],
+    .op ⟨4⟩ [13] negation [12],
+    .guard ⟨5⟩ () 13 .refused,
+    .op ⟨6⟩ [14] minus [11, 10],
+    .loop ⟨7⟩ () (.count 14) [] []
+      (.mk [20] [
+        .op ⟨8⟩ [21] plus [20, 10],
+        .op ⟨9⟩ [22] (item (sizedElements size)) [0, 21]] [])] [10]
+
+/-- On `[F; 10]` the read is accepted, as with `a + t`. -/
+example : runtimeEndExchanged 10 = some (.inr [(place 7, 10)]) := by decide +kernel
+/-- On `[F; 9]` it is refused with the same range, `0..9`, as with `a + t`. -/
+example : runtimeEndExchanged 9 = some (.inl
     [unjustified 9 (item (sizedElements 9)) (.below (.arg 1) 9) [some ⟨0, some 9⟩]]) := by
   decide +kernel
 
