@@ -13,11 +13,12 @@ of each name in scope, a map from names to identifiers (`Ctx Nat`): where the te
 its context, the walk binds the same names to the new identifiers, a later name hiding an earlier
 one as in the context (`bindIds`, `Value/Table.lean`).
 
-At a value, every requirement of its written form is decided from what is known where the value
-is evaluated; each that is not known is refused at the place, and the walk goes on as if it were
-known. The results are then those of the table, with the operands of an operation that commutes
-in one order (`ValueRules.order`), and what the operation's ranges say of them is learned. An
-operation that is kept in order gets new identifiers, the leaves of its entry in the skeleton. A
+At an operation, shared or kept in order, every requirement of its written form is decided first,
+from what is known where it is applied; each that is not known is refused at the place, and the
+walk goes on as if it were known. Then a shared operation, a value, has the results of the table,
+with the operands of an operation that commutes in one order (`ValueRules.order`), and what the
+operation's ranges say of them is learned (`valueStep`); an operation that is kept in order gets
+new identifiers, the leaves of its entry in the skeleton. A
 guard learns its condition; a choice learns its condition in one region and its negation in the
 other; what a choice, a case analysis or a block returns has the hull of the ranges that its
 regions that run give it, and the result of a choice whose other region returns a written truth
@@ -348,12 +349,11 @@ section
 variable [DecidableEq Raw] (rules : FactRules D Raw) (checks : SkelRules D) (definition : Key)
   (role : Option Role)
 
-/-- A value: its requirements decided where it is evaluated, its results from the table with its
-operands in the table's order, and what its ranges and the types say of them learned. -/
-def valueStep (place : Place) (written : Raw) (res : List D.Ty) (argIds : List Nat) (k : Known)
+/-- A value, once its requirements are decided: its results from the table with its operands in
+the table's order, and what its ranges and the types say of them learned. -/
+def valueStep (written : Raw) (res : List D.Ty) (argIds : List Nat) (k : Known)
     (st : St D.Ty Raw) : List Nat × Known × St D.Ty Raw :=
-  let st₁ := checkRequirements rules.ops k place written argIds (rules.ops.requires written) st
-  let made := share written (rules.values.order written argIds) res.length st₁
+  let made := share written (rules.values.order written argIds) res.length st
   let k₁ := k.addRanges made.1 (rules.ops.ranges written (argIds.map k.rangeOf))
   let k₂ := k₁.addOffset rules.ops made.2.table k written argIds made.1
   (made.1, (k₂.addRanges made.1 (res.map rules.range)).enter rules res, made.2)
@@ -372,14 +372,16 @@ mutual
     | _, _, .op (res := res) key o args results rest, followed, ids, k, s =>
         let place : Place := ⟨definition, blocks, some key, role⟩
         let argIds := idsOf ids args
-        match rules.written o with
-        | some written =>
-            let step := valueStep rules place written res argIds k s.st
+        let checked := checkRequirements rules.ops k place (rules.written o) argIds
+          (rules.ops.requires (rules.written o)) s.st
+        match rules.shared o with
+        | true =>
+            let step := valueStep rules (rules.written o) res argIds k checked
             walk blocks rest followed (bindIds ids results step.1) step.2.1
               { s with st := step.2.2 }
-        | none =>
+        | false =>
             let hit := effectEntry checks key o argIds followed
-            let s₁ := miss place followed.isSome hit.isSome s
+            let s₁ := miss place followed.isSome hit.isSome { s with st := checked }
             let made := leaves (hit.map (·.1)) res.length s₁
             let after := walk blocks rest (hit.map (·.2)) (bindIds ids results made.1)
               ((k.addRanges made.1 (res.map rules.range)).enter rules res) made.2

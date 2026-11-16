@@ -12,9 +12,13 @@ soundness of the analysis (`Facts/Soundness.lean`, `Facts/SoundnessFollowing.lea
 alone, with no term in it.
 
 The facts of the table are about `ValidRun`: a written operation that gives results on valid
-operands, and valid results. The law `collect` asks that the collected values be as many as the
-size given, since a sequence of a written size is valid only of that length; the law `pick` that
-the payload of the alternative of a valid variant be valid (`PickValid`).
+operands, and valid results. Every operation has requirements, those of its written form, and
+they hold of its operands' values or not (`FactRules.Required`): a shared operation whose
+requirements hold returns (`defined`), an operation kept in order whose requirements hold never
+stops `undefined` and returns valid values (`effect`), and the values that the requirements of
+any operation name are there (`named`). The law `collect` asks that the collected values be as
+many as the size given, since a sequence of a written size is valid only of that length; the
+law `pick` that the payload of the alternative of a valid variant be valid (`PickValid`).
 -/
 
 namespace Zkc.Core
@@ -35,6 +39,13 @@ def PickValid (sem : Semantics D) (Valid : sem.Dyn → Prop) {payloads : List D.
     (p : Pick sem.Val payloads) : Prop :=
   p.All fun τ v => Valid ⟨τ, v⟩
 
+/-- The requirements of an operation hold of the values of its operands. -/
+def FactRules.Required (rules : FactRules D Raw) (sem : Semantics D) (R : Reading sem.Dyn)
+    (Run : Raw → List sem.Dyn → List sem.Dyn → Prop) (Valid : sem.Dyn → Prop)
+    {ins res : List D.Ty} (o : D.Op ins res) (values : HList sem.Val ins) : Prop :=
+  ∀ requirement, requirement ∈ rules.ops.requires (rules.written o) →
+    requirement.Holds (ValidRun sem Run Valid) R (sem.dyns values)
+
 /-- The laws that tie the rules of a dialect to a semantics. Each is about the rules and the
 semantics alone. -/
 structure FactRules.Lawful (rules : FactRules D Raw) (sem : Semantics D)
@@ -49,28 +60,27 @@ structure FactRules.Lawful (rules : FactRules D Raw) (sem : Semantics D)
   /-- A written operation gives valid results on valid operands. -/
   keeps : ∀ raw operands results, Run raw operands results → (∀ v, v ∈ operands → Valid v) →
     ∀ v, v ∈ results → Valid v
-  /-- A value whose requirements hold on valid operands returns. -/
-  defined : ∀ {ins res : List D.Ty} (o : D.Op ins res) (raw : Raw), rules.written o = some raw →
+  /-- The law `defined`: a shared operation whose requirements hold on valid operands
+  returns. -/
+  defined : ∀ {ins res : List D.Ty} (o : D.Op ins res), rules.shared o = true →
     ∀ (key : Key) (path : List Frame) (values : HList sem.Val ins),
-      (∀ v, v ∈ sem.dyns values → Valid v) →
-      (∀ requirement, requirement ∈ rules.ops.requires raw →
-        requirement.Holds (ValidRun sem Run Valid) R (sem.dyns values)) →
+      (∀ v, v ∈ sem.dyns values → Valid v) → rules.Required sem R Run Valid o values →
       ∃ results, sem.op key o path values = .done results
-  /-- Every value that a requirement of a value names beyond its operands is there, on valid
-  operands: one value, given by its written operation. -/
-  named : ∀ {ins res : List D.Ty} (o : D.Op ins res) (raw : Raw), rules.written o = some raw →
-    ∀ (values : HList sem.Val ins), (∀ v, v ∈ sem.dyns values → Valid v) →
-      ∀ requirement, requirement ∈ rules.ops.requires raw → ∀ operand,
-        operand ∈ requirement.operands → ∀ written positions, operand = .apply written positions →
-          ∃ operands results, atPositions (sem.dyns values) positions = some operands ∧
-            ValidRun sem Run Valid written operands results ∧ results.length = 1
-  /-- An operation kept in order, on valid operands and permitted replies, never stops
-  `undefined` and returns valid values. Such an operation has no requirement here: nothing is
-  checked of its operands, so a callee that is safe only under a precondition is not covered
-  (contracts of definitions are a later piece). -/
-  effect : ∀ {ins res : List D.Ty} (o : D.Op ins res), rules.written o = none →
+  /-- The law `named`: every value that a requirement of an operation names beyond its operands
+  is there, on valid operands: one value, given by its written operation. For every
+  operation. -/
+  named : ∀ {ins res : List D.Ty} (o : D.Op ins res) (values : HList sem.Val ins),
+    (∀ v, v ∈ sem.dyns values → Valid v) →
+    ∀ requirement, requirement ∈ rules.ops.requires (rules.written o) → ∀ operand,
+      operand ∈ requirement.operands → ∀ written positions, operand = .apply written positions →
+        ∃ operands results, atPositions (sem.dyns values) positions = some operands ∧
+          ValidRun sem Run Valid written operands results ∧ results.length = 1
+  /-- The law `effect`: an operation kept in order whose requirements hold on valid operands, on
+  permitted replies, never stops `undefined` and returns valid values. Outside its requirements
+  it may stop `undefined`: the analysis has decided them where it is applied. -/
+  effect : ∀ {ins res : List D.Ty} (o : D.Op ins res), rules.shared o = false →
     ∀ (key : Key) (path : List Frame) (values : HList sem.Val ins),
-      (∀ v, v ∈ sem.dyns values → Valid v) →
+      (∀ v, v ∈ sem.dyns values → Valid v) → rules.Required sem R Run Valid o values →
       (sem.op key o path values).Every permitted
         (fun results => ∀ v, v ∈ sem.dyns results → Valid v) (fun stop => ¬ undefined stop)
   /-- What a type says of a natural holds of its valid values. -/

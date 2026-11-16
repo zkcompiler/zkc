@@ -25,9 +25,9 @@ its name (`OwnedName`, `Program/Syntax.lean`) and its constructor (`OwnedOp`,
 `OwnedOp.resolve`, `OwnedOp.resolve_name`, `OwnedOp.name_resolve`); its meaning (`ownedOp`,
 `Meaning/Local.lean`), with
 the proofs that it keeps validity (`ownedOp_valid`, `Meaning/Validity.lean`) and stops only
-`undefined` (`ownedOp_halts`, `Meaning/Stops.lean`); what the check of facts is told of it
-(`ownedRequires`, `ownedRanges`, `localForm`, `Facts/Local.lean`), with their laws
-(`Facts/LocalLaws.lean`).
+`undefined` (`ownedOp_halts`, `Meaning/Stops.lean`); what the check of facts is told of it, one
+entry of the table of the contracts of the operations that the core owns (`ownedContract`,
+`Facts/Local.lean`), with its laws (`Facts/LocalLaws.lean`).
 -/
 
 namespace Zkc.Core

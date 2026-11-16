@@ -602,9 +602,10 @@ def toySem : Semantics toy where
 /-- Asking is kept in order; failing is a value; nothing commutes; nothing is known of a type or
 of an operation. -/
 def toyRules : FactRules toy Unit where
-  written := fun {_ _} o => match o with
-    | .ask => none
-    | .fail => some ()
+  written := fun _ => ()
+  shared := fun {_ _} o => match o with
+    | .ask => false
+    | .fail => true
   commutes := fun _ => false
   range := fun _ => none
   noValue := fun _ => false
@@ -720,7 +721,7 @@ theorem toyBinding : toyRules.values.Binding toySem (fun _ _ _ => False) (· = t
   computes := by
     intro _ _ o raw written key path values
     cases o with
-    | ask => cases written
+    | ask => cases (toyRules.values_written_kept rfl).symm.trans written
     | fail => exact .inr ⟨true, rfl, rfl⟩
   functional := fun _ _ _ _ ran => ran.elim
   commutative := fun _ _ _ _ _ ran => ran.elim

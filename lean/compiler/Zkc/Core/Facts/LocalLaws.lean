@@ -18,10 +18,12 @@ results on those operands (`LocalReturns`), whatever the values, valid or not; i
 the written form and the operands, because the written form names the operation
 (`localReturns_functional`). The facts of the table are about it on valid values (`ValidRun`). Of
 it, what the analysis knows of the written operations is true: the form of a result, the ranges of
-arithmetic (TY8), and what the type of a natural says. What an operation requires is enough for
-it: where every requirement holds of its operands' values, it does not stop `undefined`; and every
-value that a requirement names beyond the operands (a length, the truth value of a domain row) is
-there.
+arithmetic (TY8), and what the type of a natural says. Every operation has the requirements of
+its printed form, and what an operation requires is enough for it: where every requirement holds
+of its operands' values, it does not stop `undefined`; and every value that a requirement names
+beyond the operands (a length, the truth value of a domain row) is there. A call has no
+requirement yet, so a call of a function that can stop, which is kept in order, is safe on every
+valid input because its callee is (`Callees`).
 
 The law `computes` of the value form is for every value, and so is the law `commutative`, since
 the meaning of each operation that commutes is symmetric for all values of its operands. Against
@@ -120,17 +122,17 @@ theorem localReturns_functional (distinct : (fns.map (·.key)).Nodup) {w : Local
 
 /-- How the first result of a local operation reads. -/
 theorem localReturns_form {w : LocalRaw V} {as rs : List (localSem M fns table).Dyn}
-    {f : ResultForm} (hf : localForm w = some f) (h : LocalReturns M table w as rs) :
+    {f : ResultForm} (hf : (localOpFacts V).form w = some f) (h : LocalReturns M table w as rs) :
     ∃ r, rs.head? = some r ∧ FormHolds (localReading M) f as r := by
   obtain ⟨ins, res, o, a, r, rfl, rfl, rfl, run⟩ := h
   cases o with
-  | row => simp [LocalOp.print, localForm] at hf
-  | call => simp [LocalOp.print, localForm] at hf
+  | row => simp [LocalOp.print, localOpFacts] at hf
+  | call => simp [LocalOp.print, localOpFacts] at hf
   | literal τ data reads =>
       simp only [LocalOp.print] at hf
       have shape : (τ = .bool ∧ data = [0] ∧ f = .truth false) ∨
           (τ = .bool ∧ data = [1] ∧ f = .truth true) := by
-        unfold localForm at hf
+        simp only [localOpFacts] at hf
         split at hf <;> simp_all
       simp only [localOp, Process.done.injEq] at run
       subst run
@@ -144,7 +146,8 @@ theorem localReturns_form {w : LocalRaw V} {as rs : List (localSem M fns table).
         simp only [FormHolds, localReading]
         rw [← literal]
   | owned op =>
-      cases op <;> simp [LocalOp.print, OwnedOp.name, localForm] at hf <;> subst hf
+      cases op <;> simp [LocalOp.print, OwnedOp.name, localOpFacts, ownedContract] at hf <;>
+        subst hf
       case natAdd =>
         obtain ⟨x, y, rfl⟩ := HList.two a
         simp only [localOp, ownedOp, Process.done.injEq] at run
@@ -191,11 +194,12 @@ theorem localReturns_form {w : LocalRaw V} {as rs : List (localSem M fns table).
 
 theorem seqLength_has {item : V.Ty} {size : Option Nat} {len : Nat}
     (hlen : ∀ n, size = some n → len = n) {known : List (Option Range)} {i : Nat} {r : Range}
-    (e : (ownedRanges .seqLength [.seq item size] known)[i]? = some (some r)) :
+    (e : ((ownedContract (V := V) .seqLength).ranges [.seq item size] known)[i]? =
+      some (some r)) :
     i = 0 ∧ r.Has len := by
   cases size with
   | none =>
-      simp only [ownedRanges] at e
+      simp only [ownedContract] at e
       cases i with
       | zero =>
           simp only [List.getElem?_cons_zero, Option.some.injEq] at e
@@ -203,7 +207,7 @@ theorem seqLength_has {item : V.Ty} {size : Option Nat} {len : Nat}
           exact ⟨rfl, Nat.zero_le _, fun _ e => nomatch e⟩
       | succ i => simp at e
   | some size =>
-      simp only [ownedRanges] at e
+      simp only [ownedContract] at e
       cases i with
       | zero =>
           simp only [List.getElem?_cons_zero, Option.some.injEq] at e
@@ -256,7 +260,7 @@ theorem localRun_ranges {w : LocalRaw V} {as rs : List (localSem M fns table).Dy
                · simp at literal; simp only [localReading]; rw [← literal]
                · cases literal)
   | owned op =>
-      cases op <;> simp [LocalOp.print, OwnedOp.name, localOpFacts, ownedRanges] at e
+      cases op <;> simp [LocalOp.print, OwnedOp.name, localOpFacts, ownedContract] at e
       case natAdd =>
         obtain ⟨x, y, rfl⟩ := HList.two a
         simp only [localOp, ownedOp, Process.done.injEq] at run
@@ -530,44 +534,44 @@ theorem denotes_length {item : V.Ty} {size : Option Nat} {xs : M.Val (.seq item 
   exact head.symm
 
 theorem natSub_defined (x y : Nat)
-    (holds : ∀ req, req ∈ ownedRequires (V := V) .natSub [] →
+    (holds : ∀ req, req ∈ (ownedContract (V := V) .natSub).requires [] →
       Holds (table := table) [⟨.nat, x⟩, ⟨.nat, y⟩] req) :
     ∀ h, ownedOp M (.natSub (V := V)) (.cons x (.cons y .nil)) = .halt h → h ≠ .undefined := by
   intro h e
   have le := holds_args (u := ⟨.nat, y⟩) (v := ⟨.nat, x⟩) rfl rfl rfl
-    (holds (.le (.arg 1) (.arg 0)) (by simp [ownedRequires])) y x rfl rfl
+    (holds (.le (.arg 1) (.arg 0)) (by simp [ownedContract])) y x rfl rfl
   simp [ownedOp, le] at e
 
 theorem natDiv_defined (x y : Nat)
-    (holds : ∀ req, req ∈ ownedRequires (V := V) .natDiv [] →
+    (holds : ∀ req, req ∈ (ownedContract (V := V) .natDiv).requires [] →
       Holds (table := table) [⟨.nat, x⟩, ⟨.nat, y⟩] req) :
     ∀ h, ownedOp M (.natDiv (V := V)) (.cons x (.cons y .nil)) = .halt h → h ≠ .undefined := by
   intro h e
   have pos := holds_arg (u := ⟨.nat, y⟩) rfl rfl
-    (holds (.atLeast (.arg 1) 1) (by simp [ownedRequires])) y rfl
+    (holds (.atLeast (.arg 1) 1) (by simp [ownedContract])) y rfl
   simp [ownedOp, show 1 ≤ y from pos] at e
 
 theorem natRem_defined (x y : Nat)
-    (holds : ∀ req, req ∈ ownedRequires (V := V) .natRem [] →
+    (holds : ∀ req, req ∈ (ownedContract (V := V) .natRem).requires [] →
       Holds (table := table) [⟨.nat, x⟩, ⟨.nat, y⟩] req) :
     ∀ h, ownedOp M (.natRem (V := V)) (.cons x (.cons y .nil)) = .halt h → h ≠ .undefined := by
   intro h e
   have pos := holds_arg (u := ⟨.nat, y⟩) rfl rfl
-    (holds (.atLeast (.arg 1) 1) (by simp [ownedRequires])) y rfl
+    (holds (.atLeast (.arg 1) 1) (by simp [ownedContract])) y rfl
   simp [ownedOp, show 1 ≤ y from pos] at e
 
 theorem natBelow_defined (bound n : Nat)
-    (holds : ∀ req, req ∈ ownedRequires (V := V) .natBelow [.fin bound] →
+    (holds : ∀ req, req ∈ (ownedContract (V := V) .natBelow).requires [.fin bound] →
       Holds (table := table) [⟨.nat, n⟩] req) :
     ∀ h, ownedOp M (.natBelow (V := V) bound) (.cons n .nil) = .halt h → h ≠ .undefined := by
   intro h e
   have lt := holds_arg (u := ⟨.nat, n⟩) rfl rfl
-    (holds (.below (.arg 0) bound) (by simp [ownedRequires])) n rfl
+    (holds (.below (.arg 0) bound) (by simp [ownedContract])) n rfl
   simp [ownedOp, show n < bound from lt] at e
 
 theorem seqAt_defined {item : V.Ty} {size : Option Nat} (free : Ty.isLinear V item = false)
     (xs : M.Val (.seq item size)) (i : Nat) (valid : M.Valid _ xs)
-    (holds : ∀ req, req ∈ ownedRequires .seqAt [.seq item size] →
+    (holds : ∀ req, req ∈ (ownedContract .seqAt).requires [.seq item size] →
       Holds (table := table) [⟨.seq item size, xs⟩, ⟨.nat, i⟩] req) :
     ∀ h, ownedOp M (.seqAt item size free) (.cons xs (.cons i .nil)) = .halt h →
       h ≠ .undefined := by
@@ -576,12 +580,12 @@ theorem seqAt_defined {item : V.Ty} {size : Option Nat} (free : Ty.isLinear V it
     cases size with
     | some size =>
         have := holds_arg (u := ⟨.nat, i⟩) rfl rfl
-          (holds (.below (.arg 1) size) (by simp [ownedRequires])) i rfl
+          (holds (.below (.arg 1) size) (by simp [ownedContract])) i rfl
         rw [valid.2 size rfl]
         exact this
     | none =>
         obtain ⟨vs, d, rel⟩ := holds (.lt (.arg 1) (.apply (lengthOfType (.seq item none)) [0]))
-          (by simp [ownedRequires])
+          (by simp [ownedContract])
         obtain ⟨u, v, rfl, d1, d2⟩ := DenotesAll.two d
         simp only [Operand.Denotes, List.getElem?_cons_succ, List.getElem?_cons_zero,
           Option.some.injEq] at d1
@@ -597,16 +601,16 @@ theorem seqAt_defined {item : V.Ty} {size : Option Nat} (free : Ty.isLinear V it
 
 theorem seqSlice_defined {item : V.Ty} {size result : Option Nat}
     (free : Ty.isLinear V item = false) (xs : M.Val (.seq item size)) (first second : Nat)
-    (holds : ∀ req, req ∈ ownedRequires .seqSlice [.seq item size, .seq item result] →
+    (holds : ∀ req, req ∈ (ownedContract .seqSlice).requires [.seq item size, .seq item result] →
       Holds (table := table) [⟨.seq item size, xs⟩, ⟨.nat, first⟩, ⟨.nat, second⟩] req) :
     ∀ h, ownedOp M (.seqSlice item size result free)
       (.cons xs (.cons first (.cons second .nil))) = .halt h → h ≠ .undefined := by
   intro h e
   have ordered := holds_args (u := ⟨.nat, first⟩) (v := ⟨.nat, second⟩) rfl rfl rfl
-    (holds (.le (.arg 1) (.arg 2)) (by simp [ownedRequires])) first second rfl rfl
+    (holds (.le (.arg 1) (.arg 2)) (by simp [ownedContract])) first second rfl rfl
   have within : second ≤ (xs : List (M.Val item)).length := by
     obtain ⟨vs, d, rel⟩ := holds (.le (.arg 2) (.apply (lengthOfType (.seq item size)) [0]))
-      (by simp [ownedRequires])
+      (by simp [ownedContract])
     obtain ⟨u, v, rfl, d1, d2⟩ := DenotesAll.two d
     simp only [Operand.Denotes, List.getElem?_cons_succ, List.getElem?_cons_zero,
       Option.some.injEq] at d1
@@ -618,7 +622,7 @@ theorem seqSlice_defined {item : V.Ty} {size result : Option Nat}
     | none => rfl
     | some count =>
         have := holds_args (u := ⟨.nat, second⟩) (v := ⟨.nat, first⟩) rfl rfl rfl
-          (holds (.difference (.arg 2) (.arg 1) count) (by simp [ownedRequires]))
+          (holds (.difference (.arg 2) (.arg 1) count) (by simp [ownedContract]))
           second first rfl rfl
         simp [fitsSize, this]
   simp only [ownedOp] at e
@@ -628,13 +632,13 @@ theorem seqSlice_defined {item : V.Ty} {size result : Option Nat}
 
 theorem seqSized_defined {item : V.Ty} {size : Nat} {free : Ty.isLinear V item = false}
     (xs : M.Val (.seq item none))
-    (holds : ∀ req, req ∈ ownedRequires .seqSized [.seq item (some size)] →
+    (holds : ∀ req, req ∈ (ownedContract .seqSized).requires [.seq item (some size)] →
       Holds (table := table) [⟨.seq item none, xs⟩] req) :
     ∀ h, ownedOp M (.seqSized item size free) (.cons xs .nil) = .halt h → h ≠ .undefined := by
   intro h e
   have length : (xs : List (M.Val item)).length = size := by
     obtain ⟨vs, d, rel⟩ := holds
-      (.exactly (.apply (lengthOfType (.seq item none)) [0]) size) (by simp [ownedRequires])
+      (.exactly (.apply (lengthOfType (.seq item none)) [0]) size) (by simp [ownedContract])
     obtain ⟨u, rfl, d1⟩ := DenotesAll.one d
     rw [denotes_length d1] at rel
     exact rel _ rfl
@@ -661,7 +665,7 @@ theorem localOp_defined
       apply Local.stops_of_halts
       intro h e
       simp only [localOp] at e
-      have hreq : ∀ req, req ∈ ownedRequires op.name.1 op.name.2.1 →
+      have hreq : ∀ req, req ∈ (ownedContract op.name.1).requires op.name.2.1 →
           Holds (table := table) ((localSem M fns table).dyns a) req := fun req m => holds req m
       clear holds
       cases op
@@ -723,26 +727,26 @@ theorem localRequires_runs {ins res : List V.Ty} (o : LocalOp V fns ins res)
       case seqAt =>
         obtain ⟨xs, i, rfl⟩ := HList.two a
         rename_i size _
-        cases size <;> simp [OwnedOp.name, ownedRequires] at m <;> subst m <;>
+        cases size <;> simp [OwnedOp.name, ownedContract] at m <;> subst m <;>
           simp [Requirement.operands] at mo
         obtain ⟨rfl, rfl⟩ := mo
         exact ⟨_, _, rfl, localRun_length_intro ‹_› xs (HList.all_cons.mp va).1, rfl⟩
       case seqSlice =>
         obtain ⟨xs, first, second, rfl⟩ := HList.three a
         rename_i result _
-        cases result <;> simp [OwnedOp.name, ownedRequires] at m <;>
+        cases result <;> simp [OwnedOp.name, ownedContract] at m <;>
           rcases m with rfl | rfl | rfl <;> simp [Requirement.operands] at mo
         all_goals
           obtain ⟨rfl, rfl⟩ := mo
           exact ⟨_, _, rfl, localRun_length_intro ‹_› xs (HList.all_cons.mp va).1, rfl⟩
       case seqSized item _ free =>
         obtain ⟨xs, rfl⟩ := HList.one a
-        simp [OwnedOp.name, ownedRequires] at m
+        simp [OwnedOp.name, ownedContract] at m
         subst m
         simp [Requirement.operands] at mo
         obtain ⟨rfl, rfl⟩ := mo
         exact ⟨_, _, rfl, localRun_length_intro free xs (HList.all_cons.mp va).1, rfl⟩
-      all_goals simp [OwnedOp.name, ownedRequires] at m
+      all_goals simp [OwnedOp.name, ownedContract] at m
       all_goals subst m
       all_goals simp [Requirement.operands] at mo
 
@@ -774,9 +778,10 @@ theorem localFactRules_binding (distinct : (fns.map (·.key)).Nodup)
   computes := by
     intro ins res o raw written key path values
     cases stops : LocalOp.canStop o with
-    | true => simp only [FactRules.values, localFactRules, stops, Bool.cond_true, reduceCtorEq] at written
+    | true => simp [FactRules.values, localFactRules, stops] at written
     | false =>
-        simp only [FactRules.values, localFactRules, stops, Bool.cond_false, Option.some.injEq] at written
+        simp only [FactRules.values, localFactRules, stops, Bool.not_false, ↓reduceIte,
+          Option.some.injEq] at written
         show (∃ results, localOp M table o values = .done results ∧ _) ∨
           ∃ stop, localOp M table o values = .halt stop ∧ stop = Stop.undefined
         have undefinedOnly := localOp_stops_undefined M table quiet o values stops
@@ -797,8 +802,8 @@ theorem localFactRules_binding (distinct : (fns.map (·.key)).Nodup)
     | literal => simp [FactRules.values, localFactRules, LocalOp.print, LocalRaw.commutes] at commutes
     | call => simp [FactRules.values, localFactRules, LocalOp.print, LocalRaw.commutes] at commutes
     | owned o =>
-        cases o <;> simp [FactRules.values, localFactRules, LocalOp.print, OwnedOp.name, LocalRaw.commutes,
-          OwnedName.commutes] at commutes
+        cases o <;> simp [FactRules.values, localFactRules, LocalOp.print, OwnedOp.name,
+          LocalRaw.commutes, ownedContract] at commutes
         all_goals
           rcases args with _ | ⟨a, _ | ⟨b, _ | _⟩⟩
           have sameArgs : [(⟨_, a⟩ : (τ : V.Ty) × M.Val τ), ⟨_, b⟩] = [first, second] := sameArgs
@@ -857,35 +862,23 @@ theorem localFactRules_lawful (callees : Callees M table)
     exact ((localSem M fns table).dyns_valid_iff returned).mpr (localOp_valid table callees.keeps o
       args returned (((localSem M fns table).dyns_valid_iff args).mp valid) ran)
   defined := by
-    intro ins res o raw written key path values valid holds
-    cases stops : LocalOp.canStop o with
-    | true => simp [localFactRules, stops] at written
-    | false =>
-        simp only [localFactRules, stops, Bool.cond_false, Option.some.injEq]
-          at written
-        subst written
-        have defined := localOp_defined callees.safe o values
-          (((localSem M fns table).dyns_valid_iff values).mp valid) holds
-        have onlyUndefined := localOp_stops_undefined M table callees.quiet o values stops
-        show ∃ results, localOp M table o values = .done results
-        cases hrun : localOp M table o values with
-        | done r => exact ⟨r, rfl⟩
-        | halt h =>
-            rw [hrun] at defined onlyUndefined
-            exact absurd onlyUndefined defined
-        | call op _ => exact nomatch op
-  named := by
-    intro ins res o raw written values valid req m operand mo w ps e
-    cases stops : LocalOp.canStop o with
-    | true => simp [localFactRules, stops] at written
-    | false =>
-        simp only [localFactRules, stops, Bool.cond_false, Option.some.injEq]
-          at written
-        subst written
-        exact localRequires_runs o values (((localSem M fns table).dyns_valid_iff values).mp valid)
-          req m operand mo w ps e
+    intro ins res o shared key path values valid holds
+    have stops : LocalOp.canStop o = false := by simpa [localFactRules] using shared
+    have defined := localOp_defined callees.safe o values
+      (((localSem M fns table).dyns_valid_iff values).mp valid) holds
+    have onlyUndefined := localOp_stops_undefined M table callees.quiet o values stops
+    show ∃ results, localOp M table o values = .done results
+    cases hrun : localOp M table o values with
+    | done r => exact ⟨r, rfl⟩
+    | halt h =>
+        rw [hrun] at defined onlyUndefined
+        exact absurd onlyUndefined defined
+    | call op _ => exact nomatch op
+  named := fun o values valid req m operand mo w ps e =>
+    localRequires_runs o values (((localSem M fns table).dyns_valid_iff values).mp valid) req m
+      operand mo w ps e
   effect := by
-    intro ins res o written key path values valid
+    intro ins res o kept key path values valid _
     have va : values.All M.Valid := ((localSem M fns table).dyns_valid_iff values).mp valid
     cases o with
     | call callee =>
@@ -899,9 +892,9 @@ theorem localFactRules_lawful (callees : Callees M table)
             rw [hrun] at stops
             exact stops
         | call op _ => exact nomatch op
-    | row => simp [localFactRules, LocalOp.canStop] at written
-    | owned => simp [localFactRules, LocalOp.canStop] at written
-    | literal => simp [localFactRules, LocalOp.canStop] at written
+    | row => simp [localFactRules, LocalOp.canStop] at kept
+    | owned => simp [localFactRules, LocalOp.canStop] at kept
+    | literal => simp [localFactRules, LocalOp.canStop] at kept
   range := fun _ _ v h valid => localRange_has h v valid
   noValue := fun _ v valid => localNoValue_valid (fns := fns) v valid
   condition := by
