@@ -9,7 +9,8 @@ The conformance cases of the reference that a function can express are named by 
 identifiers: each is accepted or refused as the case says, and a refusal is compared whole. Then,
 for each operation with a domain and for a restricted row, an application that is accepted and
 one that is refused; then what sharing and the scope of facts must do in sibling regions, in
-loops, after a choice and when a name is bound again; a loop over a range whose end is a
+loops, after a choice, and for a new name bound where a program would bind a name again, which
+elaboration refuses by the rule `assignment`; a loop over a range whose end is a
 run-time value; a power too large to compute; what the calculus of facts does not conclude;
 then which code does not run: only what is written says so, never what is known; and, for each
 rule of the calculus, a case that only it decides: what a condition teaches, what regions give
@@ -84,8 +85,8 @@ def verdict (fns : List (FnHeader field)) (hdr : FnHeader field)
     (body : Region (LocalRaw field) Unit) :
     Option (List (ProgramRefusal field) ⊕ List (Place × Nat)) :=
   match elabFn fns hdr body with
-  | .ok ⟨fn, _⟩ =>
-      match checkFacts (localFactRules field fns) hdr.key none fn with
+  | .ok ⟨inputs, fn, _⟩ =>
+      match checkFacts (localFactRules field fns) hdr.key none inputs fn with
       | .ok bounds => some (.inr bounds)
       | .error refusals => some (.inl refusals)
   | .error _ => none
@@ -94,6 +95,14 @@ def verdict (fns : List (FnHeader field)) (hdr : FnHeader field)
 def check (ins outs : List field.Ty) (canStop : Bool) (body : Region (LocalRaw field) Unit) :
     Option (List (ProgramRefusal field) ⊕ List (Place × Nat)) :=
   verdict [] ⟨⟨1⟩, ins, outs, canStop, none⟩ body
+
+/-- The refusal of elaboration of the body of a function with the key 1 and no callee; nothing
+when it elaborates. -/
+def elaborationRefusal (ins outs : List field.Ty) (canStop : Bool)
+    (body : Region (LocalRaw field) Unit) : Option (ProgramRefusal field) :=
+  match elabFn [] ⟨⟨1⟩, ins, outs, canStop, none⟩ body with
+  | .ok _ => none
+  | .error refusal => some refusal
 
 /-- Accepted, with no loop as often as a count that has a bound. -/
 abbrev accepted : Option (List (ProgramRefusal field) ⊕ List (Place × Nat)) := some (.inr [])
@@ -149,9 +158,9 @@ def «R-TY9a-head» := check [elements] [.variant ⟨7⟩ (.cons F (.cons (.tupl
       .op ⟨7⟩ [22] (.owned .variant [.variant ⟨7⟩ (.cons F (.cons (.tuple .nil) .nil))] [0])
         [21]] [22])
     (.mk [] [
-      .op ⟨8⟩ [20] (.owned .make [.tuple .nil] []) [],
-      .op ⟨9⟩ [21] (.owned .variant [.variant ⟨7⟩ (.cons F (.cons (.tuple .nil) .nil))] [1])
-        [20]] [21])] [13]
+      .op ⟨8⟩ [30] (.owned .make [.tuple .nil] []) [],
+      .op ⟨9⟩ [31] (.owned .variant [.variant ⟨7⟩ (.cons F (.cons (.tuple .nil) .nil))] [1])
+        [30]] [31])] [13]
 
 /-- The negation of the condition goes to the second region: `last`. -/
 def «R-TY9a-last» := check [elements] [F] false <| .mk [0] [
@@ -209,7 +218,7 @@ def «N-TY8d» := check [bytes 8, .fin 128, .fin 8] [.nat] false <| .mk [0, 1, 2
       .op ⟨9⟩ [22] plus [20, 21],
       .op ⟨10⟩ [23] (item (bytes 8)) [0, 22],
       .op ⟨11⟩ [24] (toNat 256) [23]] [24])
-    (.mk [] [.op ⟨12⟩ [20] (natural 0) []] [20])] [15]
+    (.mk [] [.op ⟨12⟩ [30] (natural 0) []] [30])] [15]
 
 /-- A strided slice after a guard. -/
 def «T-Z8» := check [sizedElements 16, .nat] [sizedElements 4] true <| .mk [0, 1] [
@@ -315,7 +324,7 @@ def «V-F4» := check [elements] [.bool] false <| .mk [0] [
       .op ⟨6⟩ [21] (item elements) [0, 20],
       .op ⟨7⟩ [22] (element 0) [],
       .op ⟨8⟩ [23] (fieldRow .equal) [21, 22]] [23])
-    (.mk [] [.op ⟨9⟩ [20] (truth false) []] [20])] [13]
+    (.mk [] [.op ⟨9⟩ [30] (truth false) []] [30])] [13]
 
 /-- `a or b` is `if a then true else b`: `b` has the facts of the negation of `a`. -/
 def «V-F4b» := check [elements] [.bool] false <| .mk [0] [
@@ -325,10 +334,10 @@ def «V-F4b» := check [elements] [.bool] false <| .mk [0] [
   .choose ⟨4⟩ () 12 [13]
     (.mk [] [.op ⟨5⟩ [20] (truth true) []] [20])
     (.mk [] [
-      .op ⟨6⟩ [20] (natural 0) [],
-      .op ⟨7⟩ [21] (item elements) [0, 20],
-      .op ⟨8⟩ [22] (element 0) [],
-      .op ⟨9⟩ [23] (fieldRow .equal) [21, 22]] [23])] [13]
+      .op ⟨6⟩ [30] (natural 0) [],
+      .op ⟨7⟩ [31] (item elements) [0, 30],
+      .op ⟨8⟩ [32] (element 0) [],
+      .op ⟨9⟩ [33] (fieldRow .equal) [31, 32]] [33])] [13]
 
 /-- The same idiom as `V-F4`, written as a choice: the program is the same. -/
 def «V-F4c» := «V-F4»
@@ -366,7 +375,7 @@ def «N-TY9a» := check [elements] [.bool] false <| .mk [0] [
       .op ⟨6⟩ [20] (natural 0) [],
       .op ⟨7⟩ [21] (length elements) [0],
       .op ⟨8⟩ [22] less [20, 21]] [22])
-    (.mk [] [.op ⟨9⟩ [20] (truth false) []] [20])] [14]
+    (.mk [] [.op ⟨9⟩ [30] (truth false) []] [30])] [14]
 
 /-- The fact does not hold in the other region. -/
 def «R-TY9b» := check [elements] [F] false <| .mk [0] [
@@ -376,8 +385,8 @@ def «R-TY9b» := check [elements] [F] false <| .mk [0] [
   .choose ⟨4⟩ () 12 [13]
     (.mk [] [.op ⟨5⟩ [20] (element 0) []] [20])
     (.mk [] [
-      .op ⟨6⟩ [20] (natural 0) [],
-      .op ⟨7⟩ [21] (item elements) [0, 20]] [21])] [13]
+      .op ⟨6⟩ [30] (natural 0) [],
+      .op ⟨7⟩ [31] (item elements) [0, 30]] [31])] [13]
 
 /-- The negation of `i != n` is `i == n`, which does not give `i < n`. -/
 def «V-F7» := check [elements, .nat] [F] false <| .mk [0, 1] [
@@ -400,10 +409,10 @@ def «V-F10» := check [elements, .nat, .nat] [F] false <| .mk [0, 1, 2] [
       .op ⟨6⟩ [20] (length elements) [0],
       .op ⟨7⟩ [21] less [2, 20],
       .op ⟨8⟩ [22] negation [21]] [22])
-    (.mk [] [.op ⟨9⟩ [20] (truth false) []] [20]),
+    (.mk [] [.op ⟨9⟩ [30] (truth false) []] [30]),
   .choose ⟨10⟩ () 14 [15]
     (.mk [] [] [10])
-    (.mk [] [.op ⟨11⟩ [20] (item elements) [0, 1]] [20])] [15]
+    (.mk [] [.op ⟨11⟩ [40] (item elements) [0, 1]] [40])] [15]
 
 /-- The fact of a choice's region does not leave it. -/
 def «V-F11» := check [elements, .nat] [F] false <| .mk [0, 1] [
@@ -411,7 +420,7 @@ def «V-F11» := check [elements, .nat] [F] false <| .mk [0, 1] [
   .op ⟨2⟩ [11] less [1, 10],
   .choose ⟨3⟩ () 11 [12]
     (.mk [] [.op ⟨4⟩ [20] (natural 0) []] [20])
-    (.mk [] [.op ⟨5⟩ [20] (natural 1) []] [20]),
+    (.mk [] [.op ⟨5⟩ [30] (natural 1) []] [30]),
   .op ⟨6⟩ [13] (item elements) [0, 1]] [13]
 
 /-- A fact made in one region does not leave it. -/
@@ -477,7 +486,8 @@ def «N-TY10g» := check [bytes 4] [.fin 1024] false <| .mk [0] [
 /-- A sum of weighted bytes, `∑ i ∈ 0..count, units[i] * 256^i`, of `count` terms. The index is
 an operand of arithmetic in the element, so the sum is its iterations in sequence, each with the
 index a literal, and its range is taken index by index (`LANGUAGE.md`, TY8, the row of `∑`; §7.5,
-stepped loops). -/
+stepped loops). The sum starts at `0`, named `1999`, and the sum of the first `k + 1` terms is
+`2000 + k`. -/
 def weighted (count : Nat) : Region (LocalRaw field) Unit :=
   .mk [0] (terms ++ [.op ⟨1000⟩ [3000] (narrowTo (2 ^ 64)) [total]]) [3000]
 where
@@ -491,8 +501,8 @@ where
        .op ⟨10 * k + 4⟩ [100 * k + 13] (natural 256) [],
        .op ⟨10 * k + 5⟩ [100 * k + 14] power [100 * k + 13, 100 * k + 10],
        .op ⟨10 * k + 6⟩ [100 * k + 15] times [100 * k + 12, 100 * k + 14]] ++
-      (if k = 0 then [.op ⟨10 * k + 7⟩ [2000] (natural 0) [],
-          .op ⟨10 * k + 8⟩ [2000] plus [2000, 15]]
+      (if k = 0 then [.op ⟨10 * k + 7⟩ [1999] (natural 0) [],
+          .op ⟨10 * k + 8⟩ [2000] plus [1999, 15]]
         else [.op ⟨10 * k + 7⟩ [2000 + k] plus [2000 + (k - 1), 100 * k + 15]])
 
 /-- Eight bytes weighted by powers of 256 are below `2^64`. -/
@@ -510,7 +520,7 @@ def «V-F1d» := check [elements, .nat] [F] true <| .mk [0, 1] [
   .op ⟨5⟩ [13] plus [1, 12],
   .op ⟨6⟩ [14] (item elements) [0, 1]] [14]
 
-/-- A fact on `i + 1`, then `i` updated. -/
+/-- A fact on `i + 1`, then `i` updated: the updated value has its own name, `17`. -/
 def «V-F1» := check [elements, .nat] [F] true <| .mk [0, 1] [
   .op ⟨1⟩ [10] (natural 1) [],
   .op ⟨2⟩ [11] plus [1, 10],
@@ -519,26 +529,26 @@ def «V-F1» := check [elements, .nat] [F] true <| .mk [0, 1] [
   .op ⟨5⟩ [14] negation [13],
   .guard ⟨6⟩ () 14 .refused,
   .op ⟨7⟩ [15] (natural 100) [],
-  .op ⟨8⟩ [1] plus [1, 15],
-  .op ⟨9⟩ [16] (item elements) [0, 1]] [16]
+  .op ⟨8⟩ [17] plus [1, 15],
+  .op ⟨9⟩ [16] (item elements) [0, 17]] [16]
 
-/-- A name narrowed by a guard, then updated. -/
+/-- A name narrowed by a guard, then updated: the updated value has its own name, `14`. -/
 def «V-F1b» := check [elements, .nat] [F] true <| .mk [0, 1] [
   .op ⟨1⟩ [10] (length elements) [0],
   .op ⟨2⟩ [11] less [1, 10],
   .guard ⟨3⟩ () 11 .refused,
   .op ⟨4⟩ [12] (natural 100) [],
-  .op ⟨5⟩ [1] plus [1, 12],
-  .op ⟨6⟩ [13] (item elements) [0, 1]] [13]
+  .op ⟨5⟩ [14] plus [1, 12],
+  .op ⟨6⟩ [13] (item elements) [0, 14]] [13]
 
-/-- A name with a range from a guard, then updated. -/
+/-- A name with a range from a guard, then updated: the updated value has its own name, `14`. -/
 def «V-F1c» := check [sizedElements 8, .nat] [F] true <| .mk [0, 1] [
   .op ⟨1⟩ [10] (natural 8) [],
   .op ⟨2⟩ [11] less [1, 10],
   .guard ⟨3⟩ () 11 .refused,
   .op ⟨4⟩ [12] (natural 100) [],
-  .op ⟨5⟩ [1] plus [1, 12],
-  .op ⟨6⟩ [13] (item (sizedElements 8)) [0, 1]] [13]
+  .op ⟨5⟩ [14] plus [1, 12],
+  .op ⟨6⟩ [13] (item (sizedElements 8)) [0, 14]] [13]
 
 /-- Three guards: the order asked for is one of them. -/
 def «facts-direct-order» := check [.nat, .nat, .nat] [.nat] true <| .mk [0, 1, 2] [
@@ -665,7 +675,7 @@ example : check [.nat, .nat, .bool] [.nat] true (.mk [0, 1, 2] [
         .op ⟨3⟩ [21] negation [20],
         .guard ⟨4⟩ () 21 .reject,
         .op ⟨5⟩ [22] minus [0, 1]] [22])
-      (.mk [] [.op ⟨6⟩ [20] minus [0, 1]] [20])] [10]) =
+      (.mk [] [.op ⟨6⟩ [30] minus [0, 1]] [30])] [10]) =
     some (.inl [unjustified 6 minus (.le (.arg 1) (.arg 0)) [anyNat, anyNat]]) := by
   decide +kernel
 
@@ -772,10 +782,10 @@ def siblings (secondIndex : Nat) (secondGuarded : Bool) :=
       .guard ⟨4⟩ () 21 .reject,
       .op ⟨5⟩ [22] (item elements) [0, 2]] [22])
     (.mk [] ((if secondGuarded then [
-      .op ⟨6⟩ [20] (length elements) [0],
-      .op ⟨7⟩ [21] less [secondIndex, 20],
-      .guard ⟨8⟩ () 21 .reject] else []) ++
-      [.op ⟨9⟩ [22] (item elements) [0, secondIndex]]) [22])] [10]
+      .op ⟨6⟩ [30] (length elements) [0],
+      .op ⟨7⟩ [31] less [secondIndex, 30],
+      .guard ⟨8⟩ () 31 .reject] else []) ++
+      [.op ⟨9⟩ [32] (item elements) [0, secondIndex]]) [32])] [10]
 
 example : siblings 3 true = accepted := by decide +kernel
 /-- The second region indexes by another value with no guard. -/
@@ -855,7 +865,7 @@ def shortCircuit (guarded reversed : Bool) :=
     (.mk [] [
       .op ⟨6⟩ [20] (length elements) [0],
       .op ⟨7⟩ [21] less [10, 20]] [21])
-    (.mk [] [.op ⟨8⟩ [20] (truth false) []] [20])] else [
+    (.mk [] [.op ⟨8⟩ [30] (truth false) []] [30])] else [
   .op ⟨1⟩ [10] (natural 0) [],
   .op ⟨2⟩ [11] (length elements) [0],
   .op ⟨3⟩ [12] less [10, 11],
@@ -864,7 +874,7 @@ def shortCircuit (guarded reversed : Bool) :=
       .op ⟨6⟩ [20] (item elements) [0, 10],
       .op ⟨7⟩ [21] (element 0) [],
       .op ⟨4⟩ [22] (fieldRow .equal) [20, 21]] [22])
-    (.mk [] [.op ⟨8⟩ [20] (truth false) []] [20])]) ++
+    (.mk [] [.op ⟨8⟩ [30] (truth false) []] [30])]) ++
   (if guarded then [.guard ⟨9⟩ () 14 .reject] else []) ++
   [.op ⟨10⟩ [15] (natural 0) [],
    .op ⟨11⟩ [16] (item elements) [0, 15]]) [16]
@@ -886,23 +896,39 @@ example : check [elements, elements, .nat] [F] true (.mk [0, 1, 2] [
     some (.inl [unjustified 4 (item elements) (.lt (.arg 1) lengthOf) [anyNat, anyNat]]) := by
   decide +kernel
 
-/-- `x := i + 1; guard x < length(xs)`, then `x` bound again to `x + 1`, to `i + 1` and to
-`1 + i`, and `xs[x]`. -/
-def rebound (again : List (Instruction (LocalRaw field) Unit)) :=
-  check [elements, .nat] [F] true <| .mk [0, 1] ([
+/-- `x := i + 1; guard x < length(xs)`, then the instruction given, and `xs[index]`. -/
+def afterGuard (again : List (Instruction (LocalRaw field) Unit)) (index : Nat) :
+    Region (LocalRaw field) Unit :=
+  .mk [0, 1] ([
   .op ⟨1⟩ [11] (natural 1) [],
   .op ⟨2⟩ [10] plus [1, 11],
   .op ⟨3⟩ [12] (length elements) [0],
   .op ⟨4⟩ [13] less [10, 12],
   .guard ⟨5⟩ () 13 .reject,
   .op ⟨6⟩ [14] (natural 1) []] ++ again ++ [
-  .op ⟨8⟩ [15] (item elements) [0, 10]]) [15]
+  .op ⟨8⟩ [15] (item elements) [0, index]]) [15]
 
-example : rebound [.op ⟨7⟩ [10] plus [10, 14]] = some (.inl
+/-- `x` bound again, to `x + 1`, to `i + 1` and to `1 + i`: each refused by the rule `assignment`
+at the instruction that binds it again, with its name. -/
+example : elaborationRefusal [elements, .nat] [F] true (afterGuard [.op ⟨7⟩ [10] plus [10, 14]] 10) =
+    some ⟨.assignment, place 7, .name 10⟩ := by
+  decide +kernel
+example : elaborationRefusal [elements, .nat] [F] true (afterGuard [.op ⟨7⟩ [10] plus [1, 14]] 10) =
+    some ⟨.assignment, place 7, .name 10⟩ := by
+  decide +kernel
+example : elaborationRefusal [elements, .nat] [F] true (afterGuard [.op ⟨7⟩ [10] plus [14, 1]] 10) =
+    some ⟨.assignment, place 7, .name 10⟩ := by
+  decide +kernel
+
+/-- A new name `16` bound to `x + 1`, to `i + 1` and to `1 + i`, and `xs[16]`: the fact on `x`
+says nothing of `x + 1`; it holds of `i + 1`, the same written computation as `x`; and not of
+`1 + i`. -/
+example : check [elements, .nat] [F] true (afterGuard [.op ⟨7⟩ [16] plus [10, 14]] 16) = some (.inl
     [unjustified 8 (item elements) (.lt (.arg 1) lengthOf) [some ⟨2, none⟩, anyNat]]) := by
   decide +kernel
-example : rebound [.op ⟨7⟩ [10] plus [1, 14]] = accepted := by decide +kernel
-example : rebound [.op ⟨7⟩ [10] plus [14, 1]] = some (.inl
+example : check [elements, .nat] [F] true (afterGuard [.op ⟨7⟩ [16] plus [1, 14]] 16) = accepted := by
+  decide +kernel
+example : check [elements, .nat] [F] true (afterGuard [.op ⟨7⟩ [16] plus [14, 1]] 16) = some (.inl
     [unjustified 8 (item elements) (.lt (.arg 1) lengthOf) [some ⟨1, none⟩, anyNat]]) := by
   decide +kernel
 
@@ -1095,7 +1121,7 @@ example : check [elements, .variant ⟨7⟩ (.cons .nat (.cons (.fin 0) .nil))] 
       .op ⟨1⟩ [10] (element 0) [],
       .cases ⟨2⟩ () 1 [11]
         [.mk [20] [] [10],
-         .mk [20] [.op ⟨3⟩ [21] (toNat 0) [20], .op ⟨4⟩ [22] (item elements) [0, 21]] [22]]]
+         .mk [30] [.op ⟨3⟩ [31] (toNat 0) [30], .op ⟨4⟩ [32] (item elements) [0, 31]] [32]]]
       [11]) = accepted := by
   decide +kernel
 
@@ -1105,7 +1131,7 @@ example : check [elements, .variant ⟨7⟩ (.cons .nat (.cons (.seq (.fin 0) (s
       .op ⟨1⟩ [10] (element 0) [],
       .cases ⟨2⟩ () 1 [11]
         [.mk [20] [] [10],
-         .mk [20] [.op ⟨3⟩ [21] (natural 0) [], .op ⟨4⟩ [22] (item elements) [0, 21]] [22]]]
+         .mk [30] [.op ⟨3⟩ [31] (natural 0) [], .op ⟨4⟩ [32] (item elements) [0, 31]] [32]]]
       [11]) = accepted := by
   decide +kernel
 
@@ -1234,7 +1260,7 @@ example : check [.nat, .nat, .nat] [.nat] true (.mk [0, 1, 2] [
     .op ⟨1⟩ [10] less [0, 2],
     .choose ⟨2⟩ () 10 [11]
       (.mk [] [.op ⟨3⟩ [20] (truth true) []] [20])
-      (.mk [] [.op ⟨4⟩ [20] less [1, 2]] [20]),
+      (.mk [] [.op ⟨4⟩ [30] less [1, 2]] [30]),
     .op ⟨5⟩ [12] negation [11],
     .guard ⟨6⟩ () 12 .reject,
     .op ⟨7⟩ [13] minus [0, 2],
@@ -1253,7 +1279,7 @@ abbrev natOr (payload : field.Ty) : field.Ty := .variant ⟨7⟩ (.cons .nat (.c
 example : check [.nat, natOrTruth] [.nat] false (.mk [0, 1] [
     .cases ⟨1⟩ () 1 [10]
       [.mk [20] [.op ⟨2⟩ [21] (natural 2) []] [21],
-       .mk [20] [.op ⟨3⟩ [21] (natural 3) []] [21]],
+       .mk [30] [.op ⟨3⟩ [31] (natural 3) []] [31]],
     .op ⟨4⟩ [11] quotient [0, 10]] [11]) = accepted := by
   decide +kernel
 
@@ -1262,7 +1288,7 @@ and the divisor is `3`. -/
 def deadArm (payload : field.Ty) := check [.nat, natOr payload] [.nat] false (.mk [0, 1] [
     .cases ⟨1⟩ () 1 [10]
       [.mk [20] [.op ⟨2⟩ [21] (natural 3) []] [21],
-       .mk [20] [.op ⟨3⟩ [21] (natural 0) []] [21]],
+       .mk [30] [.op ⟨3⟩ [31] (natural 0) []] [31]],
     .op ⟨4⟩ [11] quotient [0, 10]] [11])
 
 example : deadArm (.fin 0) = accepted := by decide +kernel
@@ -1271,7 +1297,7 @@ example : deadArm (.fin 0) = accepted := by decide +kernel
 example : check [.nat, .bool] [.nat] false (.mk [0, 1] [
     .choose ⟨1⟩ () 1 [10]
       (.mk [] [.op ⟨2⟩ [20] (natural 2) []] [20])
-      (.mk [] [.op ⟨3⟩ [20] (natural 3) []] [20]),
+      (.mk [] [.op ⟨3⟩ [30] (natural 3) []] [30]),
     .op ⟨4⟩ [11] quotient [0, 10]] [11]) = accepted := by
   decide +kernel
 
@@ -1286,7 +1312,7 @@ the payload has its type's range. -/
 example : check [.variant ⟨7⟩ (.cons (.fin 4) (.cons .nat .nil))] [.fin 4] false (.mk [0] [
     .cases ⟨1⟩ () 0 [10]
       [.mk [20] [.op ⟨2⟩ [21] (toNat 4) [20], .op ⟨3⟩ [22] (narrowTo 4) [21]] [22],
-       .mk [20] [.op ⟨4⟩ [21] (natural 0) [], .op ⟨5⟩ [22] (narrowTo 4) [21]] [22]]] [10]) =
+       .mk [30] [.op ⟨4⟩ [31] (natural 0) [], .op ⟨5⟩ [32] (narrowTo 4) [31]] [32]]] [10]) =
     accepted := by
   decide +kernel
 
@@ -1428,9 +1454,9 @@ example : check [elements, .bool] [F] false (.mk [0, 1] [
         .op ⟨3⟩ [21] (narrowTo 0) [20],
         .op ⟨8⟩ [22] (natural 7) []] [22])
       (.mk [] [
-        .op ⟨4⟩ [20] (natural 0) [],
-        .op ⟨5⟩ [21] (narrowTo 0) [20],
-        .op ⟨9⟩ [22] (natural 7) []] [22]),
+        .op ⟨4⟩ [30] (natural 0) [],
+        .op ⟨5⟩ [31] (narrowTo 0) [30],
+        .op ⟨9⟩ [32] (natural 7) []] [32]),
     .op ⟨6⟩ [11] (natural 0) [],
     .op ⟨7⟩ [12] (item elements) [0, 11]] [12]) = some (.inl
     [unjustified 3 (narrowTo 0) (.below (.arg 0) 0) [some (Range.point 0)],
@@ -1474,7 +1500,7 @@ example : check [.nat, .nat] [.nat] true (.mk [0, 1] [
     .op ⟨5⟩ [13] less [1, 12],
     .guard ⟨6⟩ () 13 .reject,
     .loop ⟨7⟩ () (.count 0) [] [] (.mk [20] [] []),
-    .loop ⟨8⟩ () (.count 1) [] [] (.mk [20] [] [])] [0]) =
+    .loop ⟨8⟩ () (.count 1) [] [] (.mk [30] [] [])] [0]) =
     some (.inr [(place 7, 9), (place 8, 4)]) := by
   decide +kernel
 

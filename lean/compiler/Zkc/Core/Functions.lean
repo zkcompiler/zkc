@@ -18,16 +18,17 @@ namespace Zkc.Core
 
 /-! ## The functions to be built -/
 
-/-- The functions of elaboration, admission, deployment and execution. The printed form of a
-typed program is the definition `print`. For a program of functions, `elaborate`, `admit` and
+/-- The functions of elaboration, admission, deployment and execution. The erased form of a
+typed program is the definition `erase`. For a program of functions, `elaborate`, `admit` and
 `check` are the definitions `elaborateFunctions`, `admit` and `check`, which refuse a protocol;
 the record gets them when protocols are elaborated. The others are still to be built. -/
 structure Functions (V : Vocabulary) where
   /-- The typed program of a program by names, of functions and protocols; the refusals of
   elaboration. -/
   elaborate : NamedProgram V → Except (List (ProgramRefusal V)) (Typed V)
-  /-- The printed form of a role's code: of its program, and of a clause of a handler. -/
-  printRole : ∀ {hs : Headers V} (r : Role) {Γ outs : List (LTy V)},
+  /-- The erased form of a role's code, in a context of names: of its program, and of a
+  clause of a handler. -/
+  eraseRole : ∀ {hs : Headers V} (r : Role) {Γ : Ctx (LTy V)} {outs : List (LTy V)},
     Term (roleDialect V hs r) Γ outs → Region (RoleRaw V) (List Role)
   /-- The canonical format of a type: the core's combinators over the formats of the nominal
   carriers that a model with codecs gives. -/
@@ -48,7 +49,7 @@ structure Functions (V : Vocabulary) where
   the network, to a limit of steps. It reports the record of the execution and, for each role,
   how it ended. -/
   schedule : ∀ (p : Typed V) (M : Model V) (hdr : ProtocolHeader V)
-    (_ : Var p.headers.protocols hdr), (∀ r, HList (RV M r) hdr.ins) → Source M → Nat →
+    (_ : Member p.headers.protocols hdr), (∀ r, HList (RV M r) hdr.ins) → Source M → Nat →
       List (Happened M) × (∀ r, Outcome (HList (RV M r) hdr.outs) Unit)
 
 end Zkc.Core

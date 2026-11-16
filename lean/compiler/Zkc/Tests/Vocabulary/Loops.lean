@@ -13,17 +13,20 @@ abbrev triple : Ty :=
   .tuple (.cons (sized byte 2) (.cons (sized byte 4) (.cons (sized byte 8) .nil)))
 
 /-- `N-TY10a`: `for j in 0..3: x = t[j]; acc := acc + x[0]`. The index is a tuple position, so the
-loop is typed per iteration and is three blocks of the loop `⟨2⟩` (§7.4, §7.5). -/
+loop is typed per iteration and is three blocks of the loop `⟨2⟩` (§7.4, §7.5). Each value of
+`acc` has its own name: block `j` reads `10 + j` and binds `11 + j`, and the names inside it are
+`20 + 10 * j` and after. -/
 def firstsBlock (j size : Nat) : Instruction Raw Unit :=
-  .block ⟨2⟩ j [10] (.mk [] [
-    .op ⟨3⟩ [20] (get triple j) [0],
-    .op ⟨4⟩ [21] (natural 0) [],
-    .op ⟨5⟩ [22] (item (sized byte size)) [20, 21],
-    .op ⟨6⟩ [23] (toNat 256) [22],
-    .op ⟨7⟩ [24] plus [10, 23]] [24])
+  let base := 20 + 10 * j
+  .block ⟨2⟩ j [11 + j] (.mk [] [
+    .op ⟨3⟩ [base] (get triple j) [0],
+    .op ⟨4⟩ [base + 1] (natural 0) [],
+    .op ⟨5⟩ [base + 2] (item (sized byte size)) [base, base + 1],
+    .op ⟨6⟩ [base + 3] (toNat 256) [base + 2],
+    .op ⟨7⟩ [base + 4] plus [10 + j, base + 3]] [base + 4])
 def «N-TY10a» := check [triple] [.nat] false <| .mk [0] [
   .op ⟨1⟩ [10] (natural 0) [],
-  firstsBlock 0 2, firstsBlock 1 4, firstsBlock 2 8] [10]
+  firstsBlock 0 2, firstsBlock 1 4, firstsBlock 2 8] [13]
 
 /-- `N-TY11a`: `[t[j][0] for j in 0..3]`, typed per element: a `local.make` of its elements. -/
 def «N-TY11a» := check [triple] [sized byte 3] false <| .mk [0] [
@@ -42,12 +45,14 @@ abbrev partsTy : Ty :=
     (.cons (sized byte 1) (.cons (sized byte 2) (.cons (sized byte 3) .nil))))
 
 /-- `N-TY16b`: `for i in 0..4 collect (parts = xs[0..i]): ()`, then `length(parts[3])`: four
-blocks, and the tuple of their values (§7.4). -/
+blocks, and the tuple of their values (§7.4). The names inside block `i` are `40 + 10 * i` and
+after. -/
 def partBlock (i : Nat) : Instruction Raw Unit :=
+  let base := 40 + 10 * i
   .block ⟨1⟩ i [30 + i] (.mk [] [
-    .op ⟨2⟩ [20] (natural 0) [],
-    .op ⟨3⟩ [21] (natural i) [],
-    .op ⟨4⟩ [22] (slice (sized byte 4) (sized byte i)) [0, 20, 21]] [22])
+    .op ⟨2⟩ [base] (natural 0) [],
+    .op ⟨3⟩ [base + 1] (natural i) [],
+    .op ⟨4⟩ [base + 2] (slice (sized byte 4) (sized byte i)) [0, base, base + 1]] [base + 2])
 def «N-TY16b» := check [sized byte 4] [.nat] false <| .mk [0] [
   partBlock 0, partBlock 1, partBlock 2, partBlock 3,
   .op ⟨5⟩ [10] (make partsTy) [30, 31, 32, 33],
@@ -55,7 +60,8 @@ def «N-TY16b» := check [sized byte 4] [.nat] false <| .mk [0] [
   .op ⟨7⟩ [12] (length (sized byte 3)) [11]] [12]
 
 /-- `N-TY10d`: `rest := low(rest)` three times, stepped: the instances `low<byte, 2>`,
-`low<byte, 1>` and `low<byte, 0>` (keys 1, 2, 3), then `shrink` (key 4). -/
+`low<byte, 1>` and `low<byte, 0>` (keys 1, 2, 3), then `shrink` (key 4). Each value of `rest`
+has its own name: block `j` reads `j` and binds `j + 1`. -/
 def lowHeader (key m : Nat) : FnHeader V :=
   ⟨⟨key⟩, [sized byte (2 ^ (m + 1))], [sized byte (2 ^ m)], false, none⟩
 def lowBody (m : Nat) : Region Raw Unit := .mk [0] [
@@ -67,11 +73,11 @@ def «N-TY10d-low» := (run [] (lowHeader 1 2) (lowBody 2),
   run [lowHeader 1 2, lowHeader 2 1] (lowHeader 3 0) (lowBody 0))
 def «N-TY10d» := run [lowHeader 1 2, lowHeader 2 1, lowHeader 3 0]
     ⟨⟨4⟩, [sized byte 8], [byte], false, none⟩ <| .mk [0] [
-  .block ⟨1⟩ 0 [0] (.mk [] [.op ⟨2⟩ [20] (.call ⟨1⟩) [0]] [20]),
-  .block ⟨1⟩ 1 [0] (.mk [] [.op ⟨2⟩ [20] (.call ⟨2⟩) [0]] [20]),
-  .block ⟨1⟩ 2 [0] (.mk [] [.op ⟨2⟩ [20] (.call ⟨3⟩) [0]] [20]),
+  .block ⟨1⟩ 0 [1] (.mk [] [.op ⟨2⟩ [20] (.call ⟨1⟩) [0]] [20]),
+  .block ⟨1⟩ 1 [2] (.mk [] [.op ⟨2⟩ [30] (.call ⟨2⟩) [1]] [30]),
+  .block ⟨1⟩ 2 [3] (.mk [] [.op ⟨2⟩ [40] (.call ⟨3⟩) [2]] [40]),
   .op ⟨3⟩ [10] (natural 0) [],
-  .op ⟨4⟩ [11] (item (sized byte 1)) [0, 10]] [11]
+  .op ⟨4⟩ [11] (item (sized byte 1)) [3, 10]] [11]
 
 /-- `N-TY10f`: `mut acc = 0; for i in 0..4: acc := acc + xs[i]`. -/
 def «N-TY10f» := check [sized byte 4] [.nat] false <| .mk [0] [
@@ -124,7 +130,7 @@ def «R-LIB1-count» := check [sized .bool 8] [.fin 9] false <| .mk [0] [
       .op ⟨3⟩ [22] (item (sized .bool 8)) [0, 20],
       .choose ⟨4⟩ () 22 [23]
         (.mk [] [.op ⟨5⟩ [30] (natural 1) []] [30])
-        (.mk [] [.op ⟨6⟩ [30] (natural 0) []] [30]),
+        (.mk [] [.op ⟨6⟩ [40] (natural 0) []] [40]),
       .op ⟨7⟩ [24] plus [21, 23]] [24]),
   .op ⟨8⟩ [12] (narrowTo 9) [11]] [12]
 

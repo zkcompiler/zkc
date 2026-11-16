@@ -83,8 +83,8 @@ deriving DecidableEq
 /-- The outcome for a function against the headers before it. -/
 def run (fns : List (FnHeader V)) (hdr : FnHeader V) (body : Region Raw Unit) : Outcome :=
   match elabFn fns hdr body with
-  | .ok ⟨fn, _⟩ =>
-      match checkFacts (localFactRules V fns) hdr.key none fn with
+  | .ok ⟨inputs, fn, _⟩ =>
+      match checkFacts (localFactRules V fns) hdr.key none inputs fn with
       | .ok bounds => .accepted bounds
       | .error refusals => .refused refusals
   | .error refusal => .elaboration refusal

@@ -26,14 +26,14 @@ theorem accepted_places : ∀ {hs : Headers V} (defs : Defs V hs)
       have h : bounds = [] := h
       subst h
       cases m
-  | _, .fn hdr body ok rest, bounds, h, q, m => by
+  | _, .fn hdr inputs body ok rest, bounds, h, q, m => by
       obtain ⟨mine, others, e1, e2, rfl⟩ := h
       rcases List.mem_append.mp m with m | m
-      · obtain ⟨d, r⟩ := FactCheck.checkFacts_places hdr.key body e1 q m
+      · obtain ⟨d, r⟩ := FactCheck.checkFacts_places hdr.key inputs body e1 q m
         exact ⟨by rw [d]; exact List.mem_cons_self, r⟩
       · obtain ⟨d, r⟩ := accepted_places rest e2 q m
         exact ⟨List.mem_cons_of_mem _ d, r⟩
-  | _, .protocol _ _ _ rest, bounds, h, q, m => accepted_places rest h q m
+  | _, .protocol _ _ _ _ rest, bounds, h, q, m => accepted_places rest h q m
 
 /-- **The check of facts is sound for the functions of a program.** When the check accepts every
 function of a program against the headers before it, and the keys of the functions are distinct:
@@ -48,20 +48,20 @@ theorem functions_sound : ∀ {hs : Headers V} (defs : Defs V hs),
       Defs.FunctionsRespect M ⟨F⟩ defs
   | _, .nil, _, _, _, M, _, _ =>
       ⟨fun _ f => (nomatch f), fun _ f => (nomatch f), trivial⟩
-  | _, .fn (hs := hs) hdr body ok rest, distinct, bounds, h, M, F, hF => by
+  | _, .fn (hs := hs) hdr inputs body ok rest, distinct, bounds, h, M, F, hF => by
       obtain ⟨mine, others, e1, e2, rfl⟩ := h
       have notIn := (List.nodup_cons.mp distinct).1
       have distinct' := (List.nodup_cons.mp distinct).2
       obtain ⟨safeR, keepsR, respR⟩ := functions_sound rest distinct' e2 M F
         (fun p b m r d => by
           rcases List.mem_append.mp (hF p b m r (List.mem_cons_of_mem _ d)) with m' | m'
-          · have := (FactCheck.checkFacts_places hdr.key body e1 _ m').1
+          · have := (FactCheck.checkFacts_places hdr.key inputs body e1 _ m').1
             simp only at this
             rw [this] at d
             exact absurd d notIn
           · exact m')
       have sound := FactCheck.checkFacts_sound (table := Defs.fnTable M rest) distinct' safeR
-        keepsR hdr.key body ok.distinct e1 F (fun p b m d r => by
+        keepsR hdr.key inputs body ok.distinct e1 F (fun p b m d r => by
           rcases List.mem_append.mp (hF p b m r (by rw [d]; exact List.mem_cons_self)) with
             m' | m'
           · exact m'
@@ -83,7 +83,7 @@ theorem functions_sound : ∀ {hs : Headers V} (defs : Defs V hs),
             rw [e] at this
             exact this
         | tail f => exact keepsR _ f args results valid e
-  | _, .protocol _ _ _ rest, distinct, _, h, M, F, hF => by
+  | _, .protocol _ _ _ _ rest, distinct, _, h, M, F, hF => by
       obtain ⟨safeR, keepsR, respR⟩ := functions_sound rest distinct h M F hF
       exact ⟨safeR, keepsR, respR⟩
 
@@ -93,9 +93,9 @@ a typed program: every function never stops `undefined` on valid inputs and retu
 part of `Respects` holds of the bounds that the check gives. -/
 theorem typed_functions_sound (p : Typed V) {bounds : List (Place × Nat)}
     (accepted : Defs.Accepted p.defs bounds) (M : Model V) :
-    (∀ hdr (f : Var p.headers.fns hdr) (ins : HList M.Val hdr.ins), ins.All M.Valid →
+    (∀ hdr (f : Member p.headers.fns hdr) (ins : HList M.Val hdr.ins), ins.All M.Valid →
       (fnMeaning M p f ins).Stops (· ≠ .undefined)) ∧
-    (∀ hdr (f : Var p.headers.fns hdr) (ins : HList M.Val hdr.ins)
+    (∀ hdr (f : Member p.headers.fns hdr) (ins : HList M.Val hdr.ins)
       (outs : HList M.Val hdr.outs), ins.All M.Valid → fnMeaning M p f ins = .done outs →
         outs.All M.Valid) ∧
     Defs.FunctionsRespect M ⟨bounds⟩ p.defs := by

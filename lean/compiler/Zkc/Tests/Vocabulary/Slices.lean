@@ -54,20 +54,23 @@ def «T-Z9-outer» := run [pickHeader] ⟨⟨2⟩, [sized F 7], [F], false, none
   .mk [0] [.op ⟨1⟩ [10] (.call ⟨1⟩) [0]] [10]
 
 /-- `R-TY2a` at `fold_all<3>`: the index is static in a slice bound, so the loop is three blocks
-of the loop `⟨2⟩` in sequence (§7.4, §7.5); `half` and `2 * half` are numbers. -/
+of the loop `⟨2⟩` in sequence (§7.4, §7.5); `half` and `2 * half` are numbers. Each value of the
+folded sequence has its own name: block `k` reads `k` and binds `k + 1`, and the names inside it
+are `20 + 10 * k` and after. -/
 def foldBlock (k size : Nat) : Instruction Raw Unit :=
-  .block ⟨2⟩ k [0] (.mk [] [
-    .op ⟨3⟩ [20] (natural 0) [],
-    .op ⟨4⟩ [21] (natural (size / 2)) [],
-    .op ⟨5⟩ [22] (slice (sized F size) (sized F (size / 2))) [0, 20, 21],
-    .op ⟨6⟩ [23] (natural (size / 2)) [],
-    .op ⟨7⟩ [24] (natural size) [],
-    .op ⟨8⟩ [25] (slice (sized F size) (sized F (size / 2))) [0, 23, 24],
-    .op ⟨9⟩ [26] (seqAddRow (size / 2)) [22, 25]] [26])
+  let base := 20 + 10 * k
+  .block ⟨2⟩ k [k + 1] (.mk [] [
+    .op ⟨3⟩ [base] (natural 0) [],
+    .op ⟨4⟩ [base + 1] (natural (size / 2)) [],
+    .op ⟨5⟩ [base + 2] (slice (sized F size) (sized F (size / 2))) [k, base, base + 1],
+    .op ⟨6⟩ [base + 3] (natural (size / 2)) [],
+    .op ⟨7⟩ [base + 4] (natural size) [],
+    .op ⟨8⟩ [base + 5] (slice (sized F size) (sized F (size / 2))) [k, base + 3, base + 4],
+    .op ⟨9⟩ [base + 6] (seqAddRow (size / 2)) [base + 2, base + 5]] [base + 6])
 def «R-TY2a» := check [sized F 8] [F] false <| .mk [0] [
   foldBlock 0 8, foldBlock 1 4, foldBlock 2 2,
   .op ⟨10⟩ [11] (natural 0) [],
-  .op ⟨11⟩ [12] (item (sized F 1)) [0, 11]] [12]
+  .op ⟨11⟩ [12] (item (sized F 1)) [3, 11]] [12]
 
 example : «T-Z1» = .accepted [] := by decide +kernel
 example : «T-Z2» = .accepted [] := by decide +kernel
@@ -103,7 +106,8 @@ def firstByte (taken : Bool) (n : Nat) := check [sized byte n] [byte] false <| .
 def «N-TY9c» (n : Nat) := firstByte (decide (1 ≤ n)) n
 def «N-TY9d» (n : Nat) := firstByte (decide (0 ≤ n)) n
 
-/-- `N-TY9f`: `if 2 <= n: pair = xs[0] + xs[1]; acc := pair`. -/
+/-- `N-TY9f`: `if 2 <= n: pair = xs[0] + xs[1]; acc := pair`. The value of `acc` after the
+update has its own name, `17`. -/
 def «N-TY9f» (n : Nat) := check [sized byte n] [.nat] false <| .mk [0]
   (if 2 ≤ n then [
     .op ⟨1⟩ [10] (natural 0) [],
@@ -113,8 +117,8 @@ def «N-TY9f» (n : Nat) := check [sized byte n] [.nat] false <| .mk [0]
     .op ⟨5⟩ [14] (natural 1) [],
     .op ⟨6⟩ [15] (item (sized byte n)) [0, 14],
     .op ⟨7⟩ [16] (toNat 256) [15],
-    .op ⟨8⟩ [10] plus [13, 16]]
-  else [.op ⟨1⟩ [10] (natural 0) []]) [10]
+    .op ⟨8⟩ [17] plus [13, 16]]
+  else [.op ⟨1⟩ [10] (natural 0) []]) [if 2 ≤ n then 17 else 10]
 
 /-- `N-TY2a` (`N = 2^3`) and `N-TY2b` (`N = 2^k`): `xs[N - 1]`, the difference written as
 `nat.sub` of numbers (the frontend may as well write the number). -/

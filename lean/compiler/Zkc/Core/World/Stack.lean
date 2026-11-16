@@ -11,8 +11,8 @@ The meaning of the description of a handler, and of a stack of them.
 
 A layer answers an effect when the site of the effect's occurrence, the role's part and the
 types of what the effect takes and gives are those of one of its clauses: the clause's code,
-under the role semantics, runs on what the effect takes and the state, and gives the reply and
-the next state; its own effects go below. Every other effect goes below unchanged. The state
+under the role semantics, runs on what the effect takes and the state, bound by position
+(`Env.positional`), and gives the reply and the next state; its own effects go below. Every other effect goes below unchanged. The state
 of the next attempt is the local meaning of the layer's `again` code; a stop of it is the stop
 of the run. A stack is its layers, the nearest to the program first.
 -/
@@ -106,7 +106,7 @@ def Clause.answer : List (Clause V hs r state) → (op : ROp M) → M.Val state 
       if h : c.site.site = (ROp.occurrence M op).site ∧ some c.site.part = ROp.part M op ∧
           c.site.takes = ROp.takes M op ∧ c.site.gives = ROp.gives M op then
         ((c.code.denote (roleSem M r fnTable rTable) (ROp.occurrence M op).path
-          (Env.ofList (aloneIn M r (HList.append
+          (Env.positional (aloneIn M r (HList.append
             (cast (congrArg (HList M.Val) h.2.2.1.symm) (ROp.payload M op))
             (.cons s .nil))))).mapHalt fun why => (why, s)).map fun out =>
           let values := HList.split c.site.gives (aloneOut M r out)
@@ -119,7 +119,7 @@ def Layer.handler {ins : List (LTy V)} (l : Layer V hs r ins) :
   clause op s := Clause.answer M fnTable rTable l.clauses op s
   again i entry stop :=
     match l.again.denote (localSem M hs.fns fnTable) []
-        (Env.ofList (.cons (i : Nat) (.cons entry (.cons stop .nil)))) with
+        (Env.positional (.cons (i : Nat) (.cons entry (.cons stop .nil)))) with
     | .done (.cons next .nil) => .ok next
     | .halt why => .error why
     | .call op _ => nomatch op
@@ -183,7 +183,7 @@ def Stack.start : (layers : List (Layer V hs r ins)) → HList (RV M r) ins →
   | l :: rest, inputs, taken =>
       let parts := HList.split l.takes taken
       (liftLocal id (l.start.denote (localSem M hs.fns fnTable) []
-        (Env.ofList (HList.append parts.1 (heldValues M r inputs))))).bind fun first =>
+        (Env.positional (HList.append parts.1 (heldValues M r inputs))))).bind fun first =>
         (Stack.start rest inputs parts.2).map fun others => .cons first.single others
 
 /-- What the layers give: each layer's `finish` on its last state. -/
@@ -191,7 +191,7 @@ def Stack.finish : (layers : List (Layer V hs r ins)) → HList M.Val (Stack.Sta
     Program M (HList M.Val (Stack.Gives layers))
   | [], _ => .done .nil
   | l :: rest, .cons s states =>
-      (liftLocal id (l.finish.denote (localSem M hs.fns fnTable) [] (Env.ofList (.cons s .nil)))).bind
+      (liftLocal id (l.finish.denote (localSem M hs.fns fnTable) [] (Env.positional (.cons s .nil)))).bind
         fun mine => (Stack.finish rest states).map fun others => HList.append mine others
 
 end

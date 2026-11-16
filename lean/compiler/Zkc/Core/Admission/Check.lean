@@ -31,7 +31,7 @@ variable {V : Vocabulary}
 arm of a protocol is not reached there; it refuses the protocol too. -/
 def Elaborated.facts {hs : Headers V} :
     Elaborated V hs → Except (List (ProgramRefusal V)) (List (Place × Nat))
-  | .fn hdr body _ _ => checkFacts (localFactRules V hs.fns) hdr.key none body
+  | .fn hdr inputs body _ _ => checkFacts (localFactRules V hs.fns) hdr.key none inputs body
   | .protocol hdr .. => .error [refuseWhole hdr.key .protocol (.key hdr.key)]
 
 /-- One definition checked against the headers of those before it: elaborated, with the
@@ -74,10 +74,10 @@ the bounds are theirs, the latest definition's first. A protocol is passed over:
 programs are not walked yet. -/
 def Defs.Accepted : {hs : Headers V} → Defs V hs → List (Place × Nat) → Prop
   | _, .nil, bounds => bounds = []
-  | _, .fn (hs := hs) hdr body _ rest, bounds => ∃ mine others,
-      checkFacts (localFactRules V hs.fns) hdr.key none body = .ok mine ∧
+  | _, .fn (hs := hs) hdr inputs body _ rest, bounds => ∃ mine others,
+      checkFacts (localFactRules V hs.fns) hdr.key none inputs body = .ok mine ∧
         Defs.Accepted rest others ∧ bounds = mine ++ others
-  | _, .protocol _ _ _ rest, bounds => Defs.Accepted rest bounds
+  | _, .protocol _ _ _ _ rest, bounds => Defs.Accepted rest bounds
 
 end
 

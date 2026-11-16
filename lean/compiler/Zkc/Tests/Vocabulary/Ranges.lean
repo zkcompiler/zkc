@@ -79,7 +79,7 @@ expected (TY5). -/
 def «N-TY6e» := check [.bool] [.fin 2] false <| .mk [0] [
   .choose ⟨1⟩ () 0 [10]
     (.mk [] [.op ⟨2⟩ [20] (natural 1) []] [20])
-    (.mk [] [.op ⟨3⟩ [20] (natural 0) []] [20]),
+    (.mk [] [.op ⟨3⟩ [30] (natural 0) []] [30]),
   .op ⟨4⟩ [11] (narrowTo 2) [10]] [11]
 
 /-- `N-TY6b`: `y = if 0 < length(xs) then xs[0] else 0; return y`. -/
@@ -89,7 +89,7 @@ def «N-TY6b» := check [unsized F] [F] false <| .mk [0] [
   .op ⟨3⟩ [12] less [10, 11],
   .choose ⟨4⟩ () 12 [13]
     (.mk [] [.op ⟨5⟩ [20] (natural 0) [], .op ⟨6⟩ [21] (item (unsized F)) [0, 20]] [21])
-    (.mk [] [.op ⟨7⟩ [20] (element 0) []] [20])] [13]
+    (.mk [] [.op ⟨7⟩ [30] (element 0) []] [30])] [13]
 
 /-- `N-TY6c`: `∑ i ∈ 0..4, if ws[i] == z then values[i] else 0` on field elements: a loop that
 collects the term, then the row `seq.sum` (§7.4). -/
@@ -100,7 +100,7 @@ def «N-TY6c» := check [sized F 4, sized F 4, F] [F] false <| .mk [0, 1, 2] [
       .op ⟨3⟩ [22] (frow .equal) [21, 2],
       .choose ⟨4⟩ () 22 [23]
         (.mk [] [.op ⟨5⟩ [30] (item (sized F 4)) [1, 20]] [30])
-        (.mk [] [.op ⟨6⟩ [30] (element 0) []] [30])] [23]),
+        (.mk [] [.op ⟨6⟩ [40] (element 0) []] [40])] [23]),
   .op ⟨7⟩ [11] (sumRow (some 4)) [10]] [11]
 
 /-- `V-F9`: `if not (i < length(xs)): out := xs[i]`. -/
@@ -145,9 +145,9 @@ def «M-FRA5» := check [unsized F] [opt] false <| .mk [0] [
       .op ⟨5⟩ [20] (make (.tuple .nil)) [],
       .op ⟨6⟩ [21] (variant opt 1) [20]] [21])
     (.mk [] [
-      .op ⟨7⟩ [20] (natural 0) [],
-      .op ⟨8⟩ [21] (item (unsized F)) [0, 20],
-      .op ⟨9⟩ [22] (variant opt 0) [21]] [22])] [13]
+      .op ⟨7⟩ [30] (natural 0) [],
+      .op ⟨8⟩ [31] (item (unsized F)) [0, 30],
+      .op ⟨9⟩ [32] (variant opt 0) [31]] [32])] [13]
 
 /-- `M-FRA15` (and `N-TY9a`, the same function): `xs[0] == 0 and 0 < length(xs)`. The right
 operand cannot stop and applies no operation with a domain, so `and` is `bool.and` (§7.4). -/
