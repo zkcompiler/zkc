@@ -6,266 +6,243 @@ public import Zkc.Core.Program.Term
 
 /-!
 Linear use: every value of a linear type is used once. It is defined by its decision, which
-counts the uses of the values of linear type only and says, where a value is not used as it
-must be, which value and where.
+counts the uses of the values of linear type only, by name, and says, where a value is not used
+as it must be, which value (by its name) and where.
+
+The uses below a point are counted per name. Where a binding binds names, the counts of the
+names that it binds are read in the term that it binds them in, and then dropped: so the counts
+that a region gives are those of the names around it, and a name that a region binds again
+hides the one around it, as the context does. A body is decided with the names of the inputs of
+its definition, as single assignment is (`Term.BoundOnce`): the context of a definition's body is
+its inputs, and they are the values that the body has from outside.
 -/
 
 namespace Zkc.Core
 
 /-- A value of a linear type that is not used as it must be: the blocks and the instruction of
-the place (no instruction for an input of the body); its position, among the values bound
-there or, for a value from around the place, in the scope there, the innermost first; how often
-it is used; and whether it comes from around the place (a choice, a case analysis or a loop
-whose regions use it differently) rather than being bound there. -/
+the place (no instruction for an input of the body); its name; how often it is used; and
+whether it comes from around the place (a choice, a case analysis or a loop whose regions use it
+differently) rather than being bound there. -/
 structure Misuse where
   blocks : List (Key × Nat)
   instruction : Option Key
-  position : Nat
+  name : Name
   found : Nat
   around : Bool
 deriving DecidableEq
 
-/-- The uses of two parts, added. -/
-def addUses (first second : List Nat) : List Nat := List.zipWith (· + ·) first second
+/-! ## Counts of uses by name -/
 
-/-- The uses of two regions of which one runs: the more often of the two, for each value. -/
-def joinUses (first second : List Nat) : List Nat := List.zipWith max first second
+/-- How often names are used: names with their counts, each name listed once. A name that is
+not listed is not used. -/
+abbrev Uses : Type := List (Name × Nat)
+
+namespace Uses
+
+/-- How often a name is used. -/
+def count : Uses → Name → Nat
+  | [], _ => 0
+  | (used, uses) :: rest, name => cond (Nat.beq used name) uses (count rest name)
+
+/-- The counts with `more` uses of a name added. -/
+def addTo (name : Name) (more : Nat) : Uses → Uses
+  | [] => [(name, more)]
+  | (used, uses) :: rest =>
+      cond (Nat.beq used name) ((used, uses + more) :: rest) ((used, uses) :: addTo name more rest)
+
+/-- The counts of two parts, added. -/
+def add (first second : Uses) : Uses :=
+  first.foldr (fun entry sum => addTo entry.1 entry.2 sum) second
+
+/-- The counts without the names given: those of a binding, once the term in which it binds them
+is counted. -/
+def drop (uses : Uses) (names : List Name) : Uses :=
+  uses.filter fun entry => !names.any (Nat.beq entry.1)
+
+/-- A name that two counts use differently often, with its count in the second; none when they
+use every name equally often. -/
+def differ (first second : Uses) : Option (Name × Nat) :=
+  match first.find? (fun entry => !Nat.beq entry.2 (second.count entry.1)) with
+  | some entry => some (entry.1, second.count entry.1)
+  | none => second.find? fun entry => !Nat.beq entry.2 (first.count entry.1)
+
+/-- A name that is used, with its count; none when no name is. -/
+def used (uses : Uses) : Option (Name × Nat) :=
+  uses.find? fun entry => !Nat.beq entry.2 0
+
+end Uses
 
 section
 variable {D : Dialect} (linear : D.Ty → Bool)
 
-/-- The number of values of linear type among types. -/
-def linearCount : List D.Ty → Nat
-  | [] => 0
-  | τ :: types => cond (linear τ) (linearCount types + 1) (linearCount types)
-
-/-- The position among the types of the first value of linear type whose count is not one,
-with its count, reading the counts of the values of linear type in order. -/
-def misuseAmong : (items : List D.Ty) → List Nat → Option (Nat × Nat)
-  | [], _ => none
-  | τ :: items, counts =>
-      cond (linear τ)
-        (match counts with
-          | c :: counts =>
-              cond (Nat.beq c 1) ((misuseAmong items counts).map fun m => (m.1 + 1, m.2))
-                (some (0, c))
-          | [] => some (0, 0))
-        ((misuseAmong items counts).map fun m => (m.1 + 1, m.2))
-
-/-- A list of `width` counts, one at a position and none elsewhere. -/
-def oneAt : Nat → Nat → List Nat
-  | _, 0 => []
-  | 0, width + 1 => 1 :: List.replicate width 0
-  | position + 1, width + 1 => 0 :: oneAt position width
-
-/-- The position of a variable among the values of linear type of its context, the innermost
-first. -/
-def Var.linearIndex : {Γ : List D.Ty} → {a : D.Ty} → Var Γ a → Nat
-  | _, _, .head => 0
-  | b :: _, _, .tail x => cond (linear b) (Var.linearIndex x + 1) (Var.linearIndex x)
-
-/-- One use of a variable, counted for the `width` values of linear type of its context: it
-walks the variable only when its type is linear. -/
-def Var.linearUses (width : Nat) {Γ : List D.Ty} {a : D.Ty} (x : Var Γ a) : List Nat :=
-  cond (linear a) (oneAt (Var.linearIndex linear x) width) (List.replicate width 0)
+/-- One use of a variable, counted when its type is linear. -/
+def Var.linearUses {Γ : Ctx D.Ty} {a : D.Ty} (x : Var Γ a) : Uses :=
+  cond (linear a) [(x.name, 1)] []
 
 /-- The uses of a list of variables, counted for the values of linear type. -/
-def HList.linearUses (width : Nat) {Γ : List D.Ty} :
-    {items : List D.Ty} → HList (Var Γ) items → List Nat
-  | [], .nil => List.replicate width 0
-  | _ :: _, .cons x rest => addUses (Var.linearUses linear width x) (HList.linearUses width rest)
+def HList.linearUses {Γ : Ctx D.Ty} : {items : List D.Ty} → HList (Var Γ) items → Uses
+  | [], .nil => []
+  | _ :: _, .cons x rest => (Var.linearUses linear x).add (HList.linearUses rest)
 
-/-- The use of the count of a loop, counted for the values of linear type. -/
-def Times.linearUses (width : Nat) {w : D.Who} {Γ : List D.Ty} : Times D w Γ → List Nat
-  | .fixed _ => List.replicate width 0
-  | .value count _ => Var.linearUses linear width count
+/-- The use of the count of a loop, counted when its type is linear. -/
+def Times.linearUses {w : D.Who} {Γ : Ctx D.Ty} : Times D w Γ → Uses
+  | .fixed _ => []
+  | .value count _ => Var.linearUses linear count
 
-/-- The position in a context of the first value of linear type whose counts differ between
-two regions, with its count in the second. -/
-def firstDifference : (Γ : List D.Ty) → List Nat → List Nat → Nat × Nat
-  | [], _, _ => (0, 0)
-  | τ :: Γ, first, second =>
-      cond (linear τ)
-        (match first, second with
-          | a :: first, b :: second =>
-              cond (Nat.beq a b)
-                (let found := firstDifference Γ first second; (found.1 + 1, found.2)) (0, b)
-          | _, _ => (0, 0))
-        (let found := firstDifference Γ first second; (found.1 + 1, found.2))
+/-- The first value of linear type among the names of a binding that the counts of the term in
+which it binds them do not use once, with its count. A name that the binding binds again after
+it is hidden by the later one, and is not used. -/
+def misuseAmong (uses : Uses) : {types : List D.Ty} → Names types → Option (Name × Nat)
+  | [], .nil => none
+  | τ :: _, .cons name rest =>
+      let found := cond ((Names.toList rest).any (Nat.beq name)) 0 (uses.count name)
+      cond (linear τ && !Nat.beq found 1) (some (name, found)) (misuseAmong uses rest)
 
-/-- The position in a context of the first value of linear type that is used, with its
-count. -/
-def firstUsed : (Γ : List D.Ty) → List Nat → Nat × Nat
-  | [], _ => (0, 0)
-  | τ :: Γ, counts =>
-      cond (linear τ)
-        (match counts with
-          | c :: counts =>
-              cond (Nat.beq c 0) (let found := firstUsed Γ counts; (found.1 + 1, found.2)) (0, c)
-          | [] => (0, 0))
-        (let found := firstUsed Γ counts; (found.1 + 1, found.2))
-
-/-- What the arms of a case analysis use of the values around it, counted for the values of
-linear type: when every arm uses each of them as often as the first, what any arm uses. -/
-def joinArms (Γ : List D.Ty) (blocks : List (Key × Nat)) (key : Key) (width : Nat) :
-    List (List Nat) → Except Misuse (List Nat)
-  | [] => .ok (List.replicate width 0)
+/-- What the arms of a case analysis use of the values around it: when every arm uses each of
+them as often as the first, what the first uses. -/
+def joinArms (blocks : List (Key × Nat)) (key : Key) : List Uses → Except Misuse Uses
+  | [] => .ok []
   | first :: others =>
-      if others.all (fun other => decide (first = other)) then .ok (others.foldl joinUses first)
-      else
-        let found := firstDifference linear Γ first
-          ((others.find? fun other => !decide (first = other)).getD first)
-        .error ⟨blocks, some key, found.1, found.2, true⟩
+      match others.findSome? fun other => first.differ other with
+      | none => .ok first
+      | some found => .error ⟨blocks, some key, found.1, found.2, true⟩
 
 mutual
-  /-- How often each value of linear type of the context is used on every path, the innermost
-  first, in a context with `width` values of linear type: an operand or a returned value is a
-  use; where the regions of a choice or the arms of a case analysis agree, what any of them uses;
-  the body of an attempt counted once, as the program is written. Or else the first value of
-  linear type that is not used as it must be, with where: one bound by an instruction and not
-  used once (its position among the values that the instruction binds); or one from around a
-  choice, a case analysis or a loop whose regions use it differently, or whose loop body uses
-  it at all (its position in the context there). -/
-  def Term.linearUses (blocks : List (Key × Nat)) (width : Nat) :
-      {Γ outs : List D.Ty} → Term D Γ outs → Except Misuse (List Nat)
-    | _, _, .ret xs => .ok (HList.linearUses linear width xs)
-    | _, _, .op (res := res) key _ args rest =>
-        match Term.linearUses blocks (linearCount linear res + width) rest with
+  /-- How often each value of linear type from around a term is used on every path, by name: an
+  operand or a returned value is a use; where the regions of a choice or the arms of a case
+  analysis agree, what any of them uses; the body of an attempt counted once, as the program is
+  written. Or else the first value of linear type that is not used as it must be, with where:
+  one bound by an instruction (as a result, or as an input of one of its regions) and not used
+  once; or one from around a choice, a case analysis or a loop whose regions use it differently,
+  or whose loop body uses it at all. -/
+  def Term.linearUses (blocks : List (Key × Nat)) :
+      {Γ : Ctx D.Ty} → {outs : List D.Ty} → Term D Γ outs → Except Misuse Uses
+    | _, _, .ret xs => .ok (HList.linearUses linear xs)
+    | _, _, .op key _ args results rest =>
+        match Term.linearUses blocks rest with
         | .error misuse => .error misuse
         | .ok inner =>
-            match misuseAmong linear res inner with
+            match misuseAmong linear inner results with
             | some found => .error ⟨blocks, some key, found.1, found.2, false⟩
-            | none =>
-                .ok (addUses (inner.drop (linearCount linear res))
-                  (HList.linearUses linear width args))
+            | none => .ok ((inner.drop results.toList).add (HList.linearUses linear args))
     | _, _, .guard _ _ c _ _ rest =>
-        match Term.linearUses blocks width rest with
+        match Term.linearUses blocks rest with
         | .error misuse => .error misuse
-        | .ok inner => .ok (addUses inner (Var.linearUses linear width c))
-    | Γ, _, .choose (mid := mid) key _ c _ _ onTrue onFalse rest =>
-        match Term.linearUses blocks width onTrue with
+        | .ok inner => .ok (inner.add (Var.linearUses linear c))
+    | _, _, .choose key _ c _ _ onTrue onFalse results rest =>
+        match Term.linearUses blocks onTrue with
         | .error misuse => .error misuse
         | .ok whenTrue =>
-            match Term.linearUses blocks width onFalse with
+            match Term.linearUses blocks onFalse with
             | .error misuse => .error misuse
             | .ok whenFalse =>
-                match Term.linearUses blocks (linearCount linear mid + width) rest with
+                match Term.linearUses blocks rest with
                 | .error misuse => .error misuse
                 | .ok inner =>
-                    if whenTrue = whenFalse then
-                      match misuseAmong linear mid inner with
-                      | some found => .error ⟨blocks, some key, found.1, found.2, false⟩
-                      | none =>
-                          .ok (addUses (addUses (joinUses whenTrue whenFalse)
-                            (inner.drop (linearCount linear mid))) (Var.linearUses linear width c))
-                    else
-                      let found := firstDifference linear Γ whenTrue whenFalse
-                      .error ⟨blocks, some key, found.1, found.2, true⟩
-    | Γ, _, .cases (mid := mid) (payloads := payloads) key _ x _ _ arms rest =>
-        match Arms.linearUses blocks key width 0 arms with
+                    match whenTrue.differ whenFalse with
+                    | none =>
+                        match misuseAmong linear inner results with
+                        | some found => .error ⟨blocks, some key, found.1, found.2, false⟩
+                        | none =>
+                            .ok ((whenTrue.add (inner.drop results.toList)).add
+                              (Var.linearUses linear c))
+                    | some found => .error ⟨blocks, some key, found.1, found.2, true⟩
+    | _, _, .cases key _ x _ _ arms results rest =>
+        match Arms.linearUses blocks key arms with
         | .error misuse => .error misuse
         | .ok armUses =>
-            match Term.linearUses blocks (linearCount linear mid + width) rest with
+            match Term.linearUses blocks rest with
             | .error misuse => .error misuse
             | .ok inner =>
-                match joinArms linear Γ blocks key width armUses with
+                match joinArms blocks key armUses with
                 | .error misuse => .error misuse
                 | .ok outer =>
-                    match misuseAmong linear mid inner with
-                    | some found =>
-                        .error ⟨blocks, some key, payloads.length + found.1, found.2, false⟩
+                    match misuseAmong linear inner results with
+                    | some found => .error ⟨blocks, some key, found.1, found.2, false⟩
                     | none =>
-                        .ok (addUses (addUses outer (inner.drop (linearCount linear mid)))
-                          (Var.linearUses linear width x))
-    | Γ, _, .loop (carried := carried) (each := each) key w times _ init body rest =>
-        match Term.linearUses blocks (linearCount linear (D.index w :: carried) + width) body with
+                        .ok ((outer.add (inner.drop results.toList)).add (Var.linearUses linear x))
+    | _, _, .loop key _ times _ init inputs body results rest =>
+        match Term.linearUses blocks body with
         | .error misuse => .error misuse
         | .ok inBody =>
-            match Term.linearUses blocks
-                (linearCount linear (carried ++ each.map (D.collected times.size)) + width)
-                rest with
+            match Term.linearUses blocks rest with
             | .error misuse => .error misuse
             | .ok inner =>
-                match misuseAmong linear (D.index w :: carried) inBody with
+                match misuseAmong linear inBody inputs with
                 | some found => .error ⟨blocks, some key, found.1, found.2, false⟩
                 | none =>
-                    if (inBody.drop (linearCount linear (D.index w :: carried))).all
-                        (Nat.beq · 0) then
-                      match misuseAmong linear (carried ++ each.map (D.collected times.size))
-                          inner with
-                      | some found =>
-                          .error ⟨blocks, some key, carried.length + 1 + found.1, found.2, false⟩
-                      | none =>
-                          .ok (addUses
-                            (addUses (inBody.drop (linearCount linear (D.index w :: carried)))
-                              (inner.drop (linearCount linear
-                                (carried ++ each.map (D.collected times.size)))))
-                            (addUses (HList.linearUses linear width init)
-                              (Times.linearUses linear width times)))
-                    else
-                      let found := firstUsed linear Γ
-                        (inBody.drop (linearCount linear (D.index w :: carried)))
-                      .error ⟨blocks, some key, found.1, found.2, true⟩
-    | _, _, .block (mid := mid) key number body rest =>
-        match Term.linearUses (blocks ++ [(key, number)]) width body with
+                    match (inBody.drop inputs.toList).used with
+                    | none =>
+                        match misuseAmong linear inner results with
+                        | some found => .error ⟨blocks, some key, found.1, found.2, false⟩
+                        | none =>
+                            .ok (((inner.drop results.toList).add
+                              (HList.linearUses linear init)).add (Times.linearUses linear times))
+                    | some found => .error ⟨blocks, some key, found.1, found.2, true⟩
+    | _, _, .block key number body results rest =>
+        match Term.linearUses (blocks ++ [(key, number)]) body with
         | .error misuse => .error misuse
         | .ok inBody =>
-            match Term.linearUses blocks (linearCount linear mid + width) rest with
+            match Term.linearUses blocks rest with
             | .error misuse => .error misuse
             | .ok inner =>
-                match misuseAmong linear mid inner with
+                match misuseAmong linear inner results with
                 | some found => .error ⟨blocks, some key, found.1, found.2, false⟩
-                | none => .ok (addUses inBody (inner.drop (linearCount linear mid)))
-    | _, _, .attempt (mid := mid) key w _ body rest =>
-        match Term.linearUses blocks (linearCount linear [D.index w] + width) body with
+                | none => .ok (inBody.add (inner.drop results.toList))
+    | _, _, .attempt key _ _ inputs body results rest =>
+        match Term.linearUses blocks body with
         | .error misuse => .error misuse
         | .ok inBody =>
-            match Term.linearUses blocks (linearCount linear mid + width) rest with
+            match Term.linearUses blocks rest with
             | .error misuse => .error misuse
             | .ok inner =>
-                match misuseAmong linear [D.index w] inBody with
+                match misuseAmong linear inBody inputs with
                 | some found => .error ⟨blocks, some key, found.1, found.2, false⟩
                 | none =>
-                    match misuseAmong linear mid inner with
-                    | some found => .error ⟨blocks, some key, found.1 + 1, found.2, false⟩
-                    | none =>
-                        .ok (addUses (inBody.drop (linearCount linear [D.index w]))
-                          (inner.drop (linearCount linear mid)))
-  /-- What the arms of a case analysis use, each counted for the values of linear type around
-  it; or the first arm (by its position from `index`) whose payload is linear and not used
-  once. -/
-  def Arms.linearUses (blocks : List (Key × Nat)) (key : Key) (width : Nat) (index : Nat) :
-      {Γ mid payloads : List D.Ty} → Arms D Γ mid payloads → Except Misuse (List (List Nat))
+                    match misuseAmong linear inner results with
+                    | some found => .error ⟨blocks, some key, found.1, found.2, false⟩
+                    | none => .ok ((inBody.drop inputs.toList).add (inner.drop results.toList))
+  /-- What the arms of the case analysis with the key use of the values around it, each counted
+  by name; or the first value of linear type that is not used as it must be, among them the
+  payload of an arm that is not used once. -/
+  def Arms.linearUses (blocks : List (Key × Nat)) (key : Key) :
+      {Γ : Ctx D.Ty} → {mid payloads : List D.Ty} → Arms D Γ mid payloads →
+        Except Misuse (List Uses)
     | _, _, _, .nil => .ok []
-    | _, _, _, .cons (payload := payload) arm rest =>
-        match Term.linearUses blocks (linearCount linear [payload] + width) arm with
+    | _, _, _, .cons inputs arm rest =>
+        match Term.linearUses blocks arm with
         | .error misuse => .error misuse
         | .ok inArm =>
-            match Arms.linearUses blocks key width (index + 1) rest with
+            match Arms.linearUses blocks key rest with
             | .error misuse => .error misuse
             | .ok others =>
-                match misuseAmong linear [payload] inArm with
-                | some found => .error ⟨blocks, some key, index, found.2, false⟩
-                | none => .ok (inArm.drop (linearCount linear [payload]) :: others)
+                match misuseAmong linear inArm inputs with
+                | some found => .error ⟨blocks, some key, found.1, found.2, false⟩
+                | none => .ok (inArm.drop inputs.toList :: others)
 end
 
-/-- The value of a linear type at which the decision of linear use fails: the first value of
-linear type that is not used once, with where; nothing when every one is used once. -/
-def Term.misuse {Γ outs : List D.Ty} (t : Term D Γ outs) : Option Misuse :=
-  match Term.linearUses linear [] (linearCount linear Γ) t with
+/-- The value of a linear type at which the decision of linear use fails, for a body and the
+names of the inputs of its definition (whose context is its inputs, `Ctx.empty.extend inputs`):
+the first value of linear type that is not used once, with where; nothing when every one is
+used once. The inputs are read as one binding, as the context reads them. -/
+def Term.misuse {ins : List D.Ty} (inputs : Names ins) {Γ : Ctx D.Ty} {outs : List D.Ty}
+    (t : Term D Γ outs) : Option Misuse :=
+  match Term.linearUses linear [] t with
   | .error misuse => some misuse
-  | .ok kept => (misuseAmong linear Γ kept).map fun found => ⟨[], none, found.1, found.2, false⟩
+  | .ok kept =>
+      (misuseAmong linear kept inputs).map fun found => ⟨[], none, found.1, found.2, false⟩
 
 /-- Every value of a linear type among the inputs of a body is used once, and so is every one
 bound inside it; the regions of a choice and the arms of a case analysis use each value of a
 linear type from around them equally often, and a loop body uses none from around it. -/
-def Term.UsedOnce {Γ outs : List D.Ty} (t : Term D Γ outs) : Prop :=
-  t.misuse linear = none
+def Term.UsedOnce {ins : List D.Ty} (inputs : Names ins) {Γ : Ctx D.Ty} {outs : List D.Ty}
+    (t : Term D Γ outs) : Prop :=
+  t.misuse linear inputs = none
 
 /-- Whether every value of a linear type is used once in a body. -/
-instance Term.decideUsedOnce {Γ outs : List D.Ty} (t : Term D Γ outs) :
-    Decidable (t.UsedOnce linear) :=
-  inferInstanceAs (Decidable (t.misuse linear = none))
+instance Term.decideUsedOnce {ins : List D.Ty} (inputs : Names ins) {Γ : Ctx D.Ty}
+    {outs : List D.Ty} (t : Term D Γ outs) : Decidable (t.UsedOnce linear inputs) :=
+  inferInstanceAs (Decidable (t.misuse linear inputs = none))
 
 end
 

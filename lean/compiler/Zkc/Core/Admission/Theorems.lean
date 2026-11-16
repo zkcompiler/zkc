@@ -10,7 +10,12 @@ public import Zkc.Core.Statements
 /-!
 The statements of `Statements.lean` about functions, proved for every record of functions whose
 `admit`, `check` and `elaborate` are `admit`, `check` and `elaborateFunctions`: each theorem has
-the statement as its type.
+the statement as its type, except the round trip from a typed program, which holds of the typed
+programs without protocols (`roundTrip`), since `elaborateFunctions` refuses a protocol.
+
+A program that elaboration gives erases to what was elaborated (`eraseOfElaborated`), and the
+erased form of a typed program of functions elaborates as the program (`roundTrip`), by the
+round trip of `Admission/Elaboration.lean`.
 
 Admission checks one definition at a time, each against the headers before it: so what it
 returns is the elaboration of what was given (`admitsWhatWasGiven`), and the check of each
@@ -19,7 +24,12 @@ function whose body the check of facts accepts, so the program is `Defs.Accepted
 annotation, and the theorem of the check of facts for a program gives `functionsSafe`,
 `functionsKeepValidity` and `annotationHolds`. A function whose header says that it cannot stop
 stops only `undefined` (`Defs.fnTable_stops_undefined`), and never that, so it does not stop
-(`headersSayWhoStops`).
+(`headersSayWhoStops`). Two functions of which the second follows the first mean the same
+(`functionsSame`): it is the theorem `functions_follow_same` of `Transform/StepSound.lean`. A transformation that the step accepts relates functions with the same
+meaning (`transformSound`, the theorem `transform_sound` of `Transform/StepSound.lean`), and
+every function of a program whose functions follow those of another means what the function of
+the other with its header means (`replacedFunctionsSame`, the theorem
+`Defs.functionsFollow_sound` of `Admission/Programs.lean`).
 -/
 
 namespace Zkc.Core
@@ -33,14 +43,16 @@ variable {V : Vocabulary}
 facts accepts with the bounds given. -/
 theorem checkDefinition_fn {hs : Headers V} {definition : Definition V} {e : Elaborated V hs}
     {bounds : List (Place × Nat)} (h : checkDefinition hs definition = .ok (e, bounds)) :
-    elaborateDefinition hs definition = .ok e ∧ ∃ hdr body ok fresh, e = .fn hdr body ok fresh ∧
-      checkFacts (localFactRules V hs.fns) hdr.key none body = .ok bounds := by
+    elaborateDefinition hs definition = .ok e ∧ ∃ hdr inputs body ok fresh,
+      e = .fn hdr inputs body ok fresh ∧
+      checkFacts (localFactRules V hs.fns) (localSkelRules V hs.fns) hdr.key none inputs body =
+        .ok bounds := by
   obtain ⟨e', elaborated, checked⟩ := ok_of_bind h
   obtain ⟨b, facts, same⟩ := ok_of_map checked
   cases same
   refine ⟨elaborated, ?_⟩
   cases e with
-  | fn hdr body ok fresh => exact ⟨hdr, body, ok, fresh, rfl, facts⟩
+  | fn hdr inputs body ok fresh => exact ⟨hdr, inputs, body, ok, fresh, rfl, facts⟩
   | protocol => cases facts
 
 /-- The headers of a program with a definition are the definition's. -/
@@ -100,9 +112,10 @@ theorem admitFrom_accepted : ∀ (p : Typed V) (bounds : List (Place × Nat))
       exact accepted
   | p, bounds, definition :: rest, q, bounds', accepted, h => by
       obtain ⟨⟨e, mine⟩, checked, later⟩ := ok_of_bind h
-      obtain ⟨hdr, body, ok, fresh, same, facts⟩ := (checkDefinition_fn checked).2
+      obtain ⟨hdr, inputs, body, ok, fresh, same, facts⟩ := (checkDefinition_fn checked).2
       subst same
-      exact admitFrom_accepted (p.add (.fn hdr body ok fresh)) (mine ++ bounds) rest q bounds'
+      exact admitFrom_accepted (p.add (.fn hdr inputs body ok fresh)) (mine ++ bounds) rest q
+        bounds'
         ⟨mine, bounds, facts, accepted, rfl⟩ later
 
 /-- The checks in order add no protocol. -/
@@ -115,9 +128,10 @@ theorem admitFrom_functions : ∀ (p : Typed V) (bounds : List (Place × Nat))
       exact noProtocols
   | p, bounds, definition :: rest, q, bounds', noProtocols, h => by
       obtain ⟨⟨e, mine⟩, checked, later⟩ := ok_of_bind h
-      obtain ⟨hdr, body, ok, fresh, same, _⟩ := (checkDefinition_fn checked).2
+      obtain ⟨hdr, inputs, body, ok, fresh, same, _⟩ := (checkDefinition_fn checked).2
       subst same
-      exact admitFrom_functions (p.add (.fn hdr body ok fresh)) (mine ++ bounds) rest q bounds'
+      exact admitFrom_functions (p.add (.fn hdr inputs body ok fresh)) (mine ++ bounds) rest q
+        bounds'
         noProtocols later
 
 /-- An admitted program is accepted by the check of facts, with its annotation. -/
@@ -129,7 +143,24 @@ theorem admit_accepted {named : NamedProgram V} {assoc : Association} {a : Admit
 /-! ## The statements
 
 Each theorem has its statement as its type, for any record of functions whose `admit`, `check`
-and `elaborate`, those that the statement reads, are the definitions here. -/
+and `elaborate`, those that the statement reads, are the definitions here; `roundTrip` has it for
+the typed programs without protocols. -/
+
+/-- Execution and state: elaborating the erased form of a typed program of functions gives the
+program. This is `Statements.roundTrip` for the typed programs without protocols, which are those
+that `elaborateFunctions` can give. -/
+theorem roundTrip (c : Functions V) (elaborates : c.elaborate = elaborateFunctions) :
+    ∀ p : Typed V, p.headers.protocols = [] → c.elaborate (erase p) = .ok p := by
+  rw [elaborates]
+  exact elaborateFunctions_erase
+
+/-- Execution and state: a program that elaboration gives erases to the program by names that
+was elaborated. -/
+theorem eraseOfElaborated (c : Functions V) (elaborates : c.elaborate = elaborateFunctions) :
+    Statements.eraseOfElaborated c := by
+  unfold Statements.eraseOfElaborated
+  rw [elaborates]
+  exact erase_elab
 
 /-- Execution and state: an admitted program is the elaboration of what was given, and its
 association is the resolution in it of the association given. -/
@@ -179,6 +210,26 @@ theorem headersSayWhoStops (c : Functions V) (admits : c.admit = admit) :
   exact Process.every_mono _ _ (fun _ _ => trivial) (fun _ both => both.1 both.2)
     (Process.every_and _ _ (safe named assoc a h M hdr f ins valid)
       (Defs.fnTable_stops_undefined M a.program.defs hdr f ins quiet))
+
+/-- Execution and state: two functions of which the second follows the first mean the same
+(`functions_follow_same`, `Transform/StepSound.lean`). -/
+theorem functionsSame : Statements.functionsSame (V := V) :=
+  fun _ _ _ callees _ _ inputs inputs' body body' definition definition' distinct distinct' _
+      accepted followed ins valid permitted =>
+    functions_follow_same callees inputs inputs' body body' definition definition' distinct
+      distinct' accepted followed ins valid permitted
+
+/-- Execution and state: a transformation of a function that the step accepts relates functions
+with the same meaning (`transform_sound`, `Transform/StepSound.lean`). -/
+theorem transformSound : Statements.transformSound (V := V) :=
+  fun _ _ _ _ _ accepted => transform_sound accepted
+
+/-- Execution and state: every function of a program whose functions follow those of another
+program over the same headers, both accepted by the check of facts, means what the function of
+the other with its header means (`Defs.functionsFollow_sound`, `Admission/Programs.lean`). -/
+theorem replacedFunctionsSame : Statements.replacedFunctionsSame (V := V) :=
+  fun _ defs defs' distinct _ _ accepted accepted' follows M hdr f ins valid =>
+    Defs.functionsFollow_sound defs defs' distinct accepted accepted' follows M hdr f ins valid
 
 /-- Validity: what the annotation of an admitted program knows holds, and no loop runs more
 often than its bound. -/

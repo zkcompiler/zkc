@@ -1,8 +1,9 @@
 import Zkc.Tests.Core.Elaboration
 
 /-!
-The operations that the core owns. For each written name, a function that elaborates and whose
-printed form elaborates back to it; written forms with other types or numbers refused; the
+The operations that the core owns. For each written name, a function that elaborates, whose
+erased form elaborates back to it and is the function by names that was elaborated; written forms
+with other types or numbers refused; the
 operations that would copy or drop a part refused at a linear type; each meaning at a value;
 each domain at a value outside it. The kernel evaluates each.
 -/
@@ -20,15 +21,19 @@ def one (ins outs : List plain.Ty) (name : OwnedName) (types : List plain.Ty)
       (List.range ins.length)]
     ((List.range outs.length).map (· + ins.length)))
 
-/-- Whether a program elaborates and its printed form elaborates to what it elaborates to. -/
+/-- Whether the erased form of what a program elaborates to elaborates to the same. -/
 def roundTrips (named : NamedProgram plain) : Prop :=
   again named = elaborateFunctions named
+
+/-- Whether the erased form of what a program elaborates to is the program. -/
+def erasesBack (named : NamedProgram plain) : Prop :=
+  erased named = .ok named
 
 def pair : plain.Ty := .tuple (.cons .nat (.cons .bool .nil))
 def point : plain.Ty := .record ⟨3⟩ false (.cons .nat (.cons .bool .nil))
 def handle : plain.Ty := .record ⟨4⟩ true (.cons .nat (.cons .bool .nil))
 
-/-! ## Each written name elaborates, and its printed form elaborates back -/
+/-! ## Each written name elaborates, its erased form elaborates back, and is the program -/
 
 def natAdd := one [.nat, .nat] [.nat] .natAdd [] []
 def natSub := one [.nat, .nat] [.nat] .natSub [] []
@@ -124,6 +129,37 @@ example : roundTrips getRecord := by rfl
 example : roundTrips takeTuple := by rfl
 example : roundTrips takeRecord := by rfl
 example : roundTrips variant := by rfl
+
+example : erasesBack natAdd := by rfl
+example : erasesBack natSub := by rfl
+example : erasesBack natMul := by rfl
+example : erasesBack natDiv := by rfl
+example : erasesBack natRem := by rfl
+example : erasesBack natPow := by rfl
+example : erasesBack natEqual := by rfl
+example : erasesBack natLess := by rfl
+example : erasesBack boolAnd := by rfl
+example : erasesBack boolOr := by rfl
+example : erasesBack boolNot := by rfl
+example : erasesBack boolEqual := by rfl
+example : erasesBack seqLength := by rfl
+example : erasesBack seqAt := by rfl
+example : erasesBack seqSlice := by rfl
+example : erasesBack seqConcat := by rfl
+example : erasesBack seqFill := by rfl
+example : erasesBack seqSized := by rfl
+example : erasesBack natBelow := by rfl
+example : erasesBack seqUnsized := by rfl
+example : erasesBack finToNat := by rfl
+example : erasesBack finWiden := by rfl
+example : erasesBack makeSeq := by rfl
+example : erasesBack makeTuple := by rfl
+example : erasesBack makeRecord := by rfl
+example : erasesBack getTuple := by rfl
+example : erasesBack getRecord := by rfl
+example : erasesBack takeTuple := by rfl
+example : erasesBack takeRecord := by rfl
+example : erasesBack variant := by rfl
 
 /-! ## Written forms with other types are refused -/
 

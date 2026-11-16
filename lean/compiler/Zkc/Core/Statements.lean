@@ -3,7 +3,8 @@ module
 public import Zkc.Core.Functions
 public import Zkc.Core.Admission.Check
 public import Zkc.Core.Facts.Facts
-public import Zkc.Core.Program.PrintProgram
+public import Zkc.Core.Program.EraseProgram
+public import Zkc.Core.Transform.StepSound
 
 @[expose] public section
 
@@ -19,7 +20,8 @@ or stop outside what is allowed), or progress (a run goes on or ends as said).
 
 That every role program is a projection of its protocol is not a statement: it is the
 theorem `Zkc.Core.projection` (`Projection/Theorem.lean`). For a program of functions, the
-round trip is the theorem `Zkc.Core.elaborateFunctions_print` (`Admission/Elaboration.lean`).
+round trip in both directions is the theorems `Zkc.Core.elaborateFunctions_erase` and
+`Zkc.Core.erase_elab` (`Admission/Elaboration.lean`).
 -/
 
 namespace Zkc.Core
@@ -30,10 +32,15 @@ variable {V : Vocabulary} (c : Functions V)
 
 /-! ## The program by names -/
 
-/-- Execution and state: elaborating the printed form of a typed program gives the
+/-- Execution and state: elaborating the erased form of a typed program gives the
 program. -/
 def roundTrip : Prop :=
-  ∀ p : Typed V, c.elaborate (print p) = .ok p
+  ∀ p : Typed V, c.elaborate (erase p) = .ok p
+
+/-- Execution and state: a program that elaboration gives erases to the program by names that
+was elaborated. -/
+def eraseOfElaborated : Prop :=
+  ∀ named p, c.elaborate named = .ok p → erase p = named
 
 /-- Execution and state: an admitted program is the elaboration of what was given, and its
 association is the resolution in it of the association given. -/
@@ -54,29 +61,78 @@ def checkAgrees : Prop :=
 inputs. -/
 def functionsSafe : Prop :=
   ∀ named assoc (a : Admitted V), c.admit named assoc = .ok a →
-    ∀ (M : Model V) (hdr : FnHeader V) (f : Var a.program.headers.fns hdr)
+    ∀ (M : Model V) (hdr : FnHeader V) (f : Member a.program.headers.fns hdr)
       (ins : HList M.Val hdr.ins), ins.All M.Valid →
       (fnMeaning M a.program f ins).Stops (· ≠ .undefined)
 
 /-- Validity: a function returns valid values. -/
 def functionsKeepValidity : Prop :=
   ∀ named assoc (a : Admitted V), c.admit named assoc = .ok a →
-    ∀ (M : Model V) (hdr : FnHeader V) (f : Var a.program.headers.fns hdr)
+    ∀ (M : Model V) (hdr : FnHeader V) (f : Member a.program.headers.fns hdr)
       (ins : HList M.Val hdr.ins) (outs : HList M.Val hdr.outs), ins.All M.Valid →
       fnMeaning M a.program f ins = .done outs → outs.All M.Valid
 
 /-- A view: a function that its header says cannot stop does not stop. -/
 def headersSayWhoStops : Prop :=
   ∀ named assoc (a : Admitted V), c.admit named assoc = .ok a →
-    ∀ (M : Model V) (hdr : FnHeader V) (f : Var a.program.headers.fns hdr)
+    ∀ (M : Model V) (hdr : FnHeader V) (f : Member a.program.headers.fns hdr)
       (ins : HList M.Val hdr.ins), ins.All M.Valid → hdr.canStop = false →
       (fnMeaning M a.program f ins).Stops fun _ => False
+
+/-- Execution and state: two functions of which the second follows the first mean the same. For
+two bodies of functions over the same headers and of the same types, each with distinct
+addresses, of which the first is accepted by the check of facts and the second follows its
+analysis with no refusal and no place that differs (`Analysis.follow`): against callees with
+distinct keys that never stop `undefined` on valid inputs, keep validity, and stop only
+`undefined` where their headers say that they cannot stop (`Callees`), on every valid input the
+two processes mean the same, for any replies permitted. Nothing is assumed of the safety of the
+second; its addresses are distinct, which elaboration decides. -/
+def functionsSame : Prop :=
+  ∀ (fns : List (FnHeader V)) (M : Model V) (table : FnTable M fns), Callees M table →
+    ∀ {types outs : List V.Ty} (inputs inputs' : Names types)
+      (body : Term (localDialect V fns) (Ctx.empty.extend inputs) outs)
+      (body' : Term (localDialect V fns) (Ctx.empty.extend inputs') outs)
+      (definition definition' : Key), Term.Distinct body → Term.Distinct body' →
+    ∀ (bounds : List (Place × Nat)),
+      checkFacts (localFactRules V fns) (localSkelRules V fns) definition none inputs body =
+        .ok bounds →
+      (Analysis.follow (localFactRules V fns) (localSkelRules V fns) definition' none
+        (Analysis.analyse (localFactRules V fns) (localSkelRules V fns) definition none inputs
+          body) inputs' body').accepted = true →
+      ∀ ins : HList M.Val types, ins.All M.Valid → ∀ permitted : ∀ op, NoSig.Reply op → Prop,
+        Process.SameWhen permitted
+          (body.denote (localSem M fns table) [] (Env.empty.extend inputs ins))
+          (body'.denote (localSem M fns table) [] (Env.empty.extend inputs' ins))
+
+/-- Execution and state: a transformation of a function that the step accepts relates functions
+with the same meaning. When `transform` accepts a source and a target, both elaborated, the
+source accepted by the check of facts and the target following its analysis: against
+callees with distinct keys that never stop `undefined` on valid inputs, keep validity, and stop
+only `undefined` where their headers say that they cannot stop, the two return the same on every
+valid input (`AcceptedFn.SameAs`). -/
+def transformSound : Prop :=
+  ∀ (fns : List (FnHeader V)) (hdr : FnHeader V) (source target : Region (LocalRaw V) Unit)
+    (step : Transformed V fns hdr), transform fns hdr source target = .ok step →
+      step.source.SameAs step.target
+
+/-- Execution and state: the functions of a program whose functions were replaced by functions
+that follow them mean what they meant. For two programs over the same headers with distinct
+keys, both accepted by the check of facts, whose functions follow one by one
+(`Defs.functionsFollow`): every function of the second has, on valid inputs, the meaning of the
+function of the first with its header, the callers of a replaced function included. The
+protocols of the two programs are not compared, and nothing is said of them. -/
+def replacedFunctionsSame : Prop :=
+  ∀ (hs : Headers V) (defs defs' : Defs V hs), (hs.fns.map (·.key)).Nodup →
+    ∀ (bounds bounds' : List (Place × Nat)), Defs.Accepted defs bounds →
+      Defs.Accepted defs' bounds' → Defs.functionsFollow defs defs' = true →
+      ∀ (M : Model V) (hdr : FnHeader V) (f : Member hs.fns hdr) (ins : HList M.Val hdr.ins),
+        ins.All M.Valid → Defs.fnTable M defs' hdr f ins = Defs.fnTable M defs hdr f ins
 
 /-- Validity: an open role program is safe: on valid inputs and every permitted reply it
 never stops `undefined`, whatever its peers do. -/
 def rolesSafe : Prop :=
   ∀ named assoc (a : Admitted V), c.admit named assoc = .ok a →
-    ∀ (M : Model V) (hdr : ProtocolHeader V) (p : Var a.program.headers.protocols hdr)
+    ∀ (M : Model V) (hdr : ProtocolHeader V) (p : Member a.program.headers.protocols hdr)
       (r : Role) (path : List Frame) (ins : HList (RV M r) hdr.ins), ins.All (RV.Valid M r) →
       (roleMeaning M a.program p r path ins).StopsWhen (Permitted M) (· ≠ .undefined)
 
@@ -89,7 +145,7 @@ def annotationHolds : Prop :=
 
 /-- The network of the projections of a protocol, each on its part of one input. -/
 def projections (p : Typed V) (M : Model V) {hdr : ProtocolHeader V}
-    (x : Var p.headers.protocols hdr) (path : List Frame) (ins : HList (LVal M) hdr.ins) :
+    (x : Member p.headers.protocols hdr) (path : List Frame) (ins : HList (LVal M) hdr.ins) :
     Net M (fun _ => Stop) (fun r => HList (RV M r) hdr.outs) × Pending M :=
   ((fun r => roleMeaning M p x r path (hideAll M r ins)), Pending.empty M)
 
@@ -99,7 +155,7 @@ where it returns, every role has returned its part and nothing is pending; where
 roles that stop have stopped with its reason; and what was sent in the execution is exactly
 what the run sent, in its order. -/
 def realized : Prop :=
-  ∀ (p : Typed V) (M : Model V) (hdr : ProtocolHeader V) (x : Var p.headers.protocols hdr)
+  ∀ (p : Typed V) (M : Model V) (hdr : ProtocolHeader V) (x : Member p.headers.protocols hdr)
     (path : List Frame) (ins : HList (LVal M) hdr.ins) (source : Source M)
     (events : List (Event M)) (e : GEnd _),
     GRun M source (protocolMeaning M p x path ins) events e →
@@ -116,7 +172,7 @@ with its part and nothing pending; where the run stops, in every such execution 
 that stop have stopped with its reason, and every other role has returned, stopped, waits
 for a message that will not come, or starves for what the world does not give. -/
 def anyOrder : Prop :=
-  ∀ (p : Typed V) (M : Model V) (hdr : ProtocolHeader V) (x : Var p.headers.protocols hdr)
+  ∀ (p : Typed V) (M : Model V) (hdr : ProtocolHeader V) (x : Member p.headers.protocols hdr)
     (path : List Frame) (ins : HList (LVal M) hdr.ins) (source : Source M) (e : GEnd _),
     GExec M source (protocolMeaning M p x path ins) e →
     ∀ record net pending,
@@ -137,7 +193,7 @@ def replayed : Prop :=
 /-- Validity: on valid inputs and against a world that gives what its laws allow, a run that
 returns gives valid results and a valid record. -/
 def recordsAreValid : Prop :=
-  ∀ (p : Typed V) (M : Model V) (hdr : ProtocolHeader V) (x : Var p.headers.protocols hdr)
+  ∀ (p : Typed V) (M : Model V) (hdr : ProtocolHeader V) (x : Member p.headers.protocols hdr)
     (path : List Frame) (ins : HList (LVal M) hdr.ins) (source : Source M) out,
     ins.All (fun a v => M.Valid a.ty v) → Lawful M source (protocolMeaning M p x path ins) →
     GExec M source (protocolMeaning M p x path ins) (.returned out) →
@@ -150,7 +206,7 @@ and when it does not report the limit for any role, no role can move. A budget c
 of the network: when some execution of `n` steps reaches a state where no role can move, the
 scheduler with a budget of at least `n` reports the limit for no role. -/
 def schedulerRuns : Prop :=
-  ∀ (p : Typed V) (M : Model V) (hdr : ProtocolHeader V) (x : Var p.headers.protocols hdr)
+  ∀ (p : Typed V) (M : Model V) (hdr : ProtocolHeader V) (x : Member p.headers.protocols hdr)
     (ins : HList (LVal M) hdr.ins) (source : Source M),
     (∀ limit, ∃ net pending,
       Reach M source (projections p M x [] ins)
@@ -248,13 +304,13 @@ answers, has a key that is no key of the entry's events. -/
 def deployFresh : Prop :=
   ∀ (a : Admitted V) declaration (d : Deployed V), c.deploy a declaration = .ok d → d.Fresh
 
-/-- A view: the identity of a deployed scheme reads its declaration and the printed
+/-- A view: the identity of a deployed scheme reads its declaration and the erased
 definitions that its entry and its declaration reach, and nothing else: not the association,
 not the annotation, not another definition. -/
 def identityReads : Prop :=
   ∀ d d' : Deployed V, d.declaration = d'.declaration →
-    (print d.admitted.program).definitions.filter (fun definition => decide (definition.key ∈ d.closure)) =
-      (print d'.admitted.program).definitions.filter
+    (erase d.admitted.program).definitions.filter (fun definition => decide (definition.key ∈ d.closure)) =
+      (erase d'.admitted.program).definitions.filter
         (fun definition => decide (definition.key ∈ d'.closure)) →
     c.identity d = c.identity d'
 

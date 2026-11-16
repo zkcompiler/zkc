@@ -17,31 +17,48 @@ row keeps validity.
 
 namespace Zkc.Core
 
-/-! ## Contexts and environments -/
+/-! ## Positions in a list -/
 
-inductive Var {α : Type} : List α → α → Type where
-  | head {a : α} {rest : List α} : Var (a :: rest) a
-  | tail {a b : α} {rest : List α} : Var rest a → Var (b :: rest) a
+/-- An item of a list with its place: the definition among the headers before a caller that a
+call names. -/
+inductive Member {α : Type} : List α → α → Type where
+  | head {a : α} {rest : List α} : Member (a :: rest) a
+  | tail {a b : α} {rest : List α} : Member rest a → Member (b :: rest) a
 
 section
 variable {T : Type}
 
-/-- The position of a variable, from the innermost binding. -/
-def Var.index {Γ : List T} {a : T} : Var Γ a → Nat
+/-- The position, from the front. -/
+def Member.index {Γ : List T} {a : T} : Member Γ a → Nat
   | .head => 0
   | .tail x => x.index + 1
 
-/-- The variable at a position, with its type. -/
-def Var.atIndex : (Γ : List T) → Nat → Option ((t : T) × Var Γ t)
+/-- The item at a position. -/
+def Member.atIndex : (Γ : List T) → Nat → Option ((t : T) × Member Γ t)
   | [], _ => none
   | t :: _, 0 => some ⟨t, .head⟩
-  | _ :: Γ, n + 1 => (Var.atIndex Γ n).map fun found => ⟨found.1, .tail found.2⟩
+  | _ :: Γ, n + 1 => (Member.atIndex Γ n).map fun found => ⟨found.1, .tail found.2⟩
 
-theorem Var.atIndex_index : ∀ {Γ : List T} {a : T} (x : Var Γ a),
-    Var.atIndex Γ x.index = some ⟨a, x⟩
+theorem Member.atIndex_index : ∀ {Γ : List T} {a : T} (x : Member Γ a),
+    Member.atIndex Γ x.index = some ⟨a, x⟩
   | _ :: _, _, .head => rfl
   | _ :: _, _, .tail x => by
-      simp only [Var.index, Var.atIndex, Var.atIndex_index x, Option.map_some]
+      simp only [Member.index, Member.atIndex, Member.atIndex_index x, Option.map_some]
+
+/-- The position of an item found at a position is that position. -/
+theorem Member.index_of_atIndex :
+    ∀ {Γ : List T} {n : Nat} {a : T} {x : Member Γ a},
+      Member.atIndex Γ n = some ⟨a, x⟩ → x.index = n
+  | [], _, _, _, found => nomatch found
+  | _ :: _, 0, _, _, found => by
+      simp only [Member.atIndex, Option.some.injEq] at found
+      cases found
+      rfl
+  | _ :: Γ, n + 1, _, _, found => by
+      simp only [Member.atIndex, Option.map_eq_some_iff] at found
+      obtain ⟨⟨_, y⟩, located, same⟩ := found
+      cases same
+      simp only [Member.index, Member.index_of_atIndex located]
 
 end
 
@@ -66,6 +83,14 @@ def HList.split {α : Type} {V : α → Type} :
   | [], _, ys => (.nil, ys)
   | _ :: as, _, .cons x rest => let parts := HList.split as rest; (.cons x parts.1, parts.2)
 
+/-- The values of a list that is two lists, split and put together, are the values. -/
+theorem split_append {α : Type} {F : α → Type} :
+    ∀ (as : List α) {bs : List α} (xs : HList F (as ++ bs)),
+      (HList.split as xs).1.append (HList.split as xs).2 = xs
+  | [], _, _ => rfl
+  | _ :: as, _, .cons x rest => by
+      simp only [HList.split, HList.append, split_append as rest]
+
 theorem HList.all_cons {α : Type} {F : α → Type} {P : ∀ a, F a → Prop} {a : α} {rest : List α}
     {v : F a} {vs : HList F rest} : (HList.cons v vs).All P ↔ P a v ∧ vs.All P := Iff.rfl
 
@@ -80,8 +105,6 @@ theorem HList.two {α : Type} {F : α → Type} {a b : α} :
 theorem HList.three {α : Type} {F : α → Type} {a b c : α} :
     ∀ (vs : HList F [a, b, c]), ∃ u v w, vs = .cons u (.cons v (.cons w .nil))
   | .cons u (.cons v (.cons w .nil)) => ⟨u, v, w, rfl⟩
-
-def Env {α : Type} (V : α → Type) (Γ : List α) : Type := ∀ a, Var Γ a → V a
 
 /-! ## Types -/
 
@@ -327,12 +350,6 @@ theorem all_append : ∀ {as bs : List V.Ty} (xs : HList M.Val as) (ys : HList M
   | [], _, .nil, _ => by simp [HList.append, HList.All]
   | _ :: _, _, .cons x xs, ys => by
       simp only [HList.append, HList.all_cons, all_append xs ys, and_assoc]
-
-theorem split_append : ∀ (as : List V.Ty) {bs : List V.Ty} (xs : HList M.Val (as ++ bs)),
-    (HList.split as xs).1.append (HList.split as xs).2 = xs
-  | [], _, _ => rfl
-  | _ :: as, _, .cons x rest => by
-      simp only [HList.split, HList.append, split_append as rest]
 
 end
 

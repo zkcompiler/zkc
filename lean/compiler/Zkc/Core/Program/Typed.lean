@@ -6,25 +6,34 @@ public import Zkc.Core.Program.Linear
 @[expose] public section
 
 /-!
-A typed program: its definitions, each with what elaboration decided about its body, and
-the lookup of a definition by its key. Also one definition elaborated against the headers before
-it (`Elaborated`), the program extended by it (`Typed.add`), whether a function or a local
-operation can stop (`Fn.canStop`, `LocalOp.canStop`), and the definitions that a definition
-reaches by its calls (`Defs.closureOf`).
+A typed program: its definitions, each with the names of its inputs and what elaboration decided
+about its body, and the lookup of a definition by its key. The body of a definition is a term in
+the context of its inputs, by their names; a header has no names, since a caller passes by
+position. Also one definition elaborated against the headers before it (`Elaborated`), the
+program extended by it (`Typed.add`), whether a function or a local operation can stop
+(`Fn.canStop`, `LocalOp.canStop`), and the definitions that a definition reaches by its calls
+(`Defs.closureOf`).
 -/
 
 namespace Zkc.Core
 
 /-! ## A program -/
 
-abbrev Fn (V : Vocabulary) (fns : List (FnHeader V)) (hdr : FnHeader V) : Type :=
-  Term (localDialect V fns) hdr.ins hdr.outs
+/-- The body of a function, in the context of its inputs by their names. -/
+abbrev Fn (V : Vocabulary) (fns : List (FnHeader V)) (hdr : FnHeader V)
+    (inputs : Names hdr.ins) : Type :=
+  Term (localDialect V fns) (Ctx.empty.extend inputs) hdr.outs
 
-abbrev Prot (V : Vocabulary) (hs : Headers V) (hdr : ProtocolHeader V) : Type :=
-  Term (protocolDialect V hs) hdr.ins hdr.outs
+/-- The body of a protocol, in the context of its ports by their names. -/
+abbrev Prot (V : Vocabulary) (hs : Headers V) (hdr : ProtocolHeader V)
+    (inputs : Names hdr.ins) : Type :=
+  Term (protocolDialect V hs) (Ctx.empty.extend inputs) hdr.outs
 
-abbrev RoleP (V : Vocabulary) (hs : Headers V) (r : Role) (hdr : ProtocolHeader V) : Type :=
-  Term (roleDialect V hs r) hdr.ins hdr.outs
+/-- The program of a role of a protocol, in the context of the protocol's ports by their
+names. -/
+abbrev RoleP (V : Vocabulary) (hs : Headers V) (r : Role) (hdr : ProtocolHeader V)
+    (inputs : Names hdr.ins) : Type :=
+  Term (roleDialect V hs r) (Ctx.empty.extend inputs) hdr.outs
 
 /-- Whether a local operation can stop with a reason: a call of a function that can. -/
 def LocalOp.canStop {V : Vocabulary} {fns : List (FnHeader V)} {ins res : List V.Ty} :
@@ -34,44 +43,47 @@ def LocalOp.canStop {V : Vocabulary} {fns : List (FnHeader V)} {ins res : List V
 
 /-- Whether the body of a function can stop with a reason. -/
 def Fn.canStop {V : Vocabulary} {fns : List (FnHeader V)} {hdr : FnHeader V}
-    (body : Fn V fns hdr) : Bool :=
+    {inputs : Names hdr.ins} (body : Fn V fns hdr inputs) : Bool :=
   Term.canStop (fun o => LocalOp.canStop o) body
 
 /-- What elaboration decides about the body of a function: its instructions have their own
 addresses, every value of a linear type is used once, its header says whether it can stop
-with a reason as its body does, and its case analyses without an arm give nothing. With these
-a typed function is one that a program by names writes: its printed form elaborates to it. -/
+with a reason as its body does, its case analyses without an arm give nothing, and every name
+is bound at one place. With these a typed function is one that a program by names writes: its
+erased form elaborates to it. -/
 structure FnConditions {V : Vocabulary} {fns : List (FnHeader V)} {hdr : FnHeader V}
-    (body : Fn V fns hdr) : Prop where
+    {inputs : Names hdr.ins} (body : Fn V fns hdr inputs) : Prop where
   distinct : Term.Distinct body
-  linear : body.UsedOnce (fun τ : V.Ty => Ty.isLinear V τ)
+  linear : body.UsedOnce (fun τ : V.Ty => Ty.isLinear V τ) inputs
   stops : hdr.canStop = body.canStop
   armed : body.armed = true
+  once : body.BoundOnce inputs.toList
 
 /-- What elaboration decides about the body of a protocol: its roles are those below the
 number in its header (nobody else acts in the body, and its ports and results are held by no
 other role); nobody but those who perform a choice or a loop acts in its regions; its
 instructions have their own addresses; the shape in its header is the shape of its body;
-every value of a linear type is used once; and its case analyses without an arm give
-nothing. -/
+every value of a linear type is used once; its case analyses without an arm give nothing; and
+every name is bound at one place. -/
 structure ProtocolConditions {V : Vocabulary} {hs : Headers V} (hdr : ProtocolHeader V)
-    (body : Prot V hs hdr) : Prop where
+    {inputs : Names hdr.ins} (body : Prot V hs hdr inputs) : Prop where
   within : Within (List.range hdr.roles) body
   located : ∀ a, a ∈ hdr.ins ++ hdr.outs → ∀ r, r ∈ a.holders → r < hdr.roles
   enclosed : Enclosed body
   distinct : Term.Distinct body
   shaped : hdr.shape = shapeOf body
-  linear : body.UsedOnce (fun a : LTy V => Ty.isLinear V a.ty)
+  linear : body.UsedOnce (fun a : LTy V => Ty.isLinear V a.ty) inputs
   armed : body.armed = true
+  once : body.BoundOnce inputs.toList
 
 /-- The definitions of a program, the latest first; each applies only earlier ones, and each
-carries what elaboration decided about its body, once. -/
+carries the names of its inputs and what elaboration decided about its body, once. -/
 inductive Defs (V : Vocabulary) : Headers V → Type where
   | nil : Defs V ⟨[], []⟩
-  | fn {hs} (hdr : FnHeader V) (body : Fn V hs.fns hdr) (ok : FnConditions body)
-      (rest : Defs V hs) : Defs V ⟨hdr :: hs.fns, hs.protocols⟩
-  | protocol {hs} (hdr : ProtocolHeader V) (body : Prot V hs hdr) (ok : ProtocolConditions hdr body)
-      (rest : Defs V hs) : Defs V ⟨hs.fns, hdr :: hs.protocols⟩
+  | fn {hs} (hdr : FnHeader V) (inputs : Names hdr.ins) (body : Fn V hs.fns hdr inputs)
+      (ok : FnConditions body) (rest : Defs V hs) : Defs V ⟨hdr :: hs.fns, hs.protocols⟩
+  | protocol {hs} (hdr : ProtocolHeader V) (inputs : Names hdr.ins) (body : Prot V hs hdr inputs)
+      (ok : ProtocolConditions hdr body) (rest : Defs V hs) : Defs V ⟨hs.fns, hdr :: hs.protocols⟩
 
 /-- The keys of the definitions of a program. -/
 def Headers.keys {V : Vocabulary} (hs : Headers V) : List Key :=
@@ -85,15 +97,16 @@ structure Typed (V : Vocabulary) where
 
 /-! ## One definition after the definitions before it -/
 
-/-- A definition elaborated against the headers of those before it: its header, its body and
-what elaboration decided about the body; none of them has its key. Elaborating a definition
-needs the headers before it and not their bodies, so this is what the check of one definition
-gives while a program is being written, and what a program is extended by. -/
+/-- A definition elaborated against the headers of those before it: its header, the names of
+its inputs, its body and what elaboration decided about the body; none of them has its key.
+Elaborating a definition needs the headers before it and not their bodies, so this is what the
+check of one definition gives while a program is being written, and what a program is extended
+by. -/
 inductive Elaborated (V : Vocabulary) (hs : Headers V) where
-  | fn (hdr : FnHeader V) (body : Fn V hs.fns hdr) (ok : FnConditions body)
-      (fresh : hdr.key ∉ hs.keys)
-  | protocol (hdr : ProtocolHeader V) (body : Prot V hs hdr) (ok : ProtocolConditions hdr body)
-      (fresh : hdr.key ∉ hs.keys)
+  | fn (hdr : FnHeader V) (inputs : Names hdr.ins) (body : Fn V hs.fns hdr inputs)
+      (ok : FnConditions body) (fresh : hdr.key ∉ hs.keys)
+  | protocol (hdr : ProtocolHeader V) (inputs : Names hdr.ins) (body : Prot V hs hdr inputs)
+      (ok : ProtocolConditions hdr body) (fresh : hdr.key ∉ hs.keys)
 
 /-- The key of an elaborated definition. -/
 def Elaborated.key {V : Vocabulary} {hs : Headers V} : Elaborated V hs → Key
@@ -122,11 +135,11 @@ theorem Headers.distinct_protocol {V : Vocabulary} {hs : Headers V} {key : Key}
 
 /-- A program with one more definition, elaborated against its headers. -/
 def Typed.add {V : Vocabulary} (p : Typed V) : Elaborated V p.headers → Typed V
-  | .fn hdr body ok fresh =>
-      ⟨⟨hdr :: p.headers.fns, p.headers.protocols⟩, .fn hdr body ok p.defs,
+  | .fn hdr inputs body ok fresh =>
+      ⟨⟨hdr :: p.headers.fns, p.headers.protocols⟩, .fn hdr inputs body ok p.defs,
         List.nodup_cons.mpr ⟨fresh, p.distinct⟩⟩
-  | .protocol hdr body ok fresh =>
-      ⟨⟨p.headers.fns, hdr :: p.headers.protocols⟩, .protocol hdr body ok p.defs,
+  | .protocol hdr inputs body ok fresh =>
+      ⟨⟨p.headers.fns, hdr :: p.headers.protocols⟩, .protocol hdr inputs body ok p.defs,
         Headers.distinct_protocol fresh p.distinct⟩
 
 /-- A program without definitions. -/
@@ -136,8 +149,8 @@ def Typed.empty {V : Vocabulary} : Typed V := ⟨⟨[], []⟩, .nil, List.nodup_
 
 /-- A definition of a program, as a typed reference: a function or a protocol. -/
 inductive Ref {V : Vocabulary} (hs : Headers V) where
-  | fn {hdr : FnHeader V} (ref : Var hs.fns hdr)
-  | protocol {hdr : ProtocolHeader V} (ref : Var hs.protocols hdr)
+  | fn {hdr : FnHeader V} (ref : Member hs.fns hdr)
+  | protocol {hdr : ProtocolHeader V} (ref : Member hs.protocols hdr)
 
 /-- The key of a referenced definition. -/
 def Ref.key {V : Vocabulary} {hs : Headers V} : Ref hs → Key
@@ -145,47 +158,68 @@ def Ref.key {V : Vocabulary} {hs : Headers V} : Ref hs → Key
   | .protocol (hdr := hdr) _ => hdr.key
 
 /-- The references of the headers with the key. -/
-def Var.withKey {α : Type} (keyOf : α → Key) (key : Key) :
-    (items : List α) → List ((a : α) × Var items a)
+def Member.withKey {α : Type} (keyOf : α → Key) (key : Key) :
+    (items : List α) → List ((a : α) × Member items a)
   | [] => []
   | a :: rest =>
-      let later := (Var.withKey keyOf key rest).map fun found => ⟨found.1, .tail found.2⟩
+      let later := (Member.withKey keyOf key rest).map fun found => ⟨found.1, .tail found.2⟩
       if keyOf a = key then ⟨a, .head⟩ :: later else later
 
 section
 variable {α : Type}
 
-theorem Var.key_mem (keyOf : α → Key) : ∀ {items : List α} {a : α}, Var items a →
+theorem Member.key_mem (keyOf : α → Key) : ∀ {items : List α} {a : α}, Member items a →
     keyOf a ∈ items.map keyOf
   | _ :: _, _, .head => List.mem_cons_self
-  | _ :: _, _, .tail x => List.mem_cons_of_mem _ (Var.key_mem keyOf x)
+  | _ :: _, _, .tail x => List.mem_cons_of_mem _ (Member.key_mem keyOf x)
 
-theorem Var.withKey_absent (keyOf : α → Key) (key : Key) : ∀ {items : List α},
-    key ∉ items.map keyOf → Var.withKey keyOf key items = []
+theorem Member.withKey_absent (keyOf : α → Key) (key : Key) : ∀ {items : List α},
+    key ∉ items.map keyOf → Member.withKey keyOf key items = []
   | [], _ => rfl
   | a :: rest, absent => by
       have other : keyOf a ≠ key := fun same => absent (same ▸ List.mem_cons_self)
       have later : key ∉ rest.map keyOf := fun found => absent (List.mem_cons_of_mem _ found)
-      simp only [Var.withKey, other, ↓reduceIte, Var.withKey_absent keyOf key later, List.map_nil]
+      simp only [Member.withKey, other, ↓reduceIte, Member.withKey_absent keyOf key later,
+        List.map_nil]
 
-/-- With distinct keys, the variable with the key of an item is that item's. -/
-theorem Var.withKey_key (keyOf : α → Key) : ∀ {items : List α} {a : α} (x : Var items a),
-    (items.map keyOf).Nodup → Var.withKey keyOf (keyOf a) items = [⟨a, x⟩]
+/-- With distinct keys, the reference with the key of an item is that item's. -/
+theorem Member.withKey_key (keyOf : α → Key) :
+    ∀ {items : List α} {a : α} (x : Member items a),
+      (items.map keyOf).Nodup → Member.withKey keyOf (keyOf a) items = [⟨a, x⟩]
   | _ :: _, _, .head, distinct => by
       have absent := (List.nodup_cons.mp distinct).1
-      simp only [Var.withKey, ↓reduceIte, Var.withKey_absent keyOf _ absent, List.map_nil]
+      simp only [Member.withKey, ↓reduceIte, Member.withKey_absent keyOf _ absent, List.map_nil]
   | b :: _, a, .tail x, distinct => by
       have ⟨absent, others⟩ := List.nodup_cons.mp distinct
-      have other : keyOf b ≠ keyOf a := fun same => absent (same ▸ Var.key_mem keyOf x)
-      simp only [Var.withKey, other, ↓reduceIte, Var.withKey_key keyOf x others, List.map_cons,
-        List.map_nil]
+      have other : keyOf b ≠ keyOf a := fun same => absent (same ▸ Member.key_mem keyOf x)
+      simp only [Member.withKey, other, ↓reduceIte, Member.withKey_key keyOf x others,
+        List.map_cons, List.map_nil]
+
+/-- A reference with a key has that key. -/
+theorem Member.key_of_withKey (keyOf : α → Key) (key : Key) :
+    ∀ {items : List α} {found : (a : α) × Member items a},
+      found ∈ Member.withKey keyOf key items → keyOf found.1 = key
+  | [], _, listed => nomatch listed
+  | a :: rest, found, listed => by
+      simp only [Member.withKey] at listed
+      split at listed
+      · rename_i same
+        rcases List.mem_cons.mp listed with first | later
+        · subst first
+          exact same
+        · obtain ⟨other, inRest, moved⟩ := List.mem_map.mp later
+          subst moved
+          exact Member.key_of_withKey keyOf key (items := rest) inRest
+      · obtain ⟨other, inRest, moved⟩ := List.mem_map.mp listed
+        subst moved
+        exact Member.key_of_withKey keyOf key (items := rest) inRest
 
 end
 
 /-- The definition with the key, when exactly one has it. -/
 def Headers.find {V : Vocabulary} (hs : Headers V) (key : Key) : Option (Ref hs) :=
-  match (Var.withKey (·.key) key hs.fns).map (fun found => Ref.fn found.2) ++
-      (Var.withKey (·.key) key hs.protocols).map (fun found => Ref.protocol found.2) with
+  match (Member.withKey (·.key) key hs.fns).map (fun found => Ref.fn found.2) ++
+      (Member.withKey (·.key) key hs.protocols).map (fun found => Ref.protocol found.2) with
   | [found] => some found
   | _ => none
 
@@ -201,11 +235,11 @@ def Typed.find {V : Vocabulary} (p : Typed V) (key : Key) : Option (Subject p) :
 applications, itself included. -/
 def Defs.closureOf {V : Vocabulary} : {hs : Headers V} → Defs V hs → Key → List Key
   | _, .nil, _ => []
-  | _, .fn hdr body _ rest, key =>
+  | _, .fn hdr _ body _ rest, key =>
       if hdr.key = key then
         hdr.key :: (Term.calls (fun o => LocalOp.calls o) body).flatMap (Defs.closureOf rest)
       else Defs.closureOf rest key
-  | _, .protocol hdr body _ rest, key =>
+  | _, .protocol hdr _ body _ rest, key =>
       if hdr.key = key then
         hdr.key :: (Term.calls (fun o => ProtocolOp.calls o) body).flatMap (Defs.closureOf rest)
       else Defs.closureOf rest key

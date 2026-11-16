@@ -2,17 +2,20 @@ module
 
 public import Zkc.Core.Program.Term
 public import Zkc.Core.Program.Requirement
+public import Zkc.Core.Value.Skeleton
 
 @[expose] public section
 
 /-!
-What the check of facts is told about operations.
+What the analysis is told about the operations of a dialect: the one description of them.
 
-The check walks a term of any dialect. Of an operation it reads its written form: an operation
-that computes is shared by it, and what the check knows of it (what it requires, the ranges of
-its results, how its result reads) is said once per written form, for every dialect whose
-operations compute. A dialect says which of its operations compute, the range of a natural of
-each of its types, and which of its types have no value.
+The analysis walks a term of any dialect. Of an operation it reads its written form: an operation
+that is a value is shared by it, and what the analysis knows of it (what it requires, the ranges
+of its results, how its result reads) is said once per written form, for every dialect whose
+operations compute. A dialect says which of its operations are values and how they are written,
+which written operations commute, where the table places them, the range of a natural of each of
+its types, and which of its types have no value (`FactRules`). The value form reads a part of
+it (`FactRules.values`).
 -/
 
 namespace Zkc.Core
@@ -49,11 +52,16 @@ structure OpFacts (Raw : Type) where
   /-- How the first result reads. -/
   form : Raw → Option ResultForm
 
-/-- What a dialect tells the check of facts. -/
+/-- What a dialect tells the analysis of its operations. -/
 structure FactRules (D : Dialect) (Raw : Type) where
-  /-- The written form of an operation that computes: equal applications of it are one value.
-  Nothing for an operation whose results are new values each time. -/
+  /-- The written form of an operation that is a value: equal applications of it are one value,
+  and it has no place of its own in the order of a term. Nothing for an operation that is kept in
+  order: one whose results are new values each time, or that can stop with a reason. -/
   written : ∀ {ins res : List D.Ty}, D.Op ins res → Option Raw
+  /-- Whether the result of a written operation of two operands does not depend on their order.
+  Such an operation is placed in the table with its operands in one order, whichever way they
+  were written. -/
+  commutes : Raw → Bool
   /-- What the type alone says of a natural of the type; nothing for a type that is not a
   natural. -/
   range : D.Ty → Option Range
@@ -66,5 +74,12 @@ structure FactRules (D : Dialect) (Raw : Type) where
   operands' identifiers: any number will do, since the applications placed together are
   compared whole; operations that it tells apart fall in different places. -/
   place : Raw → Nat
+
+/-- The rules as the value form reads them: which operations are values, how they are written,
+where the table places them, and which commute. -/
+def FactRules.values {D : Dialect} {Raw : Type} (rules : FactRules D Raw) : ValueRules D Raw where
+  written := rules.written
+  place := rules.place
+  commutes := rules.commutes
 
 end Zkc.Core

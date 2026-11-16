@@ -23,6 +23,10 @@ structure Key where
   number : Nat
 deriving DecidableEq, Repr, Hashable
 
+/-- The name of a value in a program by names: a number. A definition binds each of its names at
+one place. -/
+abbrev Name := Nat
+
 abbrev Role := Nat
 
 /-- The roles that hold a value: strictly increasing, so that equal sets are equal. Every

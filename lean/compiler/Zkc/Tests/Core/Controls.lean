@@ -35,16 +35,17 @@ def zeroSource : Source plainModel := fun _ τ =>
   | _ => Option.none
 
 /-- A protocol of one private sample. -/
-def privateSample : Term (protocolDialect Shapes.plain Shapes.none) [] [] :=
+def privateSample : Term (protocolDialect Shapes.plain Shapes.none) (Ctx.positional []) [] :=
   .op ⟨1⟩ (.given (.coin ()) 0 [] [] .nat ⟨_, rfl, rfl, rfl⟩
-    (fun _ h => nomatch h) (by decide)) .nil <| .ret .nil
+    (fun _ h => nomatch h) (by decide)) .nil (.cons 0 .nil) <| .ret .nil
 
 def sampleHeader : ProtocolHeader Shapes.plain := ⟨⟨44⟩, 2, [], [], shapeOf privateSample⟩
 
 def sampleTyped : Typed Shapes.plain := ⟨⟨[], [sampleHeader]⟩,
-  .protocol sampleHeader privateSample
+  .protocol sampleHeader (Names.counting 0 _) privateSample
     ⟨by simp [Within, ProtocolOp.Within, privateSample, sampleHeader], by decide,
-    by simp [Enclosed, privateSample], rfl, rfl, rfl, rfl⟩ .nil, by decide⟩
+    by simp [Enclosed, privateSample], rfl, rfl, rfl, rfl, by unfold Term.BoundOnce; decide⟩ .nil,
+    by decide⟩
 
 /-- The empty source does not feed the private sample, so `complete` asks nothing of it. -/
 theorem empty_source_not_fed :
@@ -73,12 +74,13 @@ theorem sampler_starves :
 /-! ## Progress of the scheduler -/
 
 /-- A protocol of one role that does nothing. -/
-def idle : Term (protocolDialect Shapes.plain Shapes.none) [] [] := .ret .nil
+def idle : Term (protocolDialect Shapes.plain Shapes.none) (Ctx.positional []) [] := .ret .nil
 
 def idleHeader : ProtocolHeader Shapes.plain := ⟨⟨45⟩, 1, [], [], shapeOf idle⟩
 
 def idleTyped : Typed Shapes.plain := ⟨⟨[], [idleHeader]⟩,
-  .protocol idleHeader idle ⟨by simp [Within, idle], by decide, by simp [Enclosed, idle], rfl, rfl, rfl, rfl⟩ .nil, by decide⟩
+  .protocol idleHeader (Names.counting 0 _) idle ⟨by simp [Within, idle], by decide,
+    by simp [Enclosed, idle], rfl, rfl, rfl, rfl, by unfold Term.BoundOnce; decide⟩ .nil, by decide⟩
 
 /-- A scheduler that never takes a step. -/
 def neverSchedule {V : Vocabulary} (c : Functions V) : Functions V :=
@@ -135,9 +137,10 @@ theorem composition_keeps_lower (n : Nat) :
 /-! ## Distinct keys -/
 
 /-- Two sends with one key, from two roles to one. -/
-def colliding : Term (protocolDialect Shapes.plain Shapes.none) [nat [0], nat [2]] [] :=
-  .op ⟨7⟩ (.flow .message 0 [1] (by decide) (by decide)) (.cons .head .nil) <|
-  .op ⟨7⟩ (.flow .message 2 [1] (by decide) (by decide)) (.cons (.tail (.tail .head)) .nil) <|
+def colliding :
+    Term (protocolDialect Shapes.plain Shapes.none) (Ctx.positional [nat [0], nat [2]]) [] :=
+  .op ⟨7⟩ (.flow .message 0 [1] (by decide) (by decide)) (.cons (var 0) .nil) (.cons 2 .nil) <|
+  .op ⟨7⟩ (.flow .message 2 [1] (by decide) (by decide)) (.cons (var 1) .nil) (.cons 3 .nil) <|
   .ret .nil
 
 /-- They are not `Distinct`, so no program has them. -/
@@ -167,7 +170,7 @@ def occupied : Pending M := (Pending.empty M).post M at_ [1] ⟨2, .message, .na
 
 /-- The projections of the colliding term, as a bare term. -/
 def bareNet : Net M (fun _ => Stop) B := fun r =>
-  (project r colliding).denote (roleSem M r noFns noPrograms) [] (restrict M r (Env.ofList inputs))
+  (project r colliding).denote (roleSem M r noFns noPrograms) [] (restrict M r (Env.positional inputs))
 
 /-- The first and third roles send at one key, and the second receives both there. -/
 theorem bare_initial : bareNet = initialNet := by
@@ -257,7 +260,7 @@ theorem stuck (source : Source M) : Quiescent M source (stuckNet, occupied) := b
 
 /-- The colliding term returns as a protocol. -/
 theorem bare_global_returns (source : Source M) :
-    GExec M source (colliding.denote (protocolSem M noFns noProtocols) [] (Env.ofList inputs))
+    GExec M source (colliding.denote (protocolSem M noFns noProtocols) [] (Env.positional inputs))
       (.returned .nil) :=
   ⟨_, .flow (.flow .done)⟩
 
@@ -280,14 +283,15 @@ theorem bare_not_returned : ¬ Ended M
 
 /-- An attempt of the first role whose body samples privately, gives the sample to the second
 role, and aborts. -/
-def retriedBody : Term (protocolDialect Shapes.plain Shapes.none) [] [] :=
-  .attempt ⟨80⟩ [0] ⟨0, rfl⟩
+def retriedBody : Term (protocolDialect Shapes.plain Shapes.none) (Ctx.positional []) [] :=
+  .attempt ⟨80⟩ [0] ⟨0, rfl⟩ (.cons 0 .nil)
     (.op ⟨81⟩ (.given (.coin ()) 0 [] [] .nat ⟨_, rfl, rfl, rfl⟩ (fun _ h => nomatch h)
-      (by decide)) .nil <|
-     .op ⟨84⟩ (.flow .message 0 [1] (by decide) (by decide)) (.cons .head .nil) <|
-     .op ⟨82⟩ (.compute [0] (.literal .bool [0] rfl) [] rfl (fun _ h => nomatch h)) .nil <|
-     .guard ⟨83⟩ [0] .head ⟨rfl, by decide, by decide⟩ .abort <|
-     .ret .nil) <|
+      (by decide)) .nil (.cons 1 .nil) <|
+     .op ⟨84⟩ (.flow .message 0 [1] (by decide) (by decide)) (.cons (var 1) .nil) (.cons 2 .nil) <|
+     .op ⟨82⟩ (.compute [0] (.literal .bool [0] rfl) [] rfl (fun _ h => nomatch h)) .nil
+      (.cons 3 .nil) <|
+     .guard ⟨83⟩ [0] (var 3) ⟨rfl, by decide, by decide⟩ .abort <|
+     .ret .nil) .nil <|
   .ret .nil
 
 /-- The retry of two attempts at the site of the attempt `80`. -/
@@ -295,10 +299,10 @@ def twoAttempts : Retry (RSig plainModel) (RSig plainModel) Stop :=
   retryOf plainModel (some (2, ⟨[], ⟨80⟩⟩))
 
 /-- The first role's program of a protocol under the retry of two attempts. -/
-def retriedRun (t : Term (protocolDialect Shapes.plain Shapes.none) [] []) :
+def retriedRun (t : Term (protocolDialect Shapes.plain Shapes.none) (Ctx.positional []) []) :
     Process (RSig plainModel) (Stop × Unit) (HList (RV plainModel 0) [] × Unit) :=
   (Handler.none (RSig plainModel) Stop).run twoAttempts
-    ((project 0 t).denote (roleSem plainModel 0 noFns noPrograms) [] (Env.ofList .nil)) ()
+    ((project 0 t).denote (roleSem plainModel 0 noFns noPrograms) [] (Env.positional .nil)) ()
 
 /-- The occurrences at which a run asks for private coins, while every coin is `0`. -/
 def sampled : Process (RSig plainModel) (Stop × Unit) (HList (RV plainModel 0) [] × Unit) →
@@ -335,20 +339,21 @@ theorem retry_exhausted :
     ending (retriedRun retriedBody) = some (.declared .exhausted ⟨[], ⟨80⟩⟩) := rfl
 
 /-- An attempt whose body does nothing, then a private coin. -/
-def coinAfter : Term (protocolDialect Shapes.plain Shapes.none) [] [] :=
-  .attempt ⟨80⟩ [0] ⟨0, rfl⟩ (.ret .nil) <|
+def coinAfter : Term (protocolDialect Shapes.plain Shapes.none) (Ctx.positional []) [] :=
+  .attempt ⟨80⟩ [0] ⟨0, rfl⟩ (.cons 0 .nil) (.ret .nil) .nil <|
   .op ⟨85⟩ (.given (.coin ()) 0 [] [] .nat ⟨_, rfl, rfl, rfl⟩ (fun _ h => nomatch h)
-    (by decide)) .nil <|
+    (by decide)) .nil (.cons 1 .nil) <|
   .ret .nil
 
 /-- A private coin after the region is asked once, at its own occurrence. -/
 theorem coin_after_once : sampled (retriedRun coinAfter) = [⟨[], ⟨85⟩⟩] := rfl
 
 /-- An attempt whose body does nothing, then a guard that aborts. -/
-def abortAfter : Term (protocolDialect Shapes.plain Shapes.none) [] [] :=
-  .attempt ⟨80⟩ [0] ⟨0, rfl⟩ (.ret .nil) <|
-  .op ⟨86⟩ (.compute [0] (.literal .bool [0] rfl) [] rfl (fun _ h => nomatch h)) .nil <|
-  .guard ⟨87⟩ [0] .head ⟨rfl, by decide, by decide⟩ .abort <|
+def abortAfter : Term (protocolDialect Shapes.plain Shapes.none) (Ctx.positional []) [] :=
+  .attempt ⟨80⟩ [0] ⟨0, rfl⟩ (.cons 0 .nil) (.ret .nil) .nil <|
+  .op ⟨86⟩ (.compute [0] (.literal .bool [0] rfl) [] rfl (fun _ h => nomatch h)) .nil
+    (.cons 1 .nil) <|
+  .guard ⟨87⟩ [0] (var 1) ⟨rfl, by decide, by decide⟩ .abort <|
   .ret .nil
 
 /-- An `abort` after the region is not retried: it is the stop. -/
@@ -403,28 +408,28 @@ theorem counter_survives_retry (n : Nat) :
 /-- The shape of the identification protocol of ML-DSA: an attempt of the first role whose
 body has its private coin, a message to the second, a coin of the second that the first hears,
 a guard of the first that aborts, and a second message; then a guard of the second. -/
-def signing : Term (protocolDialect Shapes.plain Shapes.none) [] [] :=
-  .attempt ⟨1⟩ [0] ⟨0, rfl⟩
+def signing : Term (protocolDialect Shapes.plain Shapes.none) (Ctx.positional []) [] :=
+  .attempt ⟨1⟩ [0] ⟨0, rfl⟩ (.cons 0 .nil)
     (.op ⟨2⟩ (.given (.coin ()) 0 [] [] .nat ⟨_, rfl, rfl, rfl⟩ (fun _ h => nomatch h)
-      (by decide)) .nil <|
-     .op ⟨3⟩ (.flow .message 0 [1] (by decide) (by decide)) (.cons .head .nil) <|
+      (by decide)) .nil (.cons 1 .nil) <|
+     .op ⟨3⟩ (.flow .message 0 [1] (by decide) (by decide)) (.cons (var 1) .nil) (.cons 2 .nil) <|
      .op ⟨4⟩ (.given (.coin ()) 1 [0] [] .nat ⟨_, rfl, rfl, rfl⟩ (fun _ h => nomatch h)
-      (by decide)) .nil <|
+      (by decide)) .nil (.cons 3 .nil) <|
      .op ⟨5⟩ (.compute [0] (.owned .natLess) [nat [0], nat [0]] rfl
       (fun a ha r hr => by
         simp only [List.mem_cons, List.not_mem_nil, or_false] at ha
         rcases ha with rfl | rfl <;> exact hr))
-      (.cons (.tail (.tail (.tail .head))) (.cons (.tail (.tail .head)) .nil)) <|
-     .guard ⟨6⟩ [0] .head ⟨rfl, by decide, by decide⟩ .abort <|
-     .op ⟨7⟩ (.flow .message 0 [1] (by decide) (by decide))
-      (.cons (.tail (.tail (.tail .head))) .nil) <|
-     .ret (.cons .head (.cons (.tail (.tail (.tail .head))) .nil))) <|
+      (.cons (var 0) (.cons (var 1) .nil)) (.cons 4 .nil) <|
+     .guard ⟨6⟩ [0] (var 4) ⟨rfl, by decide, by decide⟩ .abort <|
+     .op ⟨7⟩ (.flow .message 0 [1] (by decide) (by decide)) (.cons (var 1) .nil) (.cons 5 .nil) <|
+     .ret (.cons (var 5) (.cons (var 3) .nil)))
+    (.cons 6 (.cons 7 .nil)) <|
   .op ⟨8⟩ (.compute [1] (.owned .natLess) [nat [0, 1], nat [0, 1]] rfl
     (fun a ha r hr => by
       simp only [List.mem_cons, List.not_mem_nil, or_false] at ha hr
       rcases ha with rfl | rfl <;> subst hr <;> decide))
-    (.cons .head (.cons (.tail .head) .nil)) <|
-  .guard ⟨9⟩ [1] .head ⟨rfl, by decide, by decide⟩ .reject <|
+    (.cons (var 6) (.cons (var 7) .nil)) (.cons 8 .nil) <|
+  .guard ⟨9⟩ [1] (var 8) ⟨rfl, by decide, by decide⟩ .reject <|
   .ret .nil
 
 def signingHeader : ProtocolHeader Shapes.plain := ⟨⟨46⟩, 2, [], [], shapeOf signing⟩
@@ -432,14 +437,16 @@ def signingHeader : ProtocolHeader Shapes.plain := ⟨⟨46⟩, 2, [], [], shape
 /-- The protocol is accepted: its definition has `within`, `enclosed`, `distinct` and
 `shaped`, with the second role acting inside the region of the attempt. -/
 def signingTyped : Typed Shapes.plain := ⟨⟨[], [signingHeader]⟩,
-  .protocol signingHeader signing
+  .protocol signingHeader (Names.counting 0 _) signing
     ⟨by simp [Within, ProtocolOp.Within, signing, signingHeader], by decide,
-    by simp [Enclosed, signing], rfl, rfl, rfl, rfl⟩ .nil, by decide⟩
+    by simp [Enclosed, signing], rfl, rfl, rfl, rfl, by unfold Term.BoundOnce; decide⟩ .nil,
+    by decide⟩
 
 /-- The four properties of its definition, stated. -/
-theorem signing_accepted : ProtocolConditions signingHeader signing :=
+theorem signing_accepted :
+    ProtocolConditions signingHeader (inputs := Names.counting 0 _) signing :=
   ⟨by simp [Within, ProtocolOp.Within, signing, signingHeader], by decide,
-    by simp [Enclosed, signing], rfl, rfl, rfl, rfl⟩
+    by simp [Enclosed, signing], rfl, rfl, rfl, rfl, by unfold Term.BoundOnce; decide⟩
 
 /-! ## Codecs -/
 
@@ -489,24 +496,25 @@ theorem function_model_has_no_codecs : Codecs functionModel → False :=
 /-! ## Linear use -/
 
 /-- `if b then x else 0`, over a truth value and a natural. -/
-def ordinaryChoice : Term (localDialect Shapes.plain []) [.bool, .nat] [.nat] :=
-  .choose (mid := [.nat]) ⟨1⟩ () .head rfl (fun _ _ => trivial)
-    (.ret (.cons (.tail .head) .nil))
-    (.op ⟨2⟩ (.literal .nat [0] rfl) .nil (.ret (.cons .head .nil)))
-    (.ret (.cons .head .nil))
+def ordinaryChoice : Term (localDialect Shapes.plain []) (Ctx.positional [.bool, .nat]) [.nat] :=
+  .choose (mid := [.nat]) ⟨1⟩ () (var 0) rfl (fun _ _ => trivial)
+    (.ret (.cons (var 1) .nil))
+    (.op ⟨2⟩ (.literal .nat [0] rfl) .nil (.cons 2 .nil) (.ret (.cons (var 2) .nil)))
+    (.cons 3 .nil)
+    (.ret (.cons (var 3) .nil))
 
 /-- Neither input is linear: nothing is counted, and the choice is accepted. -/
 theorem ordinary_choice_accepted :
-    ordinaryChoice.linearUses (Ty.isLinear Shapes.plain) [] 0 = .ok [] ∧
-      ordinaryChoice.UsedOnce (Ty.isLinear Shapes.plain) :=
+    ordinaryChoice.linearUses (Ty.isLinear Shapes.plain) [] = .ok [] ∧
+      ordinaryChoice.UsedOnce (Ty.isLinear Shapes.plain) (Names.counting 0 [.bool, .nat]) :=
   ⟨rfl, by decide⟩
 
 /-! ## Who proves -/
 
 /-- One message in each direction. -/
-def twoWay : Term (protocolDialect Shapes.plain Shapes.none) [nat [0]] [] :=
-  .op ⟨1⟩ (.flow .message 0 [1] (by decide) (by decide)) (.cons .head .nil) <|
-  .op ⟨2⟩ (.flow .message 1 [0] (by decide) (by decide)) (.cons .head .nil) <|
+def twoWay : Term (protocolDialect Shapes.plain Shapes.none) (Ctx.positional [nat [0]]) [] :=
+  .op ⟨1⟩ (.flow .message 0 [1] (by decide) (by decide)) (.cons (var 0) .nil) (.cons 1 .nil) <|
+  .op ⟨2⟩ (.flow .message 1 [0] (by decide) (by decide)) (.cons (var 1) .nil) (.cons 2 .nil) <|
   .ret .nil
 
 def twoWayHeader : ProtocolHeader Shapes.plain := ⟨⟨42⟩, 2, [nat [0]], [], shapeOf twoWay⟩
@@ -553,7 +561,7 @@ theorem runs_fork :
 /-- A clause that answers a sample with the layer's state. -/
 def answerSample : Clause Shapes.plain Shapes.none 0 .nat where
   site := ⟨⟨[], ⟨50⟩⟩, .own (.coin ()) [], [], [.nat]⟩
-  code := .ret (.cons .head (.cons .head .nil))
+  code := .ret (.cons (var 0) (.cons (var 0) .nil))
 
 /-- A lower layer with that clause, whose start is what it takes. -/
 def lowerLayer : Layer Shapes.plain Shapes.none 0 [] where
@@ -562,8 +570,8 @@ def lowerLayer : Layer Shapes.plain Shapes.none 0 [] where
   takes := [.nat]
   gives := []
   clauses := [answerSample]
-  again := .ret (.cons .head .nil)
-  start := .ret (.cons .head .nil)
+  again := .ret (.cons (var 0) .nil)
+  start := .ret (.cons (var 0) .nil)
   finish := .ret .nil
 
 /-- The start reads what the layer takes, and asks nothing of the world. -/
@@ -582,23 +590,26 @@ def weightedHeader : FnHeader Shapes.plain := ⟨⟨410⟩, [.nat, .nat], [.nat]
 def identityHeader : FnHeader Shapes.plain := ⟨⟨411⟩, [.nat], [.nat], false, Option.none⟩
 
 /-- `x + (y + y)`, of `x` and `y`. -/
-def weightedBody : Fn Shapes.plain [] weightedHeader :=
-  .op ⟨1⟩ (.owned .natAdd) (.cons (.tail .head) (.cons (.tail .head) .nil)) <|
-  .op ⟨2⟩ (.owned .natAdd) (.cons (.tail .head) (.cons .head .nil)) <|
-  .ret (.cons .head .nil)
+def weightedBody : Fn Shapes.plain [] weightedHeader (Names.counting 0 _) :=
+  .op ⟨1⟩ (.owned .natAdd) (.cons (var 1) (.cons (var 1) .nil)) (.cons 2 .nil) <|
+  .op ⟨2⟩ (.owned .natAdd) (.cons (var 0) (.cons (var 2) .nil)) (.cons 3 .nil) <|
+  .ret (.cons (var 3) .nil)
 
-def identityBody : Fn Shapes.plain [weightedHeader] identityHeader := .ret (.cons .head .nil)
+def identityBody : Fn Shapes.plain [weightedHeader] identityHeader (Names.counting 0 _) :=
+  .ret (.cons (var 0) .nil)
 
 /-- The weighted sum, then the identity, which comes later. -/
 def library : Defs Shapes.plain ⟨[identityHeader, weightedHeader], []⟩ :=
-  .fn identityHeader identityBody ⟨by exact rfl, by exact rfl, by exact rfl, by exact rfl⟩ <|
-  .fn weightedHeader weightedBody ⟨by exact rfl, by exact rfl, by exact rfl, by exact rfl⟩ .nil
+  .fn identityHeader _ identityBody ⟨by exact rfl, by exact rfl, by exact rfl, by exact rfl,
+    by unfold Term.BoundOnce; decide⟩ <|
+  .fn weightedHeader _ weightedBody ⟨by exact rfl, by exact rfl, by exact rfl, by exact rfl,
+    by unfold Term.BoundOnce; decide⟩ .nil
 
 def libraryTyped : Typed Shapes.plain := ⟨_, library, by decide⟩
 
 def table : FnTable plainModel [identityHeader, weightedHeader] := Defs.fnTable plainModel library
 
-def weightedRef : Var [identityHeader, weightedHeader] weightedHeader := .tail .head
+def weightedRef : Member [identityHeader, weightedHeader] weightedHeader := .tail .head
 
 /-- The weighted sum is found by its key, at its position. -/
 theorem weighted_found : libraryTyped.find ⟨410⟩ = some (.fn weightedRef) := rfl
@@ -615,22 +626,23 @@ theorem weightedLaw : Law plainModel table weightedRef weightedModel := by
     | cons y rest => cases rest; rfl
 
 /-- Two calls with different operands. -/
-def twice : Term (localDialect Shapes.plain [identityHeader, weightedHeader]) [.nat, .nat] [.nat] :=
-  .op ⟨501⟩ (.call weightedRef) (.cons .head (.cons (.tail .head) .nil)) <|
-  .op ⟨502⟩ (.call weightedRef) (.cons .head (.cons (.tail (.tail .head)) .nil)) <|
-  .ret (.cons .head .nil)
+def twice : Term (localDialect Shapes.plain [identityHeader, weightedHeader])
+    (Ctx.positional [.nat, .nat]) [.nat] :=
+  .op ⟨501⟩ (.call weightedRef) (.cons (var 0) (.cons (var 1) .nil)) (.cons 2 .nil) <|
+  .op ⟨502⟩ (.call weightedRef) (.cons (var 2) (.cons (var 1) .nil)) (.cons 3 .nil) <|
+  .ret (.cons (var 3) .nil)
 
 /-- A call with a value captured from around it, with the operands in another order. -/
-def captured :
-    Term (localDialect Shapes.plain [identityHeader, weightedHeader]) [.nat, .nat, .nat] [.nat] :=
-  .op ⟨601⟩ (.call weightedRef) (.cons (.tail .head) (.cons (.tail (.tail .head)) .nil)) <|
-  .op ⟨602⟩ (.owned .natAdd) (.cons .head (.cons (.tail .head) .nil)) <|
-  .ret (.cons .head .nil)
+def captured : Term (localDialect Shapes.plain [identityHeader, weightedHeader])
+    (Ctx.positional [.nat, .nat, .nat]) [.nat] :=
+  .op ⟨601⟩ (.call weightedRef) (.cons (var 1) (.cons (var 2) .nil)) (.cons 3 .nil) <|
+  .op ⟨602⟩ (.owned .natAdd) (.cons (var 3) (.cons (var 0) .nil)) (.cons 4 .nil) <|
+  .ret (.cons (var 4) .nil)
 
 /-- The law at two calls, for every table that has it: the callee is not unfolded. -/
 theorem twice_from_law (t : FnTable plainModel [identityHeader, weightedHeader])
     (law : Law plainModel t weightedRef weightedModel) (x y : Nat) (path : List Frame) :
-    twice.denote (localSem plainModel _ t) path (Env.ofList (.cons x (.cons y .nil))) =
+    twice.denote (localSem plainModel _ t) path (Env.positional (.cons x (.cons y .nil))) =
       .done (.cons (x + (y + y) + (y + y)) .nil) := by
   unfold twice
   erw [Law.call plainModel t weightedRef law, Law.call plainModel t weightedRef law]
@@ -640,7 +652,7 @@ theorem twice_from_law (t : FnTable plainModel [identityHeader, weightedHeader])
 theorem captured_from_law (t : FnTable plainModel [identityHeader, weightedHeader])
     (law : Law plainModel t weightedRef weightedModel) (c x y : Nat) (path : List Frame) :
     captured.denote (localSem plainModel _ t) path
-      (Env.ofList (.cons c (.cons x (.cons y .nil)))) =
+      (Env.positional (.cons c (.cons x (.cons y .nil)))) =
       .done (.cons (x + (y + y) + c) .nil) := by
   unfold captured
   erw [Law.call plainModel t weightedRef law]
@@ -648,17 +660,18 @@ theorem captured_from_law (t : FnTable plainModel [identityHeader, weightedHeade
 
 /-- The program's table has the law, so both calls compute by it. -/
 theorem twice_by_the_law (x y : Nat) (path : List Frame) :
-    twice.denote (localSem plainModel _ table) path (Env.ofList (.cons x (.cons y .nil))) =
+    twice.denote (localSem plainModel _ table) path (Env.positional (.cons x (.cons y .nil))) =
       .done (.cons (x + (y + y) + (y + y)) .nil) :=
   twice_from_law table weightedLaw x y path
 
 /-- The weighted sum alone, moved to the first position. -/
 def movedLibrary : Defs Shapes.plain ⟨[weightedHeader], []⟩ :=
-  .fn weightedHeader weightedBody ⟨by exact rfl, by exact rfl, by exact rfl, by exact rfl⟩ .nil
+  .fn weightedHeader _ weightedBody ⟨by exact rfl, by exact rfl, by exact rfl, by exact rfl,
+    by unfold Term.BoundOnce; decide⟩ .nil
 
 def movedTyped : Typed Shapes.plain := ⟨_, movedLibrary, by decide⟩
 
-def movedRef : Var [weightedHeader] weightedHeader := .head
+def movedRef : Member [weightedHeader] weightedHeader := .head
 
 /-- Moved, it is found again by its key, and its law holds without being proved again. -/
 theorem moved_law : movedTyped.find ⟨410⟩ = some (.fn movedRef) ∧
@@ -666,11 +679,14 @@ theorem moved_law : movedTyped.find ⟨410⟩ = some (.fn movedRef) ∧
   ⟨rfl, ⟨weightedLaw.implements⟩⟩
 
 /-- Another body under the same key and signature. -/
-def changedBody : Fn Shapes.plain [] weightedHeader := .ret (.cons .head .nil)
+def changedBody : Fn Shapes.plain [] weightedHeader (Names.counting 0 _) :=
+  .ret (.cons (var 0) .nil)
 
 def changedLibrary : Defs Shapes.plain ⟨[identityHeader, weightedHeader], []⟩ :=
-  .fn identityHeader identityBody ⟨by exact rfl, by exact rfl, by exact rfl, by exact rfl⟩ <|
-  .fn weightedHeader changedBody ⟨by exact rfl, by exact rfl, by exact rfl, by exact rfl⟩ .nil
+  .fn identityHeader _ identityBody ⟨by exact rfl, by exact rfl, by exact rfl, by exact rfl,
+    by unfold Term.BoundOnce; decide⟩ <|
+  .fn weightedHeader _ changedBody ⟨by exact rfl, by exact rfl, by exact rfl, by exact rfl,
+    by unfold Term.BoundOnce; decide⟩ .nil
 
 /-- A changed body under the same key does not keep the law. -/
 theorem changed_body_loses_law :
@@ -684,21 +700,22 @@ theorem changed_body_loses_law :
 /-- A changed dependency changes the unchanged caller. -/
 theorem changed_dependency_seen :
     twice.denote (localSem plainModel _ (Defs.fnTable plainModel changedLibrary)) []
-      (Env.ofList (.cons (0 : Nat) (.cons (1 : Nat) .nil))) ≠ .done (.cons (4 : Nat) .nil) := by
+      (Env.positional (.cons (0 : Nat) (.cons (1 : Nat) .nil))) ≠ .done (.cons (4 : Nat) .nil) := by
   intro bad
   change (Process.done (.cons (0 : Nat) .nil) : Local (HList plainModel.Val [.nat])) =
     .done (.cons (4 : Nat) .nil) at bad
   cases bad
 
 /-- Two operands of one type, exchanged. -/
-def swapped : Term (localDialect Shapes.plain [identityHeader, weightedHeader]) [.nat, .nat] [.nat] :=
-  .op ⟨701⟩ (.call weightedRef) (.cons (.tail .head) (.cons .head .nil)) <|
-  .ret (.cons .head .nil)
+def swapped : Term (localDialect Shapes.plain [identityHeader, weightedHeader])
+    (Ctx.positional [.nat, .nat]) [.nat] :=
+  .op ⟨701⟩ (.call weightedRef) (.cons (var 1) (.cons (var 0) .nil)) (.cons 2 .nil) <|
+  .ret (.cons (var 2) .nil)
 
 /-- Exchanged operands of one type are seen. -/
 theorem swapped_operands_seen :
     swapped.denote (localSem plainModel _ table) []
-      (Env.ofList (.cons (0 : Nat) (.cons (1 : Nat) .nil))) ≠ .done (.cons (2 : Nat) .nil) := by
+      (Env.positional (.cons (0 : Nat) (.cons (1 : Nat) .nil))) ≠ .done (.cons (2 : Nat) .nil) := by
   intro bad
   change (Process.done (.cons (1 : Nat) .nil) : Local (HList plainModel.Val [.nat])) =
     .done (.cons (2 : Nat) .nil) at bad
@@ -707,15 +724,16 @@ theorem swapped_operands_seen :
 /-- A function that rejects when its flag is false, and returns its number otherwise. -/
 def checkedHeader : FnHeader Shapes.plain := ⟨⟨420⟩, [.bool, .nat], [.nat], true, Option.none⟩
 
-def checkedBody : Fn Shapes.plain [] checkedHeader :=
-  .guard ⟨421⟩ () .head rfl .reject (.ret (.cons (.tail .head) .nil))
+def checkedBody : Fn Shapes.plain [] checkedHeader (Names.counting 0 _) :=
+  .guard ⟨421⟩ () (var 0) rfl .reject (.ret (.cons (var 1) .nil))
 
 def checkedDefs : Defs Shapes.plain ⟨[checkedHeader], []⟩ :=
-  .fn checkedHeader checkedBody ⟨by exact rfl, by exact rfl, by exact rfl, by exact rfl⟩ .nil
+  .fn checkedHeader _ checkedBody ⟨by exact rfl, by exact rfl, by exact rfl, by exact rfl,
+    by unfold Term.BoundOnce; decide⟩ .nil
 
 def checkedTable : FnTable plainModel [checkedHeader] := Defs.fnTable plainModel checkedDefs
 
-def checkedRef : Var [checkedHeader] checkedHeader := .head
+def checkedRef : Member [checkedHeader] checkedHeader := .head
 
 def checkedPost : HList plainModel.Val checkedHeader.ins → HList plainModel.Val checkedHeader.outs → Prop
   | .cons flag (.cons n .nil), out => flag = true ∧ out = .cons n .nil
@@ -732,9 +750,10 @@ theorem checkedContract :
   | cons flag rest => cases rest with
     | cons n rest => cases rest; cases flag <;> exact ⟨rfl, rfl⟩
 
-def checkedClient : Term (localDialect Shapes.plain [checkedHeader]) [.bool, .nat] [.nat] :=
-  .op ⟨422⟩ (.call checkedRef) (.cons .head (.cons (.tail .head) .nil)) <|
-  .ret (.cons .head .nil)
+def checkedClient :
+    Term (localDialect Shapes.plain [checkedHeader]) (Ctx.positional [.bool, .nat]) [.nat] :=
+  .op ⟨422⟩ (.call checkedRef) (.cons (var 0) (.cons (var 1) .nil)) (.cons 2 .nil) <|
+  .ret (.cons (var 2) .nil)
 
 /-- The rule of a call installs the contract, for every table that has it: the caller returns
 the number when the flag is true, and rejects otherwise. -/
@@ -742,7 +761,7 @@ theorem checked_client_from_contract (t : FnTable plainModel [checkedHeader])
     (contract : Contract plainModel t checkedRef (fun _ => True) checkedPost checkedStop)
     (flag : Bool) (n : Nat) (path : List Frame) :
     (checkedClient.denote (localSem plainModel _ t) path
-      (Env.ofList (.cons flag (.cons n .nil)))).Every (fun _ _ => True)
+      (Env.positional (.cons flag (.cons n .nil)))).Every (fun _ _ => True)
       (fun out => flag = true ∧ out = .cons n .nil)
       (fun why => flag = false ∧ why = .declared .reject ⟨[], ⟨421⟩⟩) := by
   apply Contract.call plainModel t checkedRef contract
@@ -757,12 +776,12 @@ theorem checked_client_from_contract (t : FnTable plainModel [checkedHeader])
 stops, at the occurrence of the callee's guard. -/
 theorem checked_rejects (n : Nat) :
     checkedClient.denote (localSem plainModel _ checkedTable) []
-      (Env.ofList (.cons false (.cons n .nil))) = .halt (.declared .reject ⟨[], ⟨421⟩⟩) := rfl
+      (Env.positional (.cons false (.cons n .nil))) = .halt (.declared .reject ⟨[], ⟨421⟩⟩) := rfl
 
 /-- So no law of a total function holds of it. -/
 theorem checked_not_total :
     ¬ ∀ flag n, checkedClient.denote (localSem plainModel _ checkedTable) []
-      (Env.ofList (.cons flag (.cons n .nil))) = .done (.cons n .nil) := by
+      (Env.positional (.cons flag (.cons n .nil))) = .done (.cons n .nil) := by
   intro h
   have bad := h false 0
   rw [checked_rejects] at bad
@@ -777,7 +796,9 @@ def callerHeader : FnHeader Shapes.plain := ⟨⟨412⟩, [.nat, .nat], [.nat], 
 
 /-- A caller of the weighted sum, before the library. -/
 def callerTyped : Typed Shapes.plain :=
-  ⟨_, .fn callerHeader twice ⟨by exact rfl, by exact rfl, by exact rfl, by exact rfl⟩ library, by decide⟩
+  ⟨_, .fn callerHeader _ twice ⟨by exact rfl, by exact rfl, by exact rfl, by exact rfl,
+    by unfold Term.BoundOnce; decide⟩ library,
+    by decide⟩
 
 /-- The closure of the caller has the caller and, twice, the weighted sum that it calls; not
 the identity. -/

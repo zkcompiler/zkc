@@ -21,7 +21,7 @@ structure Deployed (V : Vocabulary) where
   admitted : Admitted V
   declaration : Declaration
   entry : ProtocolHeader V
-  callee : Var admitted.program.headers.protocols entry
+  callee : Member admitted.program.headers.protocols entry
   stack : (r : Role) → List (Layer V admitted.program.headers r entry.ins)
 
 section
@@ -119,20 +119,20 @@ end
 mutual
   /-- The keys of the events that a term performs itself, by its operations. -/
   def Term.eventKeys {D : Dialect} (isEvent : ∀ {ins res : List D.Ty}, D.Op ins res → Bool) :
-      {Γ outs : List D.Ty} → Term D Γ outs → List Key
+      {Γ : Ctx D.Ty} → {outs : List D.Ty} → Term D Γ outs → List Key
     | _, _, .ret _ => []
-    | _, _, .op key o _ rest => (if isEvent o then [key] else []) ++ Term.eventKeys isEvent rest
+    | _, _, .op key o _ _ rest => (if isEvent o then [key] else []) ++ Term.eventKeys isEvent rest
     | _, _, .guard _ _ _ _ _ rest => Term.eventKeys isEvent rest
-    | _, _, .choose _ _ _ _ _ onTrue onFalse rest =>
+    | _, _, .choose _ _ _ _ _ onTrue onFalse _ rest =>
         Term.eventKeys isEvent onTrue ++ Term.eventKeys isEvent onFalse ++ Term.eventKeys isEvent rest
-    | _, _, .cases _ _ _ _ _ arms rest => Arms.eventKeys isEvent arms ++ Term.eventKeys isEvent rest
-    | _, _, .loop _ _ _ _ _ body rest => Term.eventKeys isEvent body ++ Term.eventKeys isEvent rest
-    | _, _, .block _ _ body rest => Term.eventKeys isEvent body ++ Term.eventKeys isEvent rest
-    | _, _, .attempt _ _ _ body rest => Term.eventKeys isEvent body ++ Term.eventKeys isEvent rest
+    | _, _, .cases _ _ _ _ _ arms _ rest => Arms.eventKeys isEvent arms ++ Term.eventKeys isEvent rest
+    | _, _, .loop _ _ _ _ _ _ body _ rest => Term.eventKeys isEvent body ++ Term.eventKeys isEvent rest
+    | _, _, .block _ _ body _ rest => Term.eventKeys isEvent body ++ Term.eventKeys isEvent rest
+    | _, _, .attempt _ _ _ _ body _ rest => Term.eventKeys isEvent body ++ Term.eventKeys isEvent rest
   def Arms.eventKeys {D : Dialect} (isEvent : ∀ {ins res : List D.Ty}, D.Op ins res → Bool) :
-      {Γ mid payloads : List D.Ty} → Arms D Γ mid payloads → List Key
+      {Γ : Ctx D.Ty} → {mid payloads : List D.Ty} → Arms D Γ mid payloads → List Key
     | _, _, _, .nil => []
-    | _, _, _, .cons arm rest => Term.eventKeys isEvent arm ++ Arms.eventKeys isEvent rest
+    | _, _, _, .cons _ arm rest => Term.eventKeys isEvent arm ++ Arms.eventKeys isEvent rest
 end
 
 /-- Whether an operation of a role is its part of an event. -/

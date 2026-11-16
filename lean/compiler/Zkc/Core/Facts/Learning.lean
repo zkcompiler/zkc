@@ -252,7 +252,13 @@ theorem Known.Holds.pushDifferent {k : Known} (hk : k.Holds R ρ) {a b x y : Nat
     (ha : NatAt R ρ a x) (hb : NatAt R ρ b y) (ne : x ≠ y) :
     (k.pushDifferent a b).Holds R ρ := by
   simp only [Known.pushDifferent]
-  exact (hk.oneDifferent ha hb ne).oneDifferent hb ha (Ne.symm ne)
+  have learned := hk.oneDifferent ha hb ne
+  by_cases zero : k.rangeOf a = some (Range.point 0)
+  · rw [ite_eq_left zero]
+    have := Range.has_point.mp (hk.rangeOf_at ha zero)
+    exact learned.addRange hb ⟨by show 1 ≤ y; omega, fun _ e => nomatch e⟩
+  · rw [ite_eq_right zero]
+    exact learned
 
 /-! ## Assuming a truth value -/
 
@@ -457,43 +463,48 @@ theorem offsetBelow_sound (lawful : OpFacts.Lawful ops R Run) (hc : Consistent R
     (h : offsetBelow ops tbl k first second = true) :
     ∀ x y, R.nat vf = some x → R.nat vs = some y → x < y := by
   intro x y hx hy
+  -- One reading of the sum: `t < second - o` is the order that a loop made for its index `t`.
+  have below : ∀ {o t o0 t0 : Nat} {fact : OrderFact}, fact ∈ k.orders.find factDepth t →
+      fact.first = t → fact.strict = true →
+      tbl.formOf ops fact.second = some (.difference, [second, o]) →
+      NatAt R ρ o o0 → NatAt R ρ t t0 → o0 + t0 < y := by
+    intro o t o0 t0 fact m hfirst hstrict e ho ht
+    obtain ⟨t1, d0, ht1, ⟨vd, hvd, hdn⟩, lt⟩ := hk.orders _ (BitTree.mem_of_find _ _ _ _ m)
+    simp only [hstrict, ↓reduceIte] at lt
+    rw [hfirst] at ht1
+    obtain ⟨vals, hvals, vr, vo, r0, o1, eq, hr0, ho1, le, hdiff⟩ :=
+      formOf_values lawful hc hcl e hvd
+    obtain ⟨wr, wo, rfl, hr, ho'⟩ := valuesOf_pair hvals
+    cases eq
+    have e1 := ht1.unique ht
+    have e2 := NatAt.unique ⟨_, ho', ho1⟩ ho
+    have e3 := NatAt.unique ⟨_, hr, hr0⟩ ⟨_, hs, hy⟩
+    rw [hdn] at hdiff
+    cases hdiff
+    omega
   simp only [offsetBelow] at h
   split at h
-  · next a t e =>
-      obtain ⟨vals, hvals, va, vt, a0, t0, eq, ha0, ht0, hsum⟩ := formOf_values lawful hc hcl e hf
-      obtain ⟨wa, wt, rfl, ha, ht⟩ := valuesOf_pair hvals
+  · next a b e =>
+      obtain ⟨vals, hvals, va, vb, a0, b0, eq, ha0, hb0, hsum⟩ := formOf_values lawful hc hcl e hf
+      obtain ⟨wa, wb, rfl, ha, hb⟩ := valuesOf_pair hvals
       cases eq
       rw [hx] at hsum
       cases hsum
-      simp only [List.any_eq_true, Bool.and_eq_true, beq_iff_eq] at h
-      obtain ⟨⟨t', d, s, l⟩, m, ⟨⟨rfl, hstrict⟩, _⟩, hd⟩ := h
-      simp only at hstrict
-      subst hstrict
-      obtain ⟨t1, d0, ht1, hd0, lt⟩ := hk.orders _ (BitTree.mem_of_find _ _ _ _ m)
-      simp only [↓reduceIte] at lt
-      have := ht1.unique ⟨_, ht, ht0⟩
-      subst this
-      split at hd
-      · next r x' e' =>
-          simp only [Bool.and_eq_true, beq_iff_eq] at hd
-          obtain ⟨rfl, rfl⟩ := hd
-          obtain ⟨vd, hvd, hdn⟩ := hd0
-          obtain ⟨vals', hvals', vr, vx, r0, a1, eq', hr0, ha1, le, hdiff⟩ :=
-            formOf_values lawful hc hcl e' hvd
-          obtain ⟨wr, wx, rfl, hr, hx'⟩ := valuesOf_pair hvals'
-          cases eq'
-          rw [hs] at hr
-          cases hr
-          rw [hy] at hr0
-          cases hr0
-          rw [ha] at hx'
-          cases hx'
-          rw [ha0] at ha1
-          cases ha1
-          rw [hdn] at hdiff
-          cases hdiff
-          omega
-      · cases hd
+      simp only [Bool.or_eq_true, List.any_eq_true, Bool.and_eq_true, beq_iff_eq] at h
+      rcases h with ⟨fact, m, ⟨⟨hfirst, hstrict⟩, _⟩, hd⟩ | ⟨fact, m, ⟨⟨hfirst, hstrict⟩, _⟩, hd⟩
+      · split at hd
+        · next r a' e' =>
+            simp only [Bool.and_eq_true, beq_iff_eq] at hd
+            obtain ⟨rfl, rfl⟩ := hd
+            exact below m hfirst hstrict e' ⟨_, ha, ha0⟩ ⟨_, hb, hb0⟩
+        · cases hd
+      · split at hd
+        · next r b' e' =>
+            simp only [Bool.and_eq_true, beq_iff_eq] at hd
+            obtain ⟨rfl, rfl⟩ := hd
+            have := below m hfirst hstrict e' ⟨_, hb, hb0⟩ ⟨_, ha, ha0⟩
+            omega
+        · cases hd
   · cases h
 
 /-- A sum `x + t` is below the `r` that `offsetBound` gives: `t < r - x` is the order that a
@@ -546,24 +557,31 @@ theorem offsetRange_sound (lawful : OpFacts.Lawful ops R Run) (hc : Consistent R
   unfold offsetRange at h
   split at h
   · next x t hsum =>
-      cases hb : offsetBound ops tbl k x t with
-      | none => rw [hb] at h; cases h
-      | some r =>
-          rw [hb, Option.bind_some] at h
-          cases hr : k.rangeOf r with
-          | none => rw [hr] at h; cases h
-          | some rr' =>
-              rw [hr, Option.map_some, Option.some.injEq] at h
-              subst h
-              obtain ⟨a', b', x0, y0, eq, hx0, hy0, hv0⟩ := hform .sum hsum
-              obtain ⟨wa, wb, rfl, ha, hb'⟩ := valuesOf_pair hargs
-              cases eq
-              obtain ⟨c, hcr, lt⟩ :=
-                offsetBound_sound lawful hc hcl hk hb ⟨_, ha, hx0⟩ ⟨_, hb', hy0⟩
-              obtain ⟨n, hn, has⟩ := hk.rangeOf hr
-              have := hn.unique hcr
-              subst this
-              exact ⟨x0 + y0, hv0, has.below lt⟩
+      obtain ⟨a', b', x0, y0, eq, hx0, hy0, hv0⟩ := hform .sum hsum
+      obtain ⟨wa, wb, rfl, ha, hb'⟩ := valuesOf_pair hargs
+      cases eq
+      -- The range below that of an `r` above the sum holds of the sum.
+      have below : ∀ {r : Nat}, (∃ c, NatAt R ρ r c ∧ x0 + y0 < c) →
+          (k.rangeOf r).map Range.below = some rr → ∃ n, R.nat v = some n ∧ rr.Has n := by
+        intro r ⟨c, hcr, lt⟩ e
+        cases hr : k.rangeOf r with
+        | none => rw [hr] at e; cases e
+        | some rr' =>
+            rw [hr, Option.map_some, Option.some.injEq] at e
+            subst e
+            obtain ⟨n, hn, has⟩ := hk.rangeOf hr
+            have := hn.unique hcr
+            subst this
+            exact ⟨x0 + y0, hv0, has.below lt⟩
+      split at h
+      · next r hb =>
+          exact below (offsetBound_sound lawful hc hcl hk hb ⟨_, ha, hx0⟩ ⟨_, hb', hy0⟩) h
+      · split at h
+        · next r hb =>
+            obtain ⟨c, hcr, lt⟩ :=
+              offsetBound_sound lawful hc hcl hk hb ⟨_, hb', hy0⟩ ⟨_, ha, hx0⟩
+            exact below ⟨c, hcr, by omega⟩ h
+        · cases h
   · cases h
 
 /-- What `offsetRange` says of the first result of an application, learned, holds. -/
@@ -683,16 +701,22 @@ theorem knownDifference_sound (lawful : OpFacts.Lawful ops R Run) (hc : Consiste
         obtain ⟨vals, hvals, va, vc, x', c0, eq, ha', hc', hsum⟩ := formOf_values lawful hc hcl e hs
         obtain ⟨wa, wc, rfl, ha, hcv⟩ := valuesOf_pair hvals
         cases eq
-        simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at h
-        obtain ⟨rfl, hr⟩ := h
-        rw [hf] at ha
-        cases ha
-        rw [hy] at ha'
-        cases ha'
         rw [hx] at hsum
         cases hsum
-        have := Range.has_point.mp (hk.rangeOf_at ⟨_, hcv, hc'⟩ hr)
-        omega
+        simp only [Bool.or_eq_true, Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at h
+        rcases h with ⟨rfl, hr⟩ | ⟨rfl, hr⟩
+        · rw [hf] at ha
+          cases ha
+          rw [hy] at ha'
+          cases ha'
+          have := Range.has_point.mp (hk.rangeOf_at ⟨_, hcv, hc'⟩ hr)
+          omega
+        · rw [hf] at hcv
+          cases hcv
+          rw [hy] at hc'
+          cases hc'
+          have := Range.has_point.mp (hk.rangeOf_at ⟨_, ha, ha'⟩ hr)
+          omega
     · cases h
 
 /-- A requirement that the rules decide holds of the values it names. -/
@@ -801,16 +825,6 @@ theorem valuesOf_valid {ρ : Valuation Val} :
 theorem Stepped.refl {T : Type} {ρ : Valuation Val} {st : St T Raw}
     (coh : Coherent Run Valid ρ st) : Stepped Run Valid ρ ρ st st :=
   ⟨Valuation.Le.refl ρ, coh, ⟨Nat.le_refl _, [], rfl, fun _ m => nomatch m⟩, rfl, rfl⟩
-
-theorem St.Grows.trans {T : Type} {a b c : St T Raw} (h1 : St.Grows a b) (h2 : St.Grows b c) :
-    St.Grows a c := by
-  obtain ⟨n1, new1, e1, low1⟩ := h1
-  obtain ⟨n2, new2, e2, low2⟩ := h2
-  refine ⟨Nat.le_trans n1 n2, new2 ++ new1, by rw [e2, e1, List.append_assoc], ?_⟩
-  intro e m
-  rcases List.mem_append.mp m with m | m
-  · exact Nat.le_trans n1 (low2 e m)
-  · exact low1 e m
 
 theorem Stepped.trans {T : Type} {ρ₁ ρ₂ ρ₃ : Valuation Val} {st₁ st₂ st₃ : St T Raw}
     (h1 : Stepped Run Valid ρ₁ ρ₂ st₁ st₂) (h2 : Stepped Run Valid ρ₂ ρ₃ st₂ st₃) :

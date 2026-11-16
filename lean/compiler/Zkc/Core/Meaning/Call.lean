@@ -20,7 +20,7 @@ namespace Zkc.Core
 
 section
 variable {V : Vocabulary} (M : Model V) {fns : List (FnHeader V)} (table : FnTable M fns)
-  {hdr : FnHeader V} (callee : Var fns hdr)
+  {hdr : FnHeader V} (callee : Member fns hdr)
 
 /-- The contract of a function at its entry in a table: on inputs that satisfy `pre`, every
 return satisfies `post` and every stop satisfies `stops`. -/
@@ -40,14 +40,15 @@ precondition. -/
 theorem Contract.call {pre : HList M.Val hdr.ins → Prop}
     {post : HList M.Val hdr.ins → HList M.Val hdr.outs → Prop}
     {stops : HList M.Val hdr.ins → Stop → Prop} (contract : Contract M table callee pre post stops)
-    {Γ outs : List V.Ty} (key : Key) (args : HList (Var Γ) hdr.ins)
-    (rest : Term (localDialect V fns) (hdr.outs ++ Γ) outs) (path : List Frame)
-    (env : Env M.Val Γ) (Q : HList M.Val outs → Prop) (R : Stop → Prop)
+    {Γ : Ctx V.Ty} {outs : List V.Ty} (key : Key) (args : HList (Var Γ) hdr.ins)
+    (results : Names hdr.outs) (rest : Term (localDialect V fns) (Γ.extend results) outs)
+    (path : List Frame) (env : Env M.Val Γ) (Q : HList M.Val outs → Prop) (R : Stop → Prop)
     (admitted : pre (env.all args))
     (continues : ∀ values, post (env.all args) values →
-      (rest.denote (localSem M fns table) path (Env.extend values env)).Every (fun _ _ => True) Q R)
+      (rest.denote (localSem M fns table) path (env.extend results values)).Every
+        (fun _ _ => True) Q R)
     (stopped : ∀ why, stops (env.all args) why → R why) :
-    ((Term.op (D := localDialect V fns) key (LocalOp.call callee) args rest).denote
+    ((Term.op (D := localDialect V fns) key (LocalOp.call callee) args results rest).denote
       (localSem M fns table) path env).Every (fun _ _ => True) Q R := by
   change ((table _ callee (env.all args)).bind _).Every _ _ _
   rw [Process.every_bind]
@@ -56,12 +57,13 @@ theorem Contract.call {pre : HList M.Val hdr.ins → Prop}
 /-- The rule of a call of a total function: the call is the continuation on what the law
 gives. -/
 theorem Law.call {model : HList M.Val hdr.ins → HList M.Val hdr.outs}
-    (law : Law M table callee model) {Γ outs : List V.Ty} (key : Key)
-    (args : HList (Var Γ) hdr.ins) (rest : Term (localDialect V fns) (hdr.outs ++ Γ) outs)
-    (path : List Frame) (env : Env M.Val Γ) :
-    (Term.op (D := localDialect V fns) key (LocalOp.call callee) args rest).denote
+    (law : Law M table callee model) {Γ : Ctx V.Ty} {outs : List V.Ty} (key : Key)
+    (args : HList (Var Γ) hdr.ins) (results : Names hdr.outs)
+    (rest : Term (localDialect V fns) (Γ.extend results) outs) (path : List Frame)
+    (env : Env M.Val Γ) :
+    (Term.op (D := localDialect V fns) key (LocalOp.call callee) args results rest).denote
         (localSem M fns table) path env =
-      rest.denote (localSem M fns table) path (Env.extend (model (env.all args)) env) := by
+      rest.denote (localSem M fns table) path (env.extend results (model (env.all args))) := by
   change (table _ callee (env.all args)).bind _ = _
   rw [law.implements]
   rfl

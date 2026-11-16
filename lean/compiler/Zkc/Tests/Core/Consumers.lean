@@ -2,7 +2,7 @@ import Zkc.Core.Statements
 
 /-!
 Each consumer's side, written against the core: what a frontend emits, what the
-executor is called with, what a proof is about, and the printed program of a role.
+executor is called with, what a proof is about, and the erased program of a role.
 -/
 
 namespace Zkc.Core
@@ -132,7 +132,7 @@ program. With `Statements.complete` it gives the completeness of every scheme of
 protocol. -/
 def protocolComplete (a : Admitted V) (M : Model V) (entry : Key)
     (related : ∀ hdr : ProtocolHeader V, HList (LVal M) hdr.ins → Prop) : Prop :=
-  ∀ (hdr : ProtocolHeader V) (p : Var a.program.headers.protocols hdr),
+  ∀ (hdr : ProtocolHeader V) (p : Member a.program.headers.protocols hdr),
     a.program.find entry = some (.protocol p) →
     ∀ (ins : HList (LVal M) hdr.ins) (source : Source M) (e : GEnd _), related hdr ins →
       GExec M source (protocolMeaning M a.program p [] ins) e → ∃ out, e = .returned out
@@ -159,17 +159,17 @@ def sigmaDeployed : Prop :=
 
 end
 
-/-! ## The printed program of a role -/
+/-! ## The erased program of a role -/
 
 section
 variable {V : Vocabulary} (c : Functions V)
 
-/-- The printed program of each role of each protocol: its projection, printed. -/
-def Defs.printed : {hs : Headers V} → Defs V hs → {hdr : ProtocolHeader V} →
-    Var hs.protocols hdr → Role → Region (RoleRaw V) (List Role)
-  | _, .fn _ _ _ rest, _, x, r => rest.printed x r
-  | _, .protocol _ body _ _, _, .head, r => c.printRole r (project r body)
-  | _, .protocol _ _ _ rest, _, .tail x, r => rest.printed x r
+/-- The erased program of each role of each protocol: its projection, erased. -/
+def Defs.erasedRole : {hs : Headers V} → Defs V hs → {hdr : ProtocolHeader V} →
+    Member hs.protocols hdr → Role → Region (RoleRaw V) (List Role)
+  | _, .fn _ _ _ _ rest, _, x, r => rest.erasedRole x r
+  | _, .protocol _ _ body _ _, _, .head, r => c.eraseRole r (project r body)
+  | _, .protocol _ _ _ _ rest, _, .tail x, r => rest.erasedRole x r
 
 end
 

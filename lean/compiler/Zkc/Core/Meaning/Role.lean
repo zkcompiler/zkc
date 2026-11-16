@@ -200,7 +200,7 @@ def mapR (ρ : Role → Role) {B : Type} : Program M B → Program M B
 
 /-- The programs of the roles of the protocols that a region may apply. -/
 abbrev RTable (protocols : List (ProtocolHeader V)) : Type :=
-  ∀ hdr, Var protocols hdr → (j : Role) → List Frame → HList (RV M j) hdr.ins →
+  ∀ hdr, Member protocols hdr → (j : Role) → List Frame → HList (RV M j) hdr.ins →
     Program M (HList (RV M j) hdr.outs)
 
 /-- The meaning of an operation of a role program, at its key. -/
@@ -281,25 +281,47 @@ theorem collectRV_hide (r : Role) (size : Option Nat) (a : LTy V) (vs : List (LV
 
 /-! ## What a role holds of an environment -/
 
-def restrict (r : Role) {Γ : List (LTy V)} (env : Env (LVal M) Γ) : Env (RV M r) Γ :=
-  fun a x => hide M r a (env a x)
+/-- What a role holds of the value of every name in scope. -/
+def restrict (r : Role) {Γ : Ctx (LTy V)} (env : Env (LVal M) Γ) : Env (RV M r) Γ :=
+  fun name a found => hide M r a (env name a found)
 
-theorem restrict_cons (r : Role) {Γ : List (LTy V)} {a : LTy V} (v : LVal M a)
-    (env : Env (LVal M) Γ) :
-    restrict M r (Env.cons (V := LVal M) v env) = Env.cons (hide M r a v) (restrict M r env) := by
-  funext b x
-  cases x <;> rfl
+/-- Of no value, a role holds no value. -/
+theorem restrict_empty (r : Role) :
+    restrict M r (Env.empty : Env (LVal M) Ctx.empty) = Env.empty := by
+  funext name a found
+  exact nomatch (Ctx.find?_empty name).symm.trans found
 
-theorem restrict_extend (r : Role) {Γ : List (LTy V)} (env : Env (LVal M) Γ) :
-    ∀ {items : List (LTy V)} (vs : HList (LVal M) items),
-      restrict M r (Env.extend vs env) = Env.extend (hideAll M r vs) (restrict M r env)
-  | [], .nil => rfl
-  | _ :: _, .cons v rest => by
-      show restrict M r (Env.cons v (Env.extend rest env)) = _
-      rw [restrict_cons, restrict_extend r env rest]
+/-- What a role holds of an environment with a name bound to a value is what it holds of the
+environment with the name bound to what it holds of the value. -/
+theorem restrict_insert (r : Role) {Γ : Ctx (LTy V)} (env : Env (LVal M) Γ) (bound : Name)
+    {a : LTy V} (v : LVal M a) :
+    restrict M r (env.insert bound v) = (restrict M r env).insert bound (hide M r a v) := by
+  funext name b found
+  by_cases same : name = bound
+  · have typed : a = b := by
+      rw [Ctx.find?_insert, ite_eq_left same] at found
+      exact Option.some.inj found
+    subst typed
+    show hide M r a (env.insert bound v name a found) = _
+    rw [eq_of_heq (Env.insert_at_bound env bound v same found),
+      eq_of_heq (Env.insert_at_bound _ bound _ same found)]
+  · show hide M r b (env.insert bound v name b found) = _
+    rw [Env.insert_at_other env bound v same, Env.insert_at_other _ bound _ same]
+    rfl
+
+/-- The same for the names of a binding, in order, whatever the names: a name bound again is
+bound again on both sides. -/
+theorem restrict_extend (r : Role) :
+    ∀ {Γ : Ctx (LTy V)} (env : Env (LVal M) Γ) {items : List (LTy V)} (bound : Names items)
+      (vs : HList (LVal M) items),
+      restrict M r (env.extend bound vs) = (restrict M r env).extend bound (hideAll M r vs)
+  | _, _, [], .nil, .nil => rfl
+  | _, env, _ :: _, .cons name rest, .cons v more => by
+      show restrict M r ((env.insert name v).extend rest more) = _
+      rw [restrict_extend r (env.insert name v) rest more, restrict_insert]
       rfl
 
-theorem restrict_all (r : Role) {Γ : List (LTy V)} (env : Env (LVal M) Γ) :
+theorem restrict_all (r : Role) {Γ : Ctx (LTy V)} (env : Env (LVal M) Γ) :
     ∀ {items : List (LTy V)} (xs : HList (Var Γ) items),
       (restrict M r env).all xs = hideAll M r (env.all xs)
   | [], .nil => rfl

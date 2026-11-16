@@ -7,9 +7,20 @@ Each is written directly in the typed program, with every proof that a term carr
 a definition of a program with what elaboration decides about its body. They are small on purpose: what they check is that the
 typing of the protocol dialect admits each shape, with any number of roles, and, for some,
 that the meaning computes.
+
+A term is written by names: its inputs are `0, 1, 2, …` in order (`Ctx.positional`), each binding
+names what it binds, and a variable is `var name`, whose proof that the context has the name at
+its type is decided by evaluating the context. That a body binds each name once is decided too
+(`Term.BoundOnce`). The other tests of the core write their terms with `var`.
 -/
 
 namespace Zkc.Core.Shapes
+
+/-- A variable of a typed term written by hand: `var name` is the name, at the type that the
+context has there, with the proof that the context has it decided by evaluating the context
+(`rfl`). The type is what the evaluation finds when the term around the variable does not say
+it. -/
+macro "var " name:term:max : term => `(⟨$name, rfl⟩)
 
 /-- A vocabulary with no nominal type and no row: the core's own types and operations, and
 one law, a natural. -/
@@ -52,19 +63,21 @@ def noPrograms : RTable plainModel none.protocols := fun _ p => nomatch p
 /-! ## Three roles: a value passed along -/
 
 /-- The first role gives a value to the second, and the second gives it to the third. -/
-def relay : Term (protocolDialect plain none) [nat [0]] [nat [0, 1, 2]] :=
-  .op ⟨1⟩ (.flow .message 0 [1] (by decide) (by decide)) (.cons .head .nil) <|
-  .op ⟨2⟩ (.flow .message 1 [2] (by decide) (by decide)) (.cons .head .nil) <|
-  .ret (.cons .head .nil)
+def relay : Term (protocolDialect plain none) (Ctx.positional [nat [0]]) [nat [0, 1, 2]] :=
+  .op ⟨1⟩ (.flow .message 0 [1] (by decide) (by decide)) (.cons (var 0) .nil) (.cons 1 .nil) <|
+  .op ⟨2⟩ (.flow .message 1 [2] (by decide) (by decide)) (.cons (var 1) .nil) (.cons 2 .nil) <|
+  .ret (.cons (var 2) .nil)
 
 def relayHeader : ProtocolHeader plain := ⟨⟨10⟩, 3, [nat [0]], [nat [0, 1, 2]], shapeOf relay⟩
 
 def relayProgram : Defs plain ⟨[], [relayHeader]⟩ :=
-  .protocol relayHeader relay ⟨by simp [Within, ProtocolOp.Within, relay, relayHeader], by decide,
-    by simp [Enclosed, relay], rfl, rfl, rfl, rfl⟩ .nil
+  .protocol relayHeader (Names.counting 0 _) relay
+    ⟨by simp [Within, ProtocolOp.Within, relay, relayHeader], by decide,
+    by simp [Enclosed, relay], rfl, rfl, rfl, rfl, by unfold Term.BoundOnce; decide⟩ .nil
 
 /-- The second role's program: it gets the value and gives it on. -/
-example : Term (roleDialect plain none 1) [nat [0]] [nat [0, 1, 2]] := project 1 relay
+example : Term (roleDialect plain none 1) (Ctx.positional [nat [0]]) [nat [0, 1, 2]] :=
+  project 1 relay
 
 /-! ## A choice over a variant that one role holds -/
 
@@ -73,38 +86,42 @@ abbrev either : Ty Empty := .variant ⟨7⟩ (.cons .nat (.cons .bool .nil))
 
 /-- The first role chooses on a variant that it alone holds; nobody else acts in the
 regions, and nobody else learns which ran. Then it gives what the choice gave. -/
-def choice : Term (protocolDialect plain none) [⟨either, [0]⟩] [nat [0, 1]] :=
-  .cases (mid := [nat [0]]) ⟨1⟩ [0] .head ⟨_, _, rfl, rfl, by decide, by decide⟩
+def choice : Term (protocolDialect plain none) (Ctx.positional [⟨either, [0]⟩]) [nat [0, 1]] :=
+  .cases (mid := [nat [0]]) ⟨1⟩ [0] (var 0) ⟨_, _, rfl, rfl, by decide, by decide⟩
     (fun a ha r hr => by
       simp only [List.mem_singleton] at ha
       subst ha
       exact hr)
-    (.cons (.ret (.cons .head .nil)) <|
-      .cons
-        (.op ⟨2⟩ (.compute [0] (.literal .nat [0] rfl) [] rfl (fun _ ha => nomatch ha)) .nil <|
-          .ret (.cons .head .nil)) <|
-      .nil) <|
-  .op ⟨3⟩ (.flow .message 0 [1] (by decide) (by decide)) (.cons .head .nil) <|
-  .ret (.cons .head .nil)
+    (.cons (.cons 1 .nil) (.ret (.cons (var 1) .nil)) <|
+      .cons (.cons 2 .nil)
+        (.op ⟨2⟩ (.compute [0] (.literal .nat [0] rfl) [] rfl (fun _ ha => nomatch ha)) .nil
+          (.cons 3 .nil) <|
+          .ret (.cons (var 3) .nil)) <|
+      .nil)
+    (.cons 4 .nil) <|
+  .op ⟨3⟩ (.flow .message 0 [1] (by decide) (by decide)) (.cons (var 4) .nil) (.cons 5 .nil) <|
+  .ret (.cons (var 5) .nil)
 
 example : Enclosed choice := by
   simp [Enclosed, EnclosedArms, WithinArms, Within, ProtocolOp.Within, choice]
 
 /-- The other role passes over the choice and gets the value. -/
-example : Term (roleDialect plain none 1) [⟨either, [0]⟩] [nat [0, 1]] := project 1 choice
+example : Term (roleDialect plain none 1) (Ctx.positional [⟨either, [0]⟩]) [nat [0, 1]] :=
+  project 1 choice
 
 /-! ## Rounds in a loop, each an application -/
 
 /-- One round: the second role draws a natural that the first hears, and both add it to what
 is carried. -/
-def round : Term (protocolDialect plain none) [nat [0, 1]] [nat [0, 1]] :=
+def round : Term (protocolDialect plain none) (Ctx.positional [nat [0, 1]]) [nat [0, 1]] :=
   .op ⟨1⟩ (.given (.coin ()) 1 [0] [] .nat ⟨_, rfl, rfl, rfl⟩ (fun _ ha => nomatch ha)
-    (by decide)) .nil <|
+    (by decide)) .nil (.cons 1 .nil) <|
   .op ⟨2⟩ (.compute [0, 1] (.owned .natAdd) [nat [0, 1], nat [0, 1]] rfl
     (fun a ha r hr => by
       simp only [List.mem_cons, List.not_mem_nil, or_false] at ha
-      rcases ha with rfl | rfl <;> exact hr)) (.cons .head (.cons (.tail .head) .nil)) <|
-  .ret (.cons .head .nil)
+      rcases ha with rfl | rfl <;> exact hr)) (.cons (var 1) (.cons (var 0) .nil))
+    (.cons 2 .nil) <|
+  .ret (.cons (var 2) .nil)
 
 def roundHeader : ProtocolHeader plain := ⟨⟨20⟩, 2, [nat [0, 1]], [nat [0, 1]], shapeOf round⟩
 
@@ -112,28 +129,34 @@ abbrev withRound : Headers plain := ⟨[], [roundHeader]⟩
 
 /-- As many rounds as a count that both hold says, each an application of the round with the
 roles as they are. The role map is computed from the list of roles. -/
-def rounds : Term (protocolDialect plain withRound) [nat [0, 1], nat [0, 1]] [nat [0, 1]] :=
-  .loop (carried := [nat [0, 1]]) (each := []) ⟨1⟩ [0, 1] (.value .head ⟨rfl, by decide, by decide⟩)
+def rounds :
+    Term (protocolDialect plain withRound) (Ctx.positional [nat [0, 1], nat [0, 1]]) [nat [0, 1]] :=
+  .loop (carried := [nat [0, 1]]) (each := []) ⟨1⟩ [0, 1]
+    (.value (var 0) ⟨rfl, by decide, by decide⟩)
     (fun a ha r hr => by
       simp only [List.append_nil, List.mem_singleton] at ha
       subst ha
       exact hr)
-    (.cons (.tail .head) .nil)
-    (.op ⟨2⟩ (.apply (hdr := roundHeader) .head [0, 1] (by decide) rfl [nat [0, 1]]
-        ⟨⟨rfl, by decide⟩, trivial⟩)
-      (.cons (.tail .head) .nil) <|
-      .ret (.cons .head .nil)) <|
-  .ret (.cons .head .nil)
+    (.cons (var 1) .nil)
+    (.cons 2 (.cons 3 .nil))
+    (.op (res := [nat [0, 1]]) ⟨2⟩ (.apply (hdr := roundHeader) .head [0, 1] (by decide) rfl
+        [nat [0, 1]] ⟨⟨rfl, by decide⟩, trivial⟩)
+      (.cons (var 3) .nil) (.cons 4 .nil) <|
+      .ret (.cons (var 4) .nil))
+    (.cons 5 .nil) <|
+  .ret (.cons (var 5) .nil)
 
 def roundsHeader : ProtocolHeader plain :=
   ⟨⟨21⟩, 2, [nat [0, 1], nat [0, 1]], [nat [0, 1]], shapeOf rounds⟩
 
 def roundsProgram : Defs plain ⟨[], [roundsHeader, roundHeader]⟩ :=
-  .protocol roundsHeader rounds
+  .protocol roundsHeader (Names.counting 0 _) rounds
     ⟨by simp [Within, ProtocolOp.Within, rounds, roundsHeader, roundHeader], by decide,
-    by simp [Enclosed, Within, ProtocolOp.Within, rounds, roundHeader], rfl, rfl, rfl, rfl⟩ <|
-  .protocol roundHeader round
-    ⟨by simp [Within, ProtocolOp.Within, round, roundHeader], by decide, by simp [Enclosed, round], rfl, rfl, rfl, rfl⟩ .nil
+    by simp [Enclosed, Within, ProtocolOp.Within, rounds, roundHeader], rfl, rfl, rfl, rfl,
+    by unfold Term.BoundOnce; decide⟩ <|
+  .protocol roundHeader (Names.counting 0 _) round
+    ⟨by simp [Within, ProtocolOp.Within, round, roundHeader], by decide, by simp [Enclosed, round],
+    rfl, rfl, rfl, rfl, by unfold Term.BoundOnce; decide⟩ .nil
 
 /-- The record of a run of the rounds: per iteration, the record of the round, which is the
 natural drawn. -/
@@ -149,20 +172,22 @@ example : (RoleMap.ofList [2, 0] (by decide)).to 0 = 2 ∧ (RoleMap.ofList [2, 0
 
 /-- The first role's attempt: with its number it asks a service, and aborts unless the answer
 is below the number; a bounded retry runs the body again. The rest gives the answer. -/
-def attempt : Term (protocolDialect plain none) [] [nat [0]] :=
-  .attempt ⟨1⟩ [0] ⟨0, rfl⟩
+def attempt : Term (protocolDialect plain none) (Ctx.positional []) [nat [0]] :=
+  .attempt ⟨1⟩ [0] ⟨0, rfl⟩ (.cons 0 .nil)
     (.op ⟨2⟩ (.given (.request ⟨9⟩) 0 [] [nat [0]] .nat rfl
       (fun a ha => by
         simp only [List.mem_singleton] at ha
         subst ha
-        decide) (by decide)) (.cons .head .nil) <|
+        decide) (by decide)) (.cons (var 0) .nil) (.cons 1 .nil) <|
      .op ⟨3⟩ (.compute [0] (.owned .natLess) [nat [0], nat [0]] rfl
       (fun a ha r hr => by
         simp only [List.mem_cons, List.not_mem_nil, or_false] at ha
-        rcases ha with rfl | rfl <;> exact hr)) (.cons .head (.cons (.tail .head) .nil)) <|
-     .guard ⟨4⟩ [0] .head ⟨rfl, by decide, by decide⟩ .abort <|
-     .ret (.cons (.tail .head) .nil)) <|
-  .ret (.cons .head .nil)
+        rcases ha with rfl | rfl <;> exact hr)) (.cons (var 1) (.cons (var 0) .nil))
+      (.cons 2 .nil) <|
+     .guard ⟨4⟩ [0] (var 2) ⟨rfl, by decide, by decide⟩ .abort <|
+     .ret (.cons (var 1) .nil))
+    (.cons 3 .nil) <|
+  .ret (.cons (var 3) .nil)
 
 /-- Its record has the service's answer; the number of the attempt has no field. -/
 example : (shapeOf attempt).fields = .cons (.key ⟨2⟩) (.val .nat) .nil := rfl
@@ -170,24 +195,28 @@ example : (shapeOf attempt).fields = .cons (.key ⟨2⟩) (.val .nat) .nil := rf
 /-! ## A loop written out as blocks, whose carried type changes -/
 
 /-- The first iteration: the first role turns its natural into a truth value. -/
-def firstStep : Term (protocolDialect plain none) [nat [0]] [⟨.bool, [0]⟩] :=
+def firstStep : Term (protocolDialect plain none) (Ctx.positional [nat [0]]) [⟨.bool, [0]⟩] :=
   .op ⟨1⟩ (.compute [0] (.owned .natLess) [nat [0], nat [0]] rfl
     (fun a ha r hr => by
       simp only [List.mem_cons, List.not_mem_nil, or_false] at ha
-      rcases ha with rfl | rfl <;> exact hr)) (.cons .head (.cons .head .nil)) <|
-  .ret (.cons .head .nil)
+      rcases ha with rfl | rfl <;> exact hr)) (.cons (var 0) (.cons (var 0) .nil))
+    (.cons 1 .nil) <|
+  .ret (.cons (var 1) .nil)
 
-/-- The second iteration: the first role gives the truth value to the second. -/
+/-- The second iteration: the first role gives the truth value, which the first block gave as
+`2`, to the second. -/
 def secondStep :
-    Term (protocolDialect plain none) [⟨.bool, [0]⟩, nat [0]] [⟨.bool, [0, 1]⟩] :=
-  .op ⟨2⟩ (.flow .message 0 [1] (by decide) (by decide)) (.cons .head .nil) <|
-  .ret (.cons .head .nil)
+    Term (protocolDialect plain none)
+      ((Ctx.positional [nat [0]]).extend (.cons 2 .nil : Names [(⟨.bool, [0]⟩ : LTy plain)]))
+      [⟨.bool, [0, 1]⟩] :=
+  .op ⟨2⟩ (.flow .message 0 [1] (by decide) (by decide)) (.cons (var 2) .nil) (.cons 3 .nil) <|
+  .ret (.cons (var 3) .nil)
 
 /-- Two iterations of the loop `5`, written out: what the first gives, the second takes. -/
-def stepped : Term (protocolDialect plain none) [nat [0]] [⟨.bool, [0, 1]⟩] :=
-  .block ⟨5⟩ 0 firstStep <|
-  .block ⟨5⟩ 1 secondStep <|
-  .ret (.cons .head .nil)
+def stepped : Term (protocolDialect plain none) (Ctx.positional [nat [0]]) [⟨.bool, [0, 1]⟩] :=
+  .block ⟨5⟩ 0 firstStep (.cons 2 .nil) <|
+  .block ⟨5⟩ 1 secondStep (.cons 4 .nil) <|
+  .ret (.cons (var 4) .nil)
 
 example : Enclosed stepped := by simp [Enclosed, stepped, firstStep, secondStep]
 
@@ -202,11 +231,12 @@ example : (shapeOf stepped).fields =
 
 /-- The second role has both blocks: it does nothing in the first and gets the value in the
 second. -/
-example : Term (roleDialect plain none 1) [nat [0]] [⟨.bool, [0, 1]⟩] := project 1 stepped
+example : Term (roleDialect plain none 1) (Ctx.positional [nat [0]]) [⟨.bool, [0, 1]⟩] :=
+  project 1 stepped
 
 /-- The event of the second iteration happens under the frame of that iteration. -/
 example : (stepped.denote (protocolSem plainModel noFns noProtocols) []
-    (Env.ofList (.cons (3 : Nat) .nil))) =
+    (Env.positional (.cons (3 : Nat) .nil))) =
     .call (.flow .message 0 [1] ⟨[.iteration ⟨5⟩ 1], ⟨2⟩⟩ .bool false) fun _ =>
       .done (.cons false .nil) := rfl
 
@@ -214,44 +244,44 @@ example : (stepped.denote (protocolSem plainModel noFns noProtocols) []
 
 /-- The first role repeats three times, collecting the iteration number: what the loop gives
 is a sequence of exactly three naturals. -/
-def counted : Term (protocolDialect plain none) [] [⟨.seq .nat (some 3), [0]⟩] :=
+def counted : Term (protocolDialect plain none) (Ctx.positional []) [⟨.seq .nat (some 3), [0]⟩] :=
   .loop (carried := []) (each := [nat [0]]) ⟨1⟩ [0] (.fixed 3)
     (fun a ha r hr => by
       simp only [List.nil_append, List.mem_singleton] at ha
       subst ha
       exact hr)
-    .nil (.ret (.cons .head .nil)) <|
-  .ret (.cons .head .nil)
+    .nil (.cons 0 .nil) (.ret (.cons (var 0) .nil)) (.cons 1 .nil) <|
+  .ret (.cons (var 1) .nil)
 
 example : Enclosed counted := by simp [Enclosed, Within, counted]
 
 /-- It gives the three iteration numbers. -/
-example : counted.denote (protocolSem plainModel noFns noProtocols) [] (Env.ofList .nil) =
+example : counted.denote (protocolSem plainModel noFns noProtocols) [] (Env.positional .nil) =
     .done (.cons [0, 1, 2] .nil) := rfl
 
 /-- The second role, which does not take part, has nothing of the sequence. -/
 example : ((project 1 counted).denote (roleSem plainModel 1 noFns noPrograms) []
-    (restrict plainModel 1 (Env.ofList .nil))) =
+    (restrict plainModel 1 (Env.positional .nil))) =
     .done (.cons (nothing plainModel (r := 1) (a := ⟨.seq .nat (some 3), [0]⟩) (by decide))
       .nil) := rfl
 
 /-! ## A result narrowed to fewer holders -/
 
 /-- Both roles hold a natural; afterwards only the first does. Nobody acts. -/
-def narrowed : Term (protocolDialect plain none) [nat [0, 1]] [nat [0]] :=
-  .op ⟨1⟩ (.narrow [0] (by decide)) (.cons .head .nil) <|
-  .ret (.cons .head .nil)
+def narrowed : Term (protocolDialect plain none) (Ctx.positional [nat [0, 1]]) [nat [0]] :=
+  .op ⟨1⟩ (.narrow [0] (by decide)) (.cons (var 0) .nil) (.cons 1 .nil) <|
+  .ret (.cons (var 1) .nil)
 
 example : Enclosed narrowed ∧ Within [] narrowed := by
   simp [Enclosed, Within, ProtocolOp.Within, narrowed]
 
 /-- The first role keeps the value; the second has nothing of it. -/
 example : ((project 0 narrowed).denote (roleSem plainModel 0 noFns noPrograms) []
-    (restrict plainModel 0 (Env.ofList (.cons (4 : Nat) .nil)))) =
+    (restrict plainModel 0 (Env.positional (.cons (4 : Nat) .nil)))) =
     .done (.cons (hide plainModel 0 (nat [0]) (4 : Nat)) .nil) := rfl
 
 example : ((project 1 narrowed).denote (roleSem plainModel 1 noFns noPrograms) []
-    (restrict plainModel 1 (Env.ofList (.cons (4 : Nat) .nil)))) =
+    (restrict plainModel 1 (Env.positional (.cons (4 : Nat) .nil)))) =
     .done (.cons (nothing plainModel (r := 1) (a := nat [0]) (by decide)) .nil) := rfl
 
 /-! ## Owned operations, linear types, equality of types, forks -/

@@ -15,28 +15,24 @@ namespace Zkc.Core
 section
 variable {V : Vocabulary} (M : Model V)
 
-theorem restrict_ofList (r : Role) : ∀ {Γ : List (LTy V)} (vs : HList (LVal M) Γ),
-    restrict M r (Env.ofList vs) = Env.ofList (hideAll M r vs)
-  | [], .nil => by
-      funext a x
-      nomatch x
-  | _ :: _, .cons v rest => by
-      funext a x
-      cases x with
-      | head => rfl
-      | tail x => exact congrFun (congrFun (restrict_ofList r rest) a) x
+/-- What a role holds of the inputs of a definition, bound to their names, is what it holds of
+their values, bound to the same names. -/
+theorem restrict_inputs (r : Role) {items : List (LTy V)} (inputs : Names items)
+    (vs : HList (LVal M) items) :
+    restrict M r (Env.empty.extend inputs vs) = Env.empty.extend inputs (hideAll M r vs) := by
+  rw [restrict_extend, restrict_empty]
 
 /-- A role at or above a protocol's roles does nothing while it runs. -/
 theorem Defs.quiet : ∀ {hs : Headers V} (defs : Defs V hs), TableQuiet M (Defs.gTable M defs)
   | _, .nil => fun _ p => nomatch p
-  | _, .fn _ _ _ rest => Defs.quiet rest
-  | _, .protocol hdr body ok rest => fun _ p j path ins out => by
+  | _, .fn _ _ _ _ rest => Defs.quiet rest
+  | _, .protocol hdr inputs body ok rest => fun _ p j path ins out => by
       cases p with
       | head =>
           have hq := Zkc.Core.quiet M (Defs.fnTable M rest) (Defs.gTable M rest) (r := j)
             (parts := List.range hdr.roles)
             (fun m => absurd out (Nat.not_le.mpr (List.mem_range.mp m)))
-            (Defs.quiet rest) body path (Env.ofList ins) ok.within
+            (Defs.quiet rest) body path (Env.empty.extend inputs ins) ok.within
           rw [← Term.observe_fst] at hq
           exact Proj.map_left M (Proj.of_map_left M _ hq) fun _ _ _ => trivial
       | tail p => exact Defs.quiet rest _ p j path ins out
@@ -45,14 +41,14 @@ theorem Defs.quiet : ∀ {hs : Headers V} (defs : Defs V hs), TableQuiet M (Defs
 theorem Defs.sound : ∀ {hs : Headers V} (defs : Defs V hs),
     TableSound M (Defs.gTable M defs) (Defs.rTable M defs)
   | _, .nil => fun _ p => nomatch p
-  | _, .fn _ _ _ rest => Defs.sound rest
-  | _, .protocol hdr body ok rest => fun _ p j path ins => by
+  | _, .fn _ _ _ _ rest => Defs.sound rest
+  | _, .protocol _ inputs body ok rest => fun _ p j path ins => by
       cases p with
       | head =>
           have hs' := project_sound M (Defs.fnTable M rest) (Defs.gTable M rest) j
             (Defs.rTable M rest) (Defs.sound rest) (Defs.quiet M rest)
-            body path (Env.ofList ins) ok.enclosed
-          rw [restrict_ofList, ← Term.observe_fst] at hs'
+            body path (Env.empty.extend inputs ins) ok.enclosed
+          rw [restrict_inputs, ← Term.observe_fst] at hs'
           exact Proj.map_left M (Proj.of_map_left M _ hs')
             (f := fun out => (out.1, cast (congrArg (fun s : Shape V => s.fields.Val M)
               ok.shaped.symm) out.2))
@@ -60,7 +56,7 @@ theorem Defs.sound : ∀ {hs : Headers V} (defs : Defs V hs),
       | tail p => exact Defs.sound rest _ p j path ins
 
 /-- Every role program is a projection of its protocol, on parts of one input. -/
-theorem projection (p : Typed V) {hdr : ProtocolHeader V} (x : Var p.headers.protocols hdr)
+theorem projection (p : Typed V) {hdr : ProtocolHeader V} (x : Member p.headers.protocols hdr)
     (r : Role) (path : List Frame) (ins : HList (LVal M) hdr.ins) :
     Proj M r (fun out mine => mine = hideAll M r out.1)
       (protocolMeaning M p x path ins) (roleMeaning M p x r path (hideAll M r ins)) :=

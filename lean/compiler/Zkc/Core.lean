@@ -2,8 +2,10 @@ module
 
 public import Zkc.Core.Process.Handler
 public import Zkc.Core.Process.Process
+public import Zkc.Core.Process.Same
 public import Zkc.Core.Program.BitTree
 public import Zkc.Core.Program.Conditions
+public import Zkc.Core.Program.Context
 public import Zkc.Core.Program.Dialects
 public import Zkc.Core.Program.Elaborate
 public import Zkc.Core.Program.ElaborateLocal
@@ -12,8 +14,9 @@ public import Zkc.Core.Program.LocalRules
 public import Zkc.Core.Program.Identity
 public import Zkc.Core.Program.Library
 public import Zkc.Core.Program.Located
-public import Zkc.Core.Program.Print
-public import Zkc.Core.Program.PrintProgram
+public import Zkc.Core.Program.Erase
+public import Zkc.Core.Program.EraseProgram
+public import Zkc.Core.Program.Place
 public import Zkc.Core.Program.Refusal
 public import Zkc.Core.Program.Requirement
 public import Zkc.Core.Program.Project
@@ -27,6 +30,7 @@ public import Zkc.Core.Meaning.Call
 public import Zkc.Core.Meaning.Events
 public import Zkc.Core.Meaning.Fold
 public import Zkc.Core.Meaning.Local
+public import Zkc.Core.Meaning.Place
 public import Zkc.Core.Meaning.Program
 public import Zkc.Core.Meaning.Stops
 public import Zkc.Core.Meaning.Protocol
@@ -35,6 +39,12 @@ public import Zkc.Core.Meaning.Validity
 public import Zkc.Core.Projection.Proj
 public import Zkc.Core.Projection.Sound
 public import Zkc.Core.Projection.Theorem
+public import Zkc.Core.Value.Table
+public import Zkc.Core.Value.Valuation
+public import Zkc.Core.Value.Skeleton
+public import Zkc.Core.Value.Leaves
+public import Zkc.Core.Value.Runs
+public import Zkc.Core.Value.Agrees
 public import Zkc.Core.Facts.Facts
 public import Zkc.Core.Facts.OpFacts
 public import Zkc.Core.Facts.State
@@ -42,9 +52,16 @@ public import Zkc.Core.Facts.Walk
 public import Zkc.Core.Facts.Local
 public import Zkc.Core.Facts.Valuation
 public import Zkc.Core.Facts.Learning
+public import Zkc.Core.Facts.Laws
 public import Zkc.Core.Facts.Growth
-public import Zkc.Core.Facts.LocalLaws
+public import Zkc.Core.Facts.WalkRuns
 public import Zkc.Core.Facts.Soundness
+public import Zkc.Core.Facts.SoundnessFollowing
+public import Zkc.Core.Facts.Theorems
+public import Zkc.Core.Facts.LocalLaws
+public import Zkc.Core.Transform.Step
+public import Zkc.Core.Transform.StepSound
+public import Zkc.Core.Transform.Passes
 public import Zkc.Core.Admission.Admission
 public import Zkc.Core.Admission.Elaboration
 public import Zkc.Core.Admission.Check

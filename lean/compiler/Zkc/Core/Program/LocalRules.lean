@@ -1,12 +1,16 @@
 module
 
-public import Zkc.Core.Program.Print
+public import Zkc.Core.Program.Erase
+public import Zkc.Core.Program.Typed
 
 @[expose] public section
 
 /-!
 The rules of the local dialect: the written form of each of its operations and the operation
-that a written form names, with the laws that make the printed form of an operation name it.
+that a written form names, with both halves of the law of written forms: the written form of an
+operation reads back as it, over headers with distinct keys (`localRules_lawful`), and an
+operation that a written form reads as is written as that form, so that each operation has one
+spelling (`localRules_canonical`).
 
 An operation is written as a row of the vocabulary by its key (the operands have its
 signature's types), as an operation that the core owns with its name, its types and its
@@ -18,7 +22,8 @@ This is where the local dialect's operations meet their written forms. An operat
 core owns is described by case analyses in several modules, and adding one adds an arm to each:
 its name (`OwnedName`, `Program/Syntax.lean`) and its constructor (`OwnedOp`,
 `Program/Dialects.lean`); its written form and its resolution here (`OwnedOp.name`,
-`OwnedOp.resolve`, `OwnedOp.resolve_name`); its meaning (`ownedOp`, `Meaning/Local.lean`), with
+`OwnedOp.resolve`, `OwnedOp.resolve_name`, `OwnedOp.name_resolve`); its meaning (`ownedOp`,
+`Meaning/Local.lean`), with
 the proofs that it keeps validity (`ownedOp_valid`, `Meaning/Validity.lean`) and stops only
 `undefined` (`ownedOp_halts`, `Meaning/Stops.lean`); what the check of facts is told of it
 (`ownedRequires`, `ownedRanges`, `localForm`, `Facts/Local.lean`), with their laws
@@ -110,18 +115,18 @@ def OwnedOp.resolve : OwnedName → List V.Ty → List Nat →
   | .make, [.record key linear fields], [] => some ⟨_, _, .makeRecord key linear fields⟩
   | .get, [.tuple items], [position] =>
       if free : Tys.anyLinear V items = false then
-        (Var.atIndex items.toList position).map fun found =>
+        (Member.atIndex items.toList position).map fun found =>
           ⟨_, _, .getTuple items found.2 free⟩
       else none
   | .get, [.record key false fields], [position] =>
       if free : Tys.anyLinear V fields = false then
-        (Var.atIndex fields.toList position).map fun found =>
+        (Member.atIndex fields.toList position).map fun found =>
           ⟨_, _, .getRecord key fields found.2 free⟩
       else none
   | .take, [.tuple items], [] => some ⟨_, _, .takeTuple items⟩
   | .take, [.record key linear fields], [] => some ⟨_, _, .takeRecord key linear fields⟩
   | .variant, [.variant key alternatives], [position] =>
-      (Var.atIndex alternatives.toList position).map fun found =>
+      (Member.atIndex alternatives.toList position).map fun found =>
         ⟨_, _, .variant key alternatives found.2⟩
   | _, _, _ => none
 
@@ -155,15 +160,32 @@ theorem OwnedOp.resolve_name : ∀ {ins outs : List V.Ty} (o : OwnedOp V ins out
   | _, _, .makeTuple _ => rfl
   | _, _, .makeRecord .. => rfl
   | _, _, .getTuple _ position free => by
-      simp only [OwnedOp.name, OwnedOp.resolve, free, ↓reduceDIte, Var.atIndex_index position,
+      simp only [OwnedOp.name, OwnedOp.resolve, free, ↓reduceDIte, Member.atIndex_index position,
         Option.map_some]
   | _, _, .getRecord _ _ position free => by
-      simp only [OwnedOp.name, OwnedOp.resolve, free, ↓reduceDIte, Var.atIndex_index position,
+      simp only [OwnedOp.name, OwnedOp.resolve, free, ↓reduceDIte, Member.atIndex_index position,
         Option.map_some]
   | _, _, .takeTuple _ => rfl
   | _, _, .takeRecord .. => rfl
   | _, _, .variant _ _ position => by
-      simp only [OwnedOp.name, OwnedOp.resolve, Var.atIndex_index position, Option.map_some]
+      simp only [OwnedOp.name, OwnedOp.resolve, Member.atIndex_index position, Option.map_some]
+
+/-- What the core owns that a name, types and numbers resolve to is written with them: an
+operation that the core owns has one written form. -/
+theorem OwnedOp.name_resolve : ∀ {name : OwnedName} {types : List V.Ty} {numbers : List Nat}
+    {ins outs : List V.Ty} {o : OwnedOp V ins outs},
+    OwnedOp.resolve name types numbers = some ⟨ins, outs, o⟩ → o.name = (name, types, numbers) := by
+  intro name types numbers ins outs o found
+  unfold OwnedOp.resolve at found
+  repeat' split at found
+  all_goals first
+    | (cases found; done)
+    | (cases found; rfl)
+    | (subst_vars; cases found; rfl)
+    | (simp only [Option.map_eq_some_iff] at found
+       obtain ⟨⟨_, _⟩, located, same⟩ := found
+       cases same
+       simp only [OwnedOp.name, Member.index_of_atIndex located])
 
 /-! ## The operations of a function -/
 
@@ -204,7 +226,7 @@ def LocalOp.read (fns : List (FnHeader V)) : (written : LocalRaw V) → (operand
       if reads : V.Reads τ data then LocalOp.ofOperands operands [] [τ] (.literal τ data reads)
       else .error ⟨.literal, .operation (.literal τ data)⟩
   | .call key, operands =>
-      match Var.withKey (·.key) key fns with
+      match Member.withKey (·.key) key fns with
       | [⟨hdr, callee⟩] => LocalOp.ofOperands operands hdr.ins hdr.outs (.call callee)
       | found => .error ⟨.callee, .callee key found.length⟩
 
@@ -231,7 +253,7 @@ theorem LocalOp.read_print {fns : List (FnHeader V)} (distinct : (fns.map (·.ke
   | _, _, .literal τ data reads => by
       simp only [LocalOp.print, LocalOp.read, reads, ↓reduceDIte, LocalOp.ofOperands_self]
   | _, _, .call callee => by
-      simp only [LocalOp.print, LocalOp.read, Var.withKey_key (·.key) callee distinct,
+      simp only [LocalOp.print, LocalOp.read, Member.withKey_key (·.key) callee distinct,
         LocalOp.ofOperands_self]
 
 /-- What is written for an operation names it: with distinct keys before, two operations on
@@ -243,6 +265,54 @@ theorem LocalOp.print_injective {fns : List (FnHeader V)} (distinct : (fns.map (
   have both := LocalOp.read_print distinct o
   rw [same, LocalOp.read_print distinct o'] at both
   exact (Except.ok.inj both).symm
+
+/-- An operation of the operand types given is written as the operation that it is read
+from. -/
+theorem LocalOp.print_ofOperands {fns : List (FnHeader V)} {operands ins res res' : List V.Ty}
+    (o : LocalOp V fns ins res) (o' : LocalOp V fns operands res')
+    (found : LocalOp.ofOperands operands ins res o = .ok ⟨res', o'⟩) : o'.print = o.print := by
+  unfold LocalOp.ofOperands at found
+  split at found
+  · rename_i same
+    subst same
+    cases found
+    simp only [cast_eq]
+  · cases found
+
+/-- An operation that a written form reads as is written as that form: each local operation has
+one spelling. -/
+theorem LocalOp.print_read {fns : List (FnHeader V)} :
+    ∀ {ins res : List V.Ty} (written : LocalRaw V) (o : LocalOp V fns ins res),
+      LocalOp.read fns written ins = .ok ⟨res, o⟩ → o.print = written
+  | _, _, .row key, o, found => by
+      simp only [LocalOp.read] at found
+      split at found
+      · cases found
+      · rw [LocalOp.print_ofOperands _ o found]
+        rfl
+  | _, _, .owned name types numbers, o, found => by
+      simp only [LocalOp.read] at found
+      split at found
+      · cases found
+      · rename_i ins outs owned resolved
+        rw [LocalOp.print_ofOperands _ o found]
+        simp only [LocalOp.print, OwnedOp.name_resolve resolved]
+  | _, _, .literal τ data, o, found => by
+      simp only [LocalOp.read] at found
+      split at found
+      · rw [LocalOp.print_ofOperands _ o found]
+        rfl
+      · cases found
+  | _, _, .call key, o, found => by
+      simp only [LocalOp.read] at found
+      split at found
+      · rename_i hdr callee located
+        have named : hdr.key = key :=
+          Member.key_of_withKey (·.key) key (found := ⟨hdr, callee⟩)
+            (located ▸ List.mem_singleton_self _)
+        rw [LocalOp.print_ofOperands _ o found]
+        simp only [LocalOp.print, named]
+      · cases found
 
 /-! ## The rules -/
 
@@ -271,6 +341,12 @@ theorem localRules_lawful {fns : List (FnHeader V)} (distinct : (fns.map (·.key
     subst same
     subst payloads
     exact ⟨_, rfl⟩
+
+/-- The written forms of the local rules are canonical: an operation that a written form reads
+as is written as that form. No hypothesis on the headers is needed. -/
+theorem localRules_canonical {fns : List (FnHeader V)} : (localRules fns).Canonical where
+  op raw o found := LocalOp.print_read raw o found
+  who _ _ _ := rfl
 
 end
 

@@ -1,199 +1,367 @@
 module
 
+public import Zkc.Core.Facts.Laws
 public import Zkc.Core.Facts.Growth
-public import Zkc.Core.Facts.LocalLaws
 public import Zkc.Core.Facts.Facts
 
 @[expose] public section
 
 /-!
-The check of facts is sound for functions.
-
-For a body that the walk refuses nothing of, against callees that never stop `undefined` and
-keep validity, on valid inputs: the run never stops `undefined`, what it returns is valid, and
-every loop as often as a count runs at most the bound that the walk gives its place.
+The walk of the analysis is sound, for any dialect and any semantics that satisfy the laws of
+`FactRules.Lawful` (`Facts/Laws.lean`).
 
 The proof is one induction over the term. Along a run, identifiers get values: a valuation that
-grows. At every point the run reaches, the state of the walk and the valuation agree (nothing
-from the next identifier on has a value, the table is true), every variable in scope has its
-identifier's value, and what is known holds. A region that does not run is walked all the same:
-it only adds entries above the identifiers that have values, which keeps the table true. Each
-iteration of a loop starts from the valuation below the first identifier of its body.
+grows. At every point that the run reaches, the state of the walk and the valuation agree
+(nothing from the next identifier on has a value, the table is true of the valuation), every
+name in scope has an identifier whose value is the name's value in the environment (`Agree`),
+and what is known holds (`Inv`). A region that does not run is walked all the same: it only adds
+entries above the identifiers that have values, which keeps the table true. Each iteration of a
+loop starts from the valuation before the loop, with the iteration number and the carried values
+set at the leaves of the loop's body.
+
+The facts of the table are about the results of a written operation on valid operands
+(`ValidRun`). A value is entered with its operands in the table's order; the law `binding` gives
+the results on the operands in that order. An operation kept in order gets new leaves, whose
+values are what it returned (`laws.effect`), and so does an attempt, at its number and at its
+results (`laws.begin`, `laws.settle`).
 -/
 
-namespace Zkc.Core
+namespace Zkc.Core.Analysis.Facts
 
-namespace FactCheck
+open FactCheck
+
+/-- What the soundness of the walk is about: the rules of a dialect and what following decides
+for it, a semantics with its permitted replies, how the facts read its values, the relation of
+written operations, which values are valid and which stops are `undefined`, the definition and
+the role of the places, and the bounds of an annotation. -/
+structure Setting (D : Dialect) (Raw : Type) where
+  rules : FactRules D Raw
+  checks : SkelRules D
+  sem : Semantics D
+  permitted : ∀ op, sem.S.Reply op → Prop
+  R : Reading sem.Dyn
+  Run : Raw → List sem.Dyn → List sem.Dyn → Prop
+  Valid : sem.Dyn → Prop
+  undefined : sem.H → Prop
+  definition : Key
+  role : Option Role
+  F : List (Place × Nat)
+
+namespace Setting
+variable {D : Dialect} {Raw : Type} (σ : Setting D Raw)
+
+/-- The relation that the facts of the table are about. -/
+abbrev Runs : Raw → List σ.sem.Dyn → List σ.sem.Dyn → Prop := ValidRun σ.sem σ.Run σ.Valid
+
+/-- The laws of the setting. -/
+abbrev Lawful : Prop := σ.rules.Lawful σ.sem σ.permitted σ.R σ.Run σ.Valid σ.undefined
+
+/-- Values, each with its type, are valid. -/
+def AllValid {items : List D.Ty} (vs : HList σ.sem.Val items) : Prop :=
+  ∀ v, v ∈ σ.sem.dyns vs → σ.Valid v
+
+end Setting
+
+/-! ## What the walk has at a point of a run -/
 
 section
-variable {V : Vocabulary} (M : Model V) {fns : List (FnHeader V)} (table : FnTable M fns)
+variable {D : Dialect} {Raw : Type} (σ : Setting D Raw)
 
-/-- Every variable in scope has its identifier's value. -/
-def Agree {Γ : List V.Ty} (ρ : Valuation (Dyn M)) (ids : List Nat) (env : Env M.Val Γ) : Prop :=
-  ∀ τ (x : Var Γ τ), ρ (ids.getD x.index 0) = some ⟨τ, env τ x⟩
+/-- Every name in scope has an identifier, and the valuation of that identifier is the name's
+value. -/
+def Agree {Γ : Ctx D.Ty} (ρ : Valuation σ.sem.Dyn) (ids : Ctx Nat) (env : Env σ.sem.Val Γ) :
+    Prop :=
+  ∀ τ (x : Var Γ τ), ∃ i, ids.find? x.name = some i ∧ ρ i = some ⟨τ, env.get x⟩
 
-/-- What the walk has at a point of a run agrees with the run: the state with the valuation,
-the identifiers of the variables in scope with their values, and what is known holds. -/
-structure Inv {Γ : List V.Ty} (ρ : Valuation (Dyn M)) (ids : List Nat) (env : Env M.Val Γ)
-    (k : Known) (st : St V.Ty (LocalRaw V)) : Prop where
-  coherent : Coherent (LocalRun M table) (ValidDyn M) ρ st
-  length : ids.length = Γ.length
-  below : ∀ i, i ∈ ids → i < st.next
-  agree : Agree M ρ ids env
-  holds : k.Holds (localReading M) ρ
+/-- What the walk has at a point of a run agrees with the run: the state with the valuation, the
+identifiers of the names in scope with their values, and what is known holds. -/
+structure Inv {Γ : Ctx D.Ty} (ρ : Valuation σ.sem.Dyn) (ids : Ctx Nat) (env : Env σ.sem.Val Γ)
+    (k : Known) (st : St D.Ty Raw) : Prop where
+  coherent : Coherent σ.Runs σ.Valid ρ st
+  agree : Agree σ ρ ids env
+  holds : k.Holds σ.R ρ
 
-/-- Where a region returns: the state with the valuation, the identifiers it returns with the
-values, and what is known at its end holds. -/
-structure ExitInv (ρ : Valuation (Dyn M)) (e : Exit V.Ty (LocalRaw V))
-    (st : St V.Ty (LocalRaw V)) {outs : List V.Ty} (vs : HList M.Val outs) : Prop where
-  coherent : Coherent (LocalRun M table) (ValidDyn M) ρ st
-  rets : valuesOf ρ e.rets = some (toDyns vs)
-  holds : e.known.Holds (localReading M) ρ
+/-- Where a region returns: the state with the valuation, the identifiers that it returns with
+the values, and what is known at its end holds. -/
+structure ExitInv (ρ : Valuation σ.sem.Dyn) (e : FactCheck.Exit D.Ty Raw) (st : St D.Ty Raw)
+    {outs : List D.Ty} (vs : HList σ.sem.Val outs) : Prop where
+  coherent : Coherent σ.Runs σ.Valid ρ st
+  rets : valuesOf ρ e.rets = some (σ.sem.dyns vs)
+  holds : e.known.Holds σ.R ρ
+
+end
+
+/-! ## Values with their types -/
+
+section
+variable {D : Dialect} (sem : Semantics D)
+
+/-- Values of two lists, one after the other, with their types. -/
+theorem dyns_append : ∀ {as bs : List D.Ty} (xs : HList sem.Val as) (ys : HList sem.Val bs),
+    sem.dyns (xs.append ys) = sem.dyns xs ++ sem.dyns ys
+  | [], _, .nil, _ => rfl
+  | _ :: _, _, .cons x xs, ys => by
+      show (⟨_, x⟩ :: sem.dyns (xs.append ys)) = ⟨_, x⟩ :: (sem.dyns xs ++ sem.dyns ys)
+      rw [dyns_append xs ys]
+
+theorem dyns_split {carried each : List D.Ty} (out : HList sem.Val (carried ++ each)) :
+    sem.dyns out = sem.dyns (HList.split carried out).1 ++ sem.dyns (HList.split carried out).2 := by
+  conv => lhs; rw [← split_append carried out]
+  exact dyns_append sem _ _
+
+/-- A value at a position of values with their types has the type at that position. -/
+theorem dyns_typed : ∀ {items : List D.Ty} (vs : HList sem.Val items) (j : Nat) (d : sem.Dyn),
+    (sem.dyns vs)[j]? = some d → items[j]? = some d.1
+  | [], .nil, _, _, e => by simp [Semantics.dyns] at e
+  | _ :: _, .cons v vs, j, d, e => by
+      cases j with
+      | zero =>
+          simp only [Semantics.dyns, List.getElem?_cons_zero, Option.some.injEq] at e
+          subst e
+          rfl
+      | succ j =>
+          simp only [Semantics.dyns, List.getElem?_cons_succ] at e ⊢
+          exact dyns_typed vs j d e
 
 end
 
 section
-variable (definition : Key)
+variable {D : Dialect} {Raw : Type} {σ : Setting D Raw}
 
-/-- No bound recorded yet is at one of the addresses. -/
-def Apart {T Raw : Type} (st : St T Raw) (addresses : List (List (Key × Nat) × Key)) : Prop :=
-  ∀ q, q ∈ st.bounds → ∀ bl key, q.1 = ⟨definition, bl, some key, none⟩ → (bl, key) ∉ addresses
+theorem allValid_cons {a : D.Ty} {rest : List D.Ty} {v : σ.sem.Val a} {vs : HList σ.sem.Val rest} :
+    σ.AllValid (HList.cons v vs) ↔ σ.Valid ⟨a, v⟩ ∧ σ.AllValid vs := by
+  constructor
+  · intro h
+    exact ⟨h _ List.mem_cons_self, fun d m => h d (List.mem_cons_of_mem _ m)⟩
+  · intro h d m
+    rcases List.mem_cons.mp m with rfl | m
+    · exact h.1
+    · exact h.2 d m
 
-/-- Every bound of the annotation at one of the addresses is one that the state records. -/
-def Recorded {T Raw : Type} (F : List (Place × Nat)) (addresses : List (List (Key × Nat) × Key))
-    (st : St T Raw) : Prop :=
-  ∀ p b bl key, (p, b) ∈ F → p = ⟨definition, bl, some key, none⟩ → (bl, key) ∈ addresses →
-    (p, b) ∈ st.bounds
-
-end
+theorem allValid_append {as bs : List D.Ty} (xs : HList σ.sem.Val as) (ys : HList σ.sem.Val bs) :
+    σ.AllValid (xs.append ys) ↔ σ.AllValid xs ∧ σ.AllValid ys := by
+  unfold Setting.AllValid
+  rw [dyns_append]
+  constructor
+  · intro h
+    exact ⟨fun d m => h d (List.mem_append_left _ m), fun d m => h d (List.mem_append_right _ m)⟩
+  · intro h d m
+    rcases List.mem_append.mp m with m | m
+    · exact h.1 d m
+    · exact h.2 d m
 
 /-! ## Agreement -/
 
-section
-variable {V : Vocabulary} {M : Model V}
+theorem Agree.le {Γ : Ctx D.Ty} {ρ ρ' : Valuation σ.sem.Dyn} {ids : Ctx Nat}
+    {env : Env σ.sem.Val Γ} (h : Agree σ ρ ids env) (le : ρ.Le ρ') : Agree σ ρ' ids env :=
+  fun τ x => by
+    obtain ⟨i, hi, hv⟩ := h τ x
+    exact ⟨i, hi, le _ _ hv⟩
 
-theorem Agree.le {Γ : List V.Ty} {ρ ρ' : Valuation (Dyn M)} {ids : List Nat}
-    {env : Env M.Val Γ} (h : Agree M ρ ids env) (le : ρ.Le ρ') : Agree M ρ' ids env :=
-  fun τ x => le _ _ (h τ x)
+/-- The identifier of a variable has its value. -/
+theorem Agree.idOf {Γ : Ctx D.Ty} {ρ : Valuation σ.sem.Dyn} {ids : Ctx Nat}
+    {env : Env σ.sem.Val Γ} (h : Agree σ ρ ids env) {τ : D.Ty} (x : Var Γ τ) :
+    ρ (FactCheck.idOf ids x.name) = some ⟨τ, env.get x⟩ := by
+  obtain ⟨i, hi, hv⟩ := h τ x
+  simp only [FactCheck.idOf, hi, Option.getD_some]
+  exact hv
 
-theorem valuesOf_idsOf {Γ : List V.Ty} {ρ : Valuation (Dyn M)} {ids : List Nat}
-    {env : Env M.Val Γ} (h : Agree M ρ ids env) :
-    ∀ {items : List V.Ty} (xs : HList (Var Γ) items),
-      valuesOf ρ (idsOf ids xs) = some (toDyns (env.all xs))
+/-- Where nothing from `n` on has a value, every name in scope has an identifier below `n`. -/
+theorem Agree.inScope {Γ : Ctx D.Ty} {ρ : Valuation σ.sem.Dyn} {ids : Ctx Nat}
+    {env : Env σ.sem.Val Γ} (h : Agree σ ρ ids env) {n : Nat} (support : Support n ρ) :
+    InScope Γ ids n := fun name τ found => by
+  obtain ⟨i, hi, hv⟩ := h τ ⟨name, found⟩
+  refine ⟨i, hi, Nat.lt_of_not_le fun le => ?_⟩
+  rw [support i le] at hv
+  cases hv
+
+theorem valuesOf_idsOf {Γ : Ctx D.Ty} {ρ : Valuation σ.sem.Dyn} {ids : Ctx Nat}
+    {env : Env σ.sem.Val Γ} (h : Agree σ ρ ids env) :
+    ∀ {items : List D.Ty} (xs : HList (Var Γ) items),
+      valuesOf ρ (idsOf ids xs) = some (σ.sem.dyns (env.all xs))
   | [], .nil => rfl
   | _ :: _, .cons x rest => by
-      simp only [idsOf, valuesOf, h _ x, valuesOf_idsOf h rest, Env.all, toDyns]
+      simp only [idsOf, valuesOf, h.idOf x, valuesOf_idsOf h rest, Env.all, Semantics.dyns]
 
-theorem agree_extend {Γ : List V.Ty} {ρ : Valuation (Dyn M)} {ids : List Nat}
-    {env : Env M.Val Γ} (h : Agree M ρ ids env) :
-    ∀ {res : List V.Ty} (vs : HList M.Val res) (made : List Nat),
-      valuesOf ρ made = some (toDyns vs) → Agree M ρ (made ++ ids) (Env.extend vs env)
-  | [], .nil, made, hr => by
-      have := valuesOf_length hr
-      simp only [toDyns, List.length_nil] at this
-      have : made = [] := List.eq_nil_of_length_eq_zero this.symm
-      subst this
-      exact h
-  | _ :: _, .cons v vs, made, hr => by
-      cases made with
-      | nil => simp [valuesOf, toDyns] at hr
-      | cons r made =>
-          simp only [valuesOf, toDyns] at hr
-          split at hr
-          · next d ds' e1 e2 =>
-              simp only [Option.some.injEq, List.cons.injEq] at hr
-              obtain ⟨rfl, rfl⟩ := hr
-              have ih := agree_extend h vs made e2
-              intro τ x
-              cases x with
-              | head => exact e1
-              | tail y =>
-                  have := ih τ y
-                  simpa [Var.index, Env.cons, Env.extend] using this
-          · cases hr
+/-- A name bound to an identifier that has the value bound keeps the agreement. -/
+theorem agree_insert {Γ : Ctx D.Ty} {ρ : Valuation σ.sem.Dyn} {ids : Ctx Nat}
+    {env : Env σ.sem.Val Γ} (h : Agree σ ρ ids env) (bound : Name) {τ : D.Ty} (v : σ.sem.Val τ)
+    {i : Nat} (hi : ρ i = some ⟨τ, v⟩) : Agree σ ρ (ids.insert bound i) (env.insert bound v) := by
+  intro τ' x
+  obtain ⟨name, found⟩ := x
+  have look := found
+  rw [Ctx.find?_insert] at look
+  by_cases same : name = bound
+  · subst same
+    rw [ite_eq_left rfl] at look
+    cases look
+    refine ⟨i, by rw [Ctx.find?_insert, ite_eq_left rfl], ?_⟩
+    show ρ i = some ⟨τ, env.insert name v name τ found⟩
+    rw [eq_of_heq (Env.insert_at_bound env name v rfl found)]
+    exact hi
+  · rw [ite_eq_right same] at look
+    obtain ⟨j, hj, hv⟩ := h τ' ⟨name, look⟩
+    refine ⟨j, by rw [Ctx.find?_insert, ite_eq_right same]; exact hj, ?_⟩
+    show ρ j = some ⟨τ', env.insert bound v name τ' found⟩
+    rw [Env.insert_at_other env bound v same]
+    exact hv
 
-theorem agree_valid {Γ : List V.Ty} {ρ : Valuation (Dyn M)} {ids : List Nat}
-    {env : Env M.Val Γ} (h : Agree M ρ ids env) (valid : ∀ i v, ρ i = some v → ValidDyn M v) :
-    ∀ τ (x : Var Γ τ), M.Valid τ (env τ x) := fun τ x => valid _ _ (h τ x)
+/-- The names of a binding bound to identifiers that have the values bound keep the agreement:
+the invariant of the walk goes along `Env.extend`, a later name hiding an earlier one in both. -/
+theorem agree_extend {ρ : Valuation σ.sem.Dyn} : ∀ {Γ : Ctx D.Ty} {ids : Ctx Nat}
+    {env : Env σ.sem.Val Γ} {res : List D.Ty} (names : Names res) (vs : HList σ.sem.Val res)
+    (made : List Nat), Agree σ ρ ids env → valuesOf ρ made = some (σ.sem.dyns vs) →
+      Agree σ ρ (bindIds ids names made) (env.extend names vs)
+  | _, _, _, [], .nil, .nil, _, h, _ => h
+  | _, _, _, _ :: _, .cons _ _, .cons _ _, [], _, hr => by
+      simp [valuesOf, Semantics.dyns] at hr
+  | _, _, _, _ :: _, .cons name rest, .cons v vs, r :: made, h, hr => by
+      simp only [valuesOf, Semantics.dyns] at hr
+      split at hr
+      · next d ds' e1 e2 =>
+          simp only [Option.some.injEq, List.cons.injEq] at hr
+          obtain ⟨rfl, rfl⟩ := hr
+          exact agree_extend rest vs made (agree_insert h name v e1) e2
+      · cases hr
 
-theorem env_all_valid {Γ : List V.Ty} {env : Env M.Val Γ}
-    (h : ∀ τ (x : Var Γ τ), M.Valid τ (env τ x)) :
-    ∀ {items : List V.Ty} (xs : HList (Var Γ) items), (env.all xs).All M.Valid
-  | [], .nil => trivial
-  | _ :: _, .cons x rest => HList.all_cons.mpr ⟨h _ x, env_all_valid h rest⟩
+theorem agree_valid {Γ : Ctx D.Ty} {ρ : Valuation σ.sem.Dyn} {ids : Ctx Nat}
+    {env : Env σ.sem.Val Γ} (h : Agree σ ρ ids env) (valid : ∀ i v, ρ i = some v → σ.Valid v) :
+    ∀ τ (x : Var Γ τ), σ.Valid ⟨τ, env.get x⟩ := fun τ x => by
+  obtain ⟨i, _, hv⟩ := h τ x
+  exact valid _ _ hv
+
+theorem env_all_valid {Γ : Ctx D.Ty} {env : Env σ.sem.Val Γ}
+    (h : ∀ τ (x : Var Γ τ), σ.Valid ⟨τ, env.get x⟩) :
+    ∀ {items : List D.Ty} (xs : HList (Var Γ) items), σ.AllValid (env.all xs)
+  | [], .nil => fun _ m => nomatch m
+  | _ :: _, .cons x rest => allValid_cons.mpr ⟨h _ x, env_all_valid h rest⟩
+
+/-- Values that identifiers have are valid when every value is. -/
+theorem allValid_of_valuesOf {ρ : Valuation σ.sem.Dyn} {made : List Nat} {items : List D.Ty}
+    {vs : HList σ.sem.Val items} (look : valuesOf ρ made = some (σ.sem.dyns vs))
+    (valid : ∀ i v, ρ i = some v → σ.Valid v) : σ.AllValid vs :=
+  valuesOf_valid look valid
 
 /-! ## The state grows -/
 
-section
-variable {V : Vocabulary} {M : Model V} {fns : List (FnHeader V)} {table : FnTable M fns}
-
-theorem Coherent.grow {ρ : Valuation (Dyn M)} {st st' : St V.Ty (LocalRaw V)}
-    (coh : Coherent (LocalRun M table) (ValidDyn M) ρ st) (grows : St.Grows st st')
-    (wf : Table.WF st'.next st'.table) : Coherent (LocalRun M table) (ValidDyn M) ρ st' := by
+theorem Coherent.grow {ρ : Valuation σ.sem.Dyn} {st st' : St D.Ty Raw}
+    (coh : Coherent σ.Runs σ.Valid ρ st) (grows : St.Grows st st')
+    (wf : Table.WF st'.next st'.table) : Coherent σ.Runs σ.Valid ρ st' := by
   obtain ⟨n, new, e, low⟩ := grows
   obtain ⟨cons, clo⟩ := consistent_extend coh.support coh.consistent coh.closed e low
   exact ⟨coh.support.mono n, wf, cons, clo, coh.valid⟩
 
-theorem Coherent.fresh {ρ : Valuation (Dyn M)} {st : St V.Ty (LocalRaw V)}
-    (coh : Coherent (LocalRun M table) (ValidDyn M) ρ st) (vs : List (Dyn M))
-    (valid : ∀ v, v ∈ vs → ValidDyn M v) :
-    Coherent (LocalRun M table) (ValidDyn M) (ρ.setFrom st.next vs)
-      (FactCheck.fresh vs.length st).2 := by
+theorem Coherent.fresh {ρ : Valuation σ.sem.Dyn} {st : St D.Ty Raw}
+    (coh : Coherent σ.Runs σ.Valid ρ st) (vs : List σ.sem.Dyn) (valid : ∀ v, v ∈ vs → σ.Valid v) :
+    Coherent σ.Runs σ.Valid (ρ.setFrom st.next vs) (FactCheck.fresh vs.length st).2 := by
   obtain ⟨cons, clo⟩ := consistent_setFrom coh.wf coh.consistent coh.closed vs
   exact ⟨setFrom_support coh.support vs, coh.wf.mono (by simp [FactCheck.fresh]), cons, clo,
     setFrom_valid coh.valid valid⟩
 
-theorem toDyns_typed : ∀ {items : List V.Ty} (vs : HList M.Val items) (j : Nat) (d : Dyn M),
-    (toDyns vs)[j]? = some d → items[j]? = some d.1
-  | [], .nil, _, _, e => by simp [toDyns] at e
-  | _ :: _, .cons v vs, j, d, e => by
-      cases j with
-      | zero =>
-          simp only [toDyns, List.getElem?_cons_zero, Option.some.injEq] at e
-          subst e
-          rfl
-      | succ j =>
-          simp only [toDyns, List.getElem?_cons_succ] at e ⊢
-          exact toDyns_typed vs j d e
+/-- Where the walk agrees with a run, its state is well formed and every name in scope has an
+identifier below the next. -/
+theorem Inv.scoped {Γ : Ctx D.Ty} {ρ : Valuation σ.sem.Dyn} {ids : Ctx Nat}
+    {env : Env σ.sem.Val Γ} {k : Known} {st : St D.Ty Raw} (inv : Inv σ ρ ids env k st) :
+    Scoped Γ ids st :=
+  ⟨inv.coherent.wf, inv.agree.inScope inv.coherent.support⟩
+
+/-- Identifiers that look up a list of values give, at each position, a value of the type
+there. -/
+theorem valuesOf_typed {ρ : Valuation σ.sem.Dyn} {made : List Nat} {res : List D.Ty}
+    {vs : HList σ.sem.Val res} (look : valuesOf ρ made = some (σ.sem.dyns vs)) :
+    ∀ (j m : Nat), made[j]? = some m → ∃ d, ρ m = some d ∧ res[j]? = some d.1 := by
+  intro j m e1
+  have hv := valuesOf_getElem look e1
+  cases hd : (σ.sem.dyns vs)[j]? with
+  | none => rw [hd] at hv; exact absurd hv (valuesOf_mem look m (List.mem_of_getElem? e1))
+  | some d =>
+      rw [hd] at hv
+      exact ⟨d, hv, dyns_typed σ.sem vs j d hd⟩
+
+/-! ## What the types say -/
+
+variable (laws : σ.Lawful)
+include laws
 
 /-- What the types of values at identifiers say holds of them. -/
-theorem addTypeRanges_holds {k : Known} {ρ : Valuation (Dyn M)}
-    (hk : k.Holds (localReading M) ρ) (valid : ∀ i v, ρ i = some v → ValidDyn M v)
-    {ms : List Nat} {τs : List V.Ty}
+theorem addTypeRanges_holds {k : Known} {ρ : Valuation σ.sem.Dyn}
+    (hk : k.Holds σ.R ρ) (valid : ∀ i v, ρ i = some v → σ.Valid v)
+    {ms : List Nat} {τs : List D.Ty}
     (h : ∀ (j m : Nat), ms[j]? = some m → ∃ d, ρ m = some d ∧ τs[j]? = some d.1) :
-    (k.addRanges ms (τs.map localRange)).Holds (localReading M) ρ := by
+    (k.addRanges ms (τs.map σ.rules.range)).Holds σ.R ρ := by
   refine hk.addRanges fun j id r e1 e2 => ?_
   obtain ⟨d, hd, hτ⟩ := h j id e1
   rw [List.getElem?_map, hτ] at e2
   simp only [Option.map_some, Option.some.injEq] at e2
-  obtain ⟨n, hn, has⟩ := localRange_has e2 d.2 (valid id d hd)
+  obtain ⟨n, hn, has⟩ := laws.range d.1 r d.2 e2 (valid id d hd)
   exact ⟨n, ⟨d, hd, hn⟩, has⟩
 
-/-- Identifiers that look up a list of values give, at each position, a value of the type
-there. -/
-theorem valuesOf_typed {ρ : Valuation (Dyn M)} {made : List Nat} {res : List V.Ty}
-    {vs : HList M.Val res} (look : valuesOf ρ made = some (toDyns vs)) :
-    ∀ (j m : Nat), made[j]? = some m → ∃ d, ρ m = some d ∧ res[j]? = some d.1 := by
-  intro j m e1
-  have hv := valuesOf_getElem look e1
-  cases hd : (toDyns vs)[j]? with
-  | none => rw [hd] at hv; exact absurd hv (valuesOf_mem look m (List.mem_of_getElem? e1))
-  | some d =>
-      rw [hd] at hv
-      exact ⟨d, hv, toDyns_typed vs j d hd⟩
-
 /-- Valid values have types that have a value. -/
-theorem any_noValue_of_valid : ∀ {τs : List V.Ty} (vs : HList M.Val τs), vs.All M.Valid →
-    τs.any (localFactRules V fns).noValue = false
+theorem any_noValue_of_valid : ∀ {τs : List D.Ty} (vs : HList σ.sem.Val τs), σ.AllValid vs →
+    τs.any σ.rules.noValue = false
   | [], .nil, _ => rfl
   | _ :: _, .cons v rest, valid => by
-      simp only [List.any_cons, localNoValue_valid (fns := fns) v (HList.all_cons.mp valid).1,
-        any_noValue_of_valid rest (HList.all_cons.mp valid).2, Bool.false_or]
+      simp only [List.any_cons, laws.noValue _ v (allValid_cons.mp valid).1,
+        any_noValue_of_valid rest (allValid_cons.mp valid).2, Bool.false_or]
 
 /-- Valid values of the types come into scope: what is known stays as it is. -/
-theorem enter_of_valid {k : Known} {τs : List V.Ty} {vs : HList M.Val τs}
-    (valid : vs.All M.Valid) : k.enter (localFactRules V fns) τs = k := by
-  simp only [Known.enter, any_noValue_of_valid vs valid, Bool.false_eq_true, ↓reduceIte]
+theorem enter_of_valid {k : Known} {τs : List D.Ty} {vs : HList σ.sem.Val τs}
+    (valid : σ.AllValid vs) : k.enter σ.rules τs = k := by
+  simp only [Known.enter, any_noValue_of_valid laws vs valid, Bool.false_eq_true,
+    ↓reduceIte]
+
+end
+
+/-! ## Values at leaves -/
+
+section
+variable {D : Dialect} {Raw : Type} {σ : Setting D Raw}
+
+/-- Values set at new identifiers keep the state and the valuation in agreement, and the new
+identifiers have them. -/
+theorem leaves_fresh {ρ : Valuation σ.sem.Dyn} {s : State D.Ty Raw}
+    (coh : Coherent σ.Runs σ.Valid ρ s.st) (vs : List σ.sem.Dyn)
+    (valid : ∀ v, v ∈ vs → σ.Valid v) :
+    Coherent σ.Runs σ.Valid (ρ.setFrom s.st.next vs) (leaves none vs.length s).2.st ∧
+      ρ.Le (ρ.setFrom s.st.next vs) ∧
+      valuesOf (ρ.setFrom s.st.next vs) (leaves none vs.length s).1 = some vs :=
+  ⟨Coherent.fresh coh vs valid, setFrom_le coh.support vs, valuesOf_setFrom ρ s.st.next vs⟩
+
+/-- Values set at identifiers below the next one that have no value and are no results of
+entries keep the state and the valuation in agreement. -/
+theorem Coherent.setAt {ρ : Valuation σ.sem.Dyn} {st : St D.Ty Raw}
+    (coh : Coherent σ.Runs σ.Valid ρ st) {base : Nat} (vs : List σ.sem.Dyn)
+    (valid : ∀ v, v ∈ vs → σ.Valid v) (inside : base + vs.length ≤ st.next)
+    (apart : LeavesApart st.table base vs.length)
+    (unvalued : ∀ i, base ≤ i → i < base + vs.length → ρ i = none) :
+    Coherent σ.Runs σ.Valid (ρ.setFrom base vs) st ∧ ρ.Le (ρ.setFrom base vs) := by
+  have le : ρ.Le (ρ.setFrom base vs) := fun i v h => by
+    simp only [Valuation.setFrom]
+    rw [ite_eq_right fun within => by rw [unvalued i within.1 within.2] at h; cases h]
+    exact h
+  have results : ∀ e, e ∈ st.table → ∀ j, j < e.count →
+      ρ.setFrom base vs (e.lo + j) = ρ (e.lo + j) := fun e m j lt => by
+    simp only [Valuation.setFrom]
+    rw [ite_eq_right fun within => apart e m j lt (e.lo + j - base) (by omega) (by omega)]
+  refine ⟨⟨fun i hi => ?_, coh.wf, fun e m vals hvals j lt v hv => ?_,
+    fun e m j lt hv a ha => ?_, setFrom_valid coh.valid valid⟩, le⟩
+  · simp only [Valuation.setFrom]
+    rw [ite_eq_right (by omega)]
+    exact coh.support i hi
+  · rw [results e m j lt] at hv
+    obtain ⟨vals', hvals'⟩ := valuesOf_of_mem (ρ := ρ) (coh.closed e m j lt (by rw [hv]; simp))
+    rw [valuesOf_le le hvals'] at hvals
+    cases hvals
+    exact coh.consistent e m _ hvals' j lt v hv
+  · rw [results e m j lt] at hv
+    have := coh.closed e m j lt hv a ha
+    intro h0
+    apply this
+    cases hρ : ρ a with
+    | none => rfl
+    | some v => rw [le _ _ hρ] at h0; cases h0
+
+end
 
 /-! ## What is known after regions -/
 
@@ -226,8 +394,8 @@ theorem Joined.into {P : Range → Prop} (hull : ∀ a b, P a ∨ P b → P (a.h
     · exact Or.inr ⟨_, rfl, hull a r (Or.inr pr)⟩
 
 theorem joined_fold {T Raw : Type} {P : Range → Prop} (hull : ∀ a b, P a ∨ P b → P (a.hull b))
-    {e : Exit T Raw} {position : Nat} (good : Joined P (e.rangeAt position)) :
-    ∀ (exits : List (Exit T Raw)) (acc : Option (Option Range)), (Joined P acc ∨ e ∈ exits) →
+    {e : FactCheck.Exit T Raw} {position : Nat} (good : Joined P (e.rangeAt position)) :
+    ∀ (exits : List (FactCheck.Exit T Raw)) (acc : Option (Option Range)), (Joined P acc ∨ e ∈ exits) →
       Joined P (exits.foldl (fun acc e' => hullOf acc (e'.rangeAt position)) acc)
   | [], acc, h => by
       rcases h with h | h
@@ -242,15 +410,19 @@ theorem joined_fold {T Raw : Type} {P : Range → Prop} (hull : ∀ a b, P a ∨
         · exact Or.inl (good.into hull acc)
         · exact Or.inr h
 
+section
+variable {D : Dialect} {Raw : Type} {σ : Setting D Raw} (laws : σ.Lawful)
+include laws
+
 /-- What is known after regions, one of which ran and returned values that the new identifiers
 have, holds. -/
-theorem afterRegions_holds {exits : List (Exit V.Ty (LocalRaw V))} {e : Exit V.Ty (LocalRaw V)}
-    (he : e ∈ exits) {ρe ρ' : Valuation (Dyn M)}
-    (hek : e.known.Holds (localReading M) ρe) (valid : ∀ i v, ρ' i = some v → ValidDyn M v) :
-    ∀ (ms : List Nat) (τs : List V.Ty) (p : Nat) (k : Known), k.Holds (localReading M) ρ' →
+theorem afterRegions_holds {exits : List (FactCheck.Exit D.Ty Raw)} {e : FactCheck.Exit D.Ty Raw}
+    (he : e ∈ exits) {ρe ρ' : Valuation σ.sem.Dyn}
+    (hek : e.known.Holds σ.R ρe) (valid : ∀ i v, ρ' i = some v → σ.Valid v) :
+    ∀ (ms : List Nat) (τs : List D.Ty) (p : Nat) (k : Known), k.Holds σ.R ρ' →
       (∀ j m, ms[j]? = some m → ∃ d, ρ' m = some d ∧ ρe (e.rets.getD (p + j) 0) = some d ∧
         τs[j]? = some d.1) →
-      (afterRegions (localFactRules V fns) exits k ms τs p).Holds (localReading M) ρ'
+      (afterRegions σ.rules exits k ms τs p).Holds σ.R ρ'
   | m :: ms, τ :: τs, p, k, hk, h => by
       simp only [afterRegions]
       obtain ⟨d, hm, hr, hτ⟩ := h 0 m rfl
@@ -258,9 +430,9 @@ theorem afterRegions_holds {exits : List (Exit V.Ty (LocalRaw V))} {e : Exit V.T
       subst hτ
       apply afterRegions_holds he hek valid ms τs (p + 1)
       · refine (hk.addRange? fun r e1 => ?_).addRange? fun r e2 => ?_
-        · have good : Joined (fun r => ∃ n, (localReading M).nat d = some n ∧ r.Has n)
+        · have good : Joined (fun r => ∃ n, σ.R.nat d = some n ∧ r.Has n)
               (e.rangeAt p) := by
-            simp only [Exit.rangeAt, hek.alive, Bool.false_eq_true, ↓reduceIte]
+            simp only [FactCheck.Exit.rangeAt, hek.alive, Bool.false_eq_true, ↓reduceIte]
             cases hr' : e.known.rangeOf (e.rets.getD p 0) with
             | none => exact Or.inl rfl
             | some r0 =>
@@ -280,10 +452,10 @@ theorem afterRegions_holds {exits : List (Exit V.Ty (LocalRaw V))} {e : Exit V.T
             simp only [Option.getD_some, Option.some.injEq] at e1
             subst e1
             exact ⟨n, ⟨d, hm, hn⟩, has⟩
-        · obtain ⟨n, hn, has⟩ := localRange_has e2 d.2 (valid m d hm)
+        · obtain ⟨n, hn, has⟩ := laws.range d.1 r d.2 e2 (valid m d hm)
           exact ⟨n, ⟨d, hm, hn⟩, has⟩
-      · intro j m' e'
-        obtain ⟨d', h1, h2, h3⟩ := h (j + 1) m' (by simpa using e')
+      · intro j m e'
+        obtain ⟨d', h1, h2, h3⟩ := h (j + 1) m (by simpa using e')
         refine ⟨d', h1, by rw [show p + 1 + j = p + (j + 1) by omega]; exact h2,
           by simpa using h3⟩
   | [], _, _, k, hk, _ => by
@@ -303,30 +475,57 @@ theorem afterRegions_holds {exits : List (Exit V.Ty (LocalRaw V))} {e : Exit V.T
       rw [this]
       exact hk
 
+/-- After regions one of which ran: the new values are at the identifiers made for them, and what
+is known of them holds. -/
+theorem afterRegions_inv {Γ : Ctx D.Ty} {mid : List D.Ty} {exits : List (FactCheck.Exit D.Ty Raw)}
+    {e : FactCheck.Exit D.Ty Raw} (he : e ∈ exits) {ρ ρ₁ ρ₂ : Valuation σ.sem.Dyn} {ids : Ctx Nat}
+    {env : Env σ.sem.Val Γ} {k : Known} {st₀ st' st'' : St D.Ty Raw}
+    (inv : Inv σ ρ ids env k st₀) (le : ρ.Le ρ₁) {mids : HList σ.sem.Val mid}
+    (ex : ExitInv σ ρ₁ e st' mids) (results : Names mid) {made : List Nat}
+    (coh : Coherent σ.Runs σ.Valid ρ₂ st'') (le₂ : ρ₁.Le ρ₂)
+    (look : valuesOf ρ₂ made = some (σ.sem.dyns mids)) :
+    Inv σ ρ₂ (bindIds ids results made) (env.extend results mids)
+      ((afterRegions σ.rules exits k made mid 0).enter σ.rules mid) st'' := by
+  have valid : σ.AllValid mids := allValid_of_valuesOf ex.rets ex.coherent.valid
+  refine ⟨coh, agree_extend results mids _ (inv.agree.le (le.trans le₂)) look, ?_⟩
+  rw [enter_of_valid laws valid]
+  apply afterRegions_holds laws he ex.holds coh.valid _ _ 0 k (inv.holds.le (le.trans le₂))
+  intro j m em
+  have e1 := valuesOf_getElem look em
+  cases hd : (σ.sem.dyns mids)[j]? with
+  | none => rw [hd] at e1; exact absurd e1 (valuesOf_mem look m (List.mem_of_getElem? em))
+  | some d =>
+      rw [hd] at e1
+      refine ⟨d, e1, ?_, dyns_typed σ.sem mids j d hd⟩
+      have lt : j < e.rets.length := by
+        have h1 := valuesOf_length ex.rets
+        have h2 := (List.getElem?_eq_some_iff.mp hd).1
+        omega
+      rw [Nat.zero_add, valuesOf_get ex.rets j lt, hd]
+
 end
 
 /-! ## The shapes of a choice -/
 
 section
-variable {V : Vocabulary} {M : Model V} {fns : List (FnHeader V)} {table : FnTable M fns}
+variable {D : Dialect} {Raw : Type} {σ : Setting D Raw}
 
 /-- A choice fact holds of a valuation. -/
-abbrev ChoiceHolds (ρ : Valuation (Dyn M)) (c : ChoiceFact) : Prop :=
-  ρ c.result ≠ none ∧ ∀ b, BoolAt (localReading M) ρ c.result b → b = c.conjunction →
-    BoolAt (localReading M) ρ c.condition b ∧ BoolAt (localReading M) ρ c.other b
+abbrev ChoiceHolds (ρ : Valuation σ.sem.Dyn) (c : ChoiceFact) : Prop :=
+  ρ c.result ≠ none ∧ ∀ b, BoolAt σ.R ρ c.result b → b = c.conjunction →
+    BoolAt σ.R ρ c.condition b ∧ BoolAt σ.R ρ c.other b
 
 /-- The shapes of a choice hold where its condition has a value, the region that it chose ran,
 and the results of the choice have the values that the region returned. -/
-theorem choiceFacts_holds (lawful : OpFacts.Lawful (localOpFacts V) (localReading M)
-      (LocalRun M table))
-    {ρ : Valuation (Dyn M)} {tbl : Table (LocalRaw V)}
-    (hc : Consistent (LocalRun M table) ρ tbl) (hcl : Closed ρ tbl) {condition : Nat}
-    {b0 : Bool} (hcond : BoolAt (localReading M) ρ condition b0)
-    {first second : Exit V.Ty (LocalRaw V)} :
+theorem choiceFacts_holds (lawful : OpFacts.Lawful σ.rules.ops σ.R σ.Runs)
+    {ρ : Valuation σ.sem.Dyn} {tbl : Table Raw}
+    (hc : Consistent σ.Runs ρ tbl) (hcl : Closed ρ tbl) {condition : Nat}
+    {b0 : Bool} (hcond : BoolAt σ.R ρ condition b0)
+    {first second : FactCheck.Exit D.Ty Raw} :
     ∀ (ms : List Nat) (p : Nat),
       (∀ j m, ms[j]? = some m → ∃ d, ρ m = some d ∧
         ρ ((if b0 then first else second).rets.getD (p + j) 0) = some d) →
-      ∀ c, c ∈ choiceFacts (localOpFacts V) tbl condition first second ms p → ChoiceHolds ρ c
+      ∀ c, c ∈ choiceFacts σ.rules.ops tbl condition first second ms p → ChoiceHolds (σ := σ) ρ c
   | [], _, _, c, m => by simp [choiceFacts] at m
   | m :: ms, p, h, c, mem => by
       obtain ⟨d, hm, hran⟩ := h 0 m rfl
@@ -383,84 +582,147 @@ theorem choiceFacts_holds (lawful : OpFacts.Lawful (localOpFacts V) (localReadin
           obtain ⟨d', h1, h2⟩ := h (j + 1) m' (by simpa using e')
           exact ⟨d', h1, by rw [show p + 1 + j = p + (j + 1) by omega]; exact h2⟩) c mem
 
-theorem Known.Holds.addChoices {ρ : Valuation (Dyn M)} {k : Known}
-    (hk : k.Holds (localReading M) ρ) {cs : List ChoiceFact}
-    (h : ∀ c, c ∈ cs → ChoiceHolds ρ c) : (cs.foldl Known.addChoice k).Holds (localReading M) ρ :=
-  foldl_invariant (P := fun k => k.Holds (localReading M) ρ) _ cs k hk
+theorem Known.Holds.addChoices {ρ : Valuation σ.sem.Dyn} {k : Known}
+    (hk : k.Holds σ.R ρ) {cs : List ChoiceFact}
+    (h : ∀ c, c ∈ cs → ChoiceHolds (σ := σ) ρ c) : (cs.foldl Known.addChoice k).Holds σ.R ρ :=
+  foldl_invariant (P := fun k => k.Holds σ.R ρ) _ cs k hk
     (fun _ c m hk' => hk'.addChoice (h c m))
 
 end
 
-/-! ## The alternative of a variant -/
+/-! ## The statement of soundness -/
 
 section
-variable {V : Vocabulary} {M : Model V}
+variable {Raw : Type}
 
-/-- The payload of an alternative is valid. -/
-def PickValid : {payloads : List V.Ty} → Pick M.Val payloads → Prop
-  | _, .here v => M.Valid _ v
-  | _, .there p => PickValid p
+/-- Every identifier from `lo` on that has a value is a result of an entry of the table: no leaf
+of a skeleton made from `lo` on and apart from the table has a value. -/
+def Quiet {Val : Type} (lo : Nat) (ρ : Valuation Val) (tbl : Table Raw) : Prop :=
+  ∀ i, lo ≤ i → ρ i ≠ none → ∃ e, e ∈ tbl ∧ ∃ j, j < e.count ∧ i = e.lo + j
 
-theorem Tys.pick_valid : ∀ (alts : Tys V.TypeKey) (c : alts.Choice M.toCarriers),
-    Tys.ValidChoice M.toCarriers alts c → PickValid (Tys.pick M alts c)
-  | .nil, c, _ => nomatch c
-  | .cons _ _, .inl _, h => h
-  | .cons _ rest, .inr c, h => Tys.pick_valid rest c h
+variable {D : Dialect} {Val : Type}
 
-theorem pickValid_cast {ps qs : List V.Ty} (h : ps = qs) (p : Pick M.Val ps) :
-    PickValid (cast (congrArg (Pick M.Val) h) p) ↔ PickValid p := by
-  subst h
-  rfl
+/-- What a walk that follows a skeleton has at its start: the skeleton's leaves are made in order
+from `lo` on, below `hi` and the next identifier, apart from the table, and none of them has a
+value. Nothing when no skeleton is followed. -/
+def Following {outs : List D.Ty} :
+    Option (Skel D outs) → Nat → Nat → Valuation Val → St D.Ty Raw → Prop
+  | none, _, _, _, _ => True
+  | some skel, lo, hi, ρ, st =>
+      Skel.Ordered skel lo hi ∧ hi ≤ st.next ∧ skel.Apart st.table ∧ Quiet lo ρ st.table
 
-theorem valid_cast {τ τ' : V.Ty} (h : τ = τ') (v : M.Val τ) :
-    M.Valid τ' (cast (congrArg M.Val h) v) ↔ M.Valid τ v := by
-  subst h
-  rfl
+/-- What a walk of arms that follows the arms of a skeleton has at its start, as `Following`. -/
+def ArmsFollowing {mid payloads : List D.Ty} :
+    Option (SkelArms D mid payloads) → Nat → Nat → Valuation Val → St D.Ty Raw → Prop
+  | none, _, _, _, _ => True
+  | some arms, lo, hi, ρ, st =>
+      SkelArms.Ordered arms lo hi ∧ hi ≤ st.next ∧ arms.Apart st.table ∧ Quiet lo ρ st.table
 
-theorem localPick_valid {t : V.Ty} {payloads : List V.Ty}
-    (h : ∃ key alternatives, t = .variant key alternatives ∧ payloads = alternatives.toList)
-    (v : M.Val t) (valid : M.Valid t v) : PickValid (localPick M h v) := by
-  simp only [localPick]
-  rw [pickValid_cast (by obtain ⟨_, _, e, q⟩ := h; rw [Ty.alternatives_of e, q])]
-  apply Tys.pick_valid
-  have := (valid_cast (Ty.eq_variant h) v).mpr valid
-  exact this
+/-- What a walk that followed a skeleton has at its end: no identifier from `hi` on has a value
+unless it is a result of an entry. Nothing when no skeleton is followed. -/
+def Followed {outs : List D.Ty} : Option (Skel D outs) → Nat → Valuation Val → St D.Ty Raw → Prop
+  | none, _, _, _ => True
+  | some _, hi, ρ, st => Quiet hi ρ st.table
+
+/-- What a walk of arms that followed the arms of a skeleton has at its end, as `Followed`. -/
+def ArmsFollowed {mid payloads : List D.Ty} :
+    Option (SkelArms D mid payloads) → Nat → Valuation Val → St D.Ty Raw → Prop
+  | none, _, _, _ => True
+  | some _, hi, ρ, st => Quiet hi ρ st.table
 
 end
 
-/-! ## The walk is sound -/
+section
+variable {D : Dialect} {Raw : Type} [DecidableEq Raw] (σ : Setting D Raw)
+
+/-- No bound recorded yet is at one of the addresses. -/
+def BoundsApart (st : St D.Ty Raw) (addresses : List (List (Key × Nat) × Key)) : Prop :=
+  ∀ q, q ∈ st.bounds → ∀ bl key, q.1 = ⟨σ.definition, bl, some key, σ.role⟩ →
+    (bl, key) ∉ addresses
+
+/-- Every bound of the annotation at one of the addresses is one that the state records. -/
+def Recorded (addresses : List (List (Key × Nat) × Key)) (st : St D.Ty Raw) : Prop :=
+  ∀ p b bl key, (p, b) ∈ σ.F → p = ⟨σ.definition, bl, some key, σ.role⟩ →
+    (bl, key) ∈ addresses → (p, b) ∈ st.bounds
+
+/-- What the walk of a term shows of its run: every loop that it reaches respects the bound of
+the annotation, it never stops `undefined`, and what holds where it returns. -/
+abbrev Shows (blocks : List (Key × Nat)) {Γ : Ctx D.Ty} {outs : List D.Ty} (t : Term D Γ outs)
+    (path : List Frame) (env : Env σ.sem.Val Γ) (post : HList σ.sem.Val outs → Prop) : Prop :=
+  t.EveryLoop σ.sem σ.permitted (Annotation.Bounded ⟨σ.F⟩ σ.definition σ.role) path blocks env ∧
+    (t.denote σ.sem path env).Every σ.permitted post (fun stop => ¬ σ.undefined stop)
+
+/-- The walk of a term, following a skeleton or none, from any point of a run that agrees with
+it, shows the run: when it adds no refusal and no place that differs, the addresses of the term
+are distinct and apart from the bounds recorded before, and the annotation's bounds at them are
+recorded. Where it returns, the valuation has grown, agrees with the exit of the walk, and, when a
+skeleton is followed, no leaf of it from its end on has a value. -/
+def Sound (blocks : List (Key × Nat)) {Γ : Ctx D.Ty} {outs : List D.Ty} (t : Term D Γ outs)
+    (followed : Option (Skel D outs)) : Prop :=
+  ∀ (path : List Frame) (ρ : Valuation σ.sem.Dyn) (ids : Ctx Nat) (env : Env σ.sem.Val Γ)
+    (k : Known) (s : State D.Ty Raw) (lo hi : Nat),
+    Inv σ ρ ids env k s.st → Following followed lo hi ρ s.st →
+    (walk σ.rules σ.checks σ.definition σ.role blocks t followed ids k s).state.differs =
+      s.differs →
+    (walk σ.rules σ.checks σ.definition σ.role blocks t followed ids k s).state.st.refusals = [] →
+    (t.addresses blocks).Nodup → BoundsApart σ s.st (t.addresses blocks) →
+    Recorded σ (t.addresses blocks)
+      (walk σ.rules σ.checks σ.definition σ.role blocks t followed ids k s).state.st →
+    Shows σ blocks t path env (fun vs => ∃ ρ', ρ.Le ρ' ∧
+      ExitInv σ ρ' (walk σ.rules σ.checks σ.definition σ.role blocks t followed ids k s).region
+        (walk σ.rules σ.checks σ.definition σ.role blocks t followed ids k s).state.st vs ∧
+      Followed followed hi ρ'
+        (walk σ.rules σ.checks σ.definition σ.role blocks t followed ids k s).state.st)
+
+/-- The walk of the arms of a case analysis, from any point of a run that agrees with it, shows
+the run of the arm of the alternative, as `Sound`. -/
+def ArmsSound (blocks : List (Key × Nat)) {Γ : Ctx D.Ty} {mid payloads : List D.Ty}
+    (arms : Arms D Γ mid payloads) (followed : Option (SkelArms D mid payloads)) : Prop :=
+  ∀ (path : List Frame) (ρ : Valuation σ.sem.Dyn) (ids : Ctx Nat) (env : Env σ.sem.Val Γ)
+    (k : Known) (s : State D.Ty Raw) (lo hi : Nat) (p : Pick σ.sem.Val payloads),
+    PickValid σ.sem σ.Valid p →
+    Inv σ ρ ids env k s.st → ArmsFollowing followed lo hi ρ s.st →
+    (walkArms σ.rules σ.checks σ.definition σ.role blocks arms followed ids k s).state.differs =
+      s.differs →
+    (walkArms σ.rules σ.checks σ.definition σ.role blocks arms followed ids k s).state.st.refusals =
+      [] →
+    (Arms.addresses blocks arms).Nodup → BoundsApart σ s.st (Arms.addresses blocks arms) →
+    Recorded σ (Arms.addresses blocks arms)
+      (walkArms σ.rules σ.checks σ.definition σ.role blocks arms followed ids k s).state.st →
+    Arms.EveryLoop σ.sem σ.permitted (Annotation.Bounded ⟨σ.F⟩ σ.definition σ.role) arms path
+        blocks env p ∧
+      (arms.denote σ.sem path env p).Every σ.permitted (fun mids => ∃ ρ', ρ.Le ρ' ∧ ∃ e,
+        e ∈ (walkArms σ.rules σ.checks σ.definition σ.role blocks arms followed ids k s).exits ∧
+        ExitInv σ ρ' e
+          (walkArms σ.rules σ.checks σ.definition σ.role blocks arms followed ids k s).state.st
+          mids ∧
+        ArmsFollowed followed hi ρ'
+          (walkArms σ.rules σ.checks σ.definition σ.role blocks arms followed ids k s).state.st)
+        (fun stop => ¬ σ.undefined stop)
+
+end
+
+/-! ## Bounds at addresses -/
 
 section
-variable {V : Vocabulary} {M : Model V} {fns : List (FnHeader V)} {table : FnTable M fns}
+variable {D : Dialect} {Raw : Type} [DecidableEq Raw] {σ : Setting D Raw}
 
-theorem localFactRules_written {ins res : List V.Ty} (o : LocalOp V fns ins res) :
-    (localFactRules V fns).written o = some o.print := rfl
-theorem localFactRules_ops : (localFactRules V fns).ops = localOpFacts V := rfl
-theorem localFactRules_range : (localFactRules V fns).range = localRange := rfl
+omit [DecidableEq Raw] in
+theorem BoundsApart.sub {st : St D.Ty Raw} {A B : List (List (Key × Nat) × Key)}
+    (h : BoundsApart σ st A) (sub : ∀ x, x ∈ B → x ∈ A) : BoundsApart σ st B :=
+  fun q m bl key e inB => h q m bl key e (sub _ inB)
 
-/-- What the walk of a term shows of its run, with what holds where it returns. -/
-abbrev Shows (F : List (Place × Nat)) (definition : Key) (blocks : List (Key × Nat))
-    {Γ outs : List V.Ty} (t : Term (localDialect V fns) Γ outs) (path : List Frame)
-    (env : Env M.Val Γ) (post : HList M.Val outs → Prop) : Prop :=
-  t.EveryLoop (localSem M fns table) (fun _ _ => True)
-      (Annotation.Bounded ⟨F⟩ definition none) path blocks env ∧
-    (t.denote (localSem M fns table) path env).Every (fun _ _ => True) post (· ≠ .undefined)
-
-theorem Apart.sub {T Raw : Type} {definition : Key} {st : St T Raw}
-    {A B : List (List (Key × Nat) × Key)} (h : Apart definition st A) (sub : ∀ x, x ∈ B → x ∈ A) :
-    Apart definition st B := fun q m bl key e inB => h q m bl key e (sub _ inB)
-
-theorem Recorded.sub {T Raw : Type} {definition : Key} {F : List (Place × Nat)} {st : St T Raw}
-    {A B : List (List (Key × Nat) × Key)} (h : Recorded definition F A st)
-    (sub : ∀ x, x ∈ B → x ∈ A) : Recorded definition F B st :=
+omit [DecidableEq Raw] in
+theorem Recorded.sub {st : St D.Ty Raw} {A B : List (List (Key × Nat) × Key)}
+    (h : Recorded σ A st) (sub : ∀ x, x ∈ B → x ∈ A) : Recorded σ B st :=
   fun p b bl key m e inB => h p b bl key m e (sub _ inB)
 
+omit [DecidableEq Raw] in
 /-- Bounds added at other addresses keep a state apart from the addresses. -/
-theorem Apart.extend {T Raw : Type} {definition : Key} {st st' : St T Raw}
-    {A Bnew : List (List (Key × Nat) × Key)} {new : List (Place × Nat)}
-    (h : Apart definition st A) (e : st'.bounds = new ++ st.bounds)
-    (at_ : BoundsAt definition none Bnew new) (apart : ∀ x, x ∈ Bnew → x ∉ A) :
-    Apart definition st' A := by
+theorem BoundsApart.extend {st st' : St D.Ty Raw} {A Bnew : List (List (Key × Nat) × Key)}
+    {new : List (Place × Nat)} (h : BoundsApart σ st A) (e : st'.bounds = new ++ st.bounds)
+    (at_ : BoundsAt σ.definition σ.role Bnew new) (apart : ∀ x, x ∈ Bnew → x ∉ A) :
+    BoundsApart σ st' A := by
   intro q m bl key eq inA
   rw [e] at m
   rcases List.mem_append.mp m with m | m
@@ -471,12 +733,12 @@ theorem Apart.extend {T Raw : Type} {definition : Key} {st st' : St T Raw}
     exact apart _ mem inA
   · exact h q m bl key eq inA
 
+omit [DecidableEq Raw] in
 /-- Bounds recorded at other addresses are not those of the addresses. -/
-theorem Recorded.strip {T Raw : Type} {definition : Key} {F : List (Place × Nat)}
-    {st st' : St T Raw} {A Bnew : List (List (Key × Nat) × Key)} {new : List (Place × Nat)}
-    (h : Recorded definition F A st') (e : st'.bounds = new ++ st.bounds)
-    (at_ : BoundsAt definition none Bnew new) (apart : ∀ x, x ∈ A → x ∉ Bnew) :
-    Recorded definition F A st := by
+theorem Recorded.strip {st st' : St D.Ty Raw} {A Bnew : List (List (Key × Nat) × Key)}
+    {new : List (Place × Nat)} (h : Recorded σ A st') (e : st'.bounds = new ++ st.bounds)
+    (at_ : BoundsAt σ.definition σ.role Bnew new) (apart : ∀ x, x ∈ A → x ∉ Bnew) :
+    Recorded σ A st := by
   intro p b bl key m eq inA
   have := h p b bl key m eq inA
   rw [e] at this
@@ -491,382 +753,838 @@ theorem Recorded.strip {T Raw : Type} {definition : Key} {F : List (Place × Nat
 
 end
 
+/-! ## Values given to results of entries only -/
+
 section
-variable {V : Vocabulary} {M : Model V} {fns : List (FnHeader V)} {table : FnTable M fns}
-  (distinct : (fns.map (·.key)).Nodup)
-  (safe : ∀ hdr (callee : Var fns hdr) (args : HList M.Val hdr.ins), args.All M.Valid →
-    (table hdr callee args).Stops (· ≠ .undefined))
-  (keeps : FnTable.KeepsValidity table)
-  (definition : Key) (F : List (Place × Nat))
+variable {Raw Val : Type}
 
-/-- The walk of a term from any point of a run that agrees with it shows the run. -/
-def Sound (blocks : List (Key × Nat)) {Γ outs : List V.Ty} (t : Term (localDialect V fns) Γ outs) :
-    Prop :=
-  ∀ (path : List Frame) (ρ : Valuation (Dyn M)) (ids : List Nat) (env : Env M.Val Γ) (k : Known)
-    (st : St V.Ty (LocalRaw V)), Inv M table ρ ids env k st →
-    (walk (localFactRules V fns) definition none blocks t ids k st).st.refusals = [] →
-    (t.addresses blocks).Nodup → Apart definition st (t.addresses blocks) →
-    Recorded definition F (t.addresses blocks)
-      (walk (localFactRules V fns) definition none blocks t ids k st).st →
-    Shows (table := table) F definition blocks t path env (fun vs => ∃ ρ', ρ.Le ρ' ∧
-      ExitInv M table ρ' (walk (localFactRules V fns) definition none blocks t ids k st)
-        (walk (localFactRules V fns) definition none blocks t ids k st).st vs)
+/-- An identifier is a result of an entry of the table. -/
+def IsResult (tbl : Table Raw) (i : Nat) : Prop :=
+  ∃ e, e ∈ tbl ∧ ∃ j, j < e.count ∧ i = e.lo + j
 
-theorem localRun_valid (w : LocalRaw V) (as rs : List (Dyn M)) (h : LocalRun M table w as rs)
-    (_ : ∀ a, a ∈ as → ValidDyn M a) : ∀ r, r ∈ rs → ValidDyn M r := by
-  obtain ⟨_, _, _, _, r, _, _, rfl, _, vr, _⟩ := h
-  exact toDyns_valid vr
+/-- The second valuation gives values that the first has not only to results of entries of the
+table. -/
+def Fills (ρ ρ' : Valuation Val) (tbl : Table Raw) : Prop :=
+  ∀ i, ρ i = none → ρ' i ≠ none → IsResult tbl i
 
-include distinct safe keeps in
-/-- An operation: its requirements hold, so it does not stop `undefined`; its results have the
-identifiers that the table gives, with the ranges that are learned. -/
-theorem op_sound (blocks : List (Key × Nat)) {Γ outs ins res : List V.Ty} (key : Key)
-    (o : LocalOp V fns ins res) (args : HList (Var Γ) ins)
-    (rest : Term (localDialect V fns) (res ++ Γ) outs)
-    (ih : Sound (table := table) definition F blocks rest) :
-    Sound (table := table) definition F blocks (.op key o args rest) := by
-  intro path ρ ids env k st inv hnone nodup apart recorded
-  have lawful := localOpFacts_lawful (table := table) distinct
-  have nodup' := (List.nodup_cons.mp nodup).2
-  have va : (env.all args).All M.Valid :=
+theorem IsResult.grow {tbl tbl' : Table Raw} (sub : ∀ e, e ∈ tbl → e ∈ tbl') {i : Nat}
+    (h : IsResult tbl i) : IsResult tbl' i := by
+  obtain ⟨e, m, j, lt, eq⟩ := h
+  exact ⟨e, sub e m, j, lt, eq⟩
+
+theorem Fills.refl (ρ : Valuation Val) (tbl : Table Raw) : Fills ρ ρ tbl :=
+  fun _ none some => absurd none some
+
+theorem Fills.trans {ρ ρ' ρ'' : Valuation Val} {tbl tbl' : Table Raw} (first : Fills ρ ρ' tbl)
+    (second : Fills ρ' ρ'' tbl') (sub : ∀ e, e ∈ tbl → e ∈ tbl') : Fills ρ ρ'' tbl' := by
+  intro i none some
+  cases h : ρ' i with
+  | none => exact second i h some
+  | some v => exact (first i none (by rw [h]; simp)).grow sub
+
+theorem Quiet.low {lo lo' : Nat} {ρ : Valuation Val} {tbl : Table Raw} (h : Quiet lo ρ tbl)
+    (le : lo ≤ lo') : Quiet lo' ρ tbl :=
+  fun i hi valued => h i (Nat.le_trans le hi) valued
+
+theorem Quiet.grow {lo : Nat} {ρ : Valuation Val} {tbl tbl' : Table Raw} (h : Quiet lo ρ tbl)
+    (sub : ∀ e, e ∈ tbl → e ∈ tbl') : Quiet lo ρ tbl' :=
+  fun i hi valued => IsResult.grow sub (h i hi valued)
+
+/-- What is filled with values keeps every identifier from `lo` on without a value, except
+results of entries. -/
+theorem Quiet.fills {lo : Nat} {ρ ρ' : Valuation Val} {tbl tbl' : Table Raw} (h : Quiet lo ρ tbl)
+    (fills : Fills ρ ρ' tbl') (sub : ∀ e, e ∈ tbl → e ∈ tbl') : Quiet lo ρ' tbl' := by
+  intro i hi valued
+  cases hv : ρ i with
+  | none => exact fills i hv valued
+  | some v => exact IsResult.grow sub (h i hi (by rw [hv]; simp))
+
+/-- Leaves apart from the table from `lo` on have no value. -/
+theorem Quiet.unvalued {lo base count : Nat} {ρ : Valuation Val} {tbl : Table Raw}
+    (h : Quiet lo ρ tbl) (apart : LeavesApart tbl base count) (low : lo ≤ base) :
+    ∀ i, base ≤ i → i < base + count → ρ i = none := by
+  intro i hi lt
+  cases hv : ρ i with
+  | none => rfl
+  | some v =>
+      obtain ⟨e, m, j, jl, eq⟩ := h i (by omega) (by rw [hv]; simp)
+      exact (apart e m j jl (i - base) (by omega) (by omega)).elim
+
+theorem setFrom_above (ρ : Valuation Val) (lo : Nat) (vs : List Val) {i : Nat}
+    (hi : lo + vs.length ≤ i) : ρ.setFrom lo vs i = ρ i := by
+  simp only [Valuation.setFrom]
+  rw [ite_eq_right (by omega)]
+
+/-- Values set at leaves keep every identifier above them without a value, except results of
+entries. -/
+theorem Quiet.setFrom {lo base : Nat} {ρ : Valuation Val} {tbl : Table Raw} (h : Quiet lo ρ tbl)
+    (low : lo ≤ base) (vs : List Val) : Quiet (base + vs.length) (ρ.setFrom base vs) tbl := by
+  intro i hi valued
+  rw [setFrom_above ρ base vs (by omega)] at valued
+  exact h i (by omega) valued
+
+end
+
+/-! ## Sharing fills results of entries -/
+
+section
+variable {Val Raw : Type} {R : Reading Val} {Run : Raw → List Val → List Val → Prop}
+  {ops : OpFacts Raw} {Valid : Val → Prop}
+
+theorem fill_fills {ρ : Valuation Val} {tbl : Table Raw} {e : Entry Raw} (m : e ∈ tbl)
+    {rs : List Val} (len : rs.length = e.count) : Fills ρ (ρ.fill e.lo rs) tbl := by
+  intro i none some
+  simp only [Valuation.fill, none] at some
+  split at some
+  · next within => exact ⟨e, m, i - e.lo, by omega, by omega⟩
+  · exact (some rfl).elim
+
+/-- An application of a written operation, shared: as `share_sound`, and the new values are
+results of entries. -/
+theorem share_fills [DecidableEq Raw] (lawful : OpFacts.Lawful ops R Run) {T : Type}
+    {ρ : Valuation Val} {st : St T Raw} (coh : Coherent Run Valid ρ st) {w : Raw}
+    {argIds : List Nat} {as rs : List Val} (hargs : valuesOf ρ argIds = some as)
+    (hlt : ∀ a, a ∈ argIds → a < st.next) (run : Run w as rs) (hvalid : ∀ r, r ∈ rs → Valid r) :
+    ∃ ρ', Stepped Run Valid ρ ρ' st (share w argIds rs.length st).2 ∧
+      valuesOf ρ' (share w argIds rs.length st).1 = some rs ∧
+      Fills ρ ρ' (share w argIds rs.length st).2.table := by
+  have hfun : ∀ rs', Run w as rs' → rs' = rs := fun rs' r' => lawful.functional _ _ _ _ r' run
+  simp only [share]
+  split
+  · next lo found =>
+      obtain ⟨e, m, ew, ea, ec, el⟩ := Table.find_spec found
+      subst el
+      have hvs : valuesOf ρ e.args = some as := by rw [ea]; exact hargs
+      have hrun : Run e.written as rs := by rw [ew]; exact run
+      obtain ⟨le, sup, cons, clo, look⟩ := fill_entry coh.wf coh.consistent coh.closed
+        coh.support m hvs hrun ec.symm (by rw [ew]; exact hfun)
+      refine ⟨ρ.fill e.lo rs, ⟨le, ⟨sup, coh.wf, cons, clo, fill_valid coh.valid hvalid⟩,
+        ⟨Nat.le_refl _, [], rfl, fun _ m => nomatch m⟩, rfl, rfl⟩, ?_, fill_fills m ec.symm⟩
+      rw [← ec]; exact look
+  · let e : Entry Raw := ⟨w, argIds, st.next, rs.length⟩
+    have wf' : Table.WF (st.next + rs.length) (st.table.add e) :=
+      show EntriesWF _ (e :: st.table.entries) from ⟨hlt, Nat.le_refl _, coh.wf⟩
+    obtain ⟨cons', clo'⟩ := consistent_extend (tbl' := st.table.add e) (new := [e]) coh.support
+      coh.consistent coh.closed rfl (fun e' m => by simp at m; subst m; exact Nat.le_refl _)
+    obtain ⟨le, sup, cons, clo, look⟩ := fill_entry wf' cons' clo'
+      (coh.support.mono (Nat.le_add_right _ _)) (e := e) List.mem_cons_self hargs run rfl hfun
+    exact ⟨ρ.fill st.next rs, ⟨le, ⟨sup, wf', cons, clo, fill_valid coh.valid hvalid⟩,
+      ⟨Nat.le_add_right _ _, [e], rfl, fun e' m => by simp at m; subst m; exact Nat.le_refl _⟩,
+      rfl, rfl⟩, look, fill_fills (e := e) List.mem_cons_self rfl⟩
+
+/-- Resolving an operand of a requirement: as `operandId_sound`, and the new values are results
+of entries. -/
+theorem operandId_fills [DecidableEq Raw] (lawful : OpFacts.Lawful ops R Run)
+    (runValid : ∀ w as rs, Run w as rs → (∀ a, a ∈ as → Valid a) → ∀ r, r ∈ rs → Valid r)
+    {T : Type} {ρ : Valuation Val} {st : St T Raw} (coh : Coherent Run Valid ρ st)
+    {argIds : List Nat} {args : List Val} (hargs : valuesOf ρ argIds = some args)
+    (hlt : ∀ a, a ∈ argIds → a < st.next) {operand : Operand Raw}
+    (runs : ∀ w ps, operand = .apply w ps →
+      ∃ as rs, atPositions args ps = some as ∧ Run w as rs ∧ rs.length = 1) :
+    ∃ ρ', Stepped Run Valid ρ ρ' st (operandId argIds st operand).2 ∧
+      (∀ id, (operandId argIds st operand).1 = some id →
+        ∃ v, ρ' id = some v ∧ operand.Denotes Run args v) ∧
+      Fills ρ ρ' (operandId argIds st operand).2.table := by
+  cases operand with
+  | arg position =>
+      refine ⟨ρ, Stepped.refl coh, fun id e => ?_, Fills.refl ρ _⟩
+      simp only [operandId] at e
+      have := valuesOf_getElem hargs e
+      cases hv : args[position]? with
+      | none =>
+          rw [hv] at this
+          exact absurd this (valuesOf_mem hargs id (List.mem_of_getElem? e))
+      | some v =>
+          rw [hv] at this
+          exact ⟨v, this, hv⟩
+  | apply w ps =>
+      obtain ⟨as, rs, has, run, one⟩ := runs w ps rfl
+      simp only [operandId]
+      split
+      · next ids' e =>
+          obtain ⟨values, hvalues, hl⟩ := atPositions_valuesOf hargs e
+          rw [has] at hvalues
+          cases hvalues
+          have hlt' : ∀ a, a ∈ ids' → a < st.next := fun a m => hlt a (atPositions_mem e a m)
+          have hvalid : ∀ r, r ∈ rs → Valid r :=
+            runValid w as rs run (valuesOf_valid hl coh.valid)
+          obtain ⟨ρ', step, look, fills⟩ := share_fills lawful coh hl hlt' run hvalid
+          rw [one] at step look fills
+          refine ⟨ρ', step, fun id hid => ?_, fills⟩
+          match rs, one with
+          | [r], _ =>
+              obtain ⟨rest, hrest⟩ : ∃ rest, (share w ids' 1 st).1 = id :: rest := by
+                cases h : (share w ids' 1 st).1 with
+                | nil => rw [h] at hid; cases hid
+                | cons a rest =>
+                    rw [h] at hid
+                    simp only [List.head?_cons, Option.some.injEq] at hid
+                    exact ⟨rest, by rw [hid]⟩
+              rw [hrest] at look
+              refine ⟨r, ?_, as, [r], has, run, rfl⟩
+              simpa using valuesOf_get look 0 (by simp)
+      · refine ⟨ρ, Stepped.refl coh, fun id e => ?_, Fills.refl ρ _⟩
+        cases e
+
+theorem operandIds_fills [DecidableEq Raw] (lawful : OpFacts.Lawful ops R Run)
+    (runValid : ∀ w as rs, Run w as rs → (∀ a, a ∈ as → Valid a) → ∀ r, r ∈ rs → Valid r)
+    {T : Type} {argIds : List Nat} {args : List Val} :
+    ∀ (os : List (Operand Raw)) {ρ : Valuation Val} {st : St T Raw},
+      Coherent Run Valid ρ st → valuesOf ρ argIds = some args →
+      (∀ a, a ∈ argIds → a < st.next) →
+      (∀ o, o ∈ os → ∀ w ps, o = .apply w ps →
+        ∃ as rs, atPositions args ps = some as ∧ Run w as rs ∧ rs.length = 1) →
+      ∃ ρ', Stepped Run Valid ρ ρ' st (operandIds argIds os st).2 ∧
+        OperandsAt Run args ρ' os (operandIds argIds os st).1 ∧
+        Fills ρ ρ' (operandIds argIds os st).2.table
+  | [], ρ, st, coh, _, _, _ => ⟨ρ, Stepped.refl coh, trivial, Fills.refl ρ _⟩
+  | o :: os, ρ, st, coh, hargs, hlt, runs => by
+      simp only [operandIds]
+      obtain ⟨ρ₁, step₁, first, fills₁⟩ := operandId_fills lawful runValid coh hargs hlt
+        (runs o List.mem_cons_self)
+      obtain ⟨ρ₂, step₂, rest, fills₂⟩ := operandIds_fills lawful runValid os step₁.coherent
+        (valuesOf_le step₁.le hargs) (fun a m => Nat.lt_of_lt_of_le (hlt a m) step₁.grows.next)
+        (fun o' m => runs o' (List.mem_cons_of_mem _ m))
+      refine ⟨ρ₂, step₁.trans step₂, ⟨fun id e => ?_, rest⟩, fills₁.trans fills₂ step₂.grows.sub⟩
+      obtain ⟨v, hv, hd⟩ := first id e
+      exact ⟨v, step₂.le _ _ hv, hd⟩
+
+/-- The requirements of an application that the walk decides: as `checkRequirements_sound`, and
+the new values are results of entries. -/
+theorem checkRequirements_fills [DecidableEq Raw] (lawful : OpFacts.Lawful ops R Run)
+    (runValid : ∀ w as rs, Run w as rs → (∀ a, a ∈ as → Valid a) → ∀ r, r ∈ rs → Valid r)
+    {T : Type} {k : Known} {place : Place} {written : Raw} {argIds : List Nat}
+    {args : List Val} :
+    ∀ (reqs : List (Requirement Raw)) {ρ : Valuation Val} {st : St T Raw},
+      Coherent Run Valid ρ st → k.Holds R ρ → valuesOf ρ argIds = some args →
+      (∀ a, a ∈ argIds → a < st.next) →
+      (∀ req, req ∈ reqs → ∀ o, o ∈ req.operands → ∀ w ps, o = .apply w ps →
+        ∃ as rs, atPositions args ps = some as ∧ Run w as rs ∧ rs.length = 1) →
+      (checkRequirements ops k place written argIds reqs st).refusals = [] →
+      ∃ ρ', Stepped Run Valid ρ ρ' st (checkRequirements ops k place written argIds reqs st) ∧
+        (∀ req, req ∈ reqs → req.Holds Run R args) ∧
+        Fills ρ ρ' (checkRequirements ops k place written argIds reqs st).table
+  | [], ρ, st, coh, _, _, _, _, _ =>
+      ⟨ρ, Stepped.refl coh, fun _ m => (nomatch m), Fills.refl ρ _⟩
+  | req :: rest, ρ, st, coh, hk, hargs, hlt, runs, hnone => by
+      obtain ⟨ρ₁, step₁, res, fills₁⟩ := operandIds_fills lawful runValid req.operands coh hargs
+        hlt (runs req List.mem_cons_self)
+      simp only [checkRequirements] at hnone ⊢
+      generalize operandIds argIds req.operands st = resolved at step₁ res fills₁ hnone ⊢
+      have hk₁ := hk.le step₁.le
+      by_cases cond : (k.dead || decideRequirement ops resolved.2.table k req resolved.1
+          (List.zipWith (operandRange ops k argIds) req.operands resolved.1)) = true
+      · simp only [cond, ↓reduceIte] at hnone ⊢
+        have dec : decideRequirement ops resolved.2.table k req resolved.1
+            (List.zipWith (operandRange ops k argIds) req.operands resolved.1) = true := by
+          simpa [hk.alive] using cond
+        have holds : req.Holds Run R args := by
+          have all := decideRequirement_some dec
+          obtain ⟨vs, hl, hvs, hds⟩ := res.values all
+          refine ⟨vs, hds, decideRequirement_sound lawful step₁.coherent.consistent
+            step₁.coherent.closed hk₁ hvs hl ?_ dec⟩
+          intro j v hv
+          have lt : j < resolved.1.length := by
+            have := (List.getElem?_eq_some_iff.mp hv).1
+            omega
+          obtain ⟨id, hid⟩ : ∃ id, resolved.1[j]? = some (some id) := by
+            have m := List.getElem_mem lt
+            obtain ⟨id, e⟩ := Option.ne_none_iff_exists'.mp (all _ m)
+            exact ⟨id, by rw [List.getElem?_eq_getElem lt, e]⟩
+          obtain ⟨o, v', ho, hv', hd⟩ := res.get j id hid
+          have := hvs j id hid
+          rw [hv', hv] at this
+          cases this
+          rw [List.getD_eq_getElem?_getD, List.getElem?_zipWith, ho, hid]
+          exact operandRange_sound lawful hk₁ (valuesOf_le step₁.le hargs) hv' hd
+        obtain ⟨ρ₂, step₂, others, fills₂⟩ := checkRequirements_fills lawful runValid rest
+          step₁.coherent hk₁ (valuesOf_le step₁.le hargs)
+          (fun a m => Nat.lt_of_lt_of_le (hlt a m) step₁.grows.next)
+          (fun req' m => runs req' (List.mem_cons_of_mem _ m)) hnone
+        refine ⟨ρ₂, step₁.trans step₂, fun req' m => ?_, fills₁.trans fills₂ step₂.grows.sub⟩
+        rcases List.mem_cons.mp m with rfl | m
+        · exact holds
+        · exact others req' m
+      · exfalso
+        simp only [Bool.not_eq_true] at cond
+        simp only [cond, Bool.false_eq_true, ↓reduceIte] at hnone
+        obtain ⟨⟨new, e⟩, _⟩ := checkRequirements_state ops k place written argIds rest
+          { resolved.2 with refusals := ⟨.domain, place, .unjustified written req
+            (List.zipWith (operandRange ops k argIds) req.operands resolved.1)⟩ ::
+              resolved.2.refusals }
+        rw [e] at hnone
+        simp at hnone
+
+end
+
+/-! ## The order of the operands of a value -/
+
+section
+variable {D : Dialect} {Raw : Type} {σ : Setting D Raw} (laws : σ.Lawful)
+include laws
+
+/-- Operands that have values, in the order in which the table places an application of a
+written operation, have values on which the operation gives the same results: the two operands
+of an operation that commutes, exchanged, by the law `binding`. -/
+theorem order_values {ρ : Valuation σ.sem.Dyn} (raw : Raw) :
+    ∀ {ids : List Nat} {vs results : List σ.sem.Dyn}, valuesOf ρ ids = some vs →
+      σ.Runs raw vs results →
+      ∃ vs', valuesOf ρ (σ.rules.values.order raw ids) = some vs' ∧ σ.Runs raw vs' results
+  | [], _, _, h, r => ⟨_, h, r⟩
+  | [_], _, _, h, r => ⟨_, h, r⟩
+  | [a, b], vs, results, h, r => by
+      simp only [ValueRules.order]
+      split
+      · next exchanged =>
+          obtain ⟨va, vb, rfl, ha, hb⟩ := valuesOf_pair h
+          refine ⟨[vb, va], by simp [valuesOf, ha, hb],
+            laws.binding.commutative raw exchanged.1 va vb results r.1, fun v m => ?_, r.2.2⟩
+          apply r.2.1
+          simp only [List.mem_cons, List.not_mem_nil, or_false] at m ⊢
+          exact m.symm
+      · exact ⟨_, h, r⟩
+  | _ :: _ :: _ :: _, _, _, h, r => ⟨_, h, r⟩
+
+end
+
+/-! ## What a step adds, read backwards -/
+
+section
+variable {D : Dialect} {Raw : Type}
+
+/-- A list that is another with a prefix added is that list only when the prefix is empty. -/
+theorem prefix_nil {α : Type} {l m : List α} (h : l ++ m = m) : l = [] := by
+  have := congrArg List.length h
+  rw [List.length_append] at this
+  exact List.eq_nil_of_length_eq_zero (by omega)
+
+/-- Of two steps that together add no place that differs, neither adds one. -/
+theorem differs_both {s s' s'' : State D.Ty Raw} (first : ∃ n, s'.differs = n ++ s.differs)
+    (second : ∃ n, s''.differs = n ++ s'.differs) (same : s''.differs = s.differs) :
+    s'.differs = s.differs ∧ s''.differs = s'.differs := by
+  obtain ⟨n1, e1⟩ := first
+  obtain ⟨n2, e2⟩ := second
+  rw [e2, e1, ← List.append_assoc] at same
+  have := prefix_nil same
+  rw [List.append_eq_nil_iff] at this
+  obtain ⟨rfl, rfl⟩ := this
+  exact ⟨e1, e2⟩
+
+/-- Of three steps that together add no place that differs, none adds one. -/
+theorem differs_three {s s₁ s₂ s₃ : State D.Ty Raw} (first : ∃ n, s₁.differs = n ++ s.differs)
+    (second : ∃ n, s₂.differs = n ++ s₁.differs) (third : ∃ n, s₃.differs = n ++ s₂.differs)
+    (same : s₃.differs = s.differs) :
+    s₁.differs = s.differs ∧ s₂.differs = s₁.differs ∧ s₃.differs = s₂.differs := by
+  obtain ⟨n1, e1⟩ := first
+  obtain ⟨n2, e2⟩ := second
+  obtain ⟨n3, e3⟩ := third
+  have chain := same
+  rw [e3, e2, e1] at chain
+  have := congrArg List.length chain
+  simp only [List.length_append] at this
+  rw [List.eq_nil_of_length_eq_zero (show n1.length = 0 by omega)] at e1
+  rw [List.eq_nil_of_length_eq_zero (show n2.length = 0 by omega)] at e2
+  rw [List.eq_nil_of_length_eq_zero (show n3.length = 0 by omega)] at e3
+  exact ⟨e1, e2, e3⟩
+
+/-- Where a later state has no refusal, neither has an earlier one that it adds to. -/
+theorem refusals_before {s s' : St D.Ty Raw} (adds : ∃ n, s'.refusals = n ++ s.refusals)
+    (none : s'.refusals = []) : s.refusals = [] := by
+  obtain ⟨n, e⟩ := adds
+  rw [none] at e
+  exact (List.append_eq_nil_iff.mp e.symm).2
+
+end
+
+/-! ## Each construct, when no skeleton is followed -/
+
+section
+variable {D : Dialect} {Raw : Type} [DecidableEq Raw] {σ : Setting D Raw} (laws : σ.Lawful)
+
+omit [DecidableEq Raw] in
+@[simp] theorem Exit.region_skel {outs : List D.Ty} (e : Exit D Raw outs) (skel : Skel D outs) :
+    ({ e with skel := skel } : Exit D Raw outs).region = e.region := rfl
+
+theorem ret_sound (blocks : List (Key × Nat)) {Γ : Ctx D.Ty} {outs : List D.Ty}
+    (xs : HList (Var Γ) outs) : Sound σ blocks (.ret xs) none := by
+  intro path ρ ids env k s lo hi inv _ _ _ _ _ _
+  simp only [Shows, walk, Term.EveryLoop, Term.denote, Process.Every, Option.isSome_none,
+    miss_free]
+  exact ⟨trivial, ρ, Valuation.Le.refl ρ, ⟨inv.coherent, valuesOf_idsOf inv.agree xs, inv.holds⟩,
+    trivial⟩
+
+include laws in
+/-- A value: its requirements hold, so it returns; its results have the identifiers that the table
+gives, with what is learned of them. -/
+theorem value_sound (blocks : List (Key × Nat)) {Γ : Ctx D.Ty} {outs ins res : List D.Ty}
+    (key : Key) (o : D.Op ins res) (written : Raw) (hw : σ.rules.written o = some written)
+    (args : HList (Var Γ) ins) (results : Names res)
+    (rest : Term D (Γ.extend results) outs) (followed : Option (Skel D outs))
+    (path : List Frame) (ρ : Valuation σ.sem.Dyn) (ids : Ctx Nat) (env : Env σ.sem.Val Γ)
+    (k : Known) (s : State D.Ty Raw) (inv : Inv σ ρ ids env k s.st)
+    (refusals : (walk σ.rules σ.checks σ.definition σ.role blocks rest followed
+      (bindIds ids results (valueStep σ.rules ⟨σ.definition, blocks, some key, σ.role⟩ written res
+        (idsOf ids args) k s.st).1)
+      (valueStep σ.rules ⟨σ.definition, blocks, some key, σ.role⟩ written res (idsOf ids args) k
+        s.st).2.1
+      { s with st := (valueStep σ.rules ⟨σ.definition, blocks, some key, σ.role⟩ written res
+        (idsOf ids args) k s.st).2.2 }).state.st.refusals = []) :
+    ∃ values : HList σ.sem.Val res, ∃ ρ₂ : Valuation σ.sem.Dyn,
+      σ.sem.op key o path (env.all args) = .done values ∧ ρ.Le ρ₂ ∧
+      Inv σ ρ₂ (bindIds ids results (valueStep σ.rules ⟨σ.definition, blocks, some key, σ.role⟩
+          written res (idsOf ids args) k s.st).1) (env.extend results values)
+        (valueStep σ.rules ⟨σ.definition, blocks, some key, σ.role⟩ written res (idsOf ids args) k
+          s.st).2.1
+        (valueStep σ.rules ⟨σ.definition, blocks, some key, σ.role⟩ written res (idsOf ids args) k
+          s.st).2.2 ∧
+      Fills ρ ρ₂ (valueStep σ.rules ⟨σ.definition, blocks, some key, σ.role⟩ written res
+        (idsOf ids args) k s.st).2.2.table := by
+  have lawful : OpFacts.Lawful σ.rules.ops σ.R σ.Runs := laws.ops
+  have runValid : ∀ w as rs, σ.Runs w as rs → (∀ a, a ∈ as → σ.Valid a) → ∀ r, r ∈ rs →
+      σ.Valid r := fun _ _ _ run _ => run.2.2
+  have va : σ.AllValid (env.all args) :=
     env_all_valid (agree_valid inv.agree inv.coherent.valid) args
   have hargs := valuesOf_idsOf inv.agree args
-  have hlt : ∀ a, a ∈ idsOf ids args → a < st.next :=
-    fun a m => inv.below a (idsOf_mem inv.length args a m)
-  simp only [Shows, walk, opStep, localFactRules_written, localFactRules_ops,
-    localFactRules_range, Term.EveryLoop, Term.denote] at hnone recorded ⊢
-  generalize hst₁ : checkRequirements (localOpFacts V) k ⟨definition, blocks, some key, none⟩
-    o.print (idsOf ids args) ((localOpFacts V).requires o.print) st = st₁ at hnone recorded ⊢
-  generalize hmade : share o.print (idsOf ids args) res.length st₁ = made at hnone recorded ⊢
-  generalize hk₂ : (((k.addRanges made.1 ((localOpFacts V).ranges o.print
-    (List.map k.rangeOf (idsOf ids args)))).addOffset (localOpFacts V) made.2.table k
-    o.print (idsOf ids args) made.1).addRanges made.1 (List.map localRange res)).enter
-    (localFactRules V fns) res = k₂ at hnone recorded ⊢
+  have hlt : ∀ a, a ∈ idsOf ids args → a < s.st.next := idsOf_lt inv.scoped.2 args
+  simp only [valueStep] at refusals ⊢
+  generalize hst₁ : checkRequirements σ.rules.ops k ⟨σ.definition, blocks, some key, σ.role⟩
+    written (idsOf ids args) (σ.rules.ops.requires written) s.st = st₁ at refusals ⊢
   have refs₁ : st₁.refusals = [] := by
-    obtain ⟨⟨new, e⟩, _⟩ := (walk_state (localFactRules V fns) definition none blocks rest
-      (made.1 ++ ids) k₂ made.2).1
-    rw [hnone] at e
-    have := (share_state o.print (idsOf ids args) res.length st₁).1
-    rw [hmade] at this
+    obtain ⟨⟨new, e⟩, _⟩ := walk_adds σ.rules σ.checks σ.definition σ.role blocks rest followed
+      _ _ _
+    rw [refusals] at e
+    have := (share_state written (σ.rules.values.order written (idsOf ids args)) res.length st₁).1
     rw [← this]
     exact (List.append_eq_nil_iff.mp e.symm).2
-  obtain ⟨ρ₁, step₁, hreq⟩ := checkRequirements_sound lawful localRun_valid
-    ((localOpFacts V).requires o.print) inv.coherent inv.holds hargs hlt
-    (localRequires_runs o (env.all args) va) (by rw [hst₁]; exact refs₁)
-  rw [hst₁] at step₁
-  have defined := localOp_defined safe o (env.all args) va hreq
-  rw [Process.every_bind]
-  cases hrun : localOp M table o (env.all args) with
-  | call op _ => exact nomatch op
-  | halt h =>
-      rw [hrun] at defined
-      exact ⟨trivial, defined⟩
-  | done r =>
-      have vr := localOp_valid table keeps o (env.all args) r va hrun
-      have run : LocalRun M table o.print (toDyns (env.all args)) (toDyns r) :=
-        ⟨_, _, o, env.all args, r, rfl, rfl, rfl, va, vr, hrun⟩
-      obtain ⟨ρ₂, step₂, look, below⟩ := share_sound lawful step₁.coherent
-        (valuesOf_le step₁.le hargs) (fun a m => Nat.lt_of_lt_of_le (hlt a m) step₁.grows.next)
-        run (toDyns_valid vr)
-      rw [toDyns_length, hmade] at step₂ look below
-      have le := step₁.le.trans step₂.le
-      have inv' : Inv M table ρ₂ (made.1 ++ ids) (Env.extend r env) k₂ made.2 := by
-        refine ⟨step₂.coherent, ?_, ?_, agree_extend (inv.agree.le le) r made.1 look, ?_⟩
-        · have := valuesOf_length look
-          rw [toDyns_length] at this
-          simp [← this, inv.length]
-        · intro i m
-          rcases List.mem_append.mp m with m | m
-          · exact below i m
-          · exact Nat.lt_of_lt_of_le (inv.below i m)
-              (Nat.le_trans step₁.grows.next step₂.grows.next)
-        · rw [← hk₂, enter_of_valid vr]
-          refine addTypeRanges_holds (Known.Holds.addOffset lawful step₂.coherent.consistent
-            step₂.coherent.closed (inv.holds.le le)
-            ((inv.holds.le le).addRanges fun j id rr e1 e2 => ?_) (valuesOf_le le hargs) look
-            fun f hf => lawful.form _ _ _ f hf run)
-            step₂.coherent.valid (valuesOf_typed look)
-          have known : ∀ (i : Nat) (rr : Range),
-              (List.map k.rangeOf (idsOf ids args))[i]? = some (some rr) →
-              ∃ v n, (toDyns (env.all args))[i]? = some v ∧
-                (localReading M).nat v = some n ∧ rr.Has n := by
-            intro i rr e
-            rw [List.getElem?_map] at e
-            cases ha : (idsOf ids args)[i]? with
-            | none => rw [ha] at e; cases e
-            | some a =>
-                rw [ha] at e
-                simp only [Option.map_some, Option.some.injEq] at e
-                obtain ⟨n, ⟨v, hv, hn⟩, has⟩ := inv.holds.rangeOf e
-                have := valuesOf_getElem hargs ha
-                rw [hv] at this
-                exact ⟨v, n, this.symm, hn, has⟩
-          obtain ⟨v, n, hv, hn, has⟩ := localRun_ranges _ run known j rr e2
-          have := valuesOf_getElem look e1
+  obtain ⟨ρ₁, step₁, hreq, fills₁⟩ := checkRequirements_fills lawful runValid
+    (σ.rules.ops.requires written) inv.coherent inv.holds hargs hlt
+    (fun req m operand mo w ps e => laws.named o written hw (env.all args) va req m operand mo w ps e)
+    (by rw [hst₁]; exact refs₁)
+  rw [hst₁] at step₁ fills₁
+  obtain ⟨values, ran⟩ := laws.defined o written hw key path (env.all args) va hreq
+  have run : σ.Run written (σ.sem.dyns (env.all args)) (σ.sem.dyns values) := by
+    rcases laws.binding.computes o written hw key path (env.all args) with
+      ⟨values', ran', run⟩ | ⟨stop, halted, _⟩
+    · rw [ran] at ran'
+      cases ran'
+      exact run
+    · rw [ran] at halted
+      cases halted
+  have vr : σ.AllValid values := laws.keeps written _ _ run va
+  have runs : σ.Runs written (σ.sem.dyns (env.all args)) (σ.sem.dyns values) := ⟨run, va, vr⟩
+  obtain ⟨ordered, hordered, runOrdered⟩ :=
+    order_values laws written (valuesOf_le step₁.le hargs) runs
+  obtain ⟨ρ₂, step₂, look, fills₂⟩ := share_fills lawful step₁.coherent hordered
+    (fun a m => Nat.lt_of_lt_of_le (σ.rules.values.order_lt hlt a m) step₁.grows.next)
+    runOrdered vr
+  rw [σ.sem.dyns_length] at step₂ look fills₂
+  have le := step₁.le.trans step₂.le
+  refine ⟨values, ρ₂, ran, le, ⟨step₂.coherent, agree_extend results values _
+    (inv.agree.le le) look, ?_⟩, fills₁.trans fills₂ step₂.grows.sub⟩
+  · rw [enter_of_valid laws vr]
+    refine addTypeRanges_holds laws (Known.Holds.addOffset lawful step₂.coherent.consistent
+      step₂.coherent.closed (inv.holds.le le)
+      ((inv.holds.le le).addRanges fun j id rr e1 e2 => ?_) (valuesOf_le le hargs) look
+      fun f hf => lawful.form _ _ _ f hf runs)
+      step₂.coherent.valid (valuesOf_typed look)
+    have known : ∀ (i : Nat) (rr : Range),
+        (List.map k.rangeOf (idsOf ids args))[i]? = some (some rr) →
+        ∃ v n, (σ.sem.dyns (env.all args))[i]? = some v ∧ σ.R.nat v = some n ∧ rr.Has n := by
+      intro i rr e
+      rw [List.getElem?_map] at e
+      cases ha : (idsOf ids args)[i]? with
+      | none => rw [ha] at e; cases e
+      | some a =>
+          rw [ha] at e
+          simp only [Option.map_some, Option.some.injEq] at e
+          obtain ⟨n, ⟨v, hv, hn⟩, has⟩ := inv.holds.rangeOf e
+          have := valuesOf_getElem hargs ha
           rw [hv] at this
-          exact ⟨n, ⟨v, this, hn⟩, has⟩
-      have apart' : Apart definition made.2 (rest.addresses blocks) := by
-        intro q m bl key' eq inRest
-        rw [step₂.bounds, step₁.bounds] at m
-        exact apart q m bl key' eq (List.mem_cons_of_mem _ inRest)
-      have shows := ih path ρ₂ (made.1 ++ ids) (Env.extend r env) k₂ made.2 inv' hnone nodup'
-        apart' (recorded.sub fun x m => List.mem_cons_of_mem _ m)
-      refine ⟨shows.1, ?_⟩
-      simp only [Process.Every]
-      refine Process.every_mono _ _ ?_ (fun _ h => h) shows.2
-      intro vs h
-      obtain ⟨ρ'', le'', ex⟩ := h
-      exact ⟨ρ'', le.trans le'', ex⟩
+          exact ⟨v, n, this.symm, hn, has⟩
+    obtain ⟨v, n, hv, hn, has⟩ := lawful.ranges _ _ _ _ runs known j rr e2
+    have := valuesOf_getElem look e1
+    rw [hv] at this
+    exact ⟨n, ⟨v, this, hn⟩, has⟩
 
-end
+include laws in
+/-- An operation, when no skeleton is followed: a value returns, with its results where the table
+places them; an operation kept in order returns valid values on permitted replies, or stops with
+a stop that is not `undefined`, and its results are at new leaves. -/
+theorem op_sound (blocks : List (Key × Nat)) {Γ : Ctx D.Ty} {outs ins res : List D.Ty}
+    (key : Key) (o : D.Op ins res) (args : HList (Var Γ) ins) (results : Names res)
+    (rest : Term D (Γ.extend results) outs) (ih : Sound σ blocks rest none) :
+    Sound σ blocks (.op key o args results rest) none := by
+  intro path ρ ids env k s lo hi inv _ differs hnone nodup apart recorded
+  have nodup' := (List.nodup_cons.mp nodup).2
+  have recorded' := fun (st : St D.Ty Raw) (h : Recorded σ (Term.addresses blocks
+    (.op key o args results rest)) st) =>
+      Recorded.sub (σ := σ) h fun _ m => List.mem_cons_of_mem _ m
+  cases hw : σ.rules.written o with
+  | some written =>
+      simp only [walk, hw] at differs hnone recorded ⊢
+      obtain ⟨values, ρ₂, ran, le, inv', -⟩ := value_sound laws blocks key o written hw args
+        results rest none path ρ ids env k s inv hnone
+      obtain ⟨-, bounds⟩ := valueStep_state σ.rules ⟨σ.definition, blocks, some key, σ.role⟩ written
+        res (idsOf ids args) k s.st
+      have shows := ih path ρ₂ _ _ _ _ lo hi inv' trivial differs hnone nodup'
+        (fun q m bl key' eq inR => apart q (by rw [← bounds]; exact m) bl key' eq
+          (List.mem_cons_of_mem _ inR)) (recorded' _ recorded)
+      simp only [Shows, Term.EveryLoop, Term.denote, ran, Process.bind, Process.Every]
+      exact ⟨shows.1, Process.every_mono _ _ (fun vs h => by
+        obtain ⟨ρ', le', ex, f⟩ := h
+        exact ⟨ρ', le.trans le', ex, f⟩) (fun _ h => h) shows.2⟩
+  | none =>
+      simp only [walk, hw, effectEntry, Option.map_none, Option.isSome_none, miss_free, leaves,
+        Exit.region_skel] at differs hnone recorded ⊢
+      have va : σ.AllValid (env.all args) :=
+        env_all_valid (agree_valid inv.agree inv.coherent.valid) args
+      have restShows : ∀ values : HList σ.sem.Val res, σ.AllValid values →
+          Shows σ blocks rest path (env.extend results values) (fun vs => ∃ ρ', ρ.Le ρ' ∧
+            ExitInv σ ρ' (walk σ.rules σ.checks σ.definition σ.role blocks rest none
+              (bindIds ids results (fresh res.length s.st).1)
+              ((k.addRanges (fresh res.length s.st).1 (res.map σ.rules.range)).enter
+                σ.rules res) { s with st := (fresh res.length s.st).2 }).region
+              (walk σ.rules σ.checks σ.definition σ.role blocks rest none
+                (bindIds ids results (fresh res.length s.st).1)
+                ((k.addRanges (fresh res.length s.st).1 (res.map σ.rules.range)).enter
+                  σ.rules res) { s with st := (fresh res.length s.st).2 }).state.st vs ∧
+            Followed (none : Option (Skel D outs)) hi ρ'
+              (walk σ.rules σ.checks σ.definition σ.role blocks rest none
+                (bindIds ids results (fresh res.length s.st).1)
+                ((k.addRanges (fresh res.length s.st).1 (res.map σ.rules.range)).enter
+                  σ.rules res) { s with st := (fresh res.length s.st).2 }).state.st) := by
+        intro values valid
+        obtain ⟨coh, le, look⟩ := leaves_fresh (s := s) inv.coherent (σ.sem.dyns values) valid
+        simp only [leaves, σ.sem.dyns_length] at coh look
+        have inv' : Inv σ (ρ.setFrom s.st.next (σ.sem.dyns values))
+            (bindIds ids results (fresh res.length s.st).1) (env.extend results values)
+            ((k.addRanges (fresh res.length s.st).1 (res.map σ.rules.range)).enter
+              σ.rules res) (fresh res.length s.st).2 := by
+          refine ⟨coh, agree_extend results values _ (inv.agree.le le) look, ?_⟩
+          rw [enter_of_valid laws valid]
+          exact addTypeRanges_holds laws (inv.holds.le le) coh.valid (valuesOf_typed look)
+        have shows := ih path _ _ _ _ { s with st := (fresh res.length s.st).2 } lo hi inv' trivial
+          differs hnone nodup' (BoundsApart.sub apart fun _ m => List.mem_cons_of_mem _ m)
+          (recorded' _ recorded)
+        exact ⟨shows.1, Process.every_mono _ _ (fun vs h => by
+          obtain ⟨ρ', le', ex, f⟩ := h
+          exact ⟨ρ', le.trans le', ex, f⟩) (fun _ h => h) shows.2⟩
+      have effect := laws.effect o hw key path (env.all args) va
+      simp only [Shows, Term.EveryLoop, Term.denote]
+      refine ⟨Process.every_mono _ _ (fun values valid => (restShows values valid).1)
+        (fun _ _ => trivial) effect, ?_⟩
+      rw [Process.every_bind]
+      exact Process.every_mono _ _ (fun values valid => (restShows values valid).2) (fun _ h => h)
+        effect
 
-/-! ### After regions -/
-
-section
-variable {V : Vocabulary} {M : Model V} {fns : List (FnHeader V)} {table : FnTable M fns}
-
-/-- After regions one of which ran: the new values have new identifiers, and what is known of
-them holds. -/
-theorem afterRegions_inv {Γ mid : List V.Ty} {exits : List (Exit V.Ty (LocalRaw V))}
-    {e : Exit V.Ty (LocalRaw V)} (he : e ∈ exits) {ρ ρ₁ : Valuation (Dyn M)} {ids : List Nat}
-    {env : Env M.Val Γ} {k : Known} {st₀ st' : St V.Ty (LocalRaw V)}
-    (inv : Inv M table ρ ids env k st₀) (le : ρ.Le ρ₁) {mids : HList M.Val mid}
-    (ex : ExitInv M table ρ₁ e st' mids) (grows : St.Grows st₀ st') :
-    Inv M table (ρ₁.setFrom st'.next (toDyns mids)) ((fresh mid.length st').1 ++ ids)
-      (Env.extend mids env) ((afterRegions (localFactRules V fns) exits k
-        (fresh mid.length st').1 mid 0).enter (localFactRules V fns) mid)
-      (fresh mid.length st').2 := by
-  have valid : ∀ v, v ∈ toDyns mids → ValidDyn M v := valuesOf_valid ex.rets ex.coherent.valid
-  have coh := Coherent.fresh ex.coherent (toDyns mids) valid
-  rw [toDyns_length] at coh
-  have le₂ : ρ₁.Le (ρ₁.setFrom st'.next (toDyns mids)) := setFrom_le ex.coherent.support _
-  have look : valuesOf (ρ₁.setFrom st'.next (toDyns mids)) (fresh mid.length st').1 =
-      some (toDyns mids) := by
-    have := valuesOf_setFrom ρ₁ st'.next (toDyns mids)
-    rw [toDyns_length] at this
-    exact this
-  refine ⟨coh, by simp [fresh, inv.length], ?_,
-    agree_extend (inv.agree.le (le.trans le₂)) mids _ look, ?_⟩
-  · intro i m
-    rcases List.mem_append.mp m with m | m
-    · have m := mem_range'_bounds m
-      simp only [fresh] at m ⊢
-      omega
-    · simp only [fresh]
-      exact Nat.lt_of_lt_of_le (inv.below i m) (Nat.le_trans grows.next (Nat.le_add_right _ _))
-  · rw [enter_of_valid (valid_of_toDyns valid)]
-    apply afterRegions_holds he ex.holds coh.valid _ _ 0 k (inv.holds.le (le.trans le₂))
-    intro j m em
-    have e1 := valuesOf_getElem look em
-    cases hd : (toDyns mids)[j]? with
-    | none => rw [hd] at e1; exact absurd e1 (valuesOf_mem look m (List.mem_of_getElem? em))
-    | some d =>
-        rw [hd] at e1
-        refine ⟨d, e1, ?_, toDyns_typed mids j d hd⟩
-        have lt : j < e.rets.length := by
-          have h1 := valuesOf_length ex.rets
-          have h2 := (List.getElem?_eq_some_iff.mp hd).1
-          omega
-        rw [Nat.zero_add, valuesOf_get ex.rets j lt, hd]
-
-end
-
-section
-variable {V : Vocabulary} {M : Model V} {fns : List (FnHeader V)} {table : FnTable M fns}
-  (distinct : (fns.map (·.key)).Nodup)
-  (safe : ∀ hdr (callee : Var fns hdr) (args : HList M.Val hdr.ins), args.All M.Valid →
-    (table hdr callee args).Stops (· ≠ .undefined))
-  (keeps : FnTable.KeepsValidity table)
-  (definition : Key) (F : List (Place × Nat))
-
-theorem ret_sound (blocks : List (Key × Nat)) {Γ outs : List V.Ty} (xs : HList (Var Γ) outs) :
-    Sound (table := table) definition F blocks (.ret xs) := by
-  intro path ρ ids env k st inv _ _ _ _
-  simp only [Shows, walk, Term.EveryLoop, Term.denote, Process.Every]
-  exact ⟨trivial, ρ, Valuation.Le.refl ρ, inv.coherent, valuesOf_idsOf inv.agree xs, inv.holds⟩
-
-include distinct in
-theorem guard_sound (blocks : List (Key × Nat)) {Γ outs : List V.Ty} {t : V.Ty} (key : Key)
-    (c : Var Γ t) (ok : t = .bool) (why : Reason) (rest : Term (localDialect V fns) Γ outs)
-    (ih : Sound (table := table) definition F blocks rest) :
-    Sound (table := table) definition F blocks (.guard key () c ok why rest) := by
-  intro path ρ ids env k st inv hnone nodup apart recorded
-  have lawful := localOpFacts_lawful (table := table) distinct
-  simp only [Shows, walk, Term.EveryLoop, Term.denote] at hnone recorded ⊢
-  subst ok
-  have hc := inv.agree .bool c
-  simp only [asBool, cast_eq]
-  cases hv : env Ty.bool c with
+include laws in
+/-- A guard: where its condition is false it stops, with a stop that is not `undefined`; where it
+is true, what it teaches holds. -/
+theorem guard_sound (blocks : List (Key × Nat)) {Γ : Ctx D.Ty} {outs : List D.Ty} {t : D.Ty}
+    (key : Key) (w : D.Who) (c : Var Γ t) (ok : D.Condition w t) (why : Reason)
+    (rest : Term D Γ outs) (ih : Sound σ blocks rest none) :
+    Sound σ blocks (.guard key w c ok why rest) none := by
+  intro path ρ ids env k s lo hi inv _ differs hnone nodup apart recorded
+  have lawful : OpFacts.Lawful σ.rules.ops σ.R σ.Runs := laws.ops
+  simp only [walk, guardEntry, Option.isSome_none, miss_free, Exit.region_skel]
+    at differs hnone recorded ⊢
+  have hc := inv.agree.idOf c
+  have read := laws.condition ok (env.get c) (inv.coherent.valid _ _ hc)
+  simp only [Shows, Term.EveryLoop, Term.denote]
+  cases hv : σ.sem.holds ok (env.get c) with
   | false =>
       simp only [Bool.cond_false, Process.Every, Bool.false_eq_true, false_implies]
-      exact ⟨trivial, by simp⟩
+      exact ⟨trivial, laws.stop w why ⟨path, key⟩⟩
   | true =>
-      rw [hv] at hc
-      have k' := assume_holds lawful inv.coherent.consistent inv.coherent.closed st.next inv.holds
-        ⟨_, hc, rfl⟩
-      have shows := ih path ρ ids env _ st ⟨inv.coherent, inv.length, inv.below, inv.agree, k'⟩
-        hnone (List.nodup_cons.mp nodup).2 (apart.sub fun x m => List.mem_cons_of_mem _ m)
-        (recorded.sub fun x m => List.mem_cons_of_mem _ m)
+      rw [hv] at read
+      have k' := assume_holds lawful inv.coherent.consistent inv.coherent.closed s.st.next inv.holds
+        ⟨_, hc, read⟩
+      have shows := ih path ρ ids env _ s lo hi ⟨inv.coherent, inv.agree, k'⟩ trivial differs hnone
+        (List.nodup_cons.mp nodup).2 (BoundsApart.sub apart fun x m => List.mem_cons_of_mem _ m)
+        (Recorded.sub recorded fun x m => List.mem_cons_of_mem _ m)
       simp only [Bool.cond_true, forall_const]
       exact ⟨shows.1, shows.2⟩
 
-theorem block_sound (blocks : List (Key × Nat)) {Γ outs mid : List V.Ty} (key : Key)
-    (number : Nat) (body : Term (localDialect V fns) Γ mid)
-    (rest : Term (localDialect V fns) (mid ++ Γ) outs)
-    (ihb : Sound (table := table) definition F (blocks ++ [(key, number)]) body)
-    (ihr : Sound (table := table) definition F blocks rest) :
-    Sound (table := table) definition F blocks (.block key number body rest) := by
-  intro path ρ ids env k st inv hnone nodup apart recorded
-  simp only [Shows, walk, Term.EveryLoop, Term.denote] at hnone recorded ⊢
+include laws in
+/-- A block: its body under the blocks with it, then what is known after it, of the values it
+returns at new leaves. -/
+theorem block_sound (blocks : List (Key × Nat)) {Γ : Ctx D.Ty} {outs mid : List D.Ty}
+    (key : Key) (number : Nat) (body : Term D Γ mid) (results : Names mid)
+    (rest : Term D (Γ.extend results) outs)
+    (ihb : Sound σ (blocks ++ [(key, number)]) body none) (ihr : Sound σ blocks rest none) :
+    Sound σ blocks (.block key number body results rest) none := by
+  intro path ρ ids env k s lo hi inv _ differs hnone nodup apart recorded
+  simp only [walk, blockEntry, Option.map_none, Option.isSome_none, miss_free, leaves,
+    Exit.region_skel] at differs hnone recorded ⊢
   simp only [Term.addresses] at nodup apart recorded
-  obtain ⟨⟨_, nb, ebb, atb⟩, gb⟩ := walk_state (localFactRules V fns) definition none
-    (blocks ++ [(key, number)]) body ids k st
-  generalize he : walk (localFactRules V fns) definition none (blocks ++ [(key, number)]) body ids
-    k st = e at hnone recorded ebb gb ⊢
-  obtain ⟨⟨⟨nr, er⟩, nbr, ebr, atr⟩, _⟩ := walk_state (localFactRules V fns) definition none
-    blocks rest ((fresh mid.length e.st).1 ++ ids)
-    ((afterRegions (localFactRules V fns) [e] k (fresh mid.length e.st).1 mid 0).enter
-      (localFactRules V fns) mid)
-    (fresh mid.length e.st).2
-  have refs : e.st.refusals = [] := by
-    rw [hnone] at er
-    exact (List.append_eq_nil_iff.mp er.symm).2
+  obtain ⟨⟨rb, eb⟩, ⟨nb, ebb, atb⟩, db⟩ := walk_adds σ.rules σ.checks σ.definition σ.role
+    (blocks ++ [(key, number)]) body none ids k s
+  generalize he : walk σ.rules σ.checks σ.definition σ.role (blocks ++ [(key, number)]) body none
+    ids k s = e at differs hnone recorded eb ebb db ⊢
+  obtain ⟨⟨nr, er⟩, ⟨nbr, ebr, atr⟩, dr⟩ := walk_adds σ.rules σ.checks σ.definition σ.role
+    blocks rest none (bindIds ids results (fresh mid.length e.state.st).1)
+    ((afterRegions σ.rules [e.region] k (fresh mid.length e.state.st).1 mid 0).enter
+      σ.rules mid)
+    { e.state with st := (fresh mid.length e.state.st).2 }
+  obtain ⟨differsB, differsR⟩ := differs_both db dr differs
+  have refs : e.state.st.refusals = [] := refusals_before ⟨nr, er⟩ hnone
   have nodupB := (List.nodup_append.mp nodup).1
   have nodupR := (List.nodup_append.mp nodup).2.1
-  have recB : Recorded definition F (body.addresses (blocks ++ [(key, number)])) e.st :=
-    (recorded.sub fun x m => List.mem_append_left _ m).strip (by rw [ebr]; rfl) atr
+  have recB : Recorded σ (body.addresses (blocks ++ [(key, number)])) e.state.st :=
+    (Recorded.sub recorded fun x m => List.mem_append_left _ m).strip ebr atr
       (fun x m mr => nodup_apart nodup m mr)
-  have showsB := ihb (path ++ [.iteration key number]) ρ ids env k st inv (by rw [he]; exact refs)
-    nodupB (apart.sub fun x m => List.mem_append_left _ m) (by rw [he]; exact recB)
+  have showsB := ihb (path ++ [.iteration key number]) ρ ids env k s lo lo inv trivial
+    (by rw [he]; exact differsB) (by rw [he]; exact refs) nodupB
+    (BoundsApart.sub apart fun x m => List.mem_append_left _ m) (by rw [he]; exact recB)
   rw [he] at showsB
-  refine ⟨⟨showsB.1, ?_⟩, ?_⟩
-  · refine Process.every_mono _ _ ?_ (fun _ _ => trivial) showsB.2
+  have afterRest : ∀ mids : HList σ.sem.Val mid, (∃ ρ₁, ρ.Le ρ₁ ∧
+      ExitInv σ ρ₁ e.region e.state.st mids ∧ Followed (none : Option (Skel D mid)) lo ρ₁
+        e.state.st) →
+      Shows σ blocks rest path (env.extend results mids) (fun vs => ∃ ρ', ρ.Le ρ' ∧
+        ExitInv σ ρ' (walk σ.rules σ.checks σ.definition σ.role blocks rest none
+          (bindIds ids results (fresh mid.length e.state.st).1)
+          ((afterRegions σ.rules [e.region] k (fresh mid.length e.state.st).1 mid 0).enter
+            σ.rules mid) { e.state with st := (fresh mid.length e.state.st).2 }).region
+          (walk σ.rules σ.checks σ.definition σ.role blocks rest none
+            (bindIds ids results (fresh mid.length e.state.st).1)
+            ((afterRegions σ.rules [e.region] k (fresh mid.length e.state.st).1 mid 0).enter
+              σ.rules mid) { e.state with st := (fresh mid.length e.state.st).2 }).state.st
+          vs ∧
+        Followed (none : Option (Skel D outs)) hi ρ'
+          (walk σ.rules σ.checks σ.definition σ.role blocks rest none
+            (bindIds ids results (fresh mid.length e.state.st).1)
+            ((afterRegions σ.rules [e.region] k (fresh mid.length e.state.st).1 mid 0).enter
+              σ.rules mid) { e.state with st := (fresh mid.length e.state.st).2 }).state.st) := by
     intro mids h
-    obtain ⟨ρ₁, le, ex⟩ := h
-    have grows := (gb inv.length ⟨inv.coherent.wf, inv.below⟩).2
-    have inv' := afterRegions_inv (List.mem_singleton_self e) inv le ex grows
-    exact (ihr path _ _ _ _ _ inv' hnone nodupR
-      (Apart.extend (apart.sub fun x m => List.mem_append_right _ m)
+    obtain ⟨ρ₁, le, ex, -⟩ := h
+    have valid : σ.AllValid mids := allValid_of_valuesOf ex.rets ex.coherent.valid
+    obtain ⟨coh, le₂, look⟩ := leaves_fresh (s := e.state) ex.coherent (σ.sem.dyns mids) valid
+    simp only [leaves, σ.sem.dyns_length] at coh look
+    have inv' := afterRegions_inv laws (List.mem_singleton_self e.region) inv le ex results coh
+      le₂ look
+    have shows := ihr path _ _ _ _ { e.state with st := (fresh mid.length e.state.st).2 } hi hi
+      inv' trivial differsR hnone nodupR
+      (BoundsApart.extend (BoundsApart.sub apart fun x m => List.mem_append_right _ m)
         (by simp only [fresh]; exact ebb) atb (fun x m mr => nodup_apart nodup m mr))
-      (recorded.sub fun x m => List.mem_append_right _ m)).1
-  · rw [Process.every_bind]
-    refine Process.every_mono _ _ ?_ (fun _ h => h) showsB.2
-    intro mids h
-    obtain ⟨ρ₁, le, ex⟩ := h
-    have grows := (gb inv.length ⟨inv.coherent.wf, inv.below⟩).2
-    have inv' := afterRegions_inv (List.mem_singleton_self e) inv le ex grows
-    have shows := ihr path _ _ _ _ _ inv' hnone nodupR
-      (Apart.extend (apart.sub fun x m => List.mem_append_right _ m)
-        (by simp only [fresh]; exact ebb) atb (fun x m mr => nodup_apart nodup m mr))
-      (recorded.sub fun x m => List.mem_append_right _ m)
-    refine Process.every_mono _ _ ?_ (fun _ h => h) shows.2
-    intro vs h'
-    obtain ⟨ρ'', le'', ex'⟩ := h'
-    exact ⟨ρ'', le.trans ((setFrom_le ex.coherent.support _).trans le''), ex'⟩
+      (Recorded.sub recorded fun x m => List.mem_append_right _ m)
+    exact ⟨shows.1, Process.every_mono _ _ (fun vs h' => by
+      obtain ⟨ρ'', le'', ex', f⟩ := h'
+      exact ⟨ρ'', le.trans (le₂.trans le''), ex', f⟩) (fun _ h => h) shows.2⟩
+  simp only [Shows, Term.EveryLoop, Term.denote]
+  refine ⟨⟨showsB.1, Process.every_mono _ _ (fun mids h => (afterRest mids h).1)
+    (fun _ _ => trivial) showsB.2⟩, ?_⟩
+  rw [Process.every_bind]
+  exact Process.every_mono _ _ (fun mids h => (afterRest mids h).2) (fun _ h => h) showsB.2
 
-end
+omit [DecidableEq Raw] in
+/-- Where a region returns, of a state that grows. -/
+theorem exit_grow {ρ : Valuation σ.sem.Dyn} {e : FactCheck.Exit D.Ty Raw} {st st' : St D.Ty Raw}
+    {outs : List D.Ty} {vs : HList σ.sem.Val outs} (ex : ExitInv σ ρ e st vs)
+    (grows : St.Grows st st') (wf : Table.WF st'.next st'.table) : ExitInv σ ρ e st' vs :=
+  ⟨Coherent.grow ex.coherent grows wf, ex.rets, ex.holds⟩
 
-section
-variable {V : Vocabulary} {M : Model V} {fns : List (FnHeader V)} {table : FnTable M fns}
-  (distinct : (fns.map (·.key)).Nodup)
-  (definition : Key) (F : List (Place × Nat))
-
-theorem attempt_sound (blocks : List (Key × Nat)) {Γ outs mid : List V.Ty} (key : Key) (w : Unit)
-    (owns : (localDialect V fns).Attempt w)
-    (body : Term (localDialect V fns) ((localDialect V fns).index w :: Γ) mid)
-    (rest : Term (localDialect V fns) (mid ++ Γ) outs) :
-    Sound (table := table) definition F blocks (.attempt key w owns body rest) :=
-  owns.elim
-
-/-- The state after the regions of a choice, of a valuation that agrees with the region that
-ran. -/
-theorem exit_grow {ρ : Valuation (Dyn M)} {e : Exit V.Ty (LocalRaw V)}
-    {st st' : St V.Ty (LocalRaw V)} {outs : List V.Ty} {vs : HList M.Val outs}
-    (ex : ExitInv M table ρ e st vs) (grows : St.Grows st st') (wf : Table.WF st'.next st'.table) :
-    ExitInv M table ρ e st' vs :=
-  ⟨ex.coherent.grow grows wf, ex.rets, ex.holds⟩
-
-include distinct in
-theorem choose_sound (blocks : List (Key × Nat)) {Γ outs mid : List V.Ty} {t : V.Ty} (key : Key)
-    (c : Var Γ t) (ok : t = .bool) (gives : ∀ a, a ∈ mid → (localDialect V fns).Gives () a)
-    (onTrue onFalse : Term (localDialect V fns) Γ mid)
-    (rest : Term (localDialect V fns) (mid ++ Γ) outs)
-    (iht : Sound (table := table) definition F blocks onTrue)
-    (ihf : Sound (table := table) definition F blocks onFalse)
-    (ihr : Sound (table := table) definition F blocks rest) :
-    Sound (table := table) definition F blocks (.choose key () c ok gives onTrue onFalse rest) := by
-  intro path ρ ids env k st inv hnone nodup apart recorded
-  have lawful := localOpFacts_lawful (table := table) distinct
-  simp only [Shows, walk, Term.EveryLoop, Term.denote] at hnone recorded ⊢
+include laws in
+/-- An attempt: its beginning gives a valid number, which its body has at a new leaf; the end of
+its body never stops `undefined`; then what is known after it, of the values its body returned
+at new leaves. -/
+theorem attempt_sound (blocks : List (Key × Nat)) {Γ : Ctx D.Ty} {outs mid : List D.Ty}
+    (key : Key) (w : D.Who) (owns : D.Attempt w) (inputs : Names [D.index w])
+    (body : Term D (Γ.extend inputs) mid) (results : Names mid)
+    (rest : Term D (Γ.extend results) outs)
+    (ihb : Sound σ blocks body none) (ihr : Sound σ blocks rest none) :
+    Sound σ blocks (.attempt key w owns inputs body results rest) none := by
+  intro path ρ ids env k s lo hi inv _ differs hnone nodup apart recorded
+  simp only [walk, attemptEntry, Option.map_none, Option.isSome_none, miss_free, leaves,
+    Exit.region_skel] at differs hnone recorded ⊢
   simp only [Term.addresses] at nodup apart recorded
-  subst ok
-  simp only [asBool, cast_eq]
-  have hc := inv.agree .bool c
-  generalize ids.getD c.index 0 = cid at hc hnone recorded ⊢
-  obtain ⟨⟨⟨ra, ea⟩, na, eba, ata⟩, ga⟩ := walk_state (localFactRules V fns) definition none
-    blocks onTrue ids (assume (localFactRules V fns).ops st.table st.next k cid true) st
-  generalize hfirst : walk (localFactRules V fns) definition none blocks onTrue ids
-    (assume (localFactRules V fns).ops st.table st.next k cid true) st = first
-    at hnone recorded ea eba ga ⊢
-  obtain ⟨⟨⟨rb, eb⟩, nb, ebb, atb⟩, gb⟩ := walk_state (localFactRules V fns) definition none
-    blocks onFalse ids (assume (localFactRules V fns).ops first.st.table first.st.next k cid false)
-    first.st
-  generalize hsecond : walk (localFactRules V fns) definition none blocks onFalse ids
-    (assume (localFactRules V fns).ops first.st.table first.st.next k cid false) first.st = second
-    at hnone recorded eb ebb gb ⊢
-  obtain ⟨⟨⟨nr, er⟩, nbr, ebr, atr⟩, _⟩ := walk_state (localFactRules V fns) definition none
-    blocks rest ((fresh mid.length second.st).1 ++ ids)
-    ((afterChoice (localFactRules V fns) k cid first second (fresh mid.length second.st).1
-      mid).enter (localFactRules V fns) mid)
-    (fresh mid.length second.st).2
-  have refsB : second.st.refusals = [] := by
-    rw [hnone] at er
-    exact (List.append_eq_nil_iff.mp er.symm).2
-  have refsA : first.st.refusals = [] := by
-    rw [refsB] at eb
-    exact (List.append_eq_nil_iff.mp eb.symm).2
+  have notHere := (List.nodup_cons.mp nodup).1
+  have nodup₁ := (List.nodup_cons.mp nodup).2
+  have nodupB := (List.nodup_append.mp nodup₁).1
+  have nodupR := (List.nodup_append.mp nodup₁).2.1
+  obtain ⟨⟨rb, eb⟩, ⟨nb, ebb, atb⟩, db⟩ := walk_adds σ.rules σ.checks σ.definition σ.role
+    blocks body none (bindIds ids inputs (fresh 1 s.st).1)
+    ((k.addRanges (fresh 1 s.st).1 [σ.rules.range (D.index w)]).enter σ.rules [D.index w])
+    { s with st := (fresh 1 s.st).2 }
+  generalize he : walk σ.rules σ.checks σ.definition σ.role blocks body none
+    (bindIds ids inputs (fresh 1 s.st).1)
+    ((k.addRanges (fresh 1 s.st).1 [σ.rules.range (D.index w)]).enter σ.rules [D.index w])
+    { s with st := (fresh 1 s.st).2 } = e at differs hnone recorded eb ebb db ⊢
+  obtain ⟨⟨nr, er⟩, ⟨nbr, ebr, atr⟩, dr⟩ := walk_adds σ.rules σ.checks σ.definition σ.role
+    blocks rest none (bindIds ids results (fresh mid.length e.state.st).1)
+    ((afterRegions σ.rules [e.region] k (fresh mid.length e.state.st).1 mid 0).enter
+      σ.rules mid)
+    { e.state with st := (fresh mid.length e.state.st).2 }
+  obtain ⟨differsB, differsR⟩ := differs_both db dr differs
+  have refs : e.state.st.refusals = [] := refusals_before ⟨nr, er⟩ hnone
+  have recB : Recorded σ (body.addresses blocks) e.state.st :=
+    (Recorded.sub recorded fun x m => List.mem_cons_of_mem _ (List.mem_append_left _ m)).strip
+      ebr atr (fun x m mr => nodup_apart nodup₁ m mr)
+  have apartB : BoundsApart σ { s with st := (fresh 1 s.st).2 }.st (body.addresses blocks) :=
+    BoundsApart.sub apart fun x m => List.mem_cons_of_mem _ (List.mem_append_left _ m)
+  have apartR : BoundsApart σ { e.state with st := (fresh mid.length e.state.st).2 }.st
+      (rest.addresses blocks) :=
+    BoundsApart.extend (BoundsApart.sub apart fun x m =>
+        List.mem_cons_of_mem _ (List.mem_append_right _ m))
+      (by simp only [fresh]; exact ebb) atb (fun x m mr => nodup_apart nodup₁ m mr)
+  have bodyShows : ∀ n : σ.sem.Val (D.index w), σ.Valid ⟨D.index w, n⟩ →
+      Shows σ blocks body path (env.extend inputs (.cons n .nil)) (fun mids => ∃ ρ', ρ.Le ρ' ∧
+        ExitInv σ ρ' e.region e.state.st mids ∧ Followed (none : Option (Skel D mid)) lo ρ'
+          e.state.st) := by
+    intro n valid
+    have validN : σ.AllValid (HList.cons n HList.nil : HList σ.sem.Val [D.index w]) :=
+      allValid_cons.mpr ⟨valid, fun _ m => nomatch m⟩
+    obtain ⟨coh, le, look⟩ := leaves_fresh (s := s) inv.coherent [⟨D.index w, n⟩]
+      (fun d m => by simp only [List.mem_singleton] at m; subst m; exact valid)
+    simp only [leaves, List.length_singleton] at coh look
+    have inv' : Inv σ (ρ.setFrom s.st.next [⟨D.index w, n⟩]) (bindIds ids inputs (fresh 1 s.st).1)
+        (env.extend inputs (.cons n .nil))
+        ((k.addRanges (fresh 1 s.st).1 [σ.rules.range (D.index w)]).enter σ.rules
+          [D.index w]) (fresh 1 s.st).2 := by
+      refine ⟨coh, agree_extend inputs (HList.cons n HList.nil) _ (inv.agree.le le) look, ?_⟩
+      rw [enter_of_valid laws validN]
+      exact addTypeRanges_holds laws (τs := [D.index w]) (inv.holds.le le) coh.valid
+        (valuesOf_typed (vs := HList.cons n HList.nil) look)
+    have shows := ihb path _ _ _ _ { s with st := (fresh 1 s.st).2 } lo lo inv' trivial
+      (by rw [he]; exact differsB) (by rw [he]; exact refs) nodupB apartB
+      (by rw [he]; exact recB)
+    rw [he] at shows
+    exact ⟨shows.1, Process.every_mono _ _ (fun vs h' => by
+      obtain ⟨ρ'', le'', ex', f⟩ := h'
+      exact ⟨ρ'', le.trans le'', ex', f⟩) (fun _ h => h) shows.2⟩
+  have afterRest : ∀ mids : HList σ.sem.Val mid, (∃ ρ₁, ρ.Le ρ₁ ∧
+      ExitInv σ ρ₁ e.region e.state.st mids ∧ Followed (none : Option (Skel D mid)) lo ρ₁
+        e.state.st) →
+      Shows σ blocks rest path (env.extend results mids) (fun vs => ∃ ρ', ρ.Le ρ' ∧
+        ExitInv σ ρ' (walk σ.rules σ.checks σ.definition σ.role blocks rest none
+          (bindIds ids results (fresh mid.length e.state.st).1)
+          ((afterRegions σ.rules [e.region] k (fresh mid.length e.state.st).1 mid 0).enter
+            σ.rules mid) { e.state with st := (fresh mid.length e.state.st).2 }).region
+          (walk σ.rules σ.checks σ.definition σ.role blocks rest none
+            (bindIds ids results (fresh mid.length e.state.st).1)
+            ((afterRegions σ.rules [e.region] k (fresh mid.length e.state.st).1 mid 0).enter
+              σ.rules mid) { e.state with st := (fresh mid.length e.state.st).2 }).state.st
+          vs ∧
+        Followed (none : Option (Skel D outs)) hi ρ'
+          (walk σ.rules σ.checks σ.definition σ.role blocks rest none
+            (bindIds ids results (fresh mid.length e.state.st).1)
+            ((afterRegions σ.rules [e.region] k (fresh mid.length e.state.st).1 mid 0).enter
+              σ.rules mid) { e.state with st := (fresh mid.length e.state.st).2 }).state.st) := by
+    intro mids h
+    obtain ⟨ρ₁, le, ex, -⟩ := h
+    have valid : σ.AllValid mids := allValid_of_valuesOf ex.rets ex.coherent.valid
+    obtain ⟨coh, le₂, look⟩ := leaves_fresh (s := e.state) ex.coherent (σ.sem.dyns mids) valid
+    simp only [leaves, σ.sem.dyns_length] at coh look
+    have inv' := afterRegions_inv laws (List.mem_singleton_self e.region) inv le ex results coh
+      le₂ look
+    have shows := ihr path _ _ _ _ { e.state with st := (fresh mid.length e.state.st).2 } hi hi
+      inv' trivial differsR hnone nodupR apartR
+      (Recorded.sub recorded fun x m => List.mem_cons_of_mem _ (List.mem_append_right _ m))
+    exact ⟨shows.1, Process.every_mono _ _ (fun vs h' => by
+      obtain ⟨ρ'', le'', ex', f⟩ := h'
+      exact ⟨ρ'', le.trans (le₂.trans le''), ex', f⟩) (fun _ h => h) shows.2⟩
+  have began := laws.begin w key path
+  have settled := laws.settle w key path
+  simp only [Shows, Term.EveryLoop, Term.denote]
+  refine ⟨Process.every_mono _ _ (fun n valid => ⟨(bodyShows n valid).1,
+    Process.every_mono _ _ (fun mids h => Process.every_mono _ _
+      (fun _ _ => (afterRest mids h).1) (fun _ _ => trivial) settled) (fun _ _ => trivial)
+      (bodyShows n valid).2⟩) (fun _ _ => trivial) began, ?_⟩
+  rw [Process.every_bind]
+  refine Process.every_mono _ _ (fun n valid => ?_) (fun _ h => h) began
+  rw [Process.every_bind]
+  refine Process.every_mono _ _ (fun mids h => ?_) (fun _ h => h) (bodyShows n valid).2
+  rw [Process.every_bind]
+  exact Process.every_mono _ _ (fun _ _ => (afterRest mids h).2) (fun _ h => h) settled
+
+include laws in
+/-- A choice: the region that its condition chooses runs, with what the condition teaches; the
+other region's entries are above the values; then what is known after the choice, of the values
+that the region returned at new leaves, with the shapes of its results. -/
+theorem choose_sound (blocks : List (Key × Nat)) {Γ : Ctx D.Ty} {outs mid : List D.Ty} {t : D.Ty}
+    (key : Key) (w : D.Who) (c : Var Γ t) (ok : D.Condition w t)
+    (gives : ∀ a, a ∈ mid → D.Gives w a) (onTrue onFalse : Term D Γ mid) (results : Names mid)
+    (rest : Term D (Γ.extend results) outs)
+    (iht : Sound σ blocks onTrue none) (ihf : Sound σ blocks onFalse none)
+    (ihr : Sound σ blocks rest none) :
+    Sound σ blocks (.choose key w c ok gives onTrue onFalse results rest) none := by
+  intro path ρ ids env k s lo hi inv _ differs hnone nodup apart recorded
+  have lawful : OpFacts.Lawful σ.rules.ops σ.R σ.Runs := laws.ops
+  simp only [walk, chooseEntry, Option.map_none, Option.isSome_none, miss_free, leaves,
+    Exit.region_skel] at differs hnone recorded ⊢
+  simp only [Term.addresses] at nodup apart recorded
+  have hc := inv.agree.idOf c
+  have read := laws.condition ok (env.get c) (inv.coherent.valid _ _ hc)
+  generalize idOf ids c.name = cid at hc differs hnone recorded ⊢
+  obtain ⟨⟨ra, ea⟩, ⟨na, eba, ata⟩, da⟩ := walk_adds σ.rules σ.checks σ.definition σ.role
+    blocks onTrue none ids (assume σ.rules.ops s.st.table s.st.next k cid true) s
+  have ga := walk_grows σ.rules σ.checks σ.definition σ.role blocks onTrue none ids
+    (assume σ.rules.ops s.st.table s.st.next k cid true) s inv.scoped trivial
+  generalize hfirst : walk σ.rules σ.checks σ.definition σ.role blocks onTrue none ids
+    (assume σ.rules.ops s.st.table s.st.next k cid true) s = first
+    at differs hnone recorded ea eba da ga ⊢
+  have fitsB : Scoped Γ ids first.state.st := ⟨ga.1.1, inv.scoped.2.mono ga.2.next⟩
+  obtain ⟨⟨rb, eb⟩, ⟨nb, ebb, atb⟩, db⟩ := walk_adds σ.rules σ.checks σ.definition σ.role
+    blocks onFalse none ids
+    (assume σ.rules.ops first.state.st.table first.state.st.next k cid false) first.state
+  have gb := walk_grows σ.rules σ.checks σ.definition σ.role blocks onFalse none ids
+    (assume σ.rules.ops first.state.st.table first.state.st.next k cid false) first.state
+    fitsB trivial
+  generalize hsecond : walk σ.rules σ.checks σ.definition σ.role blocks onFalse none ids
+    (assume σ.rules.ops first.state.st.table first.state.st.next k cid false) first.state = second
+    at differs hnone recorded eb ebb db gb ⊢
+  obtain ⟨⟨nr, er⟩, ⟨nbr, ebr, atr⟩, dr⟩ := walk_adds σ.rules σ.checks σ.definition σ.role
+    blocks rest none (bindIds ids results (fresh mid.length second.state.st).1)
+    ((afterChoice σ.rules k cid first.region second.region
+      (fresh mid.length second.state.st).1 mid).enter σ.rules mid)
+    { second.state with st := (fresh mid.length second.state.st).2 }
+  obtain ⟨differsA, differsB, differsR⟩ := differs_three da db dr differs
+  have refsB : second.state.st.refusals = [] := refusals_before ⟨nr, er⟩ hnone
+  have refsA : first.state.st.refusals = [] := refusals_before ⟨rb, eb⟩ refsB
   have nodup₁ := (List.nodup_cons.mp nodup).2
   have nodupAB := (List.nodup_append.mp nodup₁).1
   have nodupR := (List.nodup_append.mp nodup₁).2.1
   have nodupA := (List.nodup_append.mp nodupAB).1
   have nodupB := (List.nodup_append.mp nodupAB).2.1
-  have fitsA := ga inv.length ⟨inv.coherent.wf, inv.below⟩
-  have fitsB := gb inv.length ⟨fitsA.1.1, fun i m => Nat.lt_of_lt_of_le (inv.below i m)
-    fitsA.2.next⟩
-  have apartR : Apart definition (fresh mid.length second.st).2 (rest.addresses blocks) :=
-    ((apart.sub fun x m => by simp [m]).extend eba ata (fun x m mr =>
+  have apartR : BoundsApart σ { second.state with st := (fresh mid.length second.state.st).2 }.st
+      (rest.addresses blocks) :=
+    (((BoundsApart.sub apart fun x m => by simp [m]).extend eba ata (fun x m mr =>
       nodup_apart nodup₁ (List.mem_append_left _ m) mr)).extend ebb atb
-      (fun x m mr => nodup_apart nodup₁ (List.mem_append_right _ m) mr)
+      (fun x m mr => nodup_apart nodup₁ (List.mem_append_right _ m) mr) :)
   -- the rest, after either region
-  have afterRest : ∀ (b0 : Bool) (ran : Exit V.Ty (LocalRaw V)), ran ∈ [first, second] →
-      ran = (if b0 then first else second) → (env .bool c = b0) →
-      ∀ (ρ₁ : Valuation (Dyn M)) (mids : HList M.Val mid), ρ.Le ρ₁ →
-        ExitInv M table ρ₁ ran second.st mids →
-        Shows (table := table) F definition blocks rest path (Env.extend mids env) (fun vs =>
-          ∃ ρ', ρ.Le ρ' ∧ ExitInv M table ρ'
-            (walk (localFactRules V fns) definition none blocks rest
-              ((fresh mid.length second.st).1 ++ ids)
-              ((afterChoice (localFactRules V fns) k cid first second
-                (fresh mid.length second.st).1 mid).enter (localFactRules V fns) mid)
-              (fresh mid.length second.st).2)
-            (walk (localFactRules V fns) definition none blocks rest
-              ((fresh mid.length second.st).1 ++ ids)
-              ((afterChoice (localFactRules V fns) k cid first second
-                (fresh mid.length second.st).1 mid).enter (localFactRules V fns) mid)
-              (fresh mid.length second.st).2).st vs) := by
+  have afterRest : ∀ (b0 : Bool) (ran : FactCheck.Exit D.Ty Raw),
+      ran ∈ [first.region, second.region] →
+      ran = (if b0 then first.region else second.region) → σ.sem.holds ok (env.get c) = b0 →
+      ∀ (ρ₁ : Valuation σ.sem.Dyn) (mids : HList σ.sem.Val mid), ρ.Le ρ₁ →
+        ExitInv σ ρ₁ ran second.state.st mids →
+        Shows σ blocks rest path (env.extend results mids) (fun vs => ∃ ρ', ρ.Le ρ' ∧
+          ExitInv σ ρ' (walk σ.rules σ.checks σ.definition σ.role blocks rest none
+            (bindIds ids results (fresh mid.length second.state.st).1)
+            ((afterChoice σ.rules k cid first.region second.region
+              (fresh mid.length second.state.st).1 mid).enter σ.rules mid)
+            { second.state with st := (fresh mid.length second.state.st).2 }).region
+            (walk σ.rules σ.checks σ.definition σ.role blocks rest none
+              (bindIds ids results (fresh mid.length second.state.st).1)
+              ((afterChoice σ.rules k cid first.region second.region
+                (fresh mid.length second.state.st).1 mid).enter σ.rules mid)
+              { second.state with st := (fresh mid.length second.state.st).2 }).state.st vs ∧
+          Followed (none : Option (Skel D outs)) hi ρ'
+            (walk σ.rules σ.checks σ.definition σ.role blocks rest none
+              (bindIds ids results (fresh mid.length second.state.st).1)
+              ((afterChoice σ.rules k cid first.region second.region
+                (fresh mid.length second.state.st).1 mid).enter σ.rules mid)
+              { second.state with st := (fresh mid.length second.state.st).2 }).state.st) := by
     intro b0 ran mem eran hb0 ρ₁ mids le ex
-    have grows : St.Grows st second.st := fitsA.2.trans fitsB.2
-    have inv' := afterRegions_inv mem inv le ex grows
-    have le₂ : ρ₁.Le (ρ₁.setFrom second.st.next (toDyns mids)) :=
-      setFrom_le ex.coherent.support _
-    have choices := choiceFacts_holds (first := first) (second := second) lawful
+    have valid : σ.AllValid mids := allValid_of_valuesOf ex.rets ex.coherent.valid
+    obtain ⟨coh, le₂, look⟩ := leaves_fresh (s := second.state) ex.coherent (σ.sem.dyns mids)
+      valid
+    simp only [leaves, σ.sem.dyns_length] at coh look
+    have inv' := afterRegions_inv laws mem inv le ex results coh le₂ look
+    have choices := choiceFacts_holds (first := first.region) (second := second.region) lawful
       inv'.coherent.consistent inv'.coherent.closed (b0 := b0)
-      ⟨_, (le.trans le₂) _ _ hc, by rw [hb0]; rfl⟩ (fresh mid.length second.st).1 0 (by
+      ⟨_, (le.trans le₂) _ _ hc, by rw [read, hb0]⟩ (fresh mid.length second.state.st).1 0 (by
         intro j m em
-        have look := valuesOf_setFrom ρ₁ second.st.next (toDyns mids)
-        rw [toDyns_length] at look
         have e1 := valuesOf_getElem look em
-        cases hd : (toDyns mids)[j]? with
+        cases hd : (σ.sem.dyns mids)[j]? with
         | none => rw [hd] at e1; exact absurd e1 (valuesOf_mem look m (List.mem_of_getElem? em))
         | some d =>
             rw [hd] at e1
@@ -877,325 +1595,288 @@ theorem choose_sound (blocks : List (Key × Nat)) {Γ outs mid : List V.Ty} {t :
               have h2 := (List.getElem?_eq_some_iff.mp hd).1
               omega
             rw [le₂ _ _ (by rw [valuesOf_get ex.rets j lt, hd])])
-    have validMids : mids.All M.Valid :=
-      valid_of_toDyns (valuesOf_valid ex.rets ex.coherent.valid)
-    have inv'' : Inv M table (ρ₁.setFrom second.st.next (toDyns mids))
-        ((fresh mid.length second.st).1 ++ ids) (Env.extend mids env)
-        ((afterChoice (localFactRules V fns) k cid first second (fresh mid.length second.st).1
-          mid).enter (localFactRules V fns) mid)
-        (fresh mid.length second.st).2 := by
-      refine ⟨inv'.coherent, inv'.length, inv'.below, inv'.agree, ?_⟩
+    have inv'' : Inv σ (ρ₁.setFrom second.state.st.next (σ.sem.dyns mids))
+        (bindIds ids results (fresh mid.length second.state.st).1) (env.extend results mids)
+        ((afterChoice σ.rules k cid first.region second.region
+          (fresh mid.length second.state.st).1 mid).enter σ.rules mid)
+        (fresh mid.length second.state.st).2 := by
+      refine ⟨inv'.coherent, inv'.agree, ?_⟩
       have holds := inv'.holds
-      rw [enter_of_valid validMids] at holds ⊢
-      exact holds.addChoices choices
-    have shows := ihr path _ _ _ _ _ inv'' hnone nodupR apartR
-      (recorded.sub fun x m => by simp [m])
-    refine ⟨shows.1, ?_⟩
-    refine Process.every_mono _ _ ?_ (fun _ h => h) shows.2
-    intro vs h
-    obtain ⟨ρ'', le'', ex'⟩ := h
-    exact ⟨ρ'', le.trans (le₂.trans le''), ex'⟩
-  cases hv : env Ty.bool c with
+      rw [enter_of_valid laws valid] at holds ⊢
+      exact Known.Holds.addChoices holds choices
+    have shows := ihr path _ _ _ _ { second.state with st := (fresh mid.length second.state.st).2 }
+      hi hi inv'' trivial differsR hnone nodupR apartR
+      (Recorded.sub recorded fun x m => by simp [m])
+    exact ⟨shows.1, Process.every_mono _ _ (fun vs h' => by
+      obtain ⟨ρ'', le'', ex', f⟩ := h'
+      exact ⟨ρ'', le.trans (le₂.trans le''), ex', f⟩) (fun _ h => h) shows.2⟩
+  simp only [Shows, Term.EveryLoop, Term.denote]
+  cases hv : σ.sem.holds ok (env.get c) with
   | true =>
-      have hcv : BoolAt (localReading M) ρ cid true := ⟨_, hc, by rw [hv]; rfl⟩
-      have kt : (assume (localFactRules V fns).ops st.table st.next k cid true).Holds
-          (localReading M) ρ :=
-        assume_holds lawful inv.coherent.consistent inv.coherent.closed st.next inv.holds hcv
-      have recA : Recorded definition F (onTrue.addresses blocks) first.st :=
-        ((recorded.sub fun x m => by simp [m]).strip ebr atr (fun x m mr =>
+      have hcv : BoolAt σ.R ρ cid true := ⟨_, hc, by rw [read, hv]⟩
+      have kt : (assume σ.rules.ops s.st.table s.st.next k cid true).Holds σ.R ρ :=
+        assume_holds lawful inv.coherent.consistent inv.coherent.closed s.st.next inv.holds hcv
+      have recA : Recorded σ (onTrue.addresses blocks) first.state.st :=
+        ((Recorded.sub recorded fun x m => by simp [m]).strip ebr atr (fun x m mr =>
           nodup_apart nodup₁ (List.mem_append_left _ m) mr)).strip ebb atb
           (fun x m mr => nodup_apart nodupAB m mr)
-      have showsT := iht path ρ ids env _ st ⟨inv.coherent, inv.length, inv.below, inv.agree, kt⟩
-        (by rw [hfirst]; exact refsA) nodupA
-        (apart.sub fun x m => by simp [m]) (by rw [hfirst]; exact recA)
+      have showsT := iht path ρ ids env _ s lo lo ⟨inv.coherent, inv.agree, kt⟩ trivial
+        (by rw [hfirst]; exact differsA) (by rw [hfirst]; exact refsA) nodupA
+        (BoundsApart.sub apart fun x m => by simp [m]) (by rw [hfirst]; exact recA)
       rw [hfirst] at showsT
       simp only [Bool.cond_true]
       refine ⟨⟨showsT.1, ?_⟩, ?_⟩
       · refine Process.every_mono _ _ ?_ (fun _ _ => trivial) showsT.2
         intro mids h
-        obtain ⟨ρ₁, le, ex⟩ := h
-        exact (afterRest true first (by simp) rfl hv ρ₁ mids le
-          (exit_grow ex fitsB.2 fitsB.1.1)).1
+        obtain ⟨ρ₁, le, ex, -⟩ := h
+        exact (afterRest true first.region (by simp) rfl hv ρ₁ mids le
+          (exit_grow ex gb.2 gb.1.1)).1
       · rw [Process.every_bind]
         refine Process.every_mono _ _ ?_ (fun _ h => h) showsT.2
         intro mids h
-        obtain ⟨ρ₁, le, ex⟩ := h
-        exact (afterRest true first (by simp) rfl hv ρ₁ mids le
-          (exit_grow ex fitsB.2 fitsB.1.1)).2
+        obtain ⟨ρ₁, le, ex, -⟩ := h
+        exact (afterRest true first.region (by simp) rfl hv ρ₁ mids le
+          (exit_grow ex gb.2 gb.1.1)).2
   | false =>
-      have coh₁ := inv.coherent.grow fitsA.2 fitsA.1.1
-      have hcv : BoolAt (localReading M) ρ cid false := ⟨_, hc, by rw [hv]; rfl⟩
-      have kf : (assume (localFactRules V fns).ops first.st.table first.st.next k cid false).Holds
-          (localReading M) ρ :=
-        assume_holds lawful coh₁.consistent coh₁.closed first.st.next inv.holds hcv
-      have recB : Recorded definition F (onFalse.addresses blocks) second.st :=
-        (recorded.sub fun x m => by simp [m]).strip ebr atr (fun x m mr =>
+      have coh₁ := Coherent.grow inv.coherent ga.2 ga.1.1
+      have hcv : BoolAt σ.R ρ cid false := ⟨_, hc, by rw [read, hv]⟩
+      have kf : (assume σ.rules.ops first.state.st.table first.state.st.next k cid false).Holds
+          σ.R ρ :=
+        assume_holds lawful coh₁.consistent coh₁.closed first.state.st.next inv.holds hcv
+      have recB : Recorded σ (onFalse.addresses blocks) second.state.st :=
+        (Recorded.sub recorded fun x m => by simp [m]).strip ebr atr (fun x m mr =>
           nodup_apart nodup₁ (List.mem_append_right _ m) mr)
-      have apartB : Apart definition first.st (onFalse.addresses blocks) :=
-        (apart.sub fun x m => by simp [m]).extend eba ata (fun x m mr => nodup_apart nodupAB m mr)
-      have showsF := ihf path ρ ids env _ first.st
-        ⟨coh₁, inv.length, fun i m => Nat.lt_of_lt_of_le (inv.below i m) fitsA.2.next,
-          inv.agree, kf⟩
-        (by rw [hsecond]; exact refsB) nodupB apartB (by rw [hsecond]; exact recB)
+      have apartB : BoundsApart σ first.state.st (onFalse.addresses blocks) :=
+        (BoundsApart.sub apart fun x m => by simp [m]).extend eba ata
+          (fun x m mr => nodup_apart nodupAB m mr)
+      have showsF := ihf path ρ ids env _ first.state lo lo ⟨coh₁, inv.agree, kf⟩ trivial
+        (by rw [hsecond]; exact differsB) (by rw [hsecond]; exact refsB) nodupB apartB
+        (by rw [hsecond]; exact recB)
       rw [hsecond] at showsF
       simp only [Bool.cond_false]
       refine ⟨⟨showsF.1, ?_⟩, ?_⟩
       · refine Process.every_mono _ _ ?_ (fun _ _ => trivial) showsF.2
         intro mids h
-        obtain ⟨ρ₁, le, ex⟩ := h
-        exact (afterRest false second (by simp) rfl hv ρ₁ mids le ex).1
+        obtain ⟨ρ₁, le, ex, -⟩ := h
+        exact (afterRest false second.region (by simp) rfl hv ρ₁ mids le ex).1
       · rw [Process.every_bind]
         refine Process.every_mono _ _ ?_ (fun _ h => h) showsF.2
         intro mids h
-        obtain ⟨ρ₁, le, ex⟩ := h
-        exact (afterRest false second (by simp) rfl hv ρ₁ mids le ex).2
+        obtain ⟨ρ₁, le, ex, -⟩ := h
+        exact (afterRest false second.region (by simp) rfl hv ρ₁ mids le ex).2
 
-end
+theorem armsNil_sound (blocks : List (Key × Nat)) {Γ : Ctx D.Ty} {mid : List D.Ty} :
+    ArmsSound σ blocks (.nil : Arms D Γ mid []) none :=
+  fun _ _ _ _ _ _ _ _ p => nomatch p
 
-/-! ### Case analyses -/
-
-section
-variable {V : Vocabulary} {M : Model V} {fns : List (FnHeader V)} {table : FnTable M fns}
-  (definition : Key) (F : List (Place × Nat))
-
-/-- The walk of the arms of a case analysis, from any point of a run that agrees with it, shows
-the run of the arm of the alternative. -/
-def ArmsSound (blocks : List (Key × Nat)) {Γ mid payloads : List V.Ty}
-    (arms : Arms (localDialect V fns) Γ mid payloads) : Prop :=
-  ∀ (path : List Frame) (ρ : Valuation (Dyn M)) (ids : List Nat) (env : Env M.Val Γ) (k : Known)
-    (st : St V.Ty (LocalRaw V)) (p : Pick M.Val payloads), PickValid p →
-    Inv M table ρ ids env k st →
-    (walkArms (localFactRules V fns) definition none blocks arms ids k st).2.refusals = [] →
-    (Arms.addresses blocks arms).Nodup → Apart definition st (Arms.addresses blocks arms) →
-    Recorded definition F (Arms.addresses blocks arms)
-      (walkArms (localFactRules V fns) definition none blocks arms ids k st).2 →
-    Arms.EveryLoop (localSem M fns table) (fun _ _ => True)
-        (Annotation.Bounded ⟨F⟩ definition none) arms path blocks env p ∧
-      (arms.denote (localSem M fns table) path env p).Every (fun _ _ => True) (fun mids =>
-        ∃ ρ', ρ.Le ρ' ∧ ∃ e, e ∈ (walkArms (localFactRules V fns) definition none blocks arms ids
-          k st).1 ∧ ExitInv M table ρ' e
-            (walkArms (localFactRules V fns) definition none blocks arms ids k st).2 mids)
-        (· ≠ .undefined)
-
-theorem armsNil_sound (blocks : List (Key × Nat)) {Γ mid : List V.Ty} :
-    ArmsSound (table := table) definition F blocks (.nil : Arms (localDialect V fns) Γ mid []) :=
-  fun _ _ _ _ _ _ p => nomatch p
-
-theorem armsCons_sound (blocks : List (Key × Nat)) {Γ mid payloads : List V.Ty} {payload : V.Ty}
-    (arm : Term (localDialect V fns) (payload :: Γ) mid)
-    (rest : Arms (localDialect V fns) Γ mid payloads)
-    (iha : Sound (table := table) definition F blocks arm)
-    (ihr : ArmsSound (table := table) definition F blocks rest) :
-    ArmsSound (table := table) definition F blocks (.cons arm rest) := by
-  intro path ρ ids env k st p valid inv hnone nodup apart recorded
-  simp only [walkArms, localFactRules_range] at hnone recorded ⊢
+include laws in
+/-- The arms of a case analysis, when no skeleton is followed: the arm of the alternative runs,
+with its payload at a new leaf; the other arms' entries are above the values. -/
+theorem armsCons_sound (blocks : List (Key × Nat)) {Γ : Ctx D.Ty} {mid payloads : List D.Ty}
+    {payload : D.Ty} (inputs : Names [payload]) (arm : Term D (Γ.extend inputs) mid)
+    (rest : Arms D Γ mid payloads) (iha : Sound σ blocks arm none)
+    (ihr : ArmsSound σ blocks rest none) :
+    ArmsSound σ blocks (.cons inputs arm rest) none := by
+  intro path ρ ids env k s lo hi p valid inv _ differs hnone nodup apart recorded
+  simp only [walkArms, armEntry, Option.map_none, leaves, Option.getD_none]
+    at differs hnone recorded ⊢
   simp only [Arms.addresses] at nodup apart recorded
-  obtain ⟨⟨⟨ra, ea⟩, na, eba, ata⟩, ga⟩ := walk_state (localFactRules V fns) definition none
-    blocks arm ((fresh 1 st).1 ++ ids)
-    ((k.addRanges (fresh 1 st).1 [localRange payload]).enter (localFactRules V fns) [payload])
-    (fresh 1 st).2
-  generalize he : walk (localFactRules V fns) definition none blocks arm ((fresh 1 st).1 ++ ids)
-    ((k.addRanges (fresh 1 st).1 [localRange payload]).enter (localFactRules V fns) [payload])
-    (fresh 1 st).2 = e
-    at hnone recorded ea eba ga ⊢
-  obtain ⟨⟨⟨rr, er⟩, nr, ebr, atr⟩, gr⟩ := walkArms_state (localFactRules V fns) definition none
-    blocks rest ids k e.st
-  have refsE : e.st.refusals = [] := by
-    rw [hnone] at er
-    exact (List.append_eq_nil_iff.mp er.symm).2
+  obtain ⟨⟨ra, ea⟩, ⟨na, eba, ata⟩, da⟩ := walk_adds σ.rules σ.checks σ.definition σ.role
+    blocks arm none (bindIds ids inputs (fresh 1 s.st).1)
+    ((k.addRanges (fresh 1 s.st).1 [σ.rules.range payload]).enter σ.rules [payload])
+    { s with st := (fresh 1 s.st).2 }
+  obtain ⟨wfi, gi, lti⟩ := fresh_grows 1 s.st inv.coherent.wf
+  have ga := walk_grows σ.rules σ.checks σ.definition σ.role blocks arm none
+    (bindIds ids inputs (fresh 1 s.st).1)
+    ((k.addRanges (fresh 1 s.st).1 [σ.rules.range payload]).enter σ.rules [payload])
+    { s with st := (fresh 1 s.st).2 }
+    ⟨wfi, (inv.scoped.2.mono gi.next).bind inputs _ (by simp [fresh]) lti⟩ trivial
+  generalize he : walk σ.rules σ.checks σ.definition σ.role blocks arm none
+    (bindIds ids inputs (fresh 1 s.st).1)
+    ((k.addRanges (fresh 1 s.st).1 [σ.rules.range payload]).enter σ.rules [payload])
+    { s with st := (fresh 1 s.st).2 } = e at differs hnone recorded ea eba da ga ⊢
+  obtain ⟨⟨rr, er⟩, ⟨nr, ebr, atr⟩, dr⟩ := walkArms_adds σ.rules σ.checks σ.definition σ.role
+    blocks rest none ids k e.state
+  have growsE : St.Grows s.st e.state.st := gi.trans ga.2
+  have gr := walkArms_grows σ.rules σ.checks σ.definition σ.role blocks rest none ids k e.state
+    ⟨ga.1.1, inv.scoped.2.mono growsE.next⟩ trivial
+  obtain ⟨differsA, differsR⟩ := differs_both da dr differs
+  have refsE : e.state.st.refusals = [] := refusals_before ⟨rr, er⟩ hnone
   have nodupA := (List.nodup_append.mp nodup).1
   have nodupR := (List.nodup_append.mp nodup).2.1
-  have fitsMade := fresh_grows 1 st inv.coherent.wf
-  have fitsE := ga (by simp [fresh, inv.length])
-    ⟨fitsMade.1, fun i m => by
-      rcases List.mem_append.mp m with m | m
-      · exact fitsMade.2.2 i m
-      · exact Nat.lt_of_lt_of_le (inv.below i m) fitsMade.2.1.next⟩
-  have growsE : St.Grows st e.st := fitsMade.2.1.trans fitsE.2
-  have fitsR := gr inv.length ⟨fitsE.1.1, fun i m => Nat.lt_of_lt_of_le (inv.below i m)
-    growsE.next⟩
   cases p with
   | here v =>
-      have coh := Coherent.fresh inv.coherent [⟨payload, v⟩] (fun d m => by
-        simp only [List.mem_singleton] at m
-        subst m
-        exact valid)
-      have look : valuesOf (ρ.setFrom st.next [⟨payload, v⟩]) (fresh 1 st).1 =
-          some (toDyns (HList.cons v HList.nil : HList M.Val [payload])) :=
-        valuesOf_setFrom ρ st.next [⟨payload, v⟩]
-      have le := setFrom_le inv.coherent.support [⟨payload, v⟩]
-      have inv' : Inv M table (ρ.setFrom st.next [⟨payload, v⟩]) ((fresh 1 st).1 ++ ids)
-          (Env.cons v env)
-          ((k.addRanges (fresh 1 st).1 [localRange payload]).enter (localFactRules V fns) [payload])
-          (fresh 1 st).2 :=
-        ⟨coh, by simp [fresh, inv.length], fun i m => by
-          rcases List.mem_append.mp m with m | m
-          · exact fitsMade.2.2 i m
-          · exact Nat.lt_of_lt_of_le (inv.below i m) fitsMade.2.1.next,
-          agree_extend (inv.agree.le le) (HList.cons v HList.nil) _ look,
-          by
-            rw [enter_of_valid (vs := HList.cons v HList.nil) ⟨valid, trivial⟩]
-            exact addTypeRanges_holds (inv.holds.le le) coh.valid (valuesOf_typed look)⟩
-      have recA : Recorded definition F (arm.addresses blocks) e.st :=
-        (recorded.sub fun x m => List.mem_append_left _ m).strip ebr atr
+      have validV : σ.AllValid (HList.cons v HList.nil : HList σ.sem.Val [payload]) :=
+        allValid_cons.mpr ⟨valid, fun _ m => nomatch m⟩
+      obtain ⟨coh, le, look⟩ := leaves_fresh (s := s) inv.coherent [⟨payload, v⟩]
+        (fun d m => by simp only [List.mem_singleton] at m; subst m; exact valid)
+      simp only [leaves, List.length_singleton] at coh look
+      have inv' : Inv σ (ρ.setFrom s.st.next [⟨payload, v⟩]) (bindIds ids inputs (fresh 1 s.st).1)
+          (env.extend inputs (.cons v .nil))
+          ((k.addRanges (fresh 1 s.st).1 [σ.rules.range payload]).enter σ.rules [payload])
+          (fresh 1 s.st).2 := by
+        refine ⟨coh, agree_extend inputs (HList.cons v HList.nil) _ (inv.agree.le le) look, ?_⟩
+        rw [enter_of_valid laws validV]
+        exact addTypeRanges_holds laws (τs := [payload]) (inv.holds.le le) coh.valid
+          (valuesOf_typed (vs := HList.cons v HList.nil) look)
+      have recA : Recorded σ (arm.addresses blocks) e.state.st :=
+        (Recorded.sub recorded fun x m => List.mem_append_left _ m).strip ebr atr
           (fun x m mr => nodup_apart nodup m mr)
-      have shows := iha path _ _ _ _ _ inv' (by rw [he]; exact refsE) nodupA
-        (fun q m bl key eq inA => apart q m bl key eq (List.mem_append_left _ inA))
-        (by rw [he]; exact recA)
+      have shows := iha path _ _ _ _ { s with st := (fresh 1 s.st).2 } lo lo inv' trivial
+        (by rw [he]; exact differsA) (by rw [he]; exact refsE) nodupA
+        (BoundsApart.sub apart fun x m => List.mem_append_left _ m) (by rw [he]; exact recA)
       rw [he] at shows
-      refine ⟨shows.1, ?_⟩
-      refine Process.every_mono _ _ ?_ (fun _ h => h) shows.2
+      refine ⟨shows.1, Process.every_mono _ _ ?_ (fun _ h => h) shows.2⟩
       intro mids h
-      obtain ⟨ρ₁, le₁, ex⟩ := h
-      exact ⟨ρ₁, le.trans le₁, e, List.mem_cons_self, exit_grow ex fitsR.2.2 fitsR.2.1.1⟩
+      obtain ⟨ρ₁, le₁, ex, -⟩ := h
+      exact ⟨ρ₁, le.trans le₁, e.region, List.mem_cons_self, exit_grow ex gr.2.2 gr.2.1.1, trivial⟩
   | there p =>
-      have apartR : Apart definition e.st (Arms.addresses blocks rest) :=
-        (apart.sub fun x m => List.mem_append_right _ m).extend (by rw [eba]; rfl) ata
-          (fun x m mr => nodup_apart nodup m mr)
-      have shows := ihr path ρ ids env k e.st p valid
-        ⟨inv.coherent.grow growsE fitsE.1.1, inv.length,
-          fun i m => Nat.lt_of_lt_of_le (inv.below i m) growsE.next, inv.agree, inv.holds⟩
-        hnone nodupR apartR (recorded.sub fun x m => List.mem_append_right _ m)
-      refine ⟨shows.1, ?_⟩
-      refine Process.every_mono _ _ ?_ (fun _ h => h) shows.2
+      have apartR : BoundsApart σ e.state.st (Arms.addresses blocks rest) :=
+        (BoundsApart.sub apart fun x m => List.mem_append_right _ m).extend
+          (by rw [eba]; rfl) ata (fun x m mr => nodup_apart nodup m mr)
+      have shows := ihr path ρ ids env k e.state lo hi p valid
+        ⟨Coherent.grow inv.coherent growsE ga.1.1, inv.agree, inv.holds⟩ trivial
+        differsR hnone nodupR apartR (Recorded.sub recorded fun x m => List.mem_append_right _ m)
+      refine ⟨shows.1, Process.every_mono _ _ ?_ (fun _ h => h) shows.2⟩
       intro mids h
-      obtain ⟨ρ₁, le₁, e', m, ex⟩ := h
-      exact ⟨ρ₁, le₁, e', List.mem_cons_of_mem _ m, ex⟩
+      obtain ⟨ρ₁, le₁, e', m, ex, -⟩ := h
+      exact ⟨ρ₁, le₁, e', List.mem_cons_of_mem _ m, ex, trivial⟩
 
-theorem cases_sound (blocks : List (Key × Nat)) {Γ outs mid payloads : List V.Ty} {t : V.Ty}
-    (key : Key) (x : Var Γ t) (ok : (localDialect V fns).Alternatives () t payloads)
-    (gives : ∀ a, a ∈ mid → (localDialect V fns).Gives () a)
-    (arms : Arms (localDialect V fns) Γ mid payloads)
-    (rest : Term (localDialect V fns) (mid ++ Γ) outs)
-    (iha : ArmsSound (table := table) definition F blocks arms)
-    (ihr : Sound (table := table) definition F blocks rest) :
-    Sound (table := table) definition F blocks (.cases key () x ok gives arms rest) := by
-  intro path ρ ids env k st inv hnone nodup apart recorded
-  simp only [Shows, walk, Term.EveryLoop, Term.denote] at hnone recorded ⊢
+include laws in
+/-- A case analysis, when no skeleton is followed: the arm of the alternative of its subject
+runs; then what is known after it, of the values the arm returned at new leaves. -/
+theorem cases_sound (blocks : List (Key × Nat)) {Γ : Ctx D.Ty} {outs mid payloads : List D.Ty}
+    {t : D.Ty} (key : Key) (w : D.Who) (x : Var Γ t) (ok : D.Alternatives w t payloads)
+    (gives : ∀ a, a ∈ mid → D.Gives w a) (arms : Arms D Γ mid payloads) (results : Names mid)
+    (rest : Term D (Γ.extend results) outs) (iha : ArmsSound σ blocks arms none)
+    (ihr : Sound σ blocks rest none) :
+    Sound σ blocks (.cases key w x ok gives arms results rest) none := by
+  intro path ρ ids env k s lo hi inv _ differs hnone nodup apart recorded
+  simp only [walk, casesEntry, Option.map_none, Option.isSome_none, miss_free, leaves,
+    Exit.region_skel] at differs hnone recorded ⊢
   simp only [Term.addresses] at nodup apart recorded
-  obtain ⟨⟨⟨ra, ea⟩, na, eba, ata⟩, ga⟩ := walkArms_state (localFactRules V fns) definition none
-    blocks arms ids k st
-  generalize hregions : walkArms (localFactRules V fns) definition none blocks arms ids k st =
-    regions at hnone recorded ea eba ga ⊢
-  obtain ⟨⟨⟨rr, er⟩, nr, ebr, atr⟩, _⟩ := walk_state (localFactRules V fns) definition none
-    blocks rest ((fresh mid.length regions.2).1 ++ ids)
-    ((afterRegions (localFactRules V fns) regions.1 k (fresh mid.length regions.2).1 mid 0).enter
-      (localFactRules V fns) mid)
-    (fresh mid.length regions.2).2
-  have refsR : regions.2.refusals = [] := by
-    rw [hnone] at er
-    exact (List.append_eq_nil_iff.mp er.symm).2
+  obtain ⟨⟨ra, ea⟩, ⟨na, eba, ata⟩, da⟩ := walkArms_adds σ.rules σ.checks σ.definition σ.role
+    blocks arms none ids k s
+  generalize hregions : walkArms σ.rules σ.checks σ.definition σ.role blocks arms none ids k s =
+    regions at differs hnone recorded ea eba da ⊢
+  obtain ⟨⟨rr, er⟩, ⟨nr, ebr, atr⟩, dr⟩ := walk_adds σ.rules σ.checks σ.definition σ.role
+    blocks rest none (bindIds ids results (fresh mid.length regions.state.st).1)
+    ((afterRegions σ.rules regions.exits k (fresh mid.length regions.state.st).1 mid
+      0).enter σ.rules mid)
+    { regions.state with st := (fresh mid.length regions.state.st).2 }
+  obtain ⟨differsA, differsR⟩ := differs_both da dr differs
+  have refsR : regions.state.st.refusals = [] := refusals_before ⟨rr, er⟩ hnone
   have nodup₁ := (List.nodup_cons.mp nodup).2
   have nodupA := (List.nodup_append.mp nodup₁).1
   have nodupR := (List.nodup_append.mp nodup₁).2.1
-  have fits := ga inv.length ⟨inv.coherent.wf, inv.below⟩
   have valid := agree_valid inv.agree inv.coherent.valid
-  have recA : Recorded definition F (Arms.addresses blocks arms) regions.2 :=
-    (recorded.sub fun x m => by simp [m]).strip ebr atr
+  have recA : Recorded σ (Arms.addresses blocks arms) regions.state.st :=
+    (Recorded.sub recorded fun x m => by simp [m]).strip ebr atr
       (fun x m mr => nodup_apart nodup₁ m mr)
-  have shows := iha path ρ ids env k st _ (localPick_valid ok (env t x) (valid t x)) inv
-    (by rw [hregions]; exact refsR) nodupA (apart.sub fun x m => by simp [m])
-    (by rw [hregions]; exact recA)
+  have shows := iha path ρ ids env k s lo lo _ (laws.pick ok (env.get x) (valid t x)) inv trivial
+    (by rw [hregions]; exact differsA) (by rw [hregions]; exact refsR) nodupA
+    (BoundsApart.sub apart fun x m => by simp [m]) (by rw [hregions]; exact recA)
   rw [hregions] at shows
-  have apartR : Apart definition (fresh mid.length regions.2).2 (rest.addresses blocks) :=
-    (apart.sub fun x m => by simp [m]).extend eba ata (fun x m mr => nodup_apart nodup₁ m mr)
-  have afterRest : ∀ (mids : HList M.Val mid), (∃ ρ', ρ.Le ρ' ∧ ∃ e, e ∈ regions.1 ∧
-      ExitInv M table ρ' e regions.2 mids) →
-      Shows (table := table) F definition blocks rest path (Env.extend mids env) (fun vs =>
-        ∃ ρ', ρ.Le ρ' ∧ ExitInv M table ρ'
-          (walk (localFactRules V fns) definition none blocks rest
-            ((fresh mid.length regions.2).1 ++ ids)
-            ((afterRegions (localFactRules V fns) regions.1 k (fresh mid.length regions.2).1 mid
-              0).enter (localFactRules V fns) mid)
-            (fresh mid.length regions.2).2)
-          (walk (localFactRules V fns) definition none blocks rest
-            ((fresh mid.length regions.2).1 ++ ids)
-            ((afterRegions (localFactRules V fns) regions.1 k (fresh mid.length regions.2).1 mid
-              0).enter (localFactRules V fns) mid)
-            (fresh mid.length regions.2).2).st vs) := by
+  have apartR : BoundsApart σ { regions.state with st := (fresh mid.length regions.state.st).2 }.st
+      (rest.addresses blocks) :=
+    (BoundsApart.sub apart fun x m => by simp [m]).extend eba ata
+      (fun x m mr => nodup_apart nodup₁ m mr)
+  have afterRest : ∀ (mids : HList σ.sem.Val mid), (∃ ρ', ρ.Le ρ' ∧ ∃ e, e ∈ regions.exits ∧
+      ExitInv σ ρ' e regions.state.st mids ∧
+        ArmsFollowed (none : Option (SkelArms D mid payloads)) lo ρ' regions.state.st) →
+      Shows σ blocks rest path (env.extend results mids) (fun vs => ∃ ρ', ρ.Le ρ' ∧
+        ExitInv σ ρ' (walk σ.rules σ.checks σ.definition σ.role blocks rest none
+          (bindIds ids results (fresh mid.length regions.state.st).1)
+          ((afterRegions σ.rules regions.exits k (fresh mid.length regions.state.st).1 mid
+            0).enter σ.rules mid)
+          { regions.state with st := (fresh mid.length regions.state.st).2 }).region
+          (walk σ.rules σ.checks σ.definition σ.role blocks rest none
+            (bindIds ids results (fresh mid.length regions.state.st).1)
+            ((afterRegions σ.rules regions.exits k (fresh mid.length regions.state.st).1 mid
+              0).enter σ.rules mid)
+            { regions.state with st := (fresh mid.length regions.state.st).2 }).state.st vs ∧
+        Followed (none : Option (Skel D outs)) hi ρ'
+          (walk σ.rules σ.checks σ.definition σ.role blocks rest none
+            (bindIds ids results (fresh mid.length regions.state.st).1)
+            ((afterRegions σ.rules regions.exits k (fresh mid.length regions.state.st).1 mid
+              0).enter σ.rules mid)
+            { regions.state with st := (fresh mid.length regions.state.st).2 }).state.st) := by
     intro mids h
-    obtain ⟨ρ₁, le, e, he, ex⟩ := h
-    have inv' := afterRegions_inv he inv le ex fits.2.2
-    have shows' := ihr path _ _ _ _ _ inv' hnone nodupR apartR
-      (recorded.sub fun x m => by simp [m])
-    refine ⟨shows'.1, ?_⟩
-    refine Process.every_mono _ _ ?_ (fun _ h => h) shows'.2
-    intro vs h'
-    obtain ⟨ρ'', le'', ex'⟩ := h'
-    exact ⟨ρ'', le.trans ((setFrom_le ex.coherent.support _).trans le''), ex'⟩
+    obtain ⟨ρ₁, le, e, he, ex, -⟩ := h
+    have validM : σ.AllValid mids := allValid_of_valuesOf ex.rets ex.coherent.valid
+    obtain ⟨coh, le₂, look⟩ := leaves_fresh (s := regions.state) ex.coherent (σ.sem.dyns mids)
+      validM
+    simp only [leaves, σ.sem.dyns_length] at coh look
+    have inv' := afterRegions_inv laws he inv le ex results coh le₂ look
+    have shows' := ihr path _ _ _ _ { regions.state with st := (fresh mid.length regions.state.st).2 }
+      hi hi inv' trivial differsR hnone nodupR apartR (Recorded.sub recorded fun x m => by simp [m])
+    exact ⟨shows'.1, Process.every_mono _ _ (fun vs h' => by
+      obtain ⟨ρ'', le'', ex', f⟩ := h'
+      exact ⟨ρ'', le.trans (le₂.trans le''), ex', f⟩) (fun _ h => h) shows'.2⟩
+  simp only [Shows, Term.EveryLoop, Term.denote]
   refine ⟨⟨shows.1, ?_⟩, ?_⟩
   · exact Process.every_mono _ _ (fun mids h => (afterRest mids h).1) (fun _ _ => trivial) shows.2
   · rw [Process.every_bind]
     exact Process.every_mono _ _ (fun mids h => (afterRest mids h).2) (fun _ h => h) shows.2
 
-end
-
 /-! ### Loops -/
 
-section
-variable {V : Vocabulary} {M : Model V}
-
 /-- Values collected so far: as many of each type as iterations, each valid. -/
-def CollectedOK : {each : List V.Ty} → HList (fun a => List (M.Val a)) each → Nat → Prop
+def CollectedOK (σ : Setting D Raw) :
+    {each : List D.Ty} → HList (fun a => List (σ.sem.Val a)) each → Nat → Prop
   | [], .nil, _ => True
-  | a :: _, .cons vs rest, i => vs.length = i ∧ (∀ v, v ∈ vs → M.Valid a v) ∧ CollectedOK rest i
+  | a :: _, .cons vs rest, i =>
+      vs.length = i ∧ (∀ v, v ∈ vs → σ.Valid ⟨a, v⟩) ∧ CollectedOK σ rest i
 
-theorem collectedOK_empties : ∀ (each : List V.Ty),
-    CollectedOK (HList.empties (V := M.Val) each) 0
+omit [DecidableEq Raw] in
+theorem collectedOK_empties : ∀ (each : List D.Ty),
+    CollectedOK σ (HList.empties (V := σ.sem.Val) each) 0
   | [] => trivial
   | _ :: rest => ⟨rfl, fun _ m => (nomatch m), collectedOK_empties rest⟩
 
-theorem collectedOK_push : ∀ {each : List V.Ty} {acc : HList (fun a => List (M.Val a)) each}
-    {i : Nat} {vs : HList M.Val each}, CollectedOK acc i → vs.All M.Valid →
-    CollectedOK (acc.push vs) (i + 1)
+omit [DecidableEq Raw] in
+theorem collectedOK_push : ∀ {each : List D.Ty} {acc : HList (fun a => List (σ.sem.Val a)) each}
+    {i : Nat} {vs : HList σ.sem.Val each}, CollectedOK σ acc i → σ.AllValid vs →
+    CollectedOK σ (acc.push vs) (i + 1)
   | [], .nil, _, .nil, _, _ => trivial
   | _ :: _, .cons xs rest, _, .cons v more, h, all => by
       obtain ⟨len, valid, others⟩ := h
-      refine ⟨by simp [len], fun w m => ?_, collectedOK_push others (HList.all_cons.mp all).2⟩
+      refine ⟨by simp [len], fun w m => ?_, collectedOK_push others (allValid_cons.mp all).2⟩
       rcases List.mem_append.mp m with m | m
       · exact valid w m
       · simp only [List.mem_singleton] at m
         subst m
-        exact (HList.all_cons.mp all).1
+        exact (allValid_cons.mp all).1
 
-theorem collected_valid {fns : List (FnHeader V)} {table : FnTable M fns} (size : Option Nat)
-    {n : Nat} (fits : ∀ m, size = some m → n = m) :
-    ∀ {each : List V.Ty} {acc : HList (fun a => List (M.Val a)) each}, CollectedOK acc n →
-      ((localSem M fns table).collected size acc).All M.Valid
-  | [], .nil, _ => trivial
-  | _ :: _, .cons vs rest, h => by
+omit [DecidableEq Raw] in
+include laws in
+theorem collected_valid (size : Option Nat) {n : Nat} (fits : ∀ m, size = some m → n = m) :
+    ∀ {each : List D.Ty} {acc : HList (fun a => List (σ.sem.Val a)) each}, CollectedOK σ acc n →
+      σ.AllValid (σ.sem.collected size acc)
+  | [], .nil, _ => fun _ m => nomatch m
+  | a :: _, .cons vs rest, h => by
       obtain ⟨len, valid, others⟩ := h
-      exact HList.all_cons.mpr ⟨⟨valid, fun m e => by rw [len]; exact fits m e⟩,
+      exact allValid_cons.mpr ⟨laws.collect size a vs (fun m e => by rw [len]; exact fits m e) valid,
         collected_valid size fits others⟩
 
-end
+include laws in
+omit [DecidableEq Raw] in
+/-- The value of the count of a loop as often as a count reads as the number of iterations. -/
+theorem count_at {Γ : Ctx D.Ty} {ρ : Valuation σ.sem.Dyn} {ids : Ctx Nat}
+    {env : Env σ.sem.Val Γ} (agree : Agree σ ρ ids env)
+    (valid : ∀ i v, ρ i = some v → σ.Valid v) {w : D.Who} {t : D.Ty} (count : Var Γ t)
+    (ok : D.Count w t) :
+    NatAt σ.R ρ (idOf ids count.name) (σ.sem.times (Times.value count ok) env) := by
+  have hc := agree.idOf count
+  exact ⟨_, hc, laws.count ok (env.get count) (valid _ _ hc)⟩
 
-section
-variable {V : Vocabulary} {M : Model V} {fns : List (FnHeader V)} {table : FnTable M fns}
-
-theorem Consistent.sub {ρ : Valuation (Dyn M)} {tbl tbl' : Table (LocalRaw V)}
-    (h : Consistent (LocalRun M table) ρ tbl') (sub : ∀ x, x ∈ tbl → x ∈ tbl') :
-    Consistent (LocalRun M table) ρ tbl := fun x m => h x (sub x m)
-
-theorem Closed.sub {ρ : Valuation (Dyn M)} {tbl tbl' : Table (LocalRaw V)}
-    (h : Closed ρ tbl') (sub : ∀ x, x ∈ tbl → x ∈ tbl') : Closed ρ tbl := fun x m => h x (sub x m)
-
-/-- The value of the count of a loop as often as a count, and what is known of its identifier. -/
-theorem count_at {Γ : List V.Ty} {ρ : Valuation (Dyn M)} {ids : List Nat}
-    {env : Env M.Val Γ} (agree : Agree M ρ ids env) {t : V.Ty} (count : Var Γ t)
-    (ok : (localDialect V fns).Count () t) :
-    NatAt (localReading M) ρ (ids.getD count.index 0)
-      ((localSem M fns table).times (Times.value count ok) env) := by
-  have := agree t count
-  simp only [Semantics.times]
-  subst ok
-  exact ⟨_, this, rfl⟩
-
+include laws in
+omit [DecidableEq Raw] in
 /-- How often a loop runs is at most the bound that the walk computes. -/
-theorem timesBound_ok {Γ : List V.Ty} {ρ : Valuation (Dyn M)} {ids : List Nat}
-    {env : Env M.Val Γ} {k : Known} (hk : k.Holds (localReading M) ρ) (agree : Agree M ρ ids env)
-    (times : Times (localDialect V fns) () Γ) :
-    ∀ m, timesBound k ids times = some m → (localSem M fns table).times times env ≤ m := by
+theorem timesBound_ok {Γ : Ctx D.Ty} {ρ : Valuation σ.sem.Dyn} {ids : Ctx Nat}
+    {env : Env σ.sem.Val Γ} {k : Known} (hk : k.Holds σ.R ρ) (agree : Agree σ ρ ids env)
+    (valid : ∀ i v, ρ i = some v → σ.Valid v) {w : D.Who} (times : Times D w Γ) :
+    ∀ m, timesBound k ids times = some m → σ.sem.times times env ≤ m := by
   cases times with
   | fixed n =>
       intro m e
@@ -1205,69 +1886,66 @@ theorem timesBound_ok {Γ : List V.Ty} {ρ : Valuation (Dyn M)} {ids : List Nat}
   | value count ok =>
       intro m e
       simp only [timesBound] at e
-      cases hr : k.rangeOf (ids.getD count.index 0) with
+      cases hr : k.rangeOf (idOf ids count.name) with
       | none => rw [hr] at e; cases e
       | some r =>
           rw [hr] at e
           simp only [Option.bind_some] at e
-          exact (hk.rangeOf_at (count_at agree count ok) hr).2 m e
+          exact (hk.rangeOf_at (count_at laws agree valid count ok) hr).2 m e
 
+include laws in
+omit [DecidableEq Raw] in
 /-- What is known in the body of a loop holds at an iteration below its count. -/
-theorem bodyKnown_holds {Γ carried : List V.Ty} {ρ : Valuation (Dyn M)} {ids : List Nat}
-    {env : Env M.Val Γ} {k : Known} (hk : k.Holds (localReading M) ρ) (agree : Agree M ρ ids env)
-    (valid : ∀ i v, ρ i = some v → ValidDyn M v) (times : Times (localDialect V fns) () Γ)
-    {i index : Nat} (lt : i < (localSem M fns table).times times env)
-    (hi : ρ index = some ⟨.nat, i⟩) {carriedIds : List Nat} {vs : HList M.Val carried}
-    (look : valuesOf ρ carriedIds = some (toDyns vs)) :
-    (bodyKnown (localFactRules V fns) k ids times index carriedIds carried).Holds
-      (localReading M) ρ := by
-  have hindex : NatAt (localReading M) ρ index i := ⟨_, hi, rfl⟩
+theorem bodyKnown_holds {Γ : Ctx D.Ty} {carried : List D.Ty} {ρ : Valuation σ.sem.Dyn}
+    {ids : Ctx Nat} {env : Env σ.sem.Val Γ} {k : Known} (hk : k.Holds σ.R ρ)
+    (agree : Agree σ ρ ids env) (valid : ∀ i v, ρ i = some v → σ.Valid v) {w : D.Who}
+    (times : Times D w Γ) {i index : Nat} (lt : i < σ.sem.times times env)
+    (hi : ρ index = some ⟨D.index w, σ.sem.index w i⟩) {carriedIds : List Nat}
+    {vs : HList σ.sem.Val carried} (look : valuesOf ρ carriedIds = some (σ.sem.dyns vs)) :
+    (bodyKnown σ.rules k ids times index carriedIds carried).Holds σ.R ρ := by
+  have hindex : NatAt σ.R ρ index i := ⟨_, hi, (laws.index w i).2⟩
   have k₁ : ((k.addRange index (indexRange k ids times)).addRange? index
-      (localRange (V := V) Ty.nat)).Holds (localReading M) ρ := by
+      (σ.rules.range (D.index w))).Holds σ.R ρ := by
     refine (hk.addRange hindex ?_).addRange? fun r e => ⟨i, hindex, ?_⟩
     · cases times with
       | fixed n =>
           exact (Range.has_point.mpr rfl : (Range.point n).Has n).below lt
       | value count ok =>
           simp only [indexRange]
-          cases hr : k.rangeOf (ids.getD count.index 0) with
+          cases hr : k.rangeOf (idOf ids count.name) with
           | none => exact ⟨Nat.zero_le _, fun _ e => nomatch e⟩
-          | some r => exact (hk.rangeOf_at (count_at agree count ok) hr).below lt
-    · simp only [localRange, Option.some.injEq] at e
-      subst e
-      exact ⟨Nat.zero_le _, fun _ e => nomatch e⟩
+          | some r => exact (hk.rangeOf_at (count_at laws agree valid count ok) hr).below lt
+    · obtain ⟨n, hn, has⟩ := laws.range (D.index w) r (σ.sem.index w i) e (laws.index w i).1
+      rw [(laws.index w i).2] at hn
+      cases hn
+      exact has
   have carriedOK : ∀ (j m : Nat), carriedIds[j]? = some m →
-      ∃ d, ρ m = some d ∧ carried[j]? = some d.1 := by
-    intro j m e
-    have e1 := valuesOf_getElem look e
-    cases hd : (toDyns vs)[j]? with
-    | none => rw [hd] at e1; exact absurd e1 (valuesOf_mem look m (List.mem_of_getElem? e))
-    | some d =>
-        rw [hd] at e1
-        exact ⟨d, e1, toDyns_typed vs j d hd⟩
-  have validCarried : vs.All M.Valid := valid_of_toDyns (valuesOf_valid look valid)
-  have entered : ∀ k' : Known, k'.enter (localFactRules V fns) (Ty.nat :: carried) = k' :=
-    fun _ => enter_of_valid (vs := HList.cons (i : M.Val .nat) vs) ⟨trivial, validCarried⟩
+      ∃ d, ρ m = some d ∧ carried[j]? = some d.1 := valuesOf_typed look
+  have validCarried : σ.AllValid vs := allValid_of_valuesOf look valid
+  have entered : ∀ k' : Known, k'.enter σ.rules (D.index w :: carried) = k' :=
+    fun _ => enter_of_valid laws (vs := HList.cons (σ.sem.index w i) vs)
+      (allValid_cons.mpr ⟨(laws.index w i).1, validCarried⟩)
   cases times with
   | fixed n =>
       cases n with
       | zero => exact absurd lt (Nat.not_lt_zero _)
       | succ n =>
-          simp only [bodyKnown, localFactRules_range]
+          simp only [bodyKnown]
           rw [entered]
-          exact addTypeRanges_holds k₁ valid carriedOK
+          exact addTypeRanges_holds laws k₁ valid carriedOK
   | value count ok =>
-      simp only [bodyKnown, localFactRules_range]
+      simp only [bodyKnown]
       rw [entered]
-      exact addTypeRanges_holds (k₁.addOrder hindex (count_at agree count ok) (by simpa using lt))
-        valid carriedOK
+      exact addTypeRanges_holds laws (k₁.addOrder hindex (count_at laws agree valid count ok)
+        (by simpa using lt)) valid carriedOK
 
+omit [DecidableEq Raw] in
 /-- The bound that a loop records is its count's upper end. -/
-theorem recordBound_mem {Γ : List V.Ty} {place : Place} {k : Known} {ids : List Nat}
-    {st : St V.Ty (LocalRaw V)} {times : Times (localDialect V fns) () Γ} {q : Place × Nat}
+theorem recordBound_mem {Γ : Ctx D.Ty} {place : Place} {k : Known} {ids : Ctx Nat}
+    {st : St D.Ty Raw} {w : D.Who} {times : Times D w Γ} {q : Place × Nat}
     (m : q ∈ (recordBound place k ids st times).bounds) :
     q ∈ st.bounds ∨ ∃ t, ∃ count : Var Γ t, ∃ ok, times = .value count ok ∧ q.1 = place ∧
-      (k.rangeOf (ids.getD count.index 0)).bind (·.hi) = some q.2 := by
+      (k.rangeOf (idOf ids count.name)).bind (·.hi) = some q.2 := by
   cases times with
   | fixed => exact Or.inl m
   | value count ok =>
@@ -1279,28 +1957,19 @@ theorem recordBound_mem {Γ : List V.Ty} {place : Place} {k : Known} {ids : List
           · exact Or.inl m
       · exact Or.inl m
 
-theorem toDyns_split {carried each : List V.Ty} (out : HList M.Val (carried ++ each)) :
-    toDyns out = toDyns (HList.split carried out).1 ++ toDyns (HList.split carried out).2 := by
-  conv => lhs; rw [← split_append carried out]
-  exact toDyns_append _ _
-
-end
-
-section
-variable {V : Vocabulary} {M : Model V} {fns : List (FnHeader V)} {table : FnTable M fns}
-
+include laws in
+omit [DecidableEq Raw] in
 /-- The base of what is known after a loop: what the types of the collected values say. -/
-theorem afterLoop_holds {e : Exit V.Ty (LocalRaw V)} {iters : Option Nat}
-    {ρ : Valuation (Dyn M)} (valid : ∀ i v, ρ i = some v → ValidDyn M v) :
+theorem afterLoop_holds {e : FactCheck.Exit D.Ty Raw} {iters : Option Nat}
+    {ρ : Valuation σ.sem.Dyn} (valid : ∀ i v, ρ i = some v → σ.Valid v) :
     ∀ (ms : List Nat) (initials : List (Option Range)) (carriedIds returns : List Nat)
-      (τs : List V.Ty) (k : Known), k.Holds (localReading M) ρ →
+      (τs : List D.Ty) (k : Known), k.Holds σ.R ρ →
       (∀ (j m : Nat), ms[j]? = some m → ∃ d, ρ m = some d ∧ τs[j]? = some d.1 ∧
         ∀ initial cid ret, initials[j]? = some initial → carriedIds[j]? = some cid →
           returns[j]? = some ret → ∀ r,
-            carriedRange (localFactRules V fns).ops e initial cid ret iters = some r →
-            ∃ n, (localReading M).nat d = some n ∧ r.Has n) →
-      (afterLoop (localFactRules V fns) e k iters ms initials carriedIds returns τs).Holds
-        (localReading M) ρ := by
+            carriedRange σ.rules.ops e initial cid ret iters = some r →
+            ∃ n, σ.R.nat d = some n ∧ r.Has n) →
+      (afterLoop σ.rules e k iters ms initials carriedIds returns τs).Holds σ.R ρ := by
   intro ms
   induction ms with
   | nil =>
@@ -1309,10 +1978,8 @@ theorem afterLoop_holds {e : Exit V.Ty (LocalRaw V)} {iters : Option Nat}
       exact hk
   | cons m ms ih =>
       intro initials carriedIds returns τs k hk h
-      have base : (k.addRanges (m :: ms) (τs.map (localFactRules V fns).range)).Holds
-          (localReading M) ρ := by
-        rw [localFactRules_range]
-        exact addTypeRanges_holds hk valid fun j m' e => by
+      have base : (k.addRanges (m :: ms) (τs.map σ.rules.range)).Holds σ.R ρ :=
+        addTypeRanges_holds laws hk valid fun j m' e => by
           obtain ⟨d, hd, hτ, _⟩ := h j m' e
           exact ⟨d, hd, hτ⟩
       cases initials with
@@ -1335,25 +2002,25 @@ theorem afterLoop_holds {e : Exit V.Ty (LocalRaw V)} {iters : Option Nat}
                       · refine (hk.addRange? fun r e1 => ?_).addRange? fun r e2 => ?_
                         · obtain ⟨n, hn, has⟩ := hr initial cid ret rfl rfl rfl r e1
                           exact ⟨n, ⟨d, hd, hn⟩, has⟩
-                        · rw [localFactRules_range] at e2
-                          obtain ⟨n, hn, has⟩ := localRange_has e2 d.2 (valid m d hd)
+                        · obtain ⟨n, hn, has⟩ := laws.range d.1 r d.2 e2 (valid m d hd)
                           exact ⟨n, ⟨d, hd, hn⟩, has⟩
                       · intro j m' e'
                         obtain ⟨d', h1, h2, h3⟩ := h (j + 1) m' (by simpa using e')
                         exact ⟨d', h1, by simpa using h2, fun a b c ea eb ec =>
                           h3 a b c (by simpa using ea) (by simpa using eb) (by simpa using ec)⟩
 
+omit [DecidableEq Raw] in
 /-- What the walk knows of a carried natural after a loop holds of its last value. -/
-theorem carriedRange_has {e : Exit V.Ty (LocalRaw V)} {iters : Option Nat}
-    {initial : Option Range} {cid ret N : Nat} {v : Dyn M}
+theorem carriedRange_has {e : FactCheck.Exit D.Ty Raw} {iters : Option Nat}
+    {initial : Option Range} {cid ret N : Nat} {v : σ.sem.Dyn}
     (highOK : ∀ m, iters = some m → N ≤ m)
     (alive : 0 < N → e.known.dead = false)
-    (initialOK : N = 0 → ∀ r, initial = some r → ∃ n, (localReading M).nat v = some n ∧ r.Has n)
+    (initialOK : N = 0 → ∀ r, initial = some r → ∃ n, σ.R.nat v = some n ∧ r.Has n)
     (sumOK : ∀ r₀ t rt, initial = some r₀ →
-      carriedTerm (localFactRules V fns).ops e cid ret = some t → e.known.rangeOf t = some rt →
-      ∃ n, (localReading M).nat v = some n ∧ (Range.afterSums r₀ rt (some N)).Has n) :
-    ∀ r, carriedRange (localFactRules V fns).ops e initial cid ret iters = some r →
-      ∃ n, (localReading M).nat v = some n ∧ r.Has n := by
+      carriedTerm σ.rules.ops e cid ret = some t → e.known.rangeOf t = some rt →
+      ∃ n, σ.R.nat v = some n ∧ (Range.afterSums r₀ rt (some N)).Has n) :
+    ∀ r, carriedRange σ.rules.ops e initial cid ret iters = some r →
+      ∃ n, σ.R.nat v = some n ∧ r.Has n := by
   intro r hr
   simp only [carriedRange] at hr
   split at hr
@@ -1369,7 +2036,7 @@ theorem carriedRange_has {e : Exit V.Ty (LocalRaw V)} {iters : Option Nat}
         · have := highOK 0 zero
           omega
       exact initialOK this r hr
-  · cases ht : carriedTerm (localFactRules V fns).ops e cid ret with
+  · cases ht : carriedTerm σ.rules.ops e cid ret with
     | none => simp [ht] at hr
     | some t =>
         cases hi : initial with
@@ -1385,34 +2052,10 @@ theorem carriedRange_has {e : Exit V.Ty (LocalRaw V)} {iters : Option Nat}
                 obtain ⟨n, hn, has⟩ := sumOK r₀ t rt hi ht hrt
                 exact ⟨n, hn, Range.afterSums_widen has highOK⟩
 
-/-- What holds at an iteration of a loop, of a valuation below the first identifier of its body:
-it agrees with the table after the body's walk, the values are valid, as many collected values
-as iterations, the body's end was reached when an iteration was, the carried values are the
-initial ones before any iteration, and each carried natural that the body returns as itself
-plus a term has the range of the sum so far. -/
-structure LoopAt (ρ ρi : Valuation (Dyn M)) (n0 : Nat) (e : Exit V.Ty (LocalRaw V))
-    (initials : List (Option Range)) (carriedIds : List Nat) {carried each : List V.Ty}
-    (init0 : HList M.Val carried) (i : Nat)
-    (state : HList M.Val carried × HList (fun a => List (M.Val a)) each) : Prop where
-  le : ρ.Le ρi
-  support : Support n0 ρi
-  consistent : Consistent (LocalRun M table) ρi e.st.table
-  closed : Closed ρi e.st.table
-  valid : ∀ j v, ρi j = some v → ValidDyn M v
-  carriedValid : state.1.All M.Valid
-  collected : CollectedOK state.2 i
-  alive : 0 < i → e.known.dead = false
-  initial : i = 0 → state.1 = init0
-  sums : ∀ (j : Nat) (r₀ : Range) (t : Nat) (rt : Range), initials[j]? = some (some r₀) →
-    carriedTerm (localFactRules V fns).ops e (carriedIds.getD j 0) (e.rets.getD j 0) = some t →
-    e.known.rangeOf t = some rt → ∃ d n, (toDyns state.1)[j]? = some d ∧
-      (localReading M).nat d = some n ∧ (Range.afterSums r₀ rt (some i)).Has n
-
-end
-
-theorem carriedTerm_spec {V : Vocabulary} {fns : List (FnHeader V)} {e : Exit V.Ty (LocalRaw V)}
-    {cid ret t : Nat} (h : carriedTerm (localFactRules V fns).ops e cid ret = some t) :
-    ∃ x y, e.st.table.formOf (localFactRules V fns).ops ret = some (.sum, [x, y]) ∧
+omit [DecidableEq Raw] in
+theorem carriedTerm_spec {e : FactCheck.Exit D.Ty Raw} {cid ret t : Nat}
+    (h : carriedTerm σ.rules.ops e cid ret = some t) :
+    ∃ x y, e.st.table.formOf σ.rules.ops ret = some (.sum, [x, y]) ∧
       ((x = cid ∧ t = y) ∨ (y = cid ∧ t = x)) := by
   simp only [carriedTerm] at h
   split at h
@@ -1436,204 +2079,175 @@ theorem valuesOf_tail {Val : Type} {ρ : Valuation Val} {i : Nat} {is : List Nat
       rw [e2, h.2]
   · cases h
 
-section
-variable {V : Vocabulary} {M : Model V} {fns : List (FnHeader V)} {table : FnTable M fns}
-  (distinct : (fns.map (·.key)).Nodup)
-  (definition : Key) (F : List (Place × Nat))
+/-- What holds at an iteration of a loop: the carried values are valid, as many collected values
+as iterations, the body's end was reached when an iteration was, the carried values are the
+initial ones before any iteration, and each carried natural that the body returns as itself plus
+a term has the range of the sum so far. -/
+structure LoopAt (e : FactCheck.Exit D.Ty Raw) (initials : List (Option Range))
+    (carriedIds : List Nat) {carried each : List D.Ty} (init0 : HList σ.sem.Val carried) (i : Nat)
+    (state : HList σ.sem.Val carried × HList (fun a => List (σ.sem.Val a)) each) : Prop where
+  carriedValid : σ.AllValid state.1
+  collected : CollectedOK σ state.2 i
+  alive : 0 < i → e.known.dead = false
+  initial : i = 0 → state.1 = init0
+  sums : ∀ (j : Nat) (r₀ : Range) (t : Nat) (rt : Range), initials[j]? = some (some r₀) →
+    carriedTerm σ.rules.ops e (carriedIds.getD j 0) (e.rets.getD j 0) = some t →
+    e.known.rangeOf t = some rt → ∃ d n, (σ.sem.dyns state.1)[j]? = some d ∧
+      σ.R.nat d = some n ∧ (Range.afterSums r₀ rt (some i)).Has n
 
-include distinct in
-/-- A loop: each iteration starts from the valuation below the first identifier of its body, and
-keeps what holds at an iteration; after the last, the carried naturals have the range of their
-sums, and the loop has run at most as often as the bound recorded for it. -/
-theorem loop_sound (blocks : List (Key × Nat)) {Γ outs carried each : List V.Ty} (key : Key)
-    (times : Times (localDialect V fns) () Γ)
-    (gives : ∀ a, a ∈ carried ++ each → (localDialect V fns).Gives () a)
-    (init : HList (Var Γ) carried)
-    (body : Term (localDialect V fns) ((localDialect V fns).index () :: (carried ++ Γ))
-      (carried ++ each))
-    (rest : Term (localDialect V fns)
-      ((carried ++ each.map ((localDialect V fns).collected times.size)) ++ Γ) outs)
-    (ihb : Sound (table := table) definition F blocks body)
-    (ihr : Sound (table := table) definition F blocks rest) :
-    Sound (table := table) definition F blocks (.loop key () times gives init body rest) := by
-  intro path ρ ids env k st inv hnone nodup apart recorded
-  have lawful := localOpFacts_lawful (table := table) distinct
-  simp only [Shows, walk, Term.EveryLoop, Term.denote] at hnone recorded ⊢
+include laws in
+/-- A loop, when no skeleton is followed: each iteration starts from the valuation before the
+loop, with its number and the carried values at the leaves of the body, and keeps what holds at
+an iteration; after the last, the carried naturals have the range of their sums, and the loop has
+run at most as often as the bound recorded for it. -/
+theorem loop_sound (blocks : List (Key × Nat)) {Γ : Ctx D.Ty} {outs carried each : List D.Ty}
+    (key : Key) (w : D.Who) (times : Times D w Γ)
+    (gives : ∀ a, a ∈ carried ++ each → D.Gives w a) (init : HList (Var Γ) carried)
+    (inputs : Names (D.index w :: carried)) (body : Term D (Γ.extend inputs) (carried ++ each))
+    (results : Names (carried ++ each.map (D.collected times.size)))
+    (rest : Term D (Γ.extend results) outs)
+    (ihb : Sound σ blocks body none) (ihr : Sound σ blocks rest none) :
+    Sound σ blocks (.loop key w times gives init inputs body results rest) none := by
+  intro path ρ ids env k s lo hi inv _ differs hnone nodup apart recorded
+  have lawful : OpFacts.Lawful σ.rules.ops σ.R σ.Runs := laws.ops
+  simp only [walk, loopEntry, Option.map_none, Option.isSome_none, miss_free, leaves,
+    Exit.region_skel] at differs hnone recorded ⊢
   simp only [Term.addresses] at nodup apart recorded
   have notHere := (List.nodup_cons.mp nodup).1
   have nodup₁ := (List.nodup_cons.mp nodup).2
   have nodupB := (List.nodup_append.mp nodup₁).1
   have nodupR := (List.nodup_append.mp nodup₁).2.1
-  have fitsIn := fresh_grows (carried.length + 1) st inv.coherent.wf
-  generalize hin : fresh (carried.length + 1) st = inBody at hnone recorded fitsIn ⊢
-  have in1 : inBody.1 = List.range' st.next (carried.length + 1) := by rw [← hin]; rfl
-  have in2next : inBody.2.next = st.next + (carried.length + 1) := by rw [← hin]; rfl
-  have in2table : inBody.2.table = st.table := by rw [← hin]; rfl
-  have in2bounds : inBody.2.bounds = st.bounds := by rw [← hin]; rfl
-  have headIn : inBody.1.headD 0 = st.next := by rw [in1, List.range'_succ]; rfl
-  have tailIn : inBody.1.tail = List.range' (st.next + 1) carried.length := by
+  have fitsIn := fresh_grows (carried.length + 1) s.st inv.coherent.wf
+  generalize hin : fresh (carried.length + 1) s.st = inBody at differs hnone recorded fitsIn ⊢
+  have in1 : inBody.1 = List.range' s.st.next (carried.length + 1) := by rw [← hin]; rfl
+  have in2next : inBody.2.next = s.st.next + (carried.length + 1) := by rw [← hin]; rfl
+  have in2table : inBody.2.table = s.st.table := by rw [← hin]; rfl
+  have in2bounds : inBody.2.bounds = s.st.bounds := by rw [← hin]; rfl
+  have headIn : inBody.1.headD 0 = s.st.next := by rw [in1, List.range'_succ]; rfl
+  have tailIn : inBody.1.tail = List.range' (s.st.next + 1) carried.length := by
     rw [in1, List.range'_succ]; rfl
-  obtain ⟨⟨⟨rb, eb⟩, nb, ebb, atb⟩, gb⟩ := walk_state (localFactRules V fns) definition none
-    blocks body (inBody.1 ++ ids)
-    (bodyKnown (localFactRules V fns) k ids times (inBody.1.headD 0) inBody.1.tail carried)
-    inBody.2
-  generalize he : walk (localFactRules V fns) definition none blocks body (inBody.1 ++ ids)
-    (bodyKnown (localFactRules V fns) k ids times (inBody.1.headD 0) inBody.1.tail carried)
-    inBody.2 = e at hnone recorded eb ebb gb ⊢
-  have rbs := recordBound_state (D := localDialect V fns) ⟨definition, blocks, some key, none⟩ k
-    ids e.st times
-  generalize hst₁ : recordBound ⟨definition, blocks, some key, none⟩ k ids e.st times = st₁
-    at hnone recorded rbs ⊢
+  have scopeB : Scoped (Γ.extend inputs) (bindIds ids inputs inBody.1) inBody.2 :=
+    ⟨fitsIn.1, (inv.scoped.2.mono fitsIn.2.1.next).bind inputs inBody.1 (by simp [in1])
+      fitsIn.2.2⟩
+  obtain ⟨⟨rb, eb⟩, ⟨nb, ebb, atb⟩, db⟩ := walk_adds σ.rules σ.checks σ.definition σ.role
+    blocks body none (bindIds ids inputs inBody.1)
+    (bodyKnown σ.rules k ids times (inBody.1.headD 0) inBody.1.tail carried)
+    { s with st := inBody.2 }
+  have gb := walk_grows σ.rules σ.checks σ.definition σ.role blocks body none
+    (bindIds ids inputs inBody.1)
+    (bodyKnown σ.rules k ids times (inBody.1.headD 0) inBody.1.tail carried)
+    { s with st := inBody.2 } scopeB trivial
+  generalize he : walk σ.rules σ.checks σ.definition σ.role blocks body none
+    (bindIds ids inputs inBody.1)
+    (bodyKnown σ.rules k ids times (inBody.1.headD 0) inBody.1.tail carried)
+    { s with st := inBody.2 } = e at differs hnone recorded eb ebb db gb ⊢
+  have rbs := recordBound_state (D := D) ⟨σ.definition, blocks, some key, σ.role⟩ k ids
+    e.state.st times
+  generalize hst₁ : recordBound ⟨σ.definition, blocks, some key, σ.role⟩ k ids e.state.st times =
+    st₁ at differs hnone recorded rbs ⊢
   obtain ⟨rbt, rbn, rbr, nbd, ebd, atd⟩ := rbs
-  generalize hmade : fresh (carried.length + each.length) st₁ = made at hnone recorded ⊢
-  obtain ⟨⟨⟨rr, er⟩, nbr, ebr, atr⟩, _⟩ := walk_state (localFactRules V fns) definition none
-    blocks rest (made.1 ++ ids)
-    ((afterLoop (localFactRules V fns) e k (timesBound k ids times) made.1
-      (List.map k.rangeOf (idsOf ids init)) inBody.1.tail e.rets
-      (carried ++ List.map (fun t => Ty.seq t times.size) each)).enter (localFactRules V fns)
-      (carried ++ List.map (fun t => Ty.seq t times.size) each)) made.2
-  have m2r : made.2.refusals = st₁.refusals := by rw [← hmade]; rfl
+  generalize hmade : fresh (carried.length + each.length) st₁ = made at differs hnone recorded ⊢
   have m2b : made.2.bounds = st₁.bounds := by rw [← hmade]; rfl
   have m2t : made.2.table = st₁.table := by rw [← hmade]; rfl
-  have m2n : made.2.next = st₁.next + (carried.length + each.length) := by rw [← hmade]; rfl
   have m1 : made.1 = List.range' st₁.next (carried.length + each.length) := by
     rw [← hmade]; rfl
-  have refsE : e.st.refusals = [] := by
-    rw [hnone, m2r, rbr] at er
-    exact (List.append_eq_nil_iff.mp er.symm).2
-  have fitsE := gb (by simp [in1, inv.length]; omega) ⟨fitsIn.1, fun i m => by
-    rcases List.mem_append.mp m with m | m
-    · exact fitsIn.2.2 i m
-    · exact Nat.lt_of_lt_of_le (inv.below i m) fitsIn.2.1.next⟩
-  have splitE : ∀ x, x ∈ e.st.table → x.lo + x.count ≤ st.next ∨ st.next ≤ x.lo := by
-    obtain ⟨new, enew, low⟩ := fitsE.2.table
-    intro x m
-    have m : x ∈ e.st.table.entries := m
-    rw [enew, in2table] at m
-    rcases List.mem_append.mp m with m | m
-    · right
-      have := low x m
-      rw [in2next] at this
-      omega
-    · left
-      exact (inv.coherent.wf.mem m).2
-  have argsE : ∀ x, x ∈ e.st.table → ∀ a, a ∈ x.args → a < x.lo :=
-    fun x m => (fitsE.1.1.mem m).1
-  have subTable : ∀ x, x ∈ st.table → x ∈ e.st.table := by
-    obtain ⟨new, enew, _⟩ := fitsE.2.table
-    intro x m
-    show x ∈ e.st.table.entries
-    rw [enew, in2table]
-    exact List.mem_append_right _ m
-  have apartB : Apart definition inBody.2 (body.addresses blocks) := fun q m bl key' eq inB =>
-    apart q (by rw [in2bounds] at m; exact m) bl key' eq
+  obtain ⟨⟨rr, er⟩, ⟨nbr, ebr, atr⟩, dr⟩ := walk_adds σ.rules σ.checks σ.definition σ.role
+    blocks rest none (bindIds ids results made.1)
+    ((afterLoop σ.rules e.region k (timesBound k ids times) made.1
+      ((idsOf ids init).map k.rangeOf) inBody.1.tail e.rets
+      (carried ++ each.map (D.collected times.size))).enter σ.rules
+      (carried ++ each.map (D.collected times.size))) { e.state with st := made.2 }
+  obtain ⟨differsB, differsR⟩ := differs_both db dr differs
+  have refsE : e.state.st.refusals = [] := by
+    have := refusals_before ⟨rr, er⟩ hnone
+    rw [← hmade] at this
+    simp only [fresh] at this
+    rw [rbr] at this
+    exact this
+  have apartB : BoundsApart σ { s with st := inBody.2 }.st (body.addresses blocks) :=
+    fun q m bl key' eq inB => apart q (by simp only at m; rw [in2bounds] at m; exact m) bl key' eq
       (List.mem_cons_of_mem _ (List.mem_append_left _ inB))
-  have recB : Recorded definition F (body.addresses blocks) e.st :=
-    ((recorded.sub fun x m => List.mem_cons_of_mem _ (List.mem_append_left _ m)).strip ebr atr
-      (fun x m mr => nodup_apart nodup₁ m mr)).strip (by rw [m2b, ebd])
+  have recB : Recorded σ (body.addresses blocks) e.state.st :=
+    ((Recorded.sub recorded fun x m => List.mem_cons_of_mem _ (List.mem_append_left _ m)).strip
+      ebr atr (fun x m mr => nodup_apart nodup₁ m mr)).strip (by simp only; rw [m2b, ebd])
       (Bnew := [(blocks, key)]) (fun q m => ⟨blocks, key, atd q m, List.mem_singleton_self _⟩)
       (fun x m mr => by
         simp only [List.mem_singleton] at mr
         subst mr
         exact notHere (List.mem_append_left _ m))
+  have growsE : St.Grows s.st e.state.st := fitsIn.2.1.trans gb.2
   -- the body at an iteration
-  have bodyInv : ∀ (i : Nat) (state : HList M.Val carried × HList (fun a => List (M.Val a)) each)
-      (ρi : Valuation (Dyn M)), i < (localSem M fns table).times times env →
-      LoopAt (table := table) ρ ρi st.next e (List.map k.rangeOf (idsOf ids init)) inBody.1.tail
-        (env.all init) i state →
-      Inv M table (ρi.setFrom st.next (toDyns (HList.cons (a := Ty.nat) i state.1)))
-        (inBody.1 ++ ids) (Env.cons (a := Ty.nat) i (Env.extend state.1 env))
-        (bodyKnown (localFactRules V fns) k ids times (inBody.1.headD 0) inBody.1.tail carried)
+  have bodyInv : ∀ (i : Nat) (state : σ.sem.LoopState carried each),
+      i < σ.sem.times times env →
+      LoopAt (σ := σ) e.region ((idsOf ids init).map k.rangeOf) inBody.1.tail (env.all init) i
+        state →
+      Inv σ (ρ.setFrom s.st.next (σ.sem.dyns (HList.cons (σ.sem.index w i) state.1)))
+        (bindIds ids inputs inBody.1) (env.extend inputs (.cons (σ.sem.index w i) state.1))
+        (bodyKnown σ.rules k ids times (inBody.1.headD 0) inBody.1.tail carried)
         inBody.2 := by
-    intro i state ρi lt la
-    have validL : ∀ v, v ∈ toDyns (HList.cons (a := Ty.nat) i state.1) → ValidDyn M v :=
-      toDyns_valid (HList.all_cons.mpr ⟨trivial, la.carriedValid⟩)
-    have lenL : (toDyns (HList.cons (a := Ty.nat) i state.1)).length = carried.length + 1 := by
-      rw [toDyns_length]; rfl
-    have le₁ := setFrom_le la.support (toDyns (HList.cons (a := Ty.nat) i state.1))
-    have look : valuesOf (ρi.setFrom st.next (toDyns (HList.cons (a := Ty.nat) i state.1)))
-        inBody.1 = some (toDyns (HList.cons (a := Ty.nat) i state.1)) := by
-      rw [in1, ← lenL]
-      exact valuesOf_setFrom _ _ _
-    obtain ⟨cons, clo⟩ := consistent_setFrom inv.coherent.wf (la.consistent.sub subTable)
-      (la.closed.sub subTable) (toDyns (HList.cons (a := Ty.nat) i state.1))
-    have validS := setFrom_valid (lo := st.next) la.valid validL
-    refine ⟨⟨?_, ?_, ?_, ?_, validS⟩, ?_, ?_, ?_, ?_⟩
-    · rw [in2next, ← lenL]
-      exact setFrom_support la.support _
-    · rw [in2next, in2table]
-      exact inv.coherent.wf.mono (by omega)
-    · rw [in2table]; exact cons
-    · rw [in2table]; exact clo
-    · simp [in1, inv.length]; omega
-    · intro j m
-      rcases List.mem_append.mp m with m | m
-      · exact fitsIn.2.2 j m
-      · exact Nat.lt_of_lt_of_le (inv.below j m) fitsIn.2.1.next
-    · exact agree_extend (inv.agree.le (la.le.trans le₁)) (HList.cons (a := Ty.nat) i state.1)
-        inBody.1 look
-    · have hi : (ρi.setFrom st.next (toDyns (HList.cons (a := Ty.nat) i state.1)))
-          (inBody.1.headD 0) = some ⟨.nat, i⟩ := by
-        rw [headIn]
-        have := setFrom_at ρi st.next (toDyns (HList.cons (a := Ty.nat) i state.1)) 0
-          (by rw [lenL]; omega)
-        rw [Nat.add_zero] at this
-        rw [this]
-        rfl
-      have lookC : valuesOf (ρi.setFrom st.next (toDyns (HList.cons (a := Ty.nat) i state.1)))
-          inBody.1.tail = some (toDyns state.1) := by
-        have shape : inBody.1 = st.next :: inBody.1.tail := by
-          rw [tailIn, in1, List.range'_succ]
-        rw [shape] at look
-        exact valuesOf_tail look
-      exact bodyKnown_holds (inv.holds.le (la.le.trans le₁)) (inv.agree.le (la.le.trans le₁))
-        validS times lt hi lookC
-  have bodyShows : ∀ (i : Nat)
-      (state : HList M.Val carried × HList (fun a => List (M.Val a)) each)
-      (ρi : Valuation (Dyn M)), i < (localSem M fns table).times times env →
-      LoopAt (table := table) ρ ρi st.next e (List.map k.rangeOf (idsOf ids init)) inBody.1.tail
-        (env.all init) i state →
-      Shows (table := table) F definition blocks body (path ++ [.iteration key i])
-        (Env.cons (a := Ty.nat) i (Env.extend state.1 env)) (fun out => ∃ ρ',
-          (ρi.setFrom st.next (toDyns (HList.cons (a := Ty.nat) i state.1))).Le ρ' ∧
-          ExitInv M table ρ' e e.st out) := by
-    intro i state ρi lt la
-    have shows := ihb (path ++ [.iteration key i]) _ _ _ _ _ (bodyInv i state ρi lt la)
-      (by rw [he]; exact refsE) nodupB apartB (by rw [he]; exact recB)
+    intro i state lt la
+    have validL : σ.AllValid (HList.cons (σ.sem.index w i) state.1) :=
+      allValid_cons.mpr ⟨(laws.index w i).1, la.carriedValid⟩
+    have lenL : (σ.sem.dyns (HList.cons (σ.sem.index w i) state.1)).length =
+        carried.length + 1 := by rw [σ.sem.dyns_length]; rfl
+    obtain ⟨coh, le₁, look⟩ := leaves_fresh (s := s) inv.coherent
+      (σ.sem.dyns (HList.cons (σ.sem.index w i) state.1)) validL
+    simp only [leaves, lenL, hin] at coh look
+    refine ⟨coh, agree_extend inputs (HList.cons (σ.sem.index w i) state.1) inBody.1
+      (inv.agree.le le₁) look, ?_⟩
+    have hi : (ρ.setFrom s.st.next (σ.sem.dyns (HList.cons (σ.sem.index w i) state.1)))
+        (inBody.1.headD 0) = some ⟨D.index w, σ.sem.index w i⟩ := by
+      rw [headIn]
+      have := setFrom_at ρ s.st.next (σ.sem.dyns (HList.cons (σ.sem.index w i) state.1)) 0
+        (by rw [lenL]; omega)
+      rw [Nat.add_zero] at this
+      rw [this]
+      rfl
+    have lookC : valuesOf (ρ.setFrom s.st.next (σ.sem.dyns (HList.cons (σ.sem.index w i) state.1)))
+        inBody.1.tail = some (σ.sem.dyns state.1) := by
+      have shape : inBody.1 = s.st.next :: inBody.1.tail := by
+        rw [tailIn, in1, List.range'_succ]
+      rw [shape] at look
+      exact valuesOf_tail look
+    exact bodyKnown_holds laws (inv.holds.le le₁) (inv.agree.le le₁) coh.valid times lt hi lookC
+  have bodyShows : ∀ (i : Nat) (state : σ.sem.LoopState carried each),
+      i < σ.sem.times times env →
+      LoopAt (σ := σ) e.region ((idsOf ids init).map k.rangeOf) inBody.1.tail (env.all init) i
+        state →
+      Shows σ blocks body (path ++ [.iteration key i])
+        (env.extend inputs (.cons (σ.sem.index w i) state.1)) (fun out => ∃ ρ',
+          (ρ.setFrom s.st.next (σ.sem.dyns (HList.cons (σ.sem.index w i) state.1))).Le ρ' ∧
+          ExitInv σ ρ' e.region e.state.st out ∧
+          Followed (none : Option (Skel D (carried ++ each))) lo ρ' e.state.st) := by
+    intro i state lt la
+    have shows := ihb (path ++ [.iteration key i]) _ _ _ _ { s with st := inBody.2 } lo lo
+      (bodyInv i state lt la) trivial (by rw [he]; exact differsB) (by rw [he]; exact refsE)
+      nodupB apartB (by rw [he]; exact recB)
     rw [he] at shows
     exact shows
   -- one iteration keeps what holds
-  have keeps : ∀ (i : Nat) (state : (localSem M fns table).LoopState carried each),
-      i < (localSem M fns table).times times env →
-      (∃ ρi, LoopAt (table := table) ρ ρi st.next e (List.map k.rangeOf (idsOf ids init))
-        inBody.1.tail (env.all init) i state) →
-      ((localSem M fns table).loopStep () (fun path' env' =>
-          Term.denote (localSem M fns table) body path' env') key path env i state).Every
-        (fun _ _ => True) (fun state' => ∃ ρi, LoopAt (table := table) ρ ρi st.next e
-          (List.map k.rangeOf (idsOf ids init)) inBody.1.tail (env.all init) (i + 1) state')
-        (· ≠ .undefined) := by
-    intro i state lt h
-    obtain ⟨ρi, la⟩ := h
-    have shows := bodyShows i state ρi lt la
+  have keeps : ∀ (i : Nat) (state : σ.sem.LoopState carried each),
+      i < σ.sem.times times env →
+      LoopAt (σ := σ) e.region ((idsOf ids init).map k.rangeOf) inBody.1.tail (env.all init) i
+        state →
+      (σ.sem.loopStep w inputs (fun path' env' => Term.denote σ.sem body path' env') key path env i
+        state).Every σ.permitted (fun state' => LoopAt (σ := σ) e.region
+          ((idsOf ids init).map k.rangeOf) inBody.1.tail (env.all init) (i + 1) state')
+        (fun stop => ¬ σ.undefined stop) := by
+    intro i state lt la
+    have shows := bodyShows i state lt la
     simp only [Semantics.loopStep]
     rw [Process.every_bind]
     refine Process.every_mono _ _ ?_ (fun _ h => h) shows.2
     intro out h
-    obtain ⟨ρ', le', ex⟩ := h
+    obtain ⟨ρ', le', ex, -⟩ := h
     simp only [Process.Every]
-    have lenL : (toDyns (HList.cons (a := Ty.nat) i state.1)).length = carried.length + 1 := by
-      rw [toDyns_length]; rfl
-    have le₁ := setFrom_le la.support (toDyns (HList.cons (a := Ty.nat) i state.1))
-    have outValid : out.All M.Valid :=
-      valid_of_toDyns (valuesOf_valid ex.rets ex.coherent.valid)
-    have parts := (all_append _ _).mp
-      (by rw [split_append]; exact outValid :
-        ((HList.split carried out).1.append (HList.split carried out).2).All M.Valid)
-    obtain ⟨cons, clo⟩ := consistent_below splitE argsE ex.coherent.consistent ex.coherent.closed
-    refine ⟨ρ'.below st.next, below_le inv.coherent.support (la.le.trans (le₁.trans le')),
-      below_support _ _, cons, clo,
-      fun j v h => ex.coherent.valid j v (below_self_le ρ' st.next j v h), parts.1,
-      collectedOK_push la.collected parts.2, fun _ => ex.holds.alive,
+    have lenL : (σ.sem.dyns (HList.cons (σ.sem.index w i) state.1)).length =
+        carried.length + 1 := by rw [σ.sem.dyns_length]; rfl
+    have outValid : σ.AllValid out := allValid_of_valuesOf ex.rets ex.coherent.valid
+    have parts := (allValid_append _ _).mp (by rw [split_append]; exact outValid :
+      σ.AllValid ((HList.split carried out).1.append (HList.split carried out).2))
+    refine ⟨parts.1, collectedOK_push la.collected parts.2, fun _ => ex.holds.alive,
       fun h => absurd h (Nat.succ_ne_zero i), ?_⟩
     intro j r₀ t rt hinit hterm hrt
     have jlt : j < carried.length := by
@@ -1641,26 +2255,26 @@ theorem loop_sound (blocks : List (Key × Nat)) {Γ outs carried each : List V.T
       simp only [List.length_map, idsOf_length] at this
       exact this
     obtain ⟨d₀, n₀, hd₀, hn₀, has₀⟩ := la.sums j r₀ t rt hinit hterm hrt
-    have retLt : j < e.rets.length := by
+    have retLt : j < e.region.rets.length := by
       have h1 := valuesOf_length ex.rets
-      rw [toDyns_length] at h1
+      rw [σ.sem.dyns_length] at h1
       have h2 := List.length_append (as := carried) (bs := each)
       omega
-    have hret : ρ' (e.rets.getD j 0) = (toDyns out)[j]? := valuesOf_get ex.rets j retLt
-    have outSplit : (toDyns out)[j]? = (toDyns (HList.split carried out).1)[j]? := by
-      rw [toDyns_split out, List.getElem?_append_left (by rw [toDyns_length]; exact jlt)]
+    have hret : ρ' (e.region.rets.getD j 0) = (σ.sem.dyns out)[j]? := valuesOf_get ex.rets j retLt
+    have outSplit : (σ.sem.dyns out)[j]? = (σ.sem.dyns (HList.split carried out).1)[j]? := by
+      rw [dyns_split σ.sem out, List.getElem?_append_left (by rw [σ.sem.dyns_length]; exact jlt)]
     have hcid : ρ' (inBody.1.tail.getD j 0) = some d₀ := by
       rw [tailIn, range'_getD jlt]
-      have := setFrom_at ρi st.next (toDyns (HList.cons (a := Ty.nat) i state.1)) (j + 1)
+      have := setFrom_at ρ s.st.next (σ.sem.dyns (HList.cons (σ.sem.index w i) state.1)) (j + 1)
         (by rw [lenL]; omega)
-      rw [show st.next + (j + 1) = st.next + 1 + j by omega] at this
+      rw [show s.st.next + (j + 1) = s.st.next + 1 + j by omega] at this
       apply le'
       rw [this]
       exact hd₀
-    cases hv : (toDyns (HList.split carried out).1)[j]? with
+    cases hv : (σ.sem.dyns (HList.split carried out).1)[j]? with
     | none =>
         have := (List.getElem?_eq_none_iff.mp hv)
-        rw [toDyns_length] at this
+        rw [σ.sem.dyns_length] at this
         exfalso
         omega
     | some dv =>
@@ -1685,15 +2299,10 @@ theorem loop_sound (blocks : List (Key × Nat)) {Γ outs carried each : List V.T
           rw [Nat.add_comm] at hsum
           exact ⟨dv, _, rfl, hsum, Range.afterSums_step has₀ har⟩
   -- before the first iteration
-  have I0 : ∃ ρi, LoopAt (table := table) ρ ρi st.next e (List.map k.rangeOf (idsOf ids init))
-      inBody.1.tail (env.all init) 0 (env.all init, HList.empties each) := by
-    obtain ⟨new, enew, low⟩ := fitsE.2.table
-    have ext := consistent_extend inv.coherent.support inv.coherent.consistent inv.coherent.closed
-      (tbl' := e.st.table) (new := new) (by rw [enew, in2table])
-      (fun x m => by have := low x m; rw [in2next] at this; omega)
-    refine ⟨ρ, Valuation.Le.refl ρ, inv.coherent.support, ext.1, ext.2, inv.coherent.valid,
-      env_all_valid (agree_valid inv.agree inv.coherent.valid) init, collectedOK_empties each,
-      fun h => absurd h (Nat.lt_irrefl 0), fun _ => rfl, ?_⟩
+  have I0 : LoopAt (σ := σ) e.region ((idsOf ids init).map k.rangeOf) inBody.1.tail (env.all init)
+      0 (env.all init, HList.empties each) := by
+    refine ⟨env_all_valid (agree_valid inv.agree inv.coherent.valid) init,
+      collectedOK_empties each, fun h => absurd h (Nat.lt_irrefl 0), fun _ => rfl, ?_⟩
     intro j r₀ t rt hinit _ _
     rw [List.getElem?_map] at hinit
     cases hid : (idsOf ids init)[j]? with
@@ -1706,8 +2315,9 @@ theorem loop_sound (blocks : List (Key × Nat)) {Γ outs carried each : List V.T
         rw [hd] at this
         exact ⟨d, n, this.symm, hn, Range.afterSums_zero has⟩
   -- after the last iteration
-  have apartR : Apart definition made.2 (rest.addresses blocks) := by
+  have apartR : BoundsApart σ { e.state with st := made.2 }.st (rest.addresses blocks) := by
     intro q m bl key' eq inR
+    simp only at m
     rw [m2b, ebd] at m
     rcases List.mem_append.mp m with m | m
     · have := atd q m
@@ -1722,135 +2332,129 @@ theorem loop_sound (blocks : List (Key × Nat)) {Γ outs carried each : List V.T
         simp only [Place.mk.injEq, Option.some.injEq, true_and, and_true] at eq'
         obtain ⟨rfl, rfl⟩ := eq'
         exact nodup_apart nodup₁ mem inR
-      · rw [in2bounds] at m
+      · simp only at m
+        rw [in2bounds] at m
         exact apart q m bl key' eq (List.mem_cons_of_mem _ (List.mem_append_right _ inR))
-  have afterRest : ∀ (state : (localSem M fns table).LoopState carried each),
-      (∃ ρi, LoopAt (table := table) ρ ρi st.next e (List.map k.rangeOf (idsOf ids init))
-        inBody.1.tail (env.all init) ((localSem M fns table).times times env) state) →
-      Shows (table := table) F definition blocks rest path
-        (Env.extend (state.1.append ((localSem M fns table).collected times.size state.2)) env)
-        (fun vs => ∃ ρ', ρ.Le ρ' ∧ ExitInv M table ρ'
-          (walk (localFactRules V fns) definition none blocks rest (made.1 ++ ids)
-            ((afterLoop (localFactRules V fns) e k (timesBound k ids times) made.1
-              (List.map k.rangeOf (idsOf ids init)) inBody.1.tail e.rets
-              (carried ++ List.map (fun t => Ty.seq t times.size) each)).enter
-              (localFactRules V fns) (carried ++ List.map (fun t => Ty.seq t times.size) each))
-              made.2)
-          (walk (localFactRules V fns) definition none blocks rest (made.1 ++ ids)
-            ((afterLoop (localFactRules V fns) e k (timesBound k ids times) made.1
-              (List.map k.rangeOf (idsOf ids init)) inBody.1.tail e.rets
-              (carried ++ List.map (fun t => Ty.seq t times.size) each)).enter
-              (localFactRules V fns) (carried ++ List.map (fun t => Ty.seq t times.size) each))
-              made.2).st vs) := by
-    intro state h
-    obtain ⟨ρN, la⟩ := h
-    have fits : ∀ m, times.size = some m → (localSem M fns table).times times env = m := by
+  have afterRest : ∀ (state : σ.sem.LoopState carried each),
+      LoopAt (σ := σ) e.region ((idsOf ids init).map k.rangeOf) inBody.1.tail (env.all init)
+        (σ.sem.times times env) state →
+      Shows σ blocks rest path
+        (env.extend results (state.1.append (σ.sem.collected times.size state.2)))
+        (fun vs => ∃ ρ', ρ.Le ρ' ∧ ExitInv σ ρ'
+          (walk σ.rules σ.checks σ.definition σ.role blocks rest none (bindIds ids results made.1)
+            ((afterLoop σ.rules e.region k (timesBound k ids times) made.1
+              ((idsOf ids init).map k.rangeOf) inBody.1.tail e.rets
+              (carried ++ each.map (D.collected times.size))).enter σ.rules
+              (carried ++ each.map (D.collected times.size))) { e.state with st := made.2 }).region
+          (walk σ.rules σ.checks σ.definition σ.role blocks rest none (bindIds ids results made.1)
+            ((afterLoop σ.rules e.region k (timesBound k ids times) made.1
+              ((idsOf ids init).map k.rangeOf) inBody.1.tail e.rets
+              (carried ++ each.map (D.collected times.size))).enter σ.rules
+              (carried ++ each.map (D.collected times.size))) { e.state with st := made.2 }).state.st
+          vs ∧
+          Followed (none : Option (Skel D outs)) hi ρ'
+            (walk σ.rules σ.checks σ.definition σ.role blocks rest none (bindIds ids results made.1)
+              ((afterLoop σ.rules e.region k (timesBound k ids times) made.1
+                ((idsOf ids init).map k.rangeOf) inBody.1.tail e.rets
+                (carried ++ each.map (D.collected times.size))).enter σ.rules
+                (carried ++ each.map (D.collected times.size))) { e.state with st := made.2 }).state.st)
+      := by
+    intro state la
+    have fits : ∀ m, times.size = some m → σ.sem.times times env = m := by
       intro m e'
       cases times with
       | fixed n => simp only [Times.size, Option.some.injEq] at e'; subst e'; rfl
       | value => cases e'
-    have validR : (state.1.append ((localSem M fns table).collected times.size state.2)).All
-        M.Valid :=
-      (all_append _ _).mpr ⟨la.carriedValid, collected_valid times.size fits la.collected⟩
-    have lenR : (toDyns (state.1.append
-        ((localSem M fns table).collected times.size state.2))).length =
+    have validR : σ.AllValid (state.1.append (σ.sem.collected times.size state.2)) :=
+      (allValid_append _ _).mpr ⟨la.carriedValid, collected_valid laws times.size fits la.collected⟩
+    have lenR : (σ.sem.dyns (state.1.append (σ.sem.collected times.size state.2))).length =
         carried.length + each.length := by
-      rw [toDyns_length]
+      rw [σ.sem.dyns_length]
       simp
-    have nextLe : st.next ≤ e.st.next := Nat.le_trans fitsIn.2.1.next fitsE.2.next
-    have cohN : Coherent (LocalRun M table) (ValidDyn M) ρN st₁ :=
-      ⟨by rw [rbn]; exact la.support.mono nextLe, by rw [rbt, rbn]; exact fitsE.1.1,
-        by rw [rbt]; exact la.consistent, by rw [rbt]; exact la.closed, la.valid⟩
-    have coh₂ := Coherent.fresh cohN _ (toDyns_valid validR)
+    have cohE : Coherent σ.Runs σ.Valid ρ st₁ := by
+      have := Coherent.grow inv.coherent growsE gb.1.1
+      exact ⟨by rw [rbn]; exact this.support, by rw [rbt, rbn]; exact this.wf,
+        by rw [rbt]; exact this.consistent, by rw [rbt]; exact this.closed, this.valid⟩
+    have coh₂ := Coherent.fresh cohE _ validR
     rw [lenR, hmade] at coh₂
-    have le₂ := setFrom_le cohN.support (toDyns (state.1.append
-      ((localSem M fns table).collected times.size state.2)))
-    have look : valuesOf (ρN.setFrom st₁.next (toDyns (state.1.append
-        ((localSem M fns table).collected times.size state.2)))) made.1 =
-        some (toDyns (state.1.append ((localSem M fns table).collected times.size state.2))) := by
+    have le₂ := setFrom_le cohE.support (σ.sem.dyns (state.1.append
+      (σ.sem.collected times.size state.2)))
+    have look : valuesOf (ρ.setFrom st₁.next (σ.sem.dyns (state.1.append
+        (σ.sem.collected times.size state.2)))) made.1 =
+        some (σ.sem.dyns (state.1.append (σ.sem.collected times.size state.2))) := by
       rw [m1, ← lenR]
       exact valuesOf_setFrom _ _ _
-    have le := la.le.trans le₂
-    have bounds := timesBound_ok (table := table) inv.holds inv.agree times
-    have inv' : Inv M table (ρN.setFrom st₁.next (toDyns (state.1.append
-        ((localSem M fns table).collected times.size state.2)))) (made.1 ++ ids)
-        (Env.extend (state.1.append ((localSem M fns table).collected times.size state.2)) env)
-        ((afterLoop (localFactRules V fns) e k (timesBound k ids times) made.1
-          (List.map k.rangeOf (idsOf ids init)) inBody.1.tail e.rets
-          (carried ++ List.map (fun t => Ty.seq t times.size) each)).enter (localFactRules V fns)
-          (carried ++ List.map (fun t => Ty.seq t times.size) each)) made.2 := by
-      refine ⟨coh₂, ?_, ?_, agree_extend (inv.agree.le le) _ made.1 look, ?_⟩
-      · rw [m1]; simp [inv.length, Nat.add_assoc]
-      · intro i m
-        rcases List.mem_append.mp m with m | m
-        · rw [m1] at m
-          have m := mem_range'_bounds m
-          rw [m2n]
-          omega
-        · rw [m2n, rbn]
-          exact Nat.lt_of_lt_of_le (inv.below i m) (Nat.le_trans nextLe (Nat.le_add_right _ _))
-      · rw [enter_of_valid (τs := carried ++ List.map (fun t => Ty.seq t times.size) each) validR]
-        apply afterLoop_holds coh₂.valid _ _ _ _ _ k (inv.holds.le le)
-        intro j m em
-        have e1 := valuesOf_getElem look em
-        cases hd : (toDyns (state.1.append
-            ((localSem M fns table).collected times.size state.2)))[j]? with
-        | none => rw [hd] at e1; exact absurd e1 (valuesOf_mem look m (List.mem_of_getElem? em))
-        | some d =>
-            rw [hd] at e1
-            refine ⟨d, e1, toDyns_typed _ j d hd, fun initial cid ret hinit hcid hret => ?_⟩
-            have jlt : j < carried.length := by
-              have := (List.getElem?_eq_some_iff.mp hinit).1
-              simp only [List.length_map, idsOf_length] at this
-              exact this
-            have hdj : (toDyns state.1)[j]? = some d := by
-              rw [toDyns_append, List.getElem?_append_left (by rw [toDyns_length]; exact jlt)] at hd
-              exact hd
-            refine carriedRange_has bounds la.alive ?_ ?_
-            · intro zero r hr
-              have := la.initial zero
-              rw [this] at hdj
-              rw [List.getElem?_map] at hinit
-              cases hid : (idsOf ids init)[j]? with
-              | none => rw [hid] at hinit; cases hinit
-              | some id =>
-                  rw [hid] at hinit
-                  simp only [Option.map_some, Option.some.injEq] at hinit
-                  subst hinit
-                  obtain ⟨n, ⟨d', hd', hn⟩, has⟩ := inv.holds.rangeOf hr
-                  have := valuesOf_getElem (valuesOf_idsOf inv.agree init) hid
-                  rw [hd', hdj] at this
-                  cases this
-                  exact ⟨n, hn, has⟩
-            · intro r₀ t rt hr₀ ht hrt
-              have hcidD : inBody.1.tail.getD j 0 = cid := by
-                rw [List.getD_eq_getElem?_getD, hcid]; rfl
-              have hretD : e.rets.getD j 0 = ret := by
-                rw [List.getD_eq_getElem?_getD, hret]; rfl
-              rw [← hcidD, ← hretD] at ht
-              obtain ⟨d', n, hd', hn, has⟩ := la.sums j r₀ t rt (by rw [hinit, hr₀]) ht hrt
-              rw [hdj] at hd'
-              cases hd'
-              exact ⟨n, hn, has⟩
-    have shows := ihr path _ _ _ _ _ inv' hnone nodupR apartR
-      (recorded.sub fun x m => List.mem_cons_of_mem _ (List.mem_append_right _ m))
-    refine ⟨shows.1, ?_⟩
-    refine Process.every_mono _ _ ?_ (fun _ h => h) shows.2
-    intro vs h'
-    obtain ⟨ρ'', le'', ex'⟩ := h'
-    exact ⟨ρ'', le.trans le'', ex'⟩
-  have all := Process.every_iterate_below (fun _ _ => True) (· ≠ .undefined)
-    ((localSem M fns table).loopStep () (fun path' env' =>
-      Term.denote (localSem M fns table) body path' env') key path env)
-    (fun i state => ∃ ρi, LoopAt (table := table) ρ ρi st.next e
-      (List.map k.rangeOf (idsOf ids init)) inBody.1.tail (env.all init) i state)
-    ((localSem M fns table).times times env) keeps
+    have bounds := timesBound_ok laws inv.holds inv.agree inv.coherent.valid times
+    have inv' : Inv σ (ρ.setFrom st₁.next (σ.sem.dyns (state.1.append
+        (σ.sem.collected times.size state.2)))) (bindIds ids results made.1)
+        (env.extend results (state.1.append (σ.sem.collected times.size state.2)))
+        ((afterLoop σ.rules e.region k (timesBound k ids times) made.1
+          ((idsOf ids init).map k.rangeOf) inBody.1.tail e.rets
+          (carried ++ each.map (D.collected times.size))).enter σ.rules
+          (carried ++ each.map (D.collected times.size))) made.2 := by
+      refine ⟨coh₂, agree_extend results _ made.1 (inv.agree.le le₂) look, ?_⟩
+      rw [enter_of_valid laws validR]
+      apply afterLoop_holds laws coh₂.valid _ _ _ _ _ k (inv.holds.le le₂)
+      intro j m em
+      have e1 := valuesOf_getElem look em
+      cases hd : (σ.sem.dyns (state.1.append (σ.sem.collected times.size state.2)))[j]? with
+      | none => rw [hd] at e1; exact absurd e1 (valuesOf_mem look m (List.mem_of_getElem? em))
+      | some d =>
+          rw [hd] at e1
+          refine ⟨d, e1, dyns_typed σ.sem _ j d hd, fun initial cid ret hinit hcid hret => ?_⟩
+          have jlt : j < carried.length := by
+            have := (List.getElem?_eq_some_iff.mp hinit).1
+            simp only [List.length_map, idsOf_length] at this
+            exact this
+          have hdj : (σ.sem.dyns state.1)[j]? = some d := by
+            rw [dyns_append, List.getElem?_append_left (by rw [σ.sem.dyns_length]; exact jlt)]
+              at hd
+            exact hd
+          refine carriedRange_has bounds la.alive ?_ ?_
+          · intro zero r hr
+            have := la.initial zero
+            rw [this] at hdj
+            rw [List.getElem?_map] at hinit
+            cases hid : (idsOf ids init)[j]? with
+            | none => rw [hid] at hinit; cases hinit
+            | some id =>
+                rw [hid] at hinit
+                simp only [Option.map_some, Option.some.injEq] at hinit
+                subst hinit
+                obtain ⟨n, ⟨d', hd', hn⟩, has⟩ := inv.holds.rangeOf hr
+                have := valuesOf_getElem (valuesOf_idsOf inv.agree init) hid
+                rw [hd', hdj] at this
+                cases this
+                exact ⟨n, hn, has⟩
+          · intro r₀ t rt hr₀ ht hrt
+            have hcidD : inBody.1.tail.getD j 0 = cid := by
+              rw [List.getD_eq_getElem?_getD, hcid]; rfl
+            have hretD : e.region.rets.getD j 0 = ret := by
+              show e.rets.getD j 0 = ret
+              rw [List.getD_eq_getElem?_getD, hret]; rfl
+            rw [← hcidD, ← hretD] at ht
+            obtain ⟨d', n, hd', hn, has⟩ := la.sums j r₀ t rt (by rw [hinit, hr₀]) ht hrt
+            rw [hdj] at hd'
+            cases hd'
+            exact ⟨n, hn, has⟩
+    have shows := ihr path _ _ _ _ { e.state with st := made.2 } hi hi inv' trivial differsR hnone
+      nodupR apartR
+      (Recorded.sub recorded fun x m => List.mem_cons_of_mem _ (List.mem_append_right _ m))
+    exact ⟨shows.1, Process.every_mono _ _ (fun vs h' => by
+      obtain ⟨ρ'', le'', ex', f⟩ := h'
+      exact ⟨ρ'', le₂.trans le'', ex', f⟩) (fun _ h => h) shows.2⟩
+  have all := Process.every_iterate_below σ.permitted (fun stop => ¬ σ.undefined stop)
+    (σ.sem.loopStep w inputs (fun path' env' => Term.denote σ.sem body path' env') key path env)
+    (fun i state => LoopAt (σ := σ) e.region ((idsOf ids init).map k.rangeOf) inBody.1.tail
+      (env.all init) i state)
+    (σ.sem.times times env) keeps
+  simp only [Shows, Term.EveryLoop, Term.denote]
   refine ⟨⟨?_, ?_, ?_⟩, ?_⟩
   · intro bound hb
     simp only [Annotation.boundAt, Option.map_eq_some_iff] at hb
     obtain ⟨q, hq, rfl⟩ := hb
     have mq := List.mem_of_find?_eq_some hq
-    have pq : q.1 = ⟨definition, blocks, some key, none⟩ := by
+    have pq : q.1 = ⟨σ.definition, blocks, some key, σ.role⟩ := by
       have := List.find?_some hq
       simpa using this
     have inFinal := recorded q.1 q.2 blocks key mq pq List.mem_cons_self
@@ -1861,7 +2465,8 @@ theorem loop_sound (blocks : List (Key × Nat)) {Γ outs carried each : List V.T
       simp only [Place.mk.injEq, Option.some.injEq, true_and, and_true] at eq
       obtain ⟨rfl, rfl⟩ := eq
       exact (notHere (List.mem_append_right _ mem)).elim
-    · rw [m2b, ← hst₁] at m
+    · simp only at m
+      rw [m2b, ← hst₁] at m
       rcases recordBound_mem m with m | ⟨t, count, ok, htimes, _, hb'⟩
       · rw [ebb] at m
         rcases List.mem_append.mp m with m | m
@@ -1870,22 +2475,23 @@ theorem loop_sound (blocks : List (Key × Nat)) {Γ outs carried each : List V.T
           simp only [Place.mk.injEq, Option.some.injEq, true_and, and_true] at eq
           obtain ⟨rfl, rfl⟩ := eq
           exact (notHere (List.mem_append_left _ mem)).elim
-        · rw [in2bounds] at m
+        · simp only at m
+          rw [in2bounds] at m
           exact (apart _ m blocks key pq List.mem_cons_self).elim
       · subst htimes
-        cases hr : k.rangeOf (ids.getD count.index 0) with
+        cases hr : k.rangeOf (idOf ids count.name) with
         | none => rw [hr] at hb'; cases hb'
         | some r =>
             rw [hr] at hb'
             simp only [Option.bind_some] at hb'
-            exact (inv.holds.rangeOf_at (count_at inv.agree count ok) hr).2 _ hb'
+            exact (inv.holds.rangeOf_at (count_at laws inv.agree inv.coherent.valid count ok)
+              hr).2 _ hb'
   · intro i lt
     refine Process.every_mono _ _ ?_ (fun _ _ => trivial)
       (all i 0 (env.all init, HList.empties each) (by omega) I0)
     intro state h
     rw [Nat.zero_add] at h
-    obtain ⟨ρi, la⟩ := h
-    exact (bodyShows i state ρi lt la).1
+    exact (bodyShows i state lt h).1
   · refine Process.every_mono _ _ ?_ (fun _ _ => trivial)
       (all _ 0 (env.all init, HList.empties each) (by omega) I0)
     intro state h
@@ -1900,189 +2506,85 @@ theorem loop_sound (blocks : List (Key × Nat)) {Γ outs carried each : List V.T
 
 end
 
-/-! ## The theorem for a function -/
+/-! ## Every term, when no skeleton is followed -/
 
 section
-variable {V : Vocabulary} {M : Model V} {fns : List (FnHeader V)} {table : FnTable M fns}
-  (definition : Key) (F : List (Place × Nat))
+variable {D : Dialect} {Raw : Type} [DecidableEq Raw] {σ : Setting D Raw}
 
 mutual
-  /-- The walk of every term is sound. -/
-  theorem walk_sound (distinct : (fns.map (·.key)).Nodup)
-      (safe : ∀ hdr (callee : Var fns hdr) (args : HList M.Val hdr.ins), args.All M.Valid →
-        (table hdr callee args).Stops (· ≠ .undefined))
-      (keeps : FnTable.KeepsValidity table) :
-      ∀ (blocks : List (Key × Nat)) {Γ outs : List V.Ty}
-      (t : Term (localDialect V fns) Γ outs), Sound (table := table) definition F blocks t
-    | _, _, _, .ret xs => ret_sound definition F _ xs
-    | blocks, _, _, .op key o args rest =>
-        op_sound distinct safe keeps definition F blocks key o args rest
-          (walk_sound distinct safe keeps blocks rest)
-    | blocks, _, _, .guard key () c ok why rest =>
-        guard_sound distinct definition F blocks key c ok why rest
-          (walk_sound distinct safe keeps blocks rest)
-    | blocks, _, _, .choose key () c ok gives onTrue onFalse rest =>
-        choose_sound distinct definition F blocks key c ok gives onTrue onFalse rest
-          (walk_sound distinct safe keeps blocks onTrue)
-          (walk_sound distinct safe keeps blocks onFalse)
-          (walk_sound distinct safe keeps blocks rest)
-    | blocks, _, _, .cases key () x ok gives arms rest =>
-        cases_sound definition F blocks key x ok gives arms rest
-          (walkArms_sound distinct safe keeps blocks arms)
-          (walk_sound distinct safe keeps blocks rest)
-    | blocks, _, _, .loop key () times gives init body rest =>
-        loop_sound distinct definition F blocks key times gives init body rest
-          (walk_sound distinct safe keeps blocks body) (walk_sound distinct safe keeps blocks rest)
-    | blocks, _, _, .block key number body rest =>
-        block_sound definition F blocks key number body rest
-          (walk_sound distinct safe keeps (blocks ++ [(key, number)]) body)
-          (walk_sound distinct safe keeps blocks rest)
-    | blocks, _, _, .attempt key w owns body rest =>
-        attempt_sound definition F blocks key w owns body rest
-  /-- The walk of the arms of every case analysis is sound. -/
-  theorem walkArms_sound (distinct : (fns.map (·.key)).Nodup)
-      (safe : ∀ hdr (callee : Var fns hdr) (args : HList M.Val hdr.ins), args.All M.Valid →
-        (table hdr callee args).Stops (· ≠ .undefined))
-      (keeps : FnTable.KeepsValidity table) :
-      ∀ (blocks : List (Key × Nat)) {Γ mid payloads : List V.Ty}
-      (arms : Arms (localDialect V fns) Γ mid payloads),
-      ArmsSound (table := table) definition F blocks arms
-    | blocks, _, _, _, .nil => armsNil_sound definition F blocks
-    | blocks, _, _, _, .cons arm rest =>
-        armsCons_sound definition F blocks arm rest (walk_sound distinct safe keeps blocks arm)
-          (walkArms_sound distinct safe keeps blocks rest)
+  /-- **The walk is sound where no skeleton is followed.** -/
+  theorem walk_sound_fresh (laws : σ.Lawful) :
+      ∀ (blocks : List (Key × Nat)) {Γ : Ctx D.Ty} {outs : List D.Ty} (t : Term D Γ outs),
+        Sound σ blocks t none
+    | _, _, _, .ret xs => ret_sound _ xs
+    | blocks, _, _, .op key o args results rest =>
+        op_sound laws blocks key o args results rest (walk_sound_fresh laws blocks rest)
+    | blocks, _, _, .guard key w c ok why rest =>
+        guard_sound laws blocks key w c ok why rest (walk_sound_fresh laws blocks rest)
+    | blocks, _, _, .choose key w c ok gives onTrue onFalse results rest =>
+        choose_sound laws blocks key w c ok gives onTrue onFalse results rest
+          (walk_sound_fresh laws blocks onTrue) (walk_sound_fresh laws blocks onFalse)
+          (walk_sound_fresh laws blocks rest)
+    | blocks, _, _, .cases key w x ok gives arms results rest =>
+        cases_sound laws blocks key w x ok gives arms results rest
+          (walkArms_sound_fresh laws blocks arms) (walk_sound_fresh laws blocks rest)
+    | blocks, _, _, .loop key w times gives init inputs body results rest =>
+        loop_sound laws blocks key w times gives init inputs body results rest
+          (walk_sound_fresh laws blocks body) (walk_sound_fresh laws blocks rest)
+    | blocks, _, _, .block key number body results rest =>
+        block_sound laws blocks key number body results rest
+          (walk_sound_fresh laws (blocks ++ [(key, number)]) body)
+          (walk_sound_fresh laws blocks rest)
+    | blocks, _, _, .attempt key w owns inputs body results rest =>
+        attempt_sound laws blocks key w owns inputs body results rest
+          (walk_sound_fresh laws blocks body) (walk_sound_fresh laws blocks rest)
+  /-- The walk of arms is sound where no arms are followed. -/
+  theorem walkArms_sound_fresh (laws : σ.Lawful) :
+      ∀ (blocks : List (Key × Nat)) {Γ : Ctx D.Ty} {mid payloads : List D.Ty}
+        (arms : Arms D Γ mid payloads), ArmsSound σ blocks arms none
+    | blocks, _, _, _, .nil => armsNil_sound blocks
+    | blocks, _, _, _, .cons inputs arm rest =>
+        armsCons_sound laws blocks inputs arm rest (walk_sound_fresh laws blocks arm)
+          (walkArms_sound_fresh laws blocks rest)
 end
 
-end
-
-section
-variable {V : Vocabulary} {M : Model V} {fns : List (FnHeader V)} {table : FnTable M fns}
-
-theorem toDyns_ofList : ∀ {Γ : List V.Ty} (ins : HList M.Val Γ) {τ : V.Ty} (x : Var Γ τ),
-    (toDyns ins)[x.index]? = some ⟨τ, Env.ofList ins τ x⟩
-  | _ :: _, .cons _ _, _, .head => rfl
-  | _ :: _, .cons _ rest, _, .tail x => by
-      simp only [toDyns, Var.index, List.getElem?_cons_succ]
-      exact toDyns_ofList rest x
-
-/-- At the start of a body: the inputs have the first identifiers, and the table is empty. -/
-theorem start_inv {Γ : List V.Ty} (ins : HList M.Val Γ) (valid : ins.All M.Valid) :
-    Inv M table (Valuation.setFrom (fun _ => none : Valuation (Dyn M)) 0 (toDyns ins))
-      (List.range Γ.length) (Env.ofList ins)
-      ((Known.empty.addRanges (List.range Γ.length) (List.map (localFactRules V fns).range Γ)).enter
-      (localFactRules V fns) Γ)
-      ⟨Table.empty (localFactRules V fns).place, Γ.length, [], []⟩ := by
-  have support : Support Γ.length
-      (Valuation.setFrom (fun _ => none : Valuation (Dyn M)) 0 (toDyns ins)) := by
-    have := setFrom_support (ρ := (fun _ => none : Valuation (Dyn M))) (lo := 0)
-      (fun _ _ => rfl) (toDyns ins)
-    rw [Nat.zero_add, toDyns_length] at this
+omit [DecidableEq Raw] in
+/-- At the start of a body: its inputs, bound to their names, have the first identifiers, and the
+table is empty. -/
+theorem start_inv (laws : σ.Lawful) {types : List D.Ty} (inputs : Names types)
+    (values : HList σ.sem.Val types) (valid : σ.AllValid values) (place : Raw → Nat) :
+    Inv σ (Valuation.setFrom (fun _ => none) 0 (σ.sem.dyns values))
+      (bindIds Ctx.empty inputs (List.range types.length)) (Env.empty.extend inputs values)
+      (start σ.rules types) ⟨Table.empty place, types.length, [], []⟩ := by
+  have support : Support types.length
+      (Valuation.setFrom (fun _ => none : Valuation σ.sem.Dyn) 0 (σ.sem.dyns values)) := by
+    have := setFrom_support (ρ := (fun _ => none : Valuation σ.sem.Dyn)) (lo := 0)
+      (fun _ _ => rfl) (σ.sem.dyns values)
+    rw [Nat.zero_add, σ.sem.dyns_length] at this
     exact this
-  have validS := setFrom_valid (Valid := ValidDyn M) (ρ := (fun _ => none : Valuation (Dyn M)))
-    (lo := 0) (fun _ _ e => by cases e) (toDyns_valid valid)
-  have at_ : ∀ j, j < Γ.length →
-      (Valuation.setFrom (fun _ => none : Valuation (Dyn M)) 0 (toDyns ins)) j =
-        (toDyns ins)[j]? := by
-    intro j lt
-    have := setFrom_at (fun _ => none : Valuation (Dyn M)) 0 (toDyns ins) j
-      (by rw [toDyns_length]; exact lt)
-    rw [Nat.zero_add] at this
+  have validS := setFrom_valid (Valid := σ.Valid) (ρ := (fun _ => none : Valuation σ.sem.Dyn))
+    (lo := 0) (fun _ _ e => by cases e) valid
+  have look : valuesOf (Valuation.setFrom (fun _ => none : Valuation σ.sem.Dyn) 0
+      (σ.sem.dyns values)) (List.range types.length) = some (σ.sem.dyns values) := by
+    have := valuesOf_setFrom (fun _ => none : Valuation σ.sem.Dyn) 0 (σ.sem.dyns values)
+    rw [σ.sem.dyns_length] at this
+    rw [List.range_eq_range']
     exact this
+  have nothing : Agree σ (Valuation.setFrom (fun _ => none : Valuation σ.sem.Dyn) 0
+      (σ.sem.dyns values)) Ctx.empty (Env.empty : Env σ.sem.Val Ctx.empty) :=
+    fun _ x => nomatch (Ctx.find?_empty (T := D.Ty) x.name).symm.trans x.typed
   refine ⟨⟨support, trivial, fun _ m => (List.not_mem_nil m).elim,
-    fun _ m => (List.not_mem_nil m).elim, validS⟩, by simp,
-    fun i m => List.mem_range.mp m, fun τ x => ?_, ?_⟩
-  · have lt := Var.index_lt x
-    rw [List.getD_eq_getElem?_getD, List.getElem?_range lt, Option.getD_some, at_ _ lt]
-    exact toDyns_ofList ins x
-  · rw [localFactRules_range]
-    have empty : Known.empty.Holds (localReading M)
-        (Valuation.setFrom (fun _ => none : Valuation (Dyn M)) 0 (toDyns ins)) :=
-      ⟨rfl, fun _ _ m => (BitTree.not_mem_empty _ m).elim,
-        fun _ m => (BitTree.not_mem_empty _ m).elim,
-        fun _ _ m => (BitTree.not_mem_empty _ m).elim,
-        fun _ m => (BitTree.not_mem_empty _ m).elim⟩
-    rw [enter_of_valid valid]
-    refine addTypeRanges_holds empty validS fun j m e => ?_
-    have lt := (List.getElem?_eq_some_iff.mp e).1
-    rw [List.length_range] at lt
-    rw [List.getElem?_range lt, Option.some.injEq] at e
-    subst e
-    rw [at_ _ lt]
-    cases hd : (toDyns ins)[j]? with
-    | none =>
-        have := List.getElem?_eq_none_iff.mp hd
-        rw [toDyns_length] at this
-        omega
-    | some d => exact ⟨d, rfl, toDyns_typed ins j d hd⟩
-
-/-- **The check of facts is sound for a function.** For a body with distinct addresses that the
-check of facts accepts with some bounds, against callees with distinct keys that never stop
-`undefined` on valid inputs and keep validity, on valid inputs: the process never stops
-`undefined`, what it returns is valid, and every loop as often as a count runs at most the bound
-that an annotation gives its place, for every annotation whose entries at the definition's places
-are among those bounds. -/
-theorem checkFacts_sound (distinct : (fns.map (·.key)).Nodup)
-    (safe : ∀ hdr (callee : Var fns hdr) (args : HList M.Val hdr.ins), args.All M.Valid →
-      (table hdr callee args).Stops (· ≠ .undefined))
-    (keeps : FnTable.KeepsValidity table) (definition : Key) {Γ outs : List V.Ty}
-    (body : Term (localDialect V fns) Γ outs) (hdistinct : Term.Distinct body)
-    {bounds : List (Place × Nat)}
-    (accepted : checkFacts (localFactRules V fns) definition none body = .ok bounds)
-    (F : List (Place × Nat))
-    (hF : ∀ p b, (p, b) ∈ F → p.definition = definition → p.role = none → (p, b) ∈ bounds)
-    (ins : HList M.Val Γ) (valid : ins.All M.Valid) :
-    body.EveryLoop (localSem M fns table) (fun _ _ => True)
-        (Annotation.Bounded ⟨F⟩ definition none) [] [] (Env.ofList ins) ∧
-      (body.denote (localSem M fns table) [] (Env.ofList ins)).Every (fun _ _ => True)
-        (fun outs => outs.All M.Valid) (· ≠ .undefined) := by
-  have inv := start_inv (table := table) ins valid
-  simp only [checkFacts] at accepted
-  generalize he : walk (localFactRules V fns) definition none [] body (List.range Γ.length)
-    ((Known.empty.addRanges (List.range Γ.length) (List.map (localFactRules V fns).range Γ)).enter
-      (localFactRules V fns) Γ)
-    ⟨Table.empty (localFactRules V fns).place, Γ.length, [], []⟩ = e at accepted
-  split at accepted
-  · next hr =>
-      simp only [Except.ok.injEq] at accepted
-      have nodup : (body.addresses []).Nodup := by
-        simp only [Term.Distinct, Bool.and_eq_true, decide_eq_true_eq] at hdistinct
-        exact hdistinct.1
-      have shows := walk_sound definition F distinct safe keeps [] body [] _ _ _ _ _ inv
-        (by rw [he]; exact hr) nodup (fun _ m => nomatch m) (by
-          rw [he]
-          intro p b bl key m eq _
-          have := hF p b m (by rw [eq]) (by rw [eq])
-          rw [← accepted, List.mem_reverse] at this
-          exact this)
-      refine ⟨shows.1, Process.every_mono _ _ (fun outs h => ?_) (fun _ h => h) shows.2⟩
-      obtain ⟨ρ', _, ex⟩ := h
-      exact valid_of_toDyns (valuesOf_valid ex.rets ex.coherent.valid)
-  · cases accepted
-
-/-- The bounds that the check of facts gives a body are at the definition's places. -/
-theorem checkFacts_places (definition : Key) {Γ outs : List V.Ty}
-    (body : Term (localDialect V fns) Γ outs) {bounds : List (Place × Nat)}
-    (accepted : checkFacts (localFactRules V fns) definition none body = .ok bounds) :
-    ∀ q, q ∈ bounds → q.1.definition = definition ∧ q.1.role = none := by
-  simp only [checkFacts] at accepted
-  obtain ⟨_, new, enew, at_⟩ := (walk_state (localFactRules V fns) definition none [] body
-    (List.range Γ.length)
-    ((Known.empty.addRanges (List.range Γ.length) (List.map (localFactRules V fns).range Γ)).enter
-      (localFactRules V fns) Γ)
-    ⟨Table.empty (localFactRules V fns).place, Γ.length, [], []⟩).1
-  split at accepted
-  · simp only [Except.ok.injEq] at accepted
-    intro q m
-    rw [← accepted, List.mem_reverse, enew, List.append_nil] at m
-    obtain ⟨bl, key, eq, _⟩ := at_ q m
-    rw [eq]
-    exact ⟨rfl, rfl⟩
-  · cases accepted
+    fun _ m => (List.not_mem_nil m).elim, validS⟩, agree_extend inputs values _ nothing look, ?_⟩
+  have empty : Known.empty.Holds σ.R
+      (Valuation.setFrom (fun _ => none : Valuation σ.sem.Dyn) 0 (σ.sem.dyns values)) :=
+    ⟨rfl, fun _ _ m => (BitTree.not_mem_empty _ m).elim,
+      fun _ m => (BitTree.not_mem_empty _ m).elim,
+      fun _ _ m => (BitTree.not_mem_empty _ m).elim,
+      fun _ m => (BitTree.not_mem_empty _ m).elim⟩
+  simp only [start]
+  rw [enter_of_valid laws valid]
+  exact addTypeRanges_holds laws empty validS (valuesOf_typed look)
 
 end
 
-end
-
-end FactCheck
-
-end Zkc.Core
+end Zkc.Core.Analysis.Facts

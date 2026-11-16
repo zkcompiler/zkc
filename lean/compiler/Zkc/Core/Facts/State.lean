@@ -3,28 +3,30 @@ module
 public import Zkc.Core.Facts.OpFacts
 public import Zkc.Core.Program.BitTree
 public import Zkc.Core.Program.Refusal
+public import Zkc.Core.Value.Table
 
 @[expose] public section
 
 /-!
-The state of the check of facts, and the rules that decide what is known.
+What the analysis knows, the rules that decide what is known, and the check of the
+requirements of an application.
 
-Inside the walk a value has an identifier that is never reused. An application of a written
-operation to operand identifiers has the result identifiers that the table gives it: those of
-the first application of the same operation to the same identifiers, in their order, or new
-ones. The table is never scoped: an entry says what a result is, not that it was computed.
-What is known (ranges, orders, truths, the two shapes of a choice, whether the region runs at
-all) is scoped: what is learned in a region is dropped at its exit.
+The analysis walks a term over the table of applications and its state (`Value/Table.lean`;
+the walk is `Analysis.walk`, `Facts/Walk.lean`). Beside them it keeps what is known (ranges,
+orders, truths, the two shapes of a choice, whether the region runs at all), which this file
+defines with what is learned from a truth value (`assume`), and which is scoped: what is learned
+in a region is dropped at its exit. How an identifier reads, when it is the first result of an
+entry whose operation has a form, is what the dialect tells the analysis of the entry's
+operation (`Table.formOf`).
 
-The walk reads the table and what is known through the functions here (a lookup in the table and
-an entry made in it, the entry of an identifier and how it reads, the range of an identifier,
-whether an order or a truth is known) and through whether a region is dead; how what is known
-enters a region and the range of a carried natural after a loop are in `Walk.lean`. Each of the
-functions here reads the leaf of a tree placed by an identifier, or for an application by a
-number computed from the number that the dialect gives for its written operation and from its
-operands' identifiers (`Program/BitTree.lean`): a list, read as a list; nothing else depends on
-that. The arithmetic of the ranges that this file defines is
-proved beside it.
+The walk reads what is known through the functions here (how an identifier reads, the range of an
+identifier, whether an order or a truth is known) and through whether a region is dead; how what
+is known enters a region and the range of a carried natural after a loop are in `Walk.lean`.
+Each part of what is known is placed by an identifier (`Program/BitTree.lean`): a list, read as a
+list; nothing else depends on that. A requirement of an application is decided from the
+identifiers and the ranges of the values that it names, an application among them found in the
+table or entered; each that is not known is refused at its place (`checkRequirements`). The
+arithmetic of the ranges that this file defines is proved beside it.
 -/
 
 namespace Zkc.Core
@@ -131,113 +133,10 @@ theorem Range.meet_has {a b : Option Range} {r : Range} {n : Nat} (h : Range.mee
 
 namespace FactCheck
 
-/-! ## The table -/
-
-/-- An entry of the table: a written operation applied to operand identifiers, in their order,
-and the identifiers of its results, `lo` to `lo + count - 1`. -/
-structure Entry (Raw : Type) where
-  written : Raw
-  args : List Nat
-  lo : Nat
-  count : Nat
-
-/-- The depth of the trees of what the check knows: identifiers that agree on these low bits share
-a leaf. -/
-abbrev factDepth : Nat := 12
+/-! ## How an identifier reads -/
 
 section
 variable {Raw : Type}
-
-/-- A number computed from naturals in order, from a number to start with, each multiplying
-what came before by Knuth's multiplicative constant. -/
-def mixNumbers (start : Nat) (ns : List Nat) : Nat :=
-  ns.foldl (fun key n => key * 2654435761 + n + 1) start
-
-/-- Where the table places an application, to find it: a number computed from the number that
-the dialect gives for its written operation and from all of its operands' identifiers, in order,
-so that applications that share their operands, or have none, fall in different leaves when
-their written operations differ. -/
-def applicationKey (written : Nat) (args : List Nat) : Nat := mixNumbers written args
-
-/-- Places an entry at each of the identifiers. -/
-def placeAll (e : Entry Raw) : List Nat → BitTree (Entry Raw) → BitTree (Entry Raw)
-  | [], t => t
-  | id :: ids, t => placeAll e ids (t.insert factDepth id e)
-
-theorem mem_placeAll (e : Entry Raw) : ∀ (ids : List Nat) (t : BitTree (Entry Raw)) (x : Entry Raw),
-    x ∈ placeAll e ids t → x ∈ t ∨ x = e
-  | [], _, _, m => Or.inl m
-  | id :: ids, t, x, m => by
-      rcases mem_placeAll e ids _ x m with m | same
-      · exact BitTree.mem_insert _ _ _ _ x m
-      · exact Or.inr same
-
-end
-
-/-- The table: its entries, the latest first, and the same entries placed by the number that
-`place` gives for their written operation and by their operands' identifiers
-(`applicationKey`), to find an application, and by each of their results' identifiers, to find
-what gives an identifier. The walk reads only the placed entries; every placed entry is an
-entry. -/
-structure Table (Raw : Type) where
-  place : Raw → Nat
-  entries : List (Entry Raw)
-  byApplication : BitTree (Entry Raw)
-  byResult : BitTree (Entry Raw)
-  applications : ∀ e, e ∈ byApplication → e ∈ entries
-  results : ∀ e, e ∈ byResult → e ∈ entries
-
-instance {Raw : Type} : Membership (Entry Raw) (Table Raw) := ⟨fun t e => e ∈ t.entries⟩
-
-section
-variable {Raw : Type}
-
-/-- The table without entries, which places applications by the number that `place` gives for
-their written operation. -/
-def Table.empty (place : Raw → Nat) : Table Raw :=
-  ⟨place, [], .leaf [], .leaf [], fun e m => (BitTree.not_mem_empty e m).elim,
-    fun e m => (BitTree.not_mem_empty e m).elim⟩
-
-/-- The table with an entry made. -/
-def Table.add (e : Entry Raw) (tbl : Table Raw) : Table Raw where
-  place := tbl.place
-  entries := e :: tbl.entries
-  byApplication :=
-    tbl.byApplication.insert factDepth (applicationKey (tbl.place e.written) e.args) e
-  byResult := placeAll e (List.range' e.lo e.count) tbl.byResult
-  applications x m := by
-    rcases BitTree.mem_insert _ _ _ _ x m with m | same
-    · exact List.mem_cons_of_mem _ (tbl.applications x m)
-    · rw [same]; exact List.mem_cons_self
-  results x m := by
-    rcases mem_placeAll e _ _ x m with m | same
-    · exact List.mem_cons_of_mem _ (tbl.results x m)
-    · rw [same]; exact List.mem_cons_self
-
-/-- The first result of the entry, among entries, of the written operation applied to the
-operands, with the number of results: compared by its operands first. -/
-def findIn [DecidableEq Raw] (written : Raw) (args : List Nat) (count : Nat) :
-    List (Entry Raw) → Option Nat
-  | [] => none
-  | e :: es =>
-      if e.args = args ∧ e.count = count ∧ e.written = written then some e.lo
-      else findIn written args count es
-
-/-- The first result of the entry of the written operation applied to the operands, with the
-number of results: among the entries placed where the operands are. -/
-def Table.find [DecidableEq Raw] (written : Raw) (args : List Nat) (count : Nat)
-    (tbl : Table Raw) : Option Nat :=
-  findIn written args count
-    (tbl.byApplication.find factDepth (applicationKey (tbl.place written) args))
-
-/-- The entry, among entries, that gives an identifier. -/
-def entryIn (id : Nat) : List (Entry Raw) → Option (Entry Raw)
-  | [] => none
-  | e :: es => if e.lo ≤ id ∧ id < e.lo + e.count then some e else entryIn id es
-
-/-- The entry that gives an identifier: among the entries placed at it. -/
-def Table.entryOf (id : Nat) (tbl : Table Raw) : Option (Entry Raw) :=
-  entryIn id (tbl.byResult.find factDepth id)
 
 /-- How an identifier reads, when it is the first result of an entry whose operation has a
 form: the form and the operands. -/
@@ -367,10 +266,13 @@ def pushEqual (k : Known) (first second : Nat) : Known :=
   let k := k.addRange? first (ps.map Range.point)
   k.addRange? second (pf.map Range.point)
 
-/-- What is known after `first ≠ second`: when one is zero, the other is at least one. -/
+/-- What is known after `first ≠ second`: when one is zero, the other is at least one. Both
+ranges are read before either is learned, as in the other rules, so the two orders of the
+operands teach the same. -/
 def pushDifferent (k : Known) (first second : Nat) : Known :=
-  let k := if k.rangeOf second = some (Range.point 0) then k.addRange first ⟨1, none⟩ else k
-  if k.rangeOf first = some (Range.point 0) then k.addRange second ⟨1, none⟩ else k
+  let learned :=
+    if k.rangeOf second = some (Range.point 0) then k.addRange first ⟨1, none⟩ else k
+  if k.rangeOf first = some (Range.point 0) then learned.addRange second ⟨1, none⟩ else learned
 
 end Known
 
@@ -428,16 +330,21 @@ def differenceBelow (first second : Nat) (strict : Bool) : Bool :=
   | some (.difference, [x, u]) => x == second && (!strict || decide (1 ≤ k.low u))
   | _ => false
 
-/-- The index of a range that does not start at zero: `first` is `x + t` and `t < second - x`
-is the order that a loop made for its index `t`. -/
+/-- The index of a range that does not start at zero: `first` is the sum of `x` and `t`, its
+operands in either order, and `t < second - x` is the order that a loop made for its index `t`. -/
 def offsetBelow (first second : Nat) : Bool :=
   match tbl.formOf ops first with
-  | some (.sum, [x, t]) =>
-      (k.orders.find factDepth t).any fun fact =>
-        fact.first == t && fact.strict && fact.byLoop &&
+  | some (.sum, [x, y]) =>
+      ((k.orders.find factDepth y).any fun fact =>
+        fact.first == y && fact.strict && fact.byLoop &&
           (match tbl.formOf ops fact.second with
             | some (.difference, [r, x']) => r == second && x' == x
-            | _ => false)
+            | _ => false)) ||
+      ((k.orders.find factDepth x).any fun fact =>
+        fact.first == x && fact.strict && fact.byLoop &&
+          (match tbl.formOf ops fact.second with
+            | some (.difference, [r, y']) => r == second && y' == y
+            | _ => false))
   | _ => false
 
 /-- Whether the ranges say that the first is at most (below, with `strict`) the second. -/
@@ -460,15 +367,17 @@ def knownLt (first second : Nat) (rf rs : Option Range) : Bool :=
     sumAbove ops tbl k first second true || differenceBelow ops tbl k first second true ||
     offsetBelow ops tbl k first second
 
-/-- Whether the second less the first is the number: both are points, or the second is the
-first plus a value whose range is the point. -/
+/-- Whether the second less the first is the number: both are points, or the second is the sum
+of the first and a value whose range is the point, its operands in either order. -/
 def knownDifference (second first : Nat) (rs rf : Option Range) (number : Nat) : Bool :=
   (match rs, rf with
     | some ⟨p, some p'⟩, some ⟨q, some q'⟩ =>
         decide (p = p' ∧ q = q' ∧ q ≤ p ∧ p - q = number)
     | _, _ => false) ||
   (match tbl.formOf ops second with
-    | some (.sum, [x, c]) => x == first && decide (k.rangeOf c = some (Range.point number))
+    | some (.sum, [x, y]) =>
+        (x == first && decide (k.rangeOf y = some (Range.point number))) ||
+          (y == first && decide (k.rangeOf x = some (Range.point number)))
     | _ => false)
 
 end
@@ -485,12 +394,19 @@ def offsetBound {Raw : Type} (ops : OpFacts Raw) (tbl : Table Raw) (k : Known) (
     else none
 
 /-- What is known of the first result of an application of a written operation to operands
-beyond what the operation's ranges say: for a sum `x + t` below `r` (`offsetBound`), what is
-below the range of `r` (TY10). -/
+beyond what the operation's ranges say: for a sum of `x` and `t` below `r` (`offsetBound`), its
+operands in either order (`x, t` tried first, then `t, x`), what is below the range of `r`
+(TY10). -/
 def offsetRange {Raw : Type} (ops : OpFacts Raw) (tbl : Table Raw) (k : Known) (written : Raw)
     (args : List Nat) : Option Range :=
   match ops.form written, args with
-  | some .sum, [x, t] => (offsetBound ops tbl k x t).bind fun r => (k.rangeOf r).map Range.below
+  | some .sum, [x, t] =>
+      match offsetBound ops tbl k x t with
+      | some r => (k.rangeOf r).map Range.below
+      | none =>
+          match offsetBound ops tbl k t x with
+          | some r => (k.rangeOf r).map Range.below
+          | none => none
   | _, _ => none
 
 /-- What is known after an application of a written operation to operands, whose results are
@@ -501,33 +417,10 @@ def Known.addOffset {Raw : Type} (k₁ : Known) (ops : OpFacts Raw) (tbl : Table
   | first :: _ => k₁.addRange? first (offsetRange ops tbl k written args)
   | [] => k₁
 
-/-! ## The state of the walk -/
-
-/-- What the walk carries through every region: the table, the next identifier, the refusals
-and the bounds of loops found so far (the latest first). -/
-structure St (T Raw : Type) where
-  table : Table Raw
-  next : Nat
-  refusals : List (Refusal T Raw)
-  bounds : List (Place × Nat)
+/-! ## The requirements of an application -/
 
 section
 variable {T Raw : Type}
-
-/-- New identifiers. -/
-def fresh (count : Nat) (st : St T Raw) : List Nat × St T Raw :=
-  (List.range' st.next count, { st with next := st.next + count })
-
-/-- The results of the written operation applied to the operands: those of the first such
-application, or new ones with an entry. -/
-def share [DecidableEq Raw] (written : Raw) (args : List Nat) (count : Nat) (st : St T Raw) :
-    List Nat × St T Raw :=
-  match st.table.find written args count with
-  | some lo => (List.range' lo count, st)
-  | none =>
-      (List.range' st.next count,
-        { st with table := st.table.add ⟨written, args, st.next, count⟩,
-                  next := st.next + count })
 
 /-- The items at the positions, when every one is there. -/
 def atPositions {α : Type} (xs : List α) : List Nat → Option (List α)

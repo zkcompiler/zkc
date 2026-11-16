@@ -181,14 +181,14 @@ def Tys.toHList : (fields : Tys V.TypeKey) → fields.Val M.toCarriers → HList
   | .cons _ rest, (v, vs) => .cons v (Tys.toHList rest vs)
 
 /-- The field at a position. -/
-def Tys.getAt : (fields : Tys V.TypeKey) → {τ : V.Ty} → Var fields.toList τ →
+def Tys.getAt : (fields : Tys V.TypeKey) → {τ : V.Ty} → Member fields.toList τ →
     fields.Val M.toCarriers → M.Val τ
   | .nil, _, position, _ => nomatch position
   | .cons _ _, _, .head, (v, _) => v
   | .cons _ rest, _, .tail position, (_, vs) => Tys.getAt rest position vs
 
 /-- A value as the alternative at its position. -/
-def Tys.injectAt : (alternatives : Tys V.TypeKey) → {τ : V.Ty} → Var alternatives.toList τ →
+def Tys.injectAt : (alternatives : Tys V.TypeKey) → {τ : V.Ty} → Member alternatives.toList τ →
     M.Val τ → alternatives.Choice M.toCarriers
   | .nil, _, position, _ => nomatch position
   | .cons _ _, _, .head, v => .inl v
@@ -315,7 +315,7 @@ def ownedOp : {ins outs : List V.Ty} → OwnedOp V ins outs → HList M.Val ins 
 
 /-- The processes of the functions that a body may call. -/
 abbrev FnTable (fns : List (FnHeader V)) : Type :=
-  ∀ hdr, Var fns hdr → HList M.Val hdr.ins → Local (HList M.Val hdr.outs)
+  ∀ hdr, Member fns hdr → HList M.Val hdr.ins → Local (HList M.Val hdr.outs)
 
 /-- The meaning of a local operation. -/
 def localOp {fns : List (FnHeader V)} (table : FnTable M fns) :
