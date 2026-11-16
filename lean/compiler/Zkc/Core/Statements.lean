@@ -4,7 +4,7 @@ public import Zkc.Core.Functions
 public import Zkc.Core.Admission.Check
 public import Zkc.Core.Facts.Facts
 public import Zkc.Core.Program.EraseProgram
-public import Zkc.Core.Transform.StepSound
+public import Zkc.Core.Transform.Assured
 
 @[expose] public section
 
@@ -79,54 +79,44 @@ def headersSayWhoStops : Prop :=
       (ins : HList M.Val hdr.ins), ins.All M.Valid → hdr.canStop = false →
       (fnMeaning M a.program f ins).Stops fun _ => False
 
-/-- Execution and state: two functions of which the second follows the first mean the same. For
-two bodies of functions over the same headers and of the same types, each with distinct
-addresses, of which the first is accepted by the check of facts and the second follows its
-analysis with no refusal and no place that differs (`Analysis.follow`): against callees with
-distinct keys that never stop `undefined` on valid inputs, keep validity, and stop only
-`undefined` where their headers say that they cannot stop (`Callees`), on every valid input the
-two processes mean the same, for any replies permitted. Nothing is assumed of the safety of the
-second; its addresses are distinct, which elaboration decides. -/
+/-- Execution and state: following is a producer of assurance and of sameness. For two
+functions elaborated against the same headers, of which the first is safe, however that is
+known, and the second follows its analysis with no refusal and no place that differs
+(`TypedFn.follows`): the second is assured with the bounds recorded while it follows, and the
+two have the same meaning on every valid input, against every callees. The first need not be
+accepted by the check of facts, and the second is not analysed by itself. -/
 def functionsSame : Prop :=
-  ∀ (fns : List (FnHeader V)) (M : Model V) (table : FnTable M fns), Callees M table →
-    ∀ {types outs : List V.Ty} (inputs inputs' : Names types)
-      (body : Term (localDialect V fns) (Ctx.empty.extend inputs) outs)
-      (body' : Term (localDialect V fns) (Ctx.empty.extend inputs') outs)
-      (definition definition' : Key), Term.Distinct body → Term.Distinct body' →
-    ∀ (bounds : List (Place × Nat)),
-      checkFacts (localFactRules V fns) (localSkelRules V fns) definition none inputs body =
-        .ok bounds →
-      (Analysis.follow (localFactRules V fns) (localSkelRules V fns) definition' none
-        (Analysis.analyse (localFactRules V fns) (localSkelRules V fns) definition none inputs
-          body) inputs' body').accepted = true →
-      ∀ ins : HList M.Val types, ins.All M.Valid → ∀ permitted : ∀ op, NoSig.Reply op → Prop,
-        Process.SameWhen permitted
-          (body.denote (localSem M fns table) [] (Env.empty.extend inputs ins))
-          (body'.denote (localSem M fns table) [] (Env.empty.extend inputs' ins))
+  ∀ (fns : List (FnHeader V)) (hdr : FnHeader V) (source target : TypedFn V fns hdr)
+    (bounds : List (Place × Nat)), source.Safe → source.follows target = .ok bounds →
+    target.Assured bounds ∧ source.SameAs target
 
-/-- Execution and state: a transformation of a function that the step accepts relates functions
-with the same meaning. When `transform` accepts a source and a target, both elaborated, the
-source accepted by the check of facts and the target following its analysis: against
-callees with distinct keys that never stop `undefined` on valid inputs, keep validity, and stop
-only `undefined` where their headers say that they cannot stop, the two return the same on every
-valid input (`AcceptedFn.SameAs`). -/
+/-- Execution and state: a step of transformation from an assured function relates functions
+with the same meaning. When the step from an assured function (`AssuredFn.step`) accepts a stored
+target, which elaborates and follows the analysis of the source with no refusal and no place that
+differs: against callees with distinct keys that never stop `undefined` on valid inputs, keep
+validity, and stop only `undefined` where their headers say that they cannot stop, the source and
+what the step returns return the same on every valid input (`TypedFn.SameAs`). The source is not
+admitted again: it is assured by whoever made it. -/
 def transformSound : Prop :=
-  ∀ (fns : List (FnHeader V)) (hdr : FnHeader V) (source target : Region (LocalRaw V) Unit)
-    (step : Transformed V fns hdr), transform fns hdr source target = .ok step →
-      step.source.SameAs step.target
+  ∀ (fns : List (FnHeader V)) (hdr : FnHeader V) (source next : AssuredFn V fns hdr)
+    (target : Region (LocalRaw V) Unit), source.step target = .ok next →
+      source.fn.SameAs next.fn
 
-/-- Execution and state: the functions of a program whose functions were replaced by functions
-that follow them mean what they meant. For two programs over the same headers with distinct
-keys, both accepted by the check of facts, whose functions follow one by one
-(`Defs.functionsFollow`): every function of the second has, on valid inputs, the meaning of the
-function of the first with its header, the callers of a replaced function included. The
-protocols of the two programs are not compared, and nothing is said of them. -/
+/-- Execution and state, and validity: the functions of a program whose functions were replaced
+by functions that follow them mean what they meant. For two programs over the same headers with
+distinct keys, of which the first is accepted by the check of facts, whose functions follow one
+by one (`Defs.functionsFollow`): every function of the second has, on valid inputs, the meaning
+of the function of the first with its header, the callers of a replaced function included, and
+the functions of the second never stop `undefined` on valid inputs and keep validity. The second
+program is not asked to be accepted. The protocols of the two programs are not compared, and
+nothing is said of them. -/
 def replacedFunctionsSame : Prop :=
   ∀ (hs : Headers V) (defs defs' : Defs V hs), (hs.fns.map (·.key)).Nodup →
-    ∀ (bounds bounds' : List (Place × Nat)), Defs.Accepted defs bounds →
-      Defs.Accepted defs' bounds' → Defs.functionsFollow defs defs' = true →
-      ∀ (M : Model V) (hdr : FnHeader V) (f : Member hs.fns hdr) (ins : HList M.Val hdr.ins),
-        ins.All M.Valid → Defs.fnTable M defs' hdr f ins = Defs.fnTable M defs hdr f ins
+    ∀ (bounds : List (Place × Nat)), Defs.Accepted defs bounds →
+      Defs.functionsFollow defs defs' = true → ∀ (M : Model V),
+        (∀ (hdr : FnHeader V) (f : Member hs.fns hdr) (ins : HList M.Val hdr.ins),
+          ins.All M.Valid → Defs.fnTable M defs' hdr f ins = Defs.fnTable M defs hdr f ins) ∧
+        FnTable.Safe (Defs.fnTable M defs') ∧ FnTable.KeepsValidity (Defs.fnTable M defs')
 
 /-- Validity: an open role program is safe: on valid inputs and every permitted reply it
 never stops `undefined`, whatever its peers do. -/

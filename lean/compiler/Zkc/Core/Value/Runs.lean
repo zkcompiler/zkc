@@ -9,8 +9,8 @@ public import Zkc.Core.Process.Same
 /-!
 The meaning of a skeleton over a table, and that it is one meaning.
 
-A value of a semantics with its type (`Semantics.Dyn`) is what the table's applications read and
-give. A dialect ties its values to a semantics by a relation on written forms and three laws
+A value of a semantics with its type (`Semantics.Dyn`, `Meaning/Fold.lean`) is what the table's
+applications read and give. A dialect ties its values to a semantics by a relation on written forms and three laws
 (`ValueRules.Binding`): an operation that is a value returns what its written form gives on the
 operands, or stops `undefined`; a written form gives one result on given operands; and a written
 form that the dialect says commutes gives the same results on its two operands exchanged.
@@ -32,18 +32,10 @@ namespace Zkc.Core
 
 open FactCheck (Valuation Table Entry)
 
-/-! ## Values of any type -/
+/-! ## One iteration of a loop -/
 
 section
 variable {D : Dialect}
-
-/-- A value of a semantics with its type. -/
-abbrev Semantics.Dyn (sem : Semantics D) : Type := (τ : D.Ty) × sem.Val τ
-
-/-- Values, each with its type. -/
-def Semantics.dyns (sem : Semantics D) : {items : List D.Ty} → HList sem.Val items → List sem.Dyn
-  | [], .nil => []
-  | _ :: _, .cons v rest => ⟨_, v⟩ :: sem.dyns rest
 
 /-- One iteration of a loop, from the process of its body at an iteration number and carried
 values: what `Semantics.loopStep` is, without the environment. -/
@@ -53,26 +45,6 @@ def Semantics.stepOf (sem : Semantics D) {carried each : List D.Ty}
     Process sem.S sem.H (sem.LoopState carried each) :=
   (bodyOf i state.1).bind fun out =>
     .done ((HList.split carried out).1, state.2.push (HList.split carried out).2)
-
-/-- Values with their types are as many as the types. -/
-theorem Semantics.dyns_length (sem : Semantics D) :
-    ∀ {items : List D.Ty} (values : HList sem.Val items), (sem.dyns values).length = items.length
-  | [], .nil => rfl
-  | _ :: _, .cons _ rest => congrArg (· + 1) (sem.dyns_length rest)
-
-/-- Two values of one type that are equal with their type are equal. -/
-theorem Semantics.dyn_inj (sem : Semantics D) {τ : D.Ty} {v v' : sem.Val τ}
-    (same : (⟨τ, v⟩ : sem.Dyn) = ⟨τ, v'⟩) : v = v' :=
-  eq_of_heq (Sigma.mk.inj same).2
-
-/-- Values of the same types that are equal with their types are equal. -/
-theorem Semantics.dyns_injective (sem : Semantics D) :
-    ∀ {items : List D.Ty} {values values' : HList sem.Val items},
-      sem.dyns values = sem.dyns values' → values = values'
-  | [], .nil, .nil, _ => rfl
-  | _ :: _, .cons v rest, .cons v' rest', same => by
-      simp only [Semantics.dyns, List.cons.injEq] at same
-      rw [sem.dyn_inj same.1, sem.dyns_injective same.2]
 
 end
 

@@ -1,23 +1,28 @@
 import Zkc.Core.Admission.Programs
+import Zkc.Core.Transform.Assured
 import Zkc.Core.Transform.Passes
 import Zkc.Tests.Core.Facts
 import Zkc.Tests.Core.Following
 
 /-!
-Transformations of functions as checked steps, on functions written by names, run by the kernel.
+Transformations of functions as steps from an assured function, on functions written by names,
+run by the kernel.
 
 The controls on meanings run in a model written here, the field of two elements.
 
-A function with unused and repeated operations is transformed twice by the untrusted passes:
-`removeUnused`, then `shareRepeated` of what it gave. Each stored result is compared whole with
-what is expected, `transform` accepts each step, and `transform_then` composes the two. The two
-passes again on a function with a choice, a case analysis and a block, with unused and repeated
-operations inside and around them: each stored result compared whole, each step accepted. Then
-one function whose loop runs as often as a value with an upper end, and one step from it, with
-each theorem applied to them: `checkFacts_sound` and `AcceptedFn.safe` to the function, and
-`transform_target_safe`, `transform_target_bounds` (the loop of the target bounded as the step
-recorded), `transform_erases` and `transform_both` (with a second step from the same source) to
-the step.
+A function with unused and repeated operations is admitted (`admitFn`) and transformed twice by
+the untrusted passes: a step to what `removeUnused` gives, then a step from the result to what
+`shareRepeated` gives of it. Each stored result is compared whole with what is expected, each
+step is accepted, and `AssuredFn.step_then` composes the two: the middle function is never
+admitted again. The two passes again on a function with a choice, a case analysis and a block,
+with unused and repeated operations inside and around them: each stored result compared whole,
+each step accepted, the second from the result of the first. Then one function whose loop runs
+as often as a value with an upper end, admitted, and one step from it, with each theorem applied
+to them: `checkFacts_sound`, the safety that the admitted function carries and
+`TypedFn.safe_iff_assured` to the function, and the safety and the bounds that the step's
+result carries (the loop of the target bounded as the step recorded), `admitFn_erases`,
+`AssuredFn.step_erases` and `AssuredFn.step_both` (with a second step from the same function)
+to the step.
 
 Then the refusals, each whole: a target that elaboration refuses. Three targets that follow their
 source with no place that differs (`FollowingTests.decided`) and that the analysis refuses while
@@ -28,23 +33,32 @@ before a loop in whose body a guard justified it; the step refuses each with the
 refusal. The control on the first: in the field of two elements, on the input zero, that target
 stops `undefined`, and the source stops at its guard with its reason. A target that is refused
 while it follows and also differs, refused with both. A target that elaborates but differs from
-its source (two guards exchanged), refused with the place where it differs, and a source that is
-not accepted. A control: a target that computes another result (an operand replaced by another)
-differs where it returns; a target with the operands of a sum exchanged is accepted.
+its source (two guards exchanged), refused with the place where it differs. A source that the
+check of facts refuses is not admitted, so a step cannot be asked of it. A control: a target that
+computes another result (an operand replaced by another) differs where it returns; a target with
+the operands of a sum exchanged is accepted.
+
+Then three functions as the passes treat them today, each with its whole verdict: two linear
+values shared by `shareRepeated`, which the step refuses by the rule `linear`; `a + b` then
+`b + a`, which `shareRepeated` leaves as they are, and the target that shares them by hand,
+accepted; and an unused restricted subtraction after the guard that justifies it, which
+`removeUnused` drops, accepted.
 
 Last, a program of two functions whose first, called by the second, is replaced by what
 `removeUnused` gives: the functions of the second follow those of the first
-(`Defs.functionsFollow`), and `Defs.functionsFollow_sound` gives that the caller means what it
-meant. A control: replacing the first function by one that computes another result, the
-functions do not follow, and that function's meaning is another on a concrete input.
+(`Defs.functionsFollow`), and `Defs.functionsFollow_sound`, given only that the first program is
+accepted, gives that the caller means what it meant and that the functions of the second are
+safe and keep validity. A control: replacing the first function by one that computes another
+result, the functions do not follow, and that function's meaning is another on a concrete input.
 -/
 namespace Zkc.Core.TransformTests
 
-open FactsTests (field F plus times natural element toNat fieldRow natOrTruth unjustified place)
+open FactsTests (field F plus minus times less natural element toNat fieldRow natOrTruth
+  unjustified place)
 open FollowingTests (noCallees noCallees_callees)
 
--- What a step and the check of facts return are compared whole.
-deriving instance DecidableEq for TransformRefusal
+-- What a step, admission and the check of facts return are compared whole.
+deriving instance DecidableEq for StepRefusal
 deriving instance DecidableEq for Except
 
 /-! ## Stored functions compared whole
@@ -218,13 +232,19 @@ instance Region.decideEq : DecidableEq (Region Op Who) := fun r r' =>
 
 end
 
-/-- The refusal of a step; nothing when it is accepted. -/
-def refusal {fns : List (FnHeader field)} {hdr : FnHeader field} :
-    Except (TransformRefusal field) (Transformed field fns hdr) → Option (TransformRefusal field)
+/-- The refusal of admission or of a step; nothing when it is accepted. -/
+def refusal {ε α : Type} : Except ε α → Option ε
   | .ok _ => none
   | .error refused => some refused
 
-/-- What a step accepted; nothing when it refuses. -/
+/-- The whole verdict of admission or of a step: the refusal, or the bounds of the loops of the
+function that it gives. -/
+def outcome {ε : Type} {fns : List (FnHeader field)} {hdr : FnHeader field} :
+    Except ε (AssuredFn field fns hdr) → Except ε (List (Place × Nat))
+  | .ok given => .ok given.bounds
+  | .error refused => .error refused
+
+/-- What admission or a step accepted; nothing when it refuses. -/
 def accepted? {ε α : Type} : Except ε α → Option α
   | .ok a => some a
   | .error _ => none
@@ -351,18 +371,32 @@ example : removeUnused [] source = withoutUnused := by decide +kernel
 
 example : shareRepeated [] (removeUnused [] source) = shared := by decide +kernel
 
-/-- The first step, accepted. -/
-def firstStep : Transformed field [] header :=
-  (accepted? (transform [] header source (removeUnused [] source))).get (by decide +kernel)
+/-- The function, admitted. -/
+def admitted : AssuredFn field [] header :=
+  (accepted? (admitFn [] header source)).get (by decide +kernel)
 
-/-- The second step, from what the first gave, accepted. -/
-def secondStep : Transformed field [] header :=
-  (accepted? (transform [] header (removeUnused [] source)
-    (shareRepeated [] (removeUnused [] source)))).get (by decide +kernel)
+/-- The first step, from the admitted function to what `removeUnused` gives, accepted. -/
+def firstStep : AssuredFn field [] header :=
+  (accepted? (admitted.step (removeUnused [] source))).get (by decide +kernel)
 
-/-- The two steps compose: the source of the first means what the target of the second means. -/
-example : firstStep.source.SameAs secondStep.target :=
-  transform_then (ok_of_accepted (by decide +kernel)) (ok_of_accepted (by decide +kernel))
+/-- The second step, from what the first step gave to what `shareRepeated` gives of it,
+accepted. What the first step gave is not admitted again. -/
+def secondStep : AssuredFn field [] header :=
+  (accepted? (firstStep.step (shareRepeated [] (removeUnused [] source)))).get (by decide +kernel)
+
+/-- What the first step returned. -/
+theorem firstStep_accepted : admitted.step (removeUnused [] source) = .ok firstStep :=
+  ok_of_accepted (by decide +kernel)
+
+/-- What the second step returned. -/
+theorem secondStep_accepted :
+    firstStep.step (shareRepeated [] (removeUnused [] source)) = .ok secondStep :=
+  ok_of_accepted (by decide +kernel)
+
+/-- The two steps compose: the admitted function means what the result of the second step
+means. -/
+example : admitted.fn.SameAs secondStep.fn :=
+  AssuredFn.step_then firstStep_accepted secondStep_accepted
 
 /-! ## Two steps on a function with regions -/
 
@@ -437,21 +471,24 @@ example : removeUnused [] regionsSource = regionsWithoutUnused := by decide +ker
 
 example : shareRepeated [] regionsWithoutUnused = regionsShared := by decide +kernel
 
-/-- The step from the source to what `removeUnused` gives, accepted. -/
-example : refusal (transform [] regionsHeader regionsSource (removeUnused [] regionsSource)) =
-    none := by
-  decide +kernel
+/-- The function with regions, admitted. -/
+def regionsAdmitted : AssuredFn field [] regionsHeader :=
+  (accepted? (admitFn [] regionsHeader regionsSource)).get (by decide +kernel)
+
+/-- The step from the admitted function to what `removeUnused` gives, accepted. -/
+def regionsFirstStep : AssuredFn field [] regionsHeader :=
+  (accepted? (regionsAdmitted.step (removeUnused [] regionsSource))).get (by decide +kernel)
 
 /-- The step from that to what `shareRepeated` gives, accepted. -/
-example : refusal (transform [] regionsHeader regionsWithoutUnused
-    (shareRepeated [] regionsWithoutUnused)) = none := by
+example : refusal (regionsFirstStep.step (shareRepeated [] regionsWithoutUnused)) = none := by
   decide +kernel
 
 /-! ## The theorems on one function and one step
 
-One function whose loop runs as often as a value with an upper end, accepted by the check of
-facts with that bound, and one step from it to what `removeUnused` gives: each theorem of a step,
-and the soundness of the check of facts, applied to them in every model. -/
+One function whose loop runs as often as a value with an upper end, admitted with that bound,
+and one step from it to what `removeUnused` gives: the soundness of the check of facts, what the
+admitted function and the step's result carry, and each theorem of a step, applied to them in
+every model. -/
 
 /-- A function with the key 1 of an index below 4 and a natural. -/
 def boundedHeader : FnHeader field := ⟨⟨1⟩, [.fin 4, .nat], [.nat], false, none⟩
@@ -476,82 +513,94 @@ def boundedExchanged : Region (LocalRaw field) Unit := .mk [0, 1] [
   .op ⟨2⟩ [11] times [1, 1],
   .loop ⟨3⟩ () (.count 10) [1] [12] (.mk [20, 21] [.op ⟨4⟩ [22] plus [20, 21]] [22])] [12]
 
-/-- The source, accepted by the check of facts. -/
-def boundedFn : AcceptedFn field [] boundedHeader :=
-  (accepted? (acceptFn [] boundedHeader boundedSource)).get (by decide +kernel)
+/-- The source, admitted: elaborated, and accepted by the check of facts. -/
+def boundedFn : AssuredFn field [] boundedHeader :=
+  (accepted? (admitFn [] boundedHeader boundedSource)).get (by decide +kernel)
 
-/-- The step from the source to what `removeUnused` gives, accepted. -/
-def boundedStep : Transformed field [] boundedHeader :=
-  (accepted? (transform [] boundedHeader boundedSource boundedTarget)).get (by decide +kernel)
+/-- The step from the admitted source to what `removeUnused` gives, accepted. -/
+def boundedStep : AssuredFn field [] boundedHeader :=
+  (accepted? (boundedFn.step boundedTarget)).get (by decide +kernel)
 
-/-- The step from the source to the source with the sum exchanged, accepted. -/
-def exchangedStep : Transformed field [] boundedHeader :=
-  (accepted? (transform [] boundedHeader boundedSource boundedExchanged)).get (by decide +kernel)
+/-- The step from the admitted source to the source with the sum exchanged, accepted. -/
+def exchangedStep : AssuredFn field [] boundedHeader :=
+  (accepted? (boundedFn.step boundedExchanged)).get (by decide +kernel)
 
-/-- What `acceptFn` returned. -/
-theorem boundedFn_accepted : acceptFn [] boundedHeader boundedSource = .ok boundedFn :=
+/-- What `admitFn` returned. -/
+theorem boundedFn_accepted : admitFn [] boundedHeader boundedSource = .ok boundedFn :=
   ok_of_accepted (by decide +kernel)
 
-/-- What `transform` returned. -/
-theorem boundedStep_accepted :
-    transform [] boundedHeader boundedSource boundedTarget = .ok boundedStep :=
+/-- What the step returned. -/
+theorem boundedStep_accepted : boundedFn.step boundedTarget = .ok boundedStep :=
   ok_of_accepted (by decide +kernel)
 
 /-- The loop runs at most 3 times, the upper end of the index: the check of facts gives that
 bound at the loop, and so does the step for its target, while it follows. -/
-example : boundedFn.bounds = [(place 3, 3)] ∧ boundedStep.target.bounds = [(place 3, 3)] := by
+example : outcome (admitFn [] boundedHeader boundedSource) = .ok [(place 3, 3)] ∧
+    outcome (boundedFn.step boundedTarget) = .ok [(place 3, 3)] := by
   decide +kernel
 
-/-- The soundness of the check of facts, on the accepted function: on valid inputs its loop runs
+/-- The soundness of the check of facts, on the admitted function: on valid inputs its loop runs
 at most 3 times, and it never stops `undefined` and returns valid values. -/
 example (M : Model field) (ins : HList M.Val boundedHeader.ins) (valid : ins.All M.Valid) :
-    boundedFn.body.EveryLoop (localSem M [] (noCallees M)) (fun _ _ => True)
+    boundedFn.fn.body.EveryLoop (localSem M [] (noCallees M)) (fun _ _ => True)
         (Annotation.Bounded ⟨[(place 3, 3)]⟩ ⟨1⟩ none) [] []
-        (Env.empty.extend boundedFn.inputs ins) ∧
-      (boundedFn.body.denote (localSem M [] (noCallees M)) []
-        (Env.empty.extend boundedFn.inputs ins)).Every (fun _ _ => True)
+        (Env.empty.extend boundedFn.fn.inputs ins) ∧
+      (boundedFn.fn.body.denote (localSem M [] (noCallees M)) []
+        (Env.empty.extend boundedFn.fn.inputs ins)).Every (fun _ _ => True)
         (fun outs => outs.All M.Valid) (· ≠ .undefined) :=
-  checkFacts_sound (noCallees_callees M) ⟨1⟩ boundedFn.inputs boundedFn.body
-    boundedFn.conditions.distinct
-    (acceptFn_ok boundedFn_accepted).2
+  checkFacts_sound (noCallees_callees M) ⟨1⟩ boundedFn.fn.inputs boundedFn.fn.body
+    boundedFn.fn.conditions.distinct
+    (admitFn_ok boundedFn_accepted).2
     [(place 3, 3)] (fun _ _ inside _ _ => by
       rw [show boundedFn.bounds = [(place 3, 3)] by decide +kernel]
       exact inside)
     ins valid
 
-/-- An accepted function is safe (`AcceptedFn.safe`). -/
+/-- An admitted function carries its safety. -/
 example (M : Model field) (ins : HList M.Val boundedHeader.ins) (valid : ins.All M.Valid) :
-    (boundedFn.meaning M (noCallees M) ins).Every (fun _ _ => True)
+    (boundedFn.fn.meaning M (noCallees M) ins).Every (fun _ _ => True)
       (fun outs => outs.All M.Valid) (· ≠ .undefined) :=
-  AcceptedFn.safe boundedFn_accepted M (noCallees M) (noCallees_callees M) ins valid
+  boundedFn.assured.safe M (noCallees M) (noCallees_callees M) ins valid
 
-/-- The target of the step is safe (`transform_target_safe`). -/
+/-- Its body is assured, in the sense of the evidence layer, on the empty path and its inputs
+bound to valid values (`TypedFn.safe_iff_assured`). -/
+example (M : Model field) :
+    Assured (localSem M [] (noCallees M)) (fun _ _ => True) (FactCheck.ValidDyn M)
+      (· = .undefined) boundedFn.fn.body
+      (fun path env => path = [] ∧ ∃ ins : HList M.Val boundedHeader.ins, ins.All M.Valid ∧
+        env = Env.empty.extend boundedFn.fn.inputs ins) :=
+  (TypedFn.safe_iff_assured boundedFn.fn).mp boundedFn.assured.safe M (noCallees M)
+    (noCallees_callees M)
+
+/-- The result of the step is safe: it was not analysed by itself; it follows a safe
+function. -/
 example (M : Model field) (ins : HList M.Val boundedHeader.ins) (valid : ins.All M.Valid) :
-    (boundedStep.target.meaning M (noCallees M) ins).Every (fun _ _ => True)
+    (boundedStep.fn.meaning M (noCallees M) ins).Every (fun _ _ => True)
       (fun outs => outs.All M.Valid) (· ≠ .undefined) :=
-  transform_target_safe boundedStep_accepted M (noCallees M) (noCallees_callees M) ins valid
+  boundedStep.assured.safe M (noCallees M) (noCallees_callees M) ins valid
 
-/-- The loop of the target runs at most as often as the bound that the step recorded for it
-(`transform_target_bounds`). -/
+/-- The loop of the step's result runs at most as often as the bound that the step recorded for
+it. -/
 example (M : Model field) (ins : HList M.Val boundedHeader.ins) (valid : ins.All M.Valid) :
-    boundedStep.target.body.EveryLoop (localSem M [] (noCallees M)) (fun _ _ => True)
+    boundedStep.fn.body.EveryLoop (localSem M [] (noCallees M)) (fun _ _ => True)
       (Annotation.Bounded ⟨[(place 3, 3)]⟩ ⟨1⟩ none) [] []
-      (Env.empty.extend boundedStep.target.inputs ins) :=
-  transform_target_bounds boundedStep_accepted M (noCallees M) (noCallees_callees M)
-    [(place 3, 3)] (fun _ _ inside _ _ => by
-      rw [show boundedStep.target.bounds = [(place 3, 3)] by decide +kernel]
+      (Env.empty.extend boundedStep.fn.inputs ins) :=
+  boundedStep.assured.bounded M (noCallees M) (noCallees_callees M) [(place 3, 3)]
+    (fun _ _ inside _ _ => by
+      rw [show boundedStep.bounds = [(place 3, 3)] by decide +kernel]
       exact inside)
     ins valid
 
-/-- The stored forms of what the step returns are what it was given (`transform_erases`). -/
-example : eraseFn boundedStep.source.inputs boundedStep.source.body = boundedSource ∧
-    eraseFn boundedStep.target.inputs boundedStep.target.body = boundedTarget :=
-  transform_erases boundedStep_accepted
+/-- The stored forms of what admission and the step return are what they were given
+(`admitFn_erases`, `AssuredFn.step_erases`). -/
+example : eraseFn boundedFn.fn.inputs boundedFn.fn.body = boundedSource ∧
+    eraseFn boundedStep.fn.inputs boundedStep.fn.body = boundedTarget :=
+  ⟨admitFn_erases boundedFn_accepted, AssuredFn.step_erases boundedStep_accepted⟩
 
-/-- Two steps from the one source: their targets, the source without the square and the source
-with the sum exchanged, have the same meaning (`transform_both`). -/
-example : boundedStep.target.SameAs exchangedStep.target :=
-  transform_both boundedStep_accepted (ok_of_accepted (by decide +kernel))
+/-- Two steps from the one function: their results, the source without the square and the
+source with the sum exchanged, have the same meaning (`AssuredFn.step_both`). -/
+example : boundedStep.fn.SameAs exchangedStep.fn :=
+  AssuredFn.step_both boundedStep_accepted (ok_of_accepted (by decide +kernel))
 
 /-! ## Refusals -/
 
@@ -561,8 +610,12 @@ def sum : FnHeader field := ⟨⟨1⟩, [.nat, .nat], [.nat], false, none⟩
 /-- `x + y`. -/
 def sumBody : Region (LocalRaw field) Unit := .mk [0, 1] [.op ⟨1⟩ [10] plus [0, 1]] [10]
 
+/-- `x + y`, admitted. -/
+def sumAdmitted : AssuredFn field [] sum :=
+  (accepted? (admitFn [] sum sumBody)).get (by decide +kernel)
+
 /-- A target that elaboration refuses: an operand that is not in scope. -/
-example : refusal (transform [] sum sumBody (.mk [0, 1] [.op ⟨1⟩ [10] plus [0, 5]] [10])) =
+example : refusal (sumAdmitted.step (.mk [0, 1] [.op ⟨1⟩ [10] plus [0, 5]] [10])) =
     some (.target [⟨.scope, place 1, .name 5⟩] []) := by
   decide +kernel
 
@@ -573,7 +626,8 @@ source does not justify it and still follow with no place that differs. The anal
 value's requirements where the target evaluates it, while it follows, and refuses it there. Each
 pair is one source and one target: the target follows the source with no place that differs
 (`FollowingTests.decided`), the whole verdict of following refuses it
-(`FollowingTests.safelyFollows`), and `transform` refuses the target, with its whole refusal. -/
+(`FollowingTests.safelyFollows`), and the step from the admitted source refuses the target, with
+its whole refusal. -/
 
 /-- A function with the key 1 of a field element, which can stop. -/
 def inverse : FnHeader field := ⟨⟨1⟩, [F], [F], true, none⟩
@@ -590,6 +644,10 @@ def inverseAboveGuard : Region (LocalRaw field) Unit := .mk [0] [
   .op ⟨3⟩ [11] (fieldRow .inverse) [0],
   .guard ⟨2⟩ () 10 .refused] [11]
 
+/-- The inverse after its guard, admitted. -/
+def inverseGuardedAdmitted : AssuredFn field [] inverse :=
+  (accepted? (admitFn [] inverse inverseGuarded)).get (by decide +kernel)
+
 /-- The inverse moved above the guard follows with no place that differs: the guard is the
 skeleton's entry, and the inverse a value of the table. The whole verdict refuses it. -/
 example : FollowingTests.decided [] [F] [F] true true inverseGuarded inverseAboveGuard =
@@ -600,7 +658,7 @@ example : FollowingTests.decided [] [F] [F] true true inverseGuarded inverseAbov
 
 /-- And the step refuses the target, while it follows: the inverse moved above the guard that it
 is not zero. -/
-example : refusal (transform [] inverse inverseGuarded inverseAboveGuard) =
+example : refusal (inverseGuardedAdmitted.step inverseAboveGuard) =
     some (.target [unjustified 3 (fieldRow .inverse)
       (.holds (.apply (fieldRow .isNonzero) [0])) [none]] []) := by
   decide +kernel
@@ -625,7 +683,7 @@ example : inverseGuardedTyped.2.1.denote (localSem twoModel [] (noCallees twoMod
 
 /-- A target that is refused while it follows and also differs, at a guard with another key: the
 refusal gives both, the refusal of the analysis and the place where the target differs. -/
-example : refusal (transform [] inverse inverseGuarded (.mk [0] [
+example : refusal (inverseGuardedAdmitted.step (.mk [0] [
     .op ⟨1⟩ [10] (fieldRow .isNonzero) [0],
     .op ⟨3⟩ [11] (fieldRow .inverse) [0],
     .guard ⟨4⟩ () 10 .refused] [11])) =
@@ -660,9 +718,10 @@ example : FollowingTests.decided [] [F] [F] false false inverseInRegion inverseB
       some false := by
   decide +kernel
 
-/-- And the step refuses the target, while it follows: before the choice nothing is known of the
-element. -/
-example : refusal (transform [] inverseOrZero inverseInRegion inverseBeforeChoice) =
+/-- And the step from the admitted source refuses the target, while it follows: before the
+choice nothing is known of the element. -/
+example : refusal (((accepted? (admitFn [] inverseOrZero inverseInRegion)).get
+      (by decide +kernel)).step inverseBeforeChoice) =
     some (.target [unjustified 3 (fieldRow .inverse)
       (.holds (.apply (fieldRow .isNonzero) [0])) [none]] []) := by
   decide +kernel
@@ -696,44 +755,114 @@ example : FollowingTests.decided [] [F, .nat] [F] true true inverseInLoop invers
       some false := by
   decide +kernel
 
-/-- And the step refuses the target, while it follows: before the loop nothing is known of the
-element. -/
-example : refusal (transform [] inverseRepeated inverseInLoop inverseBeforeLoop) =
+/-- And the step from the admitted source refuses the target, while it follows: before the loop
+nothing is known of the element. -/
+example : refusal (((accepted? (admitFn [] inverseRepeated inverseInLoop)).get
+      (by decide +kernel)).step inverseBeforeLoop) =
     some (.target [unjustified 5 (fieldRow .inverse)
       (.holds (.apply (fieldRow .isNonzero) [0])) [none]] []) := by
   decide +kernel
 
-/-! ### A target that differs, and a source not accepted -/
+/-! ### A target that differs, and a source that is not admitted -/
 
 /-- A function with the key 1 of two truth values, which can stop. -/
 def twoGuards : FnHeader field := ⟨⟨1⟩, [.bool, .bool], [], true, none⟩
 
 /-- A target that elaborates but differs from its source: two guards exchanged, so that which one
 stops first is another. It differs at its first guard, which is not the skeleton's next entry. -/
-example : refusal (transform [] twoGuards
-    (.mk [0, 1] [.guard ⟨1⟩ () 0 .reject, .guard ⟨2⟩ () 1 .reject] [])
+example : refusal (((accepted? (admitFn [] twoGuards
+      (.mk [0, 1] [.guard ⟨1⟩ () 0 .reject, .guard ⟨2⟩ () 1 .reject] []))).get
+      (by decide +kernel)).step
     (.mk [0, 1] [.guard ⟨2⟩ () 1 .reject, .guard ⟨1⟩ () 0 .reject] [])) =
     some (.differs [place 2]) := by
   decide +kernel
 
-/-- A source that is not accepted: the inverse with nothing known of its operand. The target is
-not looked at. -/
-example : refusal (transform [] ⟨⟨1⟩, [F], [F], false, none⟩
-    (.mk [0] [.op ⟨1⟩ [10] (fieldRow .inverse) [0]] [10])
+/-- A source that the check of facts refuses is not admitted, with its whole refusal: the
+inverse with nothing known of its operand. There is no assured function to take a step from. -/
+example : refusal (admitFn [] ⟨⟨1⟩, [F], [F], false, none⟩
     (.mk [0] [.op ⟨1⟩ [10] (fieldRow .inverse) [0]] [10])) =
-    some (.source [unjustified 1 (fieldRow .inverse)
-      (.holds (.apply (fieldRow .isNonzero) [0])) [none]]) := by
+    some [unjustified 1 (fieldRow .inverse)
+      (.holds (.apply (fieldRow .isNonzero) [0])) [none]] := by
   decide +kernel
 
 /-- Control: a target that computes another result, `x + x` for `x + y`, differs where it
 returns. -/
-example : refusal (transform [] sum sumBody (.mk [0, 1] [.op ⟨1⟩ [10] plus [0, 0]] [10])) =
+example : refusal (sumAdmitted.step (.mk [0, 1] [.op ⟨1⟩ [10] plus [0, 0]] [10])) =
     some (.differs [⟨⟨1⟩, [], none, none⟩]) := by
   decide +kernel
 
 /-- A target that writes `y + x` for `x + y` is accepted: addition commutes. -/
-example : refusal (transform [] sum sumBody (.mk [0, 1] [.op ⟨1⟩ [10] plus [1, 0]] [10])) =
-    none := by
+example : refusal (sumAdmitted.step (.mk [0, 1] [.op ⟨1⟩ [10] plus [1, 0]] [10])) = none := by
+  decide +kernel
+
+/-! ## Three functions as the passes treat them
+
+Each with its whole verdict: the refusal of admission or of the step, or the bounds of what it
+gives. -/
+
+/-- A linear record without fields. -/
+abbrev token : field.Ty := .record ⟨5⟩ true .nil
+
+/-- A function with the key 1 of no input that gives two linear values. -/
+def tokensHeader : FnHeader field := ⟨⟨1⟩, [], [token, token], false, none⟩
+
+/-- Two linear values, each made by a literal, both given. -/
+def twoTokens : Region (LocalRaw field) Unit := .mk [] [
+  .op ⟨1⟩ [10] (.literal token []) [],
+  .op ⟨2⟩ [11] (.literal token []) []] [10, 11]
+
+/-- `shareRepeated` shares the two literals: one linear value, given twice. -/
+example : shareRepeated [] twoTokens = .mk [] [.op ⟨1⟩ [10] (.literal token []) []] [10, 10] := by
+  decide +kernel
+
+/-- The two linear values are admitted, and the step to what `shareRepeated` gives is refused by
+the rule `linear`: the value bound at the first instruction is used twice. -/
+example : outcome (admitFn [] tokensHeader twoTokens) = .ok [] ∧
+    outcome (((accepted? (admitFn [] tokensHeader twoTokens)).get (by decide +kernel)).step
+      (shareRepeated [] twoTokens)) =
+      .error (.target [⟨.linear, place 1, .uses 10 2⟩] []) := by
+  decide +kernel
+
+/-- A function with the key 1 of two naturals that gives two naturals. -/
+def sumsHeader : FnHeader field := ⟨⟨1⟩, [.nat, .nat], [.nat, .nat], false, none⟩
+
+/-- `a + b`, then `b + a`. -/
+def reversedSums : Region (LocalRaw field) Unit := .mk [0, 1] [
+  .op ⟨1⟩ [10] plus [0, 1],
+  .op ⟨2⟩ [11] plus [1, 0]] [10, 11]
+
+/-- `a + b` once, given twice: the sharing of the two sums, written by hand. -/
+def sharedSum : Region (LocalRaw field) Unit := .mk [0, 1] [.op ⟨1⟩ [10] plus [0, 1]] [10, 10]
+
+/-- `shareRepeated` does not share `a + b` and `b + a`: it compares operands as written. -/
+example : shareRepeated [] reversedSums = reversedSums := by decide +kernel
+
+/-- The two sums are admitted, and the step to the target that shares them by hand is accepted:
+following places the operands of a sum in one order. -/
+example : outcome (admitFn [] sumsHeader reversedSums) = .ok [] ∧
+    outcome (((accepted? (admitFn [] sumsHeader reversedSums)).get (by decide +kernel)).step
+      sharedSum) = .ok [] := by
+  decide +kernel
+
+/-- A function with the key 1 of two naturals, which can stop. -/
+def guardedHeader : FnHeader field := ⟨⟨1⟩, [.nat, .nat], [.nat], true, none⟩
+
+/-- `y < x`, a guard on it, and `x - y`, which nothing uses: the subtraction is restricted to
+`y ≤ x`, which the guard justifies. -/
+def guardedSubtraction : Region (LocalRaw field) Unit := .mk [0, 1] [
+  .op ⟨1⟩ [2] less [1, 0],
+  .guard ⟨2⟩ () 2 .reject,
+  .op ⟨3⟩ [3] minus [0, 1]] [0]
+
+/-- `removeUnused` drops the subtraction and keeps the guard. -/
+example : removeUnused [] guardedSubtraction =
+    .mk [0, 1] [.op ⟨1⟩ [2] less [1, 0], .guard ⟨2⟩ () 2 .reject] [0] := by
+  decide +kernel
+
+/-- The function is admitted, and the step to what `removeUnused` gives is accepted. -/
+example : outcome (admitFn [] guardedHeader guardedSubtraction) = .ok [] ∧
+    outcome (((accepted? (admitFn [] guardedHeader guardedSubtraction)).get
+      (by decide +kernel)).step (removeUnused [] guardedSubtraction)) = .ok [] := by
   decide +kernel
 
 /-! ## A program whose called function is replaced -/
@@ -783,23 +912,32 @@ def other : Defs field ⟨[callerHeader, calleeHeader], []⟩ :=
 example : removeUnused [] calleeBody = .mk [0, 1] [.op ⟨1⟩ [10] plus [0, 1]] [10] := by
   decide +kernel
 
-/-- The functions of the second program follow those of the first, one by one. -/
+/-- The functions of the second program follow those of the first, one by one, with no refusal
+and no place that differs. -/
 example : Defs.functionsFollow before after = true := by decide +kernel
 
 /-- The program as written is accepted by the check of facts, with no bound. -/
 theorem before_accepted : Defs.Accepted before [] :=
   ⟨[], [], by decide +kernel, ⟨[], [], by decide +kernel, rfl, rfl⟩, rfl⟩
 
-/-- The program with the callee replaced is accepted too. -/
+/-- The program with the callee replaced is accepted too; the theorem below does not ask it. -/
 theorem after_accepted : Defs.Accepted after [] :=
   ⟨[], [], by decide +kernel, ⟨[], [], by decide +kernel, rfl, rfl⟩, rfl⟩
 
 /-- The caller means what it meant, on every valid input, in every model: it calls the replaced
-callee on valid values, where the callee means the same. -/
+callee on valid values, where the callee means the same. Only the first program's acceptance is
+given. -/
 example (M : Model field) (ins : HList M.Val callerHeader.ins) (valid : ins.All M.Valid) :
     Defs.fnTable M after callerHeader .head ins = Defs.fnTable M before callerHeader .head ins :=
-  Defs.functionsFollow_sound before after (by decide +kernel) before_accepted after_accepted
-    (by decide +kernel) M callerHeader .head ins valid
+  (Defs.functionsFollow_sound before after (by decide +kernel) before_accepted
+    (by decide +kernel) M).1 callerHeader .head ins valid
+
+/-- And the functions of the program with the callee replaced are safe and keep validity, in
+every model, from the first program's acceptance alone. -/
+example (M : Model field) :
+    FnTable.Safe (Defs.fnTable M after) ∧ FnTable.KeepsValidity (Defs.fnTable M after) :=
+  (Defs.functionsFollow_sound before after (by decide +kernel) before_accepted
+    (by decide +kernel) M).2
 
 /-- Control: a callee replaced by one that computes another result does not follow. -/
 example : Defs.functionsFollow before other = false := by decide +kernel

@@ -9,8 +9,9 @@ public import Zkc.Core.Program.Dialects
 Two transformations of a stored function, written as plain functions on the program by names.
 
 Neither is trusted, and nothing is proved of them. What one of them gives is accepted only
-through the step of a transformation (`transform`, `Transform/Step.lean`): the step elaborates
-it and follows the analysis of its source with it. A wrong result of either is refused there.
+through the step of a transformation from an assured function (`AssuredFn.step`,
+`Transform/Assured.lean`): the step elaborates it and follows the analysis of its source with
+it. A wrong result of either is refused there.
 
 - `removeUnused` drops the operations none of whose results is used later, in a body and in its
   regions. A guard, a form of control and a call of a function that can stop are kept; the
@@ -104,7 +105,7 @@ end
 
 /-- A stored function without the operations none of whose results is used later, in its body
 and in its regions; a guard, a form of control and a call of a function that can stop are kept.
-Not trusted: what it gives is accepted through `transform`. -/
+Not trusted: what it gives is accepted through the step (`AssuredFn.step`). -/
 def removeUnused (fns : List (FnHeader V)) (region : Region (LocalRaw V) Unit) :
     Region (LocalRaw V) Unit :=
   (removeUnusedRegion fns region).1
@@ -181,7 +182,7 @@ end
 /-- A stored function in which a later operation with the written form and the operand names of
 an earlier one in scope is dropped, its results replaced by the earlier ones in what follows; only
 among the operations that the analysis calls values. Not trusted: what it gives is accepted
-through `transform`. -/
+through the step (`AssuredFn.step`). -/
 def shareRepeated (fns : List (FnHeader V)) (region : Region (LocalRaw V) Unit) :
     Region (LocalRaw V) Unit :=
   shareRegion fns [] [] region

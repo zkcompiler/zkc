@@ -16,11 +16,13 @@ which neither stops `undefined` (`follow_same`). The facts side: a body that the
 nowhere is safe and respects its loop bounds (`analyse_safe`), and so is a body that follows the
 analysis of a first body with no refusal and no place that differs (`follow_safe`), which does
 not need the first body to be accepted. That the two mean the same needs the first to be safe
-too: `follow_same` asks it, and `follow_sound` has it from the first being accepted. Nothing is
-assumed of the safety of the body that follows; the facts side asks that the addresses of the
-body that it is about be distinct, which elaboration decides. Together: the analysis of a
-definition is sound (`analyse_sound`), and a definition that follows an accepted definition is
-safe and means the same (`follow_sound`).
+too, however that is known: a body that follows a safe body is safe and means the same as it
+(`follow_assured`), which reads neither the first's addresses nor whether its analysis refuses
+anything. Nothing is assumed of the safety of the body that follows; the facts side asks that
+the addresses of the body that it is about be distinct, which elaboration decides. Together: the
+analysis of a definition is sound (`analyse_sound`), and a definition that follows an accepted
+definition is safe and means the same (`follow_sound`, `follow_assured` with the first safe
+because the analysis accepts it).
 -/
 
 namespace Zkc.Core.Analysis
@@ -268,12 +270,53 @@ theorem analyse_sound (laws : rules.Lawful sem permitted R Run Valid undefined)
     analyse_runs rules checks sem permitted Run undefined laws.binding definition role inputs body
       [] values (Process.every_mono _ permitted (fun _ _ => trivial) (fun _ stop => stop) safe.2)⟩
 
+/-- **A definition that follows a safe definition is safe and means the same.** For two bodies
+of the same types, of which the second has distinct addresses and follows the analysis of the
+first with no refusal and no place that differs, on valid inputs on which the first never stops
+`undefined`, and permitted replies: every loop of the second respects the bound recorded for
+it, the second never stops `undefined` and returns valid values, and the two processes mean the
+same. How the first is known to be safe does not matter: that the analysis accepts it is one
+way (`follow_sound`), following a safe body is another. Nothing is assumed of the safety of the
+second; its addresses are distinct, which elaboration decides. -/
+theorem follow_assured (laws : rules.Lawful sem permitted R Run Valid undefined)
+    (lawful : checks.Lawful) (definition definition' : Key) (role : Option Role)
+    {types outs : List D.Ty} (inputs inputs' : Names types)
+    (body : Term D (Ctx.empty.extend inputs) outs)
+    (body' : Term D (Ctx.empty.extend inputs') outs)
+    (distinct' : Term.Distinct body')
+    (followed : (follow rules checks definition' role
+      (analyse rules checks definition role inputs body) inputs' body').accepted = true)
+    (F : List (Place × Nat))
+    (recorded : ∀ p b, (p, b) ∈ F → p.definition = definition' → p.role = role →
+      (p, b) ∈ (follow rules checks definition' role
+        (analyse rules checks definition role inputs body) inputs' body').state.st.bounds)
+    (values : HList sem.Val types) (valid : ∀ v, v ∈ sem.dyns values → Valid v)
+    (safe : (body.denote sem [] (Env.empty.extend inputs values)).Every permitted
+      (fun _ => True) (fun stop => ¬ undefined stop)) :
+    body'.EveryLoop sem permitted (Annotation.Bounded ⟨F⟩ definition' role) [] []
+        (Env.empty.extend inputs' values) ∧
+      (body'.denote sem [] (Env.empty.extend inputs' values)).Every permitted
+        (fun returned => ∀ v, v ∈ sem.dyns returned → Valid v) (fun stop => ¬ undefined stop) ∧
+      Process.SameWhen permitted (body.denote sem [] (Env.empty.extend inputs values))
+        (body'.denote sem [] (Env.empty.extend inputs' values)) := by
+  have second := follow_safe rules checks sem permitted R Run Valid undefined laws lawful
+    definition definition' role inputs inputs' body body' distinct' followed F recorded values
+    valid
+  have differs : (follow rules checks definition' role
+      (analyse rules checks definition role inputs body) inputs' body').state.differs = [] := by
+    simp only [Exit.accepted, Bool.and_eq_true, List.isEmpty_iff] at followed
+    exact followed.2
+  exact ⟨second.1, second.2,
+    follow_same rules checks sem permitted Run undefined laws.binding lawful definition
+      definition' role inputs inputs' body body' differs [] values safe
+      (Process.every_mono _ permitted (fun _ _ => trivial) (fun _ stop => stop) second.2)⟩
+
 /-- **A definition that follows an accepted definition is safe and means the same.** For two
 bodies with distinct addresses and the same types, of which the first is refused nowhere and the
 second follows the first with no refusal and no place that differs, on valid inputs and
 permitted replies: every loop of the second respects the bound recorded for it, the second never
-stops `undefined` and returns valid values, and the two processes mean the same. Nothing is
-assumed of the safety of the second; its addresses are distinct, which elaboration decides. -/
+stops `undefined` and returns valid values, and the two processes mean the same. It is
+`follow_assured`, the first being safe since the analysis accepts it (`analyse_safe`). -/
 theorem follow_sound (laws : rules.Lawful sem permitted R Run Valid undefined)
     (lawful : checks.Lawful) (definition definition' : Key) (role : Option Role)
     {types outs : List D.Ty} (inputs inputs' : Names types)
@@ -293,22 +336,12 @@ theorem follow_sound (laws : rules.Lawful sem permitted R Run Valid undefined)
       (body'.denote sem [] (Env.empty.extend inputs' values)).Every permitted
         (fun returned => ∀ v, v ∈ sem.dyns returned → Valid v) (fun stop => ¬ undefined stop) ∧
       Process.SameWhen permitted (body.denote sem [] (Env.empty.extend inputs values))
-        (body'.denote sem [] (Env.empty.extend inputs' values)) := by
-  have first := analyse_safe rules checks sem permitted R Run Valid undefined laws lawful
-    definition role inputs body distinct accepted [] (fun _ _ inside => nomatch inside) values
-    valid
-  have second := follow_safe rules checks sem permitted R Run Valid undefined laws lawful
-    definition definition' role inputs inputs' body body' distinct' followed F recorded values
-    valid
-  have differs : (follow rules checks definition' role
-      (analyse rules checks definition role inputs body) inputs' body').state.differs = [] := by
-    simp only [Exit.accepted, Bool.and_eq_true, List.isEmpty_iff] at followed
-    exact followed.2
-  exact ⟨second.1, second.2,
-    follow_same rules checks sem permitted Run undefined laws.binding lawful definition
-      definition' role inputs inputs' body body' differs [] values
-      (Process.every_mono _ permitted (fun _ _ => trivial) (fun _ stop => stop) first.2)
-      (Process.every_mono _ permitted (fun _ _ => trivial) (fun _ stop => stop) second.2)⟩
+        (body'.denote sem [] (Env.empty.extend inputs' values)) :=
+  follow_assured rules checks sem permitted R Run Valid undefined laws lawful definition
+    definition' role inputs inputs' body body' distinct' followed F recorded values valid
+    (Process.every_mono _ permitted (fun _ _ => trivial) (fun _ stop => stop)
+      (analyse_safe rules checks sem permitted R Run Valid undefined laws lawful definition role
+        inputs body distinct accepted [] (fun _ _ inside => nomatch inside) values valid).2)
 
 end
 

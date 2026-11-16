@@ -60,10 +60,10 @@ theorem hideLists_push (r : Role) : ∀ {each : List (LTy V)}
     (hideLists M r s).push (hideAll M r vs) = hideLists M r (s.push vs)
   | [], .nil, .nil => rfl
   | a :: _, .cons xs rest, .cons v more => by
-      show HList.cons (xs.map (hide M r a) ++ [hide M r a v]) ((hideLists M r rest).push (hideAll M r more)) =
-        HList.cons ((xs ++ [v]).map (hide M r a)) (hideLists M r (rest.push more))
-      rw [hideLists_push r rest more, List.map_append]
-      rfl
+      show HList.cons (hide M r a v :: xs.map (hide M r a))
+          ((hideLists M r rest).push (hideAll M r more)) =
+        HList.cons ((v :: xs).map (hide M r a)) (hideLists M r (rest.push more))
+      rw [hideLists_push r rest more, List.map_cons]
 
 theorem split_hideAll (r : Role) : ∀ (as : List (LTy V)) {bs : List (LTy V)}
     (vs : HList (LVal M) (as ++ bs)),
@@ -153,11 +153,11 @@ theorem hideAll_collected (r : Role) (rTable : RTable M hs.protocols) (size : Op
         (roleSem M r fnTable rTable).collected size (hideLists M r s)
   | [], .nil => rfl
   | a :: _, .cons vs rest => by
-      show HList.cons (hide M r (LTy.collected size a) vs)
+      show HList.cons (hide M r (LTy.collected size a) vs.reverse)
           (hideAll M r ((protocolSem M fnTable gTable).collected size rest)) =
-        HList.cons (collectRV M r size a (vs.map (hide M r a)))
+        HList.cons (collectRV M r size a (vs.map (hide M r a)).reverse)
           ((roleSem M r fnTable rTable).collected size (hideLists M r rest))
-      rw [collectRV_hide, hideAll_collected r rTable size rest]
+      rw [← List.map_reverse, collectRV_hide, hideAll_collected r rTable size rest]
 
 /-! ## A role that takes no part -/
 

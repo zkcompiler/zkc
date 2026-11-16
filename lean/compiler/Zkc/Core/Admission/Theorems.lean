@@ -24,12 +24,14 @@ function whose body the check of facts accepts, so the program is `Defs.Accepted
 annotation, and the theorem of the check of facts for a program gives `functionsSafe`,
 `functionsKeepValidity` and `annotationHolds`. A function whose header says that it cannot stop
 stops only `undefined` (`Defs.fnTable_stops_undefined`), and never that, so it does not stop
-(`headersSayWhoStops`). Two functions of which the second follows the first mean the same
-(`functionsSame`): it is the theorem `functions_follow_same` of `Transform/StepSound.lean`. A transformation that the step accepts relates functions with the same
-meaning (`transformSound`, the theorem `transform_sound` of `Transform/StepSound.lean`), and
-every function of a program whose functions follow those of another means what the function of
-the other with its header means (`replacedFunctionsSame`, the theorem
-`Defs.functionsFollow_sound` of `Admission/Programs.lean`).
+(`headersSayWhoStops`). A function that follows a safe function is assured and means the same
+(`functionsSame`): it is the theorem `TypedFn.follows_assured` of `Transform/StepSound.lean`. A
+step of transformation from an assured function relates functions with the same meaning
+(`transformSound`, the theorem `AssuredFn.step_same` of `Transform/Assured.lean`), and every
+function of a program whose functions follow those of a program that the check of facts accepts
+means what the function of the other with its header means, and is safe and keeps validity
+(`replacedFunctionsSame`, the theorem `Defs.functionsFollow_sound` of
+`Admission/Programs.lean`).
 -/
 
 namespace Zkc.Core
@@ -211,25 +213,23 @@ theorem headersSayWhoStops (c : Functions V) (admits : c.admit = admit) :
     (Process.every_and _ _ (safe named assoc a h M hdr f ins valid)
       (Defs.fnTable_stops_undefined M a.program.defs hdr f ins quiet))
 
-/-- Execution and state: two functions of which the second follows the first mean the same
-(`functions_follow_same`, `Transform/StepSound.lean`). -/
+/-- Execution and state: a function that follows a safe function is assured and means the
+same (`TypedFn.follows_assured`, `Transform/StepSound.lean`). -/
 theorem functionsSame : Statements.functionsSame (V := V) :=
-  fun _ _ _ callees _ _ inputs inputs' body body' definition definition' distinct distinct' _
-      accepted followed ins valid permitted =>
-    functions_follow_same callees inputs inputs' body body' definition definition' distinct
-      distinct' accepted followed ins valid permitted
+  fun _ _ _ _ _ safe followed => TypedFn.follows_assured safe followed
 
-/-- Execution and state: a transformation of a function that the step accepts relates functions
-with the same meaning (`transform_sound`, `Transform/StepSound.lean`). -/
+/-- Execution and state: a step of transformation from an assured function relates functions
+with the same meaning (`AssuredFn.step_same`, `Transform/Assured.lean`). -/
 theorem transformSound : Statements.transformSound (V := V) :=
-  fun _ _ _ _ _ accepted => transform_sound accepted
+  fun _ _ _ _ _ accepted => AssuredFn.step_same accepted
 
-/-- Execution and state: every function of a program whose functions follow those of another
-program over the same headers, both accepted by the check of facts, means what the function of
-the other with its header means (`Defs.functionsFollow_sound`, `Admission/Programs.lean`). -/
+/-- Execution and state, and validity: every function of a program whose functions follow those
+of a program accepted by the check of facts, over the same headers, means what the function of
+the other with its header means, and the functions of the second are safe and keep validity
+(`Defs.functionsFollow_sound`, `Admission/Programs.lean`). -/
 theorem replacedFunctionsSame : Statements.replacedFunctionsSame (V := V) :=
-  fun _ defs defs' distinct _ _ accepted accepted' follows M hdr f ins valid =>
-    Defs.functionsFollow_sound defs defs' distinct accepted accepted' follows M hdr f ins valid
+  fun _ defs defs' distinct _ accepted follows M =>
+    Defs.functionsFollow_sound defs defs' distinct accepted follows M
 
 /-- Validity: what the annotation of an admitted program knows holds, and no loop runs more
 often than its bound. -/
