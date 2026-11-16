@@ -11,7 +11,7 @@ operations.
 Inside the walk a value has an identifier that is never reused. The walk carries the identifier
 of each name in scope, a map from names to identifiers (`Ctx Nat`): where the term binds names to
 its context, the walk binds the same names to the new identifiers, a later name hiding an earlier
-one as in the context (`bindIds`).
+one as in the context (`bindIds`, `Value/Table.lean`).
 
 At an operation that computes, every requirement of its written form is decided from what is
 known there; each that is not known is refused at the place, and the walk goes on as if it were
@@ -42,25 +42,6 @@ structure Exit (T Raw : Type) where
   st : St T Raw
   known : Known
   rets : List Nat
-
-/-- The identifier of a name in scope. In the walk every name in scope has one (`InScope` in
-`Growth.lean`), so the `0` of a name without one is never read. -/
-def idOf (ids : Ctx Nat) (name : Name) : Nat := (ids.find? name).getD 0
-
-/-- The identifiers of variables. -/
-def idsOf {α : Type} {Γ : Ctx α} (ids : Ctx Nat) : {items : List α} → HList (Var Γ) items →
-    List Nat
-  | [], .nil => []
-  | _ :: _, .cons x rest => idOf ids x.name :: idsOf ids rest
-
-/-- The identifiers of the names in scope with the names of a binding bound to identifiers, in
-order, as `Ctx.extend` binds them to their types: a later name hides an earlier one. The walk
-gives as many identifiers as names (`opStep_grows`, `fresh`); names left without one would stay
-as they were. -/
-def bindIds {α : Type} (ids : Ctx Nat) : {types : List α} → Names types → List Nat → Ctx Nat
-  | [], .nil, _ => ids
-  | _ :: _, .cons name rest, i :: is => bindIds (ids.insert name i) rest is
-  | _ :: _, .cons _ _, [] => ids
 
 /-- What a region that runs knows of the value it returns at a position; nothing from a region
 that never runs. -/

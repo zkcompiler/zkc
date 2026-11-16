@@ -820,16 +820,6 @@ theorem Stepped.refl {T : Type} {ρ : Valuation Val} {st : St T Raw}
     (coh : Coherent Run Valid ρ st) : Stepped Run Valid ρ ρ st st :=
   ⟨Valuation.Le.refl ρ, coh, ⟨Nat.le_refl _, [], rfl, fun _ m => nomatch m⟩, rfl, rfl⟩
 
-theorem St.Grows.trans {T : Type} {a b c : St T Raw} (h1 : St.Grows a b) (h2 : St.Grows b c) :
-    St.Grows a c := by
-  obtain ⟨n1, new1, e1, low1⟩ := h1
-  obtain ⟨n2, new2, e2, low2⟩ := h2
-  refine ⟨Nat.le_trans n1 n2, new2 ++ new1, by rw [e2, e1, List.append_assoc], ?_⟩
-  intro e m
-  rcases List.mem_append.mp m with m | m
-  · exact Nat.le_trans n1 (low2 e m)
-  · exact low1 e m
-
 theorem Stepped.trans {T : Type} {ρ₁ ρ₂ ρ₃ : Valuation Val} {st₁ st₂ st₃ : St T Raw}
     (h1 : Stepped Run Valid ρ₁ ρ₂ st₁ st₂) (h2 : Stepped Run Valid ρ₂ ρ₃ st₂ st₃) :
     Stepped Run Valid ρ₁ ρ₃ st₁ st₃ :=

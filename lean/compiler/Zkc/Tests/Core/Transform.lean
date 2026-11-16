@@ -1,5 +1,5 @@
 import Zkc.Core.Admission.Programs
-import Zkc.Core.Value.Passes
+import Zkc.Core.Transform.Passes
 import Zkc.Tests.Core.Facts
 import Zkc.Tests.Core.Same
 

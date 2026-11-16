@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Core.Facts.Walk
+public import Zkc.Core.Value.Table
 
 @[expose] public section
 
@@ -14,18 +14,22 @@ are new each time, or that can stop with a reason), a guard, and every form of c
 says which of its operations are values (`ValueRules`).
 
 The value form of a term is the table of its applications, the one that the check of facts
-builds (`Facts/State.lean`), together with its *skeleton* (`Skel`): what is kept in order, with
-identifiers of the table in place of names. A value has the identifier of the first application
-of its operation to its operands; a result of an effect or of a form of control, and an input of
-a region, is a *leaf* with an identifier of its own. `Term.skeleton` builds both, in one walk.
+also builds (`Value/Table.lean`), together with its *skeleton* (`Skel`): what is kept in order,
+with identifiers of the table in place of names. A value has the identifier of the first
+application of its operation to its operands; a result of an effect or of a form of control, and
+an input of a region, is a *leaf* with an identifier of its own. `Term.skeleton` builds both, in
+one walk.
 
 An application is placed in the table with its operands in the order written, except that an
 operation of two operands whose result does not depend on their order has the smaller
 identifier first (`ValueRules.order`), so that `x + y` and `y + x` are one value. An effect keeps
 its operands in the order written.
 
-The meaning of a skeleton is in `Value/Runs.lean`; whether a second term follows the skeleton
-of a first, in `Value/Follows.lean`.
+What following a skeleton asks a dialect to decide (`SkelRules`: its types, its performers, and
+whether two operations are the same) and whether how often a loop runs follows how often a loop
+of a skeleton runs (`Times.follows`, which then is the loop's count on the identifiers,
+`Times.follows_eq`) are here too. The meaning of a skeleton is in `Value/Runs.lean`; whether a
+second term follows the skeleton of a first, in `Value/Follows.lean`.
 -/
 
 namespace Zkc.Core
@@ -71,6 +75,41 @@ def Count.size {D : Dialect} {w : D.Who} : Count D w → Option Nat
   | .fixed n => some n
   | .value .. => none
 
+/-! ## What following a skeleton asks of a dialect -/
+
+section
+variable {D : Dialect}
+
+/-- What following a skeleton compares that a dialect must decide. -/
+structure SkelRules (D : Dialect) where
+  sameTy : DecidableEq D.Ty
+  sameWho : DecidableEq D.Who
+  /-- Whether two operations on operands of the same types are the same operation. -/
+  sameOp : ∀ {ins res res' : List D.Ty}, D.Op ins res → D.Op ins res' → Bool
+
+/-- Operations that are found the same are the same. -/
+def SkelRules.Lawful (checks : SkelRules D) : Prop :=
+  ∀ {ins res res' : List D.Ty} (o : D.Op ins res) (o' : D.Op ins res'),
+    checks.sameOp o o' = true → res = res' ∧ HEq o o'
+
+/-- Whether two lists of types are equal, by the dialect's decision for types. -/
+def SkelRules.sameTys (checks : SkelRules D) : DecidableEq (List D.Ty) :=
+  @instDecidableEqList D.Ty checks.sameTy
+
+/-- Whether how often a loop runs follows how often a loop of a skeleton runs: the same written
+number, or a count of the same type, by the dialect's decision, on the same identifier. -/
+def Times.follows (checks : SkelRules D) {w : D.Who} {Γ : Ctx D.Ty} (ids : Ctx Nat) :
+    Times D w Γ → Count D w → Bool
+  | .fixed n, .fixed n' => decide (n = n')
+  | .value (t := t) count _, .value (t := t') id _ =>
+      match checks.sameTy t t' with
+      | isTrue _ => decide (idOf ids count.name = id)
+      | isFalse _ => false
+  | .fixed _, .value .. => false
+  | .value .., .fixed _ => false
+
+end
+
 mutual
   /-- What a term keeps in order, on identifiers of a table. A result of an entry and an input
   of a region are leaves: `results` (or `inputs`, `input`) is the first of their identifiers,
@@ -109,6 +148,26 @@ variable {D : Dialect} {Raw : Type} [DecidableEq Raw] (rules : ValueRules D Raw)
 def Times.count {w : D.Who} {Γ : Ctx D.Ty} (ids : Ctx Nat) : Times D w Γ → Count D w
   | .fixed n => .fixed n
   | .value count ok => .value (idOf ids count.name) ok
+
+/-- A count that a loop's count follows is the loop's count on the identifiers. -/
+theorem Times.follows_eq (checks : SkelRules D) {w : D.Who} {Γ : Ctx D.Ty} (ids : Ctx Nat) :
+    ∀ (times : Times D w Γ) (count : Count D w), times.follows checks ids count = true →
+      count = times.count ids
+  | .fixed n, .fixed n', same => by
+      simp only [Times.follows, decide_eq_true_eq] at same
+      subst same
+      rfl
+  | .value (t := t) c ok, .value (t := t') id ok', same => by
+      simp only [Times.follows] at same
+      split at same
+      · next sameType _ =>
+          subst sameType
+          simp only [decide_eq_true_eq] at same
+          subst same
+          rfl
+      · cases same
+  | .fixed _, .value .., same => by cases same
+  | .value .., .fixed _, same => by cases same
 
 mutual
   /-- The skeleton of a term and the table with its values, from the identifiers of the names in

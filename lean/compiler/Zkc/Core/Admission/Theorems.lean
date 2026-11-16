@@ -26,8 +26,8 @@ annotation, and the theorem of the check of facts for a program gives `functions
 stops only `undefined` (`Defs.fnTable_stops_undefined`), and never that, so it does not stop
 (`headersSayWhoStops`). Two accepted functions of which the second follows the skeleton of the
 first mean the same (`functionsSame`): it is the theorem `functions_follow_same` of
-`Value/Local.lean`. A transformation that the step accepts relates functions with the same
-meaning (`transformSound`, the theorem `transform_sound` of `Value/TransformSound.lean`), and
+`Transform/Local.lean`. A transformation that the step accepts relates functions with the same
+meaning (`transformSound`, the theorem `transform_sound` of `Transform/StepSound.lean`), and
 every function of a program whose functions follow those of another means what the function of
 the other with its header means (`replacedFunctionsSame`, the theorem
 `Defs.functionsFollow_sound` of `Admission/Programs.lean`).
@@ -212,7 +212,7 @@ theorem headersSayWhoStops (c : Functions V) (admits : c.admit = admit) :
       (Defs.fnTable_stops_undefined M a.program.defs hdr f ins quiet))
 
 /-- Execution and state: two accepted functions of which the second follows the skeleton of the
-first mean the same (`functions_follow_same`, `Value/Local.lean`). -/
+first mean the same (`functions_follow_same`, `Transform/Local.lean`). -/
 theorem functionsSame : Statements.functionsSame (V := V) :=
   fun _ _ _ inputs inputs' body body' definition definition' _ _ distinctBody distinctBody'
       accepted accepted' decided M table distinct safe keeps quiet ins valid permitted =>
@@ -221,7 +221,7 @@ theorem functionsSame : Statements.functionsSame (V := V) :=
       permitted
 
 /-- Execution and state: a transformation of a function that the step accepts relates functions
-with the same meaning (`transform_sound`, `Value/TransformSound.lean`). -/
+with the same meaning (`transform_sound`, `Transform/StepSound.lean`). -/
 theorem transformSound : Statements.transformSound (V := V) :=
   fun _ _ _ _ _ accepted => transform_sound accepted
 

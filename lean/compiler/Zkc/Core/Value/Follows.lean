@@ -11,9 +11,9 @@ Following walks a second term along the skeleton of the first, with the first's 
 (`Term.follows`): the second term's values are found in or added to the table, the operands of
 an operation that commutes in one order whichever way they were written, and each instruction
 that it keeps in order must be the skeleton's next entry, on the same identifiers.
-What a dialect must decide for it is said by `SkelRules`: its types, its performers, and whether
-two operations are the same. `followsSkeleton` decides two definitions, with the inputs of both
-on the same identifiers.
+What a dialect must decide for it is said by `SkelRules` (`Value/Skeleton.lean`): its types, its
+performers, and whether two operations are the same. `followsSkeleton` decides two definitions,
+with the inputs of both on the same identifiers.
 
 Following does not decide that the second term is safe. A value has no place in the skeleton, so
 a second term may read a value with a domain before the guard that justifies it in the first,
@@ -22,7 +22,7 @@ a reason, such a second term stops `undefined`. That two terms of which one foll
 skeleton mean the same is therefore for two terms that never stop `undefined`
 (`Term.follows_runs` and `followsSkeleton_sound`, `Value/Soundness.lean`). For a function, that
 is its check of facts, which the step of a transformation runs on both (`transform`,
-`Value/Transform.lean`).
+`Transform/Step.lean`).
 -/
 
 namespace Zkc.Core
@@ -33,34 +33,6 @@ section
 variable {D : Dialect} {Raw : Type}
 
 /-! ## Following a skeleton -/
-
-/-- What following a skeleton compares that a dialect must decide. -/
-structure SkelRules (D : Dialect) where
-  sameTy : DecidableEq D.Ty
-  sameWho : DecidableEq D.Who
-  /-- Whether two operations on operands of the same types are the same operation. -/
-  sameOp : ∀ {ins res res' : List D.Ty}, D.Op ins res → D.Op ins res' → Bool
-
-/-- Operations that are found the same are the same. -/
-def SkelRules.Lawful (checks : SkelRules D) : Prop :=
-  ∀ {ins res res' : List D.Ty} (o : D.Op ins res) (o' : D.Op ins res'),
-    checks.sameOp o o' = true → res = res' ∧ HEq o o'
-
-/-- Whether two lists of types are equal, by the dialect's decision for types. -/
-def SkelRules.sameTys (checks : SkelRules D) : DecidableEq (List D.Ty) :=
-  @instDecidableEqList D.Ty checks.sameTy
-
-/-- Whether how often a loop runs follows how often a loop of a skeleton runs: the same written
-number, or a count of the same type, by the dialect's decision, on the same identifier. -/
-def Times.follows (checks : SkelRules D) {w : D.Who} {Γ : Ctx D.Ty} (ids : Ctx Nat) :
-    Times D w Γ → Count D w → Bool
-  | .fixed n, .fixed n' => decide (n = n')
-  | .value (t := t) count _, .value (t := t') id _ =>
-      match checks.sameTy t t' with
-      | isTrue _ => decide (idOf ids count.name = id)
-      | isFalse _ => false
-  | .fixed _, .value .. => false
-  | .value .., .fixed _ => false
 
 mutual
   /-- A term follows a skeleton, from the identifiers of the names in scope and a state whose

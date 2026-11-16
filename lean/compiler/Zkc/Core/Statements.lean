@@ -4,7 +4,7 @@ public import Zkc.Core.Functions
 public import Zkc.Core.Admission.Check
 public import Zkc.Core.Facts.Facts
 public import Zkc.Core.Program.EraseProgram
-public import Zkc.Core.Value.TransformSound
+public import Zkc.Core.Transform.StepSound
 
 @[expose] public section
 

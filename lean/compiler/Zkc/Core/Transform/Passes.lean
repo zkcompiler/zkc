@@ -9,7 +9,7 @@ public import Zkc.Core.Program.Dialects
 Two transformations of a stored function, written as plain functions on the program by names.
 
 Neither is trusted, and nothing is proved of them. What one of them gives is accepted only
-through the step of a transformation (`transform`, `Value/Transform.lean`): the step elaborates
+through the step of a transformation (`transform`, `Transform/Step.lean`): the step elaborates
 it, checks its facts and decides that it follows the skeleton of its source. A wrong result of
 either is refused there.
 

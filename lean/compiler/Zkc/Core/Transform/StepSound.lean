@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Core.Value.Local
+public import Zkc.Core.Transform.Local
 public import Zkc.Core.Meaning.Stops
 
 @[expose] public section
@@ -9,7 +9,7 @@ public import Zkc.Core.Meaning.Stops
 What a transformation as a checked step means, and the meaning of a function against two tables
 of callees.
 
-A step (`transform`, `Value/Transform.lean`) returns two accepted functions. Its success means
+A step (`transform`, `Transform/Step.lean`) returns two accepted functions. Its success means
 that on valid inputs they have the same meaning, against every table of callees with distinct
 keys that never stop `undefined` on valid inputs, keep validity, and stop only `undefined` where
 their headers say that they cannot stop (`Callees`): this is `transform_sound`, from the theorem

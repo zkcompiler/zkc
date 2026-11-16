@@ -9,7 +9,8 @@ public import Zkc.Core.Facts.Learning
 What the walk does to its state, whatever the run: it only adds refusals, it adds bounds only
 at the addresses of the loops it walks, and it makes identifiers and entries above those it
 had, keeping the table well formed and every name in scope with an identifier below the next
-(`InScope`).
+(`Scoped`). That new identifiers and a shared application do so, and that binding names keeps
+every name in scope with an identifier below the next (`InScope`), is in `Value/Valuation.lean`.
 -/
 
 namespace Zkc.Core
@@ -20,56 +21,6 @@ theorem idsOf_length {α : Type} {Γ : Ctx α} (ids : Ctx Nat) :
     ∀ {items : List α} (xs : HList (Var Γ) items), (idsOf ids xs).length = items.length
   | [], .nil => rfl
   | _ :: _, .cons _ rest => by simp [idsOf, idsOf_length ids rest]
-
-/-! ## The identifiers of the names in scope -/
-
-section
-variable {α : Type}
-
-/-- Every name in scope has an identifier below `next`. -/
-def InScope (Γ : Ctx α) (ids : Ctx Nat) (next : Nat) : Prop :=
-  ∀ name a, Γ.find? name = some a → ∃ i, ids.find? name = some i ∧ i < next
-
-theorem InScope.mono {Γ : Ctx α} {ids : Ctx Nat} {next next' : Nat} (h : InScope Γ ids next)
-    (le : next ≤ next') : InScope Γ ids next' := fun name a found => by
-  obtain ⟨i, hi, lt⟩ := h name a found
-  exact ⟨i, hi, Nat.lt_of_lt_of_le lt le⟩
-
-/-- A name bound to an identifier below `next` keeps every name in scope with one. -/
-theorem InScope.insert {Γ : Ctx α} {ids : Ctx Nat} {next : Nat} (h : InScope Γ ids next)
-    (bound : Name) (a : α) {i : Nat} (lt : i < next) :
-    InScope (Γ.insert bound a) (ids.insert bound i) next := fun name b found => by
-  rw [Ctx.find?_insert] at found
-  rw [Ctx.find?_insert]
-  by_cases same : name = bound
-  · exact ⟨i, by simp [same], lt⟩
-  · simp only [same, ↓reduceIte] at found ⊢
-    exact h name b found
-
-/-- The names of a binding bound to as many identifiers below `next` keep every name in scope
-with one. -/
-theorem InScope.bind {next : Nat} : ∀ {Γ : Ctx α} {ids : Ctx Nat} {types : List α}
-    (names : Names types) (made : List Nat), InScope Γ ids next →
-    made.length = types.length → (∀ i, i ∈ made → i < next) →
-    InScope (Γ.extend names) (bindIds ids names made) next
-  | _, _, [], .nil, _, h, _, _ => h
-  | _, _, _ :: _, .cons _ _, [], _, len, _ => nomatch len
-  | _, _, _ :: _, .cons name rest, i :: is, h, len, lt =>
-      InScope.bind rest is (h.insert name _ (lt i List.mem_cons_self))
-        (Nat.succ.inj len) (fun j m => lt j (List.mem_cons_of_mem _ m))
-
-theorem idsOf_lt {Γ : Ctx α} {ids : Ctx Nat} {next : Nat} (h : InScope Γ ids next) :
-    ∀ {items : List α} (xs : HList (Var Γ) items) (i : Nat), i ∈ idsOf ids xs → i < next
-  | [], .nil, _, m => nomatch m
-  | _ :: _, .cons x rest, i, m => by
-      simp only [idsOf, List.mem_cons] at m
-      rcases m with rfl | m
-      · obtain ⟨j, hj, lt⟩ := h x.name _ x.typed
-        simp only [idOf, hj, Option.getD_some]
-        exact lt
-      · exact idsOf_lt h rest i m
-
-end
 
 section
 variable {Raw : Type} [DecidableEq Raw] {T : Type}
@@ -85,44 +36,6 @@ def WellFormed (ids : List Nat) (st : St T Raw) : Prop :=
 name in scope with an identifier below the next. -/
 def Scoped (Γ : Ctx T) (ids : Ctx Nat) (st : St T Raw) : Prop :=
   Table.WF st.next st.table ∧ InScope Γ ids st.next
-
-omit [DecidableEq Raw] in
-theorem St.Grows.refl (st : St T Raw) : St.Grows st st :=
-  ⟨Nat.le_refl _, [], rfl, fun _ m => nomatch m⟩
-
-omit [DecidableEq Raw] in
-theorem fresh_grows (n : Nat) (st : St T Raw) (wf : Table.WF st.next st.table) :
-    Table.WF (fresh n st).2.next (fresh n st).2.table ∧ St.Grows st (fresh n st).2 ∧
-      ∀ i, i ∈ (fresh n st).1 → i < (fresh n st).2.next := by
-  refine ⟨wf.mono (by simp [fresh]), ⟨by simp [fresh], [], rfl, fun _ m => nomatch m⟩, ?_⟩
-  intro i m
-  have m := mem_range'_bounds m
-  simp only [fresh] at m ⊢
-  omega
-
-theorem share_grows (w : Raw) (args : List Nat) (count : Nat) (st : St T Raw)
-    (wf : Table.WF st.next st.table) (hlt : ∀ a, a ∈ args → a < st.next) :
-    Table.WF (share w args count st).2.next (share w args count st).2.table ∧
-      St.Grows st (share w args count st).2 ∧
-      ∀ i, i ∈ (share w args count st).1 → i < (share w args count st).2.next := by
-  simp only [share]
-  split
-  · next lo found =>
-      obtain ⟨e, m, _, _, ec, el⟩ := Table.find_spec found
-      refine ⟨wf, St.Grows.refl st, fun i hi => ?_⟩
-      have := (wf.mem m).2
-      have hi := mem_range'_bounds hi
-      simp only
-      omega
-  · refine ⟨⟨hlt, Nat.le_refl _, wf⟩, ⟨Nat.le_add_right _ _, [_], rfl, ?_⟩, ?_⟩
-    · intro e m
-      simp at m
-      subst m
-      exact Nat.le_refl _
-    · intro i hi
-      have hi := mem_range'_bounds hi
-      simp only
-      omega
 
 theorem operandId_grows (argIds : List Nat) (st : St T Raw) (o : Operand Raw)
     (wf : Table.WF st.next st.table) (hlt : ∀ a, a ∈ argIds → a < st.next) :

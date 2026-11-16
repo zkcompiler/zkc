@@ -1,7 +1,7 @@
 module
 
 public import Zkc.Core.Value.Soundness
-public import Zkc.Core.Value.Transform
+public import Zkc.Core.Transform.Step
 public import Zkc.Core.Facts.Soundness
 
 @[expose] public section
@@ -12,7 +12,7 @@ one follows the other's skeleton mean the same.
 
 An operation of a function is a value, written as `LocalOp.print` writes it, unless it can stop
 with a reason (`LocalOp.canStop`: a call of a function whose header says that it can stop); such
-a call is kept in order (`localValueRules`, `Value/Transform.lean`, a module that computes,
+a call is kept in order (`localValueRules`, `Transform/Step.lean`, a module that computes,
 since the step of a transformation runs the decision). The table places the applications as the
 check of facts places them. The sum and the product of naturals, the conjunction and the
 disjunction of truth values, and the equality of naturals and of truth values commute: each is

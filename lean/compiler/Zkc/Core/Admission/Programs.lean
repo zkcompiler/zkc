@@ -3,7 +3,7 @@ module
 public import Zkc.Core.Admission.Check
 public import Zkc.Core.Facts.Soundness
 public import Zkc.Core.Meaning.Program
-public import Zkc.Core.Value.TransformSound
+public import Zkc.Core.Transform.StepSound
 
 @[expose] public section
 

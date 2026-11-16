@@ -1,7 +1,7 @@
 module
 
 public import Zkc.Core.Value.Follows
-public import Zkc.Core.Facts.Growth
+public import Zkc.Core.Value.Valuation
 
 @[expose] public section
 
@@ -425,26 +425,6 @@ mutual
             apart2⟩,
           ⟨Nat.le_refl _, inOrder1, inOrder2.mono (grows0.trans grows1).next⟩⟩
 end
-
-/-- A count that a loop's count follows is the loop's count on the identifiers. -/
-theorem Times.follows_eq (checks : SkelRules D) {w : D.Who} {Γ : Ctx D.Ty} (ids : Ctx Nat) :
-    ∀ (times : Times D w Γ) (count : Count D w), times.follows checks ids count = true →
-      count = times.count ids
-  | .fixed n, .fixed n', same => by
-      simp only [Times.follows, decide_eq_true_eq] at same
-      subst same
-      rfl
-  | .value (t := t) c ok, .value (t := t') id ok', same => by
-      simp only [Times.follows] at same
-      split at same
-      · next sameType _ =>
-          subst sameType
-          simp only [decide_eq_true_eq] at same
-          subst same
-          rfl
-      · cases same
-  | .fixed _, .value .., same => by cases same
-  | .value .., .fixed _, same => by cases same
 
 /-! ### The state that following builds -/
 

@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Core.Value.Follows
+public import Zkc.Core.Facts.Walk
 public import Zkc.Core.Facts.Local
 public import Zkc.Core.Program.ElaborateLocal
 
@@ -20,7 +21,7 @@ A transformation takes a stored function and gives a stored function. Nothing ab
 target was found is trusted. The step elaborates both, checks the facts of both, and decides
 that the target follows the skeleton of the source (`transform`). What it returns is data: the
 two accepted functions (`Transformed`), or why it refuses (`TransformRefusal`). What its success
-means is in `Value/TransformSound.lean`: on valid inputs the two have the same meaning, the target
+means is in `Transform/StepSound.lean`: on valid inputs the two have the same meaning, the target
 is safe by its own check of facts, it is the source of the next step, and the stored forms of
 what the step returns are what it was given.
 
