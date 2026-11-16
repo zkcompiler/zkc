@@ -14,11 +14,14 @@ alone, with no term in it.
 The facts of the table are about `ValidRun`: a written operation that gives results on valid
 operands, and valid results. Every operation has requirements, those of its written form, and
 they hold of its operands' values or not (`FactRules.Required`): a shared operation whose
-requirements hold returns (`defined`), an operation kept in order whose requirements hold never
-stops `undefined` and returns valid values (`effect`), and the values that the requirements of
-any operation name are there (`named`). The law `collect` asks that the collected values be as
-many as the size given, since a sequence of a written size is valid only of that length; the
-law `pick` that the payload of the alternative of a valid variant be valid (`PickValid`).
+requirements hold returns (`defined`), and what its written form guarantees then holds of its
+operands followed by its results (`OpFacts.Lawful`, the law `ops`); an operation kept in order
+whose requirements hold never stops `undefined` and returns valid values of which, with its
+operands, every guarantee of its written form holds (`effect`); and the values that the
+requirements of any operation name are there (`named`). The law `collect` asks that the
+collected values be as many as the size given, since a sequence of a written size is valid only
+of that length; the law `pick` that the payload of the alternative of a valid variant be valid
+(`PickValid`).
 -/
 
 namespace Zkc.Core
@@ -76,13 +79,17 @@ structure FactRules.Lawful (rules : FactRules D Raw) (sem : Semantics D)
         ∃ operands results, atPositions (sem.dyns values) positions = some operands ∧
           ValidRun sem Run Valid written operands results ∧ results.length = 1
   /-- The law `effect`: an operation kept in order whose requirements hold on valid operands, on
-  permitted replies, never stops `undefined` and returns valid values. Outside its requirements
-  it may stop `undefined`: the analysis has decided them where it is applied. -/
+  permitted replies, never stops `undefined` and returns valid values, of which, with the
+  operands, every guarantee of its written form holds. Outside its requirements it may stop
+  `undefined`: the analysis has decided them where it is applied. -/
   effect : ∀ {ins res : List D.Ty} (o : D.Op ins res), rules.shared o = false →
     ∀ (key : Key) (path : List Frame) (values : HList sem.Val ins),
       (∀ v, v ∈ sem.dyns values → Valid v) → rules.Required sem R Run Valid o values →
       (sem.op key o path values).Every permitted
-        (fun results => ∀ v, v ∈ sem.dyns results → Valid v) (fun stop => ¬ undefined stop)
+        (fun results => (∀ v, v ∈ sem.dyns results → Valid v) ∧
+          ∀ guarantee, guarantee ∈ rules.ops.ensures (rules.written o) →
+            guarantee.Holds (ValidRun sem Run Valid) R (sem.dyns values ++ sem.dyns results))
+        (fun stop => ¬ undefined stop)
   /-- What a type says of a natural holds of its valid values. -/
   range : ∀ (τ : D.Ty) (r : Range) (v : sem.Val τ), rules.range τ = some r → Valid ⟨τ, v⟩ →
     ∃ n, R.nat ⟨τ, v⟩ = some n ∧ r.Has n

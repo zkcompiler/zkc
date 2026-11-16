@@ -609,7 +609,7 @@ def toyRules : FactRules toy Unit where
   commutes := fun _ => false
   range := fun _ => none
   noValue := fun _ => false
-  ops := ⟨fun _ => [], fun _ _ => [], fun _ => none⟩
+  ops := ⟨fun _ => [], fun _ => [], fun _ _ => [], fun _ => none⟩
   place := fun _ => 0
 
 /-- Following decides types and performers by equality, and finds any two operations the
@@ -646,15 +646,15 @@ def attemptedOtherKey : Term toy Ctx.empty [()] :=
 /-- The attempt with other names follows the analysis of the first: the attempt is the
 skeleton's entry, the leaves of its number and of what it gives are the entry's, and the call in
 its body is the entry's next. The whole verdict accepts it. -/
-example : (Analysis.follow toyRules toyChecks ⟨1⟩ none
-    (Analysis.analyse toyRules toyChecks ⟨1⟩ none .nil attempted) .nil
+example : (Analysis.follow toyRules toyChecks ⟨1⟩ none ⟨[], []⟩
+    (Analysis.analyse toyRules toyChecks ⟨1⟩ none ⟨[], []⟩ .nil attempted) .nil
     attemptedOtherNames).accepted = true := by
   decide +kernel
 
 /-- The attempt with another key differs, at the attempt: where it stops is part of what it
 does. -/
-example : (Analysis.follow toyRules toyChecks ⟨1⟩ none
-    (Analysis.analyse toyRules toyChecks ⟨1⟩ none .nil attempted) .nil
+example : (Analysis.follow toyRules toyChecks ⟨1⟩ none ⟨[], []⟩
+    (Analysis.analyse toyRules toyChecks ⟨1⟩ none ⟨[], []⟩ .nil attempted) .nil
     attemptedOtherKey).state.differs = [⟨⟨1⟩, [], some ⟨3⟩, none⟩] := by
   decide +kernel
 

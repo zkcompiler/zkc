@@ -10,12 +10,13 @@ public import Zkc.Core.Value.Skeleton
 What the analysis is told about the operations of a dialect: the one description of them.
 
 The analysis walks a term of any dialect. Every operation has a written form, and what the
-analysis knows of it (what it requires, the ranges of its results, how its result reads) is said
-once per written form. Whether equal applications of an operation are one value is a separate
-part: a shared operation is a value, and every other operation is kept in order; both have
-requirements. A dialect says how its operations are written, which are shared, which written
-operations commute, where the table places them, the range of a natural of each of its types,
-and which of its types have no value (`FactRules`). The value form reads a part of it, the
+analysis knows of it (what it requires, what it guarantees of its operands and results, the
+ranges of its results, how its result reads) is said once per written form. Whether equal
+applications of an operation are one value is a separate part: a shared operation is a value,
+and every other operation is kept in order; both have requirements and guarantees. A dialect says
+how its operations are written, which are shared, which written operations commute, where the
+table places them, the range of a natural of each of its types, and which of its types have no
+value (`FactRules`). The value form reads a part of it, the
 written forms of the shared operations (`FactRules.values`).
 -/
 
@@ -47,6 +48,9 @@ structure OpFacts (Raw : Type) where
   /-- What an application must satisfy to be inside the operation's domain; nothing for an
   operation without one. -/
   requires : Raw → List (Requirement Raw)
+  /-- What holds of the operands followed by the results of an application, by position, when
+  its requirements hold; nothing for an operation that guarantees nothing. -/
+  ensures : Raw → List (Requirement Raw)
   /-- What is known of each result from what is known of each operand, beyond what the
   result's type says: a range for a natural, nothing otherwise. -/
   ranges : Raw → List (Option Range) → List (Option Range)
@@ -72,8 +76,8 @@ structure FactRules (D : Dialect) (Raw : Type) where
   range : D.Ty → Option Range
   /-- Whether a type has no value. -/
   noValue : D.Ty → Bool
-  /-- What the analysis knows of the written operations: what each requires, the ranges of its
-  results, how its result reads. -/
+  /-- What the analysis knows of the written operations: what each requires, what it guarantees,
+  the ranges of its results, how its result reads. -/
   ops : OpFacts Raw
   /-- A number for a written operation, by which the table places its applications. -/
   place : Raw → Nat

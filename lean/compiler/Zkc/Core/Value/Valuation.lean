@@ -339,19 +339,25 @@ theorem consistent_setFrom {Run : Raw → List Val → List Val → Prop} {ρ : 
     exact hd e he j hj hv a ha
 
 /-- An application of the operation of an entry at the values of its operands, which gives
-`rs`: the results keep the values they have, which are those of `rs` because the operation is a
-function of its operands, and get those of `rs` otherwise. The table stays true. -/
+`rs`, of which the entry's results are the first `e.count`: the results keep the values they have,
+which are those of `rs` because the operation is a function of its operands, and get those of
+`rs` otherwise. The table stays true. -/
 theorem fill_entry {Run : Raw → List Val → List Val → Prop} {ρ : Valuation Val}
     {tbl : Table Raw} {n : Nat} (wf : Table.WF n tbl) (hc : Consistent Run ρ tbl)
     (hcl : Closed ρ tbl) (hs : Support n ρ) {e : Entry Raw} (he : e ∈ tbl) {vs rs : List Val}
-    (hvs : valuesOf ρ e.args = some vs) (hrun : Run e.written vs rs) (hlen : rs.length = e.count)
+    (hvs : valuesOf ρ e.args = some vs) (hrun : Run e.written vs rs) (hlen : e.count ≤ rs.length)
     (hfun : ∀ rs', Run e.written vs rs' → rs' = rs) :
-    ρ.Le (ρ.fill e.lo rs) ∧ Support n (ρ.fill e.lo rs) ∧
-      Consistent Run (ρ.fill e.lo rs) tbl ∧ Closed (ρ.fill e.lo rs) tbl ∧
-      valuesOf (ρ.fill e.lo rs) (List.range' e.lo e.count) = some rs := by
-  have le := fill_le ρ e.lo rs
+    ρ.Le (ρ.fill e.lo (rs.take e.count)) ∧ Support n (ρ.fill e.lo (rs.take e.count)) ∧
+      Consistent Run (ρ.fill e.lo (rs.take e.count)) tbl ∧
+      Closed (ρ.fill e.lo (rs.take e.count)) tbl ∧
+      valuesOf (ρ.fill e.lo (rs.take e.count)) (List.range' e.lo e.count) =
+        some (rs.take e.count) := by
+  have le := fill_le ρ e.lo (rs.take e.count)
   have hb := (wf.mem he).2
-  have at_ : ∀ j, j < e.count → ρ.fill e.lo rs (e.lo + j) = rs[j]? := fun j hj => by
+  have taken : (rs.take e.count).length = e.count := by
+    rw [List.length_take]
+    omega
+  have at_ : ∀ j, j < e.count → ρ.fill e.lo (rs.take e.count) (e.lo + j) = rs[j]? := fun j hj => by
     cases hv : ρ (e.lo + j) with
     | some v =>
         obtain ⟨rs0, hr0, ho0⟩ := hc e he vs hvs j hj v hv
@@ -359,14 +365,14 @@ theorem fill_entry {Run : Raw → List Val → List Val → Prop} {ρ : Valuatio
         rw [le _ _ hv, ho0]
     | none =>
         simp only [Valuation.fill, hv]
-        rw [ite_eq_left ⟨by omega, by omega⟩]
-        simp
+        rw [ite_eq_left ⟨by omega, by omega⟩, Nat.add_sub_cancel_left, List.getElem?_take,
+          ite_eq_left hj]
   have other : ∀ e', e' ∈ tbl → e' ≠ e → ∀ j, j < e'.count →
-      ρ.fill e.lo rs (e'.lo + j) = ρ (e'.lo + j) := fun e' he' hne j hj => by
+      ρ.fill e.lo (rs.take e.count) (e'.lo + j) = ρ (e'.lo + j) := fun e' he' hne j hj => by
     apply fill_other
     intro hin
     exact hne (Table.WF.disjoint wf he' he j (e'.lo + j - e.lo) hj (by omega) (by omega))
-  have hargs : valuesOf (ρ.fill e.lo rs) e.args = some vs := valuesOf_le le hvs
+  have hargs : valuesOf (ρ.fill e.lo (rs.take e.count)) e.args = some vs := valuesOf_le le hvs
   refine ⟨le, ?_, ?_, ?_, ?_⟩
   · intro i hi
     have := hs i hi
@@ -399,12 +405,12 @@ theorem fill_entry {Run : Raw → List Val → List Val → Prop} {ρ : Valuatio
       cases hρ : ρ a with
       | none => rfl
       | some v => rw [le _ _ hρ] at h0; cases h0
-  · apply valuesOf_of_get (by simp [hlen])
+  · apply valuesOf_of_get (by rw [taken, List.length_range'])
     intro j hj
     simp only [List.length_range'] at hj
     rw [List.getD_eq_getElem?_getD, List.getElem?_range' hj]
     simp only [Option.getD_some, Nat.one_mul]
-    exact at_ j hj
+    rw [at_ j hj, List.getElem?_take, ite_eq_left hj]
 
 end
 

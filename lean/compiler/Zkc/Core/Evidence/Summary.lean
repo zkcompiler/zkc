@@ -11,7 +11,8 @@ The contract of a definition, in the language of requirements.
 A summary is what a call of a definition must establish of its operands and what it may then
 take of its operands and results, both in the language in which an operation states its domain
 (`Requirement`, `Meaning/Requirement.lean`), so that an analysis can decide the first at a call
-and learn the second (`Summary`). A definition satisfies a summary when, on valid inputs of which
+and learn the second (`Summary`, data beside `Requirement` in `Program/Requirement.lean`). A
+definition satisfies a summary when, on valid inputs of which
 every requirement holds, it never stops undefined, and what it returns is valid and, with the
 inputs, satisfies every guarantee (`Summary.Holds`). That is a contract in the sense of
 `Contract` (`Meaning/Call.lean`): for the function dialect, whose reading of values and relation
@@ -24,15 +25,6 @@ undefined and returns valid values (`Summary.holds_empty`).
 -/
 
 namespace Zkc.Core
-
-/-- What a call of a definition must establish of its operands, and what it may then take of
-its operands and results: both in the language in which an operation states its domain, so
-that the analysis decides the first at a call and learns the second. -/
-structure Summary (Raw : Type) where
-  /-- About the inputs, by position. -/
-  requires : List (Requirement Raw)
-  /-- About the inputs followed by the outputs, by position. -/
-  ensures : List (Requirement Raw)
 
 /-- A definition satisfies a summary: on valid inputs of which every requirement holds, it
 never stops undefined, and what it returns is valid and, with the inputs, satisfies every

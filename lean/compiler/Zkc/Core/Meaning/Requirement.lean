@@ -14,7 +14,8 @@ operands is a relation `Run`. Both are given by the dialect. A requirement holds
 an application's operands when the values that it names are there and it says of them what is
 true (`Requirement.Holds`). Nothing here depends on an analysis: this is the language in which an
 operation states its domain, and in which a definition states what it requires and what it
-guarantees (`Summary`, `Evidence/Summary.lean`).
+guarantees (`Summary`, `Program/Requirement.lean`; what it is for a definition to satisfy one,
+`Summary.Holds`, is in `Evidence/Summary.lean`).
 -/
 
 namespace Zkc.Core

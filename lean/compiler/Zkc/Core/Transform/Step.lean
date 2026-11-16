@@ -98,7 +98,7 @@ def TypedFn.SameAs (f g : TypedFn V fns hdr) : Prop :=
 
 /-- The check of facts of an elaborated function: its refusals, or the bounds of its loops. -/
 def TypedFn.check (f : TypedFn V fns hdr) : Except (List (ProgramRefusal V)) (List (Place × Nat)) :=
-  checkFacts (localFactRules V fns) (localRules fns).skel hdr.key none f.inputs f.body
+  checkFacts (localFactRules V fns) (localRules fns).skel hdr.key none ⟨[], []⟩ f.inputs f.body
 
 /-- Whether a second function follows the analysis of a first: the refusals of the analysis
 while it follows and the places where it is not the next entry of the first's skeleton, or,
@@ -106,9 +106,9 @@ when there is neither, the bounds of the second's loops. The refusals of the fir
 analysis are not read: the first is assured by whoever gives it. -/
 def TypedFn.follows (source target : TypedFn V fns hdr) :
     Except (List (ProgramRefusal V) × List Place) (List (Place × Nat)) :=
-  let first := analyse (localFactRules V fns) (localRules fns).skel hdr.key none source.inputs
-    source.body
-  let second := follow (localFactRules V fns) (localRules fns).skel hdr.key none first
+  let first := analyse (localFactRules V fns) (localRules fns).skel hdr.key none ⟨[], []⟩
+    source.inputs source.body
+  let second := follow (localFactRules V fns) (localRules fns).skel hdr.key none ⟨[], []⟩ first
     target.inputs target.body
   match second.state.st.refusals, second.state.differs with
   | [], [] => .ok second.state.st.bounds.reverse

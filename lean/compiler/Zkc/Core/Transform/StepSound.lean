@@ -66,11 +66,11 @@ with no refusal and no place that differs, and its bounds are those recorded whi
 follows. -/
 theorem TypedFn.follows_ok {source target : TypedFn V fns hdr} {bounds : List (Place × Nat)}
     (followed : source.follows target = .ok bounds) :
-    (follow (localFactRules V fns) (localRules fns).skel hdr.key none
-        (analyse (localFactRules V fns) (localRules fns).skel hdr.key none source.inputs
+    (follow (localFactRules V fns) (localRules fns).skel hdr.key none ⟨[], []⟩
+        (analyse (localFactRules V fns) (localRules fns).skel hdr.key none ⟨[], []⟩ source.inputs
           source.body) target.inputs target.body).accepted = true ∧
-      bounds = (follow (localFactRules V fns) (localRules fns).skel hdr.key none
-        (analyse (localFactRules V fns) (localRules fns).skel hdr.key none source.inputs
+      bounds = (follow (localFactRules V fns) (localRules fns).skel hdr.key none ⟨[], []⟩
+        (analyse (localFactRules V fns) (localRules fns).skel hdr.key none ⟨[], []⟩ source.inputs
           source.body) target.inputs target.body).state.st.bounds.reverse := by
   unfold TypedFn.follows at followed
   dsimp only at followed

@@ -6,8 +6,9 @@ module
 What an operation with a domain asks of an application, as data. The same requirement is what
 an operation asks, what the check of facts decides, and what a refusal says when it is not
 known. An operand of a requirement that applies a written operation names its operands by their
-positions among the application's (`atPositions`). What it is for a requirement to hold of
-values is in `Meaning/Requirement.lean`.
+positions among the application's (`atPositions`). The summary of a definition is two lists of
+requirements, on its inputs and on its inputs followed by its results (`Summary`). What it is for
+a requirement to hold of values is in `Meaning/Requirement.lean`.
 -/
 
 namespace Zkc.Core
@@ -59,6 +60,16 @@ def Requirement.operands {Raw : Type} : Requirement Raw → List (Operand Raw)
   | .difference t u _ => [t, u]
   | .holds t => [t]
   | .bounded t => [t]
+
+/-- What a call of a definition must establish of its operands, and what it may then take of
+its operands and results: both in the language in which an operation states its domain, so
+that the analysis decides the first at a call and learns the second. What it is for a definition
+to satisfy one is in `Evidence/Summary.lean` (`Summary.Holds`). -/
+structure Summary (Raw : Type) where
+  /-- About the inputs, by position. -/
+  requires : List (Requirement Raw)
+  /-- About the inputs followed by the outputs, by position. -/
+  ensures : List (Requirement Raw)
 
 /-! ## The items at positions -/
 

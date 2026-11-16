@@ -68,6 +68,9 @@ inductive Rule where
   | association
   /-- An application of an operation with a domain is inside it, by what is known there. -/
   | domain
+  /-- A definition establishes each guarantee of its summary, by what is known where it
+  returns. -/
+  | guarantee
 deriving DecidableEq, Repr
 
 /-- What a rule found, with the types `T` of a dialect and its written operations `Raw` as
@@ -101,6 +104,9 @@ inductive Detail (T Raw : Type) where
   operation, the requirement that is not known, and what is known of the values that the
   requirement names, in the order in which it names them. -/
   | unjustified (operation : Raw) (requirement : Requirement Raw) (known : List (Option Range))
+  /-- A guarantee of a summary that is not known where the definition returns: the guarantee, and
+  what is known of the values that it names, in the order in which it names them. -/
+  | unestablished (guarantee : Requirement Raw) (known : List (Option Range))
   /-- Nothing beyond the rule and the place. -/
   | nothing
 deriving DecidableEq

@@ -49,7 +49,8 @@ theorem accepted_places : ∀ {hs : Headers V} (defs : Defs V hs)
       obtain ⟨mine, others, e1, e2, rfl⟩ := h
       rcases List.mem_append.mp m with m | m
       · obtain ⟨d, r⟩ :=
-          checkFacts_places (localFactRules V _) (localRules _).skel hdr.key none inputs body e1 q m
+          checkFacts_places (localFactRules V _) (localRules _).skel hdr.key none ⟨[], []⟩ inputs
+            body e1 q m
         exact ⟨by rw [d]; exact List.mem_cons_self, r⟩
       · obtain ⟨d, r⟩ := accepted_places rest e2 q m
         exact ⟨List.mem_cons_of_mem _ d, r⟩
@@ -75,8 +76,8 @@ theorem functions_sound : ∀ {hs : Headers V} (defs : Defs V hs),
       obtain ⟨safeR, keepsR, respR⟩ := functions_sound rest distinct' e2 M F
         (fun p b m r d => by
           rcases List.mem_append.mp (hF p b m r (List.mem_cons_of_mem _ d)) with m' | m'
-          · have := (checkFacts_places (localFactRules V _) (localRules _).skel hdr.key none inputs
-              body e1 _ m').1
+          · have := (checkFacts_places (localFactRules V _) (localRules _).skel hdr.key none
+              ⟨[], []⟩ inputs body e1 _ m').1
             simp only at this
             rw [this] at d
             exact absurd d notIn
@@ -132,8 +133,9 @@ def Defs.followsFn (fns : List (FnHeader V)) (protocols : List (ProtocolHeader V
     {hs : Headers V} → Defs V hs → hs = ⟨hdr :: fns, protocols⟩ → Bool
   | _, .nil, impossible => nomatch impossible
   | _, .fn (hs := hs) _ inputs' body' _ rest', rfl =>
-      (Analysis.follow (localFactRules V hs.fns) (localRules hs.fns).skel hdr.key none
-          (Analysis.analyse (localFactRules V hs.fns) (localRules hs.fns).skel hdr.key none inputs body)
+      (Analysis.follow (localFactRules V hs.fns) (localRules hs.fns).skel hdr.key none ⟨[], []⟩
+          (Analysis.analyse (localFactRules V hs.fns) (localRules hs.fns).skel hdr.key none ⟨[], []⟩
+            inputs body)
           inputs' body').accepted && rest rest'
   | _, .protocol .., _ => false
 
@@ -172,8 +174,8 @@ theorem Defs.followsFn_true {fns : List (FnHeader V)} {protocols : List (Protoco
       ∃ (inputs' : Names hdr.ins) (body' : Fn V fns hdr inputs') (ok' : FnConditions body')
         (rest' : Defs V ⟨fns, protocols⟩),
         HEq defs' (Defs.fn (hs := ⟨fns, protocols⟩) hdr inputs' body' ok' rest') ∧
-          (follow (localFactRules V fns) (localRules fns).skel hdr.key none
-            (analyse (localFactRules V fns) (localRules fns).skel hdr.key none inputs body)
+          (follow (localFactRules V fns) (localRules fns).skel hdr.key none ⟨[], []⟩
+            (analyse (localFactRules V fns) (localRules fns).skel hdr.key none ⟨[], []⟩ inputs body)
             inputs' body').accepted = true ∧
           rest rest' = true
   | _, .nil, headers, _ => nomatch headers

@@ -9,16 +9,16 @@ public import Zkc.Core.Value.Table
 @[expose] public section
 
 /-!
-What the analysis knows, the rules that decide what is known, and the check of the
-requirements of an application.
+What the analysis knows, the rules that decide what is known, the check of the requirements of
+an application, and what is learned from requirements that hold.
 
 The analysis walks a term over the table of applications and its state (`Value/Table.lean`;
 the walk is `Analysis.walk`, `Facts/Walk.lean`). Beside them it keeps what is known (ranges,
 orders, truths, the two shapes of a choice, whether the region runs at all), which this file
-defines with what is learned from a truth value (`assume`), and which is scoped: what is learned
-in a region is dropped at its exit. How an identifier reads, when it is the first result of an
-entry whose operation has a form, is what the dialect tells the analysis of the entry's
-operation (`Table.formOf`).
+defines with what is learned from a truth value (`assume`) and from a requirement that holds
+(`learn`), and which is scoped: what is learned in a region is dropped at its exit. How an
+identifier reads, when it is the first result of an entry whose operation has a form, is what the
+dialect tells the analysis of the entry's operation (`Table.formOf`).
 
 The walk reads what is known through the functions here (how an identifier reads, the range of an
 identifier, whether an order or a truth is known) and through whether a region is dead; how what
@@ -26,8 +26,13 @@ is known enters a region and the range of a carried natural after a loop are in 
 Each part of what is known is placed by an identifier (`Program/BitTree.lean`): a list, read as a
 list; nothing else depends on that. A requirement of an application is decided from the
 identifiers and the ranges of the values that it names, an application among them found in the
-table or entered; each that is not known is refused at its place (`checkRequirements`). The
-arithmetic of ranges, with its lemmas, is in `Facts/Range.lean`.
+table or entered; each that is not known is refused at its place (`checkRequirements`).
+Requirements that hold of values, what an operation guarantees of its operands and results and
+what a summary requires of a definition's inputs, are learned with their operands resolved in the
+same way, and nothing is refused (`learnRequirements`). The guarantees of a summary are decided
+where a definition returns, over the identifiers of its inputs and of what it returns; each that
+is not known is refused there (`checkGuarantees`). The arithmetic of ranges, with its lemmas, is
+in `Facts/Range.lean`.
 -/
 
 namespace Zkc.Core
@@ -175,6 +180,9 @@ def pushDifferent (k : Known) (first second : Nat) : Known :=
     if k.rangeOf second = some (Range.point 0) then k.addRange first ⟨1, none⟩ else k
   if k.rangeOf first = some (Range.point 0) then learned.addRange second ⟨1, none⟩ else learned
 
+/-- Whether a range of the identifier is known: then its value reads as a natural. -/
+def natural (k : Known) (id : Nat) : Bool := (k.rangeOf id).isSome
+
 end Known
 
 section
@@ -205,6 +213,24 @@ def assume : Nat → Known → Nat → Bool → Known
           if choice.result = id ∧ choice.conjunction = value then
             assume fuel (assume fuel known choice.condition value) choice.other value
           else known) k₂
+
+/-- What is known after a requirement that holds, on the identifiers that its operands resolve to
+(as `operandIds` resolves them): an order as `Known.pushLe` and `Known.pushLess` learn it, a
+bound or a number as a range of the identifier, a truth value as `assume` learns it. An order, a
+bound or a number teaches nothing unless a range of each identifier is known (`Known.natural`):
+a requirement of this form holds of values that do not read as naturals. A difference and "has an
+upper bound" teach nothing, and neither does an operand that did not resolve. -/
+def learn (fuel : Nat) (k : Known) : Requirement Raw → List (Option Nat) → Known
+  | .le .., [some first, some second] =>
+      if k.natural first && k.natural second then k.pushLe first second else k
+  | .lt .., [some first, some second] =>
+      if k.natural first && k.natural second then k.pushLess first second else k
+  | .atLeast _ n, [some id] => if k.natural id then k.addRange id ⟨n, none⟩ else k
+  | .below _ n, [some id] =>
+      if k.natural id then k.addRange id (Range.below (Range.point n)) else k
+  | .exactly _ n, [some id] => if k.natural id then k.addRange id (Range.point n) else k
+  | .holds _, [some id] => assume ops tbl fuel k id true
+  | _, _ => k
 
 end
 
@@ -386,6 +412,39 @@ def checkRequirements [DecidableEq Raw] (ops : OpFacts Raw) (k : Known) (place :
         else { st₁ with refusals :=
           ⟨.domain, place, .unjustified written requirement ranges⟩ :: st₁.refusals }
       checkRequirements ops k place written argIds rest st₂
+
+/-- Learn requirements that hold of the values with the identifiers given, in order: the operands
+of each are resolved as `checkRequirements` resolves them, entering applications in the table,
+and what each teaches is learned (`learn`). Nothing is refused. -/
+def learnRequirements [DecidableEq Raw] (ops : OpFacts Raw) (ids : List Nat) :
+    List (Requirement Raw) → Known → St T Raw → Known × St T Raw
+  | [], k, st => (k, st)
+  | requirement :: rest, k, st =>
+      let resolved := operandIds ids requirement.operands st
+      learnRequirements ops ids rest
+        (learn ops resolved.2.table resolved.2.next k requirement resolved.1) resolved.2
+
+/-- The identifiers of the values that a guarantee names where a definition returns, among the
+identifiers given: an operand by its position; nothing for an application of a written
+operation, of which the analysis does not know that it has a value there. -/
+def exitIds (ids : List Nat) : List (Operand Raw) → List (Option Nat)
+  | [] => []
+  | .arg position :: rest => ids[position]? :: exitIds ids rest
+  | .apply .. :: rest => none :: exitIds ids rest
+
+/-- Decide the guarantees of a summary where a definition returns, in order, from what is known
+there, over the identifiers given (the inputs' followed by those that the body returns): each
+that is not known is refused at the place, added before the refusals given; nothing is refused
+where the region never runs. A guarantee that names an application is never known. -/
+def checkGuarantees (ops : OpFacts Raw) (tbl : Table Raw) (k : Known) (place : Place)
+    (ids : List Nat) : List (Requirement Raw) → List (Refusal T Raw) → List (Refusal T Raw)
+  | [], refusals => refusals
+  | guarantee :: rest, refusals =>
+      let found := exitIds ids guarantee.operands
+      let ranges := List.zipWith (operandRange ops k ids) guarantee.operands found
+      checkGuarantees ops tbl k place ids rest
+        (if k.dead || decideRequirement ops tbl k guarantee found ranges then refusals
+        else ⟨.guarantee, place, .unestablished guarantee ranges⟩ :: refusals)
 
 end
 

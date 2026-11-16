@@ -23,7 +23,8 @@ its printed form, and what an operation requires is enough for it: where every r
 of its operands' values, it does not stop `undefined`; and every value that a requirement names
 beyond the operands (a length, the truth value of a domain row) is there. A call has no
 requirement yet, so a call of a function that can stop, which is kept in order, is safe on every
-valid input because its callee is (`Callees`).
+valid input because its callee is (`Callees`). No operation of a function guarantees anything yet
+(`localFactRules_ensures`), so the laws of what an operation guarantees hold of every one.
 
 The law `computes` of the value form is for every value, and so is the law `commutative`, since
 the meaning of each operation that commutes is symmetric for all values of its operands. Against
@@ -39,14 +40,14 @@ function (`localFactRules_lawful`), read as the check of facts reads it (`localR
 relation `LocalReturns`, the validity of the model (`ValidDyn`) and the stop `undefined`. The law
 `collect` asks that the collected values be as many as the size given: without that it is false
 of the function dialect (`Analysis.collect_without_length`). The theorems of the analysis are
-instantiated for functions here, once, against a model, a table and `Callees`, and stated as the
-statements about functions are, with `HList.All` (converted by `Semantics.dyns_valid_iff`): the
-check of facts is sound for a function (`checkFacts_sound`, from `Analysis.analyse_safe`), and a
-body that follows the analysis of a body that is safe on the given inputs is safe, respects the
-bounds recorded while it follows and means the same (`localFollow_assured`, from
-`Analysis.follow_assured`).
+instantiated for functions here, once, against a model, a table and `Callees`, under the summary
+with no requirement and no guarantee, and stated as the statements about functions are, with
+`HList.All` (converted by `Semantics.dyns_valid_iff`): the check of facts is sound for a function
+(`checkFacts_sound`, from `Analysis.analyse_safe`), and a body that follows the analysis of a body
+that is safe on the given inputs is safe, respects the bounds recorded while it follows and means
+the same (`localFollow_assured`, from `Analysis.follow_assured`).
 
-Read so, a summary of a function (`Summary`, `Evidence/Summary.lean`) holds of its entry in a
+Read so, a summary of a function (`Summary`, `Program/Requirement.lean`) holds of its entry in a
 table exactly when the entry has the contract of `Meaning/Call.lean` whose precondition is valid
 inputs that satisfy the requirements, whose postcondition is valid results that satisfy the
 guarantees, and whose stops are not `undefined` (`localSummary_contract`).
@@ -99,6 +100,13 @@ theorem blt_decide (x y : Nat) : Nat.blt x y = decide (x < y) := by
     simp [this]
   · have : x < y := by rw [← Nat.blt_eq]; exact h
     simp [this]
+
+/-- No written operation of a function guarantees anything yet. -/
+theorem localFactRules_ensures {V : Vocabulary} {fns : List (FnHeader V)} (w : LocalRaw V) :
+    (localFactRules V fns).ops.ensures w = [] := by
+  cases w with
+  | owned name _ _ => cases name <;> rfl
+  | _ => rfl
 
 section
 variable {V : Vocabulary} {M : Model V} {fns : List (FnHeader V)} {table : FnTable M fns}
@@ -854,7 +862,10 @@ theorem localFactRules_lawful (callees : Callees M table)
     { functional := fun _ _ _ _ first second =>
         localReturns_functional callees.distinct first.1 second.1
       form := fun _ _ _ _ found run => localReturns_form found run.1
-      ranges := fun _ _ _ known run hk => localRun_ranges known run hk }
+      ranges := fun _ _ _ known run hk => localRun_ranges known run hk
+      ensures := fun w _ _ _ _ _ listed => by
+        rw [localFactRules_ensures w] at listed
+        cases listed }
   keeps := by
     intro raw operands results run valid
     obtain ⟨ins, res, o, args, returned, printed, sameArgs, sameResults, ran⟩ := run
@@ -886,8 +897,10 @@ theorem localFactRules_lawful (callees : Callees M table)
         show (table _ callee values).Every permitted _ _
         cases hrun : table _ callee values with
         | done r =>
-            exact ((localSem M fns table).dyns_valid_iff r).mpr
-              (callees.keeps _ callee values r va hrun)
+            refine ⟨((localSem M fns table).dyns_valid_iff r).mpr
+              (callees.keeps _ callee values r va hrun), fun _ listed => ?_⟩
+            rw [localFactRules_ensures] at listed
+            cases listed
         | halt h =>
             rw [hrun] at stops
             exact stops
@@ -929,8 +942,8 @@ theorem checkFacts_sound {table : FnTable M fns} (callees : Callees M table) (de
     {types outs : List V.Ty} (inputs : Names types)
     (body : Term (localDialect V fns) (Ctx.empty.extend inputs) outs)
     (distinct : Term.Distinct body) {bounds : List (Place × Nat)}
-    (accepted : checkFacts (localFactRules V fns) (localRules fns).skel definition none inputs
-      body = .ok bounds)
+    (accepted : checkFacts (localFactRules V fns) (localRules fns).skel definition none ⟨[], []⟩
+      inputs body = .ok bounds)
     (F : List (Place × Nat))
     (recorded : ∀ p b, (p, b) ∈ F → p.definition = definition → p.role = none → (p, b) ∈ bounds)
     (ins : HList M.Val types) (valid : ins.All M.Valid) :
@@ -944,12 +957,12 @@ theorem checkFacts_sound {table : FnTable M fns} (callees : Callees M table) (de
     (localSem M fns table) (fun _ _ => True) (localReading M) (LocalReturns M table) (ValidDyn M)
     (· = .undefined)
     (localFactRules_lawful M table callees (fun _ _ => True))
-    (Rules.skel_lawful (localRules_lawful callees.distinct)) definition none inputs body distinct
-    refused F
+    (Rules.skel_lawful (localRules_lawful callees.distinct)) definition none ⟨[], []⟩ inputs body
+    distinct refused F
     (fun p b m d r => List.mem_reverse.mp (recorded p b m d r))
-    ins (((localSem M fns table).dyns_valid_iff ins).mpr valid)
+    ins (((localSem M fns table).dyns_valid_iff ins).mpr valid) (fun _ listed => nomatch listed)
   exact ⟨safe.1, Process.every_mono _ _
-    (fun outs returned => ((localSem M fns table).dyns_valid_iff outs).mp returned)
+    (fun outs returned => ((localSem M fns table).dyns_valid_iff outs).mp returned.1)
     (fun _ stop => stop) safe.2⟩
 
 open FactCheck Analysis in
@@ -965,14 +978,14 @@ theorem localFollow_assured {table : FnTable M fns} (callees : Callees M table)
     (body : Term (localDialect V fns) (Ctx.empty.extend inputs) outs)
     (body' : Term (localDialect V fns) (Ctx.empty.extend inputs') outs)
     (distinct' : Term.Distinct body')
-    (followed : (follow (localFactRules V fns) (localRules fns).skel definition' none
-      (analyse (localFactRules V fns) (localRules fns).skel definition none inputs body) inputs'
-      body').accepted = true)
+    (followed : (follow (localFactRules V fns) (localRules fns).skel definition' none ⟨[], []⟩
+      (analyse (localFactRules V fns) (localRules fns).skel definition none ⟨[], []⟩ inputs body)
+      inputs' body').accepted = true)
     (F : List (Place × Nat))
     (recorded : ∀ p b, (p, b) ∈ F → p.definition = definition' → p.role = none →
-      (p, b) ∈ (follow (localFactRules V fns) (localRules fns).skel definition' none
-        (analyse (localFactRules V fns) (localRules fns).skel definition none inputs body) inputs'
-        body').state.st.bounds)
+      (p, b) ∈ (follow (localFactRules V fns) (localRules fns).skel definition' none ⟨[], []⟩
+        (analyse (localFactRules V fns) (localRules fns).skel definition none ⟨[], []⟩ inputs body)
+        inputs' body').state.st.bounds)
     (ins : HList M.Val types) (valid : ins.All M.Valid)
     (safe : (body.denote (localSem M fns table) [] (Env.empty.extend inputs ins)).Stops
       (· ≠ .undefined)) :
@@ -985,11 +998,11 @@ theorem localFollow_assured {table : FnTable M fns} (callees : Callees M table)
   have sound := follow_assured (localFactRules V fns) (localRules fns).skel (localSem M fns table)
     (fun _ _ => True) (localReading M) (LocalReturns M table) (ValidDyn M) (· = .undefined)
     (localFactRules_lawful M table callees _) (Rules.skel_lawful (localRules_lawful callees.distinct))
-    definition
-    definition' none inputs inputs' body body' distinct' followed F recorded ins
-    (((localSem M fns table).dyns_valid_iff ins).mpr valid) safe
+    definition definition' none ⟨[], []⟩ inputs inputs' body body' distinct' followed F recorded
+    ins
+    (((localSem M fns table).dyns_valid_iff ins).mpr valid) (fun _ listed => nomatch listed) safe
   exact ⟨sound.1, Process.every_mono _ _
-      (fun outs returned => ((localSem M fns table).dyns_valid_iff outs).mp returned)
+      (fun outs returned => ((localSem M fns table).dyns_valid_iff outs).mp returned.1)
       (fun _ stop => stop) sound.2.1,
     sound.2.2.eq_of_noSig⟩
 
