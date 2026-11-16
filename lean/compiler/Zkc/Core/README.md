@@ -233,7 +233,9 @@ kernel runs when they are built:
   result bound twice in one body, two results of one instruction, an input of the definition
   bound again by a result and two inputs with one name, an input of a region with the name of a
   value around it, sibling regions of a choice and sibling arms of a case analysis, the blocks
-  of a stepped loop), each refused by the rule `assignment` with its place and the name, and one
+  of a stepped loop, a name bound again as the results of a choice, of a case analysis and of a
+  loop, and of a choice inside a block, whose place has the block), each refused by the rule
+  `assignment` with its place and the name, and one
   name in two definitions accepted; the case analysis without an arm that the erased form
   cannot tell apart; and the round trip of each accepted program in both directions;
 - `Facts.lean`: the check of facts on functions written by names: the conformance cases of the
@@ -261,7 +263,12 @@ kernel runs when they are built:
   accepted; `x - y` against `y - x`, `(x + y) + z` against `x + (y + z)` (the decision does not
   know associativity), a row of the vocabulary with its operands exchanged, guards in the other
   order, a guard dropped, a call of a function that can stop moved across a guard, two loops
-  against one (the decision does not fuse loops), and another key on a guard, each refused; the
+  against one (the decision does not fuse loops), and another key on a guard, each refused;
+  each instruction kept in order, accepted: a choice, a case analysis, a block, a loop as often
+  as a value says and a call of a function that can stop, each with other names, a value moved
+  out of and into a region of a choice, and a value moved across a call of a function that can
+  stop; pairs that differ only in a guard's condition, a loop's initial values, a block's number
+  or the operand of a call of a function that can stop, each refused by that comparison; the
   theorem for functions applied to two accepted pairs, `x + y` and `y + x` the second;
   and the two controls on the definitions of the value form: two terms that follow one skeleton
   whose leaf is not made above the values in scope and do not mean the same (why following asks
@@ -270,14 +277,30 @@ kernel runs when they are built:
 - `Transform.lean`: transformations of functions as checked steps: a function with unused and
   repeated operations, in its body and in a loop, given to `removeUnused` and then to
   `shareRepeated`, each stored result compared whole, each step accepted by `transform`, and the
-  two steps composed by `transform_then`; a target refused by elaboration, a target refused by
-  the check of facts (an inverse moved above the guard that it is not zero), a target that is
-  accepted but not decided (two guards exchanged), and a source that is not accepted, each with
-  its whole refusal; a target that computes another result, not decided; a target with the
-  operands of a sum exchanged, accepted; a program of two
+  two steps composed by `transform_then`; the two passes on a function with a choice, a case
+  analysis and a block, with unused and repeated operations inside and around them, each result
+  compared whole and each step accepted; a target refused by elaboration; three targets that
+  follow the skeleton of their source and that the check of facts refuses, which shows that
+  following leaves the target's safety to the step (an inverse moved above the guard that it is
+  not zero, read before a choice in whose region it was justified, read before a loop in whose
+  body a guard justified it); a target that is accepted but not decided (two guards exchanged),
+  and a source that is not accepted, each with its whole refusal; a target that computes another
+  result, not decided; a target with the operands of a sum exchanged, accepted; a program of two
   functions whose callee is replaced by what `removeUnused` gives, which follows the first, with
   `Defs.functionsFollow_sound` applied to the caller; and a callee replaced by one that computes
-  another result, which does not follow. The decision of equality of stored functions is written there;
+  another result, which does not follow. The decision of equality of stored functions is written
+  there;
+- `Place.lean`: places inside a term, on a dialect of truth values written there (it has guards
+  and attempts): replacement (`Hole.fill_same`) of a value that nothing uses in the body of a
+  loop inside an attempt, and there of the carried value by the input, which differ only on
+  environments of the body that no run reaches; a replacement after a guard that differs only
+  where the guard stops, accepted, and the control, one that differs where the guard holds, for
+  which the premise of replacement fails and the wholes do not mean the same; a term that means
+  the same in two environments that agree on what it reads (`Term.denote_reads`), and gives
+  different results in two that differ there; a term split after two of its instructions and
+  after more than it has, each filled back (`Term.fill_splitAt`); and a term in a wider context,
+  with its meaning (`Term.denote_reindex`), and the control of an environment that does not
+  agree, on which the meaning differs, and with its erased form (`eraseBody_reindex`);
 - `Admission.lean`: `admit` and `check` on programs of functions: a program of two functions
   admitted with its whole annotation; admission stopped at the first refused definition, with
   every refusal of it and nothing of a later one, for a refusal of the check of facts and for

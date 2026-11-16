@@ -1,18 +1,25 @@
 import Zkc.Core.Admission.Programs
 import Zkc.Core.Value.Passes
 import Zkc.Tests.Core.Facts
+import Zkc.Tests.Core.Same
 
 /-!
 Transformations of functions as checked steps, on functions written by names, run by the kernel.
 
 A function with unused and repeated operations is transformed twice by the untrusted passes:
 `removeUnused`, then `shareRepeated` of what it gave. Each stored result is compared whole with
-what is expected, `transform` accepts each step, and `transform_then` composes the two. Then the
-refusals, each whole: a target that elaboration refuses, a target that the check of facts
-refuses (an operation with a domain moved above the guard that justified it), a target that
-elaborates and passes the check of facts but is not decided (two guards exchanged), and a
-source that is not accepted. A control: a target that computes another result (an operand
-replaced by another) is not decided; a target with the operands of a sum exchanged is accepted.
+what is expected, `transform` accepts each step, and `transform_then` composes the two. The two
+passes again on a function with a choice, a case analysis and a block, with unused and repeated
+operations inside and around them: each stored result compared whole, each step accepted.
+
+Then the refusals, each whole: a target that elaboration refuses. Three targets that follow the
+skeleton of their source (`SameTests.decided`) and that the check of facts refuses, since
+following does not decide that a target is safe: an operation with a domain moved above the
+guard that justified it, read before a choice in whose region it was justified, and read before
+a loop in whose body a guard justified it. A target that elaborates and passes the check of
+facts but is not decided (two guards exchanged), and a source that is not accepted. A control: a
+target that computes another result (an operand replaced by another) is not decided; a target
+with the operands of a sum exchanged is accepted.
 
 Last, a program of two functions whose first, called by the second, is replaced by what
 `removeUnused` gives: the functions of the second follow those of the first
@@ -23,7 +30,7 @@ functions do not follow.
 
 namespace Zkc.Core.TransformTests
 
-open FactsTests (field F plus times fieldRow unjustified place)
+open FactsTests (field F plus times natural element fieldRow natOrTruth unjustified place)
 
 -- What a step and the check of facts return are compared whole.
 deriving instance DecidableEq for TransformRefusal
@@ -275,6 +282,89 @@ of the first means what the target of the second means. -/
 example : firstStep.target = secondStep.source ∧ firstStep.source.SameAs secondStep.target :=
   transform_then (ok_of_accepted (by decide +kernel)) (ok_of_accepted (by decide +kernel))
 
+/-! ## Two steps on a function with regions -/
+
+/-- A function with the key 1 of a truth value, a natural or a truth value, and two naturals. -/
+def regionsHeader : FnHeader field := ⟨⟨1⟩, [.bool, natOrTruth, .nat, .nat], [.nat], false, none⟩
+
+/-- `x + y`, and a product that nothing uses; a choice whose first region computes `x + y` again
+and a square of it that nothing uses, and whose second gives zero; a case analysis whose first
+arm adds the payload to `x + y` and computes `x + y` again, unused, and whose second arm computes
+zero, unused, and gives `x + y` computed again; a block that adds what the choice and the case
+analysis gave, computes `x + y` again, adds the two, and squares the first sum, unused; then
+`x + y` again, added to what the block gave. -/
+def regionsSource : Region (LocalRaw field) Unit := .mk [0, 1, 2, 3] [
+  .op ⟨1⟩ [10] plus [2, 3],
+  .op ⟨2⟩ [11] times [2, 3],
+  .choose ⟨3⟩ () 0 [12]
+    (.mk [] [
+      .op ⟨4⟩ [20] plus [2, 3],
+      .op ⟨5⟩ [21] times [20, 20]] [20])
+    (.mk [] [.op ⟨6⟩ [22] (natural 0) []] [22]),
+  .cases ⟨7⟩ () 1 [13]
+    [.mk [30] [
+       .op ⟨8⟩ [31] plus [30, 10],
+       .op ⟨9⟩ [32] plus [2, 3]] [31],
+     .mk [40] [
+       .op ⟨10⟩ [41] (natural 0) [],
+       .op ⟨11⟩ [42] plus [2, 3]] [42]],
+  .block ⟨12⟩ 0 [14] (.mk [] [
+    .op ⟨13⟩ [50] plus [12, 13],
+    .op ⟨14⟩ [51] plus [2, 3],
+    .op ⟨15⟩ [52] plus [50, 51],
+    .op ⟨16⟩ [53] times [50, 50]] [52]),
+  .op ⟨17⟩ [15] plus [2, 3],
+  .op ⟨18⟩ [16] plus [14, 15]] [16]
+
+/-- What `removeUnused` gives: the unused product before the choice, the unused square in its
+first region, the unused `x + y` of the first arm and the unused zero of the second, and the
+unused square in the block, are dropped; every region is walked, and the choice, the case
+analysis and the block are kept. -/
+def regionsWithoutUnused : Region (LocalRaw field) Unit := .mk [0, 1, 2, 3] [
+  .op ⟨1⟩ [10] plus [2, 3],
+  .choose ⟨3⟩ () 0 [12]
+    (.mk [] [.op ⟨4⟩ [20] plus [2, 3]] [20])
+    (.mk [] [.op ⟨6⟩ [22] (natural 0) []] [22]),
+  .cases ⟨7⟩ () 1 [13]
+    [.mk [30] [.op ⟨8⟩ [31] plus [30, 10]] [31],
+     .mk [40] [.op ⟨11⟩ [42] plus [2, 3]] [42]],
+  .block ⟨12⟩ 0 [14] (.mk [] [
+    .op ⟨13⟩ [50] plus [12, 13],
+    .op ⟨14⟩ [51] plus [2, 3],
+    .op ⟨15⟩ [52] plus [50, 51]] [52]),
+  .op ⟨17⟩ [15] plus [2, 3],
+  .op ⟨18⟩ [16] plus [14, 15]] [16]
+
+/-- What `shareRepeated` gives of that: `x + y` once, before the regions; its computations in the
+first region of the choice, in the second arm, in the block and after the block are dropped, and
+their results renamed to its result, in the regions' exits and in the operands after them. -/
+def regionsShared : Region (LocalRaw field) Unit := .mk [0, 1, 2, 3] [
+  .op ⟨1⟩ [10] plus [2, 3],
+  .choose ⟨3⟩ () 0 [12]
+    (.mk [] [] [10])
+    (.mk [] [.op ⟨6⟩ [22] (natural 0) []] [22]),
+  .cases ⟨7⟩ () 1 [13]
+    [.mk [30] [.op ⟨8⟩ [31] plus [30, 10]] [31],
+     .mk [40] [] [10]],
+  .block ⟨12⟩ 0 [14] (.mk [] [
+    .op ⟨13⟩ [50] plus [12, 13],
+    .op ⟨15⟩ [52] plus [50, 10]] [52]),
+  .op ⟨18⟩ [16] plus [14, 10]] [16]
+
+example : removeUnused [] regionsSource = regionsWithoutUnused := by decide +kernel
+
+example : shareRepeated [] regionsWithoutUnused = regionsShared := by decide +kernel
+
+/-- The step from the source to what `removeUnused` gives, accepted. -/
+example : refusal (transform [] regionsHeader regionsSource (removeUnused [] regionsSource)) =
+    none := by
+  decide +kernel
+
+/-- The step from that to what `shareRepeated` gives, accepted. -/
+example : refusal (transform [] regionsHeader regionsWithoutUnused
+    (shareRepeated [] regionsWithoutUnused)) = none := by
+  decide +kernel
+
 /-! ## Refusals -/
 
 /-- A function with the key 1 of two naturals. -/
@@ -288,23 +378,106 @@ example : refusal (transform [] sum sumBody (.mk [0, 1] [.op ⟨1⟩ [10] plus [
     some (.target [⟨.scope, place 1, .name 5⟩]) := by
   decide +kernel
 
+/-! ### What following leaves to the check of facts
+
+Following does not decide that the target is safe: a value has no place in the skeleton, so a
+target may read an operation with a domain where the source does not justify it, and still
+follow. The step refuses such a target by the target's own check of facts. Each pair is one
+source and one target: the target follows the skeleton of the source (`SameTests.decided`), and
+`transform` refuses the target, with its whole refusal. -/
+
 /-- A function with the key 1 of a field element, which can stop. -/
 def inverse : FnHeader field := ⟨⟨1⟩, [F], [F], true, none⟩
 
+/-- The inverse after the guard that the element is not zero. -/
+def inverseGuarded : Region (LocalRaw field) Unit := .mk [0] [
+  .op ⟨1⟩ [10] (fieldRow .isNonzero) [0],
+  .guard ⟨2⟩ () 10 .refused,
+  .op ⟨3⟩ [11] (fieldRow .inverse) [0]] [11]
+
+/-- The inverse moved above that guard. -/
+def inverseAboveGuard : Region (LocalRaw field) Unit := .mk [0] [
+  .op ⟨1⟩ [10] (fieldRow .isNonzero) [0],
+  .op ⟨3⟩ [11] (fieldRow .inverse) [0],
+  .guard ⟨2⟩ () 10 .refused] [11]
+
+/-- The inverse moved above the guard follows: the guard is the skeleton's entry, and the
+inverse a value of the table. -/
+example : SameTests.decided [] [F] [F] true true inverseGuarded inverseAboveGuard = some true := by
+  decide +kernel
+
 /-- A target that the check of facts refuses: the inverse moved above the guard that it is not
 zero. -/
-example : refusal (transform [] inverse
-    (.mk [0] [
-      .op ⟨1⟩ [10] (fieldRow .isNonzero) [0],
-      .guard ⟨2⟩ () 10 .refused,
-      .op ⟨3⟩ [11] (fieldRow .inverse) [0]] [11])
-    (.mk [0] [
-      .op ⟨1⟩ [10] (fieldRow .isNonzero) [0],
-      .op ⟨3⟩ [11] (fieldRow .inverse) [0],
-      .guard ⟨2⟩ () 10 .refused] [11])) =
+example : refusal (transform [] inverse inverseGuarded inverseAboveGuard) =
     some (.target [unjustified 3 (fieldRow .inverse)
       (.holds (.apply (fieldRow .isNonzero) [0])) [none]]) := by
   decide +kernel
+
+/-- A function with the key 1 of a field element, which cannot stop. -/
+def inverseOrZero : FnHeader field := ⟨⟨1⟩, [F], [F], false, none⟩
+
+/-- The inverse in the region of a choice that runs when the element is not zero, and zero in
+the other region. -/
+def inverseInRegion : Region (LocalRaw field) Unit := .mk [0] [
+  .op ⟨1⟩ [10] (fieldRow .isNonzero) [0],
+  .choose ⟨2⟩ () 10 [11]
+    (.mk [] [.op ⟨3⟩ [20] (fieldRow .inverse) [0]] [20])
+    (.mk [] [.op ⟨4⟩ [21] (element 0) []] [21])] [11]
+
+/-- The inverse read before the choice, and given by its first region. -/
+def inverseBeforeChoice : Region (LocalRaw field) Unit := .mk [0] [
+  .op ⟨1⟩ [10] (fieldRow .isNonzero) [0],
+  .op ⟨3⟩ [20] (fieldRow .inverse) [0],
+  .choose ⟨2⟩ () 10 [11]
+    (.mk [] [] [20])
+    (.mk [] [.op ⟨4⟩ [21] (element 0) []] [21])] [11]
+
+/-- The inverse read before the choice follows: the first region gives the same value of the
+table. -/
+example : SameTests.decided [] [F] [F] false false inverseInRegion inverseBeforeChoice =
+    some true := by
+  decide +kernel
+
+/-- And the step refuses it: before the choice nothing is known of the element. -/
+example : refusal (transform [] inverseOrZero inverseInRegion inverseBeforeChoice) =
+    some (.target [unjustified 3 (fieldRow .inverse)
+      (.holds (.apply (fieldRow .isNonzero) [0])) [none]]) := by
+  decide +kernel
+
+/-- A function with the key 1 of a field element and a natural, which can stop. -/
+def inverseRepeated : FnHeader field := ⟨⟨1⟩, [F, .nat], [F], true, none⟩
+
+/-- A loop as often as the natural says, which may be no iteration, carrying a field element
+from zero: its body guards that the input is not zero and gives the input's inverse. The inverse
+is justified only by the guard in the body. -/
+def inverseInLoop : Region (LocalRaw field) Unit := .mk [0, 1] [
+  .op ⟨1⟩ [10] (fieldRow .isNonzero) [0],
+  .op ⟨2⟩ [11] (element 0) [],
+  .loop ⟨3⟩ () (.count 1) [11] [12] (.mk [20, 21] [
+    .guard ⟨4⟩ () 10 .refused,
+    .op ⟨5⟩ [22] (fieldRow .inverse) [0]] [22])] [12]
+
+/-- The inverse read before the loop, which its body gives. -/
+def inverseBeforeLoop : Region (LocalRaw field) Unit := .mk [0, 1] [
+  .op ⟨1⟩ [10] (fieldRow .isNonzero) [0],
+  .op ⟨2⟩ [11] (element 0) [],
+  .op ⟨5⟩ [22] (fieldRow .inverse) [0],
+  .loop ⟨3⟩ () (.count 1) [11] [12] (.mk [20, 21] [.guard ⟨4⟩ () 10 .refused] [22])] [12]
+
+/-- The inverse read before the loop follows: the guard stays in the body, and the body gives the
+same value of the table. On zero iterations and the element zero, the source returns zero and the
+target stops `undefined`. -/
+example : SameTests.decided [] [F, .nat] [F] true true inverseInLoop inverseBeforeLoop =
+    some true := by
+  decide +kernel
+
+/-- And the step refuses it: before the loop nothing is known of the element. -/
+example : refusal (transform [] inverseRepeated inverseInLoop inverseBeforeLoop) =
+    some (.target [unjustified 5 (fieldRow .inverse)
+      (.holds (.apply (fieldRow .isNonzero) [0])) [none]]) := by
+  decide +kernel
+
+/-! ### A target not decided, and a source not accepted -/
 
 /-- A function with the key 1 of two truth values, which can stop. -/
 def twoGuards : FnHeader field := ⟨⟨1⟩, [.bool, .bool], [], true, none⟩

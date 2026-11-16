@@ -15,9 +15,15 @@ and a sum with their operands exchanged inside a loop after a guard. Refused: `x
 `y - x`; `(x + y) + z` against `x + (y + z)` (associativity is not a law that the decision
 knows); a row of the vocabulary with its operands exchanged; two guards in the other order; a
 guard dropped; a call of a function that can stop moved across a guard; two loops against one
-loop that computes the same; a different key on a guard. Then the theorem for functions, applied
-to two pairs, the second of them `x + y` and `y + x`: the two processes are equal on valid
-inputs.
+loop that computes the same; a different key on a guard.
+
+Then each instruction that following keeps in order, accepted: a choice, a case analysis, a
+block, a loop as often as a value says and a call of a function that can stop, each the same
+program with other names; a value moved out of a region of a choice and one moved into it; a
+value moved across a call of a function that can stop. And refused, each by one comparison: only
+a guard's condition differs, only a loop's initial values, only a block's number, only the
+operand of a call of a function that can stop. Then the theorem for functions, applied to two
+pairs, the second of them `x + y` and `y + x`: the two processes are equal on valid inputs.
 
 Last, the two controls on the definitions of the value form: why following asks for leaves made
 in order (`Skel.Fresh`), and why what follows an attempt runs only from an end of the attempt
@@ -26,7 +32,7 @@ that can return (`Skel.Runs.attempt`).
 
 namespace Zkc.Core.SameTests
 
-open FactsTests (field F plus minus times natural fieldRow)
+open FactsTests (field F plus minus times natural fieldRow natOrTruth)
 
 -- What the check of facts returns is compared whole.
 deriving instance DecidableEq for Except
@@ -220,6 +226,155 @@ example : decided [] [.nat, .nat] [.nat, .nat] false false
 example : decided [] [.nat, .bool] [.nat] true true
     (.mk [0, 1] [.guard ⟨1⟩ () 1 .reject] [0])
     (.mk [0, 1] [.guard ⟨2⟩ () 1 .reject] [0]) = some false := by
+  decide +kernel
+
+/-! ## Each form of control, followed
+
+Each instruction that following keeps in order, reached with a pair that it accepts: a choice, a
+case analysis, a block, a loop as often as a value says, and a call of a function that can stop. -/
+
+/-- A choice on a truth value whose regions give the sum and the product of two naturals, and the
+sum of what it gives with the first natural. -/
+def chosen : Region (LocalRaw field) Unit := .mk [0, 1, 2] [
+  .choose ⟨1⟩ () 0 [10]
+    (.mk [] [.op ⟨2⟩ [20] plus [1, 2]] [20])
+    (.mk [] [.op ⟨3⟩ [30] times [1, 2]] [30]),
+  .op ⟨4⟩ [11] plus [10, 1]] [11]
+
+/-- A choice: the same program with other names for its inputs, the values of its regions and
+its result. -/
+example : decided [] [.bool, .nat, .nat] [.nat] false false chosen
+    (.mk [5, 6, 7] [
+      .choose ⟨1⟩ () 5 [40]
+        (.mk [] [.op ⟨2⟩ [50] plus [6, 7]] [50])
+        (.mk [] [.op ⟨3⟩ [60] times [6, 7]] [60]),
+      .op ⟨4⟩ [41] plus [40, 6]] [41]) = some true := by
+  decide +kernel
+
+/-- A value moved out of a region of a choice, to before the choice: the sum, which has no
+domain, so that computing it where the region does not run is safe. The first region gives it.
+-/
+example : decided [] [.bool, .nat, .nat] [.nat] false false chosen
+    (.mk [0, 1, 2] [
+      .op ⟨2⟩ [20] plus [1, 2],
+      .choose ⟨1⟩ () 0 [10]
+        (.mk [] [] [20])
+        (.mk [] [.op ⟨3⟩ [30] times [1, 2]] [30]),
+      .op ⟨4⟩ [11] plus [10, 1]] [11]) = some true := by
+  decide +kernel
+
+/-- A value moved into a region of a choice: the product computed before the choice and given
+by its second region, against the product computed in that region. -/
+example : decided [] [.bool, .nat, .nat] [.nat] false false
+    (.mk [0, 1, 2] [
+      .op ⟨3⟩ [30] times [1, 2],
+      .choose ⟨1⟩ () 0 [10]
+        (.mk [] [.op ⟨2⟩ [20] plus [1, 2]] [20])
+        (.mk [] [] [30]),
+      .op ⟨4⟩ [11] plus [10, 1]] [11])
+    chosen = some true := by
+  decide +kernel
+
+/-- A case analysis of a natural or a truth value: the natural plus the second input, or the
+second input; then what it gives times the second input. -/
+def analysed : Region (LocalRaw field) Unit := .mk [0, 1] [
+  .cases ⟨1⟩ () 0 [10]
+    [.mk [20] [.op ⟨2⟩ [21] plus [20, 1]] [21],
+     .mk [30] [] [1]],
+  .op ⟨3⟩ [11] times [10, 1]] [11]
+
+/-- A case analysis: the same program with other names for its inputs, the payloads of its arms,
+their values and its result. -/
+example : decided [] [natOrTruth, .nat] [.nat] false false analysed
+    (.mk [3, 4] [
+      .cases ⟨1⟩ () 3 [40]
+        [.mk [50] [.op ⟨2⟩ [51] plus [50, 4]] [51],
+         .mk [60] [] [4]],
+      .op ⟨3⟩ [41] times [40, 4]] [41]) = some true := by
+  decide +kernel
+
+/-- A block whose body gives the sum of two naturals, and what it gives times the first. -/
+def blocked : Region (LocalRaw field) Unit := .mk [0, 1] [
+  .block ⟨1⟩ 0 [10] (.mk [] [.op ⟨2⟩ [20] plus [0, 1]] [20]),
+  .op ⟨3⟩ [11] times [10, 0]] [11]
+
+/-- A block: the same program with other names. -/
+example : decided [] [.nat, .nat] [.nat] false false blocked
+    (.mk [5, 6] [
+      .block ⟨1⟩ 0 [40] (.mk [] [.op ⟨2⟩ [50] plus [5, 6]] [50]),
+      .op ⟨3⟩ [41] times [40, 5]] [41]) = some true := by
+  decide +kernel
+
+/-- A loop as often as the second natural says, which adds the iteration number to what it
+carries from the first. -/
+def counted : Region (LocalRaw field) Unit := .mk [0, 1] [
+  .loop ⟨1⟩ () (.count 1) [0] [10] (.mk [20, 21] [.op ⟨2⟩ [22] plus [21, 20]] [22])] [10]
+
+/-- A loop as often as a value says: the same program with other names, the count's among them.
+-/
+example : decided [] [.nat, .nat] [.nat] false false counted
+    (.mk [5, 6] [
+      .loop ⟨1⟩ () (.count 6) [5] [40] (.mk [50, 51] [.op ⟨2⟩ [52] plus [51, 50]] [52])] [40]) =
+    some true := by
+  decide +kernel
+
+/-- A call of a function that can stop, on a sum, followed by a product. -/
+def calling : Region (LocalRaw field) Unit := .mk [0, 1] [
+  .op ⟨1⟩ [10] plus [0, 1],
+  .op ⟨2⟩ [11] (.call ⟨9⟩) [10],
+  .op ⟨3⟩ [12] times [0, 1]] [11, 12]
+
+/-- A call of a function that can stop, an effect kept in order: the same program with other
+names. -/
+example : decided [callee true] [.nat, .nat] [.nat, .nat] true true calling
+    (.mk [5, 6] [
+      .op ⟨1⟩ [40] plus [5, 6],
+      .op ⟨2⟩ [41] (.call ⟨9⟩) [40],
+      .op ⟨3⟩ [42] times [5, 6]] [41, 42]) = some true := by
+  decide +kernel
+
+/-- A value moved across a call of a function that can stop: the product, before the call. -/
+example : decided [callee true] [.nat, .nat] [.nat, .nat] true true calling
+    (.mk [0, 1] [
+      .op ⟨1⟩ [10] plus [0, 1],
+      .op ⟨3⟩ [12] times [0, 1],
+      .op ⟨2⟩ [11] (.call ⟨9⟩) [10]] [11, 12]) = some true := by
+  decide +kernel
+
+/-! ## Refused by one comparison
+
+Each pair differs in one part of one instruction that following keeps in order, and is refused
+by the comparison of that part. -/
+
+/-- Only a guard's condition differs, with the same key and the same reason: refused by the
+comparison of the condition's identifier. -/
+example : decided [] [.bool, .bool] [] true true
+    (.mk [0, 1] [.guard ⟨1⟩ () 0 .reject] [])
+    (.mk [0, 1] [.guard ⟨1⟩ () 1 .reject] []) = some false := by
+  decide +kernel
+
+/-- Only a loop's initial values differ: refused by the comparison of the identifiers of the
+initial values. -/
+example : decided [] [.nat, .nat] [.nat] false false
+    (.mk [0, 1] [
+      .loop ⟨1⟩ () (.fixed 2) [0] [10] (.mk [20, 21] [.op ⟨2⟩ [22] plus [21, 21]] [22])] [10])
+    (.mk [0, 1] [
+      .loop ⟨1⟩ () (.fixed 2) [1] [10] (.mk [20, 21] [.op ⟨2⟩ [22] plus [21, 21]] [22])] [10]) =
+    some false := by
+  decide +kernel
+
+/-- Only a block's number differs: refused by the comparison of the numbers. -/
+example : decided [] [.nat, .nat] [.nat] false false blocked
+    (.mk [0, 1] [
+      .block ⟨1⟩ 1 [10] (.mk [] [.op ⟨2⟩ [20] plus [0, 1]] [20]),
+      .op ⟨3⟩ [11] times [10, 0]] [11]) = some false := by
+  decide +kernel
+
+/-- Only the operand of a call of a function that can stop differs: refused by the comparison of
+the identifiers of the effect's operands. -/
+example : decided [callee true] [.nat, .nat] [.nat] true true
+    (.mk [0, 1] [.op ⟨1⟩ [10] (.call ⟨9⟩) [0]] [10])
+    (.mk [0, 1] [.op ⟨1⟩ [10] (.call ⟨9⟩) [1]] [10]) = some false := by
   decide +kernel
 
 /-! ## The theorem for functions -/

@@ -5,9 +5,10 @@ import Zkc.Tests.Core.Shapes
 The elaboration of functions by names. For each rule, a program that is accepted and one that
 is refused, with the refusal: its rule, its place and what the rule found; where a refusal is at
 each construct; the literals of each type; linear use at each construct, by the name of the value,
-and which types are linear; single assignment at each place that binds a name; and the round trip
-of each accepted program in both directions: the erased form of what it elaborates to elaborates
-to the same, and is the program. The kernel evaluates each.
+and which types are linear; single assignment at each place that binds a name, the results of a
+choice, a case analysis and a loop among them; and the round trip of each accepted program in
+both directions: the erased form of what it elaborates to elaborates to the same, and is the
+program. The kernel evaluates each.
 -/
 
 namespace Zkc.Core.Elaboration
@@ -775,6 +776,40 @@ example : refusal (single [] [.bool] false (.mk []
     [.block ⟨1⟩ 0 [1] (.mk [] [.op ⟨2⟩ [5] (.literal .bool [0]) []] [5]),
      .block ⟨1⟩ 1 [2] (.mk [] [.op ⟨2⟩ [5] (.owned .boolNot [] []) [1]] [5])] [2])) =
     some ⟨.assignment, ⟨⟨1⟩, [(⟨1⟩, 1)], some ⟨2⟩, none⟩, .name 5⟩ := by
+  decide +kernel
+
+/-- A name bound by an operation, then again as the result of a choice: refused at the choice,
+which binds its results. Its regions bind nothing. -/
+example : refusal (single [.bool] [.nat] false (.mk [0]
+    [.op ⟨1⟩ [1] (.literal .nat [3]) [],
+     .choose ⟨2⟩ () 0 [1] (.mk [] [] [1]) (.mk [] [] [1])] [1])) =
+    some ⟨.assignment, at_ 1 2, .name 1⟩ := by
+  decide +kernel
+
+/-- A name bound by an operation, then again as the result of a case analysis: refused at the
+case analysis, which binds its results. Its arms' payloads have other names. -/
+example : refusal (single [natOrBool] [.nat] false (.mk [0]
+    [.op ⟨1⟩ [1] (.literal .nat [3]) [],
+     .cases ⟨2⟩ () 0 [1]
+      [.mk [9] [] [9],
+       .mk [10] [.op ⟨3⟩ [11] (.literal .nat [0]) []] [11]]] [1])) =
+    some ⟨.assignment, at_ 1 2, .name 1⟩ := by
+  decide +kernel
+
+/-- A name bound by an operation, then again as the result of a loop: refused at the loop, which
+binds its results. The inputs of its region have other names. -/
+example : refusal (single [.nat] [.nat] false (.mk [0]
+    [.op ⟨1⟩ [1] (.literal .nat [3]) [],
+     .loop ⟨2⟩ () (.fixed 3) [0] [1] (.mk [10, 11] [] [11])] [1])) =
+    some ⟨.assignment, at_ 1 2, .name 1⟩ := by
+  decide +kernel
+
+/-- The same choice inside a block: the place has the block around the choice. -/
+example : refusal (single [.bool] [.nat] false (.mk [0]
+    [.op ⟨1⟩ [1] (.literal .nat [3]) [],
+     .block ⟨3⟩ 0 [2] (.mk []
+      [.choose ⟨2⟩ () 0 [1] (.mk [] [] [1]) (.mk [] [] [1])] [1])] [2])) =
+    some ⟨.assignment, ⟨⟨1⟩, [(⟨3⟩, 0)], some ⟨2⟩, none⟩, .name 1⟩ := by
   decide +kernel
 
 /-- Two blocks of a stepped loop that bind one name as their results: refused at the second
