@@ -498,20 +498,6 @@ example : decided [callee true] [.nat] [.nat] true true
 
 /-! ## The theorem for functions -/
 
-/-- The body of a function with the key 1 and no callee, elaborated with the names of its
-inputs; nothing when it does not elaborate. -/
-def elaborated (ins outs : List field.Ty) (stops : Bool) (body : Region (LocalRaw field) Unit) :
-    Option ((inputs : Names ins) × Term (localDialect field []) (Ctx.empty.extend inputs) outs) :=
-  match elabFn [] ⟨⟨1⟩, ins, outs, stops, none⟩ body with
-  | .ok ⟨inputs, fn, _⟩ => some ⟨inputs, fn⟩
-  | .error _ => none
-
-/-- Computations around guards, elaborated. -/
-def aroundGuardsTyped := (elaborated guarded [.nat, .nat] true aroundGuards).get (by decide +kernel)
-
-/-- The same computations after the guards, elaborated. -/
-def afterGuardsTyped := (elaborated guarded [.nat, .nat] true afterGuards).get (by decide +kernel)
-
 /-- No callee. -/
 def noCallees (M : Model field) : FnTable M [] := fun _ callee _ => nomatch callee
 
@@ -525,55 +511,55 @@ and no refusal. -/
 example : safelyFollows [] guarded [.nat, .nat] true true aroundGuards afterGuards = some true := by
   decide +kernel
 
-/-- The two bodies mean the same on every valid input, in every model, for any replies
-permitted: both have distinct addresses, the first is accepted by the check of facts, and the
-second follows its analysis with no place that differs and no refusal. -/
-example (M : Model field) (ins : HList M.Val guarded) (valid : ins.All M.Valid)
-    (permitted : ∀ op, NoSig.Reply op → Prop) :
-    Process.SameWhen permitted
-      (aroundGuardsTyped.2.denote (localSem M [] (noCallees M)) []
-        (Env.empty.extend aroundGuardsTyped.1 ins))
-      (afterGuardsTyped.2.denote (localSem M [] (noCallees M)) []
-        (Env.empty.extend afterGuardsTyped.1 ins)) :=
-  functions_follow_same (noCallees_callees M) aroundGuardsTyped.1 afterGuardsTyped.1
-    aroundGuardsTyped.2 afterGuardsTyped.2 ⟨1⟩ ⟨1⟩
-    ((Term.repeatedAddress_eq_none _).mp (by decide +kernel))
-    ((Term.repeatedAddress_eq_none _).mp (by decide +kernel)) (bounds := [])
-    (by decide +kernel) (by decide +kernel) ins valid permitted
+/-- The header of the two bodies: the key 1, no callee, and it can stop. -/
+def guardedHeader : FnHeader field := ⟨⟨1⟩, guarded, [.nat, .nat], true, none⟩
 
-/-- So, a function having no effects, the two processes are equal. -/
+/-- A stored function typed against no callee; nothing when it does not elaborate. -/
+def typed (hdr : FnHeader field) (body : Region (LocalRaw field) Unit) :
+    Option (TypedFn field [] hdr) :=
+  match typeFn [] hdr body with
+  | .ok f => some f
+  | .error _ => none
+
+/-- Computations around guards, as a typed function. -/
+def aroundGuardsFn := (typed guardedHeader aroundGuards).get (by decide +kernel)
+
+/-- The same computations after the guards, as a typed function. -/
+def afterGuardsFn := (typed guardedHeader afterGuards).get (by decide +kernel)
+
+/-- The second is assured and the two have the same meaning on every valid input, in every
+model: the first is safe, here because the check of facts accepts it
+(`TypedFn.check_assured`), and the second follows its analysis with no place that differs and no
+refusal (`TypedFn.follows_assured`). -/
+example : afterGuardsFn.Assured [] ∧ aroundGuardsFn.SameAs afterGuardsFn :=
+  TypedFn.follows_assured (aroundGuardsFn.check_assured (bounds := []) (by decide +kernel)).safe
+    (by decide +kernel)
+
+/-- So the two processes are equal, in a model and on valid inputs. -/
 example (M : Model field) (ins : HList M.Val guarded) (valid : ins.All M.Valid) :
-    aroundGuardsTyped.2.denote (localSem M [] (noCallees M)) []
-        (Env.empty.extend aroundGuardsTyped.1 ins) =
-      afterGuardsTyped.2.denote (localSem M [] (noCallees M)) []
-        (Env.empty.extend afterGuardsTyped.1 ins) :=
-  functions_follow_equal (noCallees_callees M) aroundGuardsTyped.1 afterGuardsTyped.1
-    aroundGuardsTyped.2 afterGuardsTyped.2 ⟨1⟩ ⟨1⟩
-    ((Term.repeatedAddress_eq_none _).mp (by decide +kernel))
-    ((Term.repeatedAddress_eq_none _).mp (by decide +kernel)) (bounds := [])
-    (by decide +kernel) (by decide +kernel) ins valid
-
-/-- `x + y`, elaborated. -/
-def sumTyped := (elaborated [.nat, .nat] [.nat] false sum).get (by decide +kernel)
-
-/-- `y + x`, elaborated. -/
-def commutedSumTyped := (elaborated [.nat, .nat] [.nat] false commutedSum).get (by decide +kernel)
+    aroundGuardsFn.meaning M (noCallees M) ins = afterGuardsFn.meaning M (noCallees M) ins :=
+  (TypedFn.follows_assured (aroundGuardsFn.check_assured (bounds := []) (by decide +kernel)).safe
+    (bounds := []) (by decide +kernel)).2 M (noCallees M) (noCallees_callees M) ins valid
 
 /-- The whole verdict on `x + y` and `y + x`: accepted. -/
 example : safelyFollows [] [.nat, .nat] [.nat] false false sum commutedSum = some true := by
   decide +kernel
 
+/-- The header of the sum: the key 1, no callee, and it cannot stop. -/
+def sumHeader : FnHeader field := ⟨⟨1⟩, [.nat, .nat], [.nat], false, none⟩
+
+/-- `x + y`, as a typed function. -/
+def sumFn := (typed sumHeader sum).get (by decide +kernel)
+
+/-- `y + x`, as a typed function. -/
+def commutedSumFn := (typed sumHeader commutedSum).get (by decide +kernel)
+
 /-- `x + y` and `y + x` have equal processes on every valid input, in every model: following
 accepts the pair, and the law `commutative` of the local operations makes that sound. -/
 example (M : Model field) (ins : HList M.Val [.nat, .nat]) (valid : ins.All M.Valid) :
-    sumTyped.2.denote (localSem M [] (noCallees M)) [] (Env.empty.extend sumTyped.1 ins) =
-      commutedSumTyped.2.denote (localSem M [] (noCallees M)) []
-        (Env.empty.extend commutedSumTyped.1 ins) :=
-  functions_follow_equal (noCallees_callees M) sumTyped.1 commutedSumTyped.1 sumTyped.2
-    commutedSumTyped.2 ⟨1⟩ ⟨1⟩
-    ((Term.repeatedAddress_eq_none _).mp (by decide +kernel))
-    ((Term.repeatedAddress_eq_none _).mp (by decide +kernel)) (bounds := [])
-    (by decide +kernel) (by decide +kernel) ins valid
+    sumFn.meaning M (noCallees M) ins = commutedSumFn.meaning M (noCallees M) ins :=
+  (TypedFn.follows_assured (sumFn.check_assured (bounds := []) (by decide +kernel)).safe
+    (bounds := []) (by decide +kernel)).2 M (noCallees M) (noCallees_callees M) ins valid
 
 /-! ## Controls on the definitions of the value form -/
 

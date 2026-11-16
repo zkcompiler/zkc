@@ -91,40 +91,6 @@ structure ExitInv (ρ : Valuation σ.sem.Dyn) (e : FactCheck.Exit D.Ty Raw) (st 
 
 end
 
-/-! ## Values with their types -/
-
-section
-variable {D : Dialect} (sem : Semantics D)
-
-/-- Values of two lists, one after the other, with their types. -/
-theorem dyns_append : ∀ {as bs : List D.Ty} (xs : HList sem.Val as) (ys : HList sem.Val bs),
-    sem.dyns (xs.append ys) = sem.dyns xs ++ sem.dyns ys
-  | [], _, .nil, _ => rfl
-  | _ :: _, _, .cons x xs, ys => by
-      show (⟨_, x⟩ :: sem.dyns (xs.append ys)) = ⟨_, x⟩ :: (sem.dyns xs ++ sem.dyns ys)
-      rw [dyns_append xs ys]
-
-theorem dyns_split {carried each : List D.Ty} (out : HList sem.Val (carried ++ each)) :
-    sem.dyns out = sem.dyns (HList.split carried out).1 ++ sem.dyns (HList.split carried out).2 := by
-  conv => lhs; rw [← split_append carried out]
-  exact dyns_append sem _ _
-
-/-- A value at a position of values with their types has the type at that position. -/
-theorem dyns_typed : ∀ {items : List D.Ty} (vs : HList sem.Val items) (j : Nat) (d : sem.Dyn),
-    (sem.dyns vs)[j]? = some d → items[j]? = some d.1
-  | [], .nil, _, _, e => by simp [Semantics.dyns] at e
-  | _ :: _, .cons v vs, j, d, e => by
-      cases j with
-      | zero =>
-          simp only [Semantics.dyns, List.getElem?_cons_zero, Option.some.injEq] at e
-          subst e
-          rfl
-      | succ j =>
-          simp only [Semantics.dyns, List.getElem?_cons_succ] at e ⊢
-          exact dyns_typed vs j d e
-
-end
-
 section
 variable {D : Dialect} {Raw : Type} {σ : Setting D Raw}
 
@@ -141,7 +107,7 @@ theorem allValid_cons {a : D.Ty} {rest : List D.Ty} {v : σ.sem.Val a} {vs : HLi
 theorem allValid_append {as bs : List D.Ty} (xs : HList σ.sem.Val as) (ys : HList σ.sem.Val bs) :
     σ.AllValid (xs.append ys) ↔ σ.AllValid xs ∧ σ.AllValid ys := by
   unfold Setting.AllValid
-  rw [dyns_append]
+  rw [Semantics.dyns_append]
   constructor
   · intro h
     exact ⟨fun d m => h d (List.mem_append_left _ m), fun d m => h d (List.mem_append_right _ m)⟩
@@ -276,7 +242,7 @@ theorem valuesOf_typed {ρ : Valuation σ.sem.Dyn} {made : List Nat} {res : List
   | none => rw [hd] at hv; exact absurd hv (valuesOf_mem look m (List.mem_of_getElem? e1))
   | some d =>
       rw [hd] at hv
-      exact ⟨d, hv, dyns_typed σ.sem vs j d hd⟩
+      exact ⟨d, hv, σ.sem.dyns_typed vs j d hd⟩
 
 /-! ## What the types say -/
 
@@ -496,7 +462,7 @@ theorem afterRegions_inv {Γ : Ctx D.Ty} {mid : List D.Ty} {exits : List (FactCh
   | none => rw [hd] at e1; exact absurd e1 (valuesOf_mem look m (List.mem_of_getElem? em))
   | some d =>
       rw [hd] at e1
-      refine ⟨d, e1, ?_, dyns_typed σ.sem mids j d hd⟩
+      refine ⟨d, e1, ?_, σ.sem.dyns_typed mids j d hd⟩
       have lt : j < e.rets.length := by
         have h1 := valuesOf_length ex.rets
         have h2 := (List.getElem?_eq_some_iff.mp hd).1
@@ -1842,11 +1808,10 @@ theorem collectedOK_push : ∀ {each : List D.Ty} {acc : HList (fun a => List (�
   | _ :: _, .cons xs rest, _, .cons v more, h, all => by
       obtain ⟨len, valid, others⟩ := h
       refine ⟨by simp [len], fun w m => ?_, collectedOK_push others (allValid_cons.mp all).2⟩
-      rcases List.mem_append.mp m with m | m
-      · exact valid w m
-      · simp only [List.mem_singleton] at m
-        subst m
+      rcases List.mem_cons.mp m with m | m
+      · subst m
         exact (allValid_cons.mp all).1
+      · exact valid w m
 
 omit [DecidableEq Raw] in
 include laws in
@@ -1856,7 +1821,9 @@ theorem collected_valid (size : Option Nat) {n : Nat} (fits : ∀ m, size = some
   | [], .nil, _ => fun _ m => nomatch m
   | a :: _, .cons vs rest, h => by
       obtain ⟨len, valid, others⟩ := h
-      exact allValid_cons.mpr ⟨laws.collect size a vs (fun m e => by rw [len]; exact fits m e) valid,
+      exact allValid_cons.mpr ⟨laws.collect size a vs.reverse
+          (fun m e => by rw [List.length_reverse, len]; exact fits m e)
+          (fun v m => valid v (List.mem_reverse.mp m)),
         collected_valid size fits others⟩
 
 include laws in
@@ -2262,7 +2229,7 @@ theorem loop_sound (blocks : List (Key × Nat)) {Γ : Ctx D.Ty} {outs carried ea
       omega
     have hret : ρ' (e.region.rets.getD j 0) = (σ.sem.dyns out)[j]? := valuesOf_get ex.rets j retLt
     have outSplit : (σ.sem.dyns out)[j]? = (σ.sem.dyns (HList.split carried out).1)[j]? := by
-      rw [dyns_split σ.sem out, List.getElem?_append_left (by rw [σ.sem.dyns_length]; exact jlt)]
+      rw [σ.sem.dyns_split out, List.getElem?_append_left (by rw [σ.sem.dyns_length]; exact jlt)]
     have hcid : ρ' (inBody.1.tail.getD j 0) = some d₀ := by
       rw [tailIn, range'_getD jlt]
       have := setFrom_at ρ s.st.next (σ.sem.dyns (HList.cons (σ.sem.index w i) state.1)) (j + 1)
@@ -2401,13 +2368,13 @@ theorem loop_sound (blocks : List (Key × Nat)) {Γ : Ctx D.Ty} {outs carried ea
       | none => rw [hd] at e1; exact absurd e1 (valuesOf_mem look m (List.mem_of_getElem? em))
       | some d =>
           rw [hd] at e1
-          refine ⟨d, e1, dyns_typed σ.sem _ j d hd, fun initial cid ret hinit hcid hret => ?_⟩
+          refine ⟨d, e1, σ.sem.dyns_typed _ j d hd, fun initial cid ret hinit hcid hret => ?_⟩
           have jlt : j < carried.length := by
             have := (List.getElem?_eq_some_iff.mp hinit).1
             simp only [List.length_map, idsOf_length] at this
             exact this
           have hdj : (σ.sem.dyns state.1)[j]? = some d := by
-            rw [dyns_append, List.getElem?_append_left (by rw [σ.sem.dyns_length]; exact jlt)]
+            rw [Semantics.dyns_append, List.getElem?_append_left (by rw [σ.sem.dyns_length]; exact jlt)]
               at hd
             exact hd
           refine carriedRange_has bounds la.alive ?_ ?_

@@ -32,6 +32,7 @@ public import Zkc.Core.Meaning.Fold
 public import Zkc.Core.Meaning.Local
 public import Zkc.Core.Meaning.Place
 public import Zkc.Core.Meaning.Program
+public import Zkc.Core.Meaning.Requirement
 public import Zkc.Core.Meaning.Stops
 public import Zkc.Core.Meaning.Protocol
 public import Zkc.Core.Meaning.Role
@@ -39,6 +40,9 @@ public import Zkc.Core.Meaning.Validity
 public import Zkc.Core.Projection.Proj
 public import Zkc.Core.Projection.Sound
 public import Zkc.Core.Projection.Theorem
+public import Zkc.Core.Evidence.Claim
+public import Zkc.Core.Evidence.Relation
+public import Zkc.Core.Evidence.Summary
 public import Zkc.Core.Value.Table
 public import Zkc.Core.Value.Valuation
 public import Zkc.Core.Value.Skeleton
@@ -61,6 +65,7 @@ public import Zkc.Core.Facts.Theorems
 public import Zkc.Core.Facts.LocalLaws
 public import Zkc.Core.Transform.Step
 public import Zkc.Core.Transform.StepSound
+public import Zkc.Core.Transform.Assured
 public import Zkc.Core.Transform.Passes
 public import Zkc.Core.Admission.Admission
 public import Zkc.Core.Admission.Elaboration

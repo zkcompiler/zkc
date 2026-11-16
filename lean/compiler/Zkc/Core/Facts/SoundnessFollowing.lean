@@ -959,7 +959,7 @@ theorem loop_follow (blocks : List (Key × Nat)) {Γ : Ctx D.Ty} {outs carried e
       omega
     have hret : ρ' (e.region.rets.getD j 0) = (σ.sem.dyns out)[j]? := valuesOf_get ex.rets j retLt
     have outSplit : (σ.sem.dyns out)[j]? = (σ.sem.dyns (HList.split carried out).1)[j]? := by
-      rw [dyns_split σ.sem out, List.getElem?_append_left (by rw [σ.sem.dyns_length]; exact jlt)]
+      rw [σ.sem.dyns_split out, List.getElem?_append_left (by rw [σ.sem.dyns_length]; exact jlt)]
     have hcid : ρ' ((List.range' inp (carried.length + 1)).tail.getD j 0) = some d₀ := by
       rw [tailIn, range'_getD jlt]
       have := setFrom_at ρ inp (σ.sem.dyns (HList.cons (σ.sem.index w i) state.1)) (j + 1)
@@ -1105,13 +1105,13 @@ theorem loop_follow (blocks : List (Key × Nat)) {Γ : Ctx D.Ty} {outs carried e
       | none => rw [hd] at e1; exact absurd e1 (valuesOf_mem look m (List.mem_of_getElem? em))
       | some d =>
           rw [hd] at e1
-          refine ⟨d, e1, dyns_typed σ.sem _ j d hd, fun initial cid ret hinit hcid hret => ?_⟩
+          refine ⟨d, e1, σ.sem.dyns_typed _ j d hd, fun initial cid ret hinit hcid hret => ?_⟩
           have jlt : j < carried.length := by
             have := (List.getElem?_eq_some_iff.mp hinit).1
             simp only [List.length_map, idsOf_length] at this
             exact this
           have hdj : (σ.sem.dyns state.1)[j]? = some d := by
-            rw [dyns_append, List.getElem?_append_left (by rw [σ.sem.dyns_length]; exact jlt)]
+            rw [Semantics.dyns_append, List.getElem?_append_left (by rw [σ.sem.dyns_length]; exact jlt)]
               at hd
             exact hd
           refine carriedRange_has bounds la.alive ?_ ?_

@@ -8,10 +8,13 @@ public import Zkc.Core.Meaning.Events
 The meaning of a term, once for every dialect.
 
 A dialect's semantics says what its values are, what an operation does, how a guard, a
-choice and a loop read their subject, and what marks an attempt. The process of a term is one
-fold over the term with that; the three meanings (a function, a protocol, a role program) are
-this fold at three semantics. Nothing that reads the structure of a term is written per
-dialect.
+choice and a loop read their subject, and what marks an attempt. A value with its type
+(`Semantics.Dyn`), and the values of a list with their types (`Semantics.dyns`), are what a
+statement about values of any type speaks of. The process of a term is one fold over the term
+with that; the three meanings (a function, a protocol, a role program) are this fold at three
+semantics. Nothing that reads the structure of a term is written per dialect. A loop holds what
+its iterations collect latest first (`HList.push`), and reverses it once where it becomes one
+value (`Semantics.collected`), so that each iteration adds in constant time.
 
 Many definitions are case analyses of a term that mirror `Term.denote` constructor by
 constructor: the process with the record of its run (`Term.observe`), the count of every loop
@@ -41,12 +44,13 @@ def empties {α : Type} {V : α → Type} : (items : List α) → HList (fun a =
   | [] => .nil
   | _ :: rest => .cons [] (empties rest)
 
-/-- One more value of each type, after those collected. -/
+/-- One more value of each type, before those collected: what a loop collects is held latest
+first, and reversed once where it becomes one value (`Semantics.collected`). -/
 def push {α : Type} {V : α → Type} :
     {items : List α} → HList (fun a => List (V a)) items → HList V items →
       HList (fun a => List (V a)) items
   | [], .nil, .nil => .nil
-  | _ :: _, .cons vs rest, .cons v more => .cons (vs ++ [v]) (rest.push more)
+  | _ :: _, .cons vs rest, .cons v more => .cons (v :: vs) (rest.push more)
 
 end HList
 
@@ -86,12 +90,80 @@ structure Semantics (D : Dialect) where
   written number of iterations. -/
   collect : (size : Option Nat) → (a : D.Ty) → List (Val a) → Val (D.collected size a)
 
-/-- The collected values of each type, as the loop gives them. -/
+/-! ## Values with their types -/
+
+section
+variable {D : Dialect}
+
+/-- A value of a semantics with its type. -/
+abbrev Semantics.Dyn (sem : Semantics D) : Type := (τ : D.Ty) × sem.Val τ
+
+/-- Values, each with its type. -/
+def Semantics.dyns (sem : Semantics D) : {items : List D.Ty} → HList sem.Val items → List sem.Dyn
+  | [], .nil => []
+  | _ :: _, .cons v rest => ⟨_, v⟩ :: sem.dyns rest
+
+/-- Values with their types are as many as the types. -/
+theorem Semantics.dyns_length (sem : Semantics D) :
+    ∀ {items : List D.Ty} (values : HList sem.Val items), (sem.dyns values).length = items.length
+  | [], .nil => rfl
+  | _ :: _, .cons _ rest => congrArg (· + 1) (sem.dyns_length rest)
+
+/-- Two values of one type that are equal with their type are equal. -/
+theorem Semantics.dyn_inj (sem : Semantics D) {τ : D.Ty} {v v' : sem.Val τ}
+    (same : (⟨τ, v⟩ : sem.Dyn) = ⟨τ, v'⟩) : v = v' :=
+  eq_of_heq (Sigma.mk.inj same).2
+
+/-- Values of the same types that are equal with their types are equal. -/
+theorem Semantics.dyns_injective (sem : Semantics D) :
+    ∀ {items : List D.Ty} {values values' : HList sem.Val items},
+      sem.dyns values = sem.dyns values' → values = values'
+  | [], .nil, .nil, _ => rfl
+  | _ :: _, .cons v rest, .cons v' rest', same => by
+      simp only [Semantics.dyns, List.cons.injEq] at same
+      rw [sem.dyn_inj same.1, sem.dyns_injective same.2]
+
+/-- Values of two lists, one after the other, with their types. -/
+theorem Semantics.dyns_append (sem : Semantics D) :
+    ∀ {as bs : List D.Ty} (xs : HList sem.Val as) (ys : HList sem.Val bs),
+      sem.dyns (xs.append ys) = sem.dyns xs ++ sem.dyns ys
+  | [], _, .nil, _ => rfl
+  | _ :: _, _, .cons x xs, ys => by
+      show (⟨_, x⟩ :: sem.dyns (xs.append ys)) = ⟨_, x⟩ :: (sem.dyns xs ++ sem.dyns ys)
+      rw [sem.dyns_append xs ys]
+
+/-- Values split after a prefix of their types, with their types: those of the prefix, then
+those of the rest. -/
+theorem Semantics.dyns_split (sem : Semantics D) {carried each : List D.Ty}
+    (out : HList sem.Val (carried ++ each)) :
+    sem.dyns out = sem.dyns (HList.split carried out).1 ++ sem.dyns (HList.split carried out).2 := by
+  conv => lhs; rw [← split_append carried out]
+  exact sem.dyns_append _ _
+
+/-- A value at a position of values with their types has the type at that position. -/
+theorem Semantics.dyns_typed (sem : Semantics D) :
+    ∀ {items : List D.Ty} (vs : HList sem.Val items) (j : Nat) (d : sem.Dyn),
+      (sem.dyns vs)[j]? = some d → items[j]? = some d.1
+  | [], .nil, _, _, e => by simp [Semantics.dyns] at e
+  | _ :: _, .cons v vs, j, d, e => by
+      cases j with
+      | zero =>
+          simp only [Semantics.dyns, List.getElem?_cons_zero, Option.some.injEq] at e
+          subst e
+          rfl
+      | succ j =>
+          simp only [Semantics.dyns, List.getElem?_cons_succ] at e ⊢
+          exact sem.dyns_typed vs j d e
+
+end
+
+/-- The collected values of each type, as the loop gives them: held latest first, each list is
+reversed here, so that the value is of the iterations in order. -/
 def Semantics.collected {D : Dialect} (sem : Semantics D) (size : Option Nat) :
     {each : List D.Ty} → HList (fun a => List (sem.Val a)) each →
       HList sem.Val (each.map (D.collected size))
   | [], .nil => .nil
-  | a :: _, .cons vs rest => .cons (sem.collect size a vs) (sem.collected size rest)
+  | a :: _, .cons vs rest => .cons (sem.collect size a vs.reverse) (sem.collected size rest)
 
 /-- How often a loop runs, in an environment. -/
 def Semantics.times {D : Dialect} (sem : Semantics D) {w : D.Who} {Γ : Ctx D.Ty} :

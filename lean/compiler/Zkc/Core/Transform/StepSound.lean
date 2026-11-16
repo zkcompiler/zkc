@@ -3,36 +3,32 @@ module
 public import Zkc.Core.Transform.Step
 public import Zkc.Core.Facts.LocalLaws
 public import Zkc.Core.Meaning.Stops
+public import Zkc.Core.Evidence.Claim
 
 @[expose] public section
 
 /-!
-What a transformation as a checked step means, and the meaning of a function against two tables
-of callees.
+What the judgments about a function rest on, and the meaning of a function against two tables of
+callees.
 
-A step (`transform`, `Transform/Step.lean`) returns the source, accepted by the check of facts,
-and the target, which followed the analysis of the source with no refusal and no place that
-differs. Its success means that on valid inputs the two have the same meaning, against every
-table of callees with distinct keys that never stop `undefined` on valid inputs, keep validity,
-and stop only `undefined` where their headers say that they cannot stop (`Callees`): this is
-`transform_sound`, from the theorem of following for functions (`functions_follow_same`, from
-`Analysis.follow_sound` and the laws of the function dialect). The target was not analysed by
-itself: that it is safe, and that every loop of it respects the bound that the step recorded for
-it, follow from its following the source (`transform_target_safe`, `transform_target_bounds`);
-nothing proves that the check of facts alone accepts it. The target of one step is elaborated
-from the stored function that the next step is given, so two steps compose (`transform_then`),
-when the middle function is itself accepted as a source; two steps from one source give targets
-with the same meaning (`transform_both`), so a chain of transformations can be validated against
-the one source that was admitted. What a stored function is accepted as is determined by it
-(`acceptFn_erases`), so the stored forms of what a step returns are what it was given
-(`transform_erases`).
+The check of facts is a producer of assurance: a function that it accepts is assured with the
+bounds that it gives (`TypedFn.check_assured`, from `checkFacts_sound`). Following is another,
+from a source that is safe by any route: when a second function follows the analysis of a first
+that is safe with no refusal and no place that differs, the second is assured with the bounds
+recorded while it follows, and the two mean the same (`TypedFn.follows_assured`, from
+`Analysis.follow_assured` and the laws of the function dialect). The second is not analysed by
+itself, and the refusals of the first's own analysis are not read. "The same meaning" of
+functions is symmetric and transitive (`TypedFn.SameAs.symm`, `TypedFn.SameAs.trans`), and that
+a function is safe is that its body is assured, in the sense of `Evidence/Claim.lean`, in the
+scope of the empty path and its inputs bound to valid values (`TypedFn.safe_iff_assured`). What
+a stored function is typed as is its elaboration (`typeFn_ok`).
 
 A function that calls a replaced function is the same term run against another table of
 callees. On valid values in scope, a term of a function returns valid values against callees
 that keep validity (`Term.denote_valid`), and it means the same against two tables that agree on
 valid inputs when one of them keeps validity (`Term.denote_tables`): every call is on valid
 values, where the two tables agree. Neither needs the check of facts. With it, a program whose
-functions follow those of another program gives every function the meaning of the function of
+functions follow those of an accepted program gives every function the meaning of the function of
 the other with its header (`Defs.functionsFollow_sound`, `Admission/Programs.lean`); the second
 program is taken apart at each definition by `Defs.followsFn_true` and
 `Defs.followsProtocol_true`.
@@ -139,7 +135,7 @@ theorem localSem_collected (table' : FnTable M fns) (size : Option Nat) :
         (localSem M fns table).collected size collected
   | [], .nil => rfl
   | a :: _, .cons values rest =>
-      congrArg (HList.cons ((localSem M fns table).collect size a values))
+      congrArg (HList.cons ((localSem M fns table).collect size a values.reverse))
         (localSem_collected table' size rest)
 
 /-- The state of a loop of a function is valid: its carried values, and what it collected,
@@ -352,279 +348,141 @@ end
 
 end
 
-/-! ## A step -/
+/-! ## Two bodies of functions of which the second follows the first -/
+
+section
+variable {V : Vocabulary} {M : Model V} {fns : List (FnHeader V)}
+
+end
+
+/-! ## The judgments about a function -/
+
+section
+variable {V : Vocabulary} {fns : List (FnHeader V)} {hdr : FnHeader V}
+
+/-- The relation "same meaning" of functions is symmetric. -/
+theorem TypedFn.SameAs.symm {f g : TypedFn V fns hdr} (same : f.SameAs g) : g.SameAs f :=
+  fun M table callees ins valid => (same M table callees ins valid).symm
+
+/-- The relation "same meaning" of functions is transitive. -/
+theorem TypedFn.SameAs.trans {f g h : TypedFn V fns hdr} (first : f.SameAs g)
+    (second : g.SameAs h) : f.SameAs h :=
+  fun M table callees ins valid =>
+    (first M table callees ins valid).trans (second M table callees ins valid)
+
+/-- What a stored function is typed as is its elaboration. -/
+theorem typeFn_ok {region : Region (LocalRaw V) Unit} {f : TypedFn V fns hdr}
+    (typed : typeFn fns hdr region = .ok f) :
+    elabFn fns hdr region = .ok ⟨f.inputs, f.body, f.conditions⟩ := by
+  unfold typeFn at typed
+  split at typed
+  · cases typed
+  · rename_i elaborated
+    cases typed
+    exact elaborated
+
+/-- **The check of facts is a producer of assurance.** A function that the check of facts
+accepts is assured with the bounds that the check gives (`checkFacts_sound`). -/
+theorem TypedFn.check_assured (f : TypedFn V fns hdr) {bounds : List (Place × Nat)}
+    (checked : f.check = .ok bounds) : f.Assured bounds :=
+  ⟨fun _ _ callees ins valid =>
+    (checkFacts_sound callees hdr.key f.inputs f.body f.conditions.distinct checked []
+      (fun _ _ none => nomatch none) ins valid).2,
+   fun _ _ callees F recorded ins valid =>
+    (checkFacts_sound callees hdr.key f.inputs f.body f.conditions.distinct checked F recorded
+      ins valid).1⟩
+
+open Analysis in
+/-- What it is for a second function to follow a first: it follows the analysis of the first
+with no refusal and no place that differs, and its bounds are those recorded while it
+follows. -/
+theorem TypedFn.follows_ok {source target : TypedFn V fns hdr} {bounds : List (Place × Nat)}
+    (followed : source.follows target = .ok bounds) :
+    (follow (localFactRules V fns) (localSkelRules V fns) hdr.key none
+        (analyse (localFactRules V fns) (localSkelRules V fns) hdr.key none source.inputs
+          source.body) target.inputs target.body).accepted = true ∧
+      bounds = (follow (localFactRules V fns) (localSkelRules V fns) hdr.key none
+        (analyse (localFactRules V fns) (localSkelRules V fns) hdr.key none source.inputs
+          source.body) target.inputs target.body).state.st.bounds.reverse := by
+  unfold TypedFn.follows at followed
+  dsimp only at followed
+  split at followed
+  · rename_i refused same
+    cases followed
+    exact ⟨by simp only [Exit.accepted, refused, same, List.isEmpty_nil, Bool.and_self], rfl⟩
+  · cases followed
+
+open Analysis FactCheck in
+/-- **Following is a producer of assurance and of sameness, from a source that is safe by any
+route.** When a second function follows the analysis of a first that is safe, however that is
+known, the second is assured with the bounds recorded while it follows, and the two mean the
+same (`Analysis.follow_assured`). The refusals of the first's own analysis are not read. -/
+theorem TypedFn.follows_assured {source target : TypedFn V fns hdr}
+    {bounds : List (Place × Nat)} (safe : source.Safe)
+    (followed : source.follows target = .ok bounds) :
+    target.Assured bounds ∧ source.SameAs target := by
+  obtain ⟨accepted, recordedBounds⟩ := TypedFn.follows_ok followed
+  have sound := fun (M : Model V) (table : FnTable M fns) (callees : Callees M table)
+      (F : List (Place × Nat))
+      (recorded : ∀ p b, (p, b) ∈ F → p.definition = hdr.key → p.role = none → (p, b) ∈ bounds)
+      (ins : HList M.Val hdr.ins) (valid : ins.All M.Valid) =>
+    follow_assured (localFactRules V fns) (localSkelRules V fns) (localSem M fns table)
+      (fun _ _ => True) (localReading M) (LocalReturns M table) (ValidDyn M) (· = .undefined)
+      (localFactRules_lawful M table callees.distinct callees.safe callees.keeps callees.quiet _)
+      (localSkelRules_lawful callees.distinct) hdr.key hdr.key none source.inputs target.inputs
+      source.body target.body target.conditions.distinct accepted F
+      (fun p b inside here unowned => by
+        have mine := recorded p b inside here unowned
+        rw [recordedBounds] at mine
+        exact List.mem_reverse.mp mine)
+      ins (by rw [localDyns_eq_toDyns M table]; exact toDyns_valid valid)
+      (Process.every_mono _ _ (fun _ _ => trivial) (fun _ stop => stop)
+        (safe M table callees ins valid))
+  refine ⟨⟨fun M table callees ins valid => ?_,
+    fun M table callees F recorded ins valid => (sound M table callees F recorded ins valid).1⟩,
+    fun M table callees ins valid =>
+      (sound M table callees [] (fun _ _ none => nomatch none) ins valid).2.2.eq_of_noSig⟩
+  refine Process.every_mono _ _ (fun outs returned => ?_) (fun _ stop => stop)
+    (sound M table callees [] (fun _ _ none => nomatch none) ins valid).2.1
+  rw [localDyns_eq_toDyns M table] at returned
+  exact valid_of_toDyns returned
+
+open FactCheck in
+/-- **A function is safe exactly when its body is assured** in the scope of a function: for
+every model and callees, on the empty path and the inputs bound to valid values, with the
+validity of the model and the stop `undefined` (`Assured`, `Evidence/Claim.lean`). The judgment
+about a function is the generic one at that scope. -/
+theorem TypedFn.safe_iff_assured (f : TypedFn V fns hdr) :
+    f.Safe ↔ ∀ (M : Model V) (table : FnTable M fns), Callees M table →
+      Zkc.Core.Assured (localSem M fns table) (fun _ _ => True) (ValidDyn M) (· = .undefined)
+        f.body
+        (fun path env => path = [] ∧
+          ∃ ins : HList M.Val hdr.ins, ins.All M.Valid ∧ env = Env.empty.extend f.inputs ins) := by
+  constructor
+  · intro safe M table callees
+    refine ⟨fun path env ⟨empty, ins, valid, bound⟩ => ?_⟩
+    subst empty bound
+    refine Process.every_mono _ _ (fun outs returned => ?_) (fun _ stop => stop)
+      (safe M table callees ins valid)
+    rw [localDyns_eq_toDyns M table]
+    exact toDyns_valid returned
+  · intro assured M table callees ins valid
+    refine Process.every_mono _ _ (fun outs returned => ?_) (fun _ stop => stop)
+      ((assured M table callees).holds [] _ ⟨rfl, ins, valid, rfl⟩)
+    rw [localDyns_eq_toDyns M table] at returned
+    exact valid_of_toDyns returned
+
+end
+
+/-! ## Two programs over the same headers -/
 
 section
 variable {V : Vocabulary}
 
-/-- The meaning of an accepted function on inputs, against callees. -/
-def AcceptedFn.meaning {fns : List (FnHeader V)} {hdr : FnHeader V} (f : AcceptedFn V fns hdr)
-    (M : Model V) (table : FnTable M fns) (ins : HList M.Val hdr.ins) :
-    Local (HList M.Val hdr.outs) :=
-  f.body.denote (localSem M fns table) [] (Env.empty.extend f.inputs ins)
-
-/-- Two accepted functions have the same meaning on every valid input, against every callees. -/
-def AcceptedFn.SameAs {fns : List (FnHeader V)} {hdr : FnHeader V} (f g : AcceptedFn V fns hdr) :
-    Prop :=
-  ∀ (M : Model V) (table : FnTable M fns), Callees M table →
-    ∀ ins : HList M.Val hdr.ins, ins.All M.Valid → f.meaning M table ins = g.meaning M table ins
-
-/-- Two accepted functions with the same input names and body have the same meaning. -/
-theorem AcceptedFn.meaning_eq {fns : List (FnHeader V)} {hdr : FnHeader V}
-    {f g : AcceptedFn V fns hdr}
-    (same : (⟨f.inputs, f.body, f.conditions⟩ :
-      (inputs : Names hdr.ins) × (body : Fn V fns hdr inputs) ×' FnConditions body) =
-      ⟨g.inputs, g.body, g.conditions⟩)
-    (M : Model V) (table : FnTable M fns) (ins : HList M.Val hdr.ins) :
-    f.meaning M table ins = g.meaning M table ins := by
-  obtain ⟨inputs, body, conditions, bounds⟩ := f
-  obtain ⟨inputs', body', conditions', bounds'⟩ := g
-  cases same
-  rfl
-
-variable {M : Model V} {fns : List (FnHeader V)}
-
-open Analysis FactCheck in
-/-- **Two functions of which the second follows the first mean the same.** Two bodies of
-functions of which the first is accepted by the check of facts and the second follows its
-analysis with no refusal and no place that differs mean the same on every valid input, for any
-replies permitted, against callees with distinct keys that never stop `undefined` on valid
-inputs, keep validity, and stop only `undefined` where their headers say that they cannot stop.
-Nothing is assumed of the safety of the second; its addresses are distinct, which elaboration
-decides. -/
-theorem functions_follow_same {table : FnTable M fns} (callees : Callees M table)
-    {types outs : List V.Ty} (inputs inputs' : Names types)
-    (body : Term (localDialect V fns) (Ctx.empty.extend inputs) outs)
-    (body' : Term (localDialect V fns) (Ctx.empty.extend inputs') outs)
-    (definition definition' : Key) (distinct : Term.Distinct body)
-    (distinct' : Term.Distinct body') {bounds : List (Place × Nat)}
-    (accepted : checkFacts (localFactRules V fns) (localSkelRules V fns) definition none inputs
-      body = .ok bounds)
-    (followed : (follow (localFactRules V fns) (localSkelRules V fns) definition' none
-      (analyse (localFactRules V fns) (localSkelRules V fns) definition none inputs body) inputs'
-      body').accepted = true)
-    (ins : HList M.Val types) (valid : ins.All M.Valid)
-    (permitted : ∀ op, NoSig.Reply op → Prop) :
-    Process.SameWhen permitted
-      (body.denote (localSem M fns table) [] (Env.empty.extend inputs ins))
-      (body'.denote (localSem M fns table) [] (Env.empty.extend inputs' ins)) :=
-  (follow_sound (localFactRules V fns) (localSkelRules V fns) (localSem M fns table) permitted
-    (localReading M) (LocalReturns M table) (ValidDyn M) (· = .undefined)
-    (localFactRules_lawful M table callees.distinct callees.safe callees.keeps callees.quiet
-      permitted)
-    (localSkelRules_lawful callees.distinct) definition definition' none inputs inputs' body body'
-    distinct distinct' (checkFacts_ok accepted).1 followed [] (fun _ _ none => nomatch none) ins
-    (by rw [localDyns_eq_toDyns M table]; exact toDyns_valid valid)).2.2
-
-open Analysis in
-/-- Two functions of which the second follows the first have equal processes on every valid
-input: a function has no effects, so meaning the same is equality. -/
-theorem functions_follow_equal {table : FnTable M fns} (callees : Callees M table)
-    {types outs : List V.Ty} (inputs inputs' : Names types)
-    (body : Term (localDialect V fns) (Ctx.empty.extend inputs) outs)
-    (body' : Term (localDialect V fns) (Ctx.empty.extend inputs') outs)
-    (definition definition' : Key) (distinct : Term.Distinct body)
-    (distinct' : Term.Distinct body') {bounds : List (Place × Nat)}
-    (accepted : checkFacts (localFactRules V fns) (localSkelRules V fns) definition none inputs
-      body = .ok bounds)
-    (followed : (follow (localFactRules V fns) (localSkelRules V fns) definition' none
-      (analyse (localFactRules V fns) (localSkelRules V fns) definition none inputs body) inputs'
-      body').accepted = true)
-    (ins : HList M.Val types) (valid : ins.All M.Valid) :
-    body.denote (localSem M fns table) [] (Env.empty.extend inputs ins) =
-      body'.denote (localSem M fns table) [] (Env.empty.extend inputs' ins) :=
-  (functions_follow_same callees inputs inputs' body body' definition definition' distinct
-    distinct' accepted followed ins valid fun _ _ => True).eq_of_noSig
-
-/-- What an accepted function is: the elaboration of the stored function, whose facts the check
-accepts with its bounds. -/
-theorem acceptFn_ok {hdr : FnHeader V} {region : Region (LocalRaw V) Unit}
-    {f : AcceptedFn V fns hdr} (accepted : acceptFn fns hdr region = .ok f) :
-    elabFn fns hdr region = .ok ⟨f.inputs, f.body, f.conditions⟩ ∧
-      checkFacts (localFactRules V fns) (localSkelRules V fns) hdr.key none f.inputs f.body =
-        .ok f.bounds := by
-  unfold acceptFn at accepted
-  split at accepted
-  · cases accepted
-  · rename_i inputs body conditions elaborated
-    split at accepted
-    · cases accepted
-    · rename_i bounds checked
-      cases accepted
-      exact ⟨elaborated, checked⟩
-
-/-- The stored form of what a stored function is accepted as is that stored function. -/
-theorem acceptFn_erases {hdr : FnHeader V} {region : Region (LocalRaw V) Unit}
-    {f : AcceptedFn V fns hdr} (accepted : acceptFn fns hdr region = .ok f) :
-    eraseFn f.inputs f.body = region :=
-  eraseFn_elab region (acceptFn_ok accepted).1
-
-/-- An accepted function never stops `undefined` on valid inputs and returns valid values. -/
-theorem AcceptedFn.safe {hdr : FnHeader V} {region : Region (LocalRaw V) Unit}
-    {f : AcceptedFn V fns hdr} (accepted : acceptFn fns hdr region = .ok f) (M : Model V)
-    (table : FnTable M fns) (callees : Callees M table) (ins : HList M.Val hdr.ins)
-    (valid : ins.All M.Valid) :
-    (f.meaning M table ins).Every (fun _ _ => True) (fun outs => outs.All M.Valid)
-      (· ≠ .undefined) :=
-  (checkFacts_sound callees hdr.key f.inputs f.body f.conditions.distinct (acceptFn_ok accepted).2
-    [] (fun _ _ none => nomatch none) ins valid).2
-
-open Analysis in
-/-- What a step is: its source accepted, its target elaborated, and the target following the
-analysis of the source with no refusal and no place that differs. -/
-theorem transform_ok {hdr : FnHeader V} {source target : Region (LocalRaw V) Unit}
-    {step : Transformed V fns hdr} (accepted : transform fns hdr source target = .ok step) :
-    acceptFn fns hdr source = .ok step.source ∧
-      elabFn fns hdr target = .ok ⟨step.target.inputs, step.target.body, step.target.conditions⟩ ∧
-      (follow (localFactRules V fns) (localSkelRules V fns) hdr.key none
-        (analyse (localFactRules V fns) (localSkelRules V fns) hdr.key none step.source.inputs
-          step.source.body) step.target.inputs step.target.body).accepted = true := by
-  unfold transform at accepted
-  split at accepted
-  · cases accepted
-  · rename_i inputs body conditions elaborated
-    dsimp only at accepted
-    split at accepted
-    · cases accepted
-    · rename_i refused
-      split at accepted
-      · cases accepted
-      · rename_i inputs' body' conditions' elaborated'
-        split at accepted
-        · rename_i refused' same
-          cases accepted
-          refine ⟨?_, elaborated', ?_⟩
-          · simp only [acceptFn, elaborated, checkFacts, refused]
-          · simp only [Exit.accepted, refused', same, List.isEmpty_nil, Bool.and_self]
-        · cases accepted
-        · cases accepted
-
-/-- A step that is accepted relates functions with the same meaning. -/
-theorem transform_sound {hdr : FnHeader V} {source target : Region (LocalRaw V) Unit}
-    {step : Transformed V fns hdr} (accepted : transform fns hdr source target = .ok step) :
-    step.source.SameAs step.target := by
-  intro M table callees ins valid
-  obtain ⟨sourceAccepted, _, followed⟩ := transform_ok accepted
-  exact functions_follow_equal callees step.source.inputs step.target.inputs step.source.body
-    step.target.body hdr.key hdr.key step.source.conditions.distinct
-    step.target.conditions.distinct (acceptFn_ok sourceAccepted).2 followed ins valid
-
-open Analysis FactCheck in
-/-- The target of a step never stops `undefined` on valid inputs and returns valid values. It
-was not analysed by itself: this follows from its following the source. -/
-theorem transform_target_safe {hdr : FnHeader V} {source target : Region (LocalRaw V) Unit}
-    {step : Transformed V fns hdr} (accepted : transform fns hdr source target = .ok step)
-    (M : Model V) (table : FnTable M fns) (callees : Callees M table)
-    (ins : HList M.Val hdr.ins) (valid : ins.All M.Valid) :
-    (step.target.meaning M table ins).Every (fun _ _ => True) (fun outs => outs.All M.Valid)
-      (· ≠ .undefined) := by
-  have safe := follow_safe (localFactRules V fns) (localSkelRules V fns) (localSem M fns table)
-    (fun _ _ => True) (localReading M) (LocalReturns M table) (ValidDyn M) (· = .undefined)
-    (localFactRules_lawful M table callees.distinct callees.safe callees.keeps callees.quiet _)
-    (localSkelRules_lawful callees.distinct) hdr.key hdr.key none step.source.inputs
-    step.target.inputs step.source.body step.target.body step.target.conditions.distinct
-    (transform_ok accepted).2.2 [] (fun _ _ none => nomatch none) ins
-    (by rw [localDyns_eq_toDyns M table]; exact toDyns_valid valid)
-  refine Process.every_mono _ _ (fun outs returned => ?_) (fun _ h => h) safe.2
-  rw [localDyns_eq_toDyns M table] at returned
-  exact valid_of_toDyns returned
-
-open Analysis in
-/-- The bounds of the target of a step are those that the analysis recorded while the target
-followed the source. -/
-theorem transform_target_recorded {hdr : FnHeader V} {source target : Region (LocalRaw V) Unit}
-    {step : Transformed V fns hdr} (accepted : transform fns hdr source target = .ok step) :
-    step.target.bounds = (follow (localFactRules V fns) (localSkelRules V fns) hdr.key none
-      (analyse (localFactRules V fns) (localSkelRules V fns) hdr.key none step.source.inputs
-        step.source.body) step.target.inputs step.target.body).state.st.bounds.reverse := by
-  unfold transform at accepted
-  split at accepted
-  · cases accepted
-  · dsimp only at accepted
-    split at accepted
-    · cases accepted
-    · split at accepted
-      · cases accepted
-      · split at accepted
-        · cases accepted
-          rfl
-        · cases accepted
-        · cases accepted
-
-open Analysis FactCheck in
-/-- **The loops of the target of a step respect their bounds.** For a step that is accepted,
-against callees with distinct keys that never stop `undefined` on valid inputs, keep validity,
-and stop only `undefined` where their headers say that they cannot stop, on valid inputs: every
-loop that a run of the target reaches respects the bound that the step recorded for it, for every
-annotation whose entries at this definition are among the target's bounds. The target was not
-analysed by itself: the bounds are those recorded while it followed the source
-(`Analysis.follow_sound`). -/
-theorem transform_target_bounds {hdr : FnHeader V} {source target : Region (LocalRaw V) Unit}
-    {step : Transformed V fns hdr} (accepted : transform fns hdr source target = .ok step)
-    (M : Model V) (table : FnTable M fns) (callees : Callees M table) (F : List (Place × Nat))
-    (recorded : ∀ p b, (p, b) ∈ F → p.definition = hdr.key → p.role = none →
-      (p, b) ∈ step.target.bounds)
-    (ins : HList M.Val hdr.ins) (valid : ins.All M.Valid) :
-    step.target.body.EveryLoop (localSem M fns table) (fun _ _ => True)
-      (Annotation.Bounded ⟨F⟩ hdr.key none) [] [] (Env.empty.extend step.target.inputs ins) := by
-  obtain ⟨sourceAccepted, _, followed⟩ := transform_ok accepted
-  have bounds := transform_target_recorded accepted
-  exact (follow_sound (localFactRules V fns) (localSkelRules V fns) (localSem M fns table)
-    (fun _ _ => True) (localReading M) (LocalReturns M table) (ValidDyn M) (· = .undefined)
-    (localFactRules_lawful M table callees.distinct callees.safe callees.keeps callees.quiet _)
-    (localSkelRules_lawful callees.distinct) hdr.key hdr.key none step.source.inputs
-    step.target.inputs step.source.body step.target.body step.source.conditions.distinct
-    step.target.conditions.distinct (checkFacts_ok (acceptFn_ok sourceAccepted).2).1 followed F
-    (fun p b inside here unowned => by
-      have mine := recorded p b inside here unowned
-      rw [bounds] at mine
-      exact List.mem_reverse.mp mine)
-    ins (by rw [localDyns_eq_toDyns M table]; exact toDyns_valid valid)).1
-
-/-- The stored forms of what a step returns are what it was given. -/
-theorem transform_erases {hdr : FnHeader V} {source target : Region (LocalRaw V) Unit}
-    {step : Transformed V fns hdr} (accepted : transform fns hdr source target = .ok step) :
-    eraseFn step.source.inputs step.source.body = source ∧
-      eraseFn step.target.inputs step.target.body = target :=
-  ⟨acceptFn_erases (transform_ok accepted).1, eraseFn_elab target (transform_ok accepted).2.1⟩
-
-/-- Two steps compose: when the target of the first is the source of the second as stored, the
-source of the first and the target of the second have the same meaning. The middle function
-elaborates to one thing, so the target of the first step and the source of the second have the
-same inputs and body. -/
-theorem transform_then {hdr : FnHeader V} {first middle last : Region (LocalRaw V) Unit}
-    {step step' : Transformed V fns hdr}
-    (accepted : transform fns hdr first middle = .ok step)
-    (accepted' : transform fns hdr middle last = .ok step') :
-    step.source.SameAs step'.target := by
-  intro M table callees ins valid
-  have middleOnce := Except.ok.inj
-    ((transform_ok accepted).2.1.symm.trans (acceptFn_ok (transform_ok accepted').1).1)
-  rw [transform_sound accepted M table callees ins valid,
-    AcceptedFn.meaning_eq middleOnce M table ins]
-  exact transform_sound accepted' M table callees ins valid
-
-/-- Two steps from one source give targets with the same meaning: the source is accepted as one
-thing, and each target means what it means. A chain of transformations is so validated against
-the one source that was admitted; `transform_then` is for when the middle function is itself
-accepted as a source. -/
-theorem transform_both {hdr : FnHeader V} {first middle last : Region (LocalRaw V) Unit}
-    {step step' : Transformed V fns hdr}
-    (accepted : transform fns hdr first middle = .ok step)
-    (accepted' : transform fns hdr first last = .ok step') :
-    step.target.SameAs step'.target := by
-  intro M table callees ins valid
-  have sourceOnce : step.source = step'.source :=
-    Except.ok.inj ((transform_ok accepted).1.symm.trans (transform_ok accepted').1)
-  rw [← transform_sound accepted M table callees ins valid, sourceOnce]
-  exact transform_sound accepted' M table callees ins valid
-
-/-! ## Two programs over the same headers -/
-
 open Analysis in
 /-- A second program that follows at a function of the first ends with a function of the same
-header, which follows the analysis of the first's with no place that differs, after definitions
-that follow. -/
+header, which follows the analysis of the first's with no refusal and no place that differs,
+after definitions that follow. -/
 theorem Defs.followsFn_true {fns : List (FnHeader V)} {protocols : List (ProtocolHeader V)}
     {hdr : FnHeader V} {inputs : Names hdr.ins} {body : Fn V fns hdr inputs}
     {rest : Defs V ⟨fns, protocols⟩ → Bool} :
@@ -635,12 +493,12 @@ theorem Defs.followsFn_true {fns : List (FnHeader V)} {protocols : List (Protoco
         HEq defs' (Defs.fn (hs := ⟨fns, protocols⟩) hdr inputs' body' ok' rest') ∧
           (follow (localFactRules V fns) (localSkelRules V fns) hdr.key none
             (analyse (localFactRules V fns) (localSkelRules V fns) hdr.key none inputs body)
-            inputs' body').state.differs = [] ∧
+            inputs' body').accepted = true ∧
           rest rest' = true
   | _, .nil, headers, _ => nomatch headers
   | _, .fn _ inputs' body' ok' rest', rfl, follows => by
-      obtain ⟨decided, restFollows⟩ := Bool.and_eq_true_iff.mp follows
-      exact ⟨inputs', body', ok', rest', HEq.rfl, List.isEmpty_iff.mp decided, restFollows⟩
+      obtain ⟨accepted, restFollows⟩ := Bool.and_eq_true_iff.mp follows
+      exact ⟨inputs', body', ok', rest', HEq.rfl, accepted, restFollows⟩
   | _, .protocol .., _, follows => nomatch follows
 
 /-- A second program that follows at a protocol of the first ends with a protocol of the same

@@ -4,6 +4,8 @@ public import Zkc.Core.Facts.Local
 public import Zkc.Core.Facts.Theorems
 public import Zkc.Core.Meaning.Validity
 public import Zkc.Core.Meaning.Stops
+public import Zkc.Core.Meaning.Call
+public import Zkc.Core.Evidence.Summary
 
 @[expose] public section
 
@@ -38,6 +40,11 @@ stop `undefined`; the facts of the table are about `ValidRun` of `LocalReturns`,
 `collect` asks that the collected values be as many as the size given: without that it is false
 of the function dialect (`Analysis.collect_without_length`). So the check of facts is sound for a
 function (`checkFacts_sound`), from the soundness of the analysis (`Analysis.analyse_safe`).
+
+Read so, a summary of a function (`Summary`, `Evidence/Summary.lean`) holds of its entry in a
+table exactly when the entry has the contract of `Meaning/Call.lean` whose precondition is valid
+inputs that satisfy the requirements, whose postcondition is valid results that satisfy the
+guarantees, and whose stops are not `undefined` (`localSummary_contract`).
 -/
 namespace Zkc.Core
 
@@ -842,11 +849,10 @@ theorem collectedOK_push : ∀ {each : List V.Ty} {acc : HList (fun a => List (M
   | _ :: _, .cons xs rest, _, .cons v more, h, all => by
       obtain ⟨len, valid, others⟩ := h
       refine ⟨by simp [len], fun w m => ?_, collectedOK_push others (HList.all_cons.mp all).2⟩
-      rcases List.mem_append.mp m with m | m
-      · exact valid w m
-      · simp only [List.mem_singleton] at m
-        subst m
+      rcases List.mem_cons.mp m with m | m
+      · subst m
         exact (HList.all_cons.mp all).1
+      · exact valid w m
 
 theorem collected_valid {fns : List (FnHeader V)} {table : FnTable M fns} (size : Option Nat)
     {n : Nat} (fits : ∀ m, size = some m → n = m) :
@@ -855,7 +861,8 @@ theorem collected_valid {fns : List (FnHeader V)} {table : FnTable M fns} (size 
   | [], .nil, _ => trivial
   | _ :: _, .cons vs rest, h => by
       obtain ⟨len, valid, others⟩ := h
-      exact HList.all_cons.mpr ⟨⟨valid, fun m e => by rw [len]; exact fits m e⟩,
+      exact HList.all_cons.mpr ⟨⟨fun v m => valid v (List.mem_reverse.mp m),
+          fun m e => by rw [List.length_reverse, len]; exact fits m e⟩,
         collected_valid size fits others⟩
 
 end
@@ -1193,6 +1200,39 @@ theorem checkFacts_sound {table : FnTable M fns} (callees : Callees M table) (de
   refine ⟨safe.1, Process.every_mono _ _ (fun outs returned => ?_) (fun _ h => h) safe.2⟩
   rw [localDyns_eq_toDyns M table] at returned
   exact valid_of_toDyns returned
+
+end
+
+/-! ## A summary of a function is a contract -/
+
+section
+variable {V : Vocabulary} (M : Model V) {fns : List (FnHeader V)} (table : FnTable M fns)
+
+/-- **A summary that holds of a function's entry is its contract.** For the function dialect,
+read as the check of facts reads it (`localReading`, `LocalReturns`, the validity of the model
+and the stop `undefined`), a summary holds of the entry of a function in a table exactly when
+the entry has the contract (`Contract`, `Meaning/Call.lean`) whose precondition is valid inputs
+that satisfy the requirements, whose postcondition is valid results that, with the inputs,
+satisfy the guarantees, and whose stops are not `undefined`. -/
+theorem localSummary_contract {hdr : FnHeader V} (callee : Member fns hdr)
+    (summary : Summary (LocalRaw V)) :
+    Summary.Holds (localSem M fns table) (fun _ _ => True) (localReading M) (LocalReturns M table)
+        (ValidDyn M) (· = .undefined) summary (table hdr callee) ↔
+      Contract M table callee
+        (fun args => args.All M.Valid ∧ ∀ requirement, requirement ∈ summary.requires →
+          requirement.Holds (LocalReturns M table) (localReading M) (toDyns args))
+        (fun args results => results.All M.Valid ∧ ∀ guarantee, guarantee ∈ summary.ensures →
+          guarantee.Holds (LocalReturns M table) (localReading M) (toDyns args ++ toDyns results))
+        (fun _ stop => stop ≠ .undefined) := by
+  simp only [Summary.Holds, localDyns_eq_toDyns M table]
+  constructor
+  · intro holds
+    refine ⟨fun args pre => ?_⟩
+    exact Process.every_mono _ _ (fun _ returned => ⟨valid_of_toDyns returned.1, returned.2⟩)
+      (fun _ stop => stop) (holds args (toDyns_valid pre.1) pre.2)
+  · intro contract inputs valid requirements
+    exact Process.every_mono _ _ (fun _ returned => ⟨toDyns_valid returned.1, returned.2⟩)
+      (fun _ stop => stop) (contract.holds inputs ⟨valid_of_toDyns valid, requirements⟩)
 
 end
 

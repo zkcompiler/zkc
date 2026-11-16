@@ -2,6 +2,7 @@ module
 
 public import Zkc.Core.Facts.State
 public import Zkc.Core.Value.Valuation
+public import Zkc.Core.Meaning.Requirement
 
 @[expose] public section
 
@@ -13,20 +14,15 @@ it. Of a valuation, what is known says that the region runs, that each range, or
 and shape of a choice holds (`Known.Holds`). The operations are a relation `Run` from a written
 form and the values of its operands to the values of its results, and how the check reads a
 value (as a natural, as a truth value) is a `Reading`: both are given by the dialect, with the
-laws that `OpFacts` satisfies against them (`OpFacts.Lawful`). A requirement holds of the values
-that it names when it says of them what is true (`Requirement.Holds`). One step of the walk, of a
-valuation and a state, grows both and keeps the refusals and the bounds (`Stepped`).
+laws that `OpFacts` satisfies against them (`OpFacts.Lawful`). What a requirement says of values
+(`Reading`, `Requirement.Holds`) is in `Meaning/Requirement.lean`; here, the identifiers that the
+operands of a requirement resolve to have values that they name (`OperandsAt`). One step of the
+walk, of a valuation and a state, grows both and keeps the refusals and the bounds (`Stepped`).
 -/
 
 namespace Zkc.Core
 
 namespace FactCheck
-
-/-- How the check reads a value: as a natural, as a truth value; nothing for a value that is
-not one. -/
-structure Reading (Val : Type) where
-  nat : Val → Option Nat
-  bool : Val → Option Bool
 
 section
 variable {Val : Type}
@@ -103,34 +99,7 @@ structure OpFacts.Lawful (ops : OpFacts Raw) (R : Reading Val)
     ∀ (i : Nat) (r : Range), (ops.ranges w known)[i]? = some (some r) →
       ∃ v n, rs[i]? = some v ∧ R.nat v = some n ∧ r.Has n
 
-/-! ## What a requirement says -/
-
-/-- The value that an operand of a requirement names, among the operands' values. -/
-def _root_.Zkc.Core.Operand.Denotes (Run : Raw → List Val → List Val → Prop) (args : List Val) :
-    Operand Raw → Val → Prop
-  | .arg position, v => args[position]? = some v
-  | .apply written positions, v => ∃ operands rs, atPositions args positions = some operands ∧
-      Run written operands rs ∧ rs.head? = some v
-
-/-- The values that operands name, in order. -/
-def DenotesAll (Run : Raw → List Val → List Val → Prop) (args : List Val) :
-    List (Operand Raw) → List Val → Prop
-  | [], [] => True
-  | o :: os, v :: vs => Operand.Denotes Run args o v ∧ DenotesAll Run args os vs
-  | _, _ => False
-
-/-- What a requirement says of the values it names: an order, a bound, a number, a truth
-value. -/
-def _root_.Zkc.Core.Requirement.Relation (R : Reading Val) : Requirement Raw → List Val → Prop
-  | .le .., [a, b] => ∀ x y, R.nat a = some x → R.nat b = some y → x ≤ y
-  | .lt .., [a, b] => ∀ x y, R.nat a = some x → R.nat b = some y → x < y
-  | .atLeast _ n, [a] => ∀ x, R.nat a = some x → n ≤ x
-  | .below _ n, [a] => ∀ x, R.nat a = some x → x < n
-  | .exactly _ n, [a] => ∀ x, R.nat a = some x → x = n
-  | .difference _ _ n, [b, a] => ∀ x y, R.nat b = some x → R.nat a = some y → x - y = n
-  | .holds _, [a] => R.bool a = some true
-  | .bounded _, [a] => ∃ x, R.nat a = some x
-  | _, _ => False
+/-! ## The values that a requirement names, of a valuation -/
 
 /-- The identifiers that the operands of a requirement resolve to have, where there is one,
 values that the operands name. -/
@@ -140,12 +109,6 @@ def OperandsAt (Run : Raw → List Val → List Val → Prop) (args : List Val) 
   | o :: os, i :: is => (∀ id, i = some id → ∃ v, ρ id = some v ∧ o.Denotes Run args v) ∧
       OperandsAt Run args ρ os is
   | _, _ => False
-
-/-- A requirement holds of the operands' values: the values it names are there, and it says
-of them what is true. -/
-def _root_.Zkc.Core.Requirement.Holds (Run : Raw → List Val → List Val → Prop) (R : Reading Val)
-    (args : List Val) (requirement : Requirement Raw) : Prop :=
-  ∃ vs, DenotesAll Run args requirement.operands vs ∧ requirement.Relation R vs
 
 end
 
