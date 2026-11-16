@@ -6,13 +6,17 @@ public import Zkc.Core.Program.LocalRules
 @[expose] public section
 
 /-!
-What the check of facts knows of the written operations of a function, and what the local
-dialect tells it.
+What the analysis knows of the written operations of a function, and what the local dialect
+tells it.
 
 Per written operation: what it requires (the table of requirements), the ranges of its natural
 results from those of its operands (the table of ranges of arithmetic), and how its result
 reads. One value for `LocalRaw V`: a role program's computations are local operations and read
-it too. Every operation of a function computes, by its written form.
+it too. Every operation of a function is a value, by its written form, except a call of a
+function that can stop with a reason, which is kept in order; and the operations that the core
+owns whose meaning is symmetric in two operands of one type commute (`OwnedName.commutes`), a
+row of the vocabulary and a call do not (`localFactRules`). Following decides types and
+performers by equality and two operations by their written forms (`localSkelRules`).
 -/
 
 namespace Zkc.Core
@@ -408,15 +412,51 @@ def localPlace : LocalRaw V → Nat
   | .literal _ data => FactCheck.mixNumbers 2 data
   | .call callee => 4 * callee.number + 3
 
+/-- Whether an operation that the core owns gives, on two operands of one type, a result that
+does not depend on their order, for all values (`Meaning/Local.lean`): the sum and the product
+of naturals, the conjunction and the disjunction of truth values, and the equality of naturals
+and of truth values. Not the difference, the quotient, the remainder, the power or the order of
+naturals; not a concatenation, nor a sequence, a tuple or a record made of two values of one
+type, whose order is in the result. -/
+def OwnedName.commutes : OwnedName → Bool
+  | .natAdd | .natMul | .natEqual | .boolAnd | .boolOr | .boolEqual => true
+  | .natSub | .natDiv | .natRem | .natPow | .natLess | .boolNot => false
+  | .seqLength | .seqAt | .seqSlice | .seqConcat | .seqFill | .seqSized | .natBelow => false
+  | .seqUnsized | .finToNat | .finWiden | .make | .get | .take | .variant => false
+
+/-- Whether a written operation of a function commutes: an operation that the core owns, as it
+is written (with no types and no numbers), when `OwnedName.commutes` says so. A row of the
+vocabulary does not commute here, whatever a model does: that a row commutes would be a law that
+every model must satisfy, which needs the model and is a later piece. A call does not commute:
+nothing says that the callee's result does not depend on the order of its inputs. -/
+def LocalRaw.commutes : LocalRaw V → Bool
+  | .owned name [] [] => name.commutes
+  | .owned _ (_ :: _) _ => false
+  | .owned _ [] (_ :: _) => false
+  | .row _ => false
+  | .literal _ _ => false
+  | .call _ => false
+
 variable (V) in
-/-- What the local dialect tells the check of facts: every operation of a function computes, by
-its written form. -/
+/-- What the local dialect tells the analysis: every operation of a function is a value, by its
+written form, except a call of a function that can stop with a reason, which is kept in order;
+an operation that the core owns whose meaning is symmetric in its two operands commutes
+(`LocalRaw.commutes`). -/
 def localFactRules (fns : List (FnHeader V)) : FactRules (localDialect V fns) (LocalRaw V) where
-  written := fun o => some (LocalOp.print o)
+  written := fun o => bif LocalOp.canStop o then none else some (LocalOp.print o)
+  commutes := LocalRaw.commutes
   range := localRange
   noValue := Ty.noValue
   ops := localOpFacts V
   place := localPlace
+
+variable (V) in
+/-- What following decides for a function: types and performers by equality, and two operations
+by their written forms. -/
+def localSkelRules (fns : List (FnHeader V)) : SkelRules (localDialect V fns) where
+  sameTy := inferInstanceAs (DecidableEq V.Ty)
+  sameWho := inferInstanceAs (DecidableEq Unit)
+  sameOp := fun o o' => decide (LocalOp.print o = LocalOp.print o')
 
 end
 

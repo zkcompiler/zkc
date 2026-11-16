@@ -10,16 +10,15 @@ Two transformations of a stored function, written as plain functions on the prog
 
 Neither is trusted, and nothing is proved of them. What one of them gives is accepted only
 through the step of a transformation (`transform`, `Transform/Step.lean`): the step elaborates
-it, checks its facts and decides that it follows the skeleton of its source. A wrong result of
-either is refused there.
+it and follows the analysis of its source with it. A wrong result of either is refused there.
 
 - `removeUnused` drops the operations none of whose results is used later, in a body and in its
   regions. A guard, a form of control and a call of a function that can stop are kept; the
   regions of a form of control are walked.
 - `shareRepeated` drops an operation that has the written form and the operand names of an
   earlier operation in scope, and puts the earlier operation's results for its results in what
-  follows. Only an operation that the decision calls a value (`localValueRules`) is shared: every
-  operation except a call of a function that can stop.
+  follows. Only an operation that the analysis calls a value (`(localFactRules V fns).written`)
+  is shared: every operation except a call of a function that can stop.
 
 Both read the headers of the callees for whether a call can stop: a call is dropped or shared
 only when a header with its key says that the callee cannot stop.
@@ -30,9 +29,10 @@ namespace Zkc.Core
 section
 variable {V : Vocabulary}
 
-/-- Whether a written operation of a function is a value for the decision, by the headers of
-the callees: every operation except a call of a function that can stop. A call whose key no
-header has is not taken for a value. -/
+/-- Whether a written operation of a function is a value for the analysis, as
+`(localFactRules V fns).written` says of the operation that it writes, by the headers of the
+callees: every operation except a call of a function that can stop. A call whose key no header
+has is not taken for a value. -/
 def LocalRaw.isValue (fns : List (FnHeader V)) : LocalRaw V → Bool
   | .row _ => true
   | .owned .. => true
@@ -180,7 +180,7 @@ end
 
 /-- A stored function in which a later operation with the written form and the operand names of
 an earlier one in scope is dropped, its results replaced by the earlier ones in what follows; only
-among the operations that the decision calls values. Not trusted: what it gives is accepted
+among the operations that the analysis calls values. Not trusted: what it gives is accepted
 through `transform`. -/
 def shareRepeated (fns : List (FnHeader V)) (region : Region (LocalRaw V) Unit) :
     Region (LocalRaw V) Unit :=

@@ -1,24 +1,44 @@
 module
 
 public import Zkc.Core.Facts.Local
-public import Zkc.Core.Facts.Learning
+public import Zkc.Core.Facts.Theorems
 public import Zkc.Core.Meaning.Validity
 public import Zkc.Core.Meaning.Stops
 
 @[expose] public section
 
 /-!
-What the check of facts knows of the local operations is true of their meaning.
+The laws of the function dialect, and the soundness of the check of facts for a function.
 
 A value of a function is a value of some type. An operation, by its written form, applied to
 valid values of its operands gives valid results: the relation `LocalRun`, which is a function
-of the written form and the operands because the written form names the operation. Of it,
-`localOpFacts` is lawful: the form of a result, the ranges of arithmetic (TY8), and what the
-type of a natural says. What an operation requires is enough for it: where every requirement
-holds of its operands' values, it does not stop `undefined`; and every value that a requirement
-names beyond the operands (a length, the truth value of a domain row) is there.
--/
+of the written form and the operands because the written form names the operation. Of it, what
+the analysis knows of the written operations is true: the form of a result, the ranges of
+arithmetic (TY8), and what the type of a natural says. What an operation requires is enough for
+it: where every requirement holds of its operands' values, it does not stop `undefined`; and
+every value that a requirement names beyond the operands (a length, the truth value of a domain
+row) is there.
 
+A written form gives results on operands when it is the printed form of a local operation that
+returns those results on those operands (`LocalReturns`), whatever the values, valid or not: the
+law `computes` of the value form is for every value, and so is the law `commutative`, since the
+meaning of each operation that commutes is symmetric for all values of its operands. Against
+callees with distinct keys, of which those whose headers say that they cannot stop stop only
+`undefined`, the local operations that are values satisfy the laws of the value form
+(`localFactRules_binding`); following, which decides two operations by their printed forms, is
+lawful over headers with distinct keys (`localSkelRules_lawful`).
+
+The callees that a statement about a function is made against (`Callees`): distinct keys, never
+`undefined` on valid inputs, valid results, and only `undefined` as a stop where the header says
+that the function cannot stop. Against them the rules of the function dialect are lawful for the
+semantics of a function (`localFactRules_lawful`), read as the check of facts reads it
+(`localReading`), with the relation `LocalReturns`, validity of the model (`ValidDyn`) and the
+stop `undefined`; the facts of the table are about `ValidRun` of `LocalReturns`, which is
+`LocalRun` (`Analysis.Facts.localRun_of_valid`, `Analysis.Facts.validRun_of_local`). The law
+`collect` asks that the collected values be as many as the size given: without that it is false
+of the function dialect (`Analysis.collect_without_length`). So the check of facts is sound for a
+function (`checkFacts_sound`), from the soundness of the analysis (`Analysis.analyse_safe`).
+-/
 namespace Zkc.Core
 
 namespace FactCheck
@@ -75,11 +95,6 @@ theorem toDyns_length : ∀ {items : List V.Ty} (vs : HList M.Val items),
     (toDyns vs).length = items.length
   | [], .nil => rfl
   | _ :: _, .cons _ vs => by simp [toDyns, toDyns_length vs]
-
-theorem toDyns_append : ∀ {as bs : List V.Ty} (xs : HList M.Val as) (ys : HList M.Val bs),
-    toDyns (xs.append ys) = toDyns xs ++ toDyns ys
-  | [], _, .nil, _ => rfl
-  | _ :: _, _, .cons x xs, ys => by simp [HList.append, toDyns, toDyns_append xs ys]
 
 theorem toDyns_inj : ∀ {as bs : List V.Ty} (xs : HList M.Val as) (ys : HList M.Val bs),
     toDyns xs = toDyns ys → as = bs ∧ HEq xs ys
@@ -370,13 +385,6 @@ theorem localRun_ranges {w : LocalRaw V} {as rs : List (Dyn M)} (known : List (O
         subst run
         obtain ⟨rfl, has⟩ := onOne_has (at_ 0 x rfl (by simp [toDyns])) i rr e
         exact ⟨_, x, rfl, rfl, has⟩
-
-/-- What `OpFacts` says of the local operations is true of their meaning. -/
-theorem localOpFacts_lawful (distinct : (fns.map (·.key)).Nodup) :
-    OpFacts.Lawful (localOpFacts V) (localReading M) (LocalRun M table) where
-  functional _ _ _ _ h1 h2 := localRun_functional distinct h1 h2
-  form _ _ _ _ hf h := localRun_form hf h
-  ranges _ _ _ known h hk := localRun_ranges known h hk
 
 /-- No valid value has a type that the local dialect says has no value. -/
 theorem localNoValue_valid {τ : V.Ty} (v : M.Val τ) (valid : M.Valid τ v) :
@@ -775,6 +783,428 @@ theorem localRequires_runs {ins res : List V.Ty} (o : LocalOp V fns ins res)
 
 end
 
+/-! ## Valid values in scope, payloads and collected values -/
+
+section
+variable {V : Vocabulary} {M : Model V}
+
+/-- The values of variables are valid when every value in scope is. -/
+theorem env_all_valid {Γ : Ctx V.Ty} {env : Env M.Val Γ}
+    (h : ∀ τ (x : Var Γ τ), M.Valid τ (env.get x)) :
+    ∀ {items : List V.Ty} (xs : HList (Var Γ) items), (env.all xs).All M.Valid
+  | [], .nil => trivial
+  | _ :: _, .cons x rest => HList.all_cons.mpr ⟨h _ x, env_all_valid h rest⟩
+
+/-- The payload of an alternative is valid. -/
+def PickValid : {payloads : List V.Ty} → Pick M.Val payloads → Prop
+  | _, .here v => M.Valid _ v
+  | _, .there p => PickValid p
+
+theorem Tys.pick_valid : ∀ (alts : Tys V.TypeKey) (c : alts.Choice M.toCarriers),
+    Tys.ValidChoice M.toCarriers alts c → PickValid (Tys.pick M alts c)
+  | .nil, c, _ => nomatch c
+  | .cons _ _, .inl _, h => h
+  | .cons _ rest, .inr c, h => Tys.pick_valid rest c h
+
+theorem pickValid_cast {ps qs : List V.Ty} (h : ps = qs) (p : Pick M.Val ps) :
+    PickValid (cast (congrArg (Pick M.Val) h) p) ↔ PickValid p := by
+  subst h
+  rfl
+
+theorem valid_cast {τ τ' : V.Ty} (h : τ = τ') (v : M.Val τ) :
+    M.Valid τ' (cast (congrArg M.Val h) v) ↔ M.Valid τ v := by
+  subst h
+  rfl
+
+theorem localPick_valid {t : V.Ty} {payloads : List V.Ty}
+    (h : ∃ key alternatives, t = .variant key alternatives ∧ payloads = alternatives.toList)
+    (v : M.Val t) (valid : M.Valid t v) : PickValid (localPick M h v) := by
+  simp only [localPick]
+  rw [pickValid_cast (by obtain ⟨_, _, e, q⟩ := h; rw [Ty.alternatives_of e, q])]
+  apply Tys.pick_valid
+  have := (valid_cast (Ty.eq_variant h) v).mpr valid
+  exact this
+
+/-- Values collected so far: as many of each type as iterations, each valid. -/
+def CollectedOK : {each : List V.Ty} → HList (fun a => List (M.Val a)) each → Nat → Prop
+  | [], .nil, _ => True
+  | a :: _, .cons vs rest, i => vs.length = i ∧ (∀ v, v ∈ vs → M.Valid a v) ∧ CollectedOK rest i
+
+theorem collectedOK_empties : ∀ (each : List V.Ty),
+    CollectedOK (HList.empties (V := M.Val) each) 0
+  | [] => trivial
+  | _ :: rest => ⟨rfl, fun _ m => (nomatch m), collectedOK_empties rest⟩
+
+theorem collectedOK_push : ∀ {each : List V.Ty} {acc : HList (fun a => List (M.Val a)) each}
+    {i : Nat} {vs : HList M.Val each}, CollectedOK acc i → vs.All M.Valid →
+    CollectedOK (acc.push vs) (i + 1)
+  | [], .nil, _, .nil, _, _ => trivial
+  | _ :: _, .cons xs rest, _, .cons v more, h, all => by
+      obtain ⟨len, valid, others⟩ := h
+      refine ⟨by simp [len], fun w m => ?_, collectedOK_push others (HList.all_cons.mp all).2⟩
+      rcases List.mem_append.mp m with m | m
+      · exact valid w m
+      · simp only [List.mem_singleton] at m
+        subst m
+        exact (HList.all_cons.mp all).1
+
+theorem collected_valid {fns : List (FnHeader V)} {table : FnTable M fns} (size : Option Nat)
+    {n : Nat} (fits : ∀ m, size = some m → n = m) :
+    ∀ {each : List V.Ty} {acc : HList (fun a => List (M.Val a)) each}, CollectedOK acc n →
+      ((localSem M fns table).collected size acc).All M.Valid
+  | [], .nil, _ => trivial
+  | _ :: _, .cons vs rest, h => by
+      obtain ⟨len, valid, others⟩ := h
+      exact HList.all_cons.mpr ⟨⟨valid, fun m e => by rw [len]; exact fits m e⟩,
+        collected_valid size fits others⟩
+
+end
+
 end FactCheck
+
+open FactCheck (Dyn toDyns toDyns_inj)
+
+section
+variable {V : Vocabulary} (M : Model V) {fns : List (FnHeader V)} (table : FnTable M fns)
+
+/-- A written form gives results on operands when it is the printed form of a local operation
+that returns those results on those operands. The values need not be valid. -/
+def LocalReturns (written : LocalRaw V) (operands results : List (Dyn M)) : Prop :=
+  ∃ (ins res : List V.Ty) (o : LocalOp V fns ins res) (args : HList M.Val ins)
+    (returned : HList M.Val res), o.print = written ∧ toDyns args = operands ∧
+    toDyns returned = results ∧ localOp M table o args = .done returned
+
+/-- Values with their types, of the local semantics, are the values of some type of the check of
+facts. -/
+theorem localDyns_eq_toDyns :
+    ∀ {items : List V.Ty} (values : HList M.Val items),
+      (localSem M fns table).dyns values = toDyns values
+  | [], .nil => rfl
+  | _ :: _, .cons v rest => by
+      show ⟨_, v⟩ :: (localSem M fns table).dyns rest = ⟨_, v⟩ :: toDyns rest
+      rw [localDyns_eq_toDyns rest]
+
+/-- The equality of naturals as the core computes it (`Nat.beq`) does not depend on the order of
+its operands. -/
+theorem natEqual_symmetric (first second : Nat) : Nat.beq first second = Nat.beq second first :=
+  Bool.eq_iff_iff.mpr (by simp only [Nat.beq_eq]; exact eq_comm)
+
+/-- The local operations that are values satisfy the laws of the value form: one that is a
+value returns what its printed form gives, or stops `undefined`; a printed form gives one
+result; and a printed form that commutes, which is that of an operation that the core owns whose
+meaning is symmetric in its two operands, gives the same result on them exchanged. Its
+hypotheses: the callees have distinct keys, so that a printed form names one operation; and a
+callee whose header says that it cannot stop stops only `undefined`, since a call of it is a
+value. -/
+theorem localFactRules_binding (distinct : (fns.map (·.key)).Nodup)
+    (quiet : ∀ hdr (callee : Member fns hdr) (args : HList M.Val hdr.ins), hdr.canStop = false →
+      (table hdr callee args).Stops (· = .undefined)) :
+    (localFactRules V fns).values.Binding (localSem M fns table) (LocalReturns M table)
+      (· = Stop.undefined) where
+  computes := by
+    intro ins res o raw written key path values
+    cases stops : LocalOp.canStop o with
+    | true => simp only [FactRules.values, localFactRules, stops, Bool.cond_true, reduceCtorEq] at written
+    | false =>
+        simp only [FactRules.values, localFactRules, stops, Bool.cond_false, Option.some.injEq] at written
+        show (∃ results, localOp M table o values = .done results ∧ _) ∨
+          ∃ stop, localOp M table o values = .halt stop ∧ stop = Stop.undefined
+        have undefinedOnly := localOp_stops_undefined M table quiet o values stops
+        cases ran : localOp M table o values with
+        | done returned =>
+            exact .inl ⟨returned, rfl, ins, res, o, values, returned, written,
+              (localDyns_eq_toDyns M table values).symm,
+              (localDyns_eq_toDyns M table returned).symm, ran⟩
+        | halt stop =>
+            rw [ran] at undefinedOnly
+            exact .inr ⟨stop, rfl, undefinedOnly⟩
+        | call op _ => exact nomatch op
+  functional := by
+    intro raw operands results results' first second
+    obtain ⟨ins, res, o, args, returned, printed, sameArgs, sameResults, ran⟩ := first
+    obtain ⟨ins', res', o', args', returned', printed', sameArgs', sameResults', ran'⟩ := second
+    obtain ⟨rfl, sameValues⟩ := toDyns_inj args args' (sameArgs.trans sameArgs'.symm)
+    cases eq_of_heq sameValues
+    obtain ⟨rfl, sameOp⟩ :=
+      Sigma.mk.inj (LocalOp.print_injective distinct o o' (printed.trans printed'.symm))
+    cases eq_of_heq sameOp
+    rw [ran] at ran'
+    cases ran'
+    rw [← sameResults, ← sameResults']
+  commutative := by
+    intro raw commutes first second results returns
+    obtain ⟨ins, res, o, args, returned, printed, sameArgs, sameResults, ran⟩ := returns
+    subst printed
+    cases o with
+    | row => simp [FactRules.values, localFactRules, LocalOp.print, LocalRaw.commutes] at commutes
+    | literal => simp [FactRules.values, localFactRules, LocalOp.print, LocalRaw.commutes] at commutes
+    | call => simp [FactRules.values, localFactRules, LocalOp.print, LocalRaw.commutes] at commutes
+    | owned o =>
+        cases o <;> simp [FactRules.values, localFactRules, LocalOp.print, OwnedOp.name, LocalRaw.commutes,
+          OwnedName.commutes] at commutes
+        all_goals
+          rcases args with _ | ⟨a, _ | ⟨b, _ | _⟩⟩
+          simp only [toDyns, List.cons.injEq] at sameArgs
+          obtain ⟨rfl, rfl, -⟩ := sameArgs
+          refine ⟨_, _, .owned _, .cons b (.cons a .nil), returned, rfl, rfl, sameResults, ?_⟩
+          rw [← ran]
+          simp only [localOp, ownedOp, Nat.add_comm, Nat.mul_comm, Bool.and_comm, Bool.or_comm,
+            Bool.beq_comm, natEqual_symmetric]
+
+end
+
+/-- Operations that following finds the same are the same, over headers with distinct keys: a
+printed form names one operation. -/
+theorem localSkelRules_lawful {V : Vocabulary} {fns : List (FnHeader V)}
+    (distinct : (fns.map (·.key)).Nodup) : (localSkelRules V fns).Lawful := by
+  intro ins res res' o o' found
+  exact Sigma.mk.inj (LocalOp.print_injective distinct o o' (of_decide_eq_true found))
+
+/-! ## The callees of a function -/
+
+section
+variable {V : Vocabulary}
+
+/-- The callees that a statement about a function is made against: distinct keys, never
+`undefined` on valid inputs, valid results, and only `undefined` as a stop where the header says
+that the function cannot stop. -/
+structure Callees (M : Model V) {fns : List (FnHeader V)} (table : FnTable M fns) : Prop where
+  distinct : (fns.map (·.key)).Nodup
+  safe : FnTable.Safe table
+  keeps : FnTable.KeepsValidity table
+  quiet : ∀ hdr (callee : Member fns hdr) (args : HList M.Val hdr.ins), hdr.canStop = false →
+    (table hdr callee args).Stops (· = .undefined)
+
+end
+
+
+namespace Analysis
+
+open FactCheck
+
+namespace Facts
+
+section
+variable {V : Vocabulary} {M : Model V} {fns : List (FnHeader V)} {table : FnTable M fns}
+
+/-- A local operation that returns valid results on valid operands, by its written form, is a run
+of the check of facts. -/
+theorem localRun_of_valid {w : LocalRaw V} {as rs : List (Dyn M)}
+    (h : ValidRun (localSem M fns table) (LocalReturns M table) (ValidDyn M) w as rs) :
+    LocalRun M table w as rs := by
+  obtain ⟨⟨ins, res, o, args, returned, printed, sameArgs, sameResults, ran⟩, va, vr⟩ := h
+  subst sameArgs sameResults
+  exact ⟨ins, res, o, args, returned, printed, rfl, rfl, valid_of_toDyns va, valid_of_toDyns vr,
+    ran⟩
+
+/-- A run of the check of facts is a local operation that returns valid results on valid
+operands. -/
+theorem validRun_of_local {w : LocalRaw V} {as rs : List (Dyn M)} (h : LocalRun M table w as rs) :
+    ValidRun (localSem M fns table) (LocalReturns M table) (ValidDyn M) w as rs := by
+  obtain ⟨ins, res, o, a, r, printed, ha, hr, va, vr, ran⟩ := h
+  subst ha hr
+  exact ⟨⟨ins, res, o, a, r, printed, rfl, rfl, ran⟩, toDyns_valid va, toDyns_valid vr⟩
+
+end
+
+section
+variable {Raw Val : Type} {Run Run' : Raw → List Val → List Val → Prop}
+  (sub : ∀ w as rs, Run w as rs → Run' w as rs)
+include sub
+
+/-- What an operand of a requirement names of one relation it names of a larger one. -/
+theorem operand_denotes_mono {args : List Val} :
+    ∀ {o : Operand Raw} {v : Val}, o.Denotes Run args v → o.Denotes Run' args v
+  | .arg _, _, h => h
+  | .apply _ _, _, ⟨operands, rs, positions, run, head⟩ =>
+      ⟨operands, rs, positions, sub _ _ _ run, head⟩
+
+theorem denotesAll_mono {args : List Val} :
+    ∀ {os : List (Operand Raw)} {vs : List Val}, DenotesAll Run args os vs →
+      DenotesAll Run' args os vs
+  | [], [], h => h
+  | _ :: _, _ :: _, ⟨first, rest⟩ => ⟨operand_denotes_mono sub first, denotesAll_mono rest⟩
+  | [], _ :: _, h => h.elim
+  | _ :: _, [], h => h.elim
+
+/-- A requirement that holds of one relation holds of a larger one. -/
+theorem requirement_holds_mono {R : Reading Val} {args : List Val} {req : Requirement Raw}
+    (h : req.Holds Run R args) : req.Holds Run' R args := by
+  obtain ⟨vs, d, rel⟩ := h
+  exact ⟨vs, denotesAll_mono sub d, rel⟩
+
+end
+
+section
+variable {V : Vocabulary} (M : Model V)
+
+/-- The payload of a valid variant, as the core says it, is valid as the laws say it. -/
+theorem pickValid_local {fns : List (FnHeader V)} (table : FnTable M fns) :
+    ∀ {payloads : List V.Ty} (p : Pick M.Val payloads), FactCheck.PickValid (M := M) p →
+      PickValid (localSem M fns table) (ValidDyn M) p
+  | _, .here _, h => h
+  | _, .there p, h => pickValid_local table p h
+
+end
+
+end Facts
+
+section
+variable {V : Vocabulary} (M : Model V) {fns : List (FnHeader V)} (table : FnTable M fns)
+
+/-- The law `collect` as first stated, without the length of the collected values, is false of
+the function dialect: a sequence of a written size is valid only of that length. -/
+theorem collect_without_length :
+    ¬ ∀ (size : Option Nat) (a : V.Ty) (vs : List ((localSem M fns table).Val a)),
+      (∀ v, v ∈ vs → ValidDyn M ⟨a, v⟩) →
+      ValidDyn M ⟨(localDialect V fns).collected size a, (localSem M fns table).collect size a vs⟩ :=
+  fun law => by
+    have := (law (some 1) .nat [] (fun _ m => nomatch m)).2 1 rfl
+    cases this
+
+end
+
+end Analysis
+
+open FactCheck
+
+section
+variable {V : Vocabulary} (M : Model V) {fns : List (FnHeader V)} (table : FnTable M fns)
+
+/-- **The laws hold of the function dialect.** Against callees with distinct keys that never stop
+`undefined` on valid inputs, keep validity, and stop only `undefined` where their headers say that
+they cannot stop, the rules of the function dialect are lawful for its semantics, for any
+permitted replies. -/
+theorem localFactRules_lawful (distinct : (fns.map (·.key)).Nodup) (safe : FnTable.Safe table)
+    (keeps : FnTable.KeepsValidity table)
+    (quiet : ∀ hdr (callee : Member fns hdr) (args : HList M.Val hdr.ins), hdr.canStop = false →
+      (table hdr callee args).Stops (· = .undefined))
+    (permitted : ∀ op, (localSem M fns table).S.Reply op → Prop) :
+    (localFactRules V fns).Lawful (localSem M fns table) permitted (localReading M)
+      (LocalReturns M table) (ValidDyn M) (· = .undefined) where
+  binding := localFactRules_binding M table distinct quiet
+  ops :=
+    { functional := fun _ _ _ _ h1 h2 =>
+        localRun_functional distinct (Analysis.Facts.localRun_of_valid h1) (Analysis.Facts.localRun_of_valid h2)
+      form := fun _ _ _ _ hf h => localRun_form hf (Analysis.Facts.localRun_of_valid h)
+      ranges := fun _ _ _ known h hk => localRun_ranges known (Analysis.Facts.localRun_of_valid h) hk }
+  keeps := by
+    intro raw operands results run valid
+    obtain ⟨ins, res, o, args, returned, printed, sameArgs, sameResults, ran⟩ := run
+    subst sameArgs sameResults
+    exact toDyns_valid (localOp_valid table keeps o args returned (valid_of_toDyns valid) ran)
+  defined := by
+    intro ins res o raw written key path values valid holds
+    cases stops : LocalOp.canStop o with
+    | true => simp [localFactRules, stops] at written
+    | false =>
+        simp only [localFactRules, stops, Bool.cond_false, Option.some.injEq]
+          at written
+        subst written
+        have va : values.All M.Valid := valid_of_toDyns fun d m =>
+          valid d (by rw [localDyns_eq_toDyns M table]; exact m)
+        have defined := localOp_defined safe o values va fun req m => by
+          have h := holds req m
+          rw [localDyns_eq_toDyns M table] at h
+          exact Analysis.Facts.requirement_holds_mono (fun _ _ _ run => Analysis.Facts.localRun_of_valid run) h
+        have onlyUndefined := localOp_stops_undefined M table quiet o values stops
+        show ∃ results, localOp M table o values = .done results
+        cases hrun : localOp M table o values with
+        | done r => exact ⟨r, rfl⟩
+        | halt h =>
+            rw [hrun] at defined onlyUndefined
+            exact absurd onlyUndefined defined
+        | call op _ => exact nomatch op
+  named := by
+    intro ins res o raw written values valid req m operand mo w ps e
+    cases stops : LocalOp.canStop o with
+    | true => simp [localFactRules, stops] at written
+    | false =>
+        simp only [localFactRules, stops, Bool.cond_false, Option.some.injEq]
+          at written
+        subst written
+        have va : values.All M.Valid := valid_of_toDyns fun d m =>
+          valid d (by rw [localDyns_eq_toDyns M table]; exact m)
+        obtain ⟨as, rs, hp, run, one⟩ := localRequires_runs o values va req m operand mo w ps e
+        refine ⟨as, rs, by rw [localDyns_eq_toDyns M table]; exact hp,
+          Analysis.Facts.validRun_of_local run, one⟩
+  effect := by
+    intro ins res o written key path values valid
+    have va : values.All M.Valid := valid_of_toDyns fun d m =>
+      valid d (by rw [localDyns_eq_toDyns M table]; exact m)
+    cases o with
+    | call callee =>
+        have stops := safe _ callee values va
+        show (table _ callee values).Every permitted _ _
+        cases hrun : table _ callee values with
+        | done r =>
+            show ∀ v, v ∈ (localSem M fns table).dyns r → ValidDyn M v
+            rw [localDyns_eq_toDyns M table]
+            exact toDyns_valid (keeps _ callee values r va hrun)
+        | halt h =>
+            rw [hrun] at stops
+            exact stops
+        | call op _ => exact nomatch op
+    | row => simp [localFactRules, LocalOp.canStop] at written
+    | owned => simp [localFactRules, LocalOp.canStop] at written
+    | literal => simp [localFactRules, LocalOp.canStop] at written
+  range := fun _ _ v h valid => localRange_has h v valid
+  noValue := fun _ v valid => localNoValue_valid (fns := fns) v valid
+  condition := by
+    intro w t ok v _
+    subst ok
+    rfl
+  count := by
+    intro w t ok v _
+    subst ok
+    rfl
+  pick := fun ok v valid => Analysis.Facts.pickValid_local M table _ (localPick_valid ok v valid)
+  index := fun _ _ => ⟨trivial, rfl⟩
+  collect := fun _ _ _ length valid => ⟨valid, length⟩
+  begin := fun _ _ _ => trivial
+  settle := fun _ _ _ => trivial
+  stop := fun _ _ _ => nofun
+
+end
+
+/-! ## The check of facts of a function -/
+
+section
+variable {V : Vocabulary} {M : Model V} {fns : List (FnHeader V)}
+
+open FactCheck in
+/-- **The check of facts is sound for functions.** A body with distinct addresses that the check
+accepts, against callees with distinct keys that never stop `undefined` on valid inputs, keep
+validity and stop only `undefined` where their headers say that they cannot stop: on valid
+inputs every loop respects the bound that the check gave it, and the body never stops
+`undefined` and returns valid values. -/
+theorem checkFacts_sound {table : FnTable M fns} (callees : Callees M table) (definition : Key)
+    {types outs : List V.Ty} (inputs : Names types)
+    (body : Term (localDialect V fns) (Ctx.empty.extend inputs) outs)
+    (distinct : Term.Distinct body) {bounds : List (Place × Nat)}
+    (accepted : checkFacts (localFactRules V fns) (localSkelRules V fns) definition none inputs
+      body = .ok bounds)
+    (F : List (Place × Nat))
+    (recorded : ∀ p b, (p, b) ∈ F → p.definition = definition → p.role = none → (p, b) ∈ bounds)
+    (ins : HList M.Val types) (valid : ins.All M.Valid) :
+    body.EveryLoop (localSem M fns table) (fun _ _ => True)
+        (Annotation.Bounded ⟨F⟩ definition none) [] [] (Env.empty.extend inputs ins) ∧
+      (body.denote (localSem M fns table) [] (Env.empty.extend inputs ins)).Every
+        (fun _ _ => True) (fun outs => outs.All M.Valid) (· ≠ .undefined) := by
+  obtain ⟨refused, same⟩ := checkFacts_ok accepted
+  subst same
+  have safe := Analysis.analyse_safe (localFactRules V fns) (localSkelRules V fns)
+    (localSem M fns table) (fun _ _ => True) (localReading M) (LocalReturns M table) (ValidDyn M)
+    (· = .undefined)
+    (localFactRules_lawful M table callees.distinct callees.safe callees.keeps callees.quiet
+      (fun _ _ => True))
+    (localSkelRules_lawful callees.distinct) definition none inputs body distinct refused F
+    (fun p b m d r => List.mem_reverse.mp (recorded p b m d r))
+    ins (by rw [localDyns_eq_toDyns M table]; exact toDyns_valid valid)
+  refine ⟨safe.1, Process.every_mono _ _ (fun outs returned => ?_) (fun _ h => h) safe.2⟩
+  rw [localDyns_eq_toDyns M table] at returned
+  exact valid_of_toDyns returned
+
+end
 
 end Zkc.Core

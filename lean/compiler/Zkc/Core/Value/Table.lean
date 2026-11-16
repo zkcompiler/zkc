@@ -18,12 +18,12 @@ operation and from its operands' identifiers, and the entry of an identifier the
 that identifier (`Program/BitTree.lean`): a list, read as a list; nothing else depends on that.
 
 The state (`St`) carries the table, the next identifier, and the refusals and the bounds of
-loops that the check of facts finds. The identifiers of the names in scope are a map from names
+loops that the analysis finds. The identifiers of the names in scope are a map from names
 to identifiers (`Ctx Nat`): where a term binds names to its context, the same names are bound to
 the new identifiers, a later name hiding an earlier one as in the context (`bindIds`).
 
-The check of facts (`Facts/`) and the value form of a term (`Value/Skeleton.lean`) are built on
-this table; its declarations are in the namespace `FactCheck`.
+The value form of a term (`Value/Skeleton.lean`) and the walk of the analysis that builds it
+(`Facts/Walk.lean`) are built on this table; its declarations are in the namespace `FactCheck`.
 -/
 
 namespace Zkc.Core
@@ -220,8 +220,8 @@ def idsOf {α : Type} {Γ : Ctx α} (ids : Ctx Nat) : {items : List α} → HLis
 
 /-- The identifiers of the names in scope with the names of a binding bound to identifiers, in
 order, as `Ctx.extend` binds them to their types: a later name hides an earlier one. The walk
-gives as many identifiers as names (`opStep_grows`, `fresh`); names left without one would stay
-as they were. -/
+gives as many identifiers as names (`fresh`, `FactCheck.share_length`); names left without one
+would stay as they were. -/
 def bindIds {α : Type} (ids : Ctx Nat) : {types : List α} → Names types → List Nat → Ctx Nat
   | [], .nil, _ => ids
   | _ :: _, .cons name rest, i :: is => bindIds (ids.insert name i) rest is

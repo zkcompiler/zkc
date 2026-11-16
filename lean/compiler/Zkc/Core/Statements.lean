@@ -79,35 +79,33 @@ def headersSayWhoStops : Prop :=
       (ins : HList M.Val hdr.ins), ins.All M.Valid → hdr.canStop = false →
       (fnMeaning M a.program f ins).Stops fun _ => False
 
-/-- Execution and state: two accepted functions of which the second follows the skeleton of the
-first mean the same. For two bodies of functions over the same headers and of the same types,
-each with distinct addresses and accepted by the check of facts, of which the second follows the
-skeleton of the first (`followsSkeleton`): against callees with distinct keys that never stop
-`undefined` on valid inputs, keep validity, and stop only `undefined` where their headers say
-that they cannot stop, on every valid input the two processes mean the same, for any replies
-permitted. Following alone does not give it: the check of facts of the second is a premise. -/
+/-- Execution and state: two functions of which the second follows the first mean the same. For
+two bodies of functions over the same headers and of the same types, each with distinct
+addresses, of which the first is accepted by the check of facts and the second follows its
+analysis with no refusal and no place that differs (`Analysis.follow`): against callees with
+distinct keys that never stop `undefined` on valid inputs, keep validity, and stop only
+`undefined` where their headers say that they cannot stop (`Callees`), on every valid input the
+two processes mean the same, for any replies permitted. Nothing is assumed of the second. -/
 def functionsSame : Prop :=
-  ∀ (fns : List (FnHeader V)) {types outs : List V.Ty} (inputs inputs' : Names types)
-    (body : Term (localDialect V fns) (Ctx.empty.extend inputs) outs)
-    (body' : Term (localDialect V fns) (Ctx.empty.extend inputs') outs)
-    (definition definition' : Key) (bounds bounds' : List (Place × Nat)),
-    Term.Distinct body → Term.Distinct body' →
-    checkFacts (localFactRules V fns) definition none inputs body = .ok bounds →
-    checkFacts (localFactRules V fns) definition' none inputs' body' = .ok bounds' →
-    followsSkeleton (localValueRules V fns) (localSkelRules V fns) inputs inputs' body body' =
-      true →
-    ∀ (M : Model V) (table : FnTable M fns), (fns.map (·.key)).Nodup → FnTable.Safe table →
-      FnTable.KeepsValidity table →
-      (∀ hdr (callee : Member fns hdr) (args : HList M.Val hdr.ins), hdr.canStop = false →
-        (table hdr callee args).Stops (· = .undefined)) →
+  ∀ (fns : List (FnHeader V)) (M : Model V) (table : FnTable M fns), Callees M table →
+    ∀ {types outs : List V.Ty} (inputs inputs' : Names types)
+      (body : Term (localDialect V fns) (Ctx.empty.extend inputs) outs)
+      (body' : Term (localDialect V fns) (Ctx.empty.extend inputs') outs)
+      (definition definition' : Key), Term.Distinct body → Term.Distinct body' →
+    ∀ (bounds : List (Place × Nat)),
+      checkFacts (localFactRules V fns) (localSkelRules V fns) definition none inputs body =
+        .ok bounds →
+      (Analysis.follow (localFactRules V fns) (localSkelRules V fns) definition' none
+        (Analysis.analyse (localFactRules V fns) (localSkelRules V fns) definition none inputs
+          body) inputs' body').accepted = true →
       ∀ ins : HList M.Val types, ins.All M.Valid → ∀ permitted : ∀ op, NoSig.Reply op → Prop,
         Process.SameWhen permitted
           (body.denote (localSem M fns table) [] (Env.empty.extend inputs ins))
           (body'.denote (localSem M fns table) [] (Env.empty.extend inputs' ins))
 
 /-- Execution and state: a transformation of a function that the step accepts relates functions
-with the same meaning. When `transform` accepts a source and a target, both elaborated and
-accepted by the check of facts and the target following the skeleton of the source: against
+with the same meaning. When `transform` accepts a source and a target, both elaborated, the
+source accepted by the check of facts and the target following its analysis: against
 callees with distinct keys that never stop `undefined` on valid inputs, keep validity, and stop
 only `undefined` where their headers say that they cannot stop, the two return the same on every
 valid input (`AcceptedFn.SameAs`). -/

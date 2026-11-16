@@ -43,10 +43,6 @@ def Support (n : Nat) (ρ : Valuation Val) : Prop := ∀ i, n ≤ i → ρ i = n
 def Valuation.setFrom (ρ : Valuation Val) (lo : Nat) (vs : List Val) : Valuation Val :=
   fun i => if lo ≤ i ∧ i < lo + vs.length then vs[i - lo]? else ρ i
 
-/-- The valuation below `t`. -/
-def Valuation.below (ρ : Valuation Val) (t : Nat) : Valuation Val :=
-  fun i => if i < t then ρ i else none
-
 /-- The valuation with the values given at `lo, lo + 1, ...` where it has none. -/
 def Valuation.fill (ρ : Valuation Val) (lo : Nat) (vs : List Val) : Valuation Val :=
   fun i => match ρ i with
@@ -244,27 +240,6 @@ theorem valuesOf_setFrom (ρ : Valuation Val) (lo : Nat) (vs : List Val) :
   simp only [Option.getD_some, Nat.one_mul]
   rw [setFrom_at _ _ _ _ hj]
 
-theorem below_le {ρ ρ' : Valuation Val} {t : Nat} (hs : Support t ρ) (h : ρ.Le ρ') :
-    ρ.Le (ρ'.below t) := fun i v e => by
-  simp only [Valuation.below]
-  by_cases hi : i < t
-  · rw [ite_eq_left hi]; exact h i v e
-  · rw [hs i (by omega)] at e; cases e
-
-theorem below_support (ρ : Valuation Val) (t : Nat) : Support t (ρ.below t) := fun i hi => by
-  simp only [Valuation.below]
-  rw [ite_eq_right (by omega)]
-
-theorem below_eq {ρ : Valuation Val} {t i : Nat} (hi : i < t) : ρ.below t i = ρ i := by
-  simp only [Valuation.below]
-  rw [ite_eq_left hi]
-
-theorem below_self_le (ρ : Valuation Val) (t : Nat) : (ρ.below t).Le ρ := fun i v e => by
-  simp only [Valuation.below] at e
-  split at e
-  · exact e
-  · cases e
-
 theorem fill_le (ρ : Valuation Val) (lo : Nat) (vs : List Val) : ρ.Le (ρ.fill lo vs) :=
   fun i v h => by simp only [Valuation.fill, h]
 
@@ -362,25 +337,6 @@ theorem consistent_setFrom {Run : Raw → List Val → List Val → Prop} {ρ : 
     rw [(low e he).2 j hj] at hv
     rw [(low e he).1 a ha]
     exact hd e he j hj hv a ha
-
-/-- The valuation below `t` keeps the entries below `t`, and has no value for the others. -/
-theorem consistent_below {Run : Raw → List Val → List Val → Prop} {ρ : Valuation Val}
-    {tbl : Table Raw} {t : Nat} (split : ∀ e, e ∈ tbl → e.lo + e.count ≤ t ∨ t ≤ e.lo)
-    (args : ∀ e, e ∈ tbl → ∀ a, a ∈ e.args → a < e.lo) (hc : Consistent Run ρ tbl)
-    (hd : Closed ρ tbl) : Consistent Run (ρ.below t) tbl ∧ Closed (ρ.below t) tbl := by
-  constructor
-  · intro e he vs hvs j hj v hv
-    rcases split e he with low | high
-    · rw [valuesOf_congr (fun a ha => below_eq (by have := args e he a ha; omega))] at hvs
-      rw [below_eq (by omega)] at hv
-      exact hc e he vs hvs j hj v hv
-    · rw [below_support ρ t _ (by omega)] at hv; cases hv
-  · intro e he j hj hv a ha
-    rcases split e he with low | high
-    · rw [below_eq (by omega)] at hv
-      rw [below_eq (by have := args e he a ha; omega)]
-      exact hd e he j hj hv a ha
-    · exact absurd (below_support ρ t _ (by omega)) hv
 
 /-- An application of the operation of an entry at the values of its operands, which gives
 `rs`: the results keep the values they have, which are those of `rs` because the operation is a

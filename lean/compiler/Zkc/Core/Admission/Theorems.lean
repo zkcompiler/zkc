@@ -24,9 +24,8 @@ function whose body the check of facts accepts, so the program is `Defs.Accepted
 annotation, and the theorem of the check of facts for a program gives `functionsSafe`,
 `functionsKeepValidity` and `annotationHolds`. A function whose header says that it cannot stop
 stops only `undefined` (`Defs.fnTable_stops_undefined`), and never that, so it does not stop
-(`headersSayWhoStops`). Two accepted functions of which the second follows the skeleton of the
-first mean the same (`functionsSame`): it is the theorem `functions_follow_same` of
-`Transform/Local.lean`. A transformation that the step accepts relates functions with the same
+(`headersSayWhoStops`). Two functions of which the second follows the first mean the same
+(`functionsSame`): it is the theorem `functions_follow_same` of `Transform/StepSound.lean`. A transformation that the step accepts relates functions with the same
 meaning (`transformSound`, the theorem `transform_sound` of `Transform/StepSound.lean`), and
 every function of a program whose functions follow those of another means what the function of
 the other with its header means (`replacedFunctionsSame`, the theorem
@@ -46,7 +45,8 @@ theorem checkDefinition_fn {hs : Headers V} {definition : Definition V} {e : Ela
     {bounds : List (Place × Nat)} (h : checkDefinition hs definition = .ok (e, bounds)) :
     elaborateDefinition hs definition = .ok e ∧ ∃ hdr inputs body ok fresh,
       e = .fn hdr inputs body ok fresh ∧
-      checkFacts (localFactRules V hs.fns) hdr.key none inputs body = .ok bounds := by
+      checkFacts (localFactRules V hs.fns) (localSkelRules V hs.fns) hdr.key none inputs body =
+        .ok bounds := by
   obtain ⟨e', elaborated, checked⟩ := ok_of_bind h
   obtain ⟨b, facts, same⟩ := ok_of_map checked
   cases same
@@ -211,14 +211,13 @@ theorem headersSayWhoStops (c : Functions V) (admits : c.admit = admit) :
     (Process.every_and _ _ (safe named assoc a h M hdr f ins valid)
       (Defs.fnTable_stops_undefined M a.program.defs hdr f ins quiet))
 
-/-- Execution and state: two accepted functions of which the second follows the skeleton of the
-first mean the same (`functions_follow_same`, `Transform/Local.lean`). -/
+/-- Execution and state: two functions of which the second follows the first mean the same
+(`functions_follow_same`, `Transform/StepSound.lean`). -/
 theorem functionsSame : Statements.functionsSame (V := V) :=
-  fun _ _ _ inputs inputs' body body' definition definition' _ _ distinctBody distinctBody'
-      accepted accepted' decided M table distinct safe keeps quiet ins valid permitted =>
-    functions_follow_same inputs inputs' body body' definition definition' distinctBody
-      distinctBody' accepted accepted' decided M table distinct safe keeps quiet ins valid
-      permitted
+  fun _ _ _ callees _ _ inputs inputs' body body' definition definition' distinct distinct' _
+      accepted followed ins valid permitted =>
+    functions_follow_same callees inputs inputs' body body' definition definition' distinct
+      distinct' accepted followed ins valid permitted
 
 /-- Execution and state: a transformation of a function that the step accepts relates functions
 with the same meaning (`transform_sound`, `Transform/StepSound.lean`). -/

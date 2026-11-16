@@ -37,7 +37,8 @@ def verdict (ins outs : List standard.Ty) (canStop : Bool)
     Option (List (ProgramRefusal standard) ⊕ List (Place × Nat)) :=
   match elabFn [] ⟨⟨1⟩, ins, outs, canStop, none⟩ body with
   | .ok ⟨inputs, fn, _⟩ =>
-      match checkFacts (localFactRules standard []) ⟨1⟩ none inputs fn with
+      match checkFacts (localFactRules standard []) (localSkelRules standard []) ⟨1⟩ none inputs
+          fn with
       | .ok bounds => some (.inr bounds)
       | .error refusals => some (.inl refusals)
   | .error _ => none

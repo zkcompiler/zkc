@@ -7,7 +7,9 @@ The check of facts on functions written by names, elaborated and walked by the k
 
 The conformance cases of the reference that a function can express are named by their
 identifiers: each is accepted or refused as the case says, and a refusal is compared whole;
-`T-Z8` and `I-4e-total` are also accepted with the operands of a sum exchanged. Then, for each
+`T-Z8` and `I-4e-total` are also accepted with the operands of a sum exchanged. One case is
+accepted against the reference, and named for what it shows (`facts-commutativity-recovered`):
+a fact on `i + 1` holds of `1 + i`, since the table places the operands of a sum in one order. Then, for each
 operation with a domain and for a restricted row, an application that is accepted and one that
 is refused; then what sharing and the scope of facts must do in sibling regions, in loops, after
 a choice, and for a new name bound where a program would bind a name again, which elaboration
@@ -87,7 +89,8 @@ def verdict (fns : List (FnHeader field)) (hdr : FnHeader field)
     Option (List (ProgramRefusal field) ⊕ List (Place × Nat)) :=
   match elabFn fns hdr body with
   | .ok ⟨inputs, fn, _⟩ =>
-      match checkFacts (localFactRules field fns) hdr.key none inputs fn with
+      match checkFacts (localFactRules field fns) (localSkelRules field fns) hdr.key none
+          inputs fn with
       | .ok bounds => some (.inr bounds)
       | .error refusals => some (.inl refusals)
   | .error _ => none
@@ -604,8 +607,10 @@ def «facts-no-transitivity» := check [.nat, .nat, .nat] [.nat] true <| .mk [0,
   .guard ⟨6⟩ () 13 .reject,
   .op ⟨7⟩ [14] minus [2, 0]] [14]
 
-/-- A fact on `i + 1` says nothing of `1 + i`. -/
-def «facts-no-commutativity-recovery» := check [naturals 8, .nat] [.nat] true <| .mk [0, 1] [
+/-- A fact on `i + 1` holds of `1 + i`: the table places the operands of a sum in one order, so
+the two are one value. (The reference's case `facts-no-commutativity-recovery` refuses this: a
+check that keeps the operands in the order written does not recover it.) -/
+def «facts-commutativity-recovered» := check [naturals 8, .nat] [.nat] true <| .mk [0, 1] [
   .op ⟨1⟩ [10] (natural 1) [],
   .op ⟨2⟩ [11] plus [1, 10],
   .op ⟨3⟩ [12] (natural 8) [],
@@ -696,8 +701,7 @@ example : «V-F1c» = some (.inl
 example : «facts-direct-order» = accepted := by decide +kernel
 example : «facts-no-transitivity» = some (.inl
     [unjustified 7 minus (.le (.arg 1) (.arg 0)) [anyNat, anyNat]]) := by decide +kernel
-example : «facts-no-commutativity-recovery» = some (.inl
-    [unjustified 8 (item (naturals 8)) (.below (.arg 1) 8) [some ⟨1, none⟩]]) := by decide +kernel
+example : «facts-commutativity-recovered» = accepted := by decide +kernel
 
 /-- A restricted operation is shared, and checked again where it is applied again: justified in
 one region and applied in the other, it is refused there. -/
@@ -954,15 +958,14 @@ example : elaborationRefusal [elements, .nat] [F] true (afterGuard [.op ⟨7⟩ 
   decide +kernel
 
 /-- A new name `16` bound to `x + 1`, to `i + 1` and to `1 + i`, and `xs[16]`: the fact on `x`
-says nothing of `x + 1`; it holds of `i + 1`, the same written computation as `x`; and not of
-`1 + i`. -/
+says nothing of `x + 1`; it holds of `i + 1`, the same written computation as `x`; and of
+`1 + i`, which the table places as `i + 1`. -/
 example : check [elements, .nat] [F] true (afterGuard [.op ⟨7⟩ [16] plus [10, 14]] 16) = some (.inl
     [unjustified 8 (item elements) (.lt (.arg 1) lengthOf) [some ⟨2, none⟩, anyNat]]) := by
   decide +kernel
 example : check [elements, .nat] [F] true (afterGuard [.op ⟨7⟩ [16] plus [1, 14]] 16) = accepted := by
   decide +kernel
-example : check [elements, .nat] [F] true (afterGuard [.op ⟨7⟩ [16] plus [14, 1]] 16) = some (.inl
-    [unjustified 8 (item elements) (.lt (.arg 1) lengthOf) [some ⟨1, none⟩, anyNat]]) := by
+example : check [elements, .nat] [F] true (afterGuard [.op ⟨7⟩ [16] plus [14, 1]] 16) = accepted := by
   decide +kernel
 
 

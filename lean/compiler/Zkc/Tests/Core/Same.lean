@@ -1,21 +1,23 @@
-import Zkc.Core.Transform.Local
+import Zkc.Core.Transform.StepSound
 import Zkc.Tests.Core.Facts
 
 /-!
-Whether a function follows the skeleton of another, on functions written by names, elaborated
-and decided by the kernel.
+Whether a function follows another, on functions written by names, elaborated and walked by the
+kernel.
 
 Each pair is two bodies of a function with the key 1 over the same callees, each elaborated
-against them; the decision walks the second along the skeleton of the first. Accepted: a
-repeated computation shared; two computations between guards in the other order, with one
-computation that nothing uses; computations moved around guards that stay in their order; a
-computation moved out of a loop; the same program with other names for its values; a call of a
-function that cannot stop, shared; `x + y` against `y + x`, since addition commutes; a product
-and a sum with their operands exchanged inside a loop after a guard. Refused: `x - y` against
-`y - x`; `(x + y) + z` against `x + (y + z)` (associativity is not a law that the decision
-knows); a row of the vocabulary with its operands exchanged; two guards in the other order; a
-guard dropped; a call of a function that can stop moved across a guard; two loops against one
-loop that computes the same; a different key on a guard.
+against them; the first is analysed, and the second follows its analysis
+(`Analysis.follow`): `decided` says whether the second follows with no place that differs, and
+`safelyFollows` gives the whole verdict, no place that differs and no refusal
+(`Analysis.Exit.accepted`). Accepted: a repeated computation shared; two computations between
+guards in the other order, with one computation that nothing uses; computations moved around
+guards that stay in their order; a computation moved out of a loop; the same program with other
+names for its values; a call of a function that cannot stop, shared; `x + y` against `y + x`,
+since addition commutes; a product and a sum with their operands exchanged inside a loop after a
+guard. Refused: `x - y` against `y - x`; `(x + y) + z` against `x + (y + z)` (associativity is
+not a law that following knows); a row of the vocabulary with its operands exchanged; two guards
+in the other order; a guard dropped; a call of a function that can stop moved across a guard;
+two loops against one loop that computes the same; a different key on a guard.
 
 Then each instruction that following keeps in order, accepted: a choice, a case analysis, a
 block, a loop as often as a value says and a call of a function that can stop, each the same
@@ -25,11 +27,10 @@ a guard's condition differs, only a loop's initial values, only a block's number
 operand of a call of a function that can stop. Then the theorem for functions, applied to two
 pairs, the second of them `x + y` and `y + x`: the two processes are equal on valid inputs.
 
-Last, the two controls on the definitions of the value form: why following asks for leaves made
-in order (`Skel.Fresh`), and why what follows an attempt runs only from an end of the attempt
-that can return (`Skel.Runs.attempt`).
+Last, the two controls on the definitions of the value form, on the walk of the analysis over a
+toy dialect: why following asks for leaves made in order (`Skel.Fresh`), and why what follows an
+attempt runs only from an end of the attempt that can return (`Skel.Runs.attempt`).
 -/
-
 namespace Zkc.Core.SameTests
 
 open FactsTests (field F plus minus times natural fieldRow natOrTruth)
@@ -37,18 +38,33 @@ open FactsTests (field F plus minus times natural fieldRow natOrTruth)
 -- What the check of facts returns is compared whole.
 deriving instance DecidableEq for Except
 
-/-! ## The decision -/
+/-! ## Following -/
 
-/-- The decision on two bodies of a function with the key 1, the input and result types and the
+/-- Following on two bodies of a function with the key 1, the input and result types and the
 callees given, each elaborated against the callees with whether it can stop: whether the second
-follows the skeleton of the first; nothing when one of them does not elaborate. -/
+follows the analysis of the first with no place that differs; nothing when one of them does not
+elaborate. -/
 def decided (fns : List (FnHeader field)) (ins outs : List field.Ty) (stops stops' : Bool)
     (body body' : Region (LocalRaw field) Unit) : Option Bool :=
   match elabFn fns ⟨⟨1⟩, ins, outs, stops, none⟩ body,
       elabFn fns ⟨⟨1⟩, ins, outs, stops', none⟩ body' with
   | .ok ⟨inputs, fn, _⟩, .ok ⟨inputs', fn', _⟩ =>
-      some (followsSkeleton (localValueRules field fns) (localSkelRules field fns) inputs inputs'
-        fn fn')
+      some (Analysis.follow (localFactRules field fns) (localSkelRules field fns) ⟨1⟩ none
+        (Analysis.analyse (localFactRules field fns) (localSkelRules field fns) ⟨1⟩ none inputs fn)
+        inputs' fn').state.differs.isEmpty
+  | _, _ => none
+
+/-- The whole verdict of following on two bodies, as `decided`: whether the second follows the
+analysis of the first with no place that differs and no refusal; nothing when one of them does
+not elaborate. -/
+def safelyFollows (fns : List (FnHeader field)) (ins outs : List field.Ty) (stops stops' : Bool)
+    (body body' : Region (LocalRaw field) Unit) : Option Bool :=
+  match elabFn fns ⟨⟨1⟩, ins, outs, stops, none⟩ body,
+      elabFn fns ⟨⟨1⟩, ins, outs, stops', none⟩ body' with
+  | .ok ⟨inputs, fn, _⟩, .ok ⟨inputs', fn', _⟩ =>
+      some (Analysis.follow (localFactRules field fns) (localSkelRules field fns) ⟨1⟩ none
+        (Analysis.analyse (localFactRules field fns) (localSkelRules field fns) ⟨1⟩ none inputs fn)
+        inputs' fn').accepted
   | _, _ => none
 
 /-- A callee with the key 9 from a natural to a natural, which can stop or cannot. -/
@@ -142,8 +158,7 @@ def sum : Region (LocalRaw field) Unit := .mk [0, 1] [.op ⟨1⟩ [10] plus [0, 
 def commutedSum : Region (LocalRaw field) Unit := .mk [0, 1] [.op ⟨1⟩ [10] plus [1, 0]] [10]
 
 /-- `x + y` against `y + x`: accepted, since addition commutes; the table places `y + x` with its
-operands in the order of `x + y`, so the two are one value. It was refused before the decision
-knew that law. -/
+operands in the order of `x + y`, so the two are one value. -/
 example : decided [] [.nat, .nat] [.nat] false false sum commutedSum = some true := by
   decide +kernel
 
@@ -175,14 +190,14 @@ example : decided [] [.nat, .nat] [.nat] false false
   decide +kernel
 
 /-- `(x + y) + z` against `x + (y + z)`: the same value only by the associativity of addition,
-which is not a law that the decision knows; only the order of two operands is. -/
+which is not a law that following knows; only the order of two operands is. -/
 example : decided [] [.nat, .nat, .nat] [.nat] false false
     (.mk [0, 1, 2] [.op ⟨1⟩ [10] plus [0, 1], .op ⟨2⟩ [11] plus [10, 2]] [11])
     (.mk [0, 1, 2] [.op ⟨1⟩ [10] plus [1, 2], .op ⟨2⟩ [11] plus [0, 10]] [11]) = some false := by
   decide +kernel
 
 /-- A row of the vocabulary with its operands exchanged: the addition of field elements does not
-commute for the decision, whatever a model does; that a row commutes would be a law of the
+commute for the analysis, whatever a model does; that a row commutes would be a law of the
 model. -/
 example : decided [] [F, F] [F] false false
     (.mk [0, 1] [.op ⟨1⟩ [10] (fieldRow .add) [0, 1]] [10])
@@ -207,8 +222,8 @@ example : decided [callee true] [.nat, .bool] [.nat] true true
     (.mk [0, 1] [.guard ⟨2⟩ () 1 .reject, .op ⟨1⟩ [10] (.call ⟨9⟩) [0]] [10]) = some false := by
   decide +kernel
 
-/-- Two loops against one loop that computes the same: the decision keeps every loop in order,
-as an entry of the skeleton, and does not decide the fusion of loops. -/
+/-- Two loops against one loop that computes the same: following keeps every loop in order, as an
+entry of the skeleton, and does not decide the fusion of loops. -/
 example : decided [] [.nat, .nat] [.nat, .nat] false false
     (.mk [0, 1] [
       .op ⟨1⟩ [10] (natural 0) [],
@@ -396,9 +411,19 @@ def afterGuardsTyped := (elaborated guarded [.nat, .nat] true afterGuards).get (
 /-- No callee. -/
 def noCallees (M : Model field) : FnTable M [] := fun _ callee _ => nomatch callee
 
+/-- No callee is a table of callees that a statement about a function can be made against. -/
+theorem noCallees_callees (M : Model field) : Callees M (noCallees M) :=
+  ⟨List.nodup_nil, (fun _ callee => nomatch callee), (fun _ callee => nomatch callee),
+    (fun _ callee => nomatch callee)⟩
+
+/-- The whole verdict on the two bodies: the second follows the first with no place that differs
+and no refusal. -/
+example : safelyFollows [] guarded [.nat, .nat] true true aroundGuards afterGuards = some true := by
+  decide +kernel
+
 /-- The two bodies mean the same on every valid input, in every model, for any replies
-permitted: both are accepted by the check of facts, have distinct addresses, and the second
-follows the skeleton of the first. -/
+permitted: both have distinct addresses, the first is accepted by the check of facts, and the
+second follows its analysis with no place that differs and no refusal. -/
 example (M : Model field) (ins : HList M.Val guarded) (valid : ins.All M.Valid)
     (permitted : ∀ op, NoSig.Reply op → Prop) :
     Process.SameWhen permitted
@@ -406,13 +431,11 @@ example (M : Model field) (ins : HList M.Val guarded) (valid : ins.All M.Valid)
         (Env.empty.extend aroundGuardsTyped.1 ins))
       (afterGuardsTyped.2.denote (localSem M [] (noCallees M)) []
         (Env.empty.extend afterGuardsTyped.1 ins)) :=
-  functions_follow_same aroundGuardsTyped.1 afterGuardsTyped.1 aroundGuardsTyped.2
-    afterGuardsTyped.2 ⟨1⟩ ⟨1⟩ (bounds := []) (bounds' := [])
+  functions_follow_same (noCallees_callees M) aroundGuardsTyped.1 afterGuardsTyped.1
+    aroundGuardsTyped.2 afterGuardsTyped.2 ⟨1⟩ ⟨1⟩
     ((Term.repeatedAddress_eq_none _).mp (by decide +kernel))
-    ((Term.repeatedAddress_eq_none _).mp (by decide +kernel))
-    (by decide +kernel) (by decide +kernel) (by decide +kernel) M
-    (noCallees M) List.nodup_nil (fun _ callee => nomatch callee)
-    (fun _ callee => nomatch callee) (fun _ callee => nomatch callee) ins valid permitted
+    ((Term.repeatedAddress_eq_none _).mp (by decide +kernel)) (bounds := [])
+    (by decide +kernel) (by decide +kernel) ins valid permitted
 
 /-- So, a function having no effects, the two processes are equal. -/
 example (M : Model field) (ins : HList M.Val guarded) (valid : ins.All M.Valid) :
@@ -420,13 +443,11 @@ example (M : Model field) (ins : HList M.Val guarded) (valid : ins.All M.Valid) 
         (Env.empty.extend aroundGuardsTyped.1 ins) =
       afterGuardsTyped.2.denote (localSem M [] (noCallees M)) []
         (Env.empty.extend afterGuardsTyped.1 ins) :=
-  functions_follow_equal aroundGuardsTyped.1 afterGuardsTyped.1 aroundGuardsTyped.2
-    afterGuardsTyped.2 ⟨1⟩ ⟨1⟩ (bounds := []) (bounds' := [])
+  functions_follow_equal (noCallees_callees M) aroundGuardsTyped.1 afterGuardsTyped.1
+    aroundGuardsTyped.2 afterGuardsTyped.2 ⟨1⟩ ⟨1⟩
     ((Term.repeatedAddress_eq_none _).mp (by decide +kernel))
-    ((Term.repeatedAddress_eq_none _).mp (by decide +kernel))
-    (by decide +kernel) (by decide +kernel) (by decide +kernel) M
-    (noCallees M) List.nodup_nil (fun _ callee => nomatch callee)
-    (fun _ callee => nomatch callee) (fun _ callee => nomatch callee) ins valid
+    ((Term.repeatedAddress_eq_none _).mp (by decide +kernel)) (bounds := [])
+    (by decide +kernel) (by decide +kernel) ins valid
 
 /-- `x + y`, elaborated. -/
 def sumTyped := (elaborated [.nat, .nat] [.nat] false sum).get (by decide +kernel)
@@ -434,19 +455,21 @@ def sumTyped := (elaborated [.nat, .nat] [.nat] false sum).get (by decide +kerne
 /-- `y + x`, elaborated. -/
 def commutedSumTyped := (elaborated [.nat, .nat] [.nat] false commutedSum).get (by decide +kernel)
 
-/-- `x + y` and `y + x` have equal processes on every valid input, in every model: the decision
+/-- The whole verdict on `x + y` and `y + x`: accepted. -/
+example : safelyFollows [] [.nat, .nat] [.nat] false false sum commutedSum = some true := by
+  decide +kernel
+
+/-- `x + y` and `y + x` have equal processes on every valid input, in every model: following
 accepts the pair, and the law `commutative` of the local operations makes that sound. -/
 example (M : Model field) (ins : HList M.Val [.nat, .nat]) (valid : ins.All M.Valid) :
     sumTyped.2.denote (localSem M [] (noCallees M)) [] (Env.empty.extend sumTyped.1 ins) =
       commutedSumTyped.2.denote (localSem M [] (noCallees M)) []
         (Env.empty.extend commutedSumTyped.1 ins) :=
-  functions_follow_equal sumTyped.1 commutedSumTyped.1 sumTyped.2 commutedSumTyped.2 ⟨1⟩ ⟨1⟩
-    (bounds := []) (bounds' := [])
+  functions_follow_equal (noCallees_callees M) sumTyped.1 commutedSumTyped.1 sumTyped.2
+    commutedSumTyped.2 ⟨1⟩ ⟨1⟩
     ((Term.repeatedAddress_eq_none _).mp (by decide +kernel))
-    ((Term.repeatedAddress_eq_none _).mp (by decide +kernel))
-    (by decide +kernel) (by decide +kernel) (by decide +kernel) M
-    (noCallees M) List.nodup_nil (fun _ callee => nomatch callee)
-    (fun _ callee => nomatch callee) (fun _ callee => nomatch callee) ins valid
+    ((Term.repeatedAddress_eq_none _).mp (by decide +kernel)) (bounds := [])
+    (by decide +kernel) (by decide +kernel) ins valid
 
 /-! ## Controls on the definitions of the value form -/
 
@@ -487,13 +510,17 @@ def toySem : Semantics toy where
   settle := fun _ _ _ => .call () fun _ => .done ()
   collect := fun _ _ _ => false
 
-/-- Asking is kept in order; failing is a value; nothing commutes. -/
-def toyRules : ValueRules toy Unit where
+/-- Asking is kept in order; failing is a value; nothing commutes; nothing is known of a type or
+of an operation. -/
+def toyRules : FactRules toy Unit where
   written := fun {_ _} o => match o with
     | .ask => none
     | .fail => some ()
-  place := fun _ => 0
   commutes := fun _ => false
+  range := fun _ => none
+  noValue := fun _ => false
+  ops := ⟨fun _ => [], fun _ _ => [], fun _ => none⟩
+  place := fun _ => 0
 
 /-- Following decides types and performers by equality, and finds any two operations the
 same. -/
@@ -522,21 +549,24 @@ def reusedLeaf : Skel toy [()] := .effect ⟨1⟩ ToyOp.ask [] 5 (.ret [5])
 /-- The name `0` at the identifier `5`. -/
 def atFive : Ctx Nat := Ctx.empty.insert 0 5
 
-/-- A state above the identifier `5`. -/
-def aboveFive : FactCheck.St Unit Unit := ⟨FactCheck.Table.empty toyRules.place, 6, [], []⟩
+/-- A state of the walk above the identifier `5`. -/
+def aboveFive : Analysis.State Unit Unit :=
+  ⟨⟨FactCheck.Table.empty toyRules.place, 6, [], []⟩, []⟩
 
-/-- Both terms follow the skeleton from the state above `5`: following binds the name of the
-reply to the skeleton's leaf, which is the identifier of the name `0`. -/
-example : (returnsReply.follows toyRules toyChecks reusedLeaf atFive aboveFive).isSome = true := by
+/-- Both terms follow the skeleton from the state above `5` with no place that differs: following
+binds the name of the reply to the skeleton's leaf, which is the identifier of the name `0`. -/
+example : (Analysis.walk toyRules toyChecks ⟨1⟩ none [] returnsReply (some reusedLeaf) atFive
+    FactCheck.Known.empty aboveFive).state.differs = [] := by
   decide +kernel
-example : (returnsInput.follows toyRules toyChecks reusedLeaf atFive aboveFive).isSome = true := by
+example : (Analysis.walk toyRules toyChecks ⟨1⟩ none [] returnsInput (some reusedLeaf) atFive
+    FactCheck.Known.empty aboveFive).state.differs = [] := by
   decide +kernel
 
 /-- The skeleton's leaf is not made above the values that the run already has. -/
 example : ¬ reusedLeaf.Fresh 6 := fun fresh => absurd (fresh : 6 ≤ 5 ∧ _).1 (by decide)
 
 /-- And the two terms do not mean the same: on the reply `false`, one returns `false` and the
-other `true`. So following needs `Skel.Fresh` (`Term.follows_runs`). -/
+other `true`. So following needs `Skel.Fresh` (`Analysis.ValueSide.walk_runs_followed`). -/
 example : ¬ Process.SameWhen (fun _ _ => True)
     (returnsReply.denote toySem [] fun _ _ _ => true)
     (returnsInput.denote toySem [] fun _ _ _ => true) := by
@@ -558,7 +588,7 @@ theorem failsAfterAttempt_safe : (failsAfterAttempt.denote toySem [] Env.empty).
   fun _ never => never.elim
 
 /-- Failing is a value of the dialect: it stops with `true`, which stands for `undefined`. -/
-theorem toyBinding : toyRules.Binding toySem (fun _ _ _ => False) (· = true) where
+theorem toyBinding : toyRules.values.Binding toySem (fun _ _ _ => False) (· = true) where
   computes := by
     intro _ _ o raw written key path values
     cases o with
@@ -567,18 +597,21 @@ theorem toyBinding : toyRules.Binding toySem (fun _ _ _ => False) (· = true) wh
   functional := fun _ _ _ _ ran => ran.elim
   commutative := fun _ _ _ _ _ ran => ran.elim
 
-/-- The term runs its own skeleton (`Term.skeleton_runs`), whose attempt asks nothing of what
-follows it, since its end cannot return. -/
+/-- The walk of the analysis from the empty table. -/
+def fromEmpty : Analysis.State Unit Unit := ⟨⟨FactCheck.Table.empty toyRules.place, 0, [], []⟩, []⟩
+
+/-- The term runs the skeleton that the walk builds (`Analysis.ValueSide.walk_runs_built`), whose
+attempt asks nothing of what follows it, since its end cannot return. -/
 example : Skel.Runs toySem (fun _ _ => False) (fun _ _ _ => False)
-    (failsAfterAttempt.skeleton toyRules Ctx.empty
-      ⟨FactCheck.Table.empty toyRules.place, 0, [], []⟩).2.table [] (fun _ => none)
-    (failsAfterAttempt.skeleton toyRules Ctx.empty
-      ⟨FactCheck.Table.empty toyRules.place, 0, [], []⟩).1
+    (Analysis.walk toyRules toyChecks ⟨1⟩ none [] failsAfterAttempt none Ctx.empty
+      FactCheck.Known.empty fromEmpty).state.st.table [] (fun _ => none)
+    (Analysis.walk toyRules toyChecks ⟨1⟩ none [] failsAfterAttempt none Ctx.empty
+      FactCheck.Known.empty fromEmpty).skel
     (failsAfterAttempt.denote toySem [] Env.empty) :=
-  (Term.skeleton_runs toySem (fun _ _ => False) (fun _ _ _ => False) toyRules toyBinding
-    failsAfterAttempt Ctx.empty ⟨FactCheck.Table.empty toyRules.place, 0, [], []⟩ [] Env.empty
-    (fun _ => none) trivial (fun _ _ => rfl)
-    (fun _ x => nomatch (Ctx.find?_empty x.name).symm.trans x.typed) failsAfterAttempt_safe).1
+  Analysis.ValueSide.walk_runs_built toyRules toyChecks ⟨1⟩ none toySem (fun _ _ => False)
+    (fun _ _ _ => False) toyBinding [] failsAfterAttempt Ctx.empty FactCheck.Known.empty fromEmpty
+    [] Env.empty (fun _ => none) trivial (fun _ _ => rfl)
+    (fun _ x => nomatch (Ctx.find?_empty x.name).symm.trans x.typed) failsAfterAttempt_safe
 
 /-- What follows the attempt stops `undefined`, and so does not run what follows it in the
 skeleton: a run of the attempt that asked for what follows from every end, not only from one

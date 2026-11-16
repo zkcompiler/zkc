@@ -12,13 +12,15 @@ what is expected, `transform` accepts each step, and `transform_then` composes t
 passes again on a function with a choice, a case analysis and a block, with unused and repeated
 operations inside and around them: each stored result compared whole, each step accepted.
 
-Then the refusals, each whole: a target that elaboration refuses. Three targets that follow the
-skeleton of their source (`SameTests.decided`) and that the check of facts refuses, since
-following does not decide that a target is safe: an operation with a domain moved above the
-guard that justified it, read before a choice in whose region it was justified, and read before
-a loop in whose body a guard justified it. A target that elaborates and passes the check of
-facts but is not decided (two guards exchanged), and a source that is not accepted. A control: a
-target that computes another result (an operand replaced by another) is not decided; a target
+Then the refusals, each whole: a target that elaboration refuses. Three targets that follow their
+source with no place that differs (`SameTests.decided`) and that the analysis refuses while it
+follows (`SameTests.safelyFollows`), since a value has no place in the skeleton and its
+requirements are decided where the target evaluates it: an operation with a domain moved above
+the guard that justified it, read before a choice in whose region it was justified, and read
+before a loop in whose body a guard justified it; the step refuses each with the target's
+refusal. A target that elaborates but differs from its source (two guards exchanged), refused
+with the place where it differs, and a source that is not accepted. A control: a target that
+computes another result (an operand replaced by another) differs where it returns; a target
 with the operands of a sum exchanged is accepted.
 
 Last, a program of two functions whose first, called by the second, is replaced by what
@@ -27,7 +29,6 @@ Last, a program of two functions whose first, called by the second, is replaced 
 meant. A control: replacing the first function by one that computes another result, the
 functions do not follow.
 -/
-
 namespace Zkc.Core.TransformTests
 
 open FactsTests (field F plus times natural element fieldRow natOrTruth unjustified place)
@@ -277,9 +278,8 @@ def secondStep : Transformed field [] header :=
   (accepted? (transform [] header (removeUnused [] source)
     (shareRepeated [] (removeUnused [] source)))).get (by decide +kernel)
 
-/-- The two steps compose: the target of the first is the source of the second, and the source
-of the first means what the target of the second means. -/
-example : firstStep.target = secondStep.source ∧ firstStep.source.SameAs secondStep.target :=
+/-- The two steps compose: the source of the first means what the target of the second means. -/
+example : firstStep.source.SameAs secondStep.target :=
   transform_then (ok_of_accepted (by decide +kernel)) (ok_of_accepted (by decide +kernel))
 
 /-! ## Two steps on a function with regions -/
@@ -378,12 +378,13 @@ example : refusal (transform [] sum sumBody (.mk [0, 1] [.op ⟨1⟩ [10] plus [
     some (.target [⟨.scope, place 1, .name 5⟩]) := by
   decide +kernel
 
-/-! ### What following leaves to the check of facts
+/-! ### A value read before what justifies it
 
-Following does not decide that the target is safe: a value has no place in the skeleton, so a
-target may read an operation with a domain where the source does not justify it, and still
-follow. The step refuses such a target by the target's own check of facts. Each pair is one
-source and one target: the target follows the skeleton of the source (`SameTests.decided`), and
+A value has no place in the skeleton, so a target may read an operation with a domain where the
+source does not justify it and still follow with no place that differs. The analysis decides the
+value's requirements where the target evaluates it, while it follows, and refuses it there. Each
+pair is one source and one target: the target follows the source with no place that differs
+(`SameTests.decided`), the whole verdict of following refuses it (`SameTests.safelyFollows`), and
 `transform` refuses the target, with its whole refusal. -/
 
 /-- A function with the key 1 of a field element, which can stop. -/
@@ -401,13 +402,14 @@ def inverseAboveGuard : Region (LocalRaw field) Unit := .mk [0] [
   .op ⟨3⟩ [11] (fieldRow .inverse) [0],
   .guard ⟨2⟩ () 10 .refused] [11]
 
-/-- The inverse moved above the guard follows: the guard is the skeleton's entry, and the
-inverse a value of the table. -/
-example : SameTests.decided [] [F] [F] true true inverseGuarded inverseAboveGuard = some true := by
+/-- The inverse moved above the guard follows with no place that differs: the guard is the
+skeleton's entry, and the inverse a value of the table. The whole verdict refuses it. -/
+example : SameTests.decided [] [F] [F] true true inverseGuarded inverseAboveGuard = some true ∧
+    SameTests.safelyFollows [] [F] [F] true true inverseGuarded inverseAboveGuard = some false := by
   decide +kernel
 
-/-- A target that the check of facts refuses: the inverse moved above the guard that it is not
-zero. -/
+/-- And the step refuses the target, while it follows: the inverse moved above the guard that it
+is not zero. -/
 example : refusal (transform [] inverse inverseGuarded inverseAboveGuard) =
     some (.target [unjustified 3 (fieldRow .inverse)
       (.holds (.apply (fieldRow .isNonzero) [0])) [none]]) := by
@@ -432,13 +434,16 @@ def inverseBeforeChoice : Region (LocalRaw field) Unit := .mk [0] [
     (.mk [] [] [20])
     (.mk [] [.op ⟨4⟩ [21] (element 0) []] [21])] [11]
 
-/-- The inverse read before the choice follows: the first region gives the same value of the
-table. -/
+/-- The inverse read before the choice follows with no place that differs: the first region gives
+the same value of the table. The whole verdict refuses it. -/
 example : SameTests.decided [] [F] [F] false false inverseInRegion inverseBeforeChoice =
-    some true := by
+      some true ∧
+    SameTests.safelyFollows [] [F] [F] false false inverseInRegion inverseBeforeChoice =
+      some false := by
   decide +kernel
 
-/-- And the step refuses it: before the choice nothing is known of the element. -/
+/-- And the step refuses the target, while it follows: before the choice nothing is known of the
+element. -/
 example : refusal (transform [] inverseOrZero inverseInRegion inverseBeforeChoice) =
     some (.target [unjustified 3 (fieldRow .inverse)
       (.holds (.apply (fieldRow .isNonzero) [0])) [none]]) := by
@@ -464,30 +469,33 @@ def inverseBeforeLoop : Region (LocalRaw field) Unit := .mk [0, 1] [
   .op ⟨5⟩ [22] (fieldRow .inverse) [0],
   .loop ⟨3⟩ () (.count 1) [11] [12] (.mk [20, 21] [.guard ⟨4⟩ () 10 .refused] [22])] [12]
 
-/-- The inverse read before the loop follows: the guard stays in the body, and the body gives the
-same value of the table. On zero iterations and the element zero, the source returns zero and the
-target stops `undefined`. -/
+/-- The inverse read before the loop follows with no place that differs: the guard stays in the
+body, and the body gives the same value of the table. On zero iterations and the element zero,
+the source returns zero and the target stops `undefined`. The whole verdict refuses it. -/
 example : SameTests.decided [] [F, .nat] [F] true true inverseInLoop inverseBeforeLoop =
-    some true := by
+      some true ∧
+    SameTests.safelyFollows [] [F, .nat] [F] true true inverseInLoop inverseBeforeLoop =
+      some false := by
   decide +kernel
 
-/-- And the step refuses it: before the loop nothing is known of the element. -/
+/-- And the step refuses the target, while it follows: before the loop nothing is known of the
+element. -/
 example : refusal (transform [] inverseRepeated inverseInLoop inverseBeforeLoop) =
     some (.target [unjustified 5 (fieldRow .inverse)
       (.holds (.apply (fieldRow .isNonzero) [0])) [none]]) := by
   decide +kernel
 
-/-! ### A target not decided, and a source not accepted -/
+/-! ### A target that differs, and a source not accepted -/
 
 /-- A function with the key 1 of two truth values, which can stop. -/
 def twoGuards : FnHeader field := ⟨⟨1⟩, [.bool, .bool], [], true, none⟩
 
-/-- A target that elaborates and passes the check of facts, but is not decided: two guards
-exchanged, so that which one stops first is another. -/
+/-- A target that elaborates but differs from its source: two guards exchanged, so that which one
+stops first is another. It differs at its first guard, which is not the skeleton's next entry. -/
 example : refusal (transform [] twoGuards
     (.mk [0, 1] [.guard ⟨1⟩ () 0 .reject, .guard ⟨2⟩ () 1 .reject] [])
     (.mk [0, 1] [.guard ⟨2⟩ () 1 .reject, .guard ⟨1⟩ () 0 .reject] [])) =
-    some .undecided := by
+    some (.differs [place 2]) := by
   decide +kernel
 
 /-- A source that is not accepted: the inverse with nothing known of its operand. The target is
@@ -499,9 +507,10 @@ example : refusal (transform [] ⟨⟨1⟩, [F], [F], false, none⟩
       (.holds (.apply (fieldRow .isNonzero) [0])) [none]]) := by
   decide +kernel
 
-/-- Control: a target that computes another result, `x + x` for `x + y`, is not decided. -/
+/-- Control: a target that computes another result, `x + x` for `x + y`, differs where it
+returns. -/
 example : refusal (transform [] sum sumBody (.mk [0, 1] [.op ⟨1⟩ [10] plus [0, 0]] [10])) =
-    some .undecided := by
+    some (.differs [⟨⟨1⟩, [], none, none⟩]) := by
   decide +kernel
 
 /-- A target that writes `y + x` for `x + y` is accepted: addition commutes. -/

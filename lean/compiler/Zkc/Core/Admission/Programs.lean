@@ -1,7 +1,7 @@
 module
 
 public import Zkc.Core.Admission.Check
-public import Zkc.Core.Facts.Soundness
+public import Zkc.Core.Facts.LocalLaws
 public import Zkc.Core.Meaning.Program
 public import Zkc.Core.Transform.StepSound
 
@@ -13,13 +13,17 @@ check accepts each function against the headers before it (`Defs.Accepted`), eve
 safe and keeps validity on valid inputs, and no loop of a function runs more often than its
 bound.
 
+The callees of a function of a program are the functions before it; that those whose headers say
+that they cannot stop stop only `undefined` needs no check of facts
+(`Defs.fnTable_stops_undefined`, `Meaning/Stops.lean`).
+
 With it, a program whose functions follow those of another program over the same headers
 (`Defs.functionsFollow`), both accepted by the check of facts, gives every function the meaning
 on valid inputs of the function of the other with its header (`Defs.functionsFollow_sound`), by
-induction over the definitions: a replaced function means the same by the theorem of the
-decision for functions, against the callees before it, and a function that calls a replaced
-function is the
-same term against callees that mean the same on valid inputs (`Term.denote_tables`).
+induction over the definitions: a replaced function means the same by the theorem of following
+(`Analysis.follow_same`), against the callees before it, both bodies being safe since both are
+accepted, and a function that calls a replaced function is the same term against callees that
+mean the same on valid inputs (`Term.denote_tables`).
 -/
 
 namespace Zkc.Core
@@ -38,7 +42,8 @@ theorem accepted_places : ∀ {hs : Headers V} (defs : Defs V hs)
   | _, .fn hdr inputs body ok rest, bounds, h, q, m => by
       obtain ⟨mine, others, e1, e2, rfl⟩ := h
       rcases List.mem_append.mp m with m | m
-      · obtain ⟨d, r⟩ := FactCheck.checkFacts_places hdr.key inputs body e1 q m
+      · obtain ⟨d, r⟩ :=
+          checkFacts_places (localFactRules V _) (localSkelRules V _) hdr.key none inputs body e1 q m
         exact ⟨by rw [d]; exact List.mem_cons_self, r⟩
       · obtain ⟨d, r⟩ := accepted_places rest e2 q m
         exact ⟨List.mem_cons_of_mem _ d, r⟩
@@ -64,13 +69,15 @@ theorem functions_sound : ∀ {hs : Headers V} (defs : Defs V hs),
       obtain ⟨safeR, keepsR, respR⟩ := functions_sound rest distinct' e2 M F
         (fun p b m r d => by
           rcases List.mem_append.mp (hF p b m r (List.mem_cons_of_mem _ d)) with m' | m'
-          · have := (FactCheck.checkFacts_places hdr.key inputs body e1 _ m').1
+          · have := (checkFacts_places (localFactRules V _) (localSkelRules V _) hdr.key none inputs
+              body e1 _ m').1
             simp only at this
             rw [this] at d
             exact absurd d notIn
           · exact m')
-      have sound := FactCheck.checkFacts_sound (table := Defs.fnTable M rest) distinct' safeR
-        keepsR hdr.key inputs body ok.distinct e1 F (fun p b m d r => by
+      have sound := checkFacts_sound (table := Defs.fnTable M rest)
+        ⟨distinct', safeR, keepsR, Defs.fnTable_stops_undefined M rest⟩ hdr.key inputs body
+        ok.distinct e1 F (fun p b m d r => by
           rcases List.mem_append.mp (hF p b m r (by rw [d]; exact List.mem_cons_self)) with
             m' | m'
           · exact m'
@@ -143,15 +150,26 @@ theorem Defs.functionsFollow_sound : ∀ {hs : Headers V} (defs defs' : Defs V h
       | head =>
           obtain ⟨safe, keeps, -⟩ :=
             functions_sound rest distinct' restAccepted M [] (fun _ _ none => nomatch none)
+          have callees : Callees M (Defs.fnTable M rest) :=
+            ⟨distinct', safe, keeps, Defs.fnTable_stops_undefined M rest⟩
+          have first := (checkFacts_sound callees hdr.key inputs body ok.distinct checked []
+            (fun _ _ none => nomatch none) ins valid).2
+          have second := (checkFacts_sound callees hdr.key inputs' body' ok'.distinct checked' []
+            (fun _ _ none => nomatch none) ins valid).2
           show body'.denote (localSem M _ (Defs.fnTable M rest')) []
               (Env.empty.extend inputs' ins) =
             body.denote (localSem M _ (Defs.fnTable M rest)) [] (Env.empty.extend inputs ins)
           rw [Term.denote_tables (Defs.fnTable M rest') keeps agree body' [] _
             (Env.extend_valid (fun _ x => nomatch (Ctx.find?_empty x.name).symm.trans x.typed)
               inputs' ins valid)]
-          exact (functions_follow_equal inputs inputs' body body' hdr.key hdr.key ok.distinct
-            ok'.distinct checked checked' decided M (Defs.fnTable M rest) distinct' safe keeps
-            (Defs.fnTable_stops_undefined M rest) ins valid).symm
+          exact (Process.SameWhen.eq_of_noSig (Analysis.follow_same (localFactRules V hs.fns)
+            (localSkelRules V hs.fns) (localSem M hs.fns (Defs.fnTable M rest)) (fun _ _ => True)
+            (LocalReturns M (Defs.fnTable M rest)) (· = .undefined)
+            (localFactRules_binding M (Defs.fnTable M rest) distinct' callees.quiet)
+            (localSkelRules_lawful distinct') hdr.key hdr.key none inputs inputs' body body'
+            decided [] ins
+            (Process.every_mono _ _ (fun _ _ => trivial) (fun _ h => h) first)
+            (Process.every_mono _ _ (fun _ _ => trivial) (fun _ h => h) second))).symm
       | tail f => exact agree _ f ins valid
   | _, .protocol hdr _ _ _ rest, defs', distinct, _, _, accepted, accepted', follows, M, _, f,
       ins, valid => by

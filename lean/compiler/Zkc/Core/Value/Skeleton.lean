@@ -13,12 +13,12 @@ never stops `undefined`. Everything else is kept in order: an effect (an operati
 are new each time, or that can stop with a reason), a guard, and every form of control. A dialect
 says which of its operations are values (`ValueRules`).
 
-The value form of a term is the table of its applications, the one that the check of facts
-also builds (`Value/Table.lean`), together with its *skeleton* (`Skel`): what is kept in order,
-with identifiers of the table in place of names. A value has the identifier of the first
-application of its operation to its operands; a result of an effect or of a form of control, and
-an input of a region, is a *leaf* with an identifier of its own. `Term.skeleton` builds both, in
-one walk.
+The value form of a term is the table of its applications (`Value/Table.lean`) together with its
+*skeleton* (`Skel`): what is kept in order, with identifiers of the table in place of names. A
+value has the identifier of the first application of its operation to its operands; a result of
+an effect or of a form of control, and an input of a region, is a *leaf* with an identifier of
+its own. The walk of the analysis builds both, and follows a skeleton that it is given
+(`Facts/Walk.lean`).
 
 An application is placed in the table with its operands in the order written, except that an
 operation of two operands whose result does not depend on their order has the smaller
@@ -28,17 +28,17 @@ its operands in the order written.
 What following a skeleton asks a dialect to decide (`SkelRules`: its types, its performers, and
 whether two operations are the same) and whether how often a loop runs follows how often a loop
 of a skeleton runs (`Times.follows`, which then is the loop's count on the identifiers,
-`Times.follows_eq`) are here too. The meaning of a skeleton is in `Value/Runs.lean`; whether a
-second term follows the skeleton of a first, in `Value/Follows.lean`.
+`Times.follows_eq`) are here too. The meaning of a skeleton is in `Value/Runs.lean`.
 -/
-
 namespace Zkc.Core
 
-open FactCheck (St share fresh idOf idsOf bindIds)
+open FactCheck (idOf)
 
 /-! ## Which operations are values -/
 
-/-- What a dialect tells the value form of its operations. -/
+/-- What the value form reads of the operations of a dialect: which are values, how they are
+written, where the table places them, and which commute. A dialect gives it as part of the one
+description of its operations (`FactRules.values`, `Facts/OpFacts.lean`). -/
 structure ValueRules (D : Dialect) (Raw : Type) where
   /-- The written form of an operation that is a value: equal applications of it are one
   value, and it has no effect and stops only `undefined`. Nothing for an operation that is kept
@@ -139,10 +139,10 @@ mutual
         (rest : SkelArms D mid payloads) : SkelArms D mid (payload :: payloads)
 end
 
-/-! ## The skeleton of a term -/
+/-! ## How often a loop runs, on identifiers -/
 
 section
-variable {D : Dialect} {Raw : Type} [DecidableEq Raw] (rules : ValueRules D Raw)
+variable {D : Dialect}
 
 /-- How often a loop runs, on the identifier of its count. -/
 def Times.count {w : D.Who} {Γ : Ctx D.Ty} (ids : Ctx Nat) : Times D w Γ → Count D w
@@ -168,66 +168,6 @@ theorem Times.follows_eq (checks : SkelRules D) {w : D.Who} {Γ : Ctx D.Ty} (ids
       · cases same
   | .fixed _, .value .., same => by cases same
   | .value .., .fixed _, same => by cases same
-
-mutual
-  /-- The skeleton of a term and the table with its values, from the identifiers of the names in
-  scope and a state. A value is shared in the table, with its operands in the order of
-  `ValueRules.order`; every other result is a new leaf. -/
-  def Term.skeleton : {Γ : Ctx D.Ty} → {outs : List D.Ty} → Term D Γ outs → Ctx Nat →
-      St D.Ty Raw → Skel D outs × St D.Ty Raw
-    | _, _, .ret exit, ids, st => (.ret (idsOf ids exit), st)
-    | _, _, .op (res := res) key o operands results rest, ids, st =>
-        match rules.written o with
-        | some raw =>
-            let made := share raw (rules.order raw (idsOf ids operands)) res.length st
-            rest.skeleton (bindIds ids results made.1) made.2
-        | none =>
-            let made := fresh res.length st
-            let after := rest.skeleton (bindIds ids results made.1) made.2
-            (.effect key o (idsOf ids operands) st.next after.1, after.2)
-    | _, _, .guard key w c ok why rest, ids, st =>
-        let after := rest.skeleton ids st
-        (.guard key w (idOf ids c.name) ok why after.1, after.2)
-    | _, _, .choose (mid := mid) key w c ok _ onTrue onFalse results rest, ids, st =>
-        let yes := onTrue.skeleton ids st
-        let no := onFalse.skeleton ids yes.2
-        let made := fresh mid.length no.2
-        let after := rest.skeleton (bindIds ids results made.1) made.2
-        (.choose key w (idOf ids c.name) ok yes.1 no.1 no.2.next after.1, after.2)
-    | _, _, .cases (mid := mid) key w x ok _ arms results rest, ids, st =>
-        let inside := arms.skeleton ids st
-        let made := fresh mid.length inside.2
-        let after := rest.skeleton (bindIds ids results made.1) made.2
-        (.cases key w (idOf ids x.name) ok inside.1 inside.2.next after.1, after.2)
-    | _, _, .loop (carried := carried) (each := each) key w times _ initial inputs body results
-        rest, ids, st =>
-        let bound := fresh (carried.length + 1) st
-        let inside := body.skeleton (bindIds ids inputs bound.1) bound.2
-        let made := fresh (carried.length + each.length) inside.2
-        let after := rest.skeleton (bindIds ids results made.1) made.2
-        (.loop key w (times.count ids) (idsOf ids initial) st.next inside.1 inside.2.next after.1,
-          after.2)
-    | _, _, .block (mid := mid) key number body results rest, ids, st =>
-        let inside := body.skeleton ids st
-        let made := fresh mid.length inside.2
-        let after := rest.skeleton (bindIds ids results made.1) made.2
-        (.block key number inside.1 inside.2.next after.1, after.2)
-    | _, _, .attempt (mid := mid) key w _ inputs body results rest, ids, st =>
-        let bound := fresh 1 st
-        let inside := body.skeleton (bindIds ids inputs bound.1) bound.2
-        let made := fresh mid.length inside.2
-        let after := rest.skeleton (bindIds ids results made.1) made.2
-        (.attempt key w st.next inside.1 inside.2.next after.1, after.2)
-  /-- The skeletons of the arms of a case analysis. -/
-  def Arms.skeleton : {Γ : Ctx D.Ty} → {mid payloads : List D.Ty} → Arms D Γ mid payloads →
-      Ctx Nat → St D.Ty Raw → SkelArms D mid payloads × St D.Ty Raw
-    | _, _, _, .nil, _, st => (.nil, st)
-    | _, _, _, .cons inputs arm rest, ids, st =>
-        let bound := fresh 1 st
-        let inside := arm.skeleton (bindIds ids inputs bound.1) bound.2
-        let others := rest.skeleton ids inside.2
-        (.cons st.next inside.1 others.1, others.2)
-end
 
 end
 
