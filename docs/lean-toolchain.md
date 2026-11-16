@@ -37,11 +37,13 @@ Ten isolated mutations additionally check the recognizer during its build. The c
 suite has 15 negative controls; every control must fail by its intended rule.
 
 Lean 4.36 also removed a redundant natural-number equality instance. Default instance search
-can now reach `Classical.choice` through the ordering witness even in a `by decide` proof of a
-small structural fact. Two test modules explicitly choose the constructive `LawfulBEq Nat`
-witness locally. This stabilizes those proof dependencies without changing theorem statements,
-semantic instances or the axiom policy. A successful build alone does not establish this
-property; the audit does.
+now finds `LawfulBEq Nat` through the order of naturals, and a proof that uses it (for example
+`eq_of_beq` on naturals, or a `simp` lemma about `==`) then depends on `Classical.choice`. The
+core declares one scoped instance, in `Zkc/Core/Program/Identity.lean`, that takes the fact from
+the decision of equality instead. It applies inside `Zkc.Core` and its namespaces, which is
+where the core and its tests are, and to nobody who only imports the core; it changes no
+statement. A successful build alone does not establish that no proof reaches the axiom; the
+audit does.
 
 ## Using the release's new facilities
 
@@ -63,11 +65,20 @@ choices on the final compiler, not an intermediate release description.
   imports. A field identity does not by itself preserve an operation's domain, failure behavior,
   effects or protocol observations. Inspect the resulting proof's dependencies before placing
   it in a library; stronger automation does not waive that library's axiom policy.
-- **Stateful verification:** use the current `Std.WP`/`vcgen` APIs when implementing an adapter
-  for an actual stateful algorithm. Connect its state, exceptions and results to the core's
-  interpretation with a refinement theorem. WP is not a replacement for protocol processes,
-  adversarial interaction or probabilistic security statements. No current consumer requires
-  a new WP dependency solely for this upgrade.
+- **Program logic:** `Std.WP` interprets any program type as a predicate transformer with a
+  postcondition for exceptions, and `vcgen` walks a program with the specifications it is given.
+  The core's "on every path" of a process is such a transformer and a claim about a definition
+  is its Hoare triple, so proofs about concrete definitions are to be discharged through an
+  adapter to `Std.WP` rather than through an engine of our own. The adapter is outside the
+  core: the assertion lattice of `Std.WP` depends on `Classical.choice`, and `vcgen` is still
+  marked experimental. It states that a triple is a claim of the core, so the core's theorems
+  do not depend on it. WP is not a replacement for protocol processes, adversarial interaction
+  or probabilistic security statements.
+- **Evaluation in proofs:** tests decide with `decide +kernel`, which depends on no axiom. The
+  `cbv` tactic is an alternative where kernel evaluation of a decision is too slow; its proofs
+  depend on `propext` only, which the policy allows.
+- **Deriving:** `deriving DecidableEq` still does not apply to mutual nested types, so the
+  decision of equality of stored programs stays written by hand.
 - **Bit-vector automation:** `bv_decide +uf` can help discover identities, but this release's
   native certificate path introduces native-decision axioms. It is not accepted under the
   core's existing axiom policy; an option named `+kernel` does not remove that dependency.

@@ -8,10 +8,6 @@ Controls: examples that exercise the definitions at their edges, each with what 
 the theorems that are the reasons for the definitions' shape.
 -/
 
--- Lean 4.36's default Nat ordering witness reaches Classical.choice. These concrete
--- structural checks use the constructive witness from DecidableEq instead, locally.
-local instance (priority := 2000) : LawfulBEq Nat := instLawfulBEq
-
 namespace Zkc.Core.Controls
 
 open Zkc.Core Zkc.Core.Shapes

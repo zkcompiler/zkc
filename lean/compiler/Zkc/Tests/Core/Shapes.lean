@@ -14,10 +14,6 @@ its type is decided by evaluating the context. That a body binds each name once 
 (`Term.BoundOnce`). The other tests of the core write their terms with `var`.
 -/
 
--- Lean 4.36's default Nat ordering witness reaches Classical.choice. These concrete
--- structural checks use the constructive witness from DecidableEq instead, locally.
-local instance (priority := 2000) : LawfulBEq Nat := instLawfulBEq
-
 namespace Zkc.Core.Shapes
 
 /-- A variable of a typed term written by hand: `var name` is the name, at the type that the
