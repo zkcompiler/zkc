@@ -117,15 +117,13 @@ theorem agree_insert {Γ : Ctx V.Ty} {ρ : Valuation (Dyn M)} {ids : Ctx Nat}
     cases look
     refine ⟨i, by rw [Ctx.find?_insert, ite_eq_left rfl], ?_⟩
     show ρ i = some ⟨τ, env.insert name v name τ found⟩
-    unfold Env.insert
-    rw [dite_eq_left rfl, cast_eq]
+    rw [eq_of_heq (Env.insert_at_bound env name v rfl found)]
     exact hi
   · rw [ite_eq_right same] at look
     obtain ⟨j, hj, hv⟩ := h σ ⟨name, look⟩
     refine ⟨j, by rw [Ctx.find?_insert, ite_eq_right same]; exact hj, ?_⟩
     show ρ j = some ⟨σ, env.insert bound v name σ found⟩
-    unfold Env.insert
-    rw [dite_eq_right same]
+    rw [Env.insert_at_other env bound v same]
     exact hv
 
 /-- The names of a binding bound to identifiers that have the values bound keep the agreement:

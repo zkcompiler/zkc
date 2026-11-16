@@ -24,7 +24,8 @@ function whose body the check of facts accepts, so the program is `Defs.Accepted
 annotation, and the theorem of the check of facts for a program gives `functionsSafe`,
 `functionsKeepValidity` and `annotationHolds`. A function whose header says that it cannot stop
 stops only `undefined` (`Defs.fnTable_stops_undefined`), and never that, so it does not stop
-(`headersSayWhoStops`).
+(`headersSayWhoStops`). Two functions that the decision of the value form finds the same mean
+the same (`functionsSame`): it is the theorem `functions_same_sound` of `Value/Local.lean`.
 -/
 
 namespace Zkc.Core
@@ -204,6 +205,15 @@ theorem headersSayWhoStops (c : Functions V) (admits : c.admit = admit) :
   exact Process.every_mono _ _ (fun _ _ => trivial) (fun _ both => both.1 both.2)
     (Process.every_and _ _ (safe named assoc a h M hdr f ins valid)
       (Defs.fnTable_stops_undefined M a.program.defs hdr f ins quiet))
+
+/-- Execution and state: two functions that the decision of the value form finds the same mean
+the same (`functions_same_sound`, `Value/Local.lean`). -/
+theorem functionsSame : Statements.functionsSame (V := V) :=
+  fun _ _ _ inputs inputs' body body' definition definition' _ _ distinctBody distinctBody'
+      accepted accepted' decided M table distinct safe keeps quiet ins valid permitted =>
+    functions_same_sound inputs inputs' body body' definition definition' distinctBody
+      distinctBody' accepted accepted' decided M table distinct safe keeps quiet ins valid
+      permitted
 
 /-- Validity: what the annotation of an admitted program knows holds, and no loop runs more
 often than its bound. -/

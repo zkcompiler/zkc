@@ -1,0 +1,186 @@
+module
+
+public import Zkc.Core.Value.Soundness
+public import Zkc.Core.Facts.Soundness
+
+@[expose] public section
+
+/-!
+The value form of the function dialect, and the theorem that the decision is sound for
+functions.
+
+An operation of a function is a value, written as `LocalOp.print` writes it, unless it can stop
+with a reason (`LocalOp.canStop`: a call of a function whose header says that it can stop); such
+a call is kept in order (`localValueRules`). The table places the applications as the check of
+facts places them.
+
+A written form gives results on operands when it is the printed form of a local operation that
+returns those results on those operands (`LocalReturns`), whatever the values, valid or not: the
+law `computes` of the value form is for every value. Against callees with distinct keys, of which
+those whose headers say that they cannot stop stop only `undefined`, the local operations that
+are values satisfy the laws of the value form (`localValueRules_binding`). Following decides
+types and performers by equality and two operations by their printed forms (`localSkelRules`),
+which is lawful over headers with distinct keys (`localSkelRules_lawful`).
+
+So two bodies of functions over the same headers and of the same types, each with distinct
+addresses and accepted by the check of facts, of which the second follows the skeleton of the
+first, mean the same on every valid input, for any replies permitted (`functions_same_sound`); a
+function has no effects, so their processes are equal (`functions_same_equal`). The check of
+facts gives what the decision needs of both: neither stops `undefined` on valid inputs.
+-/
+
+namespace Zkc.Core
+
+open FactCheck (Dyn toDyns toDyns_inj)
+
+section
+variable (V : Vocabulary)
+
+/-- What the value form is told of the operations of a function: every operation is a value,
+by its written form, except a call of a function that can stop with a reason, which is kept in
+order. The table places the applications as the check of facts places them. -/
+def localValueRules (fns : List (FnHeader V)) : ValueRules (localDialect V fns) (LocalRaw V) where
+  written := fun o => bif LocalOp.canStop o then none else some (LocalOp.print o)
+  place := (localFactRules V fns).place
+
+/-- What following decides for a function: types and performers by equality, and two operations
+by their written forms. -/
+def localSkelRules (fns : List (FnHeader V)) : SkelRules (localDialect V fns) where
+  sameTy := inferInstanceAs (DecidableEq V.Ty)
+  sameWho := inferInstanceAs (DecidableEq Unit)
+  sameOp := fun o o' => decide (LocalOp.print o = LocalOp.print o')
+
+end
+
+section
+variable {V : Vocabulary} (M : Model V) {fns : List (FnHeader V)} (table : FnTable M fns)
+
+/-- A written form gives results on operands when it is the printed form of a local operation
+that returns those results on those operands. The values need not be valid. -/
+def LocalReturns (written : LocalRaw V) (operands results : List (Dyn M)) : Prop :=
+  ∃ (ins res : List V.Ty) (o : LocalOp V fns ins res) (args : HList M.Val ins)
+    (returned : HList M.Val res), o.print = written ∧ toDyns args = operands ∧
+    toDyns returned = results ∧ localOp M table o args = .done returned
+
+/-- Values with their types, of the local semantics, are the values of some type of the check of
+facts. -/
+theorem localDyns_eq_toDyns :
+    ∀ {items : List V.Ty} (values : HList M.Val items),
+      (localSem M fns table).dyns values = toDyns values
+  | [], .nil => rfl
+  | _ :: _, .cons v rest => by
+      show ⟨_, v⟩ :: (localSem M fns table).dyns rest = ⟨_, v⟩ :: toDyns rest
+      rw [localDyns_eq_toDyns rest]
+
+/-- The local operations that are values satisfy the laws of the value form: one that is a
+value returns what its printed form gives, or stops `undefined`; and a printed form gives one
+result. Its hypotheses: the callees have distinct keys, so that a printed form names one
+operation; and a callee whose header says that it cannot stop stops only `undefined`, since a
+call of it is a value. -/
+theorem localValueRules_binding (distinct : (fns.map (·.key)).Nodup)
+    (quiet : ∀ hdr (callee : Member fns hdr) (args : HList M.Val hdr.ins), hdr.canStop = false →
+      (table hdr callee args).Stops (· = .undefined)) :
+    (localValueRules V fns).Binding (localSem M fns table) (LocalReturns M table)
+      (· = Stop.undefined) where
+  computes := by
+    intro ins res o raw written key path values
+    cases stops : LocalOp.canStop o with
+    | true => simp only [localValueRules, stops, Bool.cond_true, reduceCtorEq] at written
+    | false =>
+        simp only [localValueRules, stops, Bool.cond_false, Option.some.injEq] at written
+        show (∃ results, localOp M table o values = .done results ∧ _) ∨
+          ∃ stop, localOp M table o values = .halt stop ∧ stop = Stop.undefined
+        have undefinedOnly := localOp_stops_undefined M table quiet o values stops
+        cases ran : localOp M table o values with
+        | done returned =>
+            exact .inl ⟨returned, rfl, ins, res, o, values, returned, written,
+              (localDyns_eq_toDyns M table values).symm,
+              (localDyns_eq_toDyns M table returned).symm, ran⟩
+        | halt stop =>
+            rw [ran] at undefinedOnly
+            exact .inr ⟨stop, rfl, undefinedOnly⟩
+        | call op _ => exact nomatch op
+  functional := by
+    intro raw operands results results' first second
+    obtain ⟨ins, res, o, args, returned, printed, sameArgs, sameResults, ran⟩ := first
+    obtain ⟨ins', res', o', args', returned', printed', sameArgs', sameResults', ran'⟩ := second
+    obtain ⟨rfl, sameValues⟩ := toDyns_inj args args' (sameArgs.trans sameArgs'.symm)
+    cases eq_of_heq sameValues
+    obtain ⟨rfl, sameOp⟩ :=
+      Sigma.mk.inj (LocalOp.print_injective distinct o o' (printed.trans printed'.symm))
+    cases eq_of_heq sameOp
+    rw [ran] at ran'
+    cases ran'
+    rw [← sameResults, ← sameResults']
+
+end
+
+/-- Operations that following finds the same are the same, over headers with distinct keys: a
+printed form names one operation. -/
+theorem localSkelRules_lawful {V : Vocabulary} {fns : List (FnHeader V)}
+    (distinct : (fns.map (·.key)).Nodup) : (localSkelRules V fns).Lawful := by
+  intro ins res res' o o' found
+  exact Sigma.mk.inj (LocalOp.print_injective distinct o o' (of_decide_eq_true found))
+
+section
+variable {V : Vocabulary} {fns : List (FnHeader V)}
+
+/-- **Two functions that the decision finds the same mean the same.** For two bodies of
+functions over the same headers, with the same input and result types, each with distinct
+addresses and accepted by the check of facts, of which the second follows the skeleton of the
+first: against callees with distinct keys that never stop `undefined` on valid inputs, keep
+validity, and stop only `undefined` where their headers say that they cannot stop, on every
+valid input the two processes mean the same, for any replies permitted. -/
+theorem functions_same_sound {types outs : List V.Ty} (inputs inputs' : Names types)
+    (body : Term (localDialect V fns) (Ctx.empty.extend inputs) outs)
+    (body' : Term (localDialect V fns) (Ctx.empty.extend inputs') outs)
+    (definition definition' : Key) {bounds bounds' : List (Place × Nat)}
+    (distinctBody : Term.Distinct body) (distinctBody' : Term.Distinct body')
+    (accepted : checkFacts (localFactRules V fns) definition none inputs body = .ok bounds)
+    (accepted' : checkFacts (localFactRules V fns) definition' none inputs' body' = .ok bounds')
+    (decided : same (localValueRules V fns) (localSkelRules V fns) inputs inputs' body body' =
+      true)
+    (M : Model V) (table : FnTable M fns) (distinct : (fns.map (·.key)).Nodup)
+    (safe : FnTable.Safe table) (keeps : FnTable.KeepsValidity table)
+    (quiet : ∀ hdr (callee : Member fns hdr) (args : HList M.Val hdr.ins), hdr.canStop = false →
+      (table hdr callee args).Stops (· = .undefined))
+    (ins : HList M.Val types) (valid : ins.All M.Valid)
+    (permitted : ∀ op, NoSig.Reply op → Prop) :
+    Process.SameWhen permitted
+      (body.denote (localSem M fns table) [] (Env.empty.extend inputs ins))
+      (body'.denote (localSem M fns table) [] (Env.empty.extend inputs' ins)) :=
+  same_sound (localSem M fns table) permitted (LocalReturns M table) (localValueRules V fns)
+    (localValueRules_binding M table distinct quiet) (localSkelRules V fns)
+    (localSkelRules_lawful distinct) inputs inputs' body body' decided [] ins
+    (Process.every_noSig (Process.every_mono _ _ (fun _ _ => trivial) (fun _ h => h)
+      (FactCheck.checkFacts_sound distinct safe keeps definition inputs body distinctBody
+        accepted [] (fun _ _ none => nomatch none) ins valid).2))
+    (Process.every_noSig (Process.every_mono _ _ (fun _ _ => trivial) (fun _ h => h)
+      (FactCheck.checkFacts_sound distinct safe keeps definition' inputs' body' distinctBody'
+        accepted' [] (fun _ _ none => nomatch none) ins valid).2))
+
+/-- Two functions that the decision finds the same have equal processes on every valid input: a
+function has no effects, so meaning the same is equality. -/
+theorem functions_same_equal {types outs : List V.Ty} (inputs inputs' : Names types)
+    (body : Term (localDialect V fns) (Ctx.empty.extend inputs) outs)
+    (body' : Term (localDialect V fns) (Ctx.empty.extend inputs') outs)
+    (definition definition' : Key) {bounds bounds' : List (Place × Nat)}
+    (distinctBody : Term.Distinct body) (distinctBody' : Term.Distinct body')
+    (accepted : checkFacts (localFactRules V fns) definition none inputs body = .ok bounds)
+    (accepted' : checkFacts (localFactRules V fns) definition' none inputs' body' = .ok bounds')
+    (decided : same (localValueRules V fns) (localSkelRules V fns) inputs inputs' body body' =
+      true)
+    (M : Model V) (table : FnTable M fns) (distinct : (fns.map (·.key)).Nodup)
+    (safe : FnTable.Safe table) (keeps : FnTable.KeepsValidity table)
+    (quiet : ∀ hdr (callee : Member fns hdr) (args : HList M.Val hdr.ins), hdr.canStop = false →
+      (table hdr callee args).Stops (· = .undefined))
+    (ins : HList M.Val types) (valid : ins.All M.Valid) :
+    body.denote (localSem M fns table) [] (Env.empty.extend inputs ins) =
+      body'.denote (localSem M fns table) [] (Env.empty.extend inputs' ins) :=
+  (functions_same_sound inputs inputs' body body' definition definition' distinctBody
+    distinctBody' accepted accepted' decided M table distinct safe keeps quiet ins valid
+    fun _ _ => True).eq_of_noSig
+
+end
+
+end Zkc.Core

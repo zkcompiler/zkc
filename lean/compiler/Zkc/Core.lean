@@ -16,6 +16,7 @@ public import Zkc.Core.Program.Library
 public import Zkc.Core.Program.Located
 public import Zkc.Core.Program.Erase
 public import Zkc.Core.Program.EraseProgram
+public import Zkc.Core.Program.Place
 public import Zkc.Core.Program.Refusal
 public import Zkc.Core.Program.Requirement
 public import Zkc.Core.Program.Project
@@ -29,6 +30,7 @@ public import Zkc.Core.Meaning.Call
 public import Zkc.Core.Meaning.Events
 public import Zkc.Core.Meaning.Fold
 public import Zkc.Core.Meaning.Local
+public import Zkc.Core.Meaning.Place
 public import Zkc.Core.Meaning.Program
 public import Zkc.Core.Meaning.Stops
 public import Zkc.Core.Meaning.Protocol
@@ -47,6 +49,12 @@ public import Zkc.Core.Facts.Learning
 public import Zkc.Core.Facts.Growth
 public import Zkc.Core.Facts.LocalLaws
 public import Zkc.Core.Facts.Soundness
+public import Zkc.Core.Value.Skeleton
+public import Zkc.Core.Value.Follows
+public import Zkc.Core.Value.Growth
+public import Zkc.Core.Value.Runs
+public import Zkc.Core.Value.Soundness
+public import Zkc.Core.Value.Local
 public import Zkc.Core.Admission.Admission
 public import Zkc.Core.Admission.Elaboration
 public import Zkc.Core.Admission.Check

@@ -8,7 +8,8 @@ public import Zkc.Core.Program.BitTree
 /-!
 The decisions of distinct addresses and of single assignment, each with what failed: an address
 that is not an instruction's own (`Term.repeatedAddress`), a name that is bound a second time
-(`Term.rebound`), each proved to decide its proposition; and, for diagnostics, the place of the
+(`Term.rebound`), each proved to decide its proposition, the second the instance that decides
+`Term.BoundOnce` (`Term.decideBoundOnce`); and, for diagnostics, the place of the
 instruction that binds a name a second time (`Term.reboundPlace`). Linear use is decided where
 it is defined (`Linear.lean`).
 -/
@@ -80,6 +81,12 @@ theorem Term.rebound_eq_none {Γ : Ctx D.Ty} {outs : List D.Ty} (inputs : List N
     rw [added]
     exact ⟨fun found => (nomatch found),
       fun distinct => absurd ⟨distinct, fun _ _ none => (nomatch none)⟩ spec⟩
+
+/-- Whether every name of a definition is bound at one place, by the decision of single
+assignment. -/
+instance Term.decideBoundOnce {Γ : Ctx D.Ty} {outs : List D.Ty} (inputs : List Name)
+    (t : Term D Γ outs) : Decidable (t.BoundOnce inputs) :=
+  decidable_of_iff _ (Term.rebound_eq_none inputs t)
 
 /-- The names seen, placed by their bits, with the names of a binding added in order; or
 nothing when one of them is seen already. -/

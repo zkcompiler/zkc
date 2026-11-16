@@ -45,6 +45,21 @@ theorem Member.atIndex_index : ∀ {Γ : List T} {a : T} (x : Member Γ a),
   | _ :: _, _, .tail x => by
       simp only [Member.index, Member.atIndex, Member.atIndex_index x, Option.map_some]
 
+/-- The position of an item found at a position is that position. -/
+theorem Member.index_of_atIndex :
+    ∀ {Γ : List T} {n : Nat} {a : T} {x : Member Γ a},
+      Member.atIndex Γ n = some ⟨a, x⟩ → x.index = n
+  | [], _, _, _, found => nomatch found
+  | _ :: _, 0, _, _, found => by
+      simp only [Member.atIndex, Option.some.injEq] at found
+      cases found
+      rfl
+  | _ :: Γ, n + 1, _, _, found => by
+      simp only [Member.atIndex, Option.map_eq_some_iff] at found
+      obtain ⟨⟨_, y⟩, located, same⟩ := found
+      cases same
+      simp only [Member.index, Member.index_of_atIndex located]
+
 end
 
 inductive HList {α : Type} (V : α → Type) : List α → Type where

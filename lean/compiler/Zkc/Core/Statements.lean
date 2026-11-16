@@ -4,6 +4,7 @@ public import Zkc.Core.Functions
 public import Zkc.Core.Admission.Check
 public import Zkc.Core.Facts.Facts
 public import Zkc.Core.Program.EraseProgram
+public import Zkc.Core.Value.Local
 
 @[expose] public section
 
@@ -77,6 +78,30 @@ def headersSayWhoStops : Prop :=
     ∀ (M : Model V) (hdr : FnHeader V) (f : Member a.program.headers.fns hdr)
       (ins : HList M.Val hdr.ins), ins.All M.Valid → hdr.canStop = false →
       (fnMeaning M a.program f ins).Stops fun _ => False
+
+/-- Execution and state: two functions that the decision of the value form finds the same mean
+the same. For two bodies of functions over the same headers and of the same types, each with
+distinct addresses and accepted by the check of facts, of which the second follows the skeleton
+of the first (`same`): against callees with distinct keys that never stop `undefined` on valid
+inputs, keep validity, and stop only `undefined` where their headers say that they cannot stop,
+on every valid input the two processes mean the same, for any replies permitted. -/
+def functionsSame : Prop :=
+  ∀ (fns : List (FnHeader V)) {types outs : List V.Ty} (inputs inputs' : Names types)
+    (body : Term (localDialect V fns) (Ctx.empty.extend inputs) outs)
+    (body' : Term (localDialect V fns) (Ctx.empty.extend inputs') outs)
+    (definition definition' : Key) (bounds bounds' : List (Place × Nat)),
+    Term.Distinct body → Term.Distinct body' →
+    checkFacts (localFactRules V fns) definition none inputs body = .ok bounds →
+    checkFacts (localFactRules V fns) definition' none inputs' body' = .ok bounds' →
+    same (localValueRules V fns) (localSkelRules V fns) inputs inputs' body body' = true →
+    ∀ (M : Model V) (table : FnTable M fns), (fns.map (·.key)).Nodup → FnTable.Safe table →
+      FnTable.KeepsValidity table →
+      (∀ hdr (callee : Member fns hdr) (args : HList M.Val hdr.ins), hdr.canStop = false →
+        (table hdr callee args).Stops (· = .undefined)) →
+      ∀ ins : HList M.Val types, ins.All M.Valid → ∀ permitted : ∀ op, NoSig.Reply op → Prop,
+        Process.SameWhen permitted
+          (body.denote (localSem M fns table) [] (Env.empty.extend inputs ins))
+          (body'.denote (localSem M fns table) [] (Env.empty.extend inputs' ins))
 
 /-- Validity: an open role program is safe: on valid inputs and every permitted reply it
 never stops `undefined`, whatever its peers do. -/

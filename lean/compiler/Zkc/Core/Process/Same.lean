@@ -13,10 +13,18 @@ permitted nothing is compared, since an admitted program promises nothing there.
 the same" of the core is this relation.
 
 It is an equivalence and a congruence for everything a process is built with (`bind`, `map`,
-`mapHalt`, `recover`, bounded iteration); it carries a property on every path from one process
-to the other; and it is kept by a handler whose replies are permitted, retry included
-(`Handler.run_same`). So a part of a role program may be replaced by a part with the same
-process without a new argument about the layers of a deployment.
+`mapHalt`, `recover`, bounded iteration, with steps that mean the same on every state or only
+below a count); it carries a property on every path from one process to the other; and it is
+kept by a handler whose replies are permitted, retry included (`Handler.run_same`). So a part of
+a role program may be replaced by a part with the same process without a new argument about the
+layers of a deployment. Between processes without effects it is equality (`eq_of_noSig`), and
+on them what holds on every path does not depend on the replies permitted (`every_noSig`).
+
+A value that a process can return on some path of permitted replies (`Process.CanReturn`) is
+what a congruence for a sequence needs of the first process: what follows it is compared only
+from such values. Its rules: what holds on every path holds of it, every result is one, a
+sequence returns what its parts return, processes that mean the same return the same values, and
+an iteration reaches each of its steps from such a value.
 -/
 
 namespace Zkc.Core
@@ -117,7 +125,172 @@ theorem iterate (invariant : Nat → A → Prop) {step step' : Nat → A → Pro
       simp only [Process.iterate]
       exact bind (same i a holds) (kept i a holds) fun a' kept' => ih (i + 1) a' kept'
 
+/-- Bounded iteration of steps that mean the same below a count, on every state that satisfies an
+invariant which every step below the count keeps. -/
+theorem iterate_below (invariant : Nat → A → Prop)
+    {step step' : Nat → A → Process S H A} (count : Nat)
+    (same : ∀ i a, i < count → invariant i a →
+      SameWhen permitted (step i a) (step' i a))
+    (kept : ∀ i a, i < count → invariant i a →
+      (step i a).Every permitted (invariant (i + 1)) fun _ => True) :
+    ∀ (n i : Nat) (a : A), i + n ≤ count → invariant i a →
+      SameWhen permitted (Process.iterate n step i a) (Process.iterate n step' i a) := by
+  intro n
+  induction n with
+  | zero => intro i a _ _; exact refl _
+  | succ n ih =>
+      intro i a within holds
+      simp only [Process.iterate]
+      exact bind (same i a (by omega) holds) (kept i a (by omega) holds)
+        fun a' kept' => ih (i + 1) a' (by omega) kept'
+
 end Process.SameWhen
+
+/-- Processes without effects that mean the same are equal: there is no reply along which they
+could differ. -/
+theorem Process.SameWhen.eq_of_noSig {permitted : ∀ op, NoSig.Reply op → Prop}
+    {p q : Process NoSig H A} (same : Process.SameWhen permitted p q) : p = q := by
+  cases same with
+  | done a => rfl
+  | halt payload => rfl
+  | call op _ => exact nomatch op
+
+/-- On a process without effects, what holds on every path holds whatever replies are
+permitted: there is no reply. -/
+theorem Process.every_noSig {permitted permitted' : ∀ op, NoSig.Reply op → Prop}
+    {onDone : A → Prop} {onHalt : H → Prop} :
+    ∀ {p : Process NoSig H A}, p.Every permitted onDone onHalt → p.Every permitted' onDone onHalt
+  | .done _, holds => holds
+  | .halt _, holds => holds
+  | .call op _, _ => nomatch op
+
+/-! ## A value that a process can return -/
+
+/-- The process returns the value on some path of permitted replies. -/
+inductive Process.CanReturn (permitted : ∀ op, S.Reply op → Prop) : Process S H A → A → Prop where
+  | done (a : A) : CanReturn permitted (.done a) a
+  | call (op : S.Op) {k : S.Reply op → Process S H A} (reply : S.Reply op)
+      (allowed : permitted op reply) {a : A} (next : CanReturn permitted (k reply) a) :
+      CanReturn permitted (.call op k) a
+
+section
+variable {permitted : ∀ op, S.Reply op → Prop}
+
+/-- What holds of every result on every path holds of a value that the process can return. -/
+theorem Process.Every.canReturn {p : Process S H A} {onDone : A → Prop} {onHalt : H → Prop}
+    (holds : p.Every permitted onDone onHalt) {a : A} (returns : p.CanReturn permitted a) :
+    onDone a := by
+  induction returns with
+  | done a => exact holds
+  | call op reply allowed _ ih => exact ih (holds reply allowed)
+
+/-- On every path, what a process returns is a value that it can return. -/
+theorem Process.every_canReturn (p : Process S H A) :
+    p.Every permitted (fun a => p.CanReturn permitted a) fun _ => True := by
+  induction p with
+  | done a => exact .done a
+  | halt _ => trivial
+  | call op k ih =>
+      exact fun reply allowed => Process.every_mono _ permitted
+        (fun _ returns => .call op reply allowed returns) (fun _ h => h) (ih reply)
+
+/-- A value that a process can return, followed by a value that what follows can return from it,
+is a value that the sequence can return. -/
+theorem Process.CanReturn.bind {p : Process S H A} {f : A → Process S H B} {a : A} {b : B}
+    (first : p.CanReturn permitted a) (second : (f a).CanReturn permitted b) :
+    (p.bind f).CanReturn permitted b := by
+  induction first with
+  | done _ => exact second
+  | call op reply allowed _ ih => exact .call op reply allowed (ih second)
+
+/-- A value that a sequence can return comes from a value that its first process can return. -/
+theorem Process.CanReturn.of_bind {p : Process S H A} {f : A → Process S H B} {b : B}
+    (returns : (p.bind f).CanReturn permitted b) :
+    ∃ a, p.CanReturn permitted a ∧ (f a).CanReturn permitted b := by
+  induction p with
+  | done a => exact ⟨a, .done a, returns⟩
+  | halt _ =>
+      simp only [Process.bind] at returns
+      cases returns
+  | call op k ih =>
+      simp only [Process.bind] at returns
+      cases returns with
+      | call _ reply allowed next =>
+          obtain ⟨a, first, second⟩ := ih reply next
+          exact ⟨a, .call op reply allowed first, second⟩
+
+/-- Processes that mean the same can return the same values. -/
+theorem Process.SameWhen.canReturn {p q : Process S H A} (same : Process.SameWhen permitted p q)
+    {a : A} (returns : p.CanReturn permitted a) : q.CanReturn permitted a := by
+  induction returns generalizing q with
+  | done a =>
+      cases same
+      exact .done a
+  | call op reply allowed _ ih =>
+      cases same with
+      | call _ next => exact .call op reply allowed (ih (next reply allowed))
+
+/-- Bounded iteration, one iteration more: the iterations up to some number, then the step at
+that number. -/
+theorem Process.iterate_succ_eq_bind (step : Nat → A → Process S H A) :
+    ∀ (n i : Nat) (a : A),
+      Process.iterate (n + 1) step i a = (Process.iterate n step i a).bind (step (i + n))
+  | 0, i, a => by
+      show (step i a).bind (fun a' => Process.iterate 0 step (i + 1) a') = step (i + 0) a
+      exact Process.bind_pure (step i a)
+  | n + 1, i, a => by
+      show (step i a).bind (fun a' => Process.iterate (n + 1) step (i + 1) a') =
+        ((step i a).bind fun a' => Process.iterate n step (i + 1) a').bind (step (i + (n + 1)))
+      rw [Process.bind_assoc]
+      congr 1
+      funext a'
+      rw [Process.iterate_succ_eq_bind step n (i + 1) a', Nat.add_assoc, Nat.add_comm 1 n]
+
+/-- A value that one more iteration can return, from a value that the iterations before it can
+return and a value that the next step can return from it. -/
+theorem Process.CanReturn.iterate_succ {step : Nat → A → Process S H A} {n i : Nat} {a b c : A}
+    (before : (Process.iterate n step i a).CanReturn permitted b)
+    (next : (step (i + n) b).CanReturn permitted c) :
+    (Process.iterate (n + 1) step i a).CanReturn permitted c := by
+  rw [Process.iterate_succ_eq_bind]
+  exact before.bind next
+
+/-- What holds on every path of a process and what follows it holds on every path of what
+follows, from a value that the process can return. -/
+theorem Process.Every.of_bind_canReturn {p : Process S H A} {f : A → Process S H B}
+    {onDone : B → Prop} {onHalt : H → Prop} (holds : (p.bind f).Every permitted onDone onHalt)
+    {a : A} (returns : p.CanReturn permitted a) : (f a).Every permitted onDone onHalt :=
+  ((Process.every_bind p f permitted onDone onHalt).mp holds).canReturn returns
+
+/-- The stops of a process and what follows it include the stops of the process. -/
+theorem Process.Every.of_bind {p : Process S H A} {f : A → Process S H B} {onDone : B → Prop}
+    {onHalt : H → Prop} (holds : (p.bind f).Every permitted onDone onHalt) :
+    p.Every permitted (fun _ => True) onHalt :=
+  Process.every_mono _ permitted (fun _ _ => trivial) (fun _ h => h)
+    ((Process.every_bind p f permitted onDone onHalt).mp holds)
+
+/-- The stops of an iteration include the stops of each step that it reaches below its count. -/
+theorem Process.Every.iterate_step {step : Nat → A → Process S H A} {onDone : A → Prop}
+    {onHalt : H → Prop} : ∀ (i count j : Nat) (a s : A), i < count →
+      (Process.iterate count step j a).Every permitted onDone onHalt →
+      (Process.iterate i step j a).CanReturn permitted s →
+      (step (j + i) s).Every permitted (fun _ => True) onHalt
+  | 0, count, j, a, s, below, holds, returns => by
+      obtain ⟨c, rfl⟩ : ∃ c, count = c + 1 := ⟨count - 1, by omega⟩
+      cases returns
+      simp only [Process.iterate] at holds
+      rw [Nat.add_zero]
+      exact holds.of_bind
+  | i + 1, count, j, a, s, below, holds, returns => by
+      obtain ⟨c, rfl⟩ : ∃ c, count = c + 1 := ⟨count - 1, by omega⟩
+      simp only [Process.iterate] at holds returns
+      obtain ⟨a', first, rest⟩ := Process.CanReturn.of_bind returns
+      have := Process.Every.iterate_step i c (j + 1) a' s (by omega)
+        (holds.of_bind_canReturn first) rest
+      rw [show j + (i + 1) = j + 1 + i by omega]
+      exact this
+
+end
 
 /-- A handler and a retry whose replies to the program are permitted: every reply of a clause,
 the number that begins an attempt and the reply that ends its body are permitted to the program

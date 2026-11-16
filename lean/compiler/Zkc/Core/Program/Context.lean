@@ -16,7 +16,16 @@ context.
 A variable is a name that the context has at its type: its only data is the name. A binding
 carries the names that it binds, one per type, and extends the context by them. An environment
 gives the value of every name in scope; one value changes its type along an equation, in
-`Env.insert`, and nowhere else.
+`Env.insert`, and nowhere else: what it gives at the name bound and at another name is said by
+two lemmas (`Env.insert_at_bound`, `Env.insert_at_other`), which every other file uses instead of
+its cast.
+
+The one structural rule on contexts: a context is within another when the other has each of its
+names at the same type (`Ctx.Within`), which a binding in both keeps; a variable and variables
+move to the wider context with their names (`Var.reindex`, `HList.reindex`). Environments that
+agree at some names: a binding of the same values keeps them agreeing at the names that it does
+not bind (`Names.unbound`), and variables have the same values where they agree
+(`Env.get_same`, `Env.all_same`).
 -/
 
 namespace Zkc.Core
@@ -230,6 +239,163 @@ def Env.extend {Γ : Ctx T} (env : Env V Γ) :
     {types : List T} → (bound : Names types) → HList V types → Env V (Γ.extend bound)
   | [], .nil, .nil => env
   | _ :: _, .cons name rest, .cons v vs => (env.insert name v).extend rest vs
+
+/-- At the name bound, an environment with one more name bound gives the value bound, at its
+type. -/
+theorem Env.insert_at_bound {Γ : Ctx T} (env : Env V Γ) (bound : Name) {τ : T} (v : V τ)
+    {name : Name} (same : name = bound) {σ : T} (found : (Γ.insert bound τ).find? name = some σ) :
+    HEq (env.insert bound v name σ found) v := by
+  unfold Env.insert
+  rw [dite_eq_left same]
+  exact cast_heq _ _
+
+/-- At another name, an environment with one more name bound gives what it gave before. -/
+theorem Env.insert_at_other {Γ : Ctx T} (env : Env V Γ) (bound : Name) {τ : T} (v : V τ)
+    {name : Name} (other : ¬ name = bound) {σ : T}
+    (found : (Γ.insert bound τ).find? name = some σ) :
+    env.insert bound v name σ found =
+      env name σ ((ite_eq_right other).symm.trans ((Ctx.find?_insert Γ bound τ name).symm.trans
+        found)) := by
+  unfold Env.insert
+  rw [dite_eq_right other]
+
+/-! ## The structural rule on contexts -/
+
+/-- Every name of the first context is a name of the second, at the same type. -/
+def Ctx.Within (Γ Δ : Ctx T) : Prop :=
+  ∀ name τ, Γ.find? name = some τ → Δ.find? name = some τ
+
+/-- A context is within itself. -/
+theorem Ctx.Within.refl (Γ : Ctx T) : Γ.Within Γ := fun _ _ found => found
+
+/-- A context within one within a third is within the third. -/
+theorem Ctx.Within.trans {Γ Δ Θ : Ctx T} (first : Γ.Within Δ) (second : Δ.Within Θ) :
+    Γ.Within Θ := fun name τ found => second name τ (first name τ found)
+
+/-- A name bound in both contexts keeps the first within the second. -/
+theorem Ctx.Within.insert {Γ Δ : Ctx T} (keeps : Γ.Within Δ) (name : Name) (τ : T) :
+    (Γ.insert name τ).Within (Δ.insert name τ) := by
+  intro name' σ found
+  rw [Ctx.find?_insert] at found ⊢
+  by_cases same : name' = name
+  · rw [ite_eq_left same] at found ⊢
+    exact found
+  · rw [ite_eq_right same] at found ⊢
+    exact keeps name' σ found
+
+/-- The names of a binding bound in both contexts keep the first within the second. -/
+theorem Ctx.Within.extend {Γ Δ : Ctx T} (keeps : Γ.Within Δ) :
+    ∀ {types : List T} (bound : Names types), (Γ.extend bound).Within (Δ.extend bound) := by
+  intro types bound
+  induction bound generalizing Γ Δ with
+  | nil => exact keeps
+  | cons name rest ih => exact ih (keeps.insert name _)
+
+/-- A name that the context does not have may be bound without changing what is in scope. -/
+theorem Ctx.Within.fresh {Γ : Ctx T} {name : Name} (absent : Γ.find? name = none) (τ : T) :
+    Γ.Within (Γ.insert name τ) := by
+  intro name' σ found
+  rw [Ctx.find?_insert]
+  by_cases same : name' = name
+  · subst same
+    exact nomatch absent.symm.trans found
+  · rw [ite_eq_right same]
+    exact found
+
+/-- A variable, in a context that has its name at its type. -/
+def Var.reindex {Γ Δ : Ctx T} {τ : T} (keeps : Γ.Within Δ) (x : Var Γ τ) : Var Δ τ :=
+  ⟨x.name, keeps x.name τ x.typed⟩
+
+/-- Variables, in a context that has their names at their types. -/
+def HList.reindex {Γ Δ : Ctx T} (keeps : Γ.Within Δ) :
+    {items : List T} → HList (Var Γ) items → HList (Var Δ) items
+  | [], .nil => .nil
+  | _ :: _, .cons x rest => .cons (x.reindex keeps) (HList.reindex keeps rest)
+
+/-- Variables in a wider context have the same names. -/
+theorem HList.names_reindex {Γ Δ : Ctx T} (keeps : Γ.Within Δ) :
+    ∀ {items : List T} (xs : HList (Var Γ) items),
+      HList.names (HList.reindex keeps xs) = HList.names xs
+  | [], .nil => rfl
+  | _ :: _, .cons x rest => by
+      show x.name :: HList.names (HList.reindex keeps rest) = x.name :: HList.names rest
+      rw [HList.names_reindex keeps rest]
+
+/-! ## Environments that agree at names -/
+
+/-- The names of a list that a binding does not bind. -/
+def Names.unbound {types : List T} (bound : Names types) (names : List Name) : List Name :=
+  names.filter fun name => name ∉ bound.toList
+
+/-- A name of a list is left by a binding exactly when the binding does not bind it. -/
+theorem Names.mem_unbound {types : List T} {bound : Names types} {names : List Name}
+    {name : Name} : name ∈ bound.unbound names ↔ name ∈ names ∧ name ∉ bound.toList := by
+  simp only [Names.unbound, List.mem_filter, decide_eq_true_eq]
+
+/-- Two environments agree at a name after one more name is bound to the same value in both,
+when the name is the one bound or they agreed at it before. -/
+theorem Env.insert_same_at {Γ : Ctx T} (env env' : Env V Γ) (bound : Name) {τ : T} (v : V τ)
+    (name : Name) (before : name = bound ∨ ∀ σ found, env name σ found = env' name σ found) :
+    ∀ σ found, env.insert bound v name σ found = env'.insert bound v name σ found := by
+  intro σ found
+  by_cases same : name = bound
+  · exact eq_of_heq ((Env.insert_at_bound env bound v same found).trans
+      (Env.insert_at_bound env' bound v same found).symm)
+  · rw [Env.insert_at_other env bound v same, Env.insert_at_other env' bound v same]
+    cases before with
+    | inl bound => exact absurd bound same
+    | inr agree => exact agree σ _
+
+/-- Two environments agree at a name after a binding binds the same values in both, when the
+binding binds the name or they agreed at it before. -/
+theorem Env.extend_same_at :
+    ∀ {Γ : Ctx T} (env env' : Env V Γ) {types : List T} (bound : Names types)
+      (values : HList V types) (name : Name),
+      (name ∈ bound.toList ∨ ∀ σ found, env name σ found = env' name σ found) →
+      ∀ σ found, env.extend bound values name σ found = env'.extend bound values name σ found
+  | _, _, _, [], .nil, .nil, _, before => by
+      cases before with
+      | inl bound => exact nomatch bound
+      | inr agree => exact agree
+  | _, env, env', _ :: _, .cons first rest, .cons v vs, name, before => by
+      show ∀ σ found, (env.insert first v).extend rest vs name σ found =
+        (env'.insert first v).extend rest vs name σ found
+      refine Env.extend_same_at (env.insert first v) (env'.insert first v) rest vs name ?_
+      cases before with
+      | inl bound =>
+          cases bound with
+          | head => exact .inr (Env.insert_same_at env env' first v first (.inl rfl))
+          | tail _ later => exact .inl later
+      | inr agree => exact .inr (Env.insert_same_at env env' first v name (.inr agree))
+
+/-- Environments that agree on the names of a list that a binding does not bind agree, after the
+binding binds the same values in both, on every name of the list. -/
+theorem Env.extend_same {Γ : Ctx T} {env env' : Env V Γ} {types : List T} {bound : Names types}
+    (values : HList V types) {names : List Name}
+    (agree : ∀ name, name ∈ bound.unbound names → ∀ σ found, env name σ found = env' name σ found) :
+    ∀ name, name ∈ names →
+      ∀ σ found, env.extend bound values name σ found = env'.extend bound values name σ found := by
+  intro name mem
+  apply Env.extend_same_at env env' bound values name
+  by_cases bound' : name ∈ bound.toList
+  · exact .inl bound'
+  · exact .inr (agree name (Names.mem_unbound.mpr ⟨mem, bound'⟩))
+
+/-- A variable has the same value in environments that agree at its name. -/
+theorem Env.get_same {Γ : Ctx T} {env env' : Env V Γ} {τ : T} (x : Var Γ τ)
+    (agree : ∀ σ found, env x.name σ found = env' x.name σ found) : env.get x = env'.get x :=
+  agree τ x.typed
+
+/-- Variables have the same values in environments that agree at their names. -/
+theorem Env.all_same {Γ : Ctx T} {env env' : Env V Γ} :
+    ∀ {items : List T} (xs : HList (Var Γ) items),
+      (∀ name, name ∈ HList.names xs → ∀ σ found, env name σ found = env' name σ found) →
+      env.all xs = env'.all xs
+  | [], .nil, _ => rfl
+  | _ :: _, .cons x rest, agree => by
+      show HList.cons (env.get x) (env.all rest) = HList.cons (env'.get x) (env'.all rest)
+      rw [Env.get_same x (agree x.name (.head _)),
+        Env.all_same rest fun name mem => agree name (.tail _ mem)]
 
 end
 

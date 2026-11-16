@@ -285,13 +285,6 @@ theorem collectRV_hide (r : Role) (size : Option Nat) (a : LTy V) (vs : List (LV
 def restrict (r : Role) {Γ : Ctx (LTy V)} (env : Env (LVal M) Γ) : Env (RV M r) Γ :=
   fun name a found => hide M r a (env name a found)
 
-/-- What a role holds of a value whose type is rewritten along an equation is what it holds of
-the value, rewritten. -/
-theorem hide_cast (r : Role) {a b : LTy V} (e : a = b) (v : LVal M a) :
-    hide M r b (cast (congrArg (LVal M) e) v) = cast (congrArg (RV M r) e) (hide M r a v) := by
-  subst e
-  rfl
-
 /-- Of no value, a role holds no value. -/
 theorem restrict_empty (r : Role) :
     restrict M r (Env.empty : Env (LVal M) Ctx.empty) = Env.empty := by
@@ -304,14 +297,17 @@ theorem restrict_insert (r : Role) {Γ : Ctx (LTy V)} (env : Env (LVal M) Γ) (b
     {a : LTy V} (v : LVal M a) :
     restrict M r (env.insert bound v) = (restrict M r env).insert bound (hide M r a v) := by
   funext name b found
-  simp only [restrict, Env.insert]
-  split
-  · rename_i same
-    have e : a = b := by
+  by_cases same : name = bound
+  · have typed : a = b := by
       rw [Ctx.find?_insert, ite_eq_left same] at found
       exact Option.some.inj found
-    exact hide_cast M r e v
-  · rfl
+    subst typed
+    show hide M r a (env.insert bound v name a found) = _
+    rw [eq_of_heq (Env.insert_at_bound env bound v same found),
+      eq_of_heq (Env.insert_at_bound _ bound _ same found)]
+  · show hide M r b (env.insert bound v name b found) = _
+    rw [Env.insert_at_other env bound v same, Env.insert_at_other _ bound _ same]
+    rfl
 
 /-- The same for the names of a binding, in order, whatever the names: a name bound again is
 bound again on both sides. -/

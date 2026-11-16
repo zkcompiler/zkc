@@ -170,21 +170,6 @@ theorem OwnedOp.resolve_name : ∀ {ins outs : List V.Ty} (o : OwnedOp V ins out
   | _, _, .variant _ _ position => by
       simp only [OwnedOp.name, OwnedOp.resolve, Member.atIndex_index position, Option.map_some]
 
-/-- The position of an item found at a position is that position. -/
-theorem Member.index_of_atIndex {T : Type} :
-    ∀ {Γ : List T} {n : Nat} {a : T} {x : Member Γ a},
-      Member.atIndex Γ n = some ⟨a, x⟩ → x.index = n
-  | [], _, _, _, found => nomatch found
-  | _ :: _, 0, _, _, found => by
-      simp only [Member.atIndex, Option.some.injEq] at found
-      cases found
-      rfl
-  | _ :: Γ, n + 1, _, _, found => by
-      simp only [Member.atIndex, Option.map_eq_some_iff] at found
-      obtain ⟨⟨_, y⟩, located, same⟩ := found
-      cases same
-      simp only [Member.index, Member.index_of_atIndex located]
-
 /-- What the core owns that a name, types and numbers resolve to is written with them: an
 operation that the core owns has one written form. -/
 theorem OwnedOp.name_resolve : ∀ {name : OwnedName} {types : List V.Ty} {numbers : List Nat}
