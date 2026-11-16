@@ -8,8 +8,9 @@ public import Zkc.Core.Value.Skeleton
 The decision that two terms mean the same: the second follows the skeleton of the first.
 
 Following walks a second term along the skeleton of the first, with the first's table
-(`Term.follows`): the second term's values are found in or added to the table, and each
-instruction that it keeps in order must be the skeleton's next entry, on the same identifiers.
+(`Term.follows`): the second term's values are found in or added to the table, the operands of
+an operation that commutes in one order whichever way they were written, and each instruction
+that it keeps in order must be the skeleton's next entry, on the same identifiers.
 What a dialect must decide for it is said by `SkelRules`: its types, its performers, and whether
 two operations are the same. `same` decides two definitions, with the inputs of both on the
 same identifiers.
@@ -58,7 +59,8 @@ def Times.follows (checks : SkelRules D) {w : D.Who} {Γ : Ctx D.Ty} (ids : Ctx 
 mutual
   /-- A term follows a skeleton, from the identifiers of the names in scope and a state whose
   next identifier is above every leaf of the skeleton: the state with the term's values added,
-  or nothing. A value of the term is shared in the table and the skeleton stays where it is.
+  or nothing. A value of the term is shared in the table, with its operands in the order of
+  `ValueRules.order`, and the skeleton stays where it is.
   Every other instruction of the term must be the skeleton's next entry: the same key, the same
   performers, the same operation on the same types, its operands and its condition on the same
   identifiers, a written count or the same identifier of a count, the same reason; its regions
@@ -75,7 +77,7 @@ mutual
     | _, _, .op (ins := ins) (res := res) key o operands results rest, skel, ids, st =>
         match rules.written o with
         | some raw =>
-            let made := share raw (idsOf ids operands) res.length st
+            let made := share raw (rules.order raw (idsOf ids operands)) res.length st
             Term.follows rules checks rest skel (bindIds ids results made.1) made.2
         | none =>
             match skel with

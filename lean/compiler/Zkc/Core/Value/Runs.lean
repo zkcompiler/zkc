@@ -10,9 +10,10 @@ public import Zkc.Core.Process.Same
 The meaning of a skeleton over a table, and that it is one meaning.
 
 A value of a semantics with its type (`Semantics.Dyn`) is what the table's applications read and
-give. A dialect ties its values to a semantics by a relation on written forms and two laws
+give. A dialect ties its values to a semantics by a relation on written forms and three laws
 (`ValueRules.Binding`): an operation that is a value returns what its written form gives on the
-operands, or stops `undefined`; and a written form gives one result on given operands.
+operands, or stops `undefined`; a written form gives one result on given operands; and a written
+form that the dialect says commutes gives the same results on its two operands exchanged.
 
 The value of an identifier is read from the values of the leaves through the table (`Reads`): a
 leaf has its value; a result of an application has what the written operation gives on the
@@ -78,8 +79,9 @@ end
 /-! ## The laws of the values of a dialect -/
 
 /-- The laws that tie the values of a dialect to a semantics: an operation that is a value
-returns what its written form gives on the operands, or stops `undefined`; and a written form
-gives one result on returned operands. -/
+returns what its written form gives on the operands, or stops `undefined`; a written form
+gives one result on returned operands; and a written form that commutes gives the same results
+on its two operands exchanged. -/
 structure ValueRules.Binding {D : Dialect} {Raw : Type} (rules : ValueRules D Raw)
     (sem : Semantics D) (Run : Raw → List sem.Dyn → List sem.Dyn → Prop)
     (undefined : sem.H → Prop) : Prop where
@@ -90,6 +92,8 @@ structure ValueRules.Binding {D : Dialect} {Raw : Type} (rules : ValueRules D Ra
         ∃ stop, sem.op key o path values = .halt stop ∧ undefined stop
   functional : ∀ raw operands results results', Run raw operands results →
     Run raw operands results' → results = results'
+  commutative : ∀ raw, rules.commutes raw = true → ∀ (first second : sem.Dyn) results,
+    Run raw [first, second] results → Run raw [second, first] results
 
 /-! ## Reading a value from the leaves through the table -/
 

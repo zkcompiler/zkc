@@ -12,7 +12,7 @@ refusals, each whole: a target that elaboration refuses, a target that the check
 refuses (an operation with a domain moved above the guard that justified it), a target that
 elaborates and passes the check of facts but is not decided (two guards exchanged), and a
 source that is not accepted. A control: a target that computes another result (an operand
-replaced by another) is not decided.
+replaced by another) is not decided; a target with the operands of a sum exchanged is accepted.
 
 Last, a program of two functions whose first, called by the second, is replaced by what
 `removeUnused` gives: the two programs follow one another (`Defs.follows`), and
@@ -328,6 +328,11 @@ example : refusal (transform [] ⟨⟨1⟩, [F], [F], false, none⟩
 /-- Control: a target that computes another result, `x + x` for `x + y`, is not decided. -/
 example : refusal (transform [] sum sumBody (.mk [0, 1] [.op ⟨1⟩ [10] plus [0, 0]] [10])) =
     some .undecided := by
+  decide +kernel
+
+/-- A target that writes `y + x` for `x + y` is accepted: addition commutes. -/
+example : refusal (transform [] sum sumBody (.mk [0, 1] [.op ⟨1⟩ [10] plus [1, 0]] [10])) =
+    none := by
   decide +kernel
 
 /-! ## A program whose called function is replaced -/

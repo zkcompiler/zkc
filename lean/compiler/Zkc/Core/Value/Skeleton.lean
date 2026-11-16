@@ -19,6 +19,11 @@ identifiers of the table in place of names. A value has the identifier of the fi
 of its operation to its operands; a result of an effect or of a form of control, and an input of
 a region, is a *leaf* with an identifier of its own. `Term.skeleton` builds both, in one walk.
 
+An application is placed in the table with its operands in the order written, except that an
+operation of two operands whose result does not depend on their order has the smaller
+identifier first (`ValueRules.order`), so that `x + y` and `y + x` are one value. An effect keeps
+its operands in the order written.
+
 The meaning of a skeleton is in `Value/Runs.lean`; the decision that two terms mean the same, in
 `Value/Follows.lean`.
 -/
@@ -37,6 +42,21 @@ structure ValueRules (D : Dialect) (Raw : Type) where
   written : ∀ {ins res : List D.Ty}, D.Op ins res → Option Raw
   /-- A number for a written operation, by which the table places its applications. -/
   place : Raw → Nat
+  /-- Whether the result of a written operation of two operands does not depend on their order.
+  Such an operation is placed in the table with its operands in one order, whichever way they
+  were written. -/
+  commutes : Raw → Bool
+
+/-- The identifiers of the operands of a written operation in the order in which the table places
+its applications: two operands of an operation that commutes with the smaller first, and every
+other list as it is. -/
+def ValueRules.order {D : Dialect} {Raw : Type} (rules : ValueRules D Raw) (raw : Raw) :
+    List Nat → List Nat
+  | [] => []
+  | [only] => [only]
+  | [first, second] =>
+      if rules.commutes raw = true ∧ second < first then [second, first] else [first, second]
+  | first :: second :: third :: others => first :: second :: third :: others
 
 /-! ## The skeleton -/
 
@@ -92,14 +112,15 @@ def Times.count {w : D.Who} {Γ : Ctx D.Ty} (ids : Ctx Nat) : Times D w Γ → C
 
 mutual
   /-- The skeleton of a term and the table with its values, from the identifiers of the names in
-  scope and a state. A value is shared in the table; every other result is a new leaf. -/
+  scope and a state. A value is shared in the table, with its operands in the order of
+  `ValueRules.order`; every other result is a new leaf. -/
   def Term.skeleton : {Γ : Ctx D.Ty} → {outs : List D.Ty} → Term D Γ outs → Ctx Nat →
       St D.Ty Raw → Skel D outs × St D.Ty Raw
     | _, _, .ret exit, ids, st => (.ret (idsOf ids exit), st)
     | _, _, .op (res := res) key o operands results rest, ids, st =>
         match rules.written o with
         | some raw =>
-            let made := share raw (idsOf ids operands) res.length st
+            let made := share raw (rules.order raw (idsOf ids operands)) res.length st
             rest.skeleton (bindIds ids results made.1) made.2
         | none =>
             let made := fresh res.length st

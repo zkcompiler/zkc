@@ -15,9 +15,11 @@ these is kept as the table grows above the leaves.
 
 The skeleton of a term is built above its state: the table stays well formed and grows, and
 the skeleton's leaves are below the next identifier, apart from the table, and made in order
-from the state's next identifier on (`Term.skeleton_state`). Following a skeleton builds above
-the state in the same way and keeps its leaves apart (`Term.follows_state`). Nothing here reads
-a semantics: these are the facts about identifiers that the meaning of a skeleton
+from the state's next identifier on (`Term.skeleton_state`). An application is placed on the
+operands written, in the order that `ValueRules.order` gives, which are the same identifiers
+(`ValueRules.mem_order`), all below the next identifier. Following a skeleton builds above the
+state in the same way and keeps its leaves apart (`Term.follows_state`). Nothing here reads a
+semantics: these are the facts about identifiers that the meaning of a skeleton
 (`Value/Runs.lean`) and its proofs (`Value/Soundness.lean`) rest on.
 -/
 
@@ -272,6 +274,28 @@ theorem FactCheck.share_length {T : Type} (written : Raw) (args : List Nat) (cou
   simp only [share]
   split <;> simp
 
+omit [DecidableEq Raw] in
+/-- The operands in the order in which the table places an application are the operands
+written. -/
+theorem ValueRules.mem_order (raw : Raw) :
+    ∀ {ids : List Nat} {id : Nat}, id ∈ rules.order raw ids → id ∈ ids
+  | [], _, m => m
+  | [_], _, m => m
+  | [first, second], id, m => by
+      simp only [ValueRules.order] at m
+      split at m
+      · simp only [List.mem_cons, List.not_mem_nil, or_false] at m ⊢
+        exact m.symm
+      · exact m
+  | _ :: _ :: _ :: _, _, m => m
+
+omit [DecidableEq Raw] in
+/-- Operands below a bound are below it in the order in which the table places an
+application. -/
+theorem ValueRules.order_lt {raw : Raw} {ids : List Nat} {next : Nat}
+    (below : ∀ id, id ∈ ids → id < next) : ∀ id, id ∈ rules.order raw ids → id < next :=
+  fun id m => below id (rules.mem_order raw m)
+
 mutual
   /-- The skeleton of a term is built above the state: the table stays well formed and grows,
   and the leaves are below the next identifier, apart from the table and made in order from the
@@ -290,8 +314,8 @@ mutual
         | some raw =>
             simp only [Term.skeleton, written]
             obtain ⟨wf', grows, made⟩ :=
-              FactCheck.share_grows raw (idsOf ids operands) res.length st wf
-                (FactCheck.idsOf_lt scope operands)
+              FactCheck.share_grows raw (rules.order raw (idsOf ids operands)) res.length st wf
+                (rules.order_lt (FactCheck.idsOf_lt scope operands))
             obtain ⟨wf'', grows', below, apart, inOrder⟩ := Term.skeleton_state rest _ _
               (FactCheck.InScope.bind results _ (scope.mono grows.next)
                 (by rw [FactCheck.share_length]) made) wf'
@@ -448,8 +472,8 @@ mutual
         | some raw =>
             simp only [Term.follows, written] at followed
             obtain ⟨wf', grows, made⟩ :=
-              FactCheck.share_grows raw (idsOf ids operands) res.length st wf
-                (FactCheck.idsOf_lt scope operands)
+              FactCheck.share_grows raw (rules.order raw (idsOf ids operands)) res.length st wf
+                (rules.order_lt (FactCheck.idsOf_lt scope operands))
             obtain ⟨wf'', grows', apart'⟩ := Term.follows_state checks rest skel _ _ st'
               followed
               (FactCheck.InScope.bind results _ (scope.mono grows.next)

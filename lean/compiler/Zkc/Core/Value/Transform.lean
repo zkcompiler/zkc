@@ -10,8 +10,10 @@ public import Zkc.Core.Program.ElaborateLocal
 A transformation of a function, as a checked step.
 
 What the decision is told of a function: every operation is a value, by its written form, except
-a call of a function that can stop with a reason, which is kept in order (`localValueRules`);
-following decides types and performers by equality and two operations by their written forms
+a call of a function that can stop with a reason, which is kept in order; and the operations
+that the core owns whose meaning is symmetric in two operands of one type commute
+(`OwnedName.commutes`), a row of the vocabulary and a call do not (`localValueRules`); following
+decides types and performers by equality and two operations by their written forms
 (`localSkelRules`).
 
 A transformation takes a stored function and gives a stored function. Nothing about how the
@@ -30,15 +32,42 @@ the functions of the second then mean what those of the first mean, their caller
 
 namespace Zkc.Core
 
+/-- Whether an operation that the core owns gives, on two operands of one type, a result that
+does not depend on their order, for all values (`Meaning/Local.lean`): the sum and the product
+of naturals, the conjunction and the disjunction of truth values, and the equality of naturals
+and of truth values. Not the difference, the quotient, the remainder, the power or the order of
+naturals; not a concatenation, nor a sequence, a tuple or a record made of two values of one
+type, whose order is in the result. -/
+def OwnedName.commutes : OwnedName → Bool
+  | .natAdd | .natMul | .natEqual | .boolAnd | .boolOr | .boolEqual => true
+  | .natSub | .natDiv | .natRem | .natPow | .natLess | .boolNot => false
+  | .seqLength | .seqAt | .seqSlice | .seqConcat | .seqFill | .seqSized | .natBelow => false
+  | .seqUnsized | .finToNat | .finWiden | .make | .get | .take | .variant => false
+
+/-- Whether a written operation of a function commutes: an operation that the core owns, as it
+is written (with no types and no numbers), when `OwnedName.commutes` says so. A row of the
+vocabulary does not commute here, whatever a model does: that a row commutes would be a law that
+every model must satisfy, which needs the model and is a later piece. A call does not commute:
+nothing says that the callee's result does not depend on the order of its inputs. -/
+def LocalRaw.commutes {V : Vocabulary} : LocalRaw V → Bool
+  | .owned name [] [] => name.commutes
+  | .owned _ (_ :: _) _ => false
+  | .owned _ [] (_ :: _) => false
+  | .row _ => false
+  | .literal _ _ => false
+  | .call _ => false
+
 section
 variable (V : Vocabulary)
 
 /-- What the value form is told of the operations of a function: every operation is a value,
 by its written form, except a call of a function that can stop with a reason, which is kept in
-order. The table places the applications as the check of facts places them. -/
+order. The table places the applications as the check of facts places them. An operation that
+the core owns whose meaning is symmetric in its two operands commutes (`LocalRaw.commutes`). -/
 def localValueRules (fns : List (FnHeader V)) : ValueRules (localDialect V fns) (LocalRaw V) where
   written := fun o => bif LocalOp.canStop o then none else some (LocalOp.print o)
   place := (localFactRules V fns).place
+  commutes := LocalRaw.commutes
 
 /-- What following decides for a function: types and performers by equality, and two operations
 by their written forms. -/

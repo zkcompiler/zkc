@@ -10,10 +10,14 @@ against them; the decision walks the second along the skeleton of the first. Acc
 repeated computation shared; two computations between guards in the other order, with one
 computation that nothing uses; computations moved around guards that stay in their order; a
 computation moved out of a loop; the same program with other names for its values; a call of a
-function that cannot stop, shared. Refused: `x + y` against `y + x` (it needs a law); two guards
-in the other order; a guard dropped; a call of a function that can stop moved across a guard;
-two loops against one loop that computes the same; a different key on a guard. Then the theorem
-for functions, applied to a pair: the two processes are equal on valid inputs.
+function that cannot stop, shared; `x + y` against `y + x`, since addition commutes; a product
+and a sum with their operands exchanged inside a loop after a guard. Refused: `x - y` against
+`y - x`; `(x + y) + z` against `x + (y + z)` (associativity is not a law that the decision
+knows); a row of the vocabulary with its operands exchanged; two guards in the other order; a
+guard dropped; a call of a function that can stop moved across a guard; two loops against one
+loop that computes the same; a different key on a guard. Then the theorem for functions, applied
+to two pairs, the second of them `x + y` and `y + x`: the two processes are equal on valid
+inputs.
 
 Last, the two controls on the definitions of the value form: why following asks for leaves made
 in order (`Skel.Fresh`), and why what follows an attempt runs only from an end of the attempt
@@ -22,7 +26,7 @@ that can return (`Skel.Runs.attempt`).
 
 namespace Zkc.Core.SameTests
 
-open FactsTests (field plus times natural)
+open FactsTests (field F plus minus times natural fieldRow)
 
 -- What the check of facts returns is compared whole.
 deriving instance DecidableEq for Except
@@ -124,13 +128,58 @@ example : decided [callee false] [.nat] [.nat] false false
       .op ⟨3⟩ [12] plus [10, 10]] [12]) = some true := by
   decide +kernel
 
+/-- `x + y`. -/
+def sum : Region (LocalRaw field) Unit := .mk [0, 1] [.op ⟨1⟩ [10] plus [0, 1]] [10]
+
+/-- `y + x`. -/
+def commutedSum : Region (LocalRaw field) Unit := .mk [0, 1] [.op ⟨1⟩ [10] plus [1, 0]] [10]
+
+/-- `x + y` against `y + x`: accepted, since addition commutes; the table places `y + x` with its
+operands in the order of `x + y`, so the two are one value. It was refused before the decision
+knew that law. -/
+example : decided [] [.nat, .nat] [.nat] false false sum commutedSum = some true := by
+  decide +kernel
+
+/-- A product and a sum with their operands exchanged, inside a loop that comes after a guard,
+and the product again after the loop: each is the value of the first. -/
+example : decided [] [.nat, .nat, .bool] [.nat, .nat] true true
+    (.mk [0, 1, 2] [
+      .guard ⟨1⟩ () 2 .reject,
+      .op ⟨2⟩ [10] (natural 0) [],
+      .loop ⟨3⟩ () (.fixed 3) [10] [11] (.mk [20, 21] [
+        .op ⟨4⟩ [22] times [0, 1],
+        .op ⟨5⟩ [23] plus [21, 22]] [23]),
+      .op ⟨6⟩ [12] times [0, 1]] [11, 12])
+    (.mk [0, 1, 2] [
+      .guard ⟨1⟩ () 2 .reject,
+      .op ⟨2⟩ [10] (natural 0) [],
+      .loop ⟨3⟩ () (.fixed 3) [10] [11] (.mk [20, 21] [
+        .op ⟨4⟩ [22] times [1, 0],
+        .op ⟨5⟩ [23] plus [22, 21]] [23]),
+      .op ⟨6⟩ [12] times [1, 0]] [11, 12]) = some true := by
+  decide +kernel
+
 /-! ## Refused -/
 
-/-- `x + y` against `y + x`: the same value only by a law of addition, which the decision does
-not know. -/
+/-- `x - y` against `y - x`: a difference does not commute. -/
 example : decided [] [.nat, .nat] [.nat] false false
-    (.mk [0, 1] [.op ⟨1⟩ [10] plus [0, 1]] [10])
-    (.mk [0, 1] [.op ⟨1⟩ [10] plus [1, 0]] [10]) = some false := by
+    (.mk [0, 1] [.op ⟨1⟩ [10] minus [0, 1]] [10])
+    (.mk [0, 1] [.op ⟨1⟩ [10] minus [1, 0]] [10]) = some false := by
+  decide +kernel
+
+/-- `(x + y) + z` against `x + (y + z)`: the same value only by the associativity of addition,
+which is not a law that the decision knows; only the order of two operands is. -/
+example : decided [] [.nat, .nat, .nat] [.nat] false false
+    (.mk [0, 1, 2] [.op ⟨1⟩ [10] plus [0, 1], .op ⟨2⟩ [11] plus [10, 2]] [11])
+    (.mk [0, 1, 2] [.op ⟨1⟩ [10] plus [1, 2], .op ⟨2⟩ [11] plus [0, 10]] [11]) = some false := by
+  decide +kernel
+
+/-- A row of the vocabulary with its operands exchanged: the addition of field elements does not
+commute for the decision, whatever a model does; that a row commutes would be a law of the
+model. -/
+example : decided [] [F, F] [F] false false
+    (.mk [0, 1] [.op ⟨1⟩ [10] (fieldRow .add) [0, 1]] [10])
+    (.mk [0, 1] [.op ⟨1⟩ [10] (fieldRow .add) [1, 0]] [10]) = some false := by
   decide +kernel
 
 /-- Two guards in the other order: which one stops first is kept. -/
@@ -223,6 +272,26 @@ example (M : Model field) (ins : HList M.Val guarded) (valid : ins.All M.Valid) 
     (noCallees M) List.nodup_nil (fun _ callee => nomatch callee)
     (fun _ callee => nomatch callee) (fun _ callee => nomatch callee) ins valid
 
+/-- `x + y`, elaborated. -/
+def sumTyped := (elaborated [.nat, .nat] [.nat] false sum).get (by decide +kernel)
+
+/-- `y + x`, elaborated. -/
+def commutedSumTyped := (elaborated [.nat, .nat] [.nat] false commutedSum).get (by decide +kernel)
+
+/-- `x + y` and `y + x` have equal processes on every valid input, in every model: the decision
+accepts the pair, and the law `commutative` of the local operations makes that sound. -/
+example (M : Model field) (ins : HList M.Val [.nat, .nat]) (valid : ins.All M.Valid) :
+    sumTyped.2.denote (localSem M [] (noCallees M)) [] (Env.empty.extend sumTyped.1 ins) =
+      commutedSumTyped.2.denote (localSem M [] (noCallees M)) []
+        (Env.empty.extend commutedSumTyped.1 ins) :=
+  functions_same_equal sumTyped.1 commutedSumTyped.1 sumTyped.2 commutedSumTyped.2 ⟨1⟩ ⟨1⟩
+    (bounds := []) (bounds' := [])
+    ((Term.repeatedAddress_eq_none _).mp (by decide +kernel))
+    ((Term.repeatedAddress_eq_none _).mp (by decide +kernel))
+    (by decide +kernel) (by decide +kernel) (by decide +kernel) M
+    (noCallees M) List.nodup_nil (fun _ callee => nomatch callee)
+    (fun _ callee => nomatch callee) (fun _ callee => nomatch callee) ins valid
+
 /-! ## Controls on the definitions of the value form -/
 
 /-- The operations of the dialect of the controls: one asks for a reply and returns it, one
@@ -262,12 +331,13 @@ def toySem : Semantics toy where
   settle := fun _ _ _ => .call () fun _ => .done ()
   collect := fun _ _ _ => false
 
-/-- Asking is kept in order; failing is a value. -/
+/-- Asking is kept in order; failing is a value; nothing commutes. -/
 def toyRules : ValueRules toy Unit where
   written := fun {_ _} o => match o with
     | .ask => none
     | .fail => some ()
   place := fun _ => 0
+  commutes := fun _ => false
 
 /-- Following decides types and performers by equality, and finds any two operations the
 same. -/
@@ -339,6 +409,7 @@ theorem toyBinding : toyRules.Binding toySem (fun _ _ _ => False) (· = true) wh
     | ask => cases written
     | fail => exact .inr ⟨true, rfl, rfl⟩
   functional := fun _ _ _ _ ran => ran.elim
+  commutative := fun _ _ _ _ _ ran => ran.elim
 
 /-- The term runs its own skeleton (`Term.skeleton_runs`), whose attempt asks nothing of what
 follows it, since its end cannot return. -/

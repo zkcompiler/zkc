@@ -14,13 +14,18 @@ An operation of a function is a value, written as `LocalOp.print` writes it, unl
 with a reason (`LocalOp.canStop`: a call of a function whose header says that it can stop); such
 a call is kept in order (`localValueRules`, `Value/Transform.lean`, a module that computes,
 since the step of a transformation runs the decision). The table places the applications as the
-check of facts places them.
+check of facts places them. The sum and the product of naturals, the conjunction and the
+disjunction of truth values, and the equality of naturals and of truth values commute: each is
+placed with its operands in one order, whichever way they were written; a row of the vocabulary
+and a call do not.
 
 A written form gives results on operands when it is the printed form of a local operation that
 returns those results on those operands (`LocalReturns`), whatever the values, valid or not: the
-law `computes` of the value form is for every value. Against callees with distinct keys, of which
-those whose headers say that they cannot stop stop only `undefined`, the local operations that
-are values satisfy the laws of the value form (`localValueRules_binding`). Following decides
+law `computes` of the value form is for every value, and so is the law `commutative`, since the
+meaning of each operation that commutes is symmetric for all values of its operands. Against
+callees with distinct keys, of which those whose headers say that they cannot stop stop only
+`undefined`, the local operations that are values satisfy the laws of the value form
+(`localValueRules_binding`). Following decides
 types and performers by equality and two operations by their printed forms (`localSkelRules`),
 which is lawful over headers with distinct keys (`localSkelRules_lawful`).
 
@@ -55,11 +60,18 @@ theorem localDyns_eq_toDyns :
       show ⟨_, v⟩ :: (localSem M fns table).dyns rest = ⟨_, v⟩ :: toDyns rest
       rw [localDyns_eq_toDyns rest]
 
+/-- The equality of naturals as the core computes it (`Nat.beq`) does not depend on the order of
+its operands. -/
+theorem natEqual_symmetric (first second : Nat) : Nat.beq first second = Nat.beq second first :=
+  Bool.eq_iff_iff.mpr (by simp only [Nat.beq_eq]; exact eq_comm)
+
 /-- The local operations that are values satisfy the laws of the value form: one that is a
-value returns what its printed form gives, or stops `undefined`; and a printed form gives one
-result. Its hypotheses: the callees have distinct keys, so that a printed form names one
-operation; and a callee whose header says that it cannot stop stops only `undefined`, since a
-call of it is a value. -/
+value returns what its printed form gives, or stops `undefined`; a printed form gives one
+result; and a printed form that commutes, which is that of an operation that the core owns whose
+meaning is symmetric in its two operands, gives the same result on them exchanged. Its
+hypotheses: the callees have distinct keys, so that a printed form names one operation; and a
+callee whose header says that it cannot stop stops only `undefined`, since a call of it is a
+value. -/
 theorem localValueRules_binding (distinct : (fns.map (·.key)).Nodup)
     (quiet : ∀ hdr (callee : Member fns hdr) (args : HList M.Val hdr.ins), hdr.canStop = false →
       (table hdr callee args).Stops (· = .undefined)) :
@@ -95,6 +107,25 @@ theorem localValueRules_binding (distinct : (fns.map (·.key)).Nodup)
     rw [ran] at ran'
     cases ran'
     rw [← sameResults, ← sameResults']
+  commutative := by
+    intro raw commutes first second results returns
+    obtain ⟨ins, res, o, args, returned, printed, sameArgs, sameResults, ran⟩ := returns
+    subst printed
+    cases o with
+    | row => simp [localValueRules, LocalOp.print, LocalRaw.commutes] at commutes
+    | literal => simp [localValueRules, LocalOp.print, LocalRaw.commutes] at commutes
+    | call => simp [localValueRules, LocalOp.print, LocalRaw.commutes] at commutes
+    | owned o =>
+        cases o <;> simp [localValueRules, LocalOp.print, OwnedOp.name, LocalRaw.commutes,
+          OwnedName.commutes] at commutes
+        all_goals
+          rcases args with _ | ⟨a, _ | ⟨b, _ | _⟩⟩
+          simp only [toDyns, List.cons.injEq] at sameArgs
+          obtain ⟨rfl, rfl, -⟩ := sameArgs
+          refine ⟨_, _, .owned _, .cons b (.cons a .nil), returned, rfl, rfl, sameResults, ?_⟩
+          rw [← ran]
+          simp only [localOp, ownedOp, Nat.add_comm, Nat.mul_comm, Bool.and_comm, Bool.or_comm,
+            Bool.beq_comm, natEqual_symmetric]
 
 end
 

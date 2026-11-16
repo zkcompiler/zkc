@@ -9,8 +9,10 @@ The soundness of the value form and of the decision, for any dialect and any sem
 values satisfy the laws of `ValueRules.Binding`.
 
 A term that never stops `undefined` runs its own skeleton, over the table that the skeleton is
-built with (`Term.skeleton_runs`): each value of the term reads through its shared entry, each
-leaf is set to what the term binds there, and the names in scope read as the environment's
+built with (`Term.skeleton_runs`): each value of the term reads through its shared entry (the
+operands of an operation that commutes, in the order of the table, by the law `commutative`:
+`ValueRules.Binding.reads_order`), each leaf is set to what the term binds there, and the names
+in scope read as the environment's
 values (`Agrees`). A term that follows a skeleton and never stops `undefined` runs it, over the
 table that following gives, when the skeleton's leaves are made in order above every value that
 the run already has (`Term.follows_runs`). So two definitions of which the second follows the
@@ -168,6 +170,32 @@ theorem Times.count_is {w : D.Who} {Γ : Ctx D.Ty} {table : Table Raw} {next : N
   | .fixed _ => rfl
   | .value count _ => ⟨env.get count, (agrees.read count).2, rfl⟩
 
+variable {rules} in
+/-- Operands that read in the order written read, in the order in which the table places an
+application of a written operation, as values on which it gives the same results: the two
+operands of an operation that commutes, exchanged, by the law `commutative`. -/
+theorem ValueRules.Binding.reads_order (binding : rules.Binding sem Run undefined)
+    {table : Table Raw} {ρ : Valuation sem.Dyn} (raw : Raw) :
+    ∀ {ids : List Nat} {operands results : List sem.Dyn},
+      ReadsAll Run table ρ ids operands → Run raw operands results →
+      ∃ operands', ReadsAll Run table ρ (rules.order raw ids) operands' ∧
+        Run raw operands' results
+  | [], _, _, read, ran => ⟨_, read, ran⟩
+  | [_], _, _, read, ran => ⟨_, read, ran⟩
+  | [_, _], _, results, read, ran => by
+      simp only [ValueRules.order]
+      split
+      · next exchanged =>
+          cases read with
+          | cons readFirst others =>
+            cases others with
+            | cons readSecond none =>
+              cases none
+              exact ⟨_, .cons readSecond (.cons readFirst .nil),
+                binding.commutative raw exchanged.1 _ _ results ran⟩
+      · exact ⟨_, read, ran⟩
+  | _ :: _ :: _ :: _, _, _, read, ran => ⟨_, read, ran⟩
+
 end
 
 /-- What a loop gives, with the types, is the same with the collected types of its count on the
@@ -227,11 +255,13 @@ mutual
               ⟨values, ran, run⟩ | ⟨stop, halted, bad⟩
             · simp only [Term.denote, ran, Process.bind] at safe ⊢
               obtain ⟨wf', grows, made⟩ :=
-                FactCheck.share_grows raw (idsOf ids operands) res.length st wf
-                  (FactCheck.idsOf_lt agrees.inScope operands)
+                FactCheck.share_grows raw (rules.order raw (idsOf ids operands)) res.length st wf
+                  (rules.order_lt (FactCheck.idsOf_lt agrees.inScope operands))
               have agrees' := agrees.mono grows.sub grows.next (.refl ρ)
-              have reads := FactCheck.share_reads raw (idsOf ids operands) res.length st
-                (agrees'.readsAll operands) run (sem.dyns_length values)
+              obtain ⟨ordered, readOrdered, runOrdered⟩ :=
+                binding.reads_order raw (agrees'.readsAll operands) run
+              have reads := FactCheck.share_reads raw (rules.order raw (idsOf ids operands))
+                res.length st readOrdered runOrdered (sem.dyns_length values)
               exact Term.denote_runs_skeleton binding rest _ _ path _ ρ wf' (support.mono
                 grows.next) (Agrees.bind results values _ agrees' reads made) safe
             · simp only [Term.denote, halted, Process.bind] at safe
@@ -496,11 +526,13 @@ mutual
               ⟨values, ran, run⟩ | ⟨stop, halted, bad⟩
             · simp only [Term.denote, ran, Process.bind] at safe ⊢
               obtain ⟨wf', grows, made⟩ :=
-                FactCheck.share_grows raw (idsOf ids operands) res.length st wf
-                  (FactCheck.idsOf_lt agrees.inScope operands)
+                FactCheck.share_grows raw (rules.order raw (idsOf ids operands)) res.length st wf
+                  (rules.order_lt (FactCheck.idsOf_lt agrees.inScope operands))
               have agrees' := agrees.mono grows.sub grows.next (.refl ρ)
-              have reads := FactCheck.share_reads raw (idsOf ids operands) res.length st
-                (agrees'.readsAll operands) run (sem.dyns_length values)
+              obtain ⟨ordered, readOrdered, runOrdered⟩ :=
+                binding.reads_order raw (agrees'.readsAll operands) run
+              have reads := FactCheck.share_reads raw (rules.order raw (idsOf ids operands))
+                res.length st readOrdered runOrdered (sem.dyns_length values)
               exact Term.denote_runs_followed binding checks lawful rest skel _ _ st' path _ ρ lo
                 followed wf' (below.mono grows.next) (Skel.Apart.grows grows skel apart below)
                 support inOrder (Agrees.bind results values _ agrees' reads made) safe
