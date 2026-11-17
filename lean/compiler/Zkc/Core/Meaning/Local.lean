@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Core.Meaning.Fold
+public import Zkc.Core.Meaning.Events
 
 @[expose] public section
 

@@ -13,6 +13,7 @@ public import Zkc.Core.Program.Linear
 public import Zkc.Core.Program.LocalRules
 public import Zkc.Core.Program.Identity
 public import Zkc.Core.Program.Library
+public import Zkc.Core.Program.Lists
 public import Zkc.Core.Program.Located
 public import Zkc.Core.Program.Erase
 public import Zkc.Core.Program.EraseProgram
@@ -22,6 +23,7 @@ public import Zkc.Core.Program.Requirement
 public import Zkc.Core.Program.Project
 public import Zkc.Core.Program.Record
 public import Zkc.Core.Program.Shape
+public import Zkc.Core.Program.Stepped
 public import Zkc.Core.Program.Syntax
 public import Zkc.Core.Program.Term
 public import Zkc.Core.Program.Typed
@@ -32,6 +34,7 @@ public import Zkc.Core.Meaning.Local
 public import Zkc.Core.Meaning.Place
 public import Zkc.Core.Meaning.Program
 public import Zkc.Core.Meaning.Requirement
+public import Zkc.Core.Meaning.Stepped
 public import Zkc.Core.Meaning.Stops
 public import Zkc.Core.Meaning.Protocol
 public import Zkc.Core.Meaning.Role
@@ -44,6 +47,7 @@ public import Zkc.Core.Evidence.Claim
 public import Zkc.Core.Evidence.Relation
 public import Zkc.Core.Evidence.Summary
 public import Zkc.Core.Evidence.Subject
+public import Zkc.Core.Evidence.Stepped
 public import Zkc.Core.Evidence.Call
 public import Zkc.Core.Value.Table
 public import Zkc.Core.Value.Valuation
@@ -52,6 +56,7 @@ public import Zkc.Core.Value.Leaves
 public import Zkc.Core.Value.Runs
 public import Zkc.Core.Value.Agrees
 public import Zkc.Core.Facts.Facts
+public import Zkc.Core.Facts.SteppedLoops
 public import Zkc.Core.Facts.OpFacts
 public import Zkc.Core.Facts.Range
 public import Zkc.Core.Facts.State

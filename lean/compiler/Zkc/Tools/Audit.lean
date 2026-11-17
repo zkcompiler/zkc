@@ -41,6 +41,13 @@ module that its root module imports, directly or not. Every `.lean` file under t
 a library of tests is a module of the environment that the audit loads, so that no file of the
 tests is left unbuilt and unaudited.
 
+The rule of layers holds for a library that lists its modules for any dialect (`generic`) and
+its modules about one dialect or about the vocabulary (`concrete`): a module for any dialect
+imports no module about one dialect or about the vocabulary, directly or through other modules.
+A violation is found with the shortest path of imports from the module to one such module, and a
+module that the lists name and the audit's environment does not have is a finding too. The core
+gives the two lists of the audit (`coreGeneric`, `coreConcrete`).
+
 `run` audits the libraries, accepts the generated-helper fixture, then checks the negative
 controls (`controls`): modules under `Zkc.Tools.Audit.Controls` that the audit must refuse,
 each audited alone and by one rule. The exit code is 0 only when the libraries and generated
@@ -78,6 +85,11 @@ structure Library where
   /-- Why the declarations of the library are not replayed through the kernel, when they are
   not. A replayed module that imports a module of the library is then a finding. -/
   withoutReplay : Option String := none
+  /-- The modules for any dialect, which the rule of layers holds of. -/
+  generic : Array Name := #[]
+  /-- The modules about one dialect or about the vocabulary, which no module for any dialect
+  imports, directly or not. -/
+  concrete : Array Name := #[]
 
 /-- Whether a module is of a library. -/
 def Library.contains (library : Library) (module : Name) : Bool :=
@@ -93,6 +105,30 @@ def coreImports : Array Name := #[`Init, `Std]
 /-- The prefixes outside the vocabulary that a module of the vocabulary may import: those of the
 core, and the core. -/
 def vocabularyImports : Array Name := coreImports.push `Zkc.Core
+
+/-- The modules of the core for any dialect: every declaration of each is for any dialect and
+any semantics, and none imports, directly or not, a module of `coreConcrete`. -/
+def coreGeneric : Array Name := #[
+  `Zkc.Core.Process.Process, `Zkc.Core.Process.Handler, `Zkc.Core.Process.Same,
+  `Zkc.Core.Program.Identity, `Zkc.Core.Program.Lists, `Zkc.Core.Program.Context,
+  `Zkc.Core.Program.Term, `Zkc.Core.Program.Stepped, `Zkc.Core.Program.BitTree,
+  `Zkc.Core.Program.Library, `Zkc.Core.Program.Requirement, `Zkc.Core.Program.Conditions,
+  `Zkc.Core.Program.Linear,
+  `Zkc.Core.Meaning.Fold, `Zkc.Core.Meaning.Stepped, `Zkc.Core.Meaning.Requirement,
+  `Zkc.Core.Evidence.Claim, `Zkc.Core.Evidence.Summary,
+  `Zkc.Core.Facts.Range]
+
+/-- The modules of the core about one dialect or about the vocabulary: the vocabulary, the types
+and records over it, the program by names with the written operations of the three dialects, the
+dialects, the rules of the function dialect and projection, the events and the semantics of the
+three dialects, and what the function dialect tells the analysis. -/
+def coreConcrete : Array Name := #[
+  `Zkc.Core.Program.Vocabulary, `Zkc.Core.Program.Located, `Zkc.Core.Program.Record,
+  `Zkc.Core.Program.Shape, `Zkc.Core.Program.Syntax, `Zkc.Core.Program.Dialects,
+  `Zkc.Core.Program.LocalRules, `Zkc.Core.Program.Project,
+  `Zkc.Core.Meaning.Events, `Zkc.Core.Meaning.Local, `Zkc.Core.Meaning.Protocol,
+  `Zkc.Core.Meaning.Role,
+  `Zkc.Core.Facts.Local]
 
 /-- The first components of the modules of Lean's own libraries: the only modules that the replay
 through the kernel takes as built. -/
@@ -116,6 +152,7 @@ inductive Rule where
   | fileNotImported
   | fileNotLoaded
   | moduleMissing
+  | layers
   deriving BEq, Inhabited
 
 /-- What a rule requires, as a phrase. -/
@@ -129,6 +166,8 @@ def Rule.describe : Rule → String
   | .fileNotImported => "every file of a library is imported by its root"
   | .fileNotLoaded => "every file of a library of tests is in the audit's environment"
   | .moduleMissing => "a library has a file"
+  | .layers =>
+    "a module for any dialect imports, directly or not, no module about one dialect or about the vocabulary"
 
 /-- One finding: the constant or the module it is about, its rule, and the line it prints. -/
 structure Finding where
@@ -185,6 +224,35 @@ def importClosure (env : Environment) (roots : Array Name) : NameSet := Id.run d
         found := found.insert imported.module
         stack := stack.push imported.module
   return found
+
+/-- A shortest path of imports from a module to one of some modules, the module first and the one
+that it reaches last, when it imports one of them, directly or not. -/
+def importPath (env : Environment) (start : Name) (targets : Array Name) :
+    Option (Array Name) := Id.run do
+  let indices : Std.HashMap Name Nat := env.header.moduleNames.zipIdx.foldl
+    (fun indices (module, index) => indices.insert module index) {}
+  -- each module reached, with the module that imports it on a shortest path
+  let mut reachedFrom : Std.HashMap Name Name := {}
+  let mut queue := #[start]
+  let mut position := 0
+  while position < queue.size do
+    let module := queue[position]!
+    position := position + 1
+    let some index := indices[module]? | continue
+    for imported in env.header.moduleData[index]!.imports do
+      let target := imported.module
+      if target == start || reachedFrom.contains target then continue
+      reachedFrom := reachedFrom.insert target module
+      if targets.contains target then
+        let mut path := #[target]
+        let mut current := target
+        while current != start do
+          let some importer := reachedFrom[current]? | break
+          path := path.push importer
+          current := importer
+        return some path.reverse
+      queue := queue.push target
+  return none
 
 /-- The constants that a constant uses directly: what `#print axioms` reads of it. -/
 def usedConstants (info : ConstantInfo) : Array Name :=
@@ -393,6 +461,19 @@ def audit (env : Environment) (libraries : Array Library) (arts : NameMap Import
           unless allowed.any (·.isPrefixOf target) do
             report := report.add module .importOutside
               s!"{module}: imports {target}, which is not of {library.root} or of {", ".intercalate (allowed.toList.map toString)}"
+  -- the layers: no module for any dialect imports, directly or not, a module about one dialect or
+  -- about the vocabulary; every module of the lists is in the environment
+  for library in libraries do
+    for (kind, listed) in #[("for any dialect", library.generic),
+        ("about one dialect or about the vocabulary", library.concrete)] do
+      for module in listed do
+        unless moduleNames.contains module do
+          report := report.add module .layers
+            s!"{module}: the rule of layers lists it as a module {kind}, and the audit's environment does not have it"
+    for module in library.generic do
+      let some path := importPath env module library.concrete | continue
+      report := report.add module .layers
+        s!"{module}: a module for any dialect, imports {path.back!}, a module about one dialect or about the vocabulary, by {" → ".intercalate (path.toList.map toString)}"
   -- the files of each library: imported by the root of a library proper, in the environment for
   -- a library of tests
   for library in libraries do
@@ -518,7 +599,15 @@ def controls (directory : System.FilePath) : Array Control := #[
     library := { name := "absent", root := `Zkc.Tools.Audit.Controls.Absent
                  directory, withoutReplay := anotherRule }
     rule := .moduleMissing
-    isRefusal := fun finding => finding.subject == `Zkc.Tools.Audit.Controls.Absent }]
+    isRefusal := fun finding => finding.subject == `Zkc.Tools.Audit.Controls.Absent },
+  { description := "a module for any dialect that imports the vocabulary through another module"
+    library := { name := "layers", root := `Zkc.Tools.Audit.Controls.Layers
+                 generic := #[`Zkc.Tools.Audit.Controls.Layers]
+                 concrete := #[`Zkc.Core.Program.Vocabulary], withoutReplay := anotherRule }
+    rule := .layers
+    -- the path of imports goes through the module that the control imports
+    isRefusal := fun finding => finding.subject == `Zkc.Tools.Audit.Controls.Layers &&
+      (finding.line.splitOn "Zkc.Core.Program.Located").length > 1 }]
 
 /-- The built files of the modules under `Zkc` in the entries of a search path, by module. Lean
 finds a module by the first entry that has a directory of the module's first component, and

@@ -1,6 +1,7 @@
 module
 
-public import Zkc.Core.Meaning.Events
+public import Zkc.Core.Program.Term
+public import Zkc.Core.Process.Process
 
 @[expose] public section
 

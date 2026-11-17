@@ -12,6 +12,7 @@ import Zkc.Tools.Audit.Controls.Import
 import Zkc.Tools.Audit.Controls.ImportOutside
 import Zkc.Tools.Audit.Controls.Unreached
 import Zkc.Tools.Audit.Controls.Unreached.Apart
+import Zkc.Tools.Audit.Controls.Layers
 
 /-! `zkc-formal-audit`: the audit of the formal library and of its tests, with the audit of the
 compiler's package (`Zkc.Tools.Audit`). A module of `Zkc.Formal` imports only modules of the core
