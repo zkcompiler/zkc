@@ -58,11 +58,13 @@ def checkAgrees : Prop :=
 
 /-! ## Admission -/
 
-/-- Validity: a function of an admitted program never stops `undefined`, on any valid
-inputs. It is said of every admitted program, however it was made. -/
+/-- Validity: a function of an admitted program never stops `undefined`, on any valid inputs
+that satisfy the requirements of its header's summary. It is said of every admitted program,
+however it was made. -/
 def functionsSafe : Prop :=
   ∀ (a : Admitted V) (M : Model V) (hdr : FnHeader V) (f : Member a.program.headers.fns hdr)
     (ins : HList M.Val hdr.ins), ins.All M.Valid →
+    FnHeader.Required M (Defs.fnTable M a.program.defs) hdr ins →
     (fnMeaning M a.program f ins).Stops (· ≠ .undefined)
 
 /-- Validity: a function of an admitted program returns valid values. -/
@@ -72,18 +74,20 @@ def functionsKeepValidity : Prop :=
     fnMeaning M a.program f ins = .done outs → outs.All M.Valid
 
 /-- A view: a function of an admitted program that its header says cannot stop does not
-stop. -/
+stop, on valid inputs that satisfy the requirements of its header's summary. -/
 def headersSayWhoStops : Prop :=
   ∀ (a : Admitted V) (M : Model V) (hdr : FnHeader V) (f : Member a.program.headers.fns hdr)
-    (ins : HList M.Val hdr.ins), ins.All M.Valid → hdr.canStop = false →
+    (ins : HList M.Val hdr.ins), ins.All M.Valid →
+    FnHeader.Required M (Defs.fnTable M a.program.defs) hdr ins → hdr.canStop = false →
     (fnMeaning M a.program f ins).Stops fun _ => False
 
 /-- Execution and state: following is a producer of assurance and of sameness. For two
-functions elaborated against the same headers, of which the first is safe, however that is
-known, and the second follows its analysis with no refusal and no place that differs
-(`TypedFn.follows`): the second is assured with the bounds recorded while it follows, and the
-two have the same meaning on every valid input, against every callees. The first need not be
-accepted by the check of facts, and the second is not analysed by itself. -/
+functions elaborated against the same headers, of which the first is safe (it satisfies its
+header's summary), however that is known, and the second follows its analysis under that summary
+with no refusal and no place that differs (`TypedFn.follows`): the second is assured with the
+bounds recorded while it follows, and the two have the same meaning on every valid input that
+satisfies the summary's requirements, against every callees. The first need not be accepted by
+the check of facts, and the second is not analysed by itself. -/
 def functionsSame : Prop :=
   ∀ (fns : List (FnHeader V)) (hdr : FnHeader V) (source target : TypedFn V fns hdr)
     (bounds : List (Place × Nat)), source.Safe → source.follows target = .ok bounds →
@@ -92,10 +96,11 @@ def functionsSame : Prop :=
 /-- Execution and state: a step of transformation from an assured function relates functions
 with the same meaning. When the step from an assured function (`AssuredFn.step`) accepts a stored
 target, which elaborates and follows the analysis of the source with no refusal and no place that
-differs: against callees with distinct keys that never stop `undefined` on valid inputs, keep
-validity, and stop only `undefined` where their headers say that they cannot stop, the source and
-what the step returns return the same on every valid input (`TypedFn.SameAs`). The source is not
-admitted again: it is assured by whoever made it. -/
+differs: against callees with distinct keys, summaries that name positions only and that they
+satisfy, which keep validity and stop only `undefined` where their headers say that they cannot
+stop, the source and what the step returns return the same on every valid input that satisfies
+the requirements of their header's summary (`TypedFn.SameAs`). The source is not admitted again:
+it is assured by whoever made it. -/
 def transformSound : Prop :=
   ∀ (fns : List (FnHeader V)) (hdr : FnHeader V) (source next : AssuredFn V fns hdr)
     (target : Region (LocalRaw V) Unit), source.step target = .ok next →
@@ -103,14 +108,14 @@ def transformSound : Prop :=
 
 /-- Execution and state, and validity: the functions of a program whose functions were replaced
 by functions that follow them mean what they meant. For two programs over the same headers with
-distinct keys, of which the first is accepted by the check of facts, whose functions follow one
-by one (`Defs.functionsFollow`): every function of the second has, on valid inputs, the meaning
-of the function of the first with its header, the callers of a replaced function included, and
-the functions of the second never stop `undefined` on valid inputs and keep validity. The second
-program is not asked to be accepted. The protocols of the two programs are not compared, and
-nothing is said of them. -/
+distinct keys, of which no summary has a requirement (`Headers.Unconditional`) and the first is
+accepted by the check of facts, whose functions follow one by one (`Defs.functionsFollow`): every
+function of the second has, on valid inputs, the meaning of the function of the first with its
+header, the callers of a replaced function included, and the functions of the second never stop
+`undefined` on valid inputs and keep validity. The second program is not asked to be accepted.
+The protocols of the two programs are not compared, and nothing is said of them. -/
 def replacedFunctionsSame : Prop :=
-  ∀ (hs : Headers V) (defs defs' : Defs V hs), (hs.fns.map (·.key)).Nodup →
+  ∀ (hs : Headers V) (defs defs' : Defs V hs), (hs.fns.map (·.key)).Nodup → hs.Unconditional →
     ∀ (bounds : List (Place × Nat)), Defs.Accepted defs bounds →
       Defs.functionsFollow defs defs' = true → ∀ (M : Model V),
         (∀ (hdr : FnHeader V) (f : Member hs.fns hdr) (ins : HList M.Val hdr.ins),
@@ -118,9 +123,12 @@ def replacedFunctionsSame : Prop :=
         FnTable.Safe (Defs.fnTable M defs') ∧ FnTable.KeepsValidity (Defs.fnTable M defs')
 
 /-- Validity: an open role program is safe: on valid inputs and every permitted reply it
-never stops `undefined`, whatever its peers do. -/
+never stops `undefined`, whatever its peers do. It is said of a program of which no function's
+summary has a requirement (`Headers.Unconditional`), whose functions are safe on every valid
+input. -/
 def rolesSafe : Prop :=
   ∀ named assoc (a : Admitted V), c.admit named assoc = .ok a →
+    a.program.headers.Unconditional →
     ∀ (M : Model V) (hdr : ProtocolHeader V) (p : Member a.program.headers.protocols hdr)
       (r : Role) (path : List Frame) (ins : HList (RV M r) hdr.ins), ins.All (RV.Valid M r) →
       (roleMeaning M a.program p r path ins).StopsWhen (Permitted M) (· ≠ .undefined)
@@ -236,9 +244,12 @@ def deployMatches : Prop :=
       Stack.Takes (d.stack prover) = [] ∧ Stack.Gives (d.stack prover) = Stack.Takes (d.stack verifier)
 
 /-- Validity: a deployed role of an admitted program never stops `undefined`: its run, on
-valid inputs, valid values taken and every permitted reply. -/
+valid inputs, valid values taken and every permitted reply. It is said of a program of which no
+function's summary has a requirement (`Headers.Unconditional`), whose functions are safe on every
+valid input. -/
 def deployedSafe : Prop :=
   ∀ named assoc (a : Admitted V), c.admit named assoc = .ok a →
+    a.program.headers.Unconditional →
     ∀ declaration (d : Deployed V), c.deploy a declaration = .ok d →
       ∀ (M : Model V) (r : Role) (ins : HList (RV M r) d.entry.ins)
         (taken : HList M.Val (Stack.Takes (d.stack r))),

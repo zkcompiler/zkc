@@ -89,7 +89,7 @@ def run (fns : List (FnHeader V)) (hdr : FnHeader V) (body : Region Raw Unit) : 
 
 /-- The outcome for a function with the key 1 and no callee. -/
 def check (ins outs : List Ty) (canStop : Bool) (body : Region Raw Unit) : Outcome :=
-  run [] ⟨⟨1⟩, ins, outs, canStop, none⟩ body
+  run [] ⟨⟨1⟩, ins, outs, canStop, none, Summary.empty⟩ body
 
 /-- The place of an instruction of a function with a key. -/
 def placeIn (fn : Nat) (instruction : Nat) (blocks : List (Key × Nat) := []) : Place :=

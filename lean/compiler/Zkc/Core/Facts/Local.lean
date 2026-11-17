@@ -11,15 +11,17 @@ tells it.
 
 Per written operation: what it requires (the table of requirements), what it guarantees of its
 operands and results, the ranges of its natural results from those of its operands (the table of
-ranges of arithmetic), and how its result reads. One value for `LocalRaw V`: a role program's
-computations are local operations and read it too. An operation that the core owns is described
-by one table, from its name to the parts of its contract (`ownedContract`): what it requires,
-what it guarantees, the ranges of its results, how its first result reads, and whether the table
-places its operands in one order; the analysis reads every part of it there (`localOpFacts`,
-`LocalRaw.commutes`). No operation of a function guarantees anything yet. Every operation of a
-function is written as it is printed, and has the requirements of that written form; every one
-is shared, a value, except a call of a function that can stop with a reason, which is kept in
-order. A call has no requirement yet. The sum and the product of naturals and the equalities
+ranges of arithmetic), and how its result reads. One value for `LocalRaw V` against the headers
+of the callees: a role program's computations are local operations and read it too. An operation
+that the core owns is described by one table, from its name to the parts of its contract
+(`ownedContract`): what it requires, what it guarantees, the ranges of its results, how its first
+result reads, and whether the table places its operands in one order; the analysis reads every
+part of it there (`localOpFacts`, `LocalRaw.commutes`). No operation that the core owns guarantees
+anything yet. A call requires and guarantees what the summary of its callee's header says
+(`summaryOf`), so that the analysis decides the callee's requirements at the call and learns its
+guarantees. Every operation of a function is written as it is printed, and has the requirements
+of that written form; every one is shared, a value, except a call of a function that can stop
+with a reason, which is kept in order. The sum and the product of naturals and the equalities
 commute; the conjunction and the disjunction, whose meaning is symmetric too, keep the order
 written, since the check of facts learns their operands in that order; a row of the vocabulary
 and a call do not commute (`localFactRules`).
@@ -186,19 +188,39 @@ def ownedContract : OwnedName → OwnedContract V
       { requires := fun _ => [], ensures := fun _ => [], ranges := fun _ _ => [], form := none,
         commutes := false }
 
-variable (V) in
-/-- What the check of facts knows of the written operations of a function: of an operation that
-the core owns, what its contract says (`ownedContract`); of a row, what its domain row says
-(`rowRequires`); of a literal, its natural (`literalRanges`), and a written truth value reads as
-itself. A row, a literal and a call guarantee nothing. -/
-def localOpFacts : OpFacts (LocalRaw V) where
+/-- The summary of the first header with the key; the empty summary when no header has it. -/
+def summaryOf (key : Key) : List (FnHeader V) → Summary (LocalRaw V)
+  | [] => Summary.empty
+  | hdr :: rest => if hdr.key = key then hdr.summary else summaryOf key rest
+
+/-- Among headers with distinct keys, the summary with the key of a header is that header's. -/
+theorem summaryOf_member : ∀ {fns : List (FnHeader V)} {hdr : FnHeader V},
+    (fns.map (·.key)).Nodup → Member fns hdr → summaryOf hdr.key fns = hdr.summary
+  | _ :: _, _, _, .head => by simp only [summaryOf, ↓reduceIte]
+  | other :: rest, hdr, distinct, .tail callee => by
+      have notIn : other.key ∉ rest.map (·.key) := (List.nodup_cons.mp distinct).1
+      have listed : hdr.key ∈ rest.map (·.key) := Member.key_mem (·.key) callee
+      have apart : other.key ≠ hdr.key := fun same => notIn (same ▸ listed)
+      simp only [summaryOf, apart, ↓reduceIte]
+      exact summaryOf_member (List.nodup_cons.mp distinct).2 callee
+
+/-- What the check of facts knows of the written operations of a function, against the headers
+of its callees: of an operation that the core owns, what its contract says (`ownedContract`); of a
+row, what its domain row says (`rowRequires`); of a call, what the summary of the header with the
+callee's key requires and guarantees (`summaryOf`), nothing when no header has it; of a literal,
+its natural (`literalRanges`), and a written truth value reads as itself. A row and a literal
+guarantee nothing. -/
+def localOpFacts (fns : List (FnHeader V)) : OpFacts (LocalRaw V) where
   requires
     | .owned name types _ => (ownedContract name).requires types
     | .row key => rowRequires key
-    | _ => []
+    | .call key => (summaryOf key fns).requires
+    | .literal .. => []
   ensures
     | .owned name types _ => (ownedContract name).ensures types
-    | _ => []
+    | .call key => (summaryOf key fns).ensures
+    | .row _ => []
+    | .literal .. => []
   ranges
     | .owned name types _, operands => (ownedContract name).ranges types operands
     | .literal τ data, _ => literalRanges τ data
@@ -248,7 +270,7 @@ def localFactRules (fns : List (FnHeader V)) : FactRules (localDialect V fns) (L
   commutes := LocalRaw.commutes
   range := localRange
   noValue := Ty.noValue
-  ops := localOpFacts V
+  ops := localOpFacts fns
   place := localPlace
 
 end

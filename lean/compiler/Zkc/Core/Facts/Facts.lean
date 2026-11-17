@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Core.Meaning.Program
+public import Zkc.Core.Meaning.Validity
 
 @[expose] public section
 
@@ -9,8 +10,9 @@ What an annotation says, as definitions.
 
 `Term.EveryLoop` is a property of the count of every loop that a run of a term reaches, by the
 same recursion as `Term.denote`. `Respects` says that no loop runs more often than the bound
-that the annotation of an admitted program gives it, in every function
-(`Defs.FunctionsRespect`) and every role program (`Defs.ProtocolsRespect`).
+that the annotation of an admitted program gives it, in every function on valid inputs that
+satisfy the requirements of its header's summary (`Defs.FunctionsRespect`) and every role program
+(`Defs.ProtocolsRespect`).
 -/
 
 namespace Zkc.Core
@@ -107,12 +109,13 @@ def Annotation.Bounded (annotation : Annotation) (definition : Key) (role : Opti
 section
 variable {V : Vocabulary} (M : Model V) (annotation : Annotation)
 
-/-- Every function on valid inputs, bound to the names of its inputs: no loop runs more often
-than its bound. -/
+/-- Every function on valid inputs that satisfy the requirements of its header's summary, bound to
+the names of its inputs: no loop runs more often than its bound. -/
 def Defs.FunctionsRespect : {hs : Headers V} → Defs V hs → Prop
   | _, .nil => True
   | _, .fn (hs := hs) hdr inputs body _ rest =>
       (∀ ins : HList M.Val hdr.ins, ins.All M.Valid →
+        FnHeader.Required M (Defs.fnTable M rest) hdr ins →
         body.EveryLoop (localSem M hs.fns (Defs.fnTable M rest)) (fun _ _ => True)
           (annotation.Bounded hdr.key none) [] [] (Env.empty.extend inputs ins)) ∧
         Defs.FunctionsRespect rest
@@ -131,8 +134,8 @@ def Defs.ProtocolsRespect : {hs : Headers V} → Defs V hs → Prop
           (annotation.Bounded hdr.key (some r)) path [] (Env.empty.extend inputs ins)) ∧
         Defs.ProtocolsRespect rest
 
-/-- Every function on valid inputs and every role program of every protocol on valid inputs
-and permitted replies: no loop runs more often than its bound. -/
+/-- Every function on valid inputs that satisfy its requirements and every role program of every
+protocol on valid inputs and permitted replies: no loop runs more often than its bound. -/
 def Defs.Respects {hs : Headers V} (defs : Defs V hs) : Prop :=
   Defs.FunctionsRespect M annotation defs ∧ Defs.ProtocolsRespect M annotation defs
 

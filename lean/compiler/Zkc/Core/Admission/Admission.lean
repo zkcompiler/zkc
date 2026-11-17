@@ -8,10 +8,12 @@ public import Zkc.Core.Program.Refusal
 
 /-!
 What admission gives: the association of a program and its resolution, and an admitted program,
-which carries what admission establishes of it: for every model, its functions never stop
-`undefined` on valid inputs and keep validity, and no loop runs more often than the bound that
-its annotation gives it (`Typed.Assured`). So what is said of the functions of an admitted
-program holds of every admitted program, however it was made.
+which carries what admission establishes of it: for every model, its functions satisfy the
+summaries of their headers (on valid inputs that satisfy the requirements they never stop
+`undefined` and return valid values that satisfy the guarantees), keep validity, and no loop runs
+more often than the bound that its annotation gives it on such inputs (`Typed.Assured`). So what
+is said of the functions of an admitted program holds of every admitted program, however it was
+made.
 -/
 
 namespace Zkc.Core
@@ -79,11 +81,12 @@ def resolve {V : Vocabulary} (p : Typed V) (raw : Association) :
 
 /-! ## An admitted program -/
 
-/-- What admission establishes of a typed program with an annotation, for every model: the
-functions of its table never stop `undefined` on valid inputs and keep validity, and no loop runs
-more often than the bound that the annotation gives it (`Respects`). -/
+/-- What admission establishes of a typed program with an annotation, for every model: every
+function of its table satisfies the summary of its header, the table keeps validity, and no loop
+runs more often than the bound that the annotation gives it, a function's on the inputs that
+satisfy its requirements (`Respects`). -/
 def Typed.Assured {V : Vocabulary} (p : Typed V) (annotation : Annotation) : Prop :=
-  ∀ M : Model V, FnTable.Safe (Defs.fnTable M p.defs) ∧
+  ∀ M : Model V, FnTable.SatisfiesSummaries (Defs.fnTable M p.defs) ∧
     FnTable.KeepsValidity (Defs.fnTable M p.defs) ∧ Respects M annotation p
 
 /-- An admitted program: the typed program, its annotation (the bound of each loop as often as

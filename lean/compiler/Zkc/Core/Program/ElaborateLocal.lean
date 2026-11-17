@@ -9,7 +9,9 @@ public import Zkc.Core.Program.Conditions
 The elaboration of a function, its erased form, and their round trip in both directions.
 
 A function's body is elaborated by the local rules in the context of its inputs, by the names
-that its region gives them; its results are the header's; its instructions have their own
+that its region gives them, once the summary of its header is found to name its inputs, and its
+results for a guarantee, by their positions only (`Summary.Positional`); its results are the
+header's; its instructions have their own
 addresses; every name is bound at one place; its linear values are used once; its header says
 whether it can stop with a reason as its body does (a guard, or a call of a function that can);
 and its case analyses without an arm give nothing, which elaboration gives by construction.
@@ -43,15 +45,19 @@ section
 variable {V : Vocabulary}
 
 /-- The body of a function by names, with the names of its inputs and what elaboration decides
-about it, against the headers of the functions before it. -/
+about it, against the headers of the functions before it. The summary of its header is checked
+first: a requirement or a guarantee that names anything but an input, or for a guarantee a result,
+by its position is refused at the definition by the rule `summary`. -/
 def elabFn (fns : List (FnHeader V)) (hdr : FnHeader V) :
     Region (LocalRaw V) Unit →
       Except (ProgramRefusal V)
         ((inputs : Names hdr.ins) × (body : Fn V fns hdr inputs) ×' FnConditions body)
   | .mk inputs instructions exit =>
-      match Names.ofList hdr.ins inputs with
-      | none => .error (refuseWhole hdr.key .inputs (.number hdr.ins.length inputs.length))
-      | some bound =>
+      match placed : hdr.summary.misplaced hdr.ins.length hdr.outs.length,
+          Names.ofList hdr.ins inputs with
+      | some requirement, _ => .error (refuseWhole hdr.key .summary (.requirement requirement))
+      | none, none => .error (refuseWhole hdr.key .inputs (.number hdr.ins.length inputs.length))
+      | none, some bound =>
           match elaborated : elabBody (localRules fns) hdr.key (Ctx.empty.extend bound) [] none
               instructions exit with
           | .error refusal => .error refusal
@@ -75,7 +81,7 @@ def elabFn (fns : List (FnHeader V)) (hdr : FnHeader V) :
                             if stops : hdr.canStop = body.canStop then
                               .ok ⟨bound, body, (Term.repeatedAddress_eq_none body).mp repeated,
                                 by exact misused, stops, armed,
-                                (Term.rebound_eq_none bound.toList body).mp rebound⟩
+                                (Term.rebound_eq_none bound.toList body).mp rebound, placed⟩
                             else
                               .error (refuseWhole hdr.key .stops (.stops hdr.canStop body.canStop))
               else .error (refuseWhole hdr.key .outputs (.types hdr.outs outs))
@@ -101,28 +107,37 @@ theorem elabFn_erase {fns : List (FnHeader V)} (distinct : (fns.map (·.key)).No
   have repeated := (Term.repeatedAddress_eq_none body).mpr ok.distinct
   have rebound := (Term.rebound_eq_none inputs.toList body).mpr ok.once
   have misused : body.misuse (fun τ : V.Ty => Ty.isLinear V τ) inputs = none := ok.linear
+  have placed : hdr.summary.misplaced hdr.ins.length hdr.outs.length = none := ok.summary
   simp only [eraseFn, elabFn, Names.ofList_toList]
   split
-  · rename_i refusal found
-    rw [elaborated] at found
+  · rename_i requirement found
+    rw [placed] at found
     cases found
-  · rename_i outs t found
-    rw [elaborated] at found
-    cases found
-    simp only [↓reduceDIte, cast_eq]
+  · rename_i none
+    cases none
+  · rename_i bound _ named
+    cases named
     split
-    · rename_i blocks key found
-      rw [repeated] at found
+    · rename_i refusal found
+      rw [elaborated] at found
       cases found
-    · split
-      · rename_i name found
-        rw [rebound] at found
+    · rename_i outs t found
+      rw [elaborated] at found
+      cases found
+      simp only [↓reduceDIte, cast_eq]
+      split
+      · rename_i blocks key found
+        rw [repeated] at found
         cases found
       · split
-        · rename_i misuse found
-          rw [misused] at found
+        · rename_i name found
+          rw [rebound] at found
           cases found
-        · simp only [ok.stops, ↓reduceDIte]
+        · split
+          · rename_i misuse found
+            rw [misused] at found
+            cases found
+          · simp only [ok.stops, ↓reduceDIte]
 
 /-- The round trip of a function, elaborated then erased: a function that elaboration gives
 erases to the region that was elaborated. -/
@@ -134,6 +149,7 @@ theorem eraseFn_elab {fns : List (FnHeader V)} {hdr : FnHeader V}
   obtain ⟨names, instructions, exit⟩ := region
   simp only [elabFn] at elaborated
   split at elaborated
+  · cases elaborated
   · cases elaborated
   · rename_i bound named
     split at elaborated

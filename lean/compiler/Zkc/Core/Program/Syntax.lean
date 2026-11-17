@@ -2,6 +2,7 @@ module
 
 public import Zkc.Core.Program.Shape
 public import Zkc.Core.Program.Located
+public import Zkc.Core.Program.Requirement
 
 @[expose] public section
 
@@ -263,10 +264,11 @@ inductive RoleRaw (V : Vocabulary) where
   | keep (holders : Holders)
   | apply (callee : Key) (roles : List Role)
 
-/-- A definition by names. The body's inputs are its ports. -/
+/-- A definition by names. The body's inputs are its ports. A function has its summary, which
+names its inputs and results by position. -/
 inductive Definition (V : Vocabulary) where
   | fn (key : Key) (ins outs : List V.Ty) (canStop : Bool) (kernel : Option Key)
-      (body : Region (LocalRaw V) Unit)
+      (summary : Summary (LocalRaw V)) (body : Region (LocalRaw V) Unit)
   | protocol (key : Key) (roles : Nat) (ins outs : List (LTy V))
       (body : Region (ProtocolRaw V) (List Role))
 

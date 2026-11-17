@@ -396,23 +396,19 @@ theorem sumAbove_sound (lawful : OpFacts.Lawful ops R Run) (hc : Consistent Run 
     (hcl : Closed ρ tbl) (hk : k.Holds R ρ) {first second : Nat} {strict : Bool} {vf vs : Val}
     (hf : ρ first = some vf) (hs : ρ second = some vs)
     (h : sumAbove ops tbl k first second strict = true) :
-    ∀ x y, R.nat vf = some x → R.nat vs = some y → if strict then x < y else x ≤ y := by
-  intro x y hx hy
+    ∃ x y, R.nat vf = some x ∧ R.nat vs = some y ∧ if strict then x < y else x ≤ y := by
   simp only [sumAbove] at h
   split at h
   · next a b e =>
       obtain ⟨vals, hvals, va, vb, x', y', eq, hx', hy', hsum⟩ := formOf_values lawful hc hcl e hs
       obtain ⟨wa, wb, rfl, ha, hb⟩ := valuesOf_pair hvals
       cases eq
-      rw [hy] at hsum
-      cases hsum
       simp only [Bool.or_eq_true, Bool.and_eq_true, beq_iff_eq, Bool.not_eq_true',
         decide_eq_true_eq] at h
       rcases h with ⟨rfl, hs'⟩ | ⟨rfl, hs'⟩
       · rw [hf] at ha
         cases ha
-        rw [hx] at hx'
-        cases hx'
+        refine ⟨x', x' + y', hx', hsum, ?_⟩
         cases strict
         · simp
         · simp only [↓reduceIte]
@@ -421,8 +417,7 @@ theorem sumAbove_sound (lawful : OpFacts.Lawful ops R Run) (hc : Consistent Run 
           omega
       · rw [hf] at hb
         cases hb
-        rw [hx] at hy'
-        cases hy'
+        refine ⟨y', x' + y', hy', hsum, ?_⟩
         cases strict
         · simp
         · simp only [↓reduceIte]
@@ -435,8 +430,7 @@ theorem differenceBelow_sound (lawful : OpFacts.Lawful ops R Run) (hc : Consiste
     (hcl : Closed ρ tbl) (hk : k.Holds R ρ) {first second : Nat} {strict : Bool} {vf vs : Val}
     (hf : ρ first = some vf) (hs : ρ second = some vs)
     (h : differenceBelow ops tbl k first second strict = true) :
-    ∀ x y, R.nat vf = some x → R.nat vs = some y → if strict then x < y else x ≤ y := by
-  intro x y hx hy
+    ∃ x y, R.nat vf = some x ∧ R.nat vs = some y ∧ if strict then x < y else x ≤ y := by
   simp only [differenceBelow] at h
   split at h
   · next a u e =>
@@ -444,15 +438,12 @@ theorem differenceBelow_sound (lawful : OpFacts.Lawful ops R Run) (hc : Consiste
         formOf_values lawful hc hcl e hf
       obtain ⟨wa, wu, rfl, ha, hu⟩ := valuesOf_pair hvals
       cases eq
-      rw [hx] at hdiff
-      cases hdiff
       simp only [Bool.and_eq_true, beq_iff_eq, Bool.or_eq_true, Bool.not_eq_true',
         decide_eq_true_eq] at h
       obtain ⟨rfl, hs'⟩ := h
       rw [hs] at ha
       cases ha
-      rw [hy] at hx'
-      cases hx'
+      refine ⟨x' - y', x', hdiff, hx', ?_⟩
       cases strict
       · simp only [Bool.false_eq_true, ↓reduceIte]
         omega
@@ -466,13 +457,12 @@ theorem offsetBelow_sound (lawful : OpFacts.Lawful ops R Run) (hc : Consistent R
     (hcl : Closed ρ tbl) (hk : k.Holds R ρ) {first second : Nat} {vf vs : Val}
     (hf : ρ first = some vf) (hs : ρ second = some vs)
     (h : offsetBelow ops tbl k first second = true) :
-    ∀ x y, R.nat vf = some x → R.nat vs = some y → x < y := by
-  intro x y hx hy
+    ∃ x y, R.nat vf = some x ∧ R.nat vs = some y ∧ x < y := by
   -- One reading of the sum: `t < second - o` is the order that a loop made for its index `t`.
   have below : ∀ {o t o0 t0 : Nat} {fact : OrderFact}, fact ∈ k.orders.find factDepth t →
       fact.first = t → fact.strict = true →
       tbl.formOf ops fact.second = some (.difference, [second, o]) →
-      NatAt R ρ o o0 → NatAt R ρ t t0 → o0 + t0 < y := by
+      NatAt R ρ o o0 → NatAt R ρ t t0 → ∃ y, R.nat vs = some y ∧ o0 + t0 < y := by
     intro o t o0 t0 fact m hfirst hstrict e ho ht
     obtain ⟨t1, d0, ht1, ⟨vd, hvd, hdn⟩, lt⟩ := hk.orders _ (BitTree.mem_of_find _ _ _ _ m)
     simp only [hstrict, ↓reduceIte] at lt
@@ -483,32 +473,32 @@ theorem offsetBelow_sound (lawful : OpFacts.Lawful ops R Run) (hc : Consistent R
     cases eq
     have e1 := ht1.unique ht
     have e2 := NatAt.unique ⟨_, ho', ho1⟩ ho
-    have e3 := NatAt.unique ⟨_, hr, hr0⟩ ⟨_, hs, hy⟩
+    rw [hs] at hr
+    cases hr
     rw [hdn] at hdiff
     cases hdiff
-    omega
+    exact ⟨r0, hr0, by omega⟩
   simp only [offsetBelow] at h
   split at h
   · next a b e =>
       obtain ⟨vals, hvals, va, vb, a0, b0, eq, ha0, hb0, hsum⟩ := formOf_values lawful hc hcl e hf
       obtain ⟨wa, wb, rfl, ha, hb⟩ := valuesOf_pair hvals
       cases eq
-      rw [hx] at hsum
-      cases hsum
       simp only [Bool.or_eq_true, List.any_eq_true, Bool.and_eq_true, beq_iff_eq] at h
       rcases h with ⟨fact, m, ⟨⟨hfirst, hstrict⟩, _⟩, hd⟩ | ⟨fact, m, ⟨⟨hfirst, hstrict⟩, _⟩, hd⟩
       · split at hd
         · next r a' e' =>
             simp only [Bool.and_eq_true, beq_iff_eq] at hd
             obtain ⟨rfl, rfl⟩ := hd
-            exact below m hfirst hstrict e' ⟨_, ha, ha0⟩ ⟨_, hb, hb0⟩
+            obtain ⟨y, hy, lt⟩ := below m hfirst hstrict e' ⟨_, ha, ha0⟩ ⟨_, hb, hb0⟩
+            exact ⟨a0 + b0, y, hsum, hy, lt⟩
         · cases hd
       · split at hd
         · next r b' e' =>
             simp only [Bool.and_eq_true, beq_iff_eq] at hd
             obtain ⟨rfl, rfl⟩ := hd
-            have := below m hfirst hstrict e' ⟨_, hb, hb0⟩ ⟨_, ha, ha0⟩
-            omega
+            obtain ⟨y, hy, lt⟩ := below m hfirst hstrict e' ⟨_, hb, hb0⟩ ⟨_, ha, ha0⟩
+            exact ⟨a0 + b0, y, hsum, hy, by omega⟩
         · cases hd
   · cases h
 
@@ -642,86 +632,102 @@ theorem RangesHold.has {rf : Option Range} {v : Val} {x : Nat} (h : RangesHold R
   cases hx'
   exact has
 
+/-- Ranges that say an order are both known. -/
+theorem rangesOrder_some {rf rs : Option Range} {strict : Bool}
+    (h : rangesOrder rf rs strict = true) : ∃ a b, rf = some a ∧ rs = some b := by
+  simp only [rangesOrder] at h
+  split at h
+  · next a b => exact ⟨a, b, rfl, rfl⟩
+  · cases h
+
+/-- Two values whose ranges say an order read as naturals in that order. -/
+theorem rangesOrder_read {rf rs : Option Range} {strict : Bool} {vf vs : Val}
+    (hrf : RangesHold R rf vf) (hrs : RangesHold R rs vs) (h : rangesOrder rf rs strict = true) :
+    ∃ x y, R.nat vf = some x ∧ R.nat vs = some y ∧ if strict then x < y else x ≤ y := by
+  obtain ⟨a, b, rfl, rfl⟩ := rangesOrder_some h
+  obtain ⟨x, hx, -⟩ := hrf a rfl
+  obtain ⟨y, hy, -⟩ := hrs b rfl
+  exact ⟨x, y, hx, hy, rangesOrder_sound (hrf.has hx) (hrs.has hy) h⟩
+
+/-- An order that is known of two identifiers holds of their values, which read as naturals. -/
+theorem Known.Holds.hasOrder_read {k : Known} (hk : k.Holds R ρ) {first second : Nat}
+    {strict : Bool} {vf vs : Val} (hf : ρ first = some vf) (hs : ρ second = some vs)
+    (h : k.hasOrder first second strict = true) :
+    ∃ x y, R.nat vf = some x ∧ R.nat vs = some y ∧ if strict then x < y else x ≤ y := by
+  obtain ⟨x, y, ⟨v, hv, hx⟩, ⟨w, hw, hy⟩, o⟩ := hk.hasOrder h
+  rw [hf] at hv
+  cases hv
+  rw [hs] at hw
+  cases hw
+  exact ⟨x, y, hx, hy, o⟩
+
 theorem knownLe_sound (lawful : OpFacts.Lawful ops R Run) (hc : Consistent Run ρ tbl)
     (hcl : Closed ρ tbl) (hk : k.Holds R ρ) {first second : Nat} {vf vs : Val}
     {rf rs : Option Range} (hf : ρ first = some vf) (hs : ρ second = some vs)
     (hrf : RangesHold R rf vf) (hrs : RangesHold R rs vs)
     (h : knownLe ops tbl k first second rf rs = true) :
-    ∀ x y, R.nat vf = some x → R.nat vs = some y → x ≤ y := by
-  intro x y hx hy
-  simp only [knownLe, Bool.or_eq_true, beq_iff_eq] at h
-  rcases h with (((h | h) | h) | h) | h
-  · simpa using rangesOrder_sound (hrf.has hx) (hrs.has hy) h
+    ∃ x y, R.nat vf = some x ∧ R.nat vs = some y ∧ x ≤ y := by
+  simp only [knownLe, Bool.or_eq_true, Bool.and_eq_true, beq_iff_eq] at h
+  rcases h with (((h | ⟨h, known⟩) | h) | h) | h
+  · simpa using rangesOrder_read hrf hrs h
   · subst h
     rw [hf] at hs
     cases hs
-    rw [hx] at hy
-    cases hy
-    exact Nat.le_refl _
-  · obtain ⟨x', y', hx', hy', o⟩ := hk.hasOrder h
-    rw [hx'.unique ⟨_, hf, hx⟩, hy'.unique ⟨_, hs, hy⟩] at o
-    simpa using o
-  · simpa using sumAbove_sound lawful hc hcl hk hf hs h x y hx hy
-  · simpa using differenceBelow_sound lawful hc hcl hk hf hs h x y hx hy
+    obtain ⟨r, hr⟩ := Option.isSome_iff_exists.mp known
+    obtain ⟨x, hx, -⟩ := hrf r hr
+    exact ⟨x, x, hx, hx, Nat.le_refl _⟩
+  · simpa using hk.hasOrder_read hf hs h
+  · simpa using sumAbove_sound lawful hc hcl hk hf hs h
+  · simpa using differenceBelow_sound lawful hc hcl hk hf hs h
 
 theorem knownLt_sound (lawful : OpFacts.Lawful ops R Run) (hc : Consistent Run ρ tbl)
     (hcl : Closed ρ tbl) (hk : k.Holds R ρ) {first second : Nat} {vf vs : Val}
     {rf rs : Option Range} (hf : ρ first = some vf) (hs : ρ second = some vs)
     (hrf : RangesHold R rf vf) (hrs : RangesHold R rs vs)
     (h : knownLt ops tbl k first second rf rs = true) :
-    ∀ x y, R.nat vf = some x → R.nat vs = some y → x < y := by
-  intro x y hx hy
+    ∃ x y, R.nat vf = some x ∧ R.nat vs = some y ∧ x < y := by
   simp only [knownLt, Bool.or_eq_true] at h
   rcases h with (((h | h) | h) | h) | h
-  · simpa using rangesOrder_sound (hrf.has hx) (hrs.has hy) h
-  · obtain ⟨x', y', hx', hy', o⟩ := hk.hasOrder h
-    rw [hx'.unique ⟨_, hf, hx⟩, hy'.unique ⟨_, hs, hy⟩] at o
-    simpa using o
-  · simpa using sumAbove_sound lawful hc hcl hk hf hs h x y hx hy
-  · simpa using differenceBelow_sound lawful hc hcl hk hf hs h x y hx hy
-  · exact offsetBelow_sound lawful hc hcl hk hf hs h x y hx hy
+  · simpa using rangesOrder_read hrf hrs h
+  · simpa using hk.hasOrder_read hf hs h
+  · simpa using sumAbove_sound lawful hc hcl hk hf hs h
+  · simpa using differenceBelow_sound lawful hc hcl hk hf hs h
+  · exact offsetBelow_sound lawful hc hcl hk hf hs h
 
 theorem knownDifference_sound (lawful : OpFacts.Lawful ops R Run) (hc : Consistent Run ρ tbl)
     (hcl : Closed ρ tbl) (hk : k.Holds R ρ) {first second : Nat} {vf vs : Val}
     {rf rs : Option Range} {n : Nat} (hf : ρ first = some vf) (hs : ρ second = some vs)
     (hrf : RangesHold R rf vf) (hrs : RangesHold R rs vs)
     (h : knownDifference ops tbl k second first rs rf n = true) :
-    ∀ x y, R.nat vs = some x → R.nat vf = some y → x - y = n := by
-  intro x y hx hy
+    ∃ x y, R.nat vs = some x ∧ R.nat vf = some y ∧ x - y = n := by
   simp only [knownDifference, Bool.or_eq_true] at h
   rcases h with h | h
   · split at h
     · next p p' q q' =>
         simp only [decide_eq_true_eq] at h
         obtain ⟨rfl, rfl, le, eq⟩ := h
-        have hp := hrs.has hx _ rfl
-        have hq := hrf.has hy _ rfl
+        obtain ⟨x, hx, hp⟩ := hrs _ rfl
+        obtain ⟨y, hy, hq⟩ := hrf _ rfl
         have e1 : x = p := by have h1 := hp.2 p rfl; have h2 : p ≤ x := hp.1; omega
         have e2 : y = q := by have h1 := hq.2 q rfl; have h2 : q ≤ y := hq.1; omega
         subst e1; subst e2
-        exact eq
+        exact ⟨x, y, hx, hy, eq⟩
     · cases h
   · split at h
     · next a c e =>
         obtain ⟨vals, hvals, va, vc, x', c0, eq, ha', hc', hsum⟩ := formOf_values lawful hc hcl e hs
         obtain ⟨wa, wc, rfl, ha, hcv⟩ := valuesOf_pair hvals
         cases eq
-        rw [hx] at hsum
-        cases hsum
         simp only [Bool.or_eq_true, Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at h
         rcases h with ⟨rfl, hr⟩ | ⟨rfl, hr⟩
         · rw [hf] at ha
           cases ha
-          rw [hy] at ha'
-          cases ha'
           have := Range.has_point.mp (hk.rangeOf_at ⟨_, hcv, hc'⟩ hr)
-          omega
+          exact ⟨x' + c0, x', hsum, ha', by omega⟩
         · rw [hf] at hcv
           cases hcv
-          rw [hy] at hc'
-          cases hc'
           have := Range.has_point.mp (hk.rangeOf_at ⟨_, ha, ha'⟩ hr)
-          omega
+          exact ⟨x' + c0, c0, hsum, hc', by omega⟩
     · cases h
 
 /-- A requirement that the rules decide holds of the values it names. -/
@@ -755,34 +761,33 @@ theorem decideRequirement_sound (lawful : OpFacts.Lawful ops R Run) (hc : Consis
   · next n a ra =>
       obtain ⟨va, rfl, ha⟩ := single rfl
       have hr : RangesHold R ra va := by simpa using hranges 0 va rfl
-      intro x hx
       split at h
       · next r =>
-          have := (hr.has hx r rfl).1
+          obtain ⟨x, hx, has⟩ := hr r rfl
+          have := has.1
           simp only [decide_eq_true_eq] at h
-          omega
+          exact ⟨x, hx, by omega⟩
       · cases h
   · next n a ra =>
       obtain ⟨va, rfl, ha⟩ := single rfl
       have hr : RangesHold R ra va := by simpa using hranges 0 va rfl
-      intro x hx
       split at h
       · next lo hi =>
-          have := (hr.has hx _ rfl).2 hi rfl
+          obtain ⟨x, hx, has⟩ := hr _ rfl
+          have := has.2 hi rfl
           simp only [decide_eq_true_eq] at h
-          omega
+          exact ⟨x, hx, by omega⟩
       · cases h
   · next n a ra =>
       obtain ⟨va, rfl, ha⟩ := single rfl
       have hr : RangesHold R ra va := by simpa using hranges 0 va rfl
-      intro x hx
       split at h
       · next lo hi =>
-          have has := hr.has hx _ rfl
+          obtain ⟨x, hx, has⟩ := hr _ rfl
           have h1 := has.2 hi rfl
           have h2 : lo ≤ x := has.1
           simp only [decide_eq_true_eq] at h
-          omega
+          exact ⟨x, hx, by omega⟩
       · cases h
   · next n b a rb ra =>
       obtain ⟨vb, va, rfl, hb, ha⟩ := pair rfl
@@ -1385,64 +1390,35 @@ theorem learn_holds (lawful : OpFacts.Lawful ops R Run) {tbl : Table Raw}
     (learn ops tbl fuel k req ids).Holds R ρ := by
   obtain ⟨vs, denoted, relation⟩ := holds
   have agrees := OperandsAt.agrees lawful.functional resolved denoted
-  -- An identifier of which a range is known has a value that reads as a natural.
-  have read : ∀ {id : Nat} {v : Val}, k.natural id = true → ρ id = some v →
-      ∃ n, R.nat v = some n ∧ NatAt R ρ id n := fun {id v} natural hv => by
-    simp only [Known.natural, Option.isSome_iff_exists] at natural
-    obtain ⟨r, hr⟩ := natural
-    obtain ⟨n, ⟨w, hw, hn⟩, _⟩ := hk.rangeOf hr
-    rw [hv] at hw
-    cases hw
-    exact ⟨n, hn, v, hv, hn⟩
   unfold learn
   split
   · next first second =>
       obtain ⟨a, b, rfl, -, -⟩ := DenotesAll.two denoted
       have ha : ρ first = some a := agrees 0 first rfl
       have hb : ρ second = some b := agrees 1 second rfl
-      split
-      · next natural =>
-          simp only [Bool.and_eq_true] at natural
-          obtain ⟨x, hx, nx⟩ := read natural.1 ha
-          obtain ⟨y, hy, ny⟩ := read natural.2 hb
-          exact hk.pushLe nx ny (relation x y hx hy)
-      · exact hk
+      obtain ⟨x, y, hx, hy, le⟩ := relation
+      exact hk.pushLe ⟨a, ha, hx⟩ ⟨b, hb, hy⟩ le
   · next first second =>
       obtain ⟨a, b, rfl, -, -⟩ := DenotesAll.two denoted
       have ha : ρ first = some a := agrees 0 first rfl
       have hb : ρ second = some b := agrees 1 second rfl
-      split
-      · next natural =>
-          simp only [Bool.and_eq_true] at natural
-          obtain ⟨x, hx, nx⟩ := read natural.1 ha
-          obtain ⟨y, hy, ny⟩ := read natural.2 hb
-          exact hk.pushLess nx ny (relation x y hx hy)
-      · exact hk
+      obtain ⟨x, y, hx, hy, lt⟩ := relation
+      exact hk.pushLess ⟨a, ha, hx⟩ ⟨b, hb, hy⟩ lt
   · next n id =>
       obtain ⟨a, rfl, -⟩ := DenotesAll.one denoted
       have ha : ρ id = some a := agrees 0 id rfl
-      split
-      · next natural =>
-          obtain ⟨x, hx, nx⟩ := read natural ha
-          exact hk.addRange nx ⟨relation x hx, fun _ e => nomatch e⟩
-      · exact hk
+      obtain ⟨x, hx, le⟩ := relation
+      exact hk.addRange ⟨a, ha, hx⟩ ⟨le, fun _ e => nomatch e⟩
   · next n id =>
       obtain ⟨a, rfl, -⟩ := DenotesAll.one denoted
       have ha : ρ id = some a := agrees 0 id rfl
-      split
-      · next natural =>
-          obtain ⟨x, hx, nx⟩ := read natural ha
-          exact hk.addRange nx ((Range.has_point.mpr rfl : (Range.point n).Has n).below
-            (relation x hx))
-      · exact hk
+      obtain ⟨x, hx, lt⟩ := relation
+      exact hk.addRange ⟨a, ha, hx⟩ ((Range.has_point.mpr rfl : (Range.point n).Has n).below lt)
   · next n id =>
       obtain ⟨a, rfl, -⟩ := DenotesAll.one denoted
       have ha : ρ id = some a := agrees 0 id rfl
-      split
-      · next natural =>
-          obtain ⟨x, hx, nx⟩ := read natural ha
-          exact hk.addRange nx (Range.has_point.mpr (relation x hx))
-      · exact hk
+      obtain ⟨x, hx, same⟩ := relation
+      exact hk.addRange ⟨a, ha, hx⟩ (Range.has_point.mpr same)
   · next id =>
       obtain ⟨a, rfl, -⟩ := DenotesAll.one denoted
       have ha : ρ id = some a := agrees 0 id rfl

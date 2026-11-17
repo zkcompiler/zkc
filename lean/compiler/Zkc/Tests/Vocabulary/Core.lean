@@ -24,7 +24,7 @@ def at_ (instruction : Nat) : Place := ⟨⟨1⟩, [], some ⟨instruction⟩, n
 elaborates. -/
 def refusal (ins outs : List standard.Ty) (canStop : Bool)
     (body : Region (LocalRaw standard) Unit) : Option (ProgramRefusal standard) :=
-  match elabFn [] ⟨⟨1⟩, ins, outs, canStop, none⟩ body with
+  match elabFn [] ⟨⟨1⟩, ins, outs, canStop, none, Summary.empty⟩ body with
   | .ok _ => none
   | .error refusal => some refusal
 
@@ -34,7 +34,7 @@ not elaborate. -/
 def verdict (ins outs : List standard.Ty) (canStop : Bool)
     (body : Region (LocalRaw standard) Unit) :
     Option (List (ProgramRefusal standard) ⊕ List (Place × Nat)) :=
-  match typeFn [] ⟨⟨1⟩, ins, outs, canStop, none⟩ body with
+  match typeFn [] ⟨⟨1⟩, ins, outs, canStop, none, Summary.empty⟩ body with
   | .ok f =>
       match f.check with
       | .ok bounds => some (.inr bounds)

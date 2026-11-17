@@ -52,8 +52,8 @@ follows the analysis of the first with no place that differs (`TypedFn.follows`)
 one of them does not elaborate. -/
 def decided (fns : List (FnHeader field)) (ins outs : List field.Ty) (stops : Bool)
     (body body' : Region (LocalRaw field) Unit) : Option Bool :=
-  match typeFn fns ⟨⟨1⟩, ins, outs, stops, none⟩ body,
-      typeFn fns ⟨⟨1⟩, ins, outs, stops, none⟩ body' with
+  match typeFn fns ⟨⟨1⟩, ins, outs, stops, none, Summary.empty⟩ body,
+      typeFn fns ⟨⟨1⟩, ins, outs, stops, none, Summary.empty⟩ body' with
   | .ok source, .ok target =>
       some (match source.follows target with
         | .ok _ => true
@@ -65,8 +65,8 @@ analysis of the first with no place that differs and no refusal (`TypedFn.follow
 when one of them does not elaborate. -/
 def safelyFollows (fns : List (FnHeader field)) (ins outs : List field.Ty) (stops : Bool)
     (body body' : Region (LocalRaw field) Unit) : Option Bool :=
-  match typeFn fns ⟨⟨1⟩, ins, outs, stops, none⟩ body,
-      typeFn fns ⟨⟨1⟩, ins, outs, stops, none⟩ body' with
+  match typeFn fns ⟨⟨1⟩, ins, outs, stops, none, Summary.empty⟩ body,
+      typeFn fns ⟨⟨1⟩, ins, outs, stops, none, Summary.empty⟩ body' with
   | .ok source, .ok target =>
       some (match source.follows target with
         | .ok _ => true
@@ -74,7 +74,7 @@ def safelyFollows (fns : List (FnHeader field)) (ins outs : List field.Ty) (stop
   | _, _ => none
 
 /-- A callee with the key 9 from a natural to a natural, which can stop or cannot. -/
-def callee (canStop : Bool) : FnHeader field := ⟨⟨9⟩, [.nat], [.nat], canStop, none⟩
+def callee (canStop : Bool) : FnHeader field := ⟨⟨9⟩, [.nat], [.nat], canStop, none, Summary.empty⟩
 
 /-- Two naturals and two truth values. -/
 abbrev guarded : List field.Ty := [.nat, .nat, .bool, .bool]
@@ -479,7 +479,7 @@ example : decided [callee true] [.nat, .nat] [.nat] true
   decide +kernel
 
 /-- A second callee, with the key 8, from a natural to a natural, which can stop too. -/
-def otherCallee : FnHeader field := ⟨⟨8⟩, [.nat], [.nat], true, none⟩
+def otherCallee : FnHeader field := ⟨⟨8⟩, [.nat], [.nat], true, none, Summary.empty⟩
 
 /-- Only the callee of a call of a function that can stop differs, between two callees of one
 header but their keys: refused by the comparison of the effects' written operations. -/
@@ -502,8 +502,8 @@ def noCallees (M : Model field) : FnTable M [] := fun _ callee _ => nomatch call
 
 /-- No callee is a table of callees that a statement about a function can be made against. -/
 theorem noCallees_callees (M : Model field) : Callees M (noCallees M) :=
-  ⟨List.nodup_nil, (fun _ callee => nomatch callee), (fun _ callee => nomatch callee),
-    (fun _ callee => nomatch callee)⟩
+  ⟨List.nodup_nil, (fun _ listed => nomatch listed), (fun _ callee => nomatch callee),
+    (fun _ callee => nomatch callee), (fun _ callee => nomatch callee)⟩
 
 /-- The whole verdict on the two bodies: the second follows the first with no place that differs
 and no refusal. -/
@@ -511,7 +511,7 @@ example : safelyFollows [] guarded [.nat, .nat] true aroundGuards afterGuards = 
   decide +kernel
 
 /-- The header of the two bodies: the key 1, no callee, and it can stop. -/
-def guardedHeader : FnHeader field := ⟨⟨1⟩, guarded, [.nat, .nat], true, none⟩
+def guardedHeader : FnHeader field := ⟨⟨1⟩, guarded, [.nat, .nat], true, none, Summary.empty⟩
 
 /-- A stored function typed against no callee; nothing when it does not elaborate. -/
 def typed (hdr : FnHeader field) (body : Region (LocalRaw field) Unit) :
@@ -534,18 +534,20 @@ example : afterGuardsFn.Assured [] ∧ aroundGuardsFn.SameAs afterGuardsFn :=
   TypedFn.follows_assured (aroundGuardsFn.check_assured (bounds := []) (by decide +kernel)).safe
     (by decide +kernel)
 
-/-- So the two processes are equal, in a model and on valid inputs. -/
+/-- So the two processes are equal, in a model and on valid inputs, of which the empty summary
+requires nothing. -/
 example (M : Model field) (ins : HList M.Val guarded) (valid : ins.All M.Valid) :
     aroundGuardsFn.meaning M (noCallees M) ins = afterGuardsFn.meaning M (noCallees M) ins :=
   (TypedFn.follows_assured (aroundGuardsFn.check_assured (bounds := []) (by decide +kernel)).safe
     (bounds := []) (by decide +kernel)).2 M (noCallees M) (noCallees_callees M) ins valid
+    (fun _ listed => nomatch listed)
 
 /-- The whole verdict on `x + y` and `y + x`: accepted. -/
 example : safelyFollows [] [.nat, .nat] [.nat] false sum commutedSum = some true := by
   decide +kernel
 
 /-- The header of the sum: the key 1, no callee, and it cannot stop. -/
-def sumHeader : FnHeader field := ⟨⟨1⟩, [.nat, .nat], [.nat], false, none⟩
+def sumHeader : FnHeader field := ⟨⟨1⟩, [.nat, .nat], [.nat], false, none, Summary.empty⟩
 
 /-- `x + y`, as a typed function. -/
 def sumFn := (typed sumHeader sum).get (by decide +kernel)
@@ -559,6 +561,7 @@ example (M : Model field) (ins : HList M.Val [.nat, .nat]) (valid : ins.All M.Va
     sumFn.meaning M (noCallees M) ins = commutedSumFn.meaning M (noCallees M) ins :=
   (TypedFn.follows_assured (sumFn.check_assured (bounds := []) (by decide +kernel)).safe
     (bounds := []) (by decide +kernel)).2 M (noCallees M) (noCallees_callees M) ins valid
+    (fun _ listed => nomatch listed)
 
 /-! ## Controls on the definitions of the value form -/
 
@@ -646,15 +649,15 @@ def attemptedOtherKey : Term toy Ctx.empty [()] :=
 /-- The attempt with other names follows the analysis of the first: the attempt is the
 skeleton's entry, the leaves of its number and of what it gives are the entry's, and the call in
 its body is the entry's next. The whole verdict accepts it. -/
-example : (Analysis.follow toyRules toyChecks ⟨1⟩ none ⟨[], []⟩
-    (Analysis.analyse toyRules toyChecks ⟨1⟩ none ⟨[], []⟩ .nil attempted) .nil
+example : (Analysis.follow toyRules toyChecks ⟨1⟩ none Summary.empty
+    (Analysis.analyse toyRules toyChecks ⟨1⟩ none Summary.empty .nil attempted) .nil
     attemptedOtherNames).accepted = true := by
   decide +kernel
 
 /-- The attempt with another key differs, at the attempt: where it stops is part of what it
 does. -/
-example : (Analysis.follow toyRules toyChecks ⟨1⟩ none ⟨[], []⟩
-    (Analysis.analyse toyRules toyChecks ⟨1⟩ none ⟨[], []⟩ .nil attempted) .nil
+example : (Analysis.follow toyRules toyChecks ⟨1⟩ none Summary.empty
+    (Analysis.analyse toyRules toyChecks ⟨1⟩ none Summary.empty .nil attempted) .nil
     attemptedOtherKey).state.differs = [⟨⟨1⟩, [], some ⟨3⟩, none⟩] := by
   decide +kernel
 

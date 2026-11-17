@@ -159,7 +159,7 @@ def twoModel : Model field where
 /-! ## Two steps -/
 
 /-- A function with the key 1 of two naturals and a truth value, which can stop. -/
-def header : FnHeader field := ⟨⟨1⟩, [.nat, .nat, .bool], [.nat], true, none⟩
+def header : FnHeader field := ⟨⟨1⟩, [.nat, .nat, .bool], [.nat], true, none, Summary.empty⟩
 
 /-- `x + y`, a product that only an unused product uses, a guard, `x + y` again, a loop that
 computes `x + y` again and a square that nothing uses, and the product of `x + y` with what the
@@ -230,7 +230,7 @@ example : admitted.fn.SameAs secondStep.fn :=
 /-! ## Two steps on a function with regions -/
 
 /-- A function with the key 1 of a truth value, a natural or a truth value, and two naturals. -/
-def regionsHeader : FnHeader field := ⟨⟨1⟩, [.bool, natOrTruth, .nat, .nat], [.nat], false, none⟩
+def regionsHeader : FnHeader field := ⟨⟨1⟩, [.bool, natOrTruth, .nat, .nat], [.nat], false, none, Summary.empty⟩
 
 /-- `x + y`, and a product that nothing uses; a choice whose first region computes `x + y` again
 and a square of it that nothing uses, and whose second gives zero; a case analysis whose first
@@ -320,7 +320,7 @@ admitted function and the step's result carry, and each theorem of a step, appli
 every model. -/
 
 /-- A function with the key 1 of an index below 4 and a natural. -/
-def boundedHeader : FnHeader field := ⟨⟨1⟩, [.fin 4, .nat], [.nat], false, none⟩
+def boundedHeader : FnHeader field := ⟨⟨1⟩, [.fin 4, .nat], [.nat], false, none, Summary.empty⟩
 
 /-- `n := index as a natural`, the square of the natural, which nothing uses, and a loop as often
 as `n` says, which adds the iteration number to what it carries from the natural. -/
@@ -368,8 +368,9 @@ example : outcome (admitFn [] boundedHeader boundedSource) = .ok [(place 3, 3)] 
     outcome (boundedFn.step boundedTarget) = .ok [(place 3, 3)] := by
   decide +kernel
 
-/-- The soundness of the check of facts, on the admitted function: on valid inputs its loop runs
-at most 3 times, and it never stops `undefined` and returns valid values. -/
+/-- The soundness of the check of facts, on the admitted function: on valid inputs, of which its
+empty summary requires nothing, its loop runs at most 3 times, and it never stops `undefined` and
+returns valid values. -/
 example (M : Model field) (ins : HList M.Val boundedHeader.ins) (valid : ins.All M.Valid) :
     boundedFn.fn.body.EveryLoop (localSem M [] (noCallees M)) (fun _ _ => True)
         (Annotation.Bounded ⟨[(place 3, 3)]⟩ ⟨1⟩ none) [] []
@@ -377,36 +378,51 @@ example (M : Model field) (ins : HList M.Val boundedHeader.ins) (valid : ins.All
       (boundedFn.fn.body.denote (localSem M [] (noCallees M)) []
         (Env.empty.extend boundedFn.fn.inputs ins)).Every (fun _ _ => True)
         (fun outs => outs.All M.Valid) (· ≠ .undefined) :=
-  checkFacts_sound (noCallees_callees M) ⟨1⟩ boundedFn.fn.inputs boundedFn.fn.body
+  have sound := checkFacts_sound (noCallees_callees M) ⟨1⟩ boundedHeader.summary
+    boundedFn.fn.conditions.summary boundedFn.fn.inputs boundedFn.fn.body
     boundedFn.fn.conditions.distinct
     (admitFn_ok boundedFn_accepted).2
     [(place 3, 3)] (fun _ _ inside _ _ => by
       rw [show boundedFn.bounds = [(place 3, 3)] by decide +kernel]
       exact inside)
-    ins valid
+    ins valid (fun _ listed => nomatch listed)
+  ⟨sound.1, Process.every_mono _ _ (fun _ returned => returned.1) (fun _ stop => stop) sound.2⟩
 
-/-- An admitted function carries its safety. -/
+/-- An admitted function carries its safety: it satisfies the empty summary of its header, so
+on every valid input it never stops `undefined` and returns valid values. -/
 example (M : Model field) (ins : HList M.Val boundedHeader.ins) (valid : ins.All M.Valid) :
     (boundedFn.fn.meaning M (noCallees M) ins).Every (fun _ _ => True)
       (fun outs => outs.All M.Valid) (· ≠ .undefined) :=
-  boundedFn.assured.safe M (noCallees M) (noCallees_callees M) ins valid
+  Process.every_mono _ _
+    (fun outs returned => ((localSem M [] (noCallees M)).dyns_valid_iff outs).mp returned.1)
+    (fun _ stop => stop)
+    (boundedFn.assured.safe M (noCallees M) (noCallees_callees M) ins
+      (((localSem M [] (noCallees M)).dyns_valid_iff ins).mpr valid)
+      (fun _ listed => nomatch listed))
 
 /-- Its body is assured, in the sense of the evidence layer, on the empty path and its inputs
-bound to valid values (`TypedFn.safe_iff_assured`). -/
+bound to valid values that satisfy the requirements of its header's summary
+(`TypedFn.safe_iff_assured`). -/
 example (M : Model field) :
     Assured (localSem M [] (noCallees M)) (fun _ _ => True) (ValidDyn M)
       (· = .undefined) boundedFn.fn.body
       (fun path env => path = [] ∧ ∃ ins : HList M.Val boundedHeader.ins, ins.All M.Valid ∧
+        FnHeader.Required M (noCallees M) boundedHeader ins ∧
         env = Env.empty.extend boundedFn.fn.inputs ins) :=
-  (TypedFn.safe_iff_assured boundedFn.fn).mp boundedFn.assured.safe M (noCallees M)
-    (noCallees_callees M)
+  ((TypedFn.safe_iff_assured boundedFn.fn).mp boundedFn.assured.safe M (noCallees M)
+    (noCallees_callees M)).1
 
 /-- The result of the step is safe: it was not analysed by itself; it follows a safe
 function. -/
 example (M : Model field) (ins : HList M.Val boundedHeader.ins) (valid : ins.All M.Valid) :
     (boundedStep.fn.meaning M (noCallees M) ins).Every (fun _ _ => True)
       (fun outs => outs.All M.Valid) (· ≠ .undefined) :=
-  boundedStep.assured.safe M (noCallees M) (noCallees_callees M) ins valid
+  Process.every_mono _ _
+    (fun outs returned => ((localSem M [] (noCallees M)).dyns_valid_iff outs).mp returned.1)
+    (fun _ stop => stop)
+    (boundedStep.assured.safe M (noCallees M) (noCallees_callees M) ins
+      (((localSem M [] (noCallees M)).dyns_valid_iff ins).mpr valid)
+      (fun _ listed => nomatch listed))
 
 /-- The loop of the step's result runs at most as often as the bound that the step recorded for
 it. -/
@@ -418,7 +434,7 @@ example (M : Model field) (ins : HList M.Val boundedHeader.ins) (valid : ins.All
     (fun _ _ inside _ _ => by
       rw [show boundedStep.bounds = [(place 3, 3)] by decide +kernel]
       exact inside)
-    ins valid
+    ins valid (fun _ listed => nomatch listed)
 
 /-- The stored forms of what admission and the step return are what they were given
 (`admitFn_erases`, `AssuredFn.step_erases`). -/
@@ -434,7 +450,7 @@ example : boundedStep.fn.SameAs exchangedStep.fn :=
 /-! ## Refusals -/
 
 /-- A function with the key 1 of two naturals. -/
-def sum : FnHeader field := ⟨⟨1⟩, [.nat, .nat], [.nat], false, none⟩
+def sum : FnHeader field := ⟨⟨1⟩, [.nat, .nat], [.nat], false, none, Summary.empty⟩
 
 /-- `x + y`. -/
 def sumBody : Region (LocalRaw field) Unit := .mk [0, 1] [.op ⟨1⟩ [10] plus [0, 1]] [10]
@@ -459,7 +475,7 @@ pair is one source and one target: the target follows the source with no place t
 its whole refusal. -/
 
 /-- A function with the key 1 of a field element, which can stop. -/
-def inverse : FnHeader field := ⟨⟨1⟩, [F], [F], true, none⟩
+def inverse : FnHeader field := ⟨⟨1⟩, [F], [F], true, none, Summary.empty⟩
 
 /-- The inverse after the guard that the element is not zero. -/
 def inverseGuarded : Region (LocalRaw field) Unit := .mk [0] [
@@ -521,7 +537,7 @@ example : refusal (inverseGuardedAdmitted.step (.mk [0] [
   decide +kernel
 
 /-- A function with the key 1 of a field element, which cannot stop. -/
-def inverseOrZero : FnHeader field := ⟨⟨1⟩, [F], [F], false, none⟩
+def inverseOrZero : FnHeader field := ⟨⟨1⟩, [F], [F], false, none, Summary.empty⟩
 
 /-- The inverse in the region of a choice that runs when the element is not zero, and zero in
 the other region. -/
@@ -556,7 +572,7 @@ example : refusal (((accepted? (admitFn [] inverseOrZero inverseInRegion)).get
   decide +kernel
 
 /-- A function with the key 1 of a field element and a natural, which can stop. -/
-def inverseRepeated : FnHeader field := ⟨⟨1⟩, [F, .nat], [F], true, none⟩
+def inverseRepeated : FnHeader field := ⟨⟨1⟩, [F, .nat], [F], true, none, Summary.empty⟩
 
 /-- A loop as often as the natural says, which may be no iteration, carrying a field element
 from zero: its body guards that the input is not zero and gives the input's inverse. The inverse
@@ -595,7 +611,7 @@ example : refusal (((accepted? (admitFn [] inverseRepeated inverseInLoop)).get
 /-! ### A target that differs, and a source that is not admitted -/
 
 /-- A function with the key 1 of two truth values, which can stop. -/
-def twoGuards : FnHeader field := ⟨⟨1⟩, [.bool, .bool], [], true, none⟩
+def twoGuards : FnHeader field := ⟨⟨1⟩, [.bool, .bool], [], true, none, Summary.empty⟩
 
 /-- A target that elaborates but differs from its source: two guards exchanged, so that which one
 stops first is another. It differs at its first guard, which is not the skeleton's next entry. -/
@@ -608,7 +624,7 @@ example : refusal (((accepted? (admitFn [] twoGuards
 
 /-- A source that the check of facts refuses is not admitted, with its whole refusal: the
 inverse with nothing known of its operand. There is no assured function to take a step from. -/
-example : refusal (admitFn [] ⟨⟨1⟩, [F], [F], false, none⟩
+example : refusal (admitFn [] ⟨⟨1⟩, [F], [F], false, none, Summary.empty⟩
     (.mk [0] [.op ⟨1⟩ [10] (fieldRow .inverse) [0]] [10])) =
     some [unjustified 1 (fieldRow .inverse)
       (.holds (.apply (fieldRow .isNonzero) [0])) [none]] := by
@@ -633,7 +649,7 @@ gives. -/
 abbrev token : field.Ty := .record ⟨5⟩ true .nil
 
 /-- A function with the key 1 of no input that gives two linear values. -/
-def tokensHeader : FnHeader field := ⟨⟨1⟩, [], [token, token], false, none⟩
+def tokensHeader : FnHeader field := ⟨⟨1⟩, [], [token, token], false, none, Summary.empty⟩
 
 /-- Two linear values, each made by a literal, both given. -/
 def twoTokens : Region (LocalRaw field) Unit := .mk [] [
@@ -653,7 +669,7 @@ example : outcome (admitFn [] tokensHeader twoTokens) = .ok [] ∧
   decide +kernel
 
 /-- A function with the key 1 of two naturals that gives two naturals. -/
-def sumsHeader : FnHeader field := ⟨⟨1⟩, [.nat, .nat], [.nat, .nat], false, none⟩
+def sumsHeader : FnHeader field := ⟨⟨1⟩, [.nat, .nat], [.nat, .nat], false, none, Summary.empty⟩
 
 /-- `a + b`, then `b + a`. -/
 def reversedSums : Region (LocalRaw field) Unit := .mk [0, 1] [
@@ -674,7 +690,7 @@ example : outcome (admitFn [] sumsHeader reversedSums) = .ok [] ∧
   decide +kernel
 
 /-- A function with the key 1 of two naturals, which can stop. -/
-def guardedHeader : FnHeader field := ⟨⟨1⟩, [.nat, .nat], [.nat], true, none⟩
+def guardedHeader : FnHeader field := ⟨⟨1⟩, [.nat, .nat], [.nat], true, none, Summary.empty⟩
 
 /-- `y < x`, a guard on it, and `x - y`, which nothing uses: the subtraction is restricted to
 `y ≤ x`, which the guard justifies. -/
@@ -697,10 +713,10 @@ example : outcome (admitFn [] guardedHeader guardedSubtraction) = .ok [] ∧
 /-! ## A program whose called function is replaced -/
 
 /-- The callee, with the key 1: of two naturals. -/
-def calleeHeader : FnHeader field := ⟨⟨1⟩, [.nat, .nat], [.nat], false, none⟩
+def calleeHeader : FnHeader field := ⟨⟨1⟩, [.nat, .nat], [.nat], false, none, Summary.empty⟩
 
 /-- The caller, with the key 2: of one natural. -/
-def callerHeader : FnHeader field := ⟨⟨2⟩, [.nat], [.nat], false, none⟩
+def callerHeader : FnHeader field := ⟨⟨2⟩, [.nat], [.nat], false, none, Summary.empty⟩
 
 /-- The callee: `x + y`, with a product that nothing uses. -/
 def calleeBody : Region (LocalRaw field) Unit :=
@@ -755,18 +771,18 @@ theorem after_accepted : Defs.Accepted after [] :=
 
 /-- The caller means what it meant, on every valid input, in every model: it calls the replaced
 callee on valid values, where the callee means the same. Only the first program's acceptance is
-given. -/
+given, and that no summary of the headers has a requirement. -/
 example (M : Model field) (ins : HList M.Val callerHeader.ins) (valid : ins.All M.Valid) :
     Defs.fnTable M after callerHeader .head ins = Defs.fnTable M before callerHeader .head ins :=
-  (Defs.functionsFollow_sound before after (by decide +kernel) before_accepted
-    (by decide +kernel) M).1 callerHeader .head ins valid
+  (Defs.functionsFollow_sound before after (by decide +kernel) (by decide +kernel)
+    before_accepted (by decide +kernel) M).1 callerHeader .head ins valid
 
 /-- And the functions of the program with the callee replaced are safe and keep validity, in
 every model, from the first program's acceptance alone. -/
 example (M : Model field) :
     FnTable.Safe (Defs.fnTable M after) ∧ FnTable.KeepsValidity (Defs.fnTable M after) :=
-  (Defs.functionsFollow_sound before after (by decide +kernel) before_accepted
-    (by decide +kernel) M).2
+  (Defs.functionsFollow_sound before after (by decide +kernel) (by decide +kernel)
+    before_accepted (by decide +kernel) M).2
 
 /-- Control: a callee replaced by one that computes another result does not follow. -/
 example : Defs.functionsFollow before other = false := by decide +kernel

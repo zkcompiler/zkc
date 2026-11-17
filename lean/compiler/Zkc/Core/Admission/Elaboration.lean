@@ -9,9 +9,10 @@ The elaboration of a program of functions by names, and its round trip in both d
 
 One definition is elaborated against the headers of those before it, never against their
 bodies (`elaborateDefinition`): a function's body against the headers before it, with a key
-that none of them has; a protocol is refused, since the rules of the protocol dialect are not
-built. A program is the same step for each definition in order, each added to the program
-before it.
+that none of them has, and its summary in its header, which `elabFn` checks names its inputs
+and results by their positions only; a protocol is refused, since the rules of the protocol
+dialect are not built. A program is the same step for each definition in order, each added to the
+program before it.
 
 The erased form of every typed program of functions elaborates as the program
 (`elaborateFunctions_erase`), and a program that elaboration gives erases to the program by
@@ -26,12 +27,13 @@ variable {V : Vocabulary}
 /-- The elaboration of one definition against the headers of those before it. -/
 def elaborateDefinition (hs : Headers V) :
     Definition V → Except (List (ProgramRefusal V)) (Elaborated V hs)
-  | .fn key ins outs canStop kernel body =>
+  | .fn key ins outs canStop kernel summary body =>
       if repeated : key ∈ hs.keys then .error [refuseWhole key .key (.key key)]
       else
-        match elabFn hs.fns ⟨key, ins, outs, canStop, kernel⟩ body with
+        match elabFn hs.fns ⟨key, ins, outs, canStop, kernel, summary⟩ body with
         | .error refusal => .error [refusal]
-        | .ok ⟨inputs, b, ok⟩ => .ok (.fn ⟨key, ins, outs, canStop, kernel⟩ inputs b ok repeated)
+        | .ok ⟨inputs, b, ok⟩ =>
+            .ok (.fn ⟨key, ins, outs, canStop, kernel, summary⟩ inputs b ok repeated)
   | .protocol key .. => .error [refuseWhole key .protocol (.key key)]
 
 /-- The elaboration of definitions in order, after a program. -/
@@ -62,7 +64,7 @@ the program. -/
 theorem elaborateFrom_erase : ∀ {hs : Headers V} (defs : Defs V hs) (distinct : hs.keys.Nodup),
     hs.protocols = [] → elaborateFrom .empty defs.erase = .ok ⟨hs, defs, distinct⟩
   | _, .nil, _, _ => rfl
-  | _, .fn (hs := hs) ⟨key, ins, outs, canStop, kernel⟩ inputs body ok rest, distinct,
+  | _, .fn (hs := hs) ⟨key, ins, outs, canStop, kernel, summary⟩ inputs body ok rest, distinct,
       functions => by
       have absent : key ∉ hs.keys := (List.nodup_cons.mp distinct).1
       have others : hs.keys.Nodup := (List.nodup_cons.mp distinct).2
@@ -86,7 +88,7 @@ theorem erase_elaborateFrom : ∀ (p : Typed V) (definitions : List (Definition 
   | _, [], _, elaborated => by
       cases elaborated
       exact (List.append_nil _).symm
-  | p, .fn key ins outs canStop kernel body :: rest, q, elaborated => by
+  | p, .fn key ins outs canStop kernel summary body :: rest, q, elaborated => by
       simp only [elaborateFrom, elaborateDefinition] at elaborated
       split at elaborated
       · cases elaborated

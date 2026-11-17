@@ -180,9 +180,6 @@ def pushDifferent (k : Known) (first second : Nat) : Known :=
     if k.rangeOf second = some (Range.point 0) then k.addRange first ⟨1, none⟩ else k
   if k.rangeOf first = some (Range.point 0) then learned.addRange second ⟨1, none⟩ else learned
 
-/-- Whether a range of the identifier is known: then its value reads as a natural. -/
-def natural (k : Known) (id : Nat) : Bool := (k.rangeOf id).isSome
-
 end Known
 
 section
@@ -216,19 +213,16 @@ def assume : Nat → Known → Nat → Bool → Known
 
 /-- What is known after a requirement that holds, on the identifiers that its operands resolve to
 (as `operandIds` resolves them): an order as `Known.pushLe` and `Known.pushLess` learn it, a
-bound or a number as a range of the identifier, a truth value as `assume` learns it. An order, a
-bound or a number teaches nothing unless a range of each identifier is known (`Known.natural`):
-a requirement of this form holds of values that do not read as naturals. A difference and "has an
-upper bound" teach nothing, and neither does an operand that did not resolve. -/
+bound or a number as a range of the identifier, a truth value as `assume` learns it. A
+requirement of these forms says that its values read as naturals, so it teaches its order, bound
+or number whatever is known of them. A difference and "has an upper bound" teach nothing, and
+neither does an operand that did not resolve. -/
 def learn (fuel : Nat) (k : Known) : Requirement Raw → List (Option Nat) → Known
-  | .le .., [some first, some second] =>
-      if k.natural first && k.natural second then k.pushLe first second else k
-  | .lt .., [some first, some second] =>
-      if k.natural first && k.natural second then k.pushLess first second else k
-  | .atLeast _ n, [some id] => if k.natural id then k.addRange id ⟨n, none⟩ else k
-  | .below _ n, [some id] =>
-      if k.natural id then k.addRange id (Range.below (Range.point n)) else k
-  | .exactly _ n, [some id] => if k.natural id then k.addRange id (Range.point n) else k
+  | .le .., [some first, some second] => k.pushLe first second
+  | .lt .., [some first, some second] => k.pushLess first second
+  | .atLeast _ n, [some id] => k.addRange id ⟨n, none⟩
+  | .below _ n, [some id] => k.addRange id (Range.below (Range.point n))
+  | .exactly _ n, [some id] => k.addRange id (Range.point n)
   | .holds _, [some id] => assume ops tbl fuel k id true
   | _, _ => k
 
@@ -283,9 +277,10 @@ def rangesOrder (first second : Option Range) (strict : Bool) : Bool :=
       | none => false
   | _, _ => false
 
-/-- Whether `first ≤ second` is known, with the ranges given of each. -/
+/-- Whether `first ≤ second` is known, with the ranges given of each. One identifier is at most
+itself when a range of it is known, by which it reads as a natural. -/
 def knownLe (first second : Nat) (rf rs : Option Range) : Bool :=
-  rangesOrder rf rs false || first == second || k.hasOrder first second false ||
+  rangesOrder rf rs false || (first == second && rf.isSome) || k.hasOrder first second false ||
     sumAbove ops tbl k first second false || differenceBelow ops tbl k first second false
 
 /-- Whether `first < second` is known, with the ranges given of each. -/

@@ -7,8 +7,11 @@ What an operation with a domain asks of an application, as data. The same requir
 an operation asks, what the check of facts decides, and what a refusal says when it is not
 known. An operand of a requirement that applies a written operation names its operands by their
 positions among the application's (`atPositions`). The summary of a definition is two lists of
-requirements, on its inputs and on its inputs followed by its results (`Summary`). What it is for
-a requirement to hold of values is in `Meaning/Requirement.lean`.
+requirements, on its inputs and on its inputs followed by its results (`Summary`), the summary with
+neither being `Summary.empty`. The summary of a function names its inputs, and its results for a
+guarantee, by their positions only, which elaboration decides (`Summary.misplaced`,
+`Summary.Positional`). What it is for a requirement to hold of values, and for a definition to
+satisfy a summary, is in `Meaning/Requirement.lean`.
 -/
 
 namespace Zkc.Core
@@ -70,6 +73,71 @@ structure Summary (Raw : Type) where
   requires : List (Requirement Raw)
   /-- About the inputs followed by the outputs, by position. -/
   ensures : List (Requirement Raw)
+deriving DecidableEq
+
+/-- The summary with no requirement and no guarantee: a definition that has it is asked nothing
+at a call and promises nothing beyond being assured. -/
+def Summary.empty {Raw : Type} : Summary Raw := ⟨[], []⟩
+
+/-! ## A summary by positions -/
+
+/-- Whether every value that a requirement names is an operand by its position below a count,
+and none the result of a written operation. -/
+def Requirement.positional {Raw : Type} (count : Nat) (requirement : Requirement Raw) : Bool :=
+  requirement.operands.all fun
+    | .arg position => decide (position < count)
+    | .apply .. => false
+
+/-- The first requirement of a summary that names something other than an input by its position,
+or else the first guarantee that names something other than an input or a result by its
+position, for a definition with as many inputs and results; nothing when there is none. -/
+def Summary.misplaced {Raw : Type} (inputs results : Nat) (summary : Summary Raw) :
+    Option (Requirement Raw) :=
+  match summary.requires.find? fun requirement => !requirement.positional inputs with
+  | some requirement => some requirement
+  | none => summary.ensures.find? fun guarantee => !guarantee.positional (inputs + results)
+
+/-- A summary names, in its requirements, inputs by their positions, and in its guarantees,
+inputs followed by results by their positions: defined by its decision, which elaboration makes of
+the summary of every function. -/
+def Summary.Positional {Raw : Type} (inputs results : Nat) (summary : Summary Raw) : Prop :=
+  summary.misplaced inputs results = none
+
+/-- What a requirement that names positions below a count names: operands by those
+positions. -/
+theorem Requirement.positional_operands {Raw : Type} {count : Nat} {requirement : Requirement Raw}
+    (positional : requirement.positional count = true) :
+    ∀ operand, operand ∈ requirement.operands → ∃ position, operand = .arg position ∧
+      position < count := by
+  intro operand listed
+  have each := List.all_eq_true.mp positional operand listed
+  cases operand with
+  | arg position => exact ⟨position, rfl, of_decide_eq_true each⟩
+  | apply => cases each
+
+/-- Every requirement of a positional summary names inputs by their positions. -/
+theorem Summary.Positional.requires {Raw : Type} {inputs results : Nat} {summary : Summary Raw}
+    (positional : summary.Positional inputs results) :
+    ∀ requirement, requirement ∈ summary.requires → requirement.positional inputs = true := by
+  intro requirement listed
+  unfold Summary.Positional Summary.misplaced at positional
+  split at positional
+  · cases positional
+  · rename_i none
+    have := List.find?_eq_none.mp none requirement listed
+    simpa using this
+
+/-- Every guarantee of a positional summary names inputs and results by their positions. -/
+theorem Summary.Positional.ensures {Raw : Type} {inputs results : Nat} {summary : Summary Raw}
+    (positional : summary.Positional inputs results) :
+    ∀ guarantee, guarantee ∈ summary.ensures →
+      guarantee.positional (inputs + results) = true := by
+  intro guarantee listed
+  unfold Summary.Positional Summary.misplaced at positional
+  split at positional
+  · cases positional
+  · have := List.find?_eq_none.mp positional guarantee listed
+    simpa using this
 
 /-! ## The items at positions -/
 

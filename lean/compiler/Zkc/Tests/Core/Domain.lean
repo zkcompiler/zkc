@@ -213,7 +213,8 @@ theorem domainRules_lawful (permitted : ∀ op, domainSem.S.Reply op → Prop) :
         have read : v = ⟨τ, n⟩ :=
           (Option.some.inj (show (some ⟨τ, n⟩ : Option domainSem.Dyn) = some v from at0)).symm
         subst read
-        have positive : 1 ≤ (n : Nat) := relation n rfl
+        obtain ⟨x, read, positive⟩ := relation
+        cases read
         rw [decrement_nonzero τ key path n (Nat.pos_iff_ne_zero.mp positive)]
         intro _ _
         refine ⟨fun v returned => ?_, fun _ listed => nomatch listed⟩
@@ -229,11 +230,8 @@ theorem domainRules_lawful (permitted : ∀ op, domainSem.S.Reply op → Prop) :
           | tail _ rest => cases rest
         · simp only [domainRules, domainWritten, List.mem_singleton] at listed
           subst listed
-          refine ⟨[⟨.natural, n / 2⟩, ⟨.natural, n⟩], ⟨rfl, rfl, trivial⟩, ?_⟩
-          intro x y hx hy
-          cases hx
-          cases hy
-          exact Nat.div_le_self n 2
+          exact ⟨[⟨.natural, n / 2⟩, ⟨.natural, n⟩], ⟨rfl, rfl, trivial⟩, n / 2, n, rfl, rfl,
+            Nat.div_le_self n 2⟩
     | opaqueHalf =>
         obtain ⟨n, rfl⟩ := HList.one values
         intro _ _
@@ -252,7 +250,9 @@ theorem domainRules_lawful (permitted : ∀ op, domainSem.S.Reply op → Prop) :
                 obtain ⟨v, v', rfl, at1, at0⟩ := DenotesAll.two denoted
                 cases at1
                 cases at0
-                have within : second ≤ first := relation second first rfl rfl
+                obtain ⟨x, y, readSecond, readFirst, within⟩ := relation
+                cases readSecond
+                cases readFirst
                 rw [subtract_within key path first second within]
                 refine ⟨fun v returned => ?_, fun _ listed => nomatch listed⟩
                 cases returned with
@@ -289,7 +289,7 @@ def decrementOf (τ : DomainTy) :
 
 /-- On a positive input the check of facts accepts: the type says that the operand is at least
 one. There is no loop, so no bound. -/
-example : checkFacts domainRules domainChecks ⟨1⟩ none ⟨[], []⟩ (.cons 0 .nil)
+example : checkFacts domainRules domainChecks ⟨1⟩ none Summary.empty (.cons 0 .nil)
     (decrementOf .positive) = .ok [] := by
   decide +kernel
 
@@ -305,7 +305,7 @@ theorem decrementPositive_safe (permitted : ∀ op, domainSem.S.Reply op → Pro
   Process.every_mono _ _ (fun _ returned => returned.1) (fun _ stop => stop)
     (Analysis.analyse_sound domainRules domainChecks domainSem permitted domainReading domainRun
       domainValid (· = .undefined) (domainRules_lawful permitted) domainChecks_lawful ⟨1⟩ none
-      ⟨[], []⟩ (.cons 0 .nil) (decrementOf .positive) (by unfold Term.Distinct; decide +kernel)
+      Summary.empty (.cons 0 .nil) (decrementOf .positive) (by unfold Term.Distinct; decide +kernel)
       (by decide +kernel) [] (fun _ _ inside => nomatch inside) (.cons n .nil)
       (fun _ inputs => by
         cases inputs with
@@ -315,7 +315,7 @@ theorem decrementPositive_safe (permitted : ∀ op, domainSem.S.Reply op → Pro
 
 /-- On a natural input the check of facts refuses the decrement, at its place, with the
 requirement that is not justified and what was known of its operand: at least zero. -/
-example : checkFacts domainRules domainChecks ⟨1⟩ none ⟨[], []⟩ (.cons 0 .nil)
+example : checkFacts domainRules domainChecks ⟨1⟩ none Summary.empty (.cons 0 .nil)
     (decrementOf .natural) =
     .error [⟨.domain, ⟨⟨1⟩, [], some ⟨1⟩, none⟩,
       .unjustified .decrement (.atLeast (.arg 0) 1) [some ⟨0, none⟩]⟩] := by
@@ -346,8 +346,8 @@ def decrementOtherNames :
 
 /-- It follows the analysis of the first: the decrement is the skeleton's entry, its requirement
 is decided where it is applied, and nothing is refused. The whole verdict accepts it. -/
-example : (Analysis.follow domainRules domainChecks ⟨1⟩ none ⟨[], []⟩
-    (Analysis.analyse domainRules domainChecks ⟨1⟩ none ⟨[], []⟩ (.cons 0 .nil)
+example : (Analysis.follow domainRules domainChecks ⟨1⟩ none Summary.empty
+    (Analysis.analyse domainRules domainChecks ⟨1⟩ none Summary.empty (.cons 0 .nil)
       (decrementOf .positive))
     (.cons 5 .nil) decrementOtherNames).accepted = true := by
   decide +kernel
@@ -385,7 +385,9 @@ example : ¬ (Requirement.atLeast (.arg 0) 1 : Requirement DomainRaw).Holds
   rintro ⟨vs, denoted, relation⟩
   obtain ⟨v, rfl, at0⟩ := DenotesAll.one denoted
   cases at0
-  exact absurd (relation 0 rfl) (by decide)
+  obtain ⟨x, read, positive⟩ := relation
+  cases read
+  exact absurd positive (by decide)
 
 /-- A body that returns its natural input, the name `0`. -/
 def returnsInput :
@@ -425,14 +427,14 @@ def subtractHalf (halve : DomainOp [.natural] [.natural]) :
 
 /-- After the half, what it guarantees, that its result is at most its operand, is learned, and the
 requirement of the subtraction follows from it: accepted. -/
-example : checkFacts domainRules domainChecks ⟨1⟩ none ⟨[], []⟩ (.cons 0 .nil)
+example : checkFacts domainRules domainChecks ⟨1⟩ none Summary.empty (.cons 0 .nil)
     (subtractHalf .half) = .ok [] := by
   decide +kernel
 
 /-- After the opaque half, which computes the same and guarantees nothing, the requirement of the
 subtraction is not known: refused at the subtraction, with what was known of its two operands, in
 the order in which the requirement names them: each at least zero. -/
-example : checkFacts domainRules domainChecks ⟨1⟩ none ⟨[], []⟩ (.cons 0 .nil)
+example : checkFacts domainRules domainChecks ⟨1⟩ none Summary.empty (.cons 0 .nil)
     (subtractHalf .opaqueHalf) =
     .error [⟨.domain, ⟨⟨1⟩, [], some ⟨2⟩, none⟩,
       .unjustified .subtract (.le (.arg 1) (.arg 0)) [some ⟨0, none⟩, some ⟨0, none⟩]⟩] := by

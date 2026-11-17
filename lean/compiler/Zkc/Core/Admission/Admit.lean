@@ -37,11 +37,11 @@ theorem checkDefinition_fn {hs : Headers V} {definition : Definition V} {e : Ela
     {bounds : List (Place × Nat)} (h : checkDefinition hs definition = .ok (e, bounds)) :
     elaborateDefinition hs definition = .ok e ∧ ∃ hdr inputs body ok fresh,
       e = .fn hdr inputs body ok fresh ∧
-      checkFacts (localFactRules V hs.fns) (localRules hs.fns).skel hdr.key none ⟨[], []⟩ inputs
-        body = .ok bounds := by
+      checkFacts (localFactRules V hs.fns) (localRules hs.fns).skel hdr.key none hdr.summary
+        inputs body = .ok bounds := by
   cases definition with
   | protocol => cases h
-  | fn key ins outs canStop kernel body =>
+  | fn key ins outs canStop kernel summary body =>
       simp only [checkDefinition] at h
       split at h
       · cases h

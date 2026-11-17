@@ -18,7 +18,7 @@ abbrev plain := Shapes.plain
 /-- A program of one function, with the key 1. -/
 def single (ins outs : List plain.Ty) (canStop : Bool) (body : Region (LocalRaw plain) Unit) :
     NamedProgram plain :=
-  ⟨[.fn ⟨1⟩ ins outs canStop none body]⟩
+  ⟨[.fn ⟨1⟩ ins outs canStop none Summary.empty body]⟩
 
 /-- The first refusal of a program; nothing when it is accepted. -/
 def refusal (named : NamedProgram plain) : Option (ProgramRefusal plain) :=
@@ -103,33 +103,33 @@ example : refusal (single [] [.bool] false (.mk [] [.op ⟨1⟩ [0] (.literal .b
 
 /-- A function that gives its input, and a function that calls it. -/
 def calls : NamedProgram plain :=
-  ⟨[.fn ⟨1⟩ [.nat] [.nat] false none (.mk [0] [] [0]),
-    .fn ⟨2⟩ [.nat] [.nat] false none (.mk [0] [.op ⟨1⟩ [1] (.call ⟨1⟩) [0]] [1])]⟩
+  ⟨[.fn ⟨1⟩ [.nat] [.nat] false none Summary.empty (.mk [0] [] [0]),
+    .fn ⟨2⟩ [.nat] [.nat] false none Summary.empty (.mk [0] [.op ⟨1⟩ [1] (.call ⟨1⟩) [0]] [1])]⟩
 
 example : refusal calls = none := by decide +kernel
 
 /-- A callee that is not there. -/
-example : refusal ⟨[.fn ⟨1⟩ [.nat] [.nat] false none (.mk [0] [] [0]),
-    .fn ⟨2⟩ [.nat] [.nat] false none (.mk [0] [.op ⟨1⟩ [1] (.call ⟨9⟩) [0]] [1])]⟩ =
+example : refusal ⟨[.fn ⟨1⟩ [.nat] [.nat] false none Summary.empty (.mk [0] [] [0]),
+    .fn ⟨2⟩ [.nat] [.nat] false none Summary.empty (.mk [0] [.op ⟨1⟩ [1] (.call ⟨9⟩) [0]] [1])]⟩ =
     some ⟨.callee, at_ 2 1, .callee ⟨9⟩ 0⟩ := by
   decide +kernel
 
 /-- A callee that is there twice: a body against headers with a repeated key, which no program
 has. -/
-example : bodyRefusal [⟨⟨1⟩, [.nat], [.nat], false, none⟩, ⟨⟨1⟩, [.nat], [.nat], false, none⟩]
-    ⟨⟨2⟩, [.nat], [.nat], false, none⟩ (.mk [0] [.op ⟨1⟩ [1] (.call ⟨1⟩) [0]] [1]) =
+example : bodyRefusal [⟨⟨1⟩, [.nat], [.nat], false, none, Summary.empty⟩, ⟨⟨1⟩, [.nat], [.nat], false, none, Summary.empty⟩]
+    ⟨⟨2⟩, [.nat], [.nat], false, none, Summary.empty⟩ (.mk [0] [.op ⟨1⟩ [1] (.call ⟨1⟩) [0]] [1]) =
     some ⟨.callee, at_ 2 1, .callee ⟨1⟩ 2⟩ := by
   decide +kernel
 
 /-- A call on operands of other types than the callee takes. -/
-example : refusal ⟨[.fn ⟨1⟩ [.nat] [.nat] false none (.mk [0] [] [0]),
-    .fn ⟨2⟩ [.bool] [.nat] false none (.mk [0] [.op ⟨1⟩ [1] (.call ⟨1⟩) [0]] [1])]⟩ =
+example : refusal ⟨[.fn ⟨1⟩ [.nat] [.nat] false none Summary.empty (.mk [0] [] [0]),
+    .fn ⟨2⟩ [.bool] [.nat] false none Summary.empty (.mk [0] [.op ⟨1⟩ [1] (.call ⟨1⟩) [0]] [1])]⟩ =
     some ⟨.operands, at_ 2 1, .types [.nat] [.bool]⟩ := by
   decide +kernel
 
 /-- A repeated key. -/
-example : refusal ⟨[.fn ⟨1⟩ [.nat] [.nat] false none (.mk [0] [] [0]),
-    .fn ⟨1⟩ [.nat] [.nat] false none (.mk [0] [] [0])]⟩ = some ⟨.key, whole 1, .key ⟨1⟩⟩ := by
+example : refusal ⟨[.fn ⟨1⟩ [.nat] [.nat] false none Summary.empty (.mk [0] [] [0]),
+    .fn ⟨1⟩ [.nat] [.nat] false none Summary.empty (.mk [0] [] [0])]⟩ = some ⟨.key, whole 1, .key ⟨1⟩⟩ := by
   decide +kernel
 
 /-- A protocol: the rules of the protocol dialect are not built. -/
@@ -161,8 +161,8 @@ example : refusal (single [.nat] [.nat] true (.mk [0] [] [0])) =
   decide +kernel
 
 /-- A call of a function that can stop can stop. -/
-example : refusal ⟨[.fn ⟨1⟩ [.bool] [.bool] true none (.mk [0] [.guard ⟨1⟩ () 0 .reject] [0]),
-    .fn ⟨2⟩ [.bool] [.bool] false none (.mk [0] [.op ⟨1⟩ [1] (.call ⟨1⟩) [0]] [1])]⟩ =
+example : refusal ⟨[.fn ⟨1⟩ [.bool] [.bool] true none Summary.empty (.mk [0] [.guard ⟨1⟩ () 0 .reject] [0]),
+    .fn ⟨2⟩ [.bool] [.bool] false none Summary.empty (.mk [0] [.op ⟨1⟩ [1] (.call ⟨1⟩) [0]] [1])]⟩ =
     some ⟨.stops, whole 2, .stops false true⟩ := by
   decide +kernel
 
@@ -701,7 +701,7 @@ def linearNominal : Vocabulary where
 outputs named. -/
 def nominalGiven (exit : List Nat) : Option (ProgramRefusal linearNominal) :=
   match elaborateFunctions (V := linearNominal)
-      ⟨[.fn ⟨1⟩ [.nominal ()] (exit.map fun _ => .nominal ()) false none (.mk [0] [] exit)]⟩ with
+      ⟨[.fn ⟨1⟩ [.nominal ()] (exit.map fun _ => .nominal ()) false none Summary.empty (.mk [0] [] exit)]⟩ with
   | .ok _ => none
   | .error refusals => refusals.head?
 
@@ -823,8 +823,8 @@ example : refusal (single [] [.bool] false (.mk []
 /-- One name in two definitions: each definition binds it at one place, and the program is
 accepted. -/
 def sameNameTwice : NamedProgram plain :=
-  ⟨[.fn ⟨1⟩ [.nat] [.nat] false none (.mk [0] [.op ⟨1⟩ [1] (.owned .natAdd [] []) [0, 0]] [1]),
-    .fn ⟨2⟩ [.nat] [.nat] false none (.mk [0] [.op ⟨1⟩ [1] (.call ⟨1⟩) [0]] [1])]⟩
+  ⟨[.fn ⟨1⟩ [.nat] [.nat] false none Summary.empty (.mk [0] [.op ⟨1⟩ [1] (.owned .natAdd [] []) [0, 0]] [1]),
+    .fn ⟨2⟩ [.nat] [.nat] false none Summary.empty (.mk [0] [.op ⟨1⟩ [1] (.call ⟨1⟩) [0]] [1])]⟩
 
 example : refusal sameNameTwice = none := by decide +kernel
 

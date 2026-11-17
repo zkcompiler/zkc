@@ -98,13 +98,13 @@ def verdict (fns : List (FnHeader field)) (hdr : FnHeader field)
 /-- The verdict on a function with the key 1 and no callee. -/
 def check (ins outs : List field.Ty) (canStop : Bool) (body : Region (LocalRaw field) Unit) :
     Option (List (ProgramRefusal field) ⊕ List (Place × Nat)) :=
-  verdict [] ⟨⟨1⟩, ins, outs, canStop, none⟩ body
+  verdict [] ⟨⟨1⟩, ins, outs, canStop, none, Summary.empty⟩ body
 
 /-- The refusal of elaboration of the body of a function with the key 1 and no callee; nothing
 when it elaborates. -/
 def elaborationRefusal (ins outs : List field.Ty) (canStop : Bool)
     (body : Region (LocalRaw field) Unit) : Option (ProgramRefusal field) :=
-  match elabFn [] ⟨⟨1⟩, ins, outs, canStop, none⟩ body with
+  match elabFn [] ⟨⟨1⟩, ins, outs, canStop, none, Summary.empty⟩ body with
   | .ok _ => none
   | .error refusal => some refusal
 
@@ -717,7 +717,7 @@ example : check [.nat, .nat, .bool] [.nat] true (.mk [0, 1, 2] [
   decide +kernel
 
 /-- A call is shared: a fact about its result holds of the same call again. -/
-example : verdict [⟨⟨1⟩, [.nat], [.nat], false, none⟩] ⟨⟨2⟩, [elements, .nat], [F], true, none⟩
+example : verdict [⟨⟨1⟩, [.nat], [.nat], false, none, Summary.empty⟩] ⟨⟨2⟩, [elements, .nat], [F], true, none, Summary.empty⟩
     (.mk [0, 1] [
       .op ⟨1⟩ [10] (.call ⟨1⟩) [1],
       .op ⟨2⟩ [11] (length elements) [0],

@@ -6,8 +6,8 @@ public import Zkc.Core.Program.ElaborateLocal
 
 /-!
 The program by names of a typed program: its erasure. Its definitions are in order, each with
-its header and the erased form of its body, which has the names of its inputs and the names
-that its body binds.
+its header, a function's summary among it, and the erased form of its body, which has the names
+of its inputs and the names that its body binds.
 -/
 
 namespace Zkc.Core
@@ -35,7 +35,8 @@ def eraseProtocol {hs : Headers V} {hdr : ProtocolHeader V} (inputs : Names hdr.
 def Defs.erase : {hs : Headers V} → Defs V hs → List (Definition V)
   | _, .nil => []
   | _, .fn hdr inputs body _ rest =>
-      rest.erase ++ [.fn hdr.key hdr.ins hdr.outs hdr.canStop hdr.kernel (eraseFn inputs body)]
+      rest.erase ++
+        [.fn hdr.key hdr.ins hdr.outs hdr.canStop hdr.kernel hdr.summary (eraseFn inputs body)]
   | _, .protocol hdr inputs body _ rest =>
       rest.erase ++ [.protocol hdr.key hdr.roles hdr.ins hdr.outs (eraseProtocol inputs body)]
 

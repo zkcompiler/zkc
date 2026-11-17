@@ -23,16 +23,19 @@ round trip of `Admission/Elaboration.lean`.
 Admission checks one definition at a time, each against the headers before it: so what it
 returns is the elaboration of what was given (`admitsWhatWasGiven`), and the check of each
 definition in order gives its headers (`checkAgrees`). Every admitted program is assured with
-its annotation, which is `functionsSafe`, `functionsKeepValidity` and `annotationHolds`. A
+its annotation: every function satisfies its summary, so it never stops `undefined` on valid inputs
+that satisfy its requirements (`functionsSafe`), keeps validity on every valid input
+(`functionsKeepValidity`), and the program respects its annotation (`annotationHolds`). A
 function whose header says that it cannot stop stops only `undefined`
-(`Defs.fnTable_stops_undefined`), and never that, so it does not stop (`headersSayWhoStops`). A
-function that follows a safe function is assured and means the same (`functionsSame`): it is the
-theorem `TypedFn.follows_assured` of `Transform/StepSound.lean`. A step of transformation from an
-assured function relates functions with the same meaning (`transformSound`, the theorem
-`AssuredFn.step_same` of `Transform/Assured.lean`), and every function of a program whose
-functions follow those of a program that the check of facts accepts means what the function of
-the other with its header means, and is safe and keeps validity (`replacedFunctionsSame`, the
-theorem `Defs.functionsFollow_sound` of `Admission/Programs.lean`).
+(`Defs.fnTable_stops_undefined`), and never that on such inputs, so it does not stop there
+(`headersSayWhoStops`). A function that follows a safe function is assured and means the same
+(`functionsSame`): it is the theorem `TypedFn.follows_assured` of `Transform/StepSound.lean`. A
+step of transformation from an assured function relates functions with the same meaning
+(`transformSound`, the theorem `AssuredFn.step_same` of `Transform/Assured.lean`), and, when no
+summary has a requirement, every function of a program whose functions follow those of a program
+that the check of facts accepts means what the function of the other with its header means, and
+is safe and keeps validity (`replacedFunctionsSame`, the theorem `Defs.functionsFollow_sound` of
+`Admission/Programs.lean`).
 -/
 
 namespace Zkc.Core
@@ -118,10 +121,14 @@ theorem checkAgrees (c : Functions V) (admits : c.admit = admit) (checks : c.che
   intro named assoc a h
   exact admitFrom_checkAll .empty [] named.definitions _ _ (admit_ok h).1
 
-/-- Validity: a function of an admitted program never stops `undefined`, on any valid inputs:
-what every admitted program carries. -/
+/-- Validity: a function of an admitted program never stops `undefined`, on any valid inputs that
+satisfy the requirements of its header's summary: what every admitted program carries, that its
+functions satisfy their summaries. -/
 theorem functionsSafe : Statements.functionsSafe (V := V) :=
-  fun a M _ f ins valid => (a.assured M).1 _ f ins valid
+  fun a M _ f ins valid required =>
+    Process.every_mono _ _ (fun _ _ => trivial) (fun _ stop => stop)
+      ((a.assured M).1 _ f ins
+        (((localSem M _ (Defs.fnTable M a.program.defs)).dyns_valid_iff ins).mpr valid) required)
 
 /-- Validity: a function of an admitted program returns valid values: what every admitted
 program carries. -/
@@ -129,11 +136,11 @@ theorem functionsKeepValidity : Statements.functionsKeepValidity (V := V) :=
   fun a M _ f ins outs valid ran => (a.assured M).2.1 _ f ins outs valid ran
 
 /-- A view: a function of an admitted program that its header says cannot stop does not
-stop. -/
+stop, on valid inputs that satisfy the requirements of its header's summary. -/
 theorem headersSayWhoStops : Statements.headersSayWhoStops (V := V) :=
-  fun a M hdr f ins valid quiet =>
+  fun a M hdr f ins valid required quiet =>
     Process.every_mono _ _ (fun _ _ => trivial) (fun _ both => both.1 both.2)
-      (Process.every_and _ _ (functionsSafe a M hdr f ins valid)
+      (Process.every_and _ _ (functionsSafe a M hdr f ins valid required)
         (Defs.fnTable_stops_undefined M a.program.defs hdr f ins quiet))
 
 /-- Execution and state: a function that follows a safe function is assured and means the
@@ -147,12 +154,12 @@ theorem transformSound : Statements.transformSound (V := V) :=
   fun _ _ _ _ _ accepted => AssuredFn.step_same accepted
 
 /-- Execution and state, and validity: every function of a program whose functions follow those
-of a program accepted by the check of facts, over the same headers, means what the function of
-the other with its header means, and the functions of the second are safe and keep validity
-(`Defs.functionsFollow_sound`, `Admission/Programs.lean`). -/
+of a program accepted by the check of facts, over the same headers of which no summary has a
+requirement, means what the function of the other with its header means, and the functions of the
+second are safe and keep validity (`Defs.functionsFollow_sound`, `Admission/Programs.lean`). -/
 theorem replacedFunctionsSame : Statements.replacedFunctionsSame (V := V) :=
-  fun _ defs defs' distinct _ accepted follows M =>
-    Defs.functionsFollow_sound defs defs' distinct accepted follows M
+  fun _ defs defs' distinct unconditional _ accepted follows M =>
+    Defs.functionsFollow_sound defs defs' distinct unconditional accepted follows M
 
 /-- Validity: no loop of an admitted program runs more often than the bound that its annotation
 gives it: what every admitted program carries. -/

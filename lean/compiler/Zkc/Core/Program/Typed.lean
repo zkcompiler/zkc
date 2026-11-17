@@ -49,8 +49,9 @@ def Fn.canStop {V : Vocabulary} {fns : List (FnHeader V)} {hdr : FnHeader V}
 
 /-- What elaboration decides about the body of a function: its instructions have their own
 addresses, every value of a linear type is used once, its header says whether it can stop
-with a reason as its body does, its case analyses without an arm give nothing, and every name
-is bound at one place. With these a typed function is one that a program by names writes: its
+with a reason as its body does, its case analyses without an arm give nothing, every name
+is bound at one place, and the summary of its header names its inputs and results by their
+positions only. With these a typed function is one that a program by names writes: its
 erased form elaborates to it. -/
 structure FnConditions {V : Vocabulary} {fns : List (FnHeader V)} {hdr : FnHeader V}
     {inputs : Names hdr.ins} (body : Fn V fns hdr inputs) : Prop where
@@ -59,6 +60,7 @@ structure FnConditions {V : Vocabulary} {fns : List (FnHeader V)} {hdr : FnHeade
   stops : hdr.canStop = body.canStop
   armed : body.armed = true
   once : body.BoundOnce inputs.toList
+  summary : hdr.summary.Positional hdr.ins.length hdr.outs.length
 
 /-- What elaboration decides about the body of a protocol: its roles are those below the
 number in its header (nobody else acts in the body, and its ports and results are held by no
@@ -173,6 +175,11 @@ theorem Member.key_mem (keyOf : α → Key) : ∀ {items : List α} {a : α}, Me
     keyOf a ∈ items.map keyOf
   | _ :: _, _, .head => List.mem_cons_self
   | _ :: _, _, .tail x => List.mem_cons_of_mem _ (Member.key_mem keyOf x)
+
+/-- An item at a position of a list is in the list. -/
+theorem Member.mem : ∀ {items : List α} {a : α}, Member items a → a ∈ items
+  | _ :: _, _, .head => List.mem_cons_self
+  | _ :: _, _, .tail x => List.mem_cons_of_mem _ (Member.mem x)
 
 theorem Member.withKey_absent (keyOf : α → Key) (key : Key) : ∀ {items : List α},
     key ∉ items.map keyOf → Member.withKey keyOf key items = []

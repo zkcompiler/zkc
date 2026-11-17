@@ -71,6 +71,9 @@ inductive Rule where
   /-- A definition establishes each guarantee of its summary, by what is known where it
   returns. -/
   | guarantee
+  /-- The summary of a function names, by their positions, its inputs in a requirement and its
+  inputs followed by its results in a guarantee, and nothing else. -/
+  | summary
 deriving DecidableEq, Repr
 
 /-- What a rule found, with the types `T` of a dialect and its written operations `Raw` as
@@ -107,6 +110,8 @@ inductive Detail (T Raw : Type) where
   /-- A guarantee of a summary that is not known where the definition returns: the guarantee, and
   what is known of the values that it names, in the order in which it names them. -/
   | unestablished (guarantee : Requirement Raw) (known : List (Option Range))
+  /-- A requirement or a guarantee that the rule does not allow there. -/
+  | requirement (requirement : Requirement Raw)
   /-- Nothing beyond the rule and the place. -/
   | nothing
 deriving DecidableEq

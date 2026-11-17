@@ -14,17 +14,19 @@ The laws of the function dialect, and the soundness of the check of facts for a 
 
 A value of a function is a value of its semantics with its type (`Semantics.Dyn`). A written form
 gives results on operands when it is the printed form of a local operation that returns those
-results on those operands (`LocalReturns`), whatever the values, valid or not; it is a function of
-the written form and the operands, because the written form names the operation
-(`localReturns_functional`). The facts of the table are about it on valid values (`ValidRun`). Of
-it, what the analysis knows of the written operations is true: the form of a result, the ranges of
-arithmetic (TY8), and what the type of a natural says. Every operation has the requirements of
-its printed form, and what an operation requires is enough for it: where every requirement holds
-of its operands' values, it does not stop `undefined`; and every value that a requirement names
-beyond the operands (a length, the truth value of a domain row) is there. A call has no
-requirement yet, so a call of a function that can stop, which is kept in order, is safe on every
-valid input because its callee is (`Callees`). No operation of a function guarantees anything yet
-(`localFactRules_ensures`), so the laws of what an operation guarantees hold of every one.
+results on those operands (`LocalReturns`, `Meaning/Validity.lean`), whatever the values, valid or
+not; it is a function of the written form and the operands, because the written form names the
+operation (`localReturns_functional`). The facts of the table are about it on valid values
+(`ValidRun`). Of it, what the analysis knows of the written operations is true: the form of a
+result, the ranges of arithmetic (TY8), and what the type of a natural says. Every operation has
+the requirements of its printed form, and what an operation requires is enough for it: where every
+requirement holds of its operands' values, it does not stop `undefined`; and every value that a
+requirement names beyond the operands (a length, the truth value of a domain row) is there. A call
+requires and guarantees what the summary of its callee's header says, which names inputs and
+results by their positions only, so it names no value beyond its operands; where its requirements
+hold of valid operands, its callee never stops `undefined` and returns valid values that, with the
+operands, satisfy the guarantees (`Callees`, `localCall_holds`). No other operation guarantees
+anything yet (`localOpFacts_ensures`).
 
 The law `computes` of the value form is for every value, and so is the law `commutative`, since
 the meaning of each operation that commutes is symmetric for all values of its operands. Against
@@ -36,14 +38,16 @@ lawful over headers with distinct keys, as the rules of elaboration are (`Rules.
 
 Against the callees that a statement about a function is made against (`Callees`,
 `Meaning/Validity.lean`), the rules of the function dialect are lawful for the semantics of a
-function (`localFactRules_lawful`), read as the check of facts reads it (`localReading`), with the
+function (`localFactRules_lawful`), read as the requirements read it (`localReading`), with the
 relation `LocalReturns`, the validity of the model (`ValidDyn`) and the stop `undefined`. The law
 `collect` asks that the collected values be as many as the size given: without that it is false
 of the function dialect (`Analysis.collect_without_length`). The theorems of the analysis are
-instantiated for functions here, once, against a model, a table and `Callees`, under the summary
-with no requirement and no guarantee, and stated as the statements about functions are, with
-`HList.All` (converted by `Semantics.dyns_valid_iff`): the check of facts is sound for a function
-(`checkFacts_sound`, from `Analysis.analyse_safe`), and a body that follows the analysis of a body
+instantiated for functions here, once, against a model, a table and `Callees`, under a summary
+that names positions only, and stated as the statements about functions are, with `HList.All`
+(converted by `Semantics.dyns_valid_iff`) and the relation `LocalReturns`: a body that the check
+of facts accepts under a summary satisfies it (`checkFacts_holds`, from `Analysis.analyse_holds`),
+and on valid inputs that satisfy its requirements respects the bounds that the check gave
+(`checkFacts_sound`, from `Analysis.analyse_safe`); and a body that follows the analysis of a body
 that is safe on the given inputs is safe, respects the bounds recorded while it follows and means
 the same (`localFollow_assured`, from `Analysis.follow_assured`).
 
@@ -54,36 +58,7 @@ guarantees, and whose stops are not `undefined` (`localSummary_contract`).
 -/
 namespace Zkc.Core
 
-section
-variable {V : Vocabulary} (M : Model V) {fns : List (FnHeader V)} (table : FnTable M fns)
-
-/-- A written form gives results on operands when it is the printed form of a local operation
-that returns those results on those operands. The values need not be valid. -/
-def LocalReturns (written : LocalRaw V) (operands results : List (localSem M fns table).Dyn) :
-    Prop :=
-  ∃ (ins res : List V.Ty) (o : LocalOp V fns ins res) (args : HList M.Val ins)
-    (returned : HList M.Val res), o.print = written ∧ (localSem M fns table).dyns args = operands ∧
-    (localSem M fns table).dyns returned = results ∧ localOp M table o args = .done returned
-
-end
-
 namespace FactCheck
-
-section
-variable {V : Vocabulary} (M : Model V)
-
-/-- How the check reads a value of a function: a natural or an index as a natural, a truth
-value as itself. -/
-def localReading : Reading ((τ : V.Ty) × M.Val τ) where
-  nat
-    | ⟨.nat, n⟩ => some n
-    | ⟨.fin _, n⟩ => some n
-    | _ => none
-  bool
-    | ⟨.bool, b⟩ => some b
-    | _ => none
-
-end
 
 /-! ## The laws -/
 
@@ -101,11 +76,13 @@ theorem blt_decide (x y : Nat) : Nat.blt x y = decide (x < y) := by
   · have : x < y := by rw [← Nat.blt_eq]; exact h
     simp [this]
 
-/-- No written operation of a function guarantees anything yet. -/
-theorem localFactRules_ensures {V : Vocabulary} {fns : List (FnHeader V)} (w : LocalRaw V) :
-    (localFactRules V fns).ops.ensures w = [] := by
+/-- An operation that the core owns, a row and a literal guarantee nothing yet: only a call
+guarantees, what the summary of its callee's header says. -/
+theorem localOpFacts_ensures {V : Vocabulary} {fns : List (FnHeader V)} (w : LocalRaw V)
+    (notCall : ∀ key, w ≠ .call key) : (localOpFacts fns).ensures w = [] := by
   cases w with
   | owned name _ _ => cases name <;> rfl
+  | call key => exact absurd rfl (notCall key)
   | _ => rfl
 
 section
@@ -130,7 +107,7 @@ theorem localReturns_functional (distinct : (fns.map (·.key)).Nodup) {w : Local
 
 /-- How the first result of a local operation reads. -/
 theorem localReturns_form {w : LocalRaw V} {as rs : List (localSem M fns table).Dyn}
-    {f : ResultForm} (hf : (localOpFacts V).form w = some f) (h : LocalReturns M table w as rs) :
+    {f : ResultForm} (hf : (localOpFacts fns).form w = some f) (h : LocalReturns M table w as rs) :
     ∃ r, rs.head? = some r ∧ FormHolds (localReading M) f as r := by
   obtain ⟨ins, res, o, a, r, rfl, rfl, rfl, run⟩ := h
   cases o with
@@ -229,7 +206,7 @@ theorem localRun_ranges {w : LocalRaw V} {as rs : List (localSem M fns table).Dy
     (h : ValidRun (localSem M fns table) (LocalReturns M table) (ValidDyn M) w as rs)
     (hk : ∀ (i : Nat) (r : Range), known[i]? = some (some r) →
       ∃ v n, as[i]? = some v ∧ (localReading M).nat v = some n ∧ r.Has n) :
-    ∀ (i : Nat) (r : Range), ((localOpFacts V).ranges w known)[i]? = some (some r) →
+    ∀ (i : Nat) (r : Range), ((localOpFacts fns).ranges w known)[i]? = some (some r) →
       ∃ v n, rs[i]? = some v ∧ (localReading M).nat v = some n ∧ r.Has n := by
   obtain ⟨⟨ins, res, o, a, r, rfl, rfl, rfl, run⟩, valid, _⟩ := h
   have va : a.All M.Valid := ((localSem M fns table).dyns_valid_iff a).mp valid
@@ -541,13 +518,70 @@ theorem denotes_length {item : V.Ty} {size : Option Nat} {xs : M.Val (.seq item 
   simp only [List.head?_cons, Option.some.injEq] at head
   exact head.symm
 
+/-- What an order says of two naturals. -/
+theorem relation_le {o o' : Operand (LocalRaw V)} {x y : Nat}
+    (h : (Requirement.le o o').Relation (localReading M)
+      [(⟨.nat, x⟩ : (τ : V.Ty) × M.Val τ), ⟨.nat, y⟩]) : x ≤ y := by
+  obtain ⟨a, b, ha, hb, le⟩ := h
+  have ea : x = a := Option.some.inj ha
+  have eb : y = b := Option.some.inj hb
+  subst ea eb
+  exact le
+
+/-- What a strict order says of two naturals. -/
+theorem relation_lt {o o' : Operand (LocalRaw V)} {x y : Nat}
+    (h : (Requirement.lt o o').Relation (localReading M)
+      [(⟨.nat, x⟩ : (τ : V.Ty) × M.Val τ), ⟨.nat, y⟩]) : x < y := by
+  obtain ⟨a, b, ha, hb, lt⟩ := h
+  have ea : x = a := Option.some.inj ha
+  have eb : y = b := Option.some.inj hb
+  subst ea eb
+  exact lt
+
+/-- What a lower bound says of a natural. -/
+theorem relation_atLeast {o : Operand (LocalRaw V)} {n x : Nat}
+    (h : (Requirement.atLeast o n).Relation (localReading M)
+      [(⟨.nat, x⟩ : (τ : V.Ty) × M.Val τ)]) : n ≤ x := by
+  obtain ⟨a, ha, le⟩ := h
+  have ea : x = a := Option.some.inj ha
+  subst ea
+  exact le
+
+/-- What an upper bound says of a natural. -/
+theorem relation_below {o : Operand (LocalRaw V)} {n x : Nat}
+    (h : (Requirement.below o n).Relation (localReading M)
+      [(⟨.nat, x⟩ : (τ : V.Ty) × M.Val τ)]) : x < n := by
+  obtain ⟨a, ha, lt⟩ := h
+  have ea : x = a := Option.some.inj ha
+  subst ea
+  exact lt
+
+/-- What a number says of a natural. -/
+theorem relation_exactly {o : Operand (LocalRaw V)} {n x : Nat}
+    (h : (Requirement.exactly o n).Relation (localReading M)
+      [(⟨.nat, x⟩ : (τ : V.Ty) × M.Val τ)]) : x = n := by
+  obtain ⟨a, ha, same⟩ := h
+  have ea : x = a := Option.some.inj ha
+  subst ea
+  exact same
+
+/-- What a difference says of two naturals. -/
+theorem relation_difference {o o' : Operand (LocalRaw V)} {n x y : Nat}
+    (h : (Requirement.difference o o' n).Relation (localReading M)
+      [(⟨.nat, x⟩ : (τ : V.Ty) × M.Val τ), ⟨.nat, y⟩]) : x - y = n := by
+  obtain ⟨a, b, ha, hb, same⟩ := h
+  have ea : x = a := Option.some.inj ha
+  have eb : y = b := Option.some.inj hb
+  subst ea eb
+  exact same
+
 theorem natSub_defined (x y : Nat)
     (holds : ∀ req, req ∈ (ownedContract (V := V) .natSub).requires [] →
       Holds (table := table) [⟨.nat, x⟩, ⟨.nat, y⟩] req) :
     ∀ h, ownedOp M (.natSub (V := V)) (.cons x (.cons y .nil)) = .halt h → h ≠ .undefined := by
   intro h e
-  have le := holds_args (u := ⟨.nat, y⟩) (v := ⟨.nat, x⟩) rfl rfl rfl
-    (holds (.le (.arg 1) (.arg 0)) (by simp [ownedContract])) y x rfl rfl
+  have le := relation_le (holds_args (u := ⟨.nat, y⟩) (v := ⟨.nat, x⟩) rfl rfl rfl
+    (holds (.le (.arg 1) (.arg 0)) (by simp [ownedContract])))
   simp [ownedOp, le] at e
 
 theorem natDiv_defined (x y : Nat)
@@ -555,27 +589,27 @@ theorem natDiv_defined (x y : Nat)
       Holds (table := table) [⟨.nat, x⟩, ⟨.nat, y⟩] req) :
     ∀ h, ownedOp M (.natDiv (V := V)) (.cons x (.cons y .nil)) = .halt h → h ≠ .undefined := by
   intro h e
-  have pos := holds_arg (u := ⟨.nat, y⟩) rfl rfl
-    (holds (.atLeast (.arg 1) 1) (by simp [ownedContract])) y rfl
-  simp [ownedOp, show 1 ≤ y from pos] at e
+  have pos := relation_atLeast (holds_arg (u := ⟨.nat, y⟩) rfl rfl
+    (holds (.atLeast (.arg 1) 1) (by simp [ownedContract])))
+  simp [ownedOp, pos] at e
 
 theorem natRem_defined (x y : Nat)
     (holds : ∀ req, req ∈ (ownedContract (V := V) .natRem).requires [] →
       Holds (table := table) [⟨.nat, x⟩, ⟨.nat, y⟩] req) :
     ∀ h, ownedOp M (.natRem (V := V)) (.cons x (.cons y .nil)) = .halt h → h ≠ .undefined := by
   intro h e
-  have pos := holds_arg (u := ⟨.nat, y⟩) rfl rfl
-    (holds (.atLeast (.arg 1) 1) (by simp [ownedContract])) y rfl
-  simp [ownedOp, show 1 ≤ y from pos] at e
+  have pos := relation_atLeast (holds_arg (u := ⟨.nat, y⟩) rfl rfl
+    (holds (.atLeast (.arg 1) 1) (by simp [ownedContract])))
+  simp [ownedOp, pos] at e
 
 theorem natBelow_defined (bound n : Nat)
     (holds : ∀ req, req ∈ (ownedContract (V := V) .natBelow).requires [.fin bound] →
       Holds (table := table) [⟨.nat, n⟩] req) :
     ∀ h, ownedOp M (.natBelow (V := V) bound) (.cons n .nil) = .halt h → h ≠ .undefined := by
   intro h e
-  have lt := holds_arg (u := ⟨.nat, n⟩) rfl rfl
-    (holds (.below (.arg 0) bound) (by simp [ownedContract])) n rfl
-  simp [ownedOp, show n < bound from lt] at e
+  have lt := relation_below (holds_arg (u := ⟨.nat, n⟩) rfl rfl
+    (holds (.below (.arg 0) bound) (by simp [ownedContract])))
+  simp [ownedOp, lt] at e
 
 theorem seqAt_defined {item : V.Ty} {size : Option Nat} (free : Ty.isLinear V item = false)
     (xs : M.Val (.seq item size)) (i : Nat) (valid : M.Valid _ xs)
@@ -587,8 +621,8 @@ theorem seqAt_defined {item : V.Ty} {size : Option Nat} (free : Ty.isLinear V it
   have lt : i < (xs : List (M.Val item)).length := by
     cases size with
     | some size =>
-        have := holds_arg (u := ⟨.nat, i⟩) rfl rfl
-          (holds (.below (.arg 1) size) (by simp [ownedContract])) i rfl
+        have := relation_below (holds_arg (u := ⟨.nat, i⟩) rfl rfl
+          (holds (.below (.arg 1) size) (by simp [ownedContract])))
         rw [valid.2 size rfl]
         exact this
     | none =>
@@ -599,7 +633,7 @@ theorem seqAt_defined {item : V.Ty} {size : Option Nat} (free : Ty.isLinear V it
           Option.some.injEq] at d1
         subst d1
         rw [denotes_length d2] at rel
-        exact rel i _ rfl rfl
+        exact relation_lt rel
   simp only [ownedOp] at e
   split at e
   · cases e
@@ -614,8 +648,8 @@ theorem seqSlice_defined {item : V.Ty} {size result : Option Nat}
     ∀ h, ownedOp M (.seqSlice item size result free)
       (.cons xs (.cons first (.cons second .nil))) = .halt h → h ≠ .undefined := by
   intro h e
-  have ordered := holds_args (u := ⟨.nat, first⟩) (v := ⟨.nat, second⟩) rfl rfl rfl
-    (holds (.le (.arg 1) (.arg 2)) (by simp [ownedContract])) first second rfl rfl
+  have ordered := relation_le (holds_args (u := ⟨.nat, first⟩) (v := ⟨.nat, second⟩) rfl rfl rfl
+    (holds (.le (.arg 1) (.arg 2)) (by simp [ownedContract])))
   have within : second ≤ (xs : List (M.Val item)).length := by
     obtain ⟨vs, d, rel⟩ := holds (.le (.arg 2) (.apply (lengthOfType (.seq item size)) [0]))
       (by simp [ownedContract])
@@ -624,14 +658,13 @@ theorem seqSlice_defined {item : V.Ty} {size result : Option Nat}
       Option.some.injEq] at d1
     subst d1
     rw [denotes_length d2] at rel
-    exact rel second _ rfl rfl
+    exact relation_le rel
   have fits : fitsSize result (second - first) = true := by
     cases result with
     | none => rfl
     | some count =>
-        have := holds_args (u := ⟨.nat, second⟩) (v := ⟨.nat, first⟩) rfl rfl rfl
-          (holds (.difference (.arg 2) (.arg 1) count) (by simp [ownedContract]))
-          second first rfl rfl
+        have := relation_difference (holds_args (u := ⟨.nat, second⟩) (v := ⟨.nat, first⟩) rfl
+          rfl rfl (holds (.difference (.arg 2) (.arg 1) count) (by simp [ownedContract])))
         simp [fitsSize, this]
   simp only [ownedOp] at e
   split at e
@@ -649,22 +682,60 @@ theorem seqSized_defined {item : V.Ty} {size : Nat} {free : Ty.isLinear V item =
       (.exactly (.apply (lengthOfType (.seq item none)) [0]) size) (by simp [ownedContract])
     obtain ⟨u, rfl, d1⟩ := DenotesAll.one d
     rw [denotes_length d1] at rel
-    exact rel _ rfl
+    exact relation_exactly rel
   simp [ownedOp, length] at e
 
+/-- The requirements and the guarantees of a call are those of the summary of its callee's
+header, among headers with distinct keys. -/
+theorem localOpFacts_call (distinct : (fns.map (·.key)).Nodup) {hdr : FnHeader V}
+    (callee : Member fns hdr) :
+    (localOpFacts fns).requires (LocalOp.call callee).print = hdr.summary.requires ∧
+      (localOpFacts fns).ensures (LocalOp.call callee).print = hdr.summary.ensures :=
+  ⟨congrArg Summary.requires (summaryOf_member distinct callee),
+    congrArg Summary.ensures (summaryOf_member distinct callee)⟩
+
+/-- **A call whose requirements hold.** Against callees that satisfy their summaries, a call on
+valid operands at whose values every requirement of the callee's summary holds, read with the
+relation of the analysis: the callee never stops `undefined` and returns valid values of which,
+with the operands, every guarantee of its summary holds. The summary names positions only, so the
+relation of written operations with which it is read does not matter. -/
+theorem localCall_holds (callees : Callees M table) {hdr : FnHeader V} (callee : Member fns hdr)
+    (args : HList M.Val hdr.ins) (valid : args.All M.Valid)
+    (holds : ∀ req, req ∈ (localOpFacts fns).requires (LocalOp.call callee).print →
+      Holds (table := table) ((localSem M fns table).dyns args) req) :
+    (table hdr callee args).Every (fun _ _ => True)
+      (fun results => results.All M.Valid ∧
+        ∀ guarantee, guarantee ∈ (localOpFacts fns).ensures (LocalOp.call callee).print →
+          Holds (table := table)
+            ((localSem M fns table).dyns args ++ (localSem M fns table).dyns results) guarantee)
+      (· ≠ .undefined) := by
+  have positional := callees.positional hdr (Member.mem callee)
+  obtain ⟨requires, ensures⟩ := localOpFacts_call callees.distinct callee
+  have summary := callees.satisfies hdr callee args
+    (((localSem M fns table).dyns_valid_iff args).mpr valid) fun req listed =>
+      Requirement.holds_positional (positional.requires req listed)
+        (holds req (by rw [requires]; exact listed))
+  exact Process.every_mono _ _
+    (fun results post => ⟨((localSem M fns table).dyns_valid_iff results).mp post.1,
+      fun guarantee listed => by
+        rw [ensures] at listed
+        exact Requirement.holds_positional (positional.ensures guarantee listed)
+          (post.2 guarantee listed)⟩)
+    (fun _ stop => stop) summary
+
 /-- A local operation, applied to valid operands at whose values every requirement of its
-written form holds, does not stop `undefined`, when the functions that it may call do not. -/
-theorem localOp_defined
-    (safe : ∀ hdr (callee : Member fns hdr) (args : HList M.Val hdr.ins), args.All M.Valid →
-      (table hdr callee args).Stops (· ≠ .undefined))
+written form holds, does not stop `undefined`, against callees that satisfy their summaries. -/
+theorem localOp_defined (callees : Callees M table)
     {ins res : List V.Ty} (o : LocalOp V fns ins res) (a : HList M.Val ins)
     (va : a.All M.Valid)
-    (holds : ∀ req, req ∈ (localOpFacts V).requires o.print →
+    (holds : ∀ req, req ∈ (localOpFacts fns).requires o.print →
       Holds (table := table) ((localSem M fns table).dyns a) req) :
     (localOp M table o a).Stops (· ≠ .undefined) := by
   cases o with
   | literal => exact trivial
-  | call callee => exact safe _ callee a va
+  | call callee =>
+      exact Process.every_mono _ _ (fun _ _ => trivial) (fun _ stop => stop)
+        (localCall_holds callees callee a va holds)
   | row key sig known =>
       obtain ⟨outs, h⟩ := row_defined key sig known a (fun req m => holds req m)
       simp only [localOp, h]
@@ -705,10 +776,11 @@ theorem localOp_defined
         | simp [ownedOp] at e
 
 /-- Every value that a requirement of a local operation names beyond its operands is there, at
-valid operands: one value, given by its written operation. -/
-theorem localRequires_runs {ins res : List V.Ty} (o : LocalOp V fns ins res)
-    (a : HList M.Val ins) (va : a.All M.Valid) :
-    ∀ req, req ∈ (localOpFacts V).requires o.print → ∀ op, op ∈ req.operands → ∀ w ps,
+valid operands: one value, given by its written operation. A call names none: the summary of its
+callee's header names positions only. -/
+theorem localRequires_runs (callees : Callees M table) {ins res : List V.Ty}
+    (o : LocalOp V fns ins res) (a : HList M.Val ins) (va : a.All M.Valid) :
+    ∀ req, req ∈ (localOpFacts fns).requires o.print → ∀ op, op ∈ req.operands → ∀ w ps,
       op = .apply w ps → ∃ as rs, atPositions ((localSem M fns table).dyns a) ps = some as ∧
         ValidRun (localSem M fns table) (LocalReturns M table) (ValidDyn M) w as rs ∧
         rs.length = 1 := by
@@ -716,7 +788,11 @@ theorem localRequires_runs {ins res : List V.Ty} (o : LocalOp V fns ins res)
   subst e
   cases o with
   | literal => simp [LocalOp.print, localOpFacts] at m
-  | call => simp [LocalOp.print, localOpFacts] at m
+  | call callee =>
+      rw [(localOpFacts_call callees.distinct callee).1] at m
+      obtain ⟨_, same, -⟩ := Requirement.positional_operands
+        ((callees.positional _ (Member.mem callee)).requires req m) _ mo
+      cases same
   | row key sig known =>
       simp only [LocalOp.print, localOpFacts, rowRequires, known] at m
       split at m
@@ -849,10 +925,10 @@ open FactCheck
 section
 variable {V : Vocabulary} (M : Model V) {fns : List (FnHeader V)} (table : FnTable M fns)
 
-/-- **The laws hold of the function dialect.** Against callees with distinct keys that never stop
-`undefined` on valid inputs, keep validity, and stop only `undefined` where their headers say that
-they cannot stop (`Callees`), the rules of the function dialect are lawful for its semantics, for
-any permitted replies. -/
+/-- **The laws hold of the function dialect.** Against callees with distinct keys, whose summaries
+name inputs and results by their positions only and which satisfy them, keep validity, and stop
+only `undefined` where their headers say that they cannot stop (`Callees`), the rules of the
+function dialect are lawful for its semantics, for any permitted replies. -/
 theorem localFactRules_lawful (callees : Callees M table)
     (permitted : ∀ op, (localSem M fns table).S.Reply op → Prop) :
     (localFactRules V fns).Lawful (localSem M fns table) permitted (localReading M)
@@ -863,9 +939,31 @@ theorem localFactRules_lawful (callees : Callees M table)
         localReturns_functional callees.distinct first.1 second.1
       form := fun _ _ _ _ found run => localReturns_form found run.1
       ranges := fun _ _ _ known run hk => localRun_ranges known run hk
-      ensures := fun w _ _ _ _ _ listed => by
-        rw [localFactRules_ensures w] at listed
-        cases listed }
+      ensures := by
+        intro w args rs run required guarantee listed
+        obtain ⟨⟨ins, res, o, values, returned, printed, sameArgs, sameResults, ran⟩, valid, -⟩ :=
+          run
+        subst printed sameArgs sameResults
+        cases o with
+        | call callee =>
+            have post : (localOp M table (.call callee) values).Every (fun _ _ => True) _ _ :=
+              localCall_holds callees callee values
+                (((localSem M fns table).dyns_valid_iff values).mp valid) required
+            rw [ran] at post
+            exact post.2 guarantee listed
+        | row =>
+            have none : guarantee ∈ ([] : List (Requirement (LocalRaw V))) := listed
+            cases none
+        | owned op =>
+            have listed' : guarantee ∈
+                (localOpFacts fns).ensures (LocalOp.print (LocalOp.owned (fns := fns) op)) :=
+              listed
+            rw [localOpFacts_ensures _ fun _ printed => by simp [LocalOp.print] at printed]
+              at listed'
+            cases listed'
+        | literal =>
+            have none : guarantee ∈ ([] : List (Requirement (LocalRaw V))) := listed
+            cases none }
   keeps := by
     intro raw operands results run valid
     obtain ⟨ins, res, o, args, returned, printed, sameArgs, sameResults, ran⟩ := run
@@ -875,7 +973,7 @@ theorem localFactRules_lawful (callees : Callees M table)
   defined := by
     intro ins res o shared key path values valid holds
     have stops : LocalOp.canStop o = false := by simpa [localFactRules] using shared
-    have defined := localOp_defined callees.safe o values
+    have defined := localOp_defined callees o values
       (((localSem M fns table).dyns_valid_iff values).mp valid) holds
     have onlyUndefined := localOp_stops_undefined M table callees.quiet o values stops
     show ∃ results, localOp M table o values = .done results
@@ -886,24 +984,23 @@ theorem localFactRules_lawful (callees : Callees M table)
         exact absurd onlyUndefined defined
     | call op _ => exact nomatch op
   named := fun o values valid req m operand mo w ps e =>
-    localRequires_runs o values (((localSem M fns table).dyns_valid_iff values).mp valid) req m
-      operand mo w ps e
+    localRequires_runs callees o values (((localSem M fns table).dyns_valid_iff values).mp valid)
+      req m operand mo w ps e
   effect := by
-    intro ins res o kept key path values valid _
+    intro ins res o kept key path values valid required
     have va : values.All M.Valid := ((localSem M fns table).dyns_valid_iff values).mp valid
     cases o with
     | call callee =>
-        have stops := callees.safe _ callee values va
+        have post : (table _ callee values).Every (fun _ _ => True) _ _ :=
+          localCall_holds callees callee values va required
         show (table _ callee values).Every permitted _ _
         cases hrun : table _ callee values with
         | done r =>
-            refine ⟨((localSem M fns table).dyns_valid_iff r).mpr
-              (callees.keeps _ callee values r va hrun), fun _ listed => ?_⟩
-            rw [localFactRules_ensures] at listed
-            cases listed
+            rw [hrun] at post
+            exact ⟨((localSem M fns table).dyns_valid_iff r).mpr post.1, post.2⟩
         | halt h =>
-            rw [hrun] at stops
-            exact stops
+            rw [hrun] at post
+            exact post
         | call op _ => exact nomatch op
     | row => simp [localFactRules, LocalOp.canStop] at kept
     | owned => simp [localFactRules, LocalOp.canStop] at kept
@@ -934,75 +1031,123 @@ variable {V : Vocabulary} {M : Model V} {fns : List (FnHeader V)}
 
 open FactCheck in
 /-- **The check of facts is sound for functions.** A body with distinct addresses that the check
-accepts, against callees with distinct keys that never stop `undefined` on valid inputs, keep
-validity and stop only `undefined` where their headers say that they cannot stop: on valid
-inputs every loop respects the bound that the check gave it, and the body never stops
-`undefined` and returns valid values. -/
+accepts under a summary that names positions only, against callees with distinct keys and
+positional summaries that they satisfy, which keep validity and stop only `undefined` where their
+headers say that they cannot stop: on valid inputs that satisfy the summary's requirements, every
+loop respects the bound that the check gave it, and the body never stops `undefined` and returns
+valid values of which, with the inputs, every guarantee of the summary holds. -/
 theorem checkFacts_sound {table : FnTable M fns} (callees : Callees M table) (definition : Key)
-    {types outs : List V.Ty} (inputs : Names types)
+    {types outs : List V.Ty} (summary : Summary (LocalRaw V))
+    (positional : summary.Positional types.length outs.length) (inputs : Names types)
     (body : Term (localDialect V fns) (Ctx.empty.extend inputs) outs)
     (distinct : Term.Distinct body) {bounds : List (Place × Nat)}
-    (accepted : checkFacts (localFactRules V fns) (localRules fns).skel definition none ⟨[], []⟩
+    (accepted : checkFacts (localFactRules V fns) (localRules fns).skel definition none summary
       inputs body = .ok bounds)
     (F : List (Place × Nat))
     (recorded : ∀ p b, (p, b) ∈ F → p.definition = definition → p.role = none → (p, b) ∈ bounds)
-    (ins : HList M.Val types) (valid : ins.All M.Valid) :
+    (ins : HList M.Val types) (valid : ins.All M.Valid)
+    (required : ∀ requirement, requirement ∈ summary.requires →
+      requirement.Holds (LocalReturns M table) (localReading M) ((localSem M fns table).dyns ins)) :
     body.EveryLoop (localSem M fns table) (fun _ _ => True)
         (Annotation.Bounded ⟨F⟩ definition none) [] [] (Env.empty.extend inputs ins) ∧
       (body.denote (localSem M fns table) [] (Env.empty.extend inputs ins)).Every
-        (fun _ _ => True) (fun outs => outs.All M.Valid) (· ≠ .undefined) := by
+        (fun _ _ => True)
+        (fun outs => outs.All M.Valid ∧ ∀ guarantee, guarantee ∈ summary.ensures →
+          guarantee.Holds (LocalReturns M table) (localReading M)
+            ((localSem M fns table).dyns ins ++ (localSem M fns table).dyns outs))
+        (· ≠ .undefined) := by
   obtain ⟨refused, same⟩ := checkFacts_ok accepted
   subst same
   have safe := Analysis.analyse_safe (localFactRules V fns) (localRules fns).skel
     (localSem M fns table) (fun _ _ => True) (localReading M) (LocalReturns M table) (ValidDyn M)
     (· = .undefined)
     (localFactRules_lawful M table callees (fun _ _ => True))
-    (Rules.skel_lawful (localRules_lawful callees.distinct)) definition none ⟨[], []⟩ inputs body
+    (Rules.skel_lawful (localRules_lawful callees.distinct)) definition none summary inputs body
     distinct refused F
     (fun p b m d r => List.mem_reverse.mp (recorded p b m d r))
-    ins (((localSem M fns table).dyns_valid_iff ins).mpr valid) (fun _ listed => nomatch listed)
+    ins (((localSem M fns table).dyns_valid_iff ins).mpr valid)
+    (fun requirement listed => Requirement.holds_positional (positional.requires requirement listed)
+      (required requirement listed))
   exact ⟨safe.1, Process.every_mono _ _
-    (fun outs returned => ((localSem M fns table).dyns_valid_iff outs).mp returned.1)
+    (fun outs returned => ⟨((localSem M fns table).dyns_valid_iff outs).mp returned.1,
+      fun guarantee listed => Requirement.holds_positional (positional.ensures guarantee listed)
+        (returned.2 guarantee listed)⟩)
     (fun _ stop => stop) safe.2⟩
+
+open FactCheck in
+/-- **A body of a function that the check of facts accepts under a summary satisfies it.** Under a
+summary that names positions only, against callees with distinct keys and positional summaries
+that they satisfy, which keep validity and stop only `undefined` where their headers say that they
+cannot stop, a body with distinct addresses that the check accepts satisfies the summary as a
+function of its inputs, read as a function reads its values and with the relation of its written
+operations (`Analysis.analyse_holds`). -/
+theorem checkFacts_holds {table : FnTable M fns} (callees : Callees M table) (definition : Key)
+    {types outs : List V.Ty} (summary : Summary (LocalRaw V))
+    (positional : summary.Positional types.length outs.length) (inputs : Names types)
+    (body : Term (localDialect V fns) (Ctx.empty.extend inputs) outs)
+    (distinct : Term.Distinct body) {bounds : List (Place × Nat)}
+    (accepted : checkFacts (localFactRules V fns) (localRules fns).skel definition none summary
+      inputs body = .ok bounds) :
+    Summary.Holds (localSem M fns table) (fun _ _ => True) (localReading M) (LocalReturns M table)
+      (ValidDyn M) (· = .undefined) summary
+      (fun ins => body.denote (localSem M fns table) [] (Env.empty.extend inputs ins)) :=
+  Summary.holds_positional positional
+    (Analysis.analyse_holds (localFactRules V fns) (localRules fns).skel (localSem M fns table)
+      (fun _ _ => True) (localReading M) (LocalReturns M table) (ValidDyn M) (· = .undefined)
+      (localFactRules_lawful M table callees (fun _ _ => True))
+      (Rules.skel_lawful (localRules_lawful callees.distinct)) definition none summary inputs body
+      distinct (checkFacts_ok accepted).1)
 
 open FactCheck Analysis in
 /-- **A body of a function that follows a safe body is safe and means the same.** For two bodies
 of the same types, of which the second has distinct addresses and follows the analysis of the
-first with no refusal and no place that differs, against callees with distinct keys that never
-stop `undefined` on valid inputs, keep validity and stop only `undefined` where their headers say
-that they cannot stop, on valid inputs on which the first never stops `undefined`: every loop of
+first, both under a summary that names positions only, with no refusal and no place that differs,
+against callees with distinct keys and positional summaries that they satisfy, which keep validity
+and stop only `undefined` where their headers say that they cannot stop, on valid inputs that
+satisfy the summary's requirements and on which the first never stops `undefined`: every loop of
 the second respects the bound recorded for it while it follows, the second never stops
-`undefined` and returns valid values, and the two return the same (`Analysis.follow_assured`). -/
+`undefined` and returns valid values of which, with the inputs, every guarantee of the summary
+holds, and the two return the same (`Analysis.follow_assured`). -/
 theorem localFollow_assured {table : FnTable M fns} (callees : Callees M table)
-    (definition definition' : Key) {types outs : List V.Ty} (inputs inputs' : Names types)
+    (definition definition' : Key) {types outs : List V.Ty} (summary : Summary (LocalRaw V))
+    (positional : summary.Positional types.length outs.length) (inputs inputs' : Names types)
     (body : Term (localDialect V fns) (Ctx.empty.extend inputs) outs)
     (body' : Term (localDialect V fns) (Ctx.empty.extend inputs') outs)
     (distinct' : Term.Distinct body')
-    (followed : (follow (localFactRules V fns) (localRules fns).skel definition' none ⟨[], []⟩
-      (analyse (localFactRules V fns) (localRules fns).skel definition none ⟨[], []⟩ inputs body)
+    (followed : (follow (localFactRules V fns) (localRules fns).skel definition' none summary
+      (analyse (localFactRules V fns) (localRules fns).skel definition none summary inputs body)
       inputs' body').accepted = true)
     (F : List (Place × Nat))
     (recorded : ∀ p b, (p, b) ∈ F → p.definition = definition' → p.role = none →
-      (p, b) ∈ (follow (localFactRules V fns) (localRules fns).skel definition' none ⟨[], []⟩
-        (analyse (localFactRules V fns) (localRules fns).skel definition none ⟨[], []⟩ inputs body)
+      (p, b) ∈ (follow (localFactRules V fns) (localRules fns).skel definition' none summary
+        (analyse (localFactRules V fns) (localRules fns).skel definition none summary inputs body)
         inputs' body').state.st.bounds)
     (ins : HList M.Val types) (valid : ins.All M.Valid)
+    (required : ∀ requirement, requirement ∈ summary.requires →
+      requirement.Holds (LocalReturns M table) (localReading M) ((localSem M fns table).dyns ins))
     (safe : (body.denote (localSem M fns table) [] (Env.empty.extend inputs ins)).Stops
       (· ≠ .undefined)) :
     body'.EveryLoop (localSem M fns table) (fun _ _ => True)
         (Annotation.Bounded ⟨F⟩ definition' none) [] [] (Env.empty.extend inputs' ins) ∧
       (body'.denote (localSem M fns table) [] (Env.empty.extend inputs' ins)).Every
-        (fun _ _ => True) (fun outs => outs.All M.Valid) (· ≠ .undefined) ∧
+        (fun _ _ => True)
+        (fun outs => outs.All M.Valid ∧ ∀ guarantee, guarantee ∈ summary.ensures →
+          guarantee.Holds (LocalReturns M table) (localReading M)
+            ((localSem M fns table).dyns ins ++ (localSem M fns table).dyns outs))
+        (· ≠ .undefined) ∧
       body.denote (localSem M fns table) [] (Env.empty.extend inputs ins) =
         body'.denote (localSem M fns table) [] (Env.empty.extend inputs' ins) := by
   have sound := follow_assured (localFactRules V fns) (localRules fns).skel (localSem M fns table)
     (fun _ _ => True) (localReading M) (LocalReturns M table) (ValidDyn M) (· = .undefined)
     (localFactRules_lawful M table callees _) (Rules.skel_lawful (localRules_lawful callees.distinct))
-    definition definition' none ⟨[], []⟩ inputs inputs' body body' distinct' followed F recorded
-    ins
-    (((localSem M fns table).dyns_valid_iff ins).mpr valid) (fun _ listed => nomatch listed) safe
+    definition definition' none summary inputs inputs' body body' distinct' followed F recorded
+    ins (((localSem M fns table).dyns_valid_iff ins).mpr valid)
+    (fun requirement listed => Requirement.holds_positional (positional.requires requirement listed)
+      (required requirement listed)) safe
   exact ⟨sound.1, Process.every_mono _ _
-      (fun outs returned => ((localSem M fns table).dyns_valid_iff outs).mp returned.1)
+      (fun outs returned => ⟨((localSem M fns table).dyns_valid_iff outs).mp returned.1,
+        fun guarantee listed => Requirement.holds_positional (positional.ensures guarantee listed)
+          (returned.2 guarantee listed)⟩)
       (fun _ stop => stop) sound.2.1,
     sound.2.2.eq_of_noSig⟩
 
