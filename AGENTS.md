@@ -11,7 +11,7 @@ Read `AGENTS.local.md` if present.
 
 - For structural searches, use ast-grep.
 - For symbol navigation in Python, use LSP; fall back to Serena.
-- For Lean navigation and proofs, use lean-lsp-mcp (`lean-lsp`); use the installed `lean4` skill for proof development, review, and build diagnosis.
+- For Lean work, use Lean Beam by default; fall back to `lean-lsp-mcp`. Follow the `lean-beam` skill for tooling and `lean4` for proof methodology.
 
 ## Development
 
