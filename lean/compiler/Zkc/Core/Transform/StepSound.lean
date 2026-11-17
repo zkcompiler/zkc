@@ -59,11 +59,10 @@ that satisfy the requirements (`checkFacts_sound`). -/
 theorem TypedFn.check_assured (f : TypedFn V fns hdr) {bounds : List (Place × Nat)}
     (checked : f.check = .ok bounds) : f.Assured bounds :=
   ⟨fun _ _ callees =>
-    checkFacts_holds callees hdr.key hdr.summary f.conditions.summary f.inputs f.body
-      f.conditions.distinct checked,
+    checkFacts_holds callees hdr.key hdr.summary f.inputs f.body f.conditions.distinct checked,
    fun _ _ callees F recorded ins valid required =>
-    (checkFacts_sound callees hdr.key hdr.summary f.conditions.summary f.inputs f.body
-      f.conditions.distinct checked F recorded ins valid required).1⟩
+    (checkFacts_sound callees hdr.key hdr.summary f.inputs f.body f.conditions.distinct checked F
+      recorded ins valid required).1⟩
 
 open Analysis in
 /-- What it is for a second function to follow a first: it follows the analysis of the first
@@ -71,11 +70,11 @@ with no refusal and no place that differs, and its bounds are those recorded whi
 follows. -/
 theorem TypedFn.follows_ok {source target : TypedFn V fns hdr} {bounds : List (Place × Nat)}
     (followed : source.follows target = .ok bounds) :
-    (follow (localFactRules V fns) (localRules fns).skel hdr.key none hdr.summary
-        (analyse (localFactRules V fns) (localRules fns).skel hdr.key none hdr.summary
+    (follow (localFactRules V fns) (localRules fns).skel hdr.key none hdr.summary.lift
+        (analyse (localFactRules V fns) (localRules fns).skel hdr.key none hdr.summary.lift
           source.inputs source.body) target.inputs target.body).accepted = true ∧
-      bounds = (follow (localFactRules V fns) (localRules fns).skel hdr.key none hdr.summary
-        (analyse (localFactRules V fns) (localRules fns).skel hdr.key none hdr.summary
+      bounds = (follow (localFactRules V fns) (localRules fns).skel hdr.key none hdr.summary.lift
+        (analyse (localFactRules V fns) (localRules fns).skel hdr.key none hdr.summary.lift
           source.inputs source.body) target.inputs target.body).state.st.bounds.reverse := by
   unfold TypedFn.follows at followed
   dsimp only at followed
@@ -100,8 +99,8 @@ theorem TypedFn.follows_assured {source target : TypedFn V fns hdr}
       (recorded : ∀ p b, (p, b) ∈ F → p.definition = hdr.key → p.role = none → (p, b) ∈ bounds)
       (ins : HList M.Val hdr.ins) (valid : ins.All M.Valid)
       (required : FnHeader.Required M table hdr ins) =>
-    localFollow_assured callees hdr.key hdr.key hdr.summary source.conditions.summary
-      source.inputs target.inputs source.body target.body target.conditions.distinct accepted F
+    localFollow_assured callees hdr.key hdr.key hdr.summary source.inputs target.inputs
+      source.body target.body target.conditions.distinct accepted F
       (fun p b inside here unowned => by
         have mine := recorded p b inside here unowned
         rw [recordedBounds] at mine
@@ -138,7 +137,7 @@ theorem TypedFn.safe_iff_assured (f : TypedFn V fns hdr) :
           Claim (localSem M fns table) (fun _ _ => True) f.body
             (fun path env => path = [] ∧ env = Env.empty.extend f.inputs ins)
             (fun outs => ∀ guarantee, guarantee ∈ hdr.summary.ensures →
-              guarantee.Holds (LocalReturns M table) (localReading M)
+              guarantee.Holds Empty.elim (localReading M)
                 ((localSem M fns table).dyns ins ++ (localSem M fns table).dyns outs))
             (fun _ => True) := by
   constructor

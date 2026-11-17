@@ -19,10 +19,10 @@ guarantees (`Summary`, `Program/Requirement.lean`).
 
 A definition satisfies a summary when, on valid inputs of which every requirement holds, it never
 stops undefined, and what it returns is valid and, with the inputs, satisfies every guarantee
-(`Summary.Holds`). A requirement that names operands by their positions only names no application,
-so it holds of the same values whatever the relation of written operations
-(`Requirement.holds_positional`), and so does a summary that names positions only
-(`Summary.holds_positional`).
+(`Summary.Holds`). A requirement over no written operation, as the summary of a function is, is
+read with no relation of written operations (`Empty.elim`); read as a requirement over the written
+operations of a dialect (`Requirement.lift`), it holds of the same values whatever the relation
+(`Requirement.holds_lift`), and so does such a summary (`Summary.holds_lift`).
 -/
 
 namespace Zkc.Core
@@ -83,30 +83,51 @@ def Requirement.Holds (Run : Raw → List Val → List Val → Prop) (R : Readin
     (args : List Val) (requirement : Requirement Raw) : Prop :=
   ∃ vs, DenotesAll Run args requirement.operands vs ∧ requirement.Relation R vs
 
-/-- Operands by their positions name the same values whatever the relation of written
-operations. -/
-theorem DenotesAll.positional {Run Run' : Raw → List Val → List Val → Prop} {args : List Val} :
-    ∀ {operands : List (Operand Raw)} {vs : List Val},
-      (∀ operand, operand ∈ operands → ∃ position, operand = .arg position) →
-      DenotesAll Run args operands vs → DenotesAll Run' args operands vs
-  | [], [], _, _ => trivial
-  | [], _ :: _, _, denoted => denoted.elim
-  | _ :: _, [], _, denoted => denoted.elim
-  | operand :: operands, _ :: _, positions, ⟨denoted, others⟩ => by
-      obtain ⟨position, rfl⟩ := positions operand List.mem_cons_self
-      exact ⟨denoted, DenotesAll.positional
-        (fun operand' listed => positions operand' (List.mem_cons_of_mem _ listed)) others⟩
+/-- A lifted operand names the value that it names with no relation of written operations: an
+operand by its position. -/
+theorem Operand.denotes_lift {Run : Raw → List Val → List Val → Prop} {args : List Val} {v : Val} :
+    ∀ operand : Operand Empty, (operand.lift (Raw := Raw)).Denotes Run args v ↔
+      operand.Denotes Empty.elim args v
+  | .arg _ => Iff.rfl
+  | .apply written _ => nomatch written
 
-/-- A requirement that names operands by their positions only holds of the same values whatever
-the relation of written operations: it names no application. -/
-theorem Requirement.holds_positional {Run Run' : Raw → List Val → List Val → Prop}
-    {R : Reading Val} {args : List Val} {requirement : Requirement Raw} {count : Nat}
-    (positional : requirement.positional count = true)
-    (holds : requirement.Holds Run R args) : requirement.Holds Run' R args := by
-  obtain ⟨vs, denoted, relation⟩ := holds
-  refine ⟨vs, DenotesAll.positional (fun operand listed => ?_) denoted, relation⟩
-  obtain ⟨position, same, -⟩ := Requirement.positional_operands positional operand listed
-  exact ⟨position, same⟩
+/-- Lifted operands name the values that they name with no relation of written operations. -/
+theorem DenotesAll.lift {Run : Raw → List Val → List Val → Prop} {args : List Val} :
+    ∀ {operands : List (Operand Empty)} {vs : List Val},
+      DenotesAll Run args (operands.map Operand.lift) vs ↔ DenotesAll Empty.elim args operands vs
+  | [], [] => Iff.rfl
+  | [], _ :: _ => Iff.rfl
+  | _ :: _, [] => Iff.rfl
+  | operand :: _, _ :: _ => and_congr (Operand.denotes_lift operand) DenotesAll.lift
+
+/-- A lifted requirement says of values what it says. -/
+theorem Requirement.relation_lift (R : Reading Val) (requirement : Requirement Empty)
+    (vs : List Val) : (requirement.lift (Raw := Raw)).Relation R vs ↔ requirement.Relation R vs := by
+  cases requirement <;>
+    match vs with
+    | [] | [_] | [_, _] | _ :: _ :: _ :: _ => exact Iff.rfl
+
+/-- **A lifted requirement holds whatever the relation of written operations**: exactly when the
+requirement holds with none. -/
+theorem Requirement.holds_lift {Run : Raw → List Val → List Val → Prop} {R : Reading Val}
+    {args : List Val} (requirement : Requirement Empty) :
+    (requirement.lift (Raw := Raw)).Holds Run R args ↔ requirement.Holds Empty.elim R args := by
+  unfold Requirement.Holds
+  rw [Requirement.operands_lift]
+  exact exists_congr fun vs => and_congr DenotesAll.lift (Requirement.relation_lift R requirement vs)
+
+/-- Every lifted requirement of a list holds exactly when every requirement of the list holds with
+no relation of written operations. -/
+theorem Requirement.all_holds_lift {Run : Raw → List Val → List Val → Prop} {R : Reading Val}
+    {args : List Val} (requirements : List (Requirement Empty)) :
+    (∀ requirement, requirement ∈ requirements.map (Requirement.lift (Raw := Raw)) →
+        requirement.Holds Run R args) ↔
+      ∀ requirement, requirement ∈ requirements → requirement.Holds Empty.elim R args :=
+  ⟨fun all requirement listed =>
+      (Requirement.holds_lift requirement).mp (all _ (List.mem_map.mpr ⟨requirement, listed, rfl⟩)),
+    fun all requirement listed => by
+      obtain ⟨original, listed', rfl⟩ := List.mem_map.mp listed
+      exact (Requirement.holds_lift original).mpr (all original listed')⟩
 
 end
 
@@ -130,23 +151,26 @@ def Summary.Holds {D : Dialect} {Raw : Type} (sem : Semantics D)
           guarantee.Holds Run R (sem.dyns inputs ++ sem.dyns returned))
       (fun stop => ¬ undefined stop)
 
-/-- **A summary that names positions only holds whatever the relation of written operations**:
-a definition that satisfies it for one relation satisfies it for every other. -/
-theorem Summary.holds_positional {D : Dialect} {Raw : Type} {sem : Semantics D}
+/-- **A lifted summary holds whatever the relation of written operations**: a definition
+satisfies the summary of a function read as a summary over the written operations of a dialect, for
+any relation, exactly when it satisfies the summary with no relation of written operations. -/
+theorem Summary.holds_lift {D : Dialect} {Raw : Type} {sem : Semantics D}
     {permitted : ∀ op, sem.S.Reply op → Prop} {R : Reading sem.Dyn}
-    {Run Run' : Raw → List sem.Dyn → List sem.Dyn → Prop} {Valid : sem.Dyn → Prop}
-    {undefined : sem.H → Prop} {summary : Summary Raw} {inputs results : Nat}
-    (positional : summary.Positional inputs results) {ins outs : List D.Ty}
-    {run : HList sem.Val ins → Process sem.S sem.H (HList sem.Val outs)}
-    (holds : Summary.Holds sem permitted R Run Valid undefined summary run) :
-    Summary.Holds sem permitted R Run' Valid undefined summary run := by
-  intro values valid required
-  exact Process.every_mono _ _
-    (fun returned post => ⟨post.1, fun guarantee listed =>
-      Requirement.holds_positional (positional.ensures guarantee listed) (post.2 guarantee listed)⟩)
-    (fun _ stop => stop)
-    (holds values valid fun requirement listed =>
-      Requirement.holds_positional (positional.requires requirement listed)
-        (required requirement listed))
+    {Run : Raw → List sem.Dyn → List sem.Dyn → Prop} {Valid : sem.Dyn → Prop}
+    {undefined : sem.H → Prop} (summary : Summary Empty) {ins outs : List D.Ty}
+    {run : HList sem.Val ins → Process sem.S sem.H (HList sem.Val outs)} :
+    Summary.Holds sem permitted R Run Valid undefined (summary.lift (Raw := Raw)) run ↔
+      Summary.Holds sem permitted R Empty.elim Valid undefined summary run := by
+  constructor
+  · intro holds values valid required
+    exact Process.every_mono _ _
+      (fun _ post => ⟨post.1, (Requirement.all_holds_lift summary.ensures).mp post.2⟩)
+      (fun _ stop => stop)
+      (holds values valid ((Requirement.all_holds_lift summary.requires).mpr required))
+  · intro holds values valid required
+    exact Process.every_mono _ _
+      (fun _ post => ⟨post.1, (Requirement.all_holds_lift summary.ensures).mpr post.2⟩)
+      (fun _ stop => stop)
+      (holds values valid ((Requirement.all_holds_lift summary.requires).mp required))
 
 end Zkc.Core

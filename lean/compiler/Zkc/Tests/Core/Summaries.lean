@@ -21,15 +21,15 @@ establish. The dividing function satisfies its summary in every model, from the 
 (`TypedFn.check_assured`, `checkFacts_holds`); the control, in the field of two elements of
 `Tests/Core/Transform.lean`: on a divisor of zero, which the summary excludes, its process is the
 stop `undefined`. A step from the dividing function admitted with an unused product to the same
-function without it is accepted, and the two mean the same (`AssuredFn.step_same`). Elaboration
-refuses a summary that names an application of a written operation, and one that names a position
-out of range, by the rule `summary` at the definition; and a stored function with a summary goes
-round trip in both directions.
+function without it is accepted, and the two mean the same (`AssuredFn.step_same`). A summary is
+over no written operation, so one that names an application cannot be written; elaboration refuses
+one that names a position out of range, by the rule `summary` at the definition; and a stored
+function with a summary goes round trip in both directions.
 -/
 
 namespace Zkc.Core.SummariesTests
 
-open FactsTests (field plus minus times quotient less negation natural verdict accepted anyNat)
+open FactsTests (field minus times quotient less negation natural verdict accepted anyNat)
 open FollowingTests (noCallees noCallees_callees)
 open TransformTests (twoModel refusal outcome accepted? ok_of_accepted)
 
@@ -49,7 +49,7 @@ def unjustifiedAt (definition instruction : Nat) (written : LocalRaw field)
 /-! ## A function that divides by its second input -/
 
 /-- The summary that requires the second input to be at least one. -/
-def divisorAtLeastOne : Summary (LocalRaw field) := ⟨[.atLeast (.arg 1) 1], []⟩
+def divisorAtLeastOne : Summary Empty := ⟨[.atLeast (.arg 1) 1], []⟩
 
 /-- The quotient of the first input by the second, with the key 1. -/
 def divideHeader : FnHeader field := ⟨⟨1⟩, [.nat, .nat], [.nat], false, none, divisorAtLeastOne⟩
@@ -109,13 +109,13 @@ example : verdict [divideUnsummarized] plainCallerHeader plainCaller = accepted 
 /-! ## What a callee guarantees -/
 
 /-- The summary that guarantees that the result is at most the input. -/
-def resultAtMostInput : Summary (LocalRaw field) := ⟨[], [.le (.arg 1) (.arg 0)]⟩
+def resultAtMostInput : Summary Empty := ⟨[], [.le (.arg 1) (.arg 0)]⟩
 
 /-- The summary that guarantees that the input is at most the result. -/
-def inputAtMostResult : Summary (LocalRaw field) := ⟨[], [.le (.arg 0) (.arg 1)]⟩
+def inputAtMostResult : Summary Empty := ⟨[], [.le (.arg 0) (.arg 1)]⟩
 
 /-- The decrement with the key 1, which can stop, under a summary. -/
-def decrementHeader (summary : Summary (LocalRaw field)) : FnHeader field :=
+def decrementHeader (summary : Summary Empty) : FnHeader field :=
   ⟨⟨1⟩, [.nat], [.nat], true, none, summary⟩
 
 /-- `guard !(x < 1); x - 1`. -/
@@ -169,19 +169,17 @@ def divideFn : AssuredFn field [] divideHeader :=
 of which the divisor is at least one, it never stops `undefined` and returns a valid value. It is
 what admission carries (`TypedFn.check_assured`). -/
 theorem divide_holds (M : Model field) :
-    Summary.Holds (localSem M [] (noCallees M)) (fun _ _ => True) (localReading M)
-      (LocalReturns M (noCallees M)) (ValidDyn M) (· = .undefined) divisorAtLeastOne
-      (divideFn.fn.meaning M (noCallees M)) :=
+    Summary.Holds (localSem M [] (noCallees M)) (fun _ _ => True) (localReading M) Empty.elim
+      (ValidDyn M) (· = .undefined) divisorAtLeastOne (divideFn.fn.meaning M (noCallees M)) :=
   divideFn.assured.safe M (noCallees M) (noCallees_callees M)
 
 /-- The same, from the theorem of the check of facts for a function under a summary
 (`checkFacts_holds`, from `Analysis.analyse_holds`). -/
 example (M : Model field) :
-    Summary.Holds (localSem M [] (noCallees M)) (fun _ _ => True) (localReading M)
-      (LocalReturns M (noCallees M)) (ValidDyn M) (· = .undefined) divisorAtLeastOne
-      (divideFn.fn.meaning M (noCallees M)) :=
-  checkFacts_holds (noCallees_callees M) ⟨1⟩ divisorAtLeastOne divideFn.fn.conditions.summary
-    divideFn.fn.inputs divideFn.fn.body divideFn.fn.conditions.distinct (bounds := [])
+    Summary.Holds (localSem M [] (noCallees M)) (fun _ _ => True) (localReading M) Empty.elim
+      (ValidDyn M) (· = .undefined) divisorAtLeastOne (divideFn.fn.meaning M (noCallees M)) :=
+  checkFacts_holds (noCallees_callees M) ⟨1⟩ divisorAtLeastOne divideFn.fn.inputs
+    divideFn.fn.body divideFn.fn.conditions.distinct (bounds := [])
     (by decide +kernel)
 
 /-- The control: in the field of two elements, on the divisor zero, the dividing function's process
@@ -250,14 +248,10 @@ def elaborationRefusal (named : NamedProgram field) : Option (ProgramRefusal fie
   | .error refusals => refusals.head?
 
 /-- The dividing function, by names, under a summary. -/
-def divideNamed (summary : Summary (LocalRaw field)) : NamedProgram field :=
+def divideNamed (summary : Summary Empty) : NamedProgram field :=
   ⟨[.fn ⟨1⟩ [.nat, .nat] [.nat] false none summary divideBody]⟩
 
-/-- A requirement on the sum of the two inputs, an application of a written operation: refused by
-the rule `summary` at the definition, with the requirement. -/
-example : elaborationRefusal (divideNamed ⟨[.atLeast (.apply plus [0, 1]) 1], []⟩) =
-    some ⟨.summary, whole 1, .requirement (.atLeast (.apply plus [0, 1]) 1)⟩ := by
-  decide +kernel
+-- A requirement on an application of a written operation cannot be written: a summary is over none.
 
 /-- A requirement on the position 2, which is the result's, not an input's: refused by the rule
 `summary`. -/

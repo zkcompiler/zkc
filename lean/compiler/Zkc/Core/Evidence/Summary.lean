@@ -14,11 +14,12 @@ and learn the second (`Summary`, data beside `Requirement` in `Program/Requireme
 definition satisfies a summary when, on valid inputs of which every requirement holds, it never
 stops undefined, and what it returns is valid and, with the inputs, satisfies every guarantee
 (`Summary.Holds`, `Meaning/Requirement.lean`, where the callees of a function are asked it). That
-is a contract in the sense of `Contract` (`Meaning/Call.lean`): for the function dialect, whose
-reading of values and relation of operations are in `Meaning/Validity.lean`, a summary that holds
-of a function's entry in a table is the contract of that entry whose precondition is valid inputs
-that satisfy the requirements, whose postcondition is valid results that satisfy the guarantees,
-and whose stops are not undefined (`localSummary_contract`, `Facts/LocalLaws.lean`). The summary
+is a contract in the sense of `Contract` (`Evidence/Call.lean`): for the function dialect, whose
+reading of values is in `Meaning/Validity.lean`, a summary that holds of a function's entry in a
+table is the contract of that entry whose precondition is valid inputs that satisfy the
+requirements, whose postcondition is valid results that satisfy the guarantees, and whose stops
+are not undefined (`localSummary_contract`, `Evidence/Call.lean`), and so knowledge of every call
+of it (`localSummary_satisfies`). The summary
 with no requirement and no guarantee holds exactly of a definition that, on valid inputs, never
 stops undefined and returns valid values (`Summary.holds_empty`): it is being assured.
 -/

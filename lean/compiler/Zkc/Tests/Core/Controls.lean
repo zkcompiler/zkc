@@ -1,7 +1,7 @@
 import Zkc.Tests.Core.Consumers
 import Zkc.Tests.Core.Shapes
 import Zkc.Core.Projection.Theorem
-import Zkc.Core.Meaning.Call
+import Zkc.Core.Evidence.Call
 
 /-!
 Controls: examples that exercise the definitions at their edges, each with what it shows, and
@@ -810,7 +810,7 @@ def callerTyped : Typed Shapes.plain :=
 /-- The closure of the caller has the caller and, twice, the weighted sum that it calls; not
 the identity. -/
 theorem caller_closure :
-    (callerTyped.find ⟨412⟩).map (fun subject => subject.closure) = some [⟨412⟩, ⟨410⟩, ⟨410⟩] :=
+    (callerTyped.find ⟨412⟩).map (fun definition => definition.closure) = some [⟨412⟩, ⟨410⟩, ⟨410⟩] :=
   rfl
 
 end Zkc.Core.Controls

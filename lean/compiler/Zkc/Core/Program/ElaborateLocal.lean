@@ -9,9 +9,9 @@ public import Zkc.Core.Program.Conditions
 The elaboration of a function, its erased form, and their round trip in both directions.
 
 A function's body is elaborated by the local rules in the context of its inputs, by the names
-that its region gives them, once the summary of its header is found to name its inputs, and its
-results for a guarantee, by their positions only (`Summary.Positional`); its results are the
-header's; its instructions have their own
+that its region gives them, once the positions that the summary of its header names are found to
+be within its inputs, and for a guarantee its inputs and results (`Summary.InRange`); its results
+are the header's; its instructions have their own
 addresses; every name is bound at one place; its linear values are used once; its header says
 whether it can stop with a reason as its body does (a guard, or a call of a function that can);
 and its case analyses without an arm give nothing, which elaboration gives by construction.
@@ -46,8 +46,8 @@ variable {V : Vocabulary}
 
 /-- The body of a function by names, with the names of its inputs and what elaboration decides
 about it, against the headers of the functions before it. The summary of its header is checked
-first: a requirement or a guarantee that names anything but an input, or for a guarantee a result,
-by its position is refused at the definition by the rule `summary`. -/
+first: a requirement that names a position beyond the inputs, or a guarantee one beyond the inputs
+and the results, is refused at the definition by the rule `summary`. -/
 def elabFn (fns : List (FnHeader V)) (hdr : FnHeader V) :
     Region (LocalRaw V) Unit →
       Except (ProgramRefusal V)
@@ -55,7 +55,8 @@ def elabFn (fns : List (FnHeader V)) (hdr : FnHeader V) :
   | .mk inputs instructions exit =>
       match placed : hdr.summary.misplaced hdr.ins.length hdr.outs.length,
           Names.ofList hdr.ins inputs with
-      | some requirement, _ => .error (refuseWhole hdr.key .summary (.requirement requirement))
+      | some requirement, _ =>
+          .error (refuseWhole hdr.key .summary (.requirement requirement.lift))
       | none, none => .error (refuseWhole hdr.key .inputs (.number hdr.ins.length inputs.length))
       | none, some bound =>
           match elaborated : elabBody (localRules fns) hdr.key (Ctx.empty.extend bound) [] none

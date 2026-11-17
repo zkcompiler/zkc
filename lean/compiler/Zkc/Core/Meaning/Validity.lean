@@ -25,11 +25,12 @@ as a whole (`localOp_valid`).
 
 A function reads its values for a requirement as naturals and truth values (`localReading`), and
 the relation of its written operations is that of the local operations that they print
-(`LocalReturns`): with them, the requirements of a function's summary hold of its inputs
-(`FnHeader.Required`), and a table of functions satisfies the summaries of their headers
-(`FnTable.SatisfiesSummaries`, by `Summary.Holds`). A statement about a function is made against
-callees (`Callees`): with distinct keys, summaries that name inputs and results by their
-positions only, each satisfying its summary, keeping validity, and stopping only `undefined`
+(`LocalReturns`), with which the analysis reads requirements. The summary of a function applies no
+written operation, so it is read with none (`Empty.elim`): so the requirements of a function's
+summary hold of its inputs (`FnHeader.Required`), and a table of functions satisfies the summaries
+of their headers (`FnTable.SatisfiesSummaries`, by `Summary.Holds`), against any callees as against
+others (`Summary.holds_tables`). A statement about a function is made against callees (`Callees`):
+with distinct keys, each satisfying its summary, keeping validity, and stopping only `undefined`
 where their headers say that they cannot stop. Keeping validity is unconditional, apart from the
 summary. That the functions of a table never stop `undefined` on any valid input (`FnTable.Safe`)
 follows when no summary has a requirement (`FnTable.safe_of_unconditional`). The values of a
@@ -552,20 +553,20 @@ def LocalReturns (written : LocalRaw V) (operands results : List (localSem M fns
     (localSem M fns table).dyns returned = results ∧ localOp M table o args = .done returned
 
 /-- The requirements of the summary of a function's header hold of its inputs, read as a function
-reads its values and with the relation of its written operations. -/
+reads its values; they apply no written operation. -/
 def FnHeader.Required (hdr : FnHeader V) (ins : HList M.Val hdr.ins) : Prop :=
   ∀ requirement, requirement ∈ hdr.summary.requires →
-    requirement.Holds (LocalReturns M table) (localReading M) ((localSem M fns table).dyns ins)
+    requirement.Holds Empty.elim (localReading M) ((localSem M fns table).dyns ins)
 
 end
 
 /-- Every function of a table satisfies the summary of its header (`Summary.Holds`), read as a
-function reads its values and with the relation of its written operations: on valid inputs that
-satisfy its requirements, it never stops `undefined` and returns valid values that, with the
-inputs, satisfy its guarantees. -/
+function reads its values, with no written operation: on valid inputs that satisfy its
+requirements, it never stops `undefined` and returns valid values that, with the inputs, satisfy
+its guarantees. -/
 def FnTable.SatisfiesSummaries {fns : List (FnHeader V)} (table : FnTable M fns) : Prop :=
   ∀ hdr (callee : Member fns hdr),
-    Summary.Holds (localSem M fns table) (fun _ _ => True) (localReading M) (LocalReturns M table)
+    Summary.Holds (localSem M fns table) (fun _ _ => True) (localReading M) Empty.elim
       (ValidDyn M) (· = .undefined) hdr.summary (table hdr callee)
 
 /-- The values of a function with their types do not depend on its callees. -/
@@ -576,43 +577,36 @@ theorem localSem_dyns {fns fns' : List (FnHeader V)} (table : FnTable M fns)
   | [], .nil => rfl
   | _ :: _, .cons _ rest => congrArg (List.cons _) (localSem_dyns table table' rest)
 
-/-- **A summary that names positions only holds against any callees as against others.** A run of
-a function that satisfies such a summary against one table of callees satisfies it against
-another: neither the values with their types nor, for a summary that names no application, the
-relation of written operations depends on the callees. -/
+/-- **A summary of a function holds against any callees as against others.** A run of a function
+that satisfies the summary of a function against one table of callees satisfies it against
+another: the values with their types do not depend on the callees, and the summary applies no
+written operation. -/
 theorem Summary.holds_tables {fns fns' : List (FnHeader V)} {table : FnTable M fns}
-    {table' : FnTable M fns'} {summary : Summary (LocalRaw V)} {inputs results : Nat}
-    (positional : summary.Positional inputs results) {ins outs : List V.Ty}
+    {table' : FnTable M fns'} {summary : Summary Empty} {ins outs : List V.Ty}
     {run : HList M.Val ins → Local (HList M.Val outs)}
-    (holds : Summary.Holds (localSem M fns table) (fun _ _ => True) (localReading M)
-      (LocalReturns M table) (ValidDyn M) (· = .undefined) summary run) :
-    Summary.Holds (localSem M fns' table') (fun _ _ => True) (localReading M)
-      (LocalReturns M table') (ValidDyn M) (· = .undefined) summary run := by
+    (holds : Summary.Holds (localSem M fns table) (fun _ _ => True) (localReading M) Empty.elim
+      (ValidDyn M) (· = .undefined) summary run) :
+    Summary.Holds (localSem M fns' table') (fun _ _ => True) (localReading M) Empty.elim
+      (ValidDyn M) (· = .undefined) summary run := by
   intro values valid required
   have valid' : ∀ v, v ∈ (localSem M fns table).dyns values → ValidDyn M v := by
     rw [localSem_dyns table table']
     exact valid
   have required' : ∀ requirement, requirement ∈ summary.requires →
-      requirement.Holds (LocalReturns M table) (localReading M)
-        ((localSem M fns table).dyns values) := fun requirement listed => by
+      requirement.Holds Empty.elim (localReading M) ((localSem M fns table).dyns values) := by
     rw [localSem_dyns table table']
-    exact Requirement.holds_positional (positional.requires requirement listed)
-      (required requirement listed)
+    exact required
   exact Process.every_mono _ _
-    (fun returned post => ⟨by rw [← localSem_dyns table table']; exact post.1,
-      fun guarantee listed => by
+    (fun returned post => ⟨by rw [← localSem_dyns table table']; exact post.1, by
         rw [← localSem_dyns table table' values, ← localSem_dyns table table' returned]
-        exact Requirement.holds_positional (positional.ensures guarantee listed)
-          (post.2 guarantee listed)⟩)
+        exact post.2⟩)
     (fun _ stop => stop) (holds values valid' required')
 
-/-- The callees that a statement about a function is made against: distinct keys, summaries that
-name inputs and results by their positions only (what elaboration decides of every function), each
-function satisfying the summary of its header, valid results, and only `undefined` as a stop where
-the header says that the function cannot stop. -/
+/-- The callees that a statement about a function is made against: distinct keys, each function
+satisfying the summary of its header, valid results, and only `undefined` as a stop where the
+header says that the function cannot stop. -/
 structure Callees (M : Model V) {fns : List (FnHeader V)} (table : FnTable M fns) : Prop where
   distinct : (fns.map (·.key)).Nodup
-  positional : ∀ hdr, hdr ∈ fns → hdr.summary.Positional hdr.ins.length hdr.outs.length
   satisfies : FnTable.SatisfiesSummaries table
   keeps : FnTable.KeepsValidity table
   quiet : ∀ hdr (callee : Member fns hdr) (args : HList M.Val hdr.ins), hdr.canStop = false →
@@ -625,8 +619,7 @@ theorem FnTable.safe_of_unconditional {fns : List (FnHeader V)} {table : FnTable
     (satisfies : FnTable.SatisfiesSummaries table) : FnTable.Safe table := by
   intro hdr callee args valid
   have none : ∀ requirement, requirement ∈ hdr.summary.requires →
-      requirement.Holds (LocalReturns M table) (localReading M)
-        ((localSem M fns table).dyns args) := by
+      requirement.Holds Empty.elim (localReading M) ((localSem M fns table).dyns args) := by
     intro requirement listed
     rw [unconditional hdr (Member.mem callee)] at listed
     cases listed

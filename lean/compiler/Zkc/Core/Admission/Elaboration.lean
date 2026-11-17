@@ -9,8 +9,8 @@ The elaboration of a program of functions by names, and its round trip in both d
 
 One definition is elaborated against the headers of those before it, never against their
 bodies (`elaborateDefinition`): a function's body against the headers before it, with a key
-that none of them has, and its summary in its header, which `elabFn` checks names its inputs
-and results by their positions only; a protocol is refused, since the rules of the protocol
+that none of them has, and its summary in its header, which `elabFn` checks names positions
+within its inputs and results; a protocol is refused, since the rules of the protocol
 dialect are not built. A program is the same step for each definition in order, each added to the
 program before it.
 

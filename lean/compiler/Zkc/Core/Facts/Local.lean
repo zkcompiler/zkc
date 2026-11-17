@@ -18,8 +18,8 @@ that the core owns is described by one table, from its name to the parts of its 
 result reads, and whether the table places its operands in one order; the analysis reads every
 part of it there (`localOpFacts`, `LocalRaw.commutes`). No operation that the core owns guarantees
 anything yet. A call requires and guarantees what the summary of its callee's header says
-(`summaryOf`), so that the analysis decides the callee's requirements at the call and learns its
-guarantees. Every operation of a function is written as it is printed, and has the requirements
+(`summaryOf`), read as a summary over the written operations of a function (`Summary.lift`), so
+that the analysis decides the callee's requirements at the call and learns its guarantees. Every operation of a function is written as it is printed, and has the requirements
 of that written form; every one is shared, a value, except a call of a function that can stop
 with a reason, which is kept in order. The sum and the product of naturals and the equalities
 commute; the conjunction and the disjunction, whose meaning is symmetric too, keep the order
@@ -189,7 +189,7 @@ def ownedContract : OwnedName → OwnedContract V
         commutes := false }
 
 /-- The summary of the first header with the key; the empty summary when no header has it. -/
-def summaryOf (key : Key) : List (FnHeader V) → Summary (LocalRaw V)
+def summaryOf (key : Key) : List (FnHeader V) → Summary Empty
   | [] => Summary.empty
   | hdr :: rest => if hdr.key = key then hdr.summary else summaryOf key rest
 
@@ -207,18 +207,19 @@ theorem summaryOf_member : ∀ {fns : List (FnHeader V)} {hdr : FnHeader V},
 /-- What the check of facts knows of the written operations of a function, against the headers
 of its callees: of an operation that the core owns, what its contract says (`ownedContract`); of a
 row, what its domain row says (`rowRequires`); of a call, what the summary of the header with the
-callee's key requires and guarantees (`summaryOf`), nothing when no header has it; of a literal,
+callee's key requires and guarantees (`summaryOf`), read over the written operations of a function
+(`Summary.lift`), nothing when no header has it; of a literal,
 its natural (`literalRanges`), and a written truth value reads as itself. A row and a literal
 guarantee nothing. -/
 def localOpFacts (fns : List (FnHeader V)) : OpFacts (LocalRaw V) where
   requires
     | .owned name types _ => (ownedContract name).requires types
     | .row key => rowRequires key
-    | .call key => (summaryOf key fns).requires
+    | .call key => (summaryOf key fns).lift.requires
     | .literal .. => []
   ensures
     | .owned name types _ => (ownedContract name).ensures types
-    | .call key => (summaryOf key fns).ensures
+    | .call key => (summaryOf key fns).lift.ensures
     | .row _ => []
     | .literal .. => []
   ranges

@@ -59,7 +59,7 @@ declaration, the substitution, and the definition, found. -/
 structure ResolvedFamily {V : Vocabulary} (p : Typed V) where
   generic : Key
   arguments : List Static
-  subject : Subject p
+  definition : Ref p.headers
 
 /-- The association of a program, resolved: what was given, and for each family application,
 in order, its definition found in the program. -/
@@ -73,7 +73,7 @@ def resolve {V : Vocabulary} (p : Typed V) (raw : Association) :
     Except (List (ProgramRefusal V)) (Resolved p) :=
   (raw.families.mapM fun (family : FamilyApplication) =>
       (match p.find family.definition with
-      | some subject => .ok ⟨family.generic, family.arguments, subject⟩
+      | some definition => .ok ⟨family.generic, family.arguments, definition⟩
       | none => .error [refuseWhole family.definition .association (.key family.definition)] :
         Except (List (ProgramRefusal V)) (ResolvedFamily p))).map
     fun families => ⟨raw, families⟩

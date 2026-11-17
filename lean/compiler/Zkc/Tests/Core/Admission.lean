@@ -124,7 +124,7 @@ def resolution (named : NamedProgram field) (association : Association) :
   match admit named association with
   | .ok admitted =>
       .inr (admitted.association.families.map fun family =>
-        (family.generic, family.arguments, family.subject.key))
+        (family.generic, family.arguments, family.definition.key))
   | .error refusals => .inl refusals
 
 /-- A key that names a definition of the program: admitted, with that definition found. -/

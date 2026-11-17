@@ -14,16 +14,17 @@ decisions of the analysis that produce them.
 
 There is one record of data for a function, the elaborated function (`TypedFn`): its input
 names, its body and what elaboration decided about it (`typeFn`). What is said of it is a
-proposition, against every table of callees with distinct keys whose summaries name inputs and
-results by their positions only, each satisfying its summary, which keep validity and stop only
-`undefined` where their headers say that they cannot stop (`Callees`), and on the valid inputs that
+proposition, against every table of callees with distinct keys, each satisfying its summary, which
+keep validity and stop only `undefined` where their headers say that they cannot stop
+(`Callees`), and on the valid inputs that
 satisfy the requirements of its header's summary: it is safe, satisfying its summary, never
 stopping `undefined` and returning valid values that satisfy its guarantees (`TypedFn.Safe`); its
 loops respect bounds (`TypedFn.Bounded`); both, it is assured with those bounds
 (`TypedFn.Assured`); two of them mean the same on every such input (`TypedFn.SameAs`).
 
 Two decisions produce these judgments (`Transform/StepSound.lean`), each of a body under its
-header's summary. The check of facts of a function (`TypedFn.check`) gives the bounds of its
+header's summary, which the analysis reads lifted (`Summary.lift`). The check of facts of a
+function (`TypedFn.check`) gives the bounds of its
 loops or its refusals; when it accepts, the function is assured. Whether a second function
 follows the analysis of a first (`TypedFn.follows`): the second is elaborated and follows the
 analysis of the first (`Analysis.follow`); it is not analysed by itself: every instruction that
@@ -68,11 +69,11 @@ def TypedFn.meaning (f : TypedFn V fns hdr) (M : Model V) (table : FnTable M fns
   f.body.denote (localSem M fns table) [] (Env.empty.extend f.inputs ins)
 
 /-- A function is safe: against every callees, it satisfies the summary of its header
-(`Summary.Holds`): on valid inputs that satisfy its requirements, it never stops `undefined` and
-returns valid values that, with the inputs, satisfy its guarantees. -/
+(`Summary.Holds`, with no written operation): on valid inputs that satisfy its requirements, it
+never stops `undefined` and returns valid values that, with the inputs, satisfy its guarantees. -/
 def TypedFn.Safe (f : TypedFn V fns hdr) : Prop :=
   ∀ (M : Model V) (table : FnTable M fns), Callees M table →
-    Summary.Holds (localSem M fns table) (fun _ _ => True) (localReading M) (LocalReturns M table)
+    Summary.Holds (localSem M fns table) (fun _ _ => True) (localReading M) Empty.elim
       (ValidDyn M) (· = .undefined) hdr.summary (f.meaning M table)
 
 /-- The loops of a function respect bounds: against every callees, on valid inputs that satisfy
@@ -102,7 +103,8 @@ def TypedFn.SameAs (f g : TypedFn V fns hdr) : Prop :=
 /-- The check of facts of an elaborated function under its header's summary: its refusals, or the
 bounds of its loops. -/
 def TypedFn.check (f : TypedFn V fns hdr) : Except (List (ProgramRefusal V)) (List (Place × Nat)) :=
-  checkFacts (localFactRules V fns) (localRules fns).skel hdr.key none hdr.summary f.inputs f.body
+  checkFacts (localFactRules V fns) (localRules fns).skel hdr.key none hdr.summary.lift f.inputs
+    f.body
 
 /-- Whether a second function follows the analysis of a first, both under their header's summary:
 the refusals of the analysis while it follows and the places where it is not the next entry of
@@ -110,10 +112,10 @@ the first's skeleton, or, when there is neither, the bounds of the second's loop
 of the first's own analysis are not read: the first is assured by whoever gives it. -/
 def TypedFn.follows (source target : TypedFn V fns hdr) :
     Except (List (ProgramRefusal V) × List Place) (List (Place × Nat)) :=
-  let first := analyse (localFactRules V fns) (localRules fns).skel hdr.key none hdr.summary
+  let first := analyse (localFactRules V fns) (localRules fns).skel hdr.key none hdr.summary.lift
     source.inputs source.body
-  let second := follow (localFactRules V fns) (localRules fns).skel hdr.key none hdr.summary first
-    target.inputs target.body
+  let second := follow (localFactRules V fns) (localRules fns).skel hdr.key none hdr.summary.lift
+    first target.inputs target.body
   match second.state.st.refusals, second.state.differs with
   | [], [] => .ok second.state.st.bounds.reverse
   | refusals, places => .error (refusals.reverse, places.reverse)

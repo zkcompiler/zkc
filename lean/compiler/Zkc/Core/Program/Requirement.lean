@@ -8,10 +8,13 @@ an operation asks, what the check of facts decides, and what a refusal says when
 known. An operand of a requirement that applies a written operation names its operands by their
 positions among the application's (`atPositions`). The summary of a definition is two lists of
 requirements, on its inputs and on its inputs followed by its results (`Summary`), the summary with
-neither being `Summary.empty`. The summary of a function names its inputs, and its results for a
-guarantee, by their positions only, which elaboration decides (`Summary.misplaced`,
-`Summary.Positional`). What it is for a requirement to hold of values, and for a definition to
-satisfy a summary, is in `Meaning/Requirement.lean`.
+neither being `Summary.empty`. The summary of a function is a summary over no written operation
+(`Summary Empty`), so that it names its inputs, and its results for a guarantee, by their positions
+only, by construction; an analysis reads it as a summary over the written operations of its
+dialect, which it does not apply (`Summary.lift`). That those positions are within the inputs, and
+for a guarantee the inputs and the results, is what elaboration decides (`Summary.misplaced`,
+`Summary.InRange`). What it is for a requirement to hold of values, and for a definition to satisfy
+a summary, is in `Meaning/Requirement.lean`.
 -/
 
 namespace Zkc.Core
@@ -79,65 +82,68 @@ deriving DecidableEq
 at a call and promises nothing beyond being assured. -/
 def Summary.empty {Raw : Type} : Summary Raw := ⟨[], []⟩
 
-/-! ## A summary by positions -/
+/-! ## The summary of a function, by positions -/
 
-/-- Whether every value that a requirement names is an operand by its position below a count,
-and none the result of a written operation. -/
-def Requirement.positional {Raw : Type} (count : Nat) (requirement : Requirement Raw) : Bool :=
+/-- An operand over no written operation, as an operand over the written operations `Raw`: the
+same position. There is no application to map. -/
+def Operand.lift {Raw : Type} : Operand Empty → Operand Raw
+  | .arg position => .arg position
+  | .apply written _ => nomatch written
+
+/-- A requirement over no written operation, as a requirement over the written operations `Raw`:
+the same requirement on the same positions. -/
+def Requirement.lift {Raw : Type} : Requirement Empty → Requirement Raw
+  | .le first second => .le first.lift second.lift
+  | .lt first second => .lt first.lift second.lift
+  | .atLeast value number => .atLeast value.lift number
+  | .below value number => .below value.lift number
+  | .exactly value number => .exactly value.lift number
+  | .difference first second number => .difference first.lift second.lift number
+  | .holds value => .holds value.lift
+  | .bounded value => .bounded value.lift
+
+/-- A summary over no written operation, the summary of a function, as a summary over the written
+operations `Raw` of a dialect, which is how an analysis reads it: the same requirements and
+guarantees, which apply none of them. -/
+def Summary.lift {Raw : Type} (summary : Summary Empty) : Summary Raw :=
+  ⟨summary.requires.map Requirement.lift, summary.ensures.map Requirement.lift⟩
+
+/-- The values that a lifted requirement names are those that it names, lifted. -/
+theorem Requirement.operands_lift {Raw : Type} (requirement : Requirement Empty) :
+    (requirement.lift (Raw := Raw)).operands = requirement.operands.map Operand.lift := by
+  cases requirement <;> rfl
+
+/-- A lifted requirement names operands by their positions only. -/
+theorem Requirement.lift_positions {Raw : Type} (requirement : Requirement Empty) :
+    ∀ operand, operand ∈ (requirement.lift (Raw := Raw)).operands →
+      ∃ position, operand = .arg position := by
+  intro operand listed
+  rw [Requirement.operands_lift] at listed
+  obtain ⟨original, -, rfl⟩ := List.mem_map.mp listed
+  cases original with
+  | arg position => exact ⟨position, rfl⟩
+  | apply written _ => exact nomatch written
+
+/-- Whether every position that a requirement names is below a count. -/
+def Requirement.within (count : Nat) (requirement : Requirement Empty) : Bool :=
   requirement.operands.all fun
     | .arg position => decide (position < count)
-    | .apply .. => false
+    | .apply written _ => nomatch written
 
-/-- The first requirement of a summary that names something other than an input by its position,
-or else the first guarantee that names something other than an input or a result by its
-position, for a definition with as many inputs and results; nothing when there is none. -/
-def Summary.misplaced {Raw : Type} (inputs results : Nat) (summary : Summary Raw) :
-    Option (Requirement Raw) :=
-  match summary.requires.find? fun requirement => !requirement.positional inputs with
+/-- The first requirement of a summary that names a position beyond the inputs, or else the first
+guarantee that names a position beyond the inputs and the results, for a definition with as many
+inputs and results; nothing when there is none. -/
+def Summary.misplaced (inputs results : Nat) (summary : Summary Empty) :
+    Option (Requirement Empty) :=
+  match summary.requires.find? fun requirement => !requirement.within inputs with
   | some requirement => some requirement
-  | none => summary.ensures.find? fun guarantee => !guarantee.positional (inputs + results)
+  | none => summary.ensures.find? fun guarantee => !guarantee.within (inputs + results)
 
-/-- A summary names, in its requirements, inputs by their positions, and in its guarantees,
-inputs followed by results by their positions: defined by its decision, which elaboration makes of
-the summary of every function. -/
-def Summary.Positional {Raw : Type} (inputs results : Nat) (summary : Summary Raw) : Prop :=
+/-- The positions that a summary names are within the inputs, for a requirement, and within the
+inputs followed by the results, for a guarantee: defined by its decision, which elaboration makes
+of the summary of every function. -/
+def Summary.InRange (inputs results : Nat) (summary : Summary Empty) : Prop :=
   summary.misplaced inputs results = none
-
-/-- What a requirement that names positions below a count names: operands by those
-positions. -/
-theorem Requirement.positional_operands {Raw : Type} {count : Nat} {requirement : Requirement Raw}
-    (positional : requirement.positional count = true) :
-    ∀ operand, operand ∈ requirement.operands → ∃ position, operand = .arg position ∧
-      position < count := by
-  intro operand listed
-  have each := List.all_eq_true.mp positional operand listed
-  cases operand with
-  | arg position => exact ⟨position, rfl, of_decide_eq_true each⟩
-  | apply => cases each
-
-/-- Every requirement of a positional summary names inputs by their positions. -/
-theorem Summary.Positional.requires {Raw : Type} {inputs results : Nat} {summary : Summary Raw}
-    (positional : summary.Positional inputs results) :
-    ∀ requirement, requirement ∈ summary.requires → requirement.positional inputs = true := by
-  intro requirement listed
-  unfold Summary.Positional Summary.misplaced at positional
-  split at positional
-  · cases positional
-  · rename_i none
-    have := List.find?_eq_none.mp none requirement listed
-    simpa using this
-
-/-- Every guarantee of a positional summary names inputs and results by their positions. -/
-theorem Summary.Positional.ensures {Raw : Type} {inputs results : Nat} {summary : Summary Raw}
-    (positional : summary.Positional inputs results) :
-    ∀ guarantee, guarantee ∈ summary.ensures →
-      guarantee.positional (inputs + results) = true := by
-  intro guarantee listed
-  unfold Summary.Positional Summary.misplaced at positional
-  split at positional
-  · cases positional
-  · have := List.find?_eq_none.mp positional guarantee listed
-    simpa using this
 
 /-! ## The items at positions -/
 

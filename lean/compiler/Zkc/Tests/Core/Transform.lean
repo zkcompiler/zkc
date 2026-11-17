@@ -379,8 +379,7 @@ example (M : Model field) (ins : HList M.Val boundedHeader.ins) (valid : ins.All
         (Env.empty.extend boundedFn.fn.inputs ins)).Every (fun _ _ => True)
         (fun outs => outs.All M.Valid) (· ≠ .undefined) :=
   have sound := checkFacts_sound (noCallees_callees M) ⟨1⟩ boundedHeader.summary
-    boundedFn.fn.conditions.summary boundedFn.fn.inputs boundedFn.fn.body
-    boundedFn.fn.conditions.distinct
+    boundedFn.fn.inputs boundedFn.fn.body boundedFn.fn.conditions.distinct
     (admitFn_ok boundedFn_accepted).2
     [(place 3, 3)] (fun _ _ inside _ _ => by
       rw [show boundedFn.bounds = [(place 3, 3)] by decide +kernel]

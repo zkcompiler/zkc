@@ -56,7 +56,7 @@ over: its role programs are not walked yet. -/
 def Defs.Accepted : {hs : Headers V} → Defs V hs → List (Place × Nat) → Prop
   | _, .nil, bounds => bounds = []
   | _, .fn (hs := hs) hdr inputs body _ rest, bounds => ∃ mine others,
-      checkFacts (localFactRules V hs.fns) (localRules hs.fns).skel hdr.key none hdr.summary
+      checkFacts (localFactRules V hs.fns) (localRules hs.fns).skel hdr.key none hdr.summary.lift
         inputs body = .ok mine ∧
         Defs.Accepted rest others ∧ bounds = mine ++ others
   | _, .protocol _ _ _ _ rest, bounds => Defs.Accepted rest bounds

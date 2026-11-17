@@ -502,8 +502,8 @@ def noCallees (M : Model field) : FnTable M [] := fun _ callee _ => nomatch call
 
 /-- No callee is a table of callees that a statement about a function can be made against. -/
 theorem noCallees_callees (M : Model field) : Callees M (noCallees M) :=
-  ⟨List.nodup_nil, (fun _ listed => nomatch listed), (fun _ callee => nomatch callee),
-    (fun _ callee => nomatch callee), (fun _ callee => nomatch callee)⟩
+  ⟨List.nodup_nil, (fun _ callee => nomatch callee), (fun _ callee => nomatch callee),
+    (fun _ callee => nomatch callee)⟩
 
 /-- The whole verdict on the two bodies: the second follows the first with no place that differs
 and no refusal. -/

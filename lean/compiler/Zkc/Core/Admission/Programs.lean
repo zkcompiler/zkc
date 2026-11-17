@@ -13,10 +13,9 @@ check accepts each function under its header's summary against the headers befor
 (`Defs.Accepted`), every function satisfies its summary and keeps validity, and no loop of a
 function runs more often than its bound on the inputs that satisfy its requirements
 (`functions_sound`); so a typed program without protocols that the check accepts is assured with
-its bounds (`typed_functions_sound`, `Typed.Assured`). The summary of every function of a program
-names positions only (`Defs.positional`), so what a function satisfies against the functions
-before it it satisfies in the whole table (`Summary.holds_tables`); keeping validity needs no
-check of facts (`Term.denote_valid`).
+its bounds (`typed_functions_sound`, `Typed.Assured`). The summary of a function applies no written
+operation, so what a function satisfies against the functions before it it satisfies in the whole
+table (`Summary.holds_tables`); keeping validity needs no check of facts (`Term.denote_valid`).
 
 The callees of a function of a program are the functions before it; that those whose headers say
 that they cannot stop stop only `undefined` needs no check of facts
@@ -55,24 +54,12 @@ theorem accepted_places : ∀ {hs : Headers V} (defs : Defs V hs)
       obtain ⟨mine, others, e1, e2, rfl⟩ := h
       rcases List.mem_append.mp m with m | m
       · obtain ⟨d, r⟩ :=
-          checkFacts_places (localFactRules V _) (localRules _).skel hdr.key none hdr.summary inputs
-            body e1 q m
+          checkFacts_places (localFactRules V _) (localRules _).skel hdr.key none hdr.summary.lift
+            inputs body e1 q m
         exact ⟨by rw [d]; exact List.mem_cons_self, r⟩
       · obtain ⟨d, r⟩ := accepted_places rest e2 q m
         exact ⟨List.mem_cons_of_mem _ d, r⟩
   | _, .protocol _ _ _ _ rest, bounds, h, q, m => accepted_places rest h q m
-
-/-- The summary of every function of a program names its inputs and results by their positions
-only, as elaboration decided of each. -/
-theorem Defs.positional : ∀ {hs : Headers V}, Defs V hs → ∀ hdr, hdr ∈ hs.fns →
-    hdr.summary.Positional hdr.ins.length hdr.outs.length
-  | _, .nil, _, listed => by cases listed
-  | _, .fn _ _ _ ok rest, hdr, listed => by
-      rcases List.mem_cons.mp listed with same | listed
-      · subst same
-        exact ok.summary
-      · exact Defs.positional rest hdr listed
-  | _, .protocol _ _ _ _ rest, hdr, listed => Defs.positional rest hdr listed
 
 /-- **The check of facts is sound for the functions of a program.** When the check accepts every
 function of a program under its header's summary against the headers before it, and the keys of
@@ -97,17 +84,16 @@ theorem functions_sound : ∀ {hs : Headers V} (defs : Defs V hs),
         (fun p b m r d => by
           rcases List.mem_append.mp (hF p b m r (List.mem_cons_of_mem _ d)) with m' | m'
           · have := (checkFacts_places (localFactRules V _) (localRules _).skel hdr.key none
-              hdr.summary inputs body e1 _ m').1
+              hdr.summary.lift inputs body e1 _ m').1
             simp only at this
             rw [this] at d
             exact absurd d notIn
           · exact m')
       have callees : Callees M (Defs.fnTable M rest) :=
-        ⟨distinct', Defs.positional rest, satisfiesR, keepsR, Defs.fnTable_stops_undefined M rest⟩
-      have holds := checkFacts_holds callees hdr.key hdr.summary ok.summary inputs body ok.distinct
-        e1
+        ⟨distinct', satisfiesR, keepsR, Defs.fnTable_stops_undefined M rest⟩
+      have holds := checkFacts_holds callees hdr.key hdr.summary inputs body ok.distinct e1
       have sound := fun ins valid required =>
-        checkFacts_sound callees hdr.key hdr.summary ok.summary inputs body ok.distinct e1 F
+        checkFacts_sound callees hdr.key hdr.summary inputs body ok.distinct e1 F
           (fun p b m d r => by
             rcases List.mem_append.mp (hF p b m r (by rw [d]; exact List.mem_cons_self)) with
               m' | m'
@@ -120,9 +106,8 @@ theorem functions_sound : ∀ {hs : Headers V} (defs : Defs V hs),
       refine ⟨fun hdr' f => ?_, fun hdr' f args results valid e => ?_,
         ⟨fun ins valid required => (sound ins valid required).1, respR⟩⟩
       · cases f with
-        | head => exact Summary.holds_tables ok.summary holds
-        | tail f =>
-            exact Summary.holds_tables (Defs.positional rest _ (Member.mem f)) (satisfiesR _ f)
+        | head => exact Summary.holds_tables holds
+        | tail f => exact Summary.holds_tables (satisfiesR _ f)
       · cases f with
         | head =>
             change body.denote (localSem M _ (Defs.fnTable M rest)) []
@@ -162,9 +147,10 @@ def Defs.followsFn (fns : List (FnHeader V)) (protocols : List (ProtocolHeader V
     {hs : Headers V} → Defs V hs → hs = ⟨hdr :: fns, protocols⟩ → Bool
   | _, .nil, impossible => nomatch impossible
   | _, .fn (hs := hs) _ inputs' body' _ rest', rfl =>
-      (Analysis.follow (localFactRules V hs.fns) (localRules hs.fns).skel hdr.key none hdr.summary
+      (Analysis.follow (localFactRules V hs.fns) (localRules hs.fns).skel hdr.key none
+          hdr.summary.lift
           (Analysis.analyse (localFactRules V hs.fns) (localRules hs.fns).skel hdr.key none
-            hdr.summary inputs body)
+            hdr.summary.lift inputs body)
           inputs' body').accepted && rest rest'
   | _, .protocol .., _ => false
 
@@ -203,9 +189,9 @@ theorem Defs.followsFn_true {fns : List (FnHeader V)} {protocols : List (Protoco
       ∃ (inputs' : Names hdr.ins) (body' : Fn V fns hdr inputs') (ok' : FnConditions body')
         (rest' : Defs V ⟨fns, protocols⟩),
         HEq defs' (Defs.fn (hs := ⟨fns, protocols⟩) hdr inputs' body' ok' rest') ∧
-          (follow (localFactRules V fns) (localRules fns).skel hdr.key none hdr.summary
-            (analyse (localFactRules V fns) (localRules fns).skel hdr.key none hdr.summary inputs
-              body) inputs' body').accepted = true ∧
+          (follow (localFactRules V fns) (localRules fns).skel hdr.key none hdr.summary.lift
+            (analyse (localFactRules V fns) (localRules fns).skel hdr.key none hdr.summary.lift
+              inputs body) inputs' body').accepted = true ∧
           rest rest' = true
   | _, .nil, headers, _ => nomatch headers
   | _, .fn _ inputs' body' ok' rest', rfl, follows => by
@@ -266,13 +252,13 @@ theorem Defs.functionsFollow_sound : ∀ {hs : Headers V} (defs defs' : Defs V h
       obtain ⟨satisfies, keeps, -⟩ :=
         functions_sound rest distinct' restAccepted M [] (fun _ _ none => nomatch none)
       have callees : Callees M (Defs.fnTable M rest) :=
-        ⟨distinct', Defs.positional rest, satisfies, keeps, Defs.fnTable_stops_undefined M rest⟩
+        ⟨distinct', satisfies, keeps, Defs.fnTable_stops_undefined M rest⟩
       -- the second's function, against the callees of the first: it follows a safe function
       have head := fun (ins : HList M.Val hdr.ins) (valid : ins.All M.Valid) =>
-        localFollow_assured callees hdr.key hdr.key hdr.summary ok.summary inputs inputs' body body'
+        localFollow_assured callees hdr.key hdr.key hdr.summary inputs inputs' body body'
           ok'.distinct followed [] (fun _ _ none => nomatch none) ins valid (required ins)
           (Process.every_mono _ _ (fun _ _ => trivial) (fun _ h => h)
-            (checkFacts_sound callees hdr.key hdr.summary ok.summary inputs body ok.distinct checked
+            (checkFacts_sound callees hdr.key hdr.summary inputs body ok.distinct checked
               [] (fun _ _ none => nomatch none) ins valid (required ins)).2)
       -- against its own callees it is the same term, which calls them on valid values
       have switch : ∀ ins : HList M.Val hdr.ins, ins.All M.Valid →

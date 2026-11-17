@@ -96,9 +96,8 @@ def functionsSame : Prop :=
 /-- Execution and state: a step of transformation from an assured function relates functions
 with the same meaning. When the step from an assured function (`AssuredFn.step`) accepts a stored
 target, which elaborates and follows the analysis of the source with no refusal and no place that
-differs: against callees with distinct keys, summaries that name positions only and that they
-satisfy, which keep validity and stop only `undefined` where their headers say that they cannot
-stop, the source and what the step returns return the same on every valid input that satisfies
+differs: against callees with distinct keys and summaries that they satisfy, which keep validity
+and stop only `undefined` where their headers say that they cannot stop, the source and what the step returns return the same on every valid input that satisfies
 the requirements of their header's summary (`TypedFn.SameAs`). The source is not admitted again:
 it is assured by whoever made it. -/
 def transformSound : Prop :=

@@ -26,7 +26,6 @@ public import Zkc.Core.Program.Syntax
 public import Zkc.Core.Program.Term
 public import Zkc.Core.Program.Typed
 public import Zkc.Core.Program.Vocabulary
-public import Zkc.Core.Meaning.Call
 public import Zkc.Core.Meaning.Events
 public import Zkc.Core.Meaning.Fold
 public import Zkc.Core.Meaning.Local
@@ -44,6 +43,8 @@ public import Zkc.Core.Projection.Theorem
 public import Zkc.Core.Evidence.Claim
 public import Zkc.Core.Evidence.Relation
 public import Zkc.Core.Evidence.Summary
+public import Zkc.Core.Evidence.Subject
+public import Zkc.Core.Evidence.Call
 public import Zkc.Core.Value.Table
 public import Zkc.Core.Value.Valuation
 public import Zkc.Core.Value.Skeleton

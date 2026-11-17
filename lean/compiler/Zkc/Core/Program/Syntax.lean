@@ -265,10 +265,10 @@ inductive RoleRaw (V : Vocabulary) where
   | apply (callee : Key) (roles : List Role)
 
 /-- A definition by names. The body's inputs are its ports. A function has its summary, which
-names its inputs and results by position. -/
+names its inputs and results by position, over no written operation. -/
 inductive Definition (V : Vocabulary) where
   | fn (key : Key) (ins outs : List V.Ty) (canStop : Bool) (kernel : Option Key)
-      (summary : Summary (LocalRaw V)) (body : Region (LocalRaw V) Unit)
+      (summary : Summary Empty) (body : Region (LocalRaw V) Unit)
   | protocol (key : Key) (roles : Nat) (ins outs : List (LTy V))
       (body : Region (ProtocolRaw V) (List Role))
 

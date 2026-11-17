@@ -16,7 +16,7 @@ context of a protocol and of a role program has the same names at the same locat
 A callee is named by its place among the headers (`Member`), and a component, a field or an
 alternative by its place among the types. The header of a function carries its summary
 (`Summary`): what a call requires of its inputs and what it guarantees of its inputs followed by
-its results.
+its results, over no written operation, so that it names them by their positions only.
 -/
 
 namespace Zkc.Core
@@ -34,8 +34,8 @@ structure FnHeader (V : Vocabulary) where
   the body. The function always has its body. -/
   kernel : Option Key
   /-- What a call must establish of the inputs, and what it may then take of the inputs followed
-  by the results, each by position. -/
-  summary : Summary (LocalRaw V)
+  by the results, each by position: over no written operation, it applies none. -/
+  summary : Summary Empty
 
 /-- What an application needs of a protocol: its ports and results, located in its own
 roles, and its shape. -/
