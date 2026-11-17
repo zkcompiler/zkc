@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Core.Facts.Facts
+public import Zkc.Core.Facts.Loops
 public import Zkc.Core.Meaning.Stepped
 
 @[expose] public section
@@ -8,7 +8,7 @@ public import Zkc.Core.Meaning.Stepped
 /-!
 The count of every loop that a run reaches, on the term in steps.
 
-`Stepped.Term.EveryLoop` says of a term in steps what `Term.EveryLoop` (`Facts/Facts.lean`) says of
+`Stepped.Term.EveryLoop` says of a term in steps what `Term.EveryLoop` (`Facts/Loops.lean`) says of
 a term: at every loop that a run reaches, on every path with permitted replies, its count satisfies
 `B` at the blocks around it and its key. The loops of a step are those of its instruction
 (`Stepped.Instr.EveryLoop`: of a choice, those of the region that its condition chooses; of a case
@@ -17,7 +17,10 @@ body at every iteration below the count; of a block, those of its body under its
 added to the blocks; of an attempt, those of its body at every number that its beginning gives),
 and those of the rest at every result that the instruction can return
 (`Stepped.Term.everyLoop_step`). The translations keep it (`Term.everyLoop_toStepped`,
-`Stepped.Term.everyLoop_toTerm`), proved from the equations of the meaning
+`Stepped.Term.everyLoop_toTerm`), of arms too (`Arms.everyLoop_toStepped`,
+`Stepped.Arms.everyLoop_toArms`), and an instruction translated back in front of a term reaches
+the loops of the instruction and those of the term at every result that the instruction can
+return (`Stepped.Instr.everyLoop_toTerm`), proved from the equations of the meaning
 (`Meaning/Stepped.lean`).
 -/
 
@@ -160,6 +163,30 @@ theorem Stepped.Term.everyLoop_toTerm {Γ : Ctx D.Ty} {outs : List D.Ty}
       t.EveryLoop sem permitted B path blocks env := by
   conv => rhs; rw [← Stepped.Term.toTerm_toStepped t]
   exact (Term.everyLoop_toStepped sem permitted B t.toTerm path blocks env).symm
+
+/-- Arms in steps, as arms, reach the loops that they reach. -/
+theorem Stepped.Arms.everyLoop_toArms {Γ : Ctx D.Ty} {mid payloads : List D.Ty}
+    (arms : Stepped.Arms D Γ mid payloads) (path : List Frame) (blocks : List (Key × Nat))
+    (env : Env sem.Val Γ) (pick : Pick sem.Val payloads) :
+    arms.toArms.EveryLoop sem permitted B path blocks env pick ↔
+      arms.EveryLoop sem permitted B path blocks env pick := by
+  conv => rhs; rw [← Stepped.Arms.toArms_toStepped arms]
+  exact (Arms.everyLoop_toStepped sem permitted B arms.toArms path blocks env pick).symm
+
+/-- **An instruction translated back in front of a term reaches the loops of the instruction**,
+and those of the term at every result that the instruction can return. -/
+theorem Stepped.Instr.everyLoop_toTerm {Γ : Ctx D.Ty} {mid outs : List D.Ty} (key : Key)
+    (i : Stepped.Instr D Γ mid) (results : Names mid)
+    (rest : Zkc.Core.Term D (Γ.extend results) outs) (path : List Frame)
+    (blocks : List (Key × Nat)) (env : Env sem.Val Γ) :
+    (Stepped.Instr.toTerm key i results rest).EveryLoop sem permitted B path blocks env ↔
+      Stepped.Instr.EveryLoop sem permitted B key i path blocks env ∧
+        (i.denote sem key path env).Every permitted
+          (fun values => rest.EveryLoop sem permitted B path blocks (env.extend results values))
+          (fun _ => True) := by
+  rw [← Term.everyLoop_toStepped sem permitted B (Stepped.Instr.toTerm key i results rest) path
+    blocks env, Stepped.Instr.toTerm_toStepped, Stepped.Term.everyLoop_step]
+  simp only [Term.everyLoop_toStepped]
 
 end
 

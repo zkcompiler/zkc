@@ -22,7 +22,9 @@ The meaning is used through its equations, each by `rfl` or by one case on a pic
 (`Stepped.Instr.denote_op`, `_guard`, `_choose`, `_cases`, `_loop`, `_block`, `_attempt`) and of
 arms (`Stepped.Arms.denote_nil`, `Stepped.Arms.denote_cons`). No proof outside this file unfolds
 the mutual recursion. The translations keep the meaning (`Term.denote_toStepped`,
-`Stepped.Term.denote_toTerm`).
+`Stepped.Term.denote_toTerm`), of arms too (`Arms.denote_toStepped`, `Stepped.Arms.denote_toArms`),
+and an instruction translated back in front of a term means the instruction's process, then the
+term (`Stepped.Instr.denote_toTerm`).
 
 The meaning of a prefix is in continuation-passing form (`Prefix.denote`: its steps, then what to
 do in the environment that they end in); a prefix followed by a term means the prefix, then the
@@ -234,6 +236,28 @@ theorem Stepped.Term.denote_toTerm {Γ : Ctx D.Ty} {outs : List D.Ty} (t : Stepp
     t.toTerm.denote sem path env = t.denote sem path env := by
   conv => rhs; rw [← Stepped.Term.toTerm_toStepped t]
   exact (Term.denote_toStepped sem t.toTerm path env).symm
+
+/-- Arms in steps, as arms, mean what they mean. -/
+theorem Stepped.Arms.denote_toArms {Γ : Ctx D.Ty} {mid payloads : List D.Ty}
+    (arms : Stepped.Arms D Γ mid payloads) (path : List Frame) (env : Env sem.Val Γ)
+    (pick : Pick sem.Val payloads) :
+    arms.toArms.denote sem path env pick = arms.denote sem path env pick := by
+  conv => rhs; rw [← Stepped.Arms.toArms_toStepped arms]
+  exact (Arms.denote_toStepped sem arms.toArms path env pick).symm
+
+/-- **An instruction translated back in front of a term means the instruction's process, then
+the term** on what it returns, bound to the instruction's names. -/
+theorem Stepped.Instr.denote_toTerm {Γ : Ctx D.Ty} {mid outs : List D.Ty} (key : Key)
+    (i : Stepped.Instr D Γ mid) (results : Names mid)
+    (rest : Zkc.Core.Term D (Γ.extend results) outs) (path : List Frame) (env : Env sem.Val Γ) :
+    (Stepped.Instr.toTerm key i results rest).denote sem path env =
+      (i.denote sem key path env).bind fun values =>
+        rest.denote sem path (env.extend results values) := by
+  rw [← Term.denote_toStepped sem (Stepped.Instr.toTerm key i results rest) path env,
+    Stepped.Instr.toTerm_toStepped, Stepped.Term.denote_step]
+  congr 1
+  funext values
+  exact Term.denote_toStepped sem rest path _
 
 /-! ## The meaning of a prefix -/
 

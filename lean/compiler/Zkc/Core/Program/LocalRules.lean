@@ -2,6 +2,7 @@ module
 
 public import Zkc.Core.Program.Erase
 public import Zkc.Core.Program.Typed
+public import Zkc.Core.Program.NamedProgram
 
 @[expose] public section
 
@@ -20,7 +21,7 @@ control, and nobody owns an attempt.
 
 This is where the local dialect's operations meet their written forms. An operation that the
 core owns is described by case analyses in several modules, and adding one adds an arm to each:
-its name (`OwnedName`, `Program/Syntax.lean`) and its constructor (`OwnedOp`,
+its name (`OwnedName`, `Program/NamedProgram.lean`) and its constructor (`OwnedOp`,
 `Program/Dialects.lean`); its written form and its resolution here (`OwnedOp.name`,
 `OwnedOp.resolve`, `OwnedOp.resolve_name`, `OwnedOp.name_resolve`); its meaning (`ownedOp`,
 `Meaning/Local.lean`), with

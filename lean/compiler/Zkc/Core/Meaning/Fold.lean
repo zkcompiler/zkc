@@ -23,8 +23,10 @@ that a run reaches (`Term.EveryLoop`), the uses of linear values (`Term.linearUs
 of `Program/Term.lean` (addresses, block keys, whether every case analysis is armed, whether a
 term can stop, its calls, its bindings) and of `Program/Dialects.lean` (who acts, enclosure, the
 shape), the place of a name bound twice (`Term.reboundAt`), projection, elaboration and erasure,
-the walk of the check of facts, and the proofs about each. A new constructor of `Term` is added
-to all of them.
+the walk of the check of facts, the translation to the term in steps (`Term.toStepped`,
+`Program/Stepped.lean`), and the proofs about each, among them that the translation keeps the
+meaning and the loops that a run reaches (`Term.denote_toStepped`, `Term.everyLoop_toStepped`). A
+new constructor of `Term` is added to all of them.
 
 A value is read and bound by name: a variable is read from the environment (`Env.get`,
 `Env.all`), and a binding binds its names to its values (`Env.extend`), a later name anew.

@@ -34,6 +34,7 @@ def Member.atIndex : (Γ : List T) → Nat → Option ((t : T) × Member Γ t)
   | t :: _, 0 => some ⟨t, .head⟩
   | _ :: Γ, n + 1 => (Member.atIndex Γ n).map fun found => ⟨found.1, .tail found.2⟩
 
+/-- The item at the position of an item is that item, at that position. -/
 theorem Member.atIndex_index : ∀ {Γ : List T} {a : T} (x : Member Γ a),
     Member.atIndex Γ x.index = some ⟨a, x⟩
   | _ :: _, _, .head => rfl
@@ -59,10 +60,12 @@ end
 
 /-! ## Lists of values of types -/
 
+/-- A list of values of types: one value of each type of a list, of the type at its place. -/
 inductive HList {α : Type} (V : α → Type) : List α → Type where
   | nil : HList V []
   | cons {a : α} {rest : List α} : V a → HList V rest → HList V (a :: rest)
 
+/-- Every value of a list satisfies a predicate of its type. -/
 def HList.All {α : Type} {V : α → Type} (P : ∀ a, V a → Prop) :
     {items : List α} → HList V items → Prop
   | [], .nil => True
@@ -88,17 +91,22 @@ theorem split_append {α : Type} {F : α → Type} :
   | _ :: as, _, .cons x rest => by
       simp only [HList.split, HList.append, split_append as rest]
 
+/-- Every value of a list with a first value satisfies a predicate exactly when the first does
+and every other does. -/
 theorem HList.all_cons {α : Type} {F : α → Type} {P : ∀ a, F a → Prop} {a : α} {rest : List α}
     {v : F a} {vs : HList F rest} : (HList.cons v vs).All P ↔ P a v ∧ vs.All P := Iff.rfl
 
+/-- A list of values of one type is that one value. -/
 theorem HList.one {α : Type} {F : α → Type} {a : α} :
     ∀ (vs : HList F [a]), ∃ v, vs = .cons v .nil
   | .cons v .nil => ⟨v, rfl⟩
 
+/-- A list of values of two types is those two values. -/
 theorem HList.two {α : Type} {F : α → Type} {a b : α} :
     ∀ (vs : HList F [a, b]), ∃ u v, vs = .cons u (.cons v .nil)
   | .cons u (.cons v .nil) => ⟨u, v, rfl⟩
 
+/-- A list of values of three types is those three values. -/
 theorem HList.three {α : Type} {F : α → Type} {a b c : α} :
     ∀ (vs : HList F [a, b, c]), ∃ u v w, vs = .cons u (.cons v (.cons w .nil))
   | .cons u (.cons v (.cons w .nil)) => ⟨u, v, w, rfl⟩

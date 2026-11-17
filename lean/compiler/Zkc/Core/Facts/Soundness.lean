@@ -2,8 +2,8 @@ module
 
 public import Zkc.Core.Facts.Laws
 public import Zkc.Core.Facts.Growth
-public import Zkc.Core.Facts.Facts
-public import Zkc.Core.Meaning.Validity
+public import Zkc.Core.Facts.Loops
+public import Zkc.Core.Meaning.ValidValues
 
 @[expose] public section
 

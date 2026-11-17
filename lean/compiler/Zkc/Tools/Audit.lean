@@ -44,8 +44,9 @@ tests is left unbuilt and unaudited.
 The rule of layers holds for a library that lists its modules for any dialect (`generic`) and
 its modules about one dialect or about the vocabulary (`concrete`): a module for any dialect
 imports no module about one dialect or about the vocabulary, directly or through other modules.
-A violation is found with the shortest path of imports from the module to one such module, and a
-module that the lists name and the audit's environment does not have is a finding too. The core
+A violation is found with the shortest path of imports from the module to one such module; a
+module that the lists name and the audit's environment does not have is a finding too, and so is
+a module that both lists name. The core
 gives the two lists of the audit (`coreGeneric`, `coreConcrete`).
 
 `run` audits the libraries, accepts the generated-helper fixture, then checks the negative
@@ -107,28 +108,47 @@ core, and the core. -/
 def vocabularyImports : Array Name := coreImports.push `Zkc.Core
 
 /-- The modules of the core for any dialect: every declaration of each is for any dialect and
-any semantics, and none imports, directly or not, a module of `coreConcrete`. -/
+any semantics, and none imports, directly or not, a module of `coreConcrete`. They are the
+processes, the program for any dialect (names, contexts, terms and the term in steps, the program
+by names for any operations, refusals, elaboration, erasure and places), the meanings for any
+dialect (the fold, the term in steps, requirements, places and the validity of values), the
+evidence layer, the value form, and the analysis with its soundness (the count of every loop that
+a run reaches, of the term and of the term in steps, included). Every module of the core whose
+declarations are for any dialect is listed: none is left out. -/
 def coreGeneric : Array Name := #[
   `Zkc.Core.Process.Process, `Zkc.Core.Process.Handler, `Zkc.Core.Process.Same,
   `Zkc.Core.Program.Identity, `Zkc.Core.Program.Lists, `Zkc.Core.Program.Context,
   `Zkc.Core.Program.Term, `Zkc.Core.Program.Stepped, `Zkc.Core.Program.BitTree,
   `Zkc.Core.Program.Library, `Zkc.Core.Program.Requirement, `Zkc.Core.Program.Conditions,
-  `Zkc.Core.Program.Linear,
+  `Zkc.Core.Program.Linear, `Zkc.Core.Program.Syntax, `Zkc.Core.Program.Refusal,
+  `Zkc.Core.Program.Elaborate, `Zkc.Core.Program.Erase, `Zkc.Core.Program.Place,
   `Zkc.Core.Meaning.Fold, `Zkc.Core.Meaning.Stepped, `Zkc.Core.Meaning.Requirement,
-  `Zkc.Core.Evidence.Claim, `Zkc.Core.Evidence.Summary,
-  `Zkc.Core.Facts.Range]
+  `Zkc.Core.Meaning.Place, `Zkc.Core.Meaning.ValidValues,
+  `Zkc.Core.Evidence.Claim, `Zkc.Core.Evidence.Relation, `Zkc.Core.Evidence.Summary,
+  `Zkc.Core.Evidence.Subject, `Zkc.Core.Evidence.Stepped,
+  `Zkc.Core.Value.Table, `Zkc.Core.Value.Valuation, `Zkc.Core.Value.Skeleton,
+  `Zkc.Core.Value.Leaves, `Zkc.Core.Value.Runs, `Zkc.Core.Value.Agrees,
+  `Zkc.Core.Facts.Loops, `Zkc.Core.Facts.SteppedLoops, `Zkc.Core.Facts.OpFacts,
+  `Zkc.Core.Facts.Range, `Zkc.Core.Facts.State, `Zkc.Core.Facts.Valuation,
+  `Zkc.Core.Facts.Walk, `Zkc.Core.Facts.Learning, `Zkc.Core.Facts.Laws, `Zkc.Core.Facts.Growth,
+  `Zkc.Core.Facts.WalkRuns, `Zkc.Core.Facts.Soundness, `Zkc.Core.Facts.SoundnessFollowing,
+  `Zkc.Core.Facts.Theorems]
 
-/-- The modules of the core about one dialect or about the vocabulary: the vocabulary, the types
-and records over it, the program by names with the written operations of the three dialects, the
-dialects, the rules of the function dialect and projection, the events and the semantics of the
-three dialects, and what the function dialect tells the analysis. -/
+/-- The modules of the core about one dialect or about the vocabulary from which the others
+follow: the vocabulary, the types and records over it, the operations of the three dialects by
+names and the program by names of them, the dialects, the rules of the function dialect and
+projection, the events and the semantics of the three dialects, what the function dialect tells
+the analysis, and the declaration of a scheme, which deploys a protocol. Every other module of
+the core about one dialect or about the vocabulary imports one of them, directly or not, so that
+the rule of layers reaches it. -/
 def coreConcrete : Array Name := #[
   `Zkc.Core.Program.Vocabulary, `Zkc.Core.Program.Located, `Zkc.Core.Program.Record,
-  `Zkc.Core.Program.Shape, `Zkc.Core.Program.Syntax, `Zkc.Core.Program.Dialects,
+  `Zkc.Core.Program.Shape, `Zkc.Core.Program.NamedProgram, `Zkc.Core.Program.Dialects,
   `Zkc.Core.Program.LocalRules, `Zkc.Core.Program.Project,
   `Zkc.Core.Meaning.Events, `Zkc.Core.Meaning.Local, `Zkc.Core.Meaning.Protocol,
   `Zkc.Core.Meaning.Role,
-  `Zkc.Core.Facts.Local]
+  `Zkc.Core.Facts.Local,
+  `Zkc.Core.Scheme.Declaration]
 
 /-- The first components of the modules of Lean's own libraries: the only modules that the replay
 through the kernel takes as built. -/
@@ -462,7 +482,7 @@ def audit (env : Environment) (libraries : Array Library) (arts : NameMap Import
             report := report.add module .importOutside
               s!"{module}: imports {target}, which is not of {library.root} or of {", ".intercalate (allowed.toList.map toString)}"
   -- the layers: no module for any dialect imports, directly or not, a module about one dialect or
-  -- about the vocabulary; every module of the lists is in the environment
+  -- about the vocabulary; every module of the lists is in the environment, and in one list only
   for library in libraries do
     for (kind, listed) in #[("for any dialect", library.generic),
         ("about one dialect or about the vocabulary", library.concrete)] do
@@ -471,6 +491,10 @@ def audit (env : Environment) (libraries : Array Library) (arts : NameMap Import
           report := report.add module .layers
             s!"{module}: the rule of layers lists it as a module {kind}, and the audit's environment does not have it"
     for module in library.generic do
+      if library.concrete.contains module then
+        report := report.add module .layers
+          s!"{module}: the rule of layers lists it both as a module for any dialect and as a module about one dialect or about the vocabulary"
+        continue
       let some path := importPath env module library.concrete | continue
       report := report.add module .layers
         s!"{module}: a module for any dialect, imports {path.back!}, a module about one dialect or about the vocabulary, by {" → ".intercalate (path.toList.map toString)}"

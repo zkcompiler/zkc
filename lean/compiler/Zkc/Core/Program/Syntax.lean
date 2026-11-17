@@ -1,13 +1,12 @@
 module
 
-public import Zkc.Core.Program.Shape
-public import Zkc.Core.Program.Located
-public import Zkc.Core.Program.Requirement
+public import Zkc.Core.Program.Identity
 
 @[expose] public section
 
 /-!
-The program by names: what a frontend gives to the core.
+The program by names, for any operations and any performers: the form of what a frontend gives
+to the core.
 
 One first-order syntax, generic in the operation and in who performs. A region is a list of
 instructions and an exit. An instruction is an operation (its results, the operation, its
@@ -17,7 +16,9 @@ dialect lists only its operations. The key is the producer's: it is the key of t
 block or the application that the instruction is. A name is a number; a definition binds each of
 its names at one place, and a use refers to that place. A nested region sees the names around it.
 Instructions and regions by names are decided equal part by part (`Instruction.decideEq`,
-`Region.decideEq`), so that stored programs are compared whole.
+`Region.decideEq`), so that stored programs are compared whole. Nothing here is about a dialect or
+the vocabulary: the operations of the three dialects by names and the program by names of them
+are in `Program/NamedProgram.lean`.
 -/
 
 namespace Zkc.Core
@@ -227,58 +228,5 @@ instance Region.decideEq : DecidableEq (Region Op Who) := fun r r' =>
     ⟨Region.eq_of_same r r', fun same => same ▸ Region.same_self r⟩
 
 end
-
-/-- An operation that the core owns, by name. -/
-inductive OwnedName where
-  | natAdd | natSub | natMul | natDiv | natRem | natPow | natEqual | natLess
-  | boolAnd | boolOr | boolNot | boolEqual
-  | seqLength | seqAt | seqSlice | seqConcat | seqFill
-  | seqSized | natBelow
-  | seqUnsized | finToNat | finWiden
-  | make | get | take | variant
-deriving DecidableEq, Repr
-
-/-- The operations of a function. An owned operation carries its types and its numbers (a
-position of `get` and of `variant`). -/
-inductive LocalRaw (V : Vocabulary) where
-  | row (key : V.RowKey)
-  | owned (name : OwnedName) (at_ : List V.Ty) (numbers : List Nat)
-  | literal (τ : V.Ty) (data : List Nat)
-  | call (callee : Key)
-deriving DecidableEq
-
-/-- The operations of a protocol. Who computes, who takes part in an event (its class, with
-its type) and who keeps a narrowed value is written; the holders of every value follow. -/
-inductive ProtocolRaw (V : Vocabulary) where
-  | compute (roles : List Role) (o : LocalRaw V)
-  | event (cls : EventClass V) (τ : V.Ty)
-  | narrow (roles : List Role)
-  | apply (callee : Key) (roles : List Role)
-
-/-- The operations of a role program, as the printer of a typed program writes them: a
-role's part of an event is its `Part` with the located type of what it has afterwards. -/
-inductive RoleRaw (V : Vocabulary) where
-  | compute (roles : List Role) (o : LocalRaw V)
-  | absent (items : List (LTy V))
-  | effect (part : Part V) (result : LTy V)
-  | keep (holders : Holders)
-  | apply (callee : Key) (roles : List Role)
-
-/-- A definition by names. The body's inputs are its ports. A function has its summary, which
-names its inputs and results by position, over no written operation. -/
-inductive Definition (V : Vocabulary) where
-  | fn (key : Key) (ins outs : List V.Ty) (canStop : Bool) (kernel : Option Key)
-      (summary : Summary Empty) (body : Region (LocalRaw V) Unit)
-  | protocol (key : Key) (roles : Nat) (ins outs : List (LTy V))
-      (body : Region (ProtocolRaw V) (List Role))
-
-/-- The key of a definition by names. -/
-def Definition.key {V : Vocabulary} : Definition V → Key
-  | .fn key .. => key
-  | .protocol key .. => key
-
-/-- A program by names: its definitions in order, each applying only earlier ones. -/
-structure NamedProgram (V : Vocabulary) where
-  definitions : List (Definition V)
 
 end Zkc.Core

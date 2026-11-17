@@ -2,7 +2,7 @@ module
 
 public import Zkc.Core.Facts.Facts
 public import Zkc.Core.Meaning.Validity
-public import Zkc.Core.Program.Refusal
+public import Zkc.Core.Program.NamedProgram
 
 @[expose] public section
 

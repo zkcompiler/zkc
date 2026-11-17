@@ -32,7 +32,8 @@ when the prefix's process ends, on every path, in environments from which the te
 (`Prefix.every_fill`, and in the form of an intermediate property of those environments,
 `Prefix.every_fill_of_run`).
 
-Nothing here unfolds the meaning: every proof uses the equations of `Meaning/Stepped.lean`.
+Nothing here unfolds the mutual recursion of the meaning: every proof uses the equations of
+`Meaning/Stepped.lean`, and the rule of a loop also unfolds one iteration (`Semantics.loopStep`).
 -/
 
 namespace Zkc.Core

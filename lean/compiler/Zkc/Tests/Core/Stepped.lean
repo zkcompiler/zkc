@@ -1,4 +1,5 @@
 import Zkc.Core.Evidence.Stepped
+import Zkc.Core.Facts.SteppedLoops
 import Zkc.Tests.Core.Subjects
 
 /-!
@@ -6,9 +7,11 @@ The term in steps, on the bodies of `Subjects.lean` and on the body of one test 
 with a choice inside a loop (`N-TY9e`), over the vocabulary with a field of `Facts.lean`.
 
 The round trip: each body of `Subjects.lean` (the sum of two products and the same instructions
-reading `c, d` then `a, b`, the caller with a block, the caller with the instructions in line, the
-caller of the sum, the callee that returns the first product and the callee with a guard), as a
-term in steps and back, is the body, and erases to what the body erases to; the body that
+reading `c, d` then `a, b`, the caller with a block and the caller whose block reads `c, d` then
+`a, b`, the caller with the instructions in line and the same with the operands of the last one
+exchanged, the caller of the sum and the caller of the sum with its operands exchanged, the callee
+that returns the first product and the callee with a guard), as a term in steps and back, is the
+body, and erases to what the body erases to; the body that
 `N-TY9e` elaborates, as a term in steps and back, erases to what it erases to. A term has no
 decision of equality (its operations are of any type), so that a body as a term in steps and
 back is the body is checked by the kernel's evaluation of a body written as a term, and of an
@@ -22,6 +25,12 @@ law of the operations that the core owns (`product_yields`, `addition_yields`); 
 meaning. Then the same body as its first two instructions, a prefix, filled with its last one: its
 process is the prefix's process, then the last instruction on the environment that the prefix
 ends in (`Prefix.denote_fill_run`).
+
+The loops that a run reaches: a loop in steps, as often as two, whose body adds the second input
+to the carried value. In every model, against any callees, every loop that a run of it reaches
+runs at most twice, by the rule of a step (`Stepped.Term.everyLoop_step`) at the loop and in its
+body; so does the loop as a term (`Stepped.Term.everyLoop_toTerm`); and, the control, not at most
+once.
 -/
 
 namespace Zkc.Core.SteppedTests
@@ -48,8 +57,11 @@ def erasesAlike {fns : List (FnHeader field)} (hdr : FnHeader field) (inputs : N
 example : sumBody.toStepped.toTerm = sumBody := rfl
 example : sumBodyExchanged.toStepped.toTerm = sumBodyExchanged := rfl
 example : blockCaller.toStepped.toTerm = blockCaller := rfl
+example : blockExchanged.toStepped.toTerm = blockExchanged := rfl
 example : inlineCaller.toStepped.toTerm = inlineCaller := rfl
+example : inlineExchanged.toStepped.toTerm = inlineExchanged := rfl
 example : callingCaller.toStepped.toTerm = callingCaller := rfl
+example : callingExchanged.toStepped.toTerm = callingExchanged := rfl
 example : firstBody.toStepped.toTerm = firstBody := rfl
 example : guardedBody.toStepped.toTerm = guardedBody := rfl
 
@@ -57,9 +69,16 @@ example : erasesAlike sumHeader (Names.counting 0 _) sumBody = true := by decide
 example : erasesAlike callerHeader (Names.counting 0 _) sumBodyExchanged = true := by
   decide +kernel
 example : erasesAlike callerHeader (Names.counting 0 _) blockCaller = true := by decide +kernel
+example : erasesAlike callerHeader (Names.counting 0 _) blockExchanged = true := by
+  decide +kernel
 example : erasesAlike callerHeader (Names.counting 0 _) inlineCaller = true := by decide +kernel
+example : erasesAlike callerHeader (Names.counting 0 _) inlineExchanged = true := by
+  decide +kernel
 example : erasesAlike (fns := [sumHeader]) callerHeader (Names.counting 0 _) callingCaller = true :=
   by decide +kernel
+example : erasesAlike (fns := [sumHeader]) callerHeader (Names.counting 0 _) callingExchanged =
+    true := by
+  decide +kernel
 example : erasesAlike firstHeader (Names.counting 0 _) firstBody = true := by decide +kernel
 example : erasesAlike stoppingHeader (Names.counting 0 _) guardedBody = true := by decide +kernel
 
@@ -167,5 +186,57 @@ theorem sumBody_prefix (M : Model field) (table : FnTable M []) (path : List Fra
       (productsFirst.run (localSem M [] table) path env).bind fun env' =>
         sumAfter.denote (localSem M [] table) path env' :=
   Prefix.denote_fill_run (localSem M [] table) productsFirst sumAfter path env
+
+/-! ## The loops that a run reaches -/
+
+/-- The names in scope in the body of the loop: the inputs, the iteration number (the name 10)
+and the carried value (11). -/
+abbrev inLoop : Ctx field.Ty :=
+  (Ctx.positional four).extend (.cons 10 (.cons 11 .nil) : Names [(.nat : field.Ty), .nat])
+
+/-- The body of the loop: `c' := c + b`, the carried value plus the second input. -/
+def loopBody : Stepped.Term (localDialect field []) inLoop [.nat] :=
+  .step ⟨2⟩ (.op (.owned .natAdd) (.cons (var 11) (.cons (var 1) .nil))) (.cons 12 .nil) <|
+  .ret (.cons (var 12) .nil)
+
+/-- A loop in steps, as often as two, whose carried value starts at the first input and adds the
+second at each iteration; what the loop gives is returned. -/
+def loopStepped : Stepped.Term (localDialect field []) (Ctx.positional four) [.nat] :=
+  .step ⟨1⟩ (.loop (carried := [(.nat : field.Ty)]) (each := []) () (.fixed 2) (fun _ _ => trivial)
+      (.cons (var 0) .nil) (.cons 10 (.cons 11 .nil)) loopBody) (.cons 4 .nil) <|
+  .ret (.cons (var 4) .nil)
+
+/-- **Every loop that a run of the loop in steps reaches runs at most twice**, in every model,
+against any callees, on any path and from any start: by the rule of a step
+(`Stepped.Term.everyLoop_step`), at the loop by its written count, and in its body, a step whose
+operation reaches no loop, by the rule of a step again. -/
+theorem loopStepped_bounded (M : Model field) (table : FnTable M []) (path : List Frame)
+    (env : Env M.Val (Ctx.positional four)) :
+    loopStepped.EveryLoop (localSem M [] table) (fun _ _ => True) (fun _ _ count => count ≤ 2)
+      path [] env := by
+  rw [loopStepped, Stepped.Term.everyLoop_step]
+  dsimp only [Stepped.Instr.EveryLoop]
+  refine ⟨⟨Nat.le_refl 2, fun i _ => every_of_all _ (fun state => ?_) _⟩,
+    every_of_all _ (fun _ => trivial) _⟩
+  rw [loopBody, Stepped.Term.everyLoop_step]
+  exact ⟨trivial, every_of_all _ (fun _ => trivial) _⟩
+
+/-- The loop as a term reaches the same loops (`Stepped.Term.everyLoop_toTerm`): each runs at
+most twice. -/
+example (M : Model field) (table : FnTable M []) (path : List Frame)
+    (env : Env M.Val (Ctx.positional four)) :
+    loopStepped.toTerm.EveryLoop (localSem M [] table) (fun _ _ => True)
+      (fun _ _ count => count ≤ 2) path [] env :=
+  (Stepped.Term.everyLoop_toTerm (localSem M [] table) (fun _ _ => True)
+    (fun _ _ count => count ≤ 2) loopStepped path [] env).mpr (loopStepped_bounded M table path env)
+
+/-- The control: the loop that it reaches does not run at most once. -/
+example (M : Model field) (table : FnTable M []) (path : List Frame)
+    (env : Env M.Val (Ctx.positional four)) :
+    ¬ loopStepped.EveryLoop (localSem M [] table) (fun _ _ => True) (fun _ _ count => count ≤ 1)
+      path [] env := by
+  rw [loopStepped, Stepped.Term.everyLoop_step]
+  dsimp only [Stepped.Instr.EveryLoop]
+  exact fun bounded => (by decide : ¬ 2 ≤ 1) bounded.1.1
 
 end Zkc.Core.SteppedTests

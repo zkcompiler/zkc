@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Core.Program.Syntax
+public import Zkc.Core.Program.Identity
 public import Zkc.Core.Program.Requirement
 
 @[expose] public section
@@ -9,7 +9,9 @@ public import Zkc.Core.Program.Requirement
 Refusals: the rules of the core, what a rule found, and the place of a program where it found
 it, as data. Elaboration, the conditions of a body and the check of facts refuse in this one
 form. The core words nothing: a frontend words a refusal from its rule, its place and what was
-found, with its own map from places to source.
+found, with its own map from places to source. What a rule found has the types and the written
+operations of a dialect as parameters, so nothing here is about a dialect or the vocabulary; a
+refusal of a program of functions (`ProgramRefusal`) is in `Program/NamedProgram.lean`.
 -/
 
 namespace Zkc.Core
@@ -147,9 +149,5 @@ def Finding.refuseAt (finding : Finding T Raw) (definition : Key) (blocks : List
   Zkc.Core.refuseAt definition blocks instruction finding.rule finding.detail
 
 end
-
-/-- A refusal of a program: of a function, with its types and its written operations as
-values. -/
-abbrev ProgramRefusal (V : Vocabulary) : Type := Refusal V.Ty (LocalRaw V)
 
 end Zkc.Core

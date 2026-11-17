@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Core.Program.Syntax
+public import Zkc.Core.Program.NamedProgram
 public import Zkc.Core.Program.Dialects
 
 @[expose] public section

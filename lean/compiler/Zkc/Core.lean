@@ -15,6 +15,7 @@ public import Zkc.Core.Program.Identity
 public import Zkc.Core.Program.Library
 public import Zkc.Core.Program.Lists
 public import Zkc.Core.Program.Located
+public import Zkc.Core.Program.NamedProgram
 public import Zkc.Core.Program.Erase
 public import Zkc.Core.Program.EraseProgram
 public import Zkc.Core.Program.Place
@@ -38,6 +39,7 @@ public import Zkc.Core.Meaning.Stepped
 public import Zkc.Core.Meaning.Stops
 public import Zkc.Core.Meaning.Protocol
 public import Zkc.Core.Meaning.Role
+public import Zkc.Core.Meaning.ValidValues
 public import Zkc.Core.Meaning.Validity
 public import Zkc.Core.Meaning.Tables
 public import Zkc.Core.Projection.Proj
@@ -55,6 +57,7 @@ public import Zkc.Core.Value.Skeleton
 public import Zkc.Core.Value.Leaves
 public import Zkc.Core.Value.Runs
 public import Zkc.Core.Value.Agrees
+public import Zkc.Core.Facts.Loops
 public import Zkc.Core.Facts.Facts
 public import Zkc.Core.Facts.SteppedLoops
 public import Zkc.Core.Facts.OpFacts

@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Core.Program.Term
+public import Zkc.Core.Program.Syntax
 public import Zkc.Core.Program.Refusal
 
 @[expose] public section
