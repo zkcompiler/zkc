@@ -29,3 +29,21 @@ The retained frontend and historical formal suites still need to be ported.
 
 The earlier implementation, a C++ compiler with a Rust runtime, is at the tag
 `old-route-2026-11-14`.
+
+## Interactive source proofs on typed Core
+
+The frontend emits the protocol into typed Core. Admission checks the program,
+and projection gives the process for each role. The formal library relates a certificate to the
+emitted entry, including the resolved callee and its source arguments.
+Source elaboration and lowering remain trusted.
+
+| Entry checked | Result and assumptions |
+|---|---|
+| Sumcheck verifier | A false sum is accepted with probability at most `n/S` for `n` rounds and a challenge set of size `S`, under the arithmetic and reached-challenge laws. The source checks instantiate 0, 1 and 10 rounds. |
+| Honest joint Sumcheck | A valid table of length `2ⁿ` with its true sum returns successfully for every reply under the table and arithmetic laws. Full reply mass at reached calls gives return probability one. |
+| GKR layer verifier | At the four-round `Reduce<Gate>` call, a false incoming claim yields a correct residual with probability at most `8/S`, under the gate, current-layer and challenge assumptions. Whole-circuit soundness also needs the wiring, line reduction, layer composition and terminal evaluation. |
+
+Run `just test-interactive` for the source checks, their mutation controls and the
+kernel audit. The [formal package guide](../lean/formal/README.md) gives the
+theorem entry points and the [source checks](../lean/formal/checks/SourceProtocols.lean)
+exercise the certificates.
