@@ -17,7 +17,8 @@ def portView (code : Typing.ProtocolCode) (where_ : Span) : ExportM View := do
     refuse where_ "WK-VIEW" "incompatible message roles or types"
   let site i := do
     let some s := code.sites[i]? | refuse where_ "WK-VIEW" "missing emitted occurrence"
-    unless s.name.isSome && s.part == "value" && s.instruction.isSome && s.iteration.isEmpty do
+    unless s.name.isSome && s.part == "value" && s.instruction.isSome && s.iteration.isEmpty &&
+        (Typing.SiteEntry.realizations code.sites s.event s.part).size == 1 do
       refuse s.place "WK-VIEW" "expected a named, unambiguous top-level event"
     pure s
   return ⟨← site ci, ← site di, ← site ri, p, v, ← historySort pt where_⟩
@@ -94,6 +95,42 @@ def checkRuns (s : Compile.State) (env : Static.Env) (t : TypeExpr) (key : Insta
     | _ => refuse t.span "WK-VIEW" "unsupported protocol arguments in run view"
   unless key.arguments == arguments do refuse t.span "WK-VIEW" "different protocol specialization"
 
+/-- Elaborate the selected declaration by its resolved binder IDs. The finite run tree is
+a pair of leaves with named fields in the order of the deciding role's exchanges. -/
+def checkedClause (label : String) (s : Compile.State) (id : DeclarationId) (args : Array StaticValue)
+    (inputs : Array ClosedType) (result : ClosedType) (specification : Bool) (at_ : Span) :
+    ExportM String := do
+  let action : CompileM (Except String String) := do
+    let d ← Static.declaration id
+    let inst ← Static.instantiate id args ⟨s.program.nameOf id, at_⟩
+    let some decl := (← getModules).lowered? id | throw (.defect "missing lowered declaration")
+    let .function head (.body expr) := decl.content | throw (.defect "expected a function body")
+    let (code, _, tree, _) ← Emit.elaborateBody inst (s.program.nameOf id)
+      (Static.instanceEnv s.program d args) ((head.parameters.map (·.binder)).zip inputs)
+      result expr specification decl.locals Typing.typeBody
+    if let some why := code.waiting then throw (.waiting why)
+    if specification && code.canStop then throw (.defect "a relation can stop")
+    let state ← get
+    let emission : Typing.EmitM String := do
+      let b ← Emit.bindCalls {} (Emit.calledIn tree)
+      let (definition, _) ← Emit.Named.functionDefinition (← Emit.bodyContext b) ⟨inst⟩ result tree
+      let package : SourcePackage := ⟨b, ⟨[definition]⟩, ⟨[],[],[],[],[]⟩⟩
+      let .ok evidence := package.checkEvidence | Typing.defect "admission refused the selected function"
+      match functionDeclarations label package evidence with
+      | .ok text => return text
+      | .error message => throw (.noCoreForm message)
+    return match emission.run state with
+      | .ok text => .ok text
+      | .error (.defect msg) | .error (.waiting msg) | .error (.noCoreForm msg) => .error msg
+  match action.run {vocabulary} s with
+  | (.ok value, state) =>
+    if let some diagnostic := (state.log.entries.extract s.log.entries.size state.log.entries.size).find? (fun d => d.isError || d.isIncomplete) then
+      refuse at_ "WK-FUNCTION" (diagnostic.render state.env.renderer)
+    value.mapError fun msg => s!"{at_.file}:{at_.render}: WK-FUNCTION: {msg}"
+  | (.error err, state) =>
+    let details := state.log.entries.extract s.log.entries.size state.log.entries.size
+    refuse at_ "WK-FUNCTION" (String.intercalate "; " ((details.map fun d => d.render state.env.renderer).toList ++ [match err with | .waiting why | .defect why => why | _ => "function elaboration refused"]))
+
 structure WrittenClause where
   view : View
   publicCount : Nat
@@ -103,8 +140,10 @@ structure WrittenClause where
   relationSpan : Span
   extractorName : String
   extractorSpan : Span
-  relation : String
-  extraction : String
+  calculations : ExportM (String × String)
+  storedRelation : String
+  storedExtractor : String
+  operands : List Nat
 
 def declarations (s : Compile.State) (scheme : SchemeEntry) : ExportM WrittenClause := do
   let some key := s.results.key? scheme.protocol | refuse scheme.span "WK-ROOT" "missing instance"
@@ -161,12 +200,20 @@ def declarations (s : Compile.State) (scheme : SchemeEntry) : ExportM WrittenCla
     let .positional sp expr := arg | refuse item.where_ "WK-PORT" "expected positional statement operands"
     let n ← localName expr
     let some index := publicNames.idxOf? n | refuse sp "WK-PORT" s!"unknown public input {n}"
-    pure (component "statement" index (index + 1 == publicNames.size))
+    pure index
   let operands ← item.args.mapM operand
   let bind (params : Array Param) : Locals := (params.zip operands).toList.map fun (p, v) =>
-    (p.name.text, ⟨.point, v⟩)
-  let relation ← algorithm view ((w.name.text, ⟨.scalar,"witness"⟩) :: bind r.statement) .boolean rb
-  let extraction ← algorithm view ((runs.name.text, ⟨.runs,""⟩) :: bind e.params.pop) .scalar eb
-  return ⟨view,publicNames.size,item,proto.span,r.name.text,r.span,e.name.text,e.span,relation,extraction⟩
+    (p.name.text, ⟨.point, component "statement" v (v + 1 == publicNames.size)⟩)
+  let #[.exchange _ _ history _, _, _] := code.flows | refuse e.span "WK-VIEW" "missing first message"
+  let leaf := ClosedType.tuple #[history, scalar, scalar] #[view.commitment.name, view.challenge.name, view.response.name]
+  let fork := ClosedType.tuple #[leaf, leaf] #[none, none]
+  let publics := Array.replicate publicNames.size point
+  let rt ← checkedClause "Relation" s relId key.arguments (publics.push scalar) .bool true r.span
+  let et ← checkedClause "Extractor" s extId key.arguments (publics.push fork) scalar false e.span
+  let calculations : ExportM (String × String) := do
+    let relation ← algorithm view ((w.name.text, ⟨.scalar,"witness"⟩) :: bind r.statement) .boolean rb
+    let extraction ← algorithm view ((runs.name.text, ⟨.runs,""⟩) :: bind e.params.pop) .scalar eb
+    return (relation, extraction)
+  return ⟨view,publicNames.size,item,proto.span,r.name.text,r.span,e.name.text,e.span,calculations,rt,et,operands.toList⟩
 
 end Zkc.Frontend.Written

@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Formal.Written.GroupModel
+public import Zkc.Formal.Written.FunctionMeaning
 
 @[expose] public section
 set_option autoImplicit false
@@ -82,6 +82,12 @@ def rowSamples (k : Standard.RowKey) (sig : RowSignature Standard.TypeKey Standa
 
 def sameBit (a b : Bool) := decide (a = b)
 
+abbrev Matches (key : Standard.RowKey) (row : Zkc.Vocabulary.RowKey) :=
+  key = (.inl row : Standard.RowKey)
+
+instance (k : Standard.RowKey) (r : Zkc.Vocabulary.RowKey) : Decidable (Matches k r) :=
+  Standard.decRowKey k (.inl r)
+
 def interpreted (k : Standard.RowKey) (sig : RowSignature Standard.TypeKey Standard.RowKey)
     (ok : Standard.row k = some sig) (args : HList (Ty.Val carriers) sig.ins) : Samples sig.outs :=
   if h : Matches k (.group .scale (.group .g1)) then by
@@ -96,6 +102,27 @@ def interpreted (k : Standard.RowKey) (sig : RowSignature Standard.TypeKey Stand
     unfold Matches at h
     subst k; cases ok
     match args with | .cons p (.cons q .nil) => exact ⟨.cons (sameBit p q) .nil, trivial, trivial⟩
+  else if h : Matches k (.field .sub .bls12381Fr .all) then by
+    unfold Matches at h; subst k; cases ok
+    match args with | (.cons x (.cons y .nil)) => exact ⟨.cons (xor x y) .nil, trivial, trivial⟩
+  else if h : Matches k (.field .mul .bls12381Fr .all) then by
+    unfold Matches at h; subst k; cases ok
+    match args with | (.cons x (.cons y .nil)) => exact ⟨.cons (x && y) .nil, trivial, trivial⟩
+  else if h : Matches k (.field .equal .bls12381Fr .all) then by
+    unfold Matches at h; subst k; cases ok
+    match args with | (.cons x (.cons y .nil)) => exact ⟨.cons (sameBit x y) .nil, trivial, trivial⟩
+  else if h : Matches k (.field .isNonzero .bls12381Fr .all) then by
+    unfold Matches at h; subst k; cases ok
+    match args with | (.cons x .nil) => exact ⟨.cons (x) .nil, trivial, trivial⟩
+  else if h : Matches k (.field .nonzero .bls12381Fr .all) then by
+    unfold Matches at h; subst k; cases ok
+    match args with | (.cons x .nil) => exact ⟨.cons (x) .nil, trivial, trivial⟩
+  else if h : Matches k (.field .inverse .bls12381Fr .nonzero) then by
+    unfold Matches at h; subst k; cases ok
+    match args with | (.cons x .nil) => exact ⟨.cons (x) .nil, trivial, trivial⟩
+  else if h : Matches k (.field .fromNonzero .bls12381Fr .nonzero) then by
+    unfold Matches at h; subst k; cases ok
+    match args with | (.cons x .nil) => exact ⟨.cons (x) .nil, trivial, trivial⟩
   else rowSamples k sig ok
 
 private theorem restricted {k : Standard.RowKey} {sig : RowSignature Standard.TypeKey Standard.RowKey}
@@ -116,20 +143,34 @@ private theorem restricted {k : Standard.RowKey} {sig : RowSignature Standard.Ty
     | hash kind => cases kind <;> cases h <;> cases hk
     | pair => cases h; cases hk
 
+def domain (k : Standard.RowKey) (sig : RowSignature Standard.TypeKey Standard.RowKey)
+    (ok : Standard.row k = some sig) (args : HList (Ty.Val carriers) sig.ins) : Bool :=
+  if h : Matches k (.field .nonzero .bls12381Fr .all) then by
+    unfold Matches at h; subst k; cases ok
+    match args with | .cons x .nil => exact x
+  else true
+
 def model : Model Standard := {
   carriers with
-  apply := fun k sig h args => some (interpreted k sig h args).values
-  inDomain := fun _ _ _ _ => true
-  defined := by intros; rfl
-  total := by intros; rfl
+  apply := fun k sig h args => if domain k sig h args then some (interpreted k sig h args).values else none
+  inDomain := domain
+  defined := by intros; split <;> simp_all
+  total := by
+    intro k sig ok args pureRow
+    unfold domain
+    split
+    · rename_i key; unfold Matches at key; subst k; cases ok; cases pureRow
+    · rfl
   decides := by
     intro k sig h d hk args
     obtain ⟨f,rfl,rfl⟩ := restricted h hk
-    cases f <;> cases h <;> rfl
+    cases f <;> cases h
+    all_goals cases args with | cons x tail => cases tail; cases x <;> rfl
   keeps := by
     intro k sig h args vals _ eq
-    cases eq
-    exact (interpreted k sig h args).valid
+    split at eq
+    · cases eq; exact (interpreted k sig h args).valid
+    · contradiction
   literals := by intro k n _; exact ⟨_, rfl, trivial⟩
   support := fun _ sig _ _ v => sig.out.Valid carriers v
   supported := by intros; assumption }
@@ -153,5 +194,20 @@ theorem rows : GroupRows model ops where
   scale := by intros; rfl
   add := by intros; rfl
   equal := by intro p q; cases p <;> cases q <;> rfl
+
+def functionRows : FunctionRows model ops where
+  pack := fun x _ => x
+  unpack := id
+  invert := id
+  sub := by intros; rfl
+  mul := by intros; rfl
+  equal := by intro x y; cases x <;> cases y <;> rfl
+  test := by intro x; cases x <;> rfl
+  refine := by intro x; cases x <;> rfl
+  inverse := by intros; rfl
+  forget := by intros; rfl
+  roundTrip := by intros; rfl
+  inverseScalar := by intros; rfl
+  zero := by intros; rfl
 
 end Zkc.Formal.Written.FiniteModel

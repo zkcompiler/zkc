@@ -32,7 +32,7 @@ exercise the certificates.
 
 ## Written three-message knowledge
 
-The G1 instances of Schnorr and Chaum–Pedersen use the same source-to-Lean certificate generator. It exports the written relation, extractor and two-transcript target over the actual admitted verifier. Lean checks extraction under the three verifier row interpretations and elementary group-action laws. An independent target is available for a companion. The finite-model controls include a proof that removing the second Chaum–Pedersen guard falsifies the admitted target. Run `just test-written-knowledge`. See the [usage and proof boundary](written-knowledge.md).
+The source-issued Schnorr and Chaum–Pedersen knowledge theorem covers the admitted verifier, extractor and relation. Both protocols use the same exact returning-trace characterization, row interpretation laws and group-action proof. An independent companion can prove the Core target directly. Finite-model controls falsify it after deleting a verifier guard or changing a selected function. Oracle names and opening operands survive resolution; full source oracle elaboration is pending. Run `just test-written-knowledge` and `just test-interactive`. See the [proof and model boundaries](written-knowledge.md).
 
 ## Earlier source and execution pipeline
 

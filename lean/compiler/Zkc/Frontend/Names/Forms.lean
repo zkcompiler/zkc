@@ -131,7 +131,10 @@ abbrev siteName := Syntax.eventSiteName
 
 /-- The parts of an event (EV3): one per receiver of a send to several, otherwise one. -/
 def eventParts : Syntax.Event → Array String
-  | .send _ _ _ receivers _ => if receivers.size ≤ 1 then #["value"] else receivers.map (s!"to {·.text}")
+  | .send _ _ _ _ (some _) => #["value"]
+  | .query _ _ _ _ true => #["rows"]
+  | .query _ _ _ _ false => #["rows", "opening"]
+  | .send _ _ _ receivers none => if receivers.size ≤ 1 then #["value"] else receivers.map (s!"to {·.text}")
   | _ => #["value"]
 
 /-- Whether a lowered term is a size by its form (TY2): numerals and static naturals with

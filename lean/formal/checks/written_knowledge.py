@@ -45,7 +45,7 @@ def replace_once(text, original, replacement):
 
 def check(work):
     names = ["Baseline", "Renamed", "Zero", "OtherRelation", "OtherVerifier", "Simulator", "Swapped",
-             "SameLog", "Reordered", "MissingGuard", "ScalarGuard"]
+             "SameLog", "Reordered", "MissingGuard", "ScalarGuard", "NativeOnly"]
     formal = ROOT / "lean/formal"
     (work / "lean-toolchain").write_text((formal / "lean-toolchain").read_text())
     (work / "lakefile.toml").write_text(
@@ -113,13 +113,23 @@ spec for Schnorr:""")
     missing = replace_once(same_log, second_guard, "")
     module("MissingGuard", missing, same_log=True)
     scalar_guard = replace_once(same_log, second_guard, second_guard + "        guard @V z == c\n")
-    module("ScalarGuard", scalar_guard, same_log=True)
+    module("ScalarGuard", scalar_guard, proof=True, same_log=True)
+
+    native_only = replace_once(original, "return (runs[0].response - runs[1].response) / gap",
+                               "return runs[0].response + runs[1].response")
+    native_target = module("NativeOnly", native_only)
+    if "def compiledObligation" not in native_target or "def extractor {" in native_target:
+        raise RuntimeError("native-only target must use the ordinary function meaning")
+    generate(native_only, failure="WK-PROOF")
 
     controls = work / "Checks.lean"
     imports = [f"public import {name}" for name in [*names, "Zkc.Formal.Written.FiniteModel"]]
     controls.write_text("\n".join(["module", "", *imports, "", CONTROL.read_text()]))
     report = run(["lake", "-q", "lean", controls], cwd=work)
-    for theorem in ["Baseline.certified_admitted", "SameLog.certified_admitted", "Reordered.certified_admitted",
+    for theorem in ["Baseline.certified_core_admitted", "SameLog.certified_core_admitted",
+                    "Reordered.certified_core_admitted", "ScalarGuard.certified_core_admitted",
+                    "WrittenControls.missing_compiled_guard", "WrittenControls.compiled_wrong_extractor",
+                    "WrittenControls.compiled_wrong_relation",
                     "WrittenControls.missing_guard_admitted", "WrittenControls.permitted_counterexample",
                     "WrittenControls.wrong_extractor", "WrittenControls.wrong_relation",
                     "WrittenControls.wrong_verifier"]:
@@ -127,8 +137,19 @@ spec for Schnorr:""")
     print("Checked both admitted certificates, permitted forks, and four source counterexamples.", flush=True)
 
     failed = work / "Rejected.lean"
-    for changed, is_same_log in [(zero, False), (other_verifier, False), (missing, True), (scalar_guard, True)]:
-        failed.write_text(generate(changed, same_log=is_same_log))
+    # Keep all three emitted programs fixed and corrupt only the auxiliary calculation.
+    # Check the correspondence on its own, before attempting the security theorem.
+    prefix = base.split("theorem certified (", 1)[0]
+    damaged = replace_once(prefix, "return (← divide ops (ops.sub left.suffix right.suffix) local0)",
+                           "return ops.zero")
+    failed.write_text(damaged + "\nend Baseline\n")
+    run(["lake", "-q", "lean", failed], failure="WK-PROOF", cwd=work)
+    for changed, is_same_log in [(zero, False), (other_verifier, False), (missing, True)]:
+        generated = generate(changed, same_log=is_same_log)
+        correspondences = generated.split("theorem certified (", 1)[0]
+        failed.write_text(correspondences + "\nend WrittenKnowledge\n")
+        run(["lake", "-q", "lean", failed], cwd=work)
+        failed.write_text(generated)
         diagnostic = run(["lake", "-q", "lean", failed], failure="WK-PROOF", cwd=work)
         if str(work / CHAUM_PEDERSEN.name if is_same_log else input_file) not in diagnostic:
             raise RuntimeError("residual proof failure did not identify the source module")
@@ -138,7 +159,7 @@ spec for Schnorr:""")
                       "    secret_coin @V <- sample G::Scalar\n    nonce @P <- sample G::Scalar"), "WK-VIEW"),
         (replace_once(original, "pub def response_difference", "pub spec def response_difference"), "WK-TYPE"),
         (replace_once(original, "spec for Schnorr:", "spec for response_difference:\n    requires false\n\nspec for Schnorr:"), "WK-CLAUSE"),
-        (replace_once(original, "runs[0].challenge", "runs[2].challenge"), "WK-VIEW"),
+        (replace_once(original, "runs[0].challenge", "runs[2].challenge"), "TY7"),
         (replace_once(original, clause, clause + "\n    " + clause), "WK-CLAUSE"),
         (replace_once(original, "    response <- send", "    #[site(challenge)]\n    response <- send"), "EV3"),
     ]:

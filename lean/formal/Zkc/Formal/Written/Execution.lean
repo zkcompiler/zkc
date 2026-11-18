@@ -1,7 +1,7 @@
 module
 
 public import Zkc.Core.Meaning.Program
-public import Zkc.Core.Process.Same
+public import Zkc.Formal.ProcessJudgment
 public import Std.WP
 public import Std.Tactic
 
@@ -31,6 +31,21 @@ variable {S : Sig} {H A : Type}
 
 @[simp] theorem not_returns_halt (why : H) (trace) : ¬ Returns (S := S) (A := A) (.halt why) trace := by
   intro h; cases h
+
+theorem returns_iff_interpret (p : Process S H A) (trace : EffectTrace S) :
+    Returns p trace ↔ p.interpret (.trace S) (fun _ t => t = []) (fun _ _ => False) trace := by
+  induction p generalizing trace with
+  | done a =>
+    constructor
+    · intro h; cases h; rfl
+    · rintro rfl; exact .done a
+  | halt h => exact iff_false_intro (not_returns_halt h trace)
+  | call op k ih =>
+    constructor
+    · intro h
+      cases h with | call v tail => exact ⟨v, _, rfl, (ih v _).mp tail⟩
+    · rintro ⟨v, tail, rfl, h⟩
+      exact .call v ((ih v tail).mpr h)
 
 /-- A driver can realize each permitted returning transcript as a returning Core execution. -/
 theorem Returns.canReturn {p : Process S H A} {trace} (h : Returns p trace)

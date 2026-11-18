@@ -19,6 +19,8 @@ test:
 test-interactive:
     cd lean/formal && lake build Zkc.Formal.Interactive Zkc.Tests.Formal.Interactive Zkc.Tests.Formal.Reuse.Controls Zkc.Tests.Formal.SourceHonestSumcheck
     cd lean/formal && lake lean checks/SourceProtocols.lean
+    cd lean/formal && lake lean checks/OracleNames.lean
+    cd lean/formal && lake lean checks/WorldObservation.lean
     cd lean/formal && lake env lean --run checks/AuditInteractive.lean
 
 # Export the written knowledge claim and kernel-check the returning fork and source mutations.

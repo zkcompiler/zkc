@@ -96,6 +96,11 @@ structure SiteEntry where
   instruction : Option Nat := none
   deriving Inhabited
 
+/-- The instructions that realize a written event part, in emission order. A uniform loop
+has one entry; a stepped loop has one per statically emitted iteration path. -/
+def SiteEntry.realizations (sites : Array SiteEntry) (event : Nat) (part : String) : Array SiteEntry :=
+  sites.filter fun entry => entry.event == event && entry.part == part
+
 /-- A specification argument of an application: the core site of the application, the port, the
 expression and its type. It is typed and not emitted: no deployed code computes it (SX4). -/
 structure SpecificationArgument where

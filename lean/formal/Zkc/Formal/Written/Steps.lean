@@ -1,6 +1,7 @@
 module
 
-public import Zkc.Formal.Written.GroupModel
+public import Zkc.Formal.Written.Source
+public import Zkc.Formal.Written.PureRows
 
 @[expose] public section
 set_option autoImplicit false
@@ -32,8 +33,8 @@ the value without re-evaluating its producing instruction or traversing an old e
 theorem afterValue (values : HList sem.Val mid) (step : i.denote sem key path env = .done values)
     (tail : Returns (rest.denote sem path (env.extend names values)) trace ↔ Q) :
     Returns ((Term.step key i names rest).denote sem path env) trace ↔ Q := by
-  rw [Term.denote_step, step]
-  exact tail
+  rw [returns_iff_interpret, Term.interpret_step, step]
+  exact (returns_iff_interpret _ trace).symm.trans tail
 
 /-- Consume exactly the operation and typed reply at the front of the recorded execution. -/
 theorem afterReply (op : sem.S.Op) (reply : sem.S.Reply op) (bindValue : sem.S.Reply op → HList sem.Val mid)

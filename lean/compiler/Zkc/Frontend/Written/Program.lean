@@ -26,6 +26,70 @@ partial def ty {b : Emit.Bindings} (t : b.vocabulary.Ty) : ExportM String := do
     return "(.tuple " ++ items.foldr (fun x rest => s!"(.cons {x} {rest})") ".nil" ++ ")"
   | _ => unsupported "Core value type in the written scalar/group profile"
 
+def localRaw {b : Emit.Bindings} : LocalRaw b.vocabulary → ExportM String
+  | .row (.inl key) => pure s!"(.row (.inl ({reprStr (show Zkc.Vocabulary.RowKey from key)})))"
+  | .owned name ts args => do
+    return s!"(.owned ({reprStr name}) {list (← ts.mapM (ty (b := b)))} {numbers args})"
+  | .literal t data => do return s!"(.literal {← ty (b := b) t} {numbers data})"
+  | _ => unsupported "nonprimitive function call in a written declaration"
+
+mutual
+  partial def functionRegion {b : Emit.Bindings} : Region (LocalRaw b.vocabulary) Unit → ExportM String
+    | .mk ins steps outs => do
+      return s!"(.mk {numbers ins} {list (← steps.mapM (functionStep (b := b)))} {numbers outs})"
+
+  partial def functionStep {b : Emit.Bindings} : Instruction (LocalRaw b.vocabulary) Unit → ExportM String
+    | .op k out op vs => do return s!".op ⟨{k.number}⟩ {numbers out} {← localRaw (b := b) op} {numbers vs}"
+    | .guard k () x .reject => pure s!".guard ⟨{k.number}⟩ () {x} .reject"
+    | .choose k () x outs yes no => do
+      return s!".choose ⟨{k.number}⟩ () {x} {numbers outs} {← functionRegion yes} {← functionRegion no}"
+    | _ => unsupported "control flow in a written function"
+end
+
+def storedFunction {b : Emit.Bindings} : Definition b.vocabulary → ExportM String
+  | .fn k ins outs stop none ⟨[], []⟩ body [] => do
+    let params ← ins.mapM (ty (b := b))
+    let results ← outs.mapM (ty (b := b))
+    return s!"⟨[.fn ⟨{k.number}⟩ {list params} {list results} {stop} none ⟨[],[]⟩ {← functionRegion body}]⟩"
+  | _ => unsupported "function header in a written declaration"
+
+def functionOp {b : Emit.Bindings} {hs ins outs} : LocalOp b.vocabulary hs ins outs → ExportM String
+  | .row key _ _ => do
+    let .inl k := (show Sum Zkc.Vocabulary.RowKey Emit.PrimitiveName from key) | unsupported "external row"
+    return s!"(LocalOp.row (V := V) (fns := []) (.inl ({reprStr k})) _ rfl)"
+  | .owned op => do
+    let (name, types, args) := op.name
+    return s!"(LocalOp.owned (V := V) (fns := []) ((OwnedOp.resolve (V := V) ({reprStr name}) {list (← types.mapM (ty (b := b)))} {numbers args}).get (by decide)).2.2)"
+  | .literal t data _ => do return s!"(LocalOp.literal (V := V) (fns := []) {← ty (b := b) t} {numbers data} (by decide))"
+  | _ => unsupported "unlinked local operation"
+
+partial def functionBody {b : Emit.Bindings} {hs : List (FnHeader b.vocabulary)} :
+    {Γ : Ctx b.vocabulary.Ty} → {outs : List b.vocabulary.Ty} → Term (localDialect b.vocabulary hs) Γ outs → ExportM String
+  | _, _, .ret vs => pure s!".ret {names vs.names true}"
+  | _, _, .step k (.op op args) ns tail => do
+    return s!".op ⟨{k.number}⟩ {← functionOp (b := b) op} {names args.names true} {names ns.toList} <|\n{← functionBody tail}"
+  | _, _, .step k (.guard _ c _ .reject) _ tail => do
+    return s!".guard ⟨{k.number}⟩ () ⟨{c.name},rfl⟩ rfl .reject <|\n{← functionBody tail}"
+  | _, _, .step k (.choose _ c _ _ yes no) ns tail => do
+    return s!".step ⟨{k.number}⟩ (.choose () ⟨{c.name},rfl⟩ rfl (by intros; trivial) ({← functionBody yes}) ({← functionBody no})) {names ns.toList} <|\n{← functionBody tail}"
+  | _, _, _ => unsupported "local instruction"
+
+def renderFunction {b : Emit.Bindings} : {hs : Headers b.vocabulary} → Defs b.vocabulary hs → ExportM (List Nat × String)
+  | _, .fn _ ns fn _ _ _ => do return (ns.toList, ← functionBody (b := b) fn)
+  | _, _ => unsupported "local root"
+
+def functionDeclarations (label : String) (p : SourcePackage) (ev : p.Admission) : ExportM String := do
+  let [defn@(.fn k ins outs stop _ _ _ _)] := p.named.definitions | unsupported "local root"
+  let (ns, typed) ← renderFunction (b := p.bindings) ev.admitted.program.defs
+  let hdr := s!"⟨⟨{k.number}⟩, {list (← ins.mapM (ty (b := p.bindings)))}, {list (← outs.mapM (ty (b := p.bindings)))}, {stop}, none, ⟨[],[]⟩⟩"
+  return "\n".intercalate [
+    s!"def stored{label} : NamedProgram V := {← storedFunction defn}",
+    s!"abbrev {label}Header : FnHeader V := {hdr}",
+    s!"abbrev {label}Names : Names {label}Header.ins := {names ns}",
+    s!"def {label}Body : Fn V [] {label}Header {label}Names :=\n{typed}",
+    s!"def installed{label} := singletonFunction {label}Header {label}Names {label}Body (by function_conditions {label}Body {label}Names)",
+    s!"theorem {label}Readback (a : Admitted V) (h : admit stored{label} ⟨[],[],[],[],[]⟩ = .ok a) : a.program = installed{label} := admitted_eq_of_readback h (by decide +kernel)",
+    s!"theorem {label}Admitted : (admit stored{label} ⟨[],[],[],[],[]⟩).isOk = true := by decide +kernel"]
 def located {b : Emit.Bindings} (ts : List (LTy b.vocabulary)) : ExportM String := do
   return list (← ts.mapM fun a => do return s!"⟨{← ty (b := b) a.ty}, {numbers a.holders}⟩")
 

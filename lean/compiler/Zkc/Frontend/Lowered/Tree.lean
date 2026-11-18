@@ -191,9 +191,17 @@ mutual
     /-- `T{f = p, …}`: a record taken apart, a pattern per field written. -/
     | record (span : Span) (type : Reference) (fields : Array (Name × CasePattern))
 
+  /-- A pending claim or an explicit opening of a handle at one position. -/
+  inductive OracleClaim where
+    | pending (span : Span) (claim : Expr)
+    | opening (span : Span) (handle position value : Expr)
+
   inductive Event where
     /-- `send e from p to R`: the sender when written, the receivers in the order written. -/
     | send (payload : Expr) (sender : Option Nat) (receivers : Array Nat)
+    | oracleSend (payload : Expr) (sender : Option Nat) (receivers : Array Nat) (kind : Expr)
+    | query (handle : Expr) (opener : Option Nat) (positions : Expr) (deferred : Bool)
+    | openClaims (claims : Array OracleClaim)
     | draw (law : TypeTerm) (sender : Nat) (receivers : Array Nat)
     | sample (law : TypeTerm)
     | attempt
@@ -351,6 +359,12 @@ mutual
 
   partial def Event.collect (acc : Array Reference) : Event → Array Reference
     | .send payload _ _ => payload.collect acc
+    | .oracleSend payload _ _ kind => kind.collect (payload.collect acc)
+    | .query handle _ positions _ => positions.collect (handle.collect acc)
+    | .openClaims claims => claims.foldl (init := acc) fun refs claim =>
+      match claim with
+      | .pending _ e => e.collect refs
+      | .opening _ h i v => v.collect (i.collect (h.collect refs))
     | .draw law _ _ | .sample law => law.collect acc
     | .attempt => acc
     | .apply callee arguments _ => arguments.foldl Argument.collect (callee.collect acc)

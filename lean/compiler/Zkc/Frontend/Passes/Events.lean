@@ -62,7 +62,7 @@ partial def writtenEvents (statements : Array Syntax.Stmt) :
     Array (Syntax.Span × Option Syntax.SiteAttr × Option Syntax.Pattern) :=
   statements.foldl (init := #[]) fun found statement => found ++ match statement with
     | .eventStmt (.bound span site pattern _ _ _) => #[(span, site, some pattern)]
-    | .eventStmt (.application span site _) => #[(span, site, none)]
+    | .eventStmt (.application span site _) | .«open» span site _ => #[(span, site, none)]
     | .«if» _ _ thenSuite elseBranch =>
       writtenEvents thenSuite ++ match elseBranch with
         | some (.suite _ statements) => writtenEvents statements

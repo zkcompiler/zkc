@@ -8,6 +8,10 @@ def main : IO UInt32 := do
   let libraries : Array Library := #[
     { name := "interactive security", root := `Zkc.Formal.Interactive, directory := some ".",
       imports := some #[`Zkc.Core,`Zkc.Formal,`Init] },
+    { name := "process judgments", root := `Zkc.Formal.ProcessJudgment, directory := some ".",
+      imports := some #[`Zkc.Core,`Init] },
+    { name := "world observations", root := `Zkc.Formal.WorldObservation, directory := some ".",
+      imports := some #[`Zkc.Core,`Zkc.Formal,`Init] },
     { name := "interactive mathematical controls", kind := .tests, root := `Zkc.Tests.Formal.Interactive, directory := some "." }]
   let env ← importModules (libraries.map fun lib => { module := lib.root }) {} (loadExts := false) (level := .private) (arts := artifacts)
   let report ← audit env libraries artifacts

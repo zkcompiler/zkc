@@ -98,8 +98,8 @@ example : SameLog.extractor ops good pairCommitment left right = some true ∧
 -- The original verifier rejects the right branch. The mutant accepts both branches.
 example : ¬ SameLog.accepts model bad [] pairCommitment right := by
   intro h
-  exact (by unfold SameLog.verifierConditions; decide : ¬ SameLog.verifierConditions ops bad pairCommitment right)
-    ((SameLog.verifier_equations model ops rows bad [] pairCommitment right).mp h)
+  exact (by unfold SameLog.verifierConditions; decide +kernel : ¬ SameLog.verifierConditions model bad pairCommitment right)
+    ((SameLog.model_equations model bad [] pairCommitment right).mp h)
 
 private theorem missing_left : MissingGuard.accepts model bad [] pairCommitment left :=
   (MissingGuard.replay_returns model ..).2 (by decide +kernel)
@@ -138,15 +138,59 @@ theorem missing_guard_admitted {adm : Admitted MissingGuard.V}
   | head => exact missing_guard property
   | tail rest => cases rest
 
+example : Baseline.coreObligation model [] := Baseline.certified_core model ops rows functionRows laws []
+example : SameLog.coreObligation model [] := SameLog.certified_core model ops rows functionRows laws []
+example : Swapped.coreExtractor model (true,false) commitment left right = none := by decide +kernel
+example : Swapped.coreRelation model (true,false) false = some false := by rfl
+example : Baseline.coreExtractor model statement commitment left left = none := by decide +kernel
+#check NativeOnly.of_core_obligation
+
+theorem compiled_wrong_extractor : ¬ Zero.coreObligation model [] := by
+  intro claim
+  obtain ⟨w, returned, holds⟩ := claim statement commitment left right left_returns right_returns (by decide)
+  have result : Zero.coreExtractor model statement commitment left right = some false := by rfl
+  cases Option.some.inj (result.symm.trans returned)
+  exact (by decide +kernel : Zero.coreRelation model statement false ≠ some true) holds
+
+theorem compiled_wrong_relation : ¬ OtherRelation.coreObligation model [] := by
+  intro claim
+  obtain ⟨w, returned, holds⟩ := claim statement commitment left right left_returns right_returns (by decide)
+  have result : OtherRelation.coreExtractor model statement commitment left right = some true :=
+    (Baseline.extractor_agrees model ops rows functionRows statement commitment left right).trans rfl
+  cases Option.some.inj (result.symm.trans returned)
+  exact (by decide +kernel : OtherRelation.coreRelation model statement true ≠ some true) holds
+
+theorem missing_compiled_guard {p r e : Admitted MissingGuard.V}
+    (hp : admit MissingGuard.stored ⟨[],[],[],[],[]⟩ = .ok p)
+    (hr : admit MissingGuard.storedRelation ⟨[],[],[],[],[]⟩ = .ok r)
+    (he : admit MissingGuard.storedExtractor ⟨[],[],[],[],[]⟩ = .ok e) :
+    ¬ MissingGuard.compiledObligation model p r e [] := by
+  unfold MissingGuard.compiledObligation
+  rw [MissingGuard.readback hp, MissingGuard.RelationReadback r hr, MissingGuard.ExtractorReadback e he]
+  rintro ⟨root, rel, ext, claim⟩
+  cases root <;> try solve | cases ‹Member [] _›
+  cases rel <;> try solve | cases ‹Member [] _›
+  cases ext <;> try solve | cases ‹Member [] _›
+  obtain ⟨w, _, holds⟩ := claim bad pairCommitment left right missing_left missing_right (by decide)
+  cases w <;> exact Bool.noConfusion (Option.some.inj holds)
+
 -- Target generation and concrete replay also work for an extra field equality,
 -- outside the verifier rows currently interpreted by the algebraic proof strategy.
 example : ScalarGuard.accepts model good [] pairCommitment left ↔
     ScalarGuard.replayCheck model good [] pairCommitment left = some () :=
   ScalarGuard.replay_returns model ..
 
+#print axioms Baseline.certified_core_admitted
+#print axioms SameLog.certified_core_admitted
+#print axioms Reordered.certified_core_admitted
+#print axioms ScalarGuard.certified_core_admitted
+#print axioms compiled_wrong_extractor
+#print axioms compiled_wrong_relation
+#print axioms missing_compiled_guard
 #print axioms Baseline.certified_admitted
 #print axioms SameLog.certified_admitted
 #print axioms Reordered.certified_admitted
+#print axioms ScalarGuard.certified_admitted
 #print axioms missing_guard_admitted
 #print axioms permitted_counterexample
 #print axioms wrong_verifier

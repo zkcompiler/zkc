@@ -37,7 +37,7 @@ elab "expose_projection" : tactic => withMainContext do
 /-- Apply the projection equation at one source constructor. Its right-hand side keeps
 the real continuation as a recursive call. The recursive call keeps the source context and suffix shared across instructions. -/
 private def projectOne (projected : Expr) : MetaM (Expr × Expr) := do
-  unless projected.isAppOfArity ``Zkc.Core.project 6 do throwError "expected a source projection"
+  unless projected.isAppOfArity ``Zkc.Core.project 6 do throwError "expected a source projection, got {projected.getAppFn} with {projected.getAppNumArgs} arguments"
   let p := projected.getAppArgs
   let term ← whnf p[5]!
   let t := term.getAppArgs
@@ -57,10 +57,13 @@ private def projectOne (projected : Expr) : MetaM (Expr × Expr) := do
 /-- Expose a single instruction, retaining the projected continuation as a shared term. -/
 elab "expose_cursor" : tactic => withMainContext do
   let goal ← getMainGoal
-  let target ← instantiateMVars (← goal.getType)
+  let target ← whnf (← instantiateMVars (← goal.getType))
+  unless target.isAppOfArity ``Iff 2 do throwError "expected trace equivalence, got {target}"
   let lhs := target.getArg! 0
+  unless lhs.isAppOfArity ``Returns 5 do throwError "expected returning trace, got {lhs}"
   let process := lhs.getArg! 3
   let args := process.getAppArgs
+  unless process.isAppOfArity ``Zkc.Core.Term.denote 7 do throwError "expected denotation; got {process.getAppFn} with {process.getAppNumArgs} arguments"
   let (head, headEq) ← projectOne args[4]!
   let exposedProcess := mkAppN process.getAppFn (args.set! 4 head)
   let exposedLhs := mkAppN lhs.getAppFn (lhs.getAppArgs.set! 3 exposedProcess)
@@ -76,7 +79,7 @@ elab "expose_cursor" : tactic => withMainContext do
 dependent environment from an empty exit can otherwise normalize all earlier bindings. -/
 private def closeReturn (equivalence : Bool) : TacticM Unit := withMainContext do
   let goal ← getMainGoal
-  let target ← instantiateMVars (← goal.getType)
+  let target ← whnf (← instantiateMVars (← goal.getType))
   let target := if equivalence && target.isAppOfArity ``Iff 2 then target.getArg! 0 else target
   unless target.isAppOfArity ``Returns 5 do throwError "expected a returning Core trace"
   let process := target.getArg! 3

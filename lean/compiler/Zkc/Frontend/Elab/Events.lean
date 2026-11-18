@@ -228,6 +228,9 @@ def elabEvent (span : Span) (event : EventId) (binder : Option Lowered.Binder)
   if (← getContext).roster.isNone then
     refuseHere "FN1" span "an event stands only in a protocol body; a `def` runs inside one role"
   match what with
+  | .oracleSend .. => waitFor "an oracle send (layer D)"
+  | .query .. => waitFor "a `query` (layer D)"
+  | .openClaims .. => waitFor "an `open` (layer D)"
   | .send payload sender receivers =>
     if roles.isSome then
       refuseHere "HO5" span "the binder of a `send` takes no `@`: the event determines its holders"

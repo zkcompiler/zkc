@@ -151,9 +151,14 @@ def protocolSummary (description : String) (head : Lowered.ProtocolHead) (checke
   let mut sites := #[]
   let mut flows := #[]
   let mut specificationArguments : Array SpecificationArgument := #[]
+  -- A source operation such as broadcast can have several parts at the same instruction.
+  -- Preserve ambiguous node origins so the uniqueness check below still rejects them.
+  let mut byNode : Std.HashMap Typed.NodeId (Option Nat) := {}
+  for (node, instruction) in origin.nodes.zipIdx do
+    byNode := byNode.insert node (if byNode.contains node then none else some instruction)
   for occurrence in checked.occurrences do
     let some (.stmt (.event _ _ what)) := body.find? occurrence.node | throw (.defect "event missing from numbered tree")
-    let #[(_, instruction)] := origin.nodes.zipIdx.filter (·.1 == occurrence.node)
+    let some (some instruction) := byNode[occurrence.node]?
       | throw (.defect "expected one emitted instruction for the source event")
     let event := head.events[occurrence.event]?
     let site (part : String) : SiteEntry :=
