@@ -30,7 +30,7 @@ case analyses without an arm give nothing (`elabBody_armed`).
 namespace Zkc.Core
 
 /-- How a dialect decides that two of its types are equal: what elaboration (`Rules`) and following
-(`SkelRules`, `Value/Skeleton.lean`) compare types with. -/
+(`SkelRules`, `Program/Erase.lean`) compare types with. -/
 structure TypeEquality (D : Dialect) where
   sameTy : DecidableEq D.Ty
 
@@ -403,7 +403,7 @@ mutual
           | (cases elaborated; done)
           | (cases elaborated
              subst_vars
-             simp only [Term.armed, cast_eq, Bool.and_eq_true]
+             simp only [Term.armed, Instr.armed, cast_eq, Bool.and_eq_true]
              exact ⟨⟨elabClosed_armed onTrue ‹elabClosed rules _ _ _ _ onTrue = _›,
                elabClosed_armed onFalse ‹elabClosed rules _ _ _ _ onFalse = _›⟩,
                elabBody_armed rest exit ‹_›⟩)
@@ -413,7 +413,7 @@ mutual
         all_goals first
           | (cases elaborated; done)
           | (cases elaborated
-             simp only [Term.armed, Bool.and_eq_true]
+             simp only [Term.armed, Instr.armed, Bool.and_eq_true]
              exact ⟨elabCases_armed arms ‹elabCases rules _ _ _ _ _ arms = _›,
                elabBody_armed rest exit ‹_›⟩)
     | _, _, _, _, .loop _ _ _ _ _ body :: rest, exit, _, _, elaborated => by
@@ -423,7 +423,7 @@ mutual
           | (cases elaborated; done)
           | (cases elaborated
              subst_vars
-             simp only [Term.armed, cast_eq, Bool.and_eq_true]
+             simp only [Term.armed, Instr.armed, cast_eq, Bool.and_eq_true]
              exact ⟨elabRegion_armed body ‹elabRegion rules _ _ _ _ _ body = _›,
                elabBody_armed rest exit ‹_›⟩)
     | _, _, _, _, .block _ _ _ body :: rest, exit, _, _, elaborated => by
@@ -432,7 +432,7 @@ mutual
         all_goals first
           | (cases elaborated; done)
           | (cases elaborated
-             simp only [Term.armed, Bool.and_eq_true]
+             simp only [Term.armed, Instr.armed, Bool.and_eq_true]
              exact ⟨elabClosed_armed body ‹elabClosed rules _ _ _ _ body = _›,
                elabBody_armed rest exit ‹_›⟩)
     | _, _, _, _, .attempt _ _ _ body :: rest, exit, _, _, elaborated => by
@@ -441,7 +441,7 @@ mutual
         all_goals first
           | (cases elaborated; done)
           | (cases elaborated
-             simp only [Term.armed, Bool.and_eq_true]
+             simp only [Term.armed, Instr.armed, Bool.and_eq_true]
              exact ⟨elabRegion_armed body ‹elabRegion rules _ _ _ _ _ body = _›,
                elabBody_armed rest exit ‹_›⟩)
   /-- Elaboration gives a region whose case analyses without an arm give nothing. -/

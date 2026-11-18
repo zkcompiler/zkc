@@ -5,18 +5,13 @@ public import Zkc.Core.Program.EraseProgram
 @[expose] public section
 
 /-!
-The elaboration of a program of functions by names, and its round trip in both directions.
+Elaboration resolves each function and protocol against the preceding headers. Local
+operations use the vocabulary, and protocol applications use the callee's ordered role
+map to check located ports. The body supplies the protocol header's shape.
 
-One definition is elaborated against the headers of those before it, never against their
-bodies (`elaborateDefinition`): a function's body against the headers before it, with a key
-that none of them has, and its summary in its header, which `elabFn` checks names positions
-within its inputs and results; a protocol is refused, since the rules of the protocol
-dialect are not built. A program is the same step for each definition in order, each added to the
-program before it.
-
-The erased form of every typed program of functions elaborates as the program
-(`elaborateFunctions_erase`), and a program that elaboration gives erases to the program by
-names that was elaborated (`erase_elab`).
+The two round trips cover arbitrary mixed programs. Elaborating an erasure returns the
+original typed program (`elaborateProgram_erase`). Erasing a successful elaboration
+returns all named definitions (`erase_elab`).
 -/
 
 namespace Zkc.Core
@@ -26,26 +21,36 @@ variable {V : Vocabulary}
 
 /-- The elaboration of one definition against the headers of those before it. -/
 def elaborateDefinition (hs : Headers V) :
-    Definition V → Except (List (ProgramRefusal V)) (Elaborated V hs)
-  | .fn key ins outs canStop kernel summary body =>
-      if repeated : key ∈ hs.keys then .error [refuseWhole key .key (.key key)]
+    Definition V → Except (List (DefinitionRefusal V)) (Elaborated V hs)
+  | .fn key ins outs canStop kernel summary body notes =>
+      if repeated : key ∈ hs.keys then .error [.fn (refuseWhole key .key (.key key))]
       else
         match elabFn hs.fns ⟨key, ins, outs, canStop, kernel, summary⟩ body with
-        | .error refusal => .error [refusal]
+        | .error refusal => .error [.fn refusal]
         | .ok ⟨inputs, b, ok⟩ =>
-            .ok (.fn ⟨key, ins, outs, canStop, kernel, summary⟩ inputs b ok repeated)
-  | .protocol key .. => .error [refuseWhole key .protocol (.key key)]
+            .ok (.fn ⟨key, ins, outs, canStop, kernel, summary⟩ inputs b ok repeated notes)
+  | .protocol key roles ins outs body =>
+      if repeated : key ∈ hs.keys then .error [.protocol (refuseWhole key .key (.key key))]
+      else
+        match elabProtocol hs key roles ins outs body with
+        | .error refusal => .error [.protocol refusal]
+        | .ok typed =>
+            .ok (.protocol ⟨key, roles, ins, outs, shapeOf typed.body⟩ typed.inputs typed.body
+              typed.conditions repeated)
 
 /-- The elaboration of definitions in order, after a program. -/
-def elaborateFrom (p : Typed V) : List (Definition V) → Except (List (ProgramRefusal V)) (Typed V)
+def elaborateFrom (p : Typed V) : List (Definition V) → Except (List (DefinitionRefusal V)) (Typed V)
   | [] => .ok p
   | definition :: rest =>
       (elaborateDefinition p.headers definition).bind fun elaborated =>
         elaborateFrom (p.add elaborated) rest
 
-/-- The typed program of a program of functions by names. -/
-def elaborateFunctions (named : NamedProgram V) : Except (List (ProgramRefusal V)) (Typed V) :=
+/-- Elaborate the complete list of named definitions. -/
+def elaborateProgram (named : NamedProgram V) : Except (List (DefinitionRefusal V)) (Typed V) :=
   elaborateFrom .empty named.definitions
+
+/-- Historical spelling of the named elaborator. -/
+abbrev elaborateFunctions (named : NamedProgram V) := elaborateProgram named
 
 /-! ## The round trip of a program -/
 
@@ -59,27 +64,49 @@ theorem elaborateFrom_append (p : Typed V) : ∀ (first second : List (Definitio
       | error _ => rfl
       | ok elaborated => exact elaborateFrom_append (p.add elaborated) rest second
 
-/-- The erased definitions of a typed program of functions, elaborated from no program, give
+/-- The erased definitions of a typed program, elaborated from no program, give
 the program. -/
 theorem elaborateFrom_erase : ∀ {hs : Headers V} (defs : Defs V hs) (distinct : hs.keys.Nodup),
-    hs.protocols = [] → elaborateFrom .empty defs.erase = .ok ⟨hs, defs, distinct⟩
-  | _, .nil, _, _ => rfl
-  | _, .fn (hs := hs) ⟨key, ins, outs, canStop, kernel, summary⟩ inputs body ok rest, distinct,
-      functions => by
+    elaborateFrom .empty defs.erase = .ok ⟨hs, defs, distinct⟩
+  | _, .nil, _ => rfl
+  | _, .fn (hs := hs) ⟨key, ins, outs, canStop, kernel, summary⟩ inputs body ok rest notes, distinct => by
       have absent : key ∉ hs.keys := (List.nodup_cons.mp distinct).1
       have others : hs.keys.Nodup := (List.nodup_cons.mp distinct).2
       have fns : (hs.fns.map (·.key)).Nodup := (List.nodup_append.mp others).1
-      rw [Defs.erase, elaborateFrom_append, elaborateFrom_erase rest others functions]
+      rw [Defs.erase, elaborateFrom_append, elaborateFrom_erase rest others]
       simp only [Except.bind, elaborateFrom, elaborateDefinition, absent, ↓reduceDIte,
         elabFn_erase fns inputs body ok]
       rfl
-  | _, .protocol .., _, functions => nomatch functions
+  | _, .protocol (hs := hs) hdr inputs body ok rest, distinct => by
+      have separated := List.nodup_append.mp distinct
+      have remaining := List.nodup_cons.mp separated.2.1
+      have others : hs.keys.Nodup := List.nodup_append.mpr
+        ⟨separated.1, remaining.2, fun a ha b hb => separated.2.2 a ha b (.tail _ hb)⟩
+      have absent : hdr.key ∉ hs.keys := by
+        intro found
+        cases List.mem_append.mp found with
+        | inl inFns => exact separated.2.2 _ inFns _ (.head _) rfl
+        | inr earlier => exact remaining.1 earlier
+      obtain ⟨⟨bound, term, conditions⟩, read, names, terms⟩ :=
+        elabProtocol_erase others inputs body ok
+      cases names
+      cases terms
+      rw [Defs.erase, elaborateFrom_append, elaborateFrom_erase rest others]
+      simp only [Except.bind, elaborateFrom, elaborateDefinition, absent, ↓reduceDIte, read]
+      obtain ⟨key, roles, ins, outs, shape⟩ := hdr
+      change Names ins at bound
+      change Term (protocolDialect V hs) (Ctx.empty.extend bound) outs at term
+      have shaped : shape = shapeOf term := ok.shaped
+      subst shape
+      rfl
 
 /-- The round trip of a program, erased then elaborated: the erased form of every typed program
-of functions elaborates as the program. -/
-theorem elaborateFunctions_erase (p : Typed V) (functions : p.headers.protocols = []) :
-    elaborateFunctions (erase p) = .ok p :=
-  elaborateFrom_erase p.defs p.distinct functions
+elaborates as the program. -/
+theorem elaborateProgram_erase (p : Typed V) : elaborateProgram (erase p) = .ok p :=
+  elaborateFrom_erase p.defs p.distinct
+
+theorem elaborateFunctions_erase (p : Typed V) (_ : p.headers.protocols = []) :
+    elaborateFunctions (erase p) = .ok p := elaborateProgram_erase p
 
 /-- What elaboration after a program gives erases to the program's definitions, then the
 definitions elaborated. -/
@@ -88,7 +115,7 @@ theorem erase_elaborateFrom : ∀ (p : Typed V) (definitions : List (Definition 
   | _, [], _, elaborated => by
       cases elaborated
       exact (List.append_nil _).symm
-  | p, .fn key ins outs canStop kernel summary body :: rest, q, elaborated => by
+  | p, .fn key ins outs canStop kernel summary body notes :: rest, q, elaborated => by
       simp only [elaborateFrom, elaborateDefinition] at elaborated
       split at elaborated
       · cases elaborated
@@ -100,7 +127,17 @@ theorem erase_elaborateFrom : ∀ (p : Typed V) (definitions : List (Definition 
           rw [erase_elaborateFrom _ rest q elaborated]
           simp only [Typed.add, Defs.erase, erased, List.append_assoc, List.cons_append,
             List.nil_append]
-  | _, .protocol .. :: _, _, elaborated => by cases elaborated
+  | p, .protocol key roles ins outs region :: rest, q, elaborated => by
+      simp only [elaborateFrom, elaborateDefinition] at elaborated
+      split at elaborated
+      · cases elaborated
+      · split at elaborated
+        · cases elaborated
+        · rename_i typed found
+          have erased := eraseProtocol_elab region found
+          rw [erase_elaborateFrom _ rest q elaborated]
+          simp only [Typed.add, Defs.erase, erased, List.append_assoc, List.cons_append,
+            List.nil_append]
 
 /-- The round trip of a program, elaborated then erased: a program that elaboration gives
 erases to the program by names that was elaborated. -/

@@ -12,3 +12,4 @@ public import Zkc.Formal.Abstract.Binding
 public import Zkc.Formal.Abstract.Provider
 public import Zkc.Formal.Bls12381.Arithmetic
 public import Zkc.Formal.Bls12381.Relation
+public import Zkc.Formal.Interactive

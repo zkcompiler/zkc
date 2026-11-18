@@ -7,8 +7,8 @@ use the [development commands](development.md). Keep package pins identical and 
 artifacts for the selected compiler; build caches from different Lean versions are incompatible.
 
 The active default targets are the redesigned core, vocabulary, their tests and audit.
-The frontend and formal sources are retained for their separate architectural port. Updating
-their toolchain file does not complete that port.
+The separate `just test-interactive` target uses the same pins for selected source entries
+and their proofs. The full CLI and historical formal suite still await migration.
 
 ## Audit and executable trust
 

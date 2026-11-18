@@ -181,7 +181,7 @@ theorem bare_initial : bareNet = initialNet := by
   · subst r; rfl
   by_cases h2 : r = 2
   · subst r; rfl
-  simp [bareNet, colliding, project, ProtocolOp.project, Term.denote, roleSem, initialNet, h0, h1,
+  simp [bareNet, colliding, project, ProtocolOp.project, Term.denote_op, Term.denote_ret, roleSem, initialNet, h0, h1,
     h2, roleOp, Process.bind, Env.all]
 
 /-- The third role may send first and occupy the second role's slot at that key. -/

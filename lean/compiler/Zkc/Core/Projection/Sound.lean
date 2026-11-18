@@ -206,17 +206,17 @@ mutual
           (.done ())
     | _, _, .ret _, _, _, _ => .done trivial
     | _, _, .op key o operands results rest, path, env, h => by
-        simp only [Term.denote]
+        simp only [Term.denote_op]
         exact Proj.bind M (q := .done ()) (g := fun _ => .done ())
           (op_quiet M fnTable gTable hr silent key o path (env.all operands) h.1)
           fun values _ _ => quiet hr silent rest path (env.extend results values) h.2
     | _, _, .guard key ps c ok why rest, path, env, h => by
-        simp only [Term.denote]
+        simp only [Term.denote_guard]
         cases asBool M ok.1 (env.get c)
         · exact .stopsElsewhere fun m => hr (h.1 _ m)
         · exact quiet hr silent rest path env h.2
     | _, _, .choose _ ps c ok _ onTrue onFalse _ rest, path, env, h => by
-        simp only [Term.denote]
+        simp only [Term.denote_choose]
         have arm : Proj M r (fun _ (_ : Unit) => True)
             (bif asBool M ok.1 (env.get c) then
               onTrue.denote (protocolSem M fnTable gTable) path env
@@ -227,11 +227,11 @@ mutual
         exact Proj.bind M (q := .done ()) (g := fun _ => .done ()) arm fun mids _ _ =>
           quiet hr silent rest path _ h.2.2.2
     | _, _, .cases _ ps x ok _ arms _ rest, path, env, h => by
-        simp only [Term.denote]
+        simp only [Term.denote_cases]
         exact Proj.bind M (q := .done ()) (g := fun _ => .done ())
           (quietArms hr silent arms path env _ h.2.1) fun mids _ _ => quiet hr silent rest path _ h.2.2
     | _, _, .loop key ps times _ initial inputs body _ rest, path, env, h => by
-        simp only [Term.denote]
+        simp only [Term.denote_loop]
         exact Proj.bind M (q := .done ()) (g := fun _ => .done ())
           (Proj.iterate_quiet M (fun i state =>
             Proj.bind M (q := .done ()) (g := fun _ => .done ())
@@ -239,7 +239,7 @@ mutual
             _ 0 _)
           fun _ _ _ => quiet hr silent rest path _ h.2.2
     | _, _, .block key number body _ rest, path, env, h => by
-        simp only [Term.denote]
+        simp only [Term.denote_block]
         exact Proj.bind M (q := .done ()) (g := fun _ => .done ())
           (quiet hr silent body (path ++ [.iteration key number]) env h.1)
           fun mids _ _ => quiet hr silent rest path _ h.2
@@ -278,12 +278,12 @@ theorem op_sound (tsound : TableSound M gTable rTable) (key : Key) {Γ : Ctx (LT
   cases o with
   | compute R lo operands types held =>
       by_cases hR : r ∈ R
-      · simp only [ProtocolOp.project, hR, ↓reduceDIte, Term.denote]
+      · simp only [ProtocolOp.project, hR, ↓reduceDIte, Term.denote_op]
         refine Proj.bind M (post := fun vs rvs => rvs = hideAll M r vs) ?_
           fun values _ e => by subst e; exact ih values
         simp only [protocolOp, roleOp, restrict_all, revealAll_hideAll]
         exact Proj.liftIn M (post := fun vs rvs => rvs = hideAll M r vs) hR (fun _ => rfl) _
-      · simp only [ProtocolOp.project, hR, ↓reduceDIte, Term.denote]
+      · simp only [ProtocolOp.project, hR, ↓reduceDIte, Term.denote_op]
         refine Proj.bind M (post := fun vs rvs => rvs = hideAll M r vs) ?_
           fun values _ e => by subst e; exact ih values
         simp only [protocolOp, roleOp]
@@ -296,20 +296,20 @@ theorem op_sound (tsound : TableSound M gTable rTable) (key : Key) {Γ : Ctx (LT
           | nil =>
               by_cases hg : r = giver
               · subst giver
-                simp only [ProtocolOp.project, ↓reduceDIte, Term.denote]
+                simp only [ProtocolOp.project, ↓reduceDIte, Term.denote_op]
                 refine Proj.bind M (post := fun vs rvs => rvs = hideAll M r vs) ?_
                   fun values _ e => by subst e; exact ih values
                 simp only [Env.all, protocolOp, roleOp, restrict_get]
                 rw [reveal_hide]
                 exact Proj.gave (post := fun vs rvs => rvs = hideAll M r vs) apart (.done rfl)
               · by_cases hm : r ∈ getters
-                · simp only [ProtocolOp.project, hg, ↓reduceDIte, hm, ↓reduceDIte, Term.denote]
+                · simp only [ProtocolOp.project, hg, ↓reduceDIte, hm, ↓reduceDIte, Term.denote_op]
                   refine Proj.bind M (post := fun vs rvs => rvs = hideAll M r vs) ?_
                     fun values _ e => by subst e; exact ih values
                   simp only [Env.all, protocolOp, roleOp]
                   exact Proj.got (post := fun vs rvs => rvs = hideAll M r vs) (Ne.symm hg) hm
                     (.done rfl)
-                · simp only [ProtocolOp.project, hg, ↓reduceDIte, hm, ↓reduceDIte, Term.denote]
+                · simp only [ProtocolOp.project, hg, ↓reduceDIte, hm, ↓reduceDIte, Term.denote_op]
                   refine Proj.bind M (post := fun vs rvs => rvs = hideAll M r vs) ?_
                     fun values _ e => by subst e; exact ih values
                   simp only [Env.all, protocolOp, roleOp, restrict_get, carry_hide]
@@ -319,20 +319,20 @@ theorem op_sound (tsound : TableSound M gTable rTable) (key : Key) {Γ : Ctx (LT
       by_cases ho : r = owner
       · subst owner
         rw [project_own]
-        simp only [Term.denote]
+        simp only [Term.denote_op]
         refine Proj.bind M (post := fun vs rvs => rvs = hideAll M r vs) ?_
           fun values _ e => by subst e; exact ih values
         simp only [protocolOp, roleOp]
         rw [restrict_all, revealAll_hideAll]
         exact Proj.owned (post := fun vs rvs => rvs = hideAll M r vs) fun _ => .done rfl
       · by_cases hh : r ∈ hearers
-        · simp only [ProtocolOp.project, ho, ↓reduceDIte, hh, ↓reduceDIte, Term.denote]
+        · simp only [ProtocolOp.project, ho, ↓reduceDIte, hh, ↓reduceDIte, Term.denote_op]
           refine Proj.bind M (post := fun vs rvs => rvs = hideAll M r vs) ?_
             fun values _ e => by subst e; exact ih values
           simp only [protocolOp, roleOp]
           exact Proj.heard (post := fun vs rvs => rvs = hideAll M r vs) (Ne.symm ho) hh
             fun _ => .done rfl
-        · simp only [ProtocolOp.project, ho, ↓reduceDIte, hh, ↓reduceDIte, Term.denote]
+        · simp only [ProtocolOp.project, ho, ↓reduceDIte, hh, ↓reduceDIte, Term.denote_op]
           refine Proj.bind M (post := fun vs rvs => rvs = hideAll M r vs) ?_
             fun values _ e => by subst e; exact ih values
           simp only [protocolOp, roleOp]
@@ -344,18 +344,18 @@ theorem op_sound (tsound : TableSound M gTable rTable) (key : Key) {Γ : Ctx (LT
           cases more with
           | nil =>
               by_cases hR : r ∈ R
-              · simp only [ProtocolOp.project, hR, ↓reduceDIte, Term.denote]
+              · simp only [ProtocolOp.project, hR, ↓reduceDIte, Term.denote_op]
                 refine Proj.bind M (post := fun vs rvs => rvs = hideAll M r vs) ?_
                   fun values _ e => by subst e; exact ih values
                 simp only [Env.all, protocolOp, roleOp, restrict_get, carry_hide]
                 exact .done rfl
-              · simp only [ProtocolOp.project, hR, ↓reduceDIte, Term.denote]
+              · simp only [ProtocolOp.project, hR, ↓reduceDIte, Term.denote_op]
                 refine Proj.bind M (post := fun vs rvs => rvs = hideAll M r vs) ?_
                   fun values _ e => by subst e; exact ih values
                 simp only [Env.all, protocolOp, roleOp]
                 exact .done (hideAll_nothings M _ _).symm
   | apply callee roles distinct covers operands fits =>
-      simp only [ProtocolOp.project, Term.denote]
+      simp only [ProtocolOp.project, Term.denote_op]
       refine Proj.bind M (post := fun vs rvs => rvs = hideAll M r vs) ?_
         fun values _ e => by subst e; exact ih values
       simp only [protocolOp, roleOp, restrict_all, fitAllRV_hide, enterAll_hide]
@@ -388,7 +388,9 @@ theorem loop_sound (key : Key) (ps : Holders) (hr : r ∈ ps) {Γ : Ctx (LTy V)}
           (project r rest)).denote (roleSem M r fnTable rTable) path (restrict M r env)) := by
   cases times
   all_goals
-    simp only [projectLoop, Term.denote, Semantics.times, restrict_get, reveal_hide, restrict_all]
+    simp only [projectLoop]
+    erw [Term.denote_loop, Term.denote_loop]
+    simp only [Semantics.times, restrict_get, reveal_hide, restrict_all]
     refine Proj.bind M
       (post := fun (s : (protocolSem M fnTable gTable).LoopState carried each)
         (rs : (roleSem M r fnTable rTable).LoopState carried each) =>
@@ -428,17 +430,17 @@ mutual
     | _, _, .guard key ps c ok why rest, path, env, h => by
         have ih := project_sound tsound tquiet rest path env h
         by_cases hr : r ∈ ps
-        · simp only [project, hr, ↓reduceDIte, Term.denote, restrict_get, reveal_hide]
+        · simp only [project, hr, ↓reduceDIte, Term.denote_guard, restrict_get, reveal_hide]
           cases asBool M ok.1 (env.get c)
           · exact .stopsHere hr
           · exact ih
-        · simp only [project, hr, ↓reduceDIte, Term.denote]
+        · simp only [project, hr, ↓reduceDIte, Term.denote_guard]
           cases asBool M ok.1 (env.get c)
           · exact .stopsElsewhere hr
           · exact ih
     | _, _, .choose key ps c ok gives onTrue onFalse results rest, path, env, h => by
         by_cases hr : r ∈ ps
-        · simp only [project, hr, ↓reduceDIte, Term.denote, restrict_get, reveal_hide]
+        · simp only [project, hr, ↓reduceDIte, Term.denote_choose, restrict_get, reveal_hide]
           refine Proj.bind M (post := fun vs rvs => rvs = hideAll M r vs) ?_ fun mids _ e => ?_
           · cases asBool M ok.1 (env.get c)
             · exact project_sound tsound tquiet onFalse path env h.2.2.2.1
@@ -446,7 +448,7 @@ mutual
           · subst e
             have ih := project_sound tsound tquiet rest path (env.extend results mids) h.2.2.2.2
             rwa [restrict_extend] at ih
-        · simp only [project, hr, ↓reduceDIte, Term.denote, roleOp, Process.bind]
+        · simp only [project, hr, ↓reduceDIte, Term.denote_choose, Term.denote_op, roleOp, Process.bind]
           have arm : Proj M r (fun _ (_ : Unit) => True)
               (bif asBool M ok.1 (env.get c) then
                 onTrue.denote (protocolSem M fnTable gTable) path env
@@ -460,7 +462,7 @@ mutual
           exact ih
     | _, _, .cases key ps x ok gives arms results rest, path, env, h => by
         by_cases hr : r ∈ ps
-        · simp only [project, hr, ↓reduceDIte, Term.denote, restrict_get]
+        · simp only [project, hr, ↓reduceDIte, Term.denote_cases, restrict_get]
           rw [rolePick_hide M r _
             (by obtain ⟨key, alternatives, e, p, _⟩ := ok; exact ⟨key, alternatives, e, p⟩)]
           refine Proj.bind M (post := fun vs rvs => rvs = hideAll M r vs)
@@ -468,7 +470,7 @@ mutual
           subst e
           have ih := project_sound tsound tquiet rest path (env.extend results mids) h.2.2
           rwa [restrict_extend] at ih
-        · simp only [project, hr, ↓reduceDIte, Term.denote, roleOp, Process.bind]
+        · simp only [project, hr, ↓reduceDIte, Term.denote_cases, Term.denote_op, roleOp, Process.bind]
           refine Proj.bind M (q := .done ()) (g := fun _ => _)
             (quietArms M fnTable gTable hr tquiet arms path env _ h.1) fun mids _ _ => ?_
           have ih := project_sound tsound tquiet rest path (env.extend results mids) h.2.2
@@ -482,7 +484,7 @@ mutual
             results rest path env
             (fun path env => project_sound tsound tquiet body path env h.2.1)
             (fun env => project_sound tsound tquiet rest path env h.2.2)
-        · simp only [project, hr, ↓reduceDIte, Term.denote, roleOp, Process.bind]
+        · simp only [project, hr, ↓reduceDIte, Term.denote_loop, Term.denote_op, roleOp, Process.bind]
           have out : ∀ a, a ∈ carried ++ each.map ((protocolDialect V hs).collected times.size) →
               r ∉ a.holders := fun a ha hr' => by
             rcases List.mem_append.mp ha with ha | ha
@@ -501,7 +503,7 @@ mutual
           rw [restrict_extend, hideAll_nothings M out] at ih
           exact ih
     | _, _, .block key number body results rest, path, env, h => by
-        simp only [project, Term.denote]
+        simp only [project, Term.denote_block]
         refine Proj.bind M (post := fun vs rvs => rvs = hideAll M r vs)
           (project_sound tsound tquiet body (path ++ [.iteration key number]) env h.1)
           fun mids _ e => ?_
@@ -511,7 +513,7 @@ mutual
     | _, _, .attempt key w owns inputs body results rest, path, env, h => by
         simp only [project]
         rw [attempt_denote]
-        simp only [Term.denote]
+        simp only [Term.denote_attempt]
         have hbody := project_sound tsound tquiet body path
           (env.extend inputs (.cons (V := LVal M) (a := LTy.index w) (0 : Nat) .nil)) h.1
         rw [restrict_extend] at hbody

@@ -1,24 +1,8 @@
 module
 
-public import Zkc.Core.Program.Term
-public import Zkc.Core.Program.Requirement
-public import Zkc.Core.Value.Skeleton
+public import Zkc.Core.Meaning.Requirement
 
 @[expose] public section
-
-/-!
-What the analysis is told about the operations of a dialect: the one description of them.
-
-The analysis walks a term of any dialect. Every operation has a written form, and what the
-analysis knows of it (what it requires, what it guarantees of its operands and results, the
-ranges of its results, how its result reads) is said once per written form. Whether equal
-applications of an operation are one value is a separate part: a shared operation is a value,
-and every other operation is kept in order; both have requirements and guarantees. A dialect says
-how its operations are written, which are shared, which written operations commute, where the
-table places them, the range of a natural of each of its types, and which of its types have no
-value (`FactRules`). The value form reads a part of it, the
-written forms of the shared operations (`FactRules.values`).
--/
 
 namespace Zkc.Core
 
@@ -57,51 +41,26 @@ structure OpFacts (Raw : Type) where
   /-- How the first result reads. -/
   form : Raw → Option ResultForm
 
-/-- What a dialect tells the analysis of its operations. -/
-structure FactRules (D : Dialect) (Raw : Type) where
-  /-- How an application of an operation reads: its written form, for every operation. What
-  the operation requires is said of it (`ops.requires`). -/
-  written : ∀ {ins res : List D.Ty}, D.Op ins res → Raw
-  /-- Whether equal applications of the operation are one value: it gives the same results on
-  the same operands, asks nothing of the world, and stops only `undefined`. Such an operation
-  has no place of its own in the order of a term. An operation that is not shared is kept in
-  order: one whose results are new each time, that asks for a reply, or that can stop with a
-  reason. -/
-  shared : ∀ {ins res : List D.Ty}, D.Op ins res → Bool
-  /-- Whether the table places the two operands of a written operation in one order. It may be
-  said only of an operation whose result does not depend on their order; an analysis that
-  learns the operands in order does not say it of every such operation. -/
-  commutes : Raw → Bool
-  /-- What the type alone says of a natural of the type. -/
-  range : D.Ty → Option Range
-  /-- Whether a type has no value. -/
-  noValue : D.Ty → Bool
-  /-- What the analysis knows of the written operations: what each requires, what it guarantees,
-  the ranges of its results, how its result reads. -/
-  ops : OpFacts Raw
-  /-- A number for a written operation, by which the table places its applications. -/
-  place : Raw → Nat
+namespace FactCheck
+variable {Val : Type}
 
-/-- The rules as the value form reads them: the written form of an operation that is shared. -/
-def FactRules.values {D : Dialect} {Raw : Type} (rules : FactRules D Raw) : ValueRules D Raw where
-  written := fun o => if rules.shared o then some (rules.written o) else none
-  place := rules.place
-  commutes := rules.commutes
+/-- How a value reads, by the form of the operation that gave it, from its operands. -/
+def FormHolds (R : Reading Val) : ResultForm → List Val → Val → Prop
+  | .sum, args, r => ∃ a b x y, args = [a, b] ∧ R.nat a = some x ∧ R.nat b = some y ∧
+      R.nat r = some (x + y)
+  | .difference, args, r => ∃ a b x y, args = [a, b] ∧ R.nat a = some x ∧ R.nat b = some y ∧
+      y ≤ x ∧ R.nat r = some (x - y)
+  | .less, args, r => ∃ a b x y, args = [a, b] ∧ R.nat a = some x ∧ R.nat b = some y ∧
+      R.bool r = some (decide (x < y))
+  | .equal, args, r => ∃ a b x y, args = [a, b] ∧ R.nat a = some x ∧ R.nat b = some y ∧
+      R.bool r = some (decide (x = y))
+  | .negation, args, r => ∃ a x, args = [a] ∧ R.bool a = some x ∧ R.bool r = some (!x)
+  | .conjunction, args, r => ∃ a b x y, args = [a, b] ∧ R.bool a = some x ∧
+      R.bool b = some y ∧ R.bool r = some (x && y)
+  | .disjunction, args, r => ∃ a b x y, args = [a, b] ∧ R.bool a = some x ∧
+      R.bool b = some y ∧ R.bool r = some (x || y)
+  | .truth value, _, r => R.bool r = some value
 
-section
-variable {D : Dialect} {Raw : Type} (rules : FactRules D Raw) {ins res : List D.Ty}
-  {o : D.Op ins res}
-
-/-- The value form reads a shared operation by its written form. -/
-theorem FactRules.values_written_shared (shared : rules.shared o = true) :
-    rules.values.written o = some (rules.written o) := by
-  simp only [FactRules.values, shared, ↓reduceIte]
-
-/-- The value form reads nothing of an operation that is kept in order. -/
-theorem FactRules.values_written_kept (kept : rules.shared o = false) :
-    rules.values.written o = none := by
-  simp only [FactRules.values, kept, Bool.false_eq_true, ↓reduceIte]
-
-end
+end FactCheck
 
 end Zkc.Core

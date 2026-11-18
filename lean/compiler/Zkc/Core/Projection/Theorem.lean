@@ -25,7 +25,7 @@ theorem restrict_inputs (r : Role) {items : List (LTy V)} (inputs : Names items)
 /-- A role at or above a protocol's roles does nothing while it runs. -/
 theorem Defs.quiet : ∀ {hs : Headers V} (defs : Defs V hs), TableQuiet M (Defs.gTable M defs)
   | _, .nil => fun _ p => nomatch p
-  | _, .fn _ _ _ _ rest => Defs.quiet rest
+  | _, .fn _ _ _ _ rest _ => Defs.quiet rest
   | _, .protocol hdr inputs body ok rest => fun _ p j path ins out => by
       cases p with
       | head =>
@@ -41,7 +41,7 @@ theorem Defs.quiet : ∀ {hs : Headers V} (defs : Defs V hs), TableQuiet M (Defs
 theorem Defs.sound : ∀ {hs : Headers V} (defs : Defs V hs),
     TableSound M (Defs.gTable M defs) (Defs.rTable M defs)
   | _, .nil => fun _ p => nomatch p
-  | _, .fn _ _ _ _ rest => Defs.sound rest
+  | _, .fn _ _ _ _ rest _ => Defs.sound rest
   | _, .protocol _ inputs body ok rest => fun _ p j path ins => by
       cases p with
       | head =>

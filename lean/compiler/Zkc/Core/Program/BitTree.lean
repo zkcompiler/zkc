@@ -218,4 +218,22 @@ theorem mem_insert : ∀ (d bits : Nat) (a : α) (t : BitTree α) (x : α),
 
 end BitTree
 
+namespace FactCheck
+
+/-- Number of low-order key bits used to place analysis entries. -/
+abbrev factDepth : Nat := 12
+
+/-- A number computed from naturals in order, from a number to start with, each multiplying
+what came before by Knuth's multiplicative constant. -/
+def mixNumbers (start : Nat) (ns : List Nat) : Nat :=
+  ns.foldl (fun key n => key * 2654435761 + n + 1) start
+
+/-- Where the table places an application, to find it: a number computed from the number that
+the dialect gives for its written operation and from all of its operands' identifiers, in order,
+so that applications that share their operands, or have none, fall in different leaves when
+their written operations differ. -/
+def applicationKey (written : Nat) (args : List Nat) : Nat := mixNumbers written args
+
+end FactCheck
+
 end Zkc.Core

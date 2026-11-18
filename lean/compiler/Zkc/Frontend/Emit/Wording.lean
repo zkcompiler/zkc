@@ -21,8 +21,6 @@ namespace Zkc.Frontend.Emit
 
 open Syntax
 open Static
-open Zkc.Core (Requirement)
-open Zkc.Core.Explain (Explained Condition)
 
 /-- A refusal as it is logged: its rule, its place and its message. -/
 structure Worded where
@@ -38,7 +36,7 @@ def ruleOf : Requirement → String
   | .position | .slice => "TY7"
   | .size | .bound | .domain => "TY5"
   | .maximum => "CT4"
-  | .reservedStop | .noDomain => "CORE"
+  | .core _ => "CORE"
 
 /-- The conversion inside a conversion that applies the refining operation of a requirement,
 with the types it converts between. -/
@@ -84,13 +82,12 @@ def needOf : Requirement → String
   | .bound => "that the natural is below the bound of the index expected"
   | .domain => "that the operands are in the domain of the operation"
   | .maximum => "a static bound of the count of the loop"
-  | .reservedStop => "that no stop names a reserved reason"
-  | .noDomain => "a row that says where the operation is defined"
+  | .core rule => s!"the Core rule {repr rule}"
 
 /-- The message of the reference for an application that the core does not justify, at its
 node. -/
 def word (node : Option Typed.Node) (explained : Explained) : CompileM Worded := do
-  let upper (position : Nat) : Option Nat := (explained.operands[position]?).bind (·.hi)
+  let upper (position : Nat) : Option Nat := (explained.operands position).bind (·.hi)
   let generic (span : Span) : Worded :=
     { rule := ruleOf explained.requirement, span
       message := s!"this needs {needOf explained.requirement}, which is not known here: write a `guard` of it before this place" }

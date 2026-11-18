@@ -56,7 +56,9 @@ def elabFn (fns : List (FnHeader V)) (hdr : FnHeader V) :
       match placed : hdr.summary.misplaced hdr.ins.length hdr.outs.length,
           Names.ofList hdr.ins inputs with
       | some requirement, _ =>
-          .error (refuseWhole hdr.key .summary (.requirement requirement.lift))
+          .error (refuseWhole hdr.key .summary (match requirement with
+            | .positional q => .requirement q.lift
+            | .assertion c => .contractAssertion c))
       | none, none => .error (refuseWhole hdr.key .inputs (.number hdr.ins.length inputs.length))
       | none, some bound =>
           match elaborated : elabBody (localRules fns) hdr.key (Ctx.empty.extend bound) [] none

@@ -1,8 +1,10 @@
 module
 
-public import Zkc.Core.Serialize
+public import Zkc.Core.Admission.Admit
+public import Zkc.Core.Program.EraseProgram
+public import Zkc.Frontend.Emit.Bindings
 public import Zkc.Frontend.Basic.Log
-public import Zkc.Core.Construction
+public import Zkc.Core.Scheme.Deployed
 
 @[expose] public section
 
@@ -35,16 +37,44 @@ inductive Emit.EntryKind where
   | defaultInstance
   deriving Inhabited, BEq, Repr
 
+/-- The source compiler emits definitions under the project's linked vocabulary. The
+same binding supplies the type of every occurrence of a primitive in the named program. -/
+structure SourcePackage where
+  bindings : Emit.Bindings
+  named : Core.NamedProgram bindings.vocabulary
+  association : Core.Association
+
+/-- Evidence indexed by the emitted source package. A consumer can transport a proof
+about a typed program to this admission by checking the program's erasure. -/
+structure SourcePackage.Admission (p : SourcePackage) where
+  admitted : Core.Admitted p.bindings.vocabulary
+  accepted : Core.admit p.named p.association = .ok admitted
+
+/-- A report that can hold the result of any source root. -/
+structure CheckedPackage extends SourcePackage where
+  admitted : Core.Admitted bindings.vocabulary
+  accepted : Core.admit named association = .ok admitted
+
+def SourcePackage.checkEvidence (p : SourcePackage) :
+    Except (List (Core.AdmissionRefusal p.bindings.vocabulary)) p.Admission :=
+  match h : Core.admit p.named p.association with
+  | .ok admitted => .ok ⟨admitted, h⟩
+  | .error errors => .error errors
+
+def SourcePackage.check (p : SourcePackage) :
+    Except (List (Core.AdmissionRefusal p.bindings.vocabulary)) CheckedPackage :=
+  p.checkEvidence.map fun evidence => ⟨p, evidence.admitted, evidence.accepted⟩
+
 /-- What became of the package of a root. -/
 inductive PackageOutcome where
   /-- Admitted by the core: elaborated, and every function and protocol passes the check of
   facts. -/
-  | admitted (package : Zkc.Core.Raw.Package)
+  | admitted (package : CheckedPackage)
   /-- Elaborated by the core; the functions and protocols named do not pass its check of facts,
   each with its first application that is not justified. -/
-  | unjustified (functions : Array String) (package : Zkc.Core.Raw.Package)
+  | unjustified (functions : Array String) (package : SourcePackage)
   /-- Emitted and refused by the core. -/
-  | refused (reason : String) (package : Zkc.Core.Raw.Package)
+  | refused (reason : String) (package : SourcePackage)
   /-- Not emitted: a form that is not typed yet. -/
   | waiting (reason : String)
   /-- Typed, and not emitted: a specification item whose types or operations have no form in
@@ -64,18 +94,11 @@ structure PackageReport where
   outcome : PackageOutcome
   deriving Inhabited
 
-/-- A scheme that the core has constructed: the admitted package of the protocol instance with
-the rows of the suite and of the layout, the declaration, and the core's construction, in
-which what each step returns is admitted. -/
+/-- The deployment of a source scheme and the source names of its roles and ports. -/
 structure Constructed where
   name : String
-  /-- The admitted package of the protocol instance with the rows of the suite and of the
-  layout. -/
-  source : Zkc.Core.Admitted
-  /-- The declaration, with the proof identity. -/
-  declaration : Zkc.Core.Raw.Declaration
-  /-- The core's construction on the admitted package. -/
-  construction : Zkc.Core.Construction source declaration
+  bindings : Emit.Bindings
+  deployment : Core.Deployed bindings.vocabulary
   identity : List Nat
   roles : Array String
   prover : Nat
@@ -93,21 +116,14 @@ structure Constructed where
 
 namespace Constructed
 
-/-- The package of the protocol instance with the rows of the suite and of the layout. -/
-abbrev package (scheme : Constructed) : Zkc.Core.Raw.Package := scheme.source.package
+abbrev source (scheme : Constructed) := scheme.deployment.admitted
 
-abbrev typed (scheme : Constructed) : Zkc.Core.Typed := scheme.source.typed
+abbrev typed (scheme : Constructed) := scheme.source.program
 
-/-- The protocols after the two steps. -/
-abbrev stepped (scheme : Constructed) :
-    Zkc.Core.Stepped scheme.typed.typeTable (scheme.typed.table.map (·.signature))
-      scheme.typed.functions :=
-  scheme.construction.serialized
+abbrev declaration (scheme : Constructed) := scheme.deployment.declaration
 
-/-- The constructed program as a raw package, without names: the admitted package of what the
-serialize step returns. -/
-abbrev constructed (scheme : Constructed) : Zkc.Core.Raw.Package :=
-  scheme.construction.admitted.package
+/-- The definitions of the admitted interactive program named by the deployment. -/
+abbrev package (scheme : Constructed) := Core.erase scheme.typed
 
 end Constructed
 
@@ -115,7 +131,7 @@ end Constructed
 inductive SchemeOutcome where
   | constructed (scheme : Constructed)
   /-- Emitted, and refused by the core's elaboration or by its construction. -/
-  | refusedByCore (reason : String) (package : Zkc.Core.Raw.Package)
+  | refusedByCore (reason : String) (package : SourcePackage)
   | waiting (reason : String)
   | refused (refusal : Diagnostic)
   | defect (message : String)

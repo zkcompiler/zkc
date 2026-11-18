@@ -25,7 +25,7 @@ variable {V : Vocabulary} (M : Model V) (annotation : Annotation)
 the names of its inputs: no loop runs more often than its bound. -/
 def Defs.FunctionsRespect : {hs : Headers V} → Defs V hs → Prop
   | _, .nil => True
-  | _, .fn (hs := hs) hdr inputs body _ rest =>
+  | _, .fn (hs := hs) hdr inputs body _ rest _ =>
       (∀ ins : HList M.Val hdr.ins, ins.All M.Valid →
         FnHeader.Required M (Defs.fnTable M rest) hdr ins →
         body.EveryLoop (localSem M hs.fns (Defs.fnTable M rest)) (fun _ _ => True)
@@ -37,7 +37,7 @@ def Defs.FunctionsRespect : {hs : Headers V} → Defs V hs → Prop
 inputs, and permitted replies: no loop runs more often than its bound. -/
 def Defs.ProtocolsRespect : {hs : Headers V} → Defs V hs → Prop
   | _, .nil => True
-  | _, .fn _ _ _ _ rest => Defs.ProtocolsRespect rest
+  | _, .fn _ _ _ _ rest _ => Defs.ProtocolsRespect rest
   | _, .protocol (hs := hs) hdr inputs body _ rest =>
       (∀ (r : Role) (path : List Frame) (ins : HList (RV M r) hdr.ins), ins.All (RV.Valid M r) →
         (project r body).EveryLoop
@@ -55,7 +55,7 @@ def Defs.Respects {hs : Headers V} (defs : Defs V hs) : Prop :=
 theorem Defs.protocolsRespect_of_none : ∀ {hs : Headers V} (defs : Defs V hs),
     hs.protocols = [] → Defs.ProtocolsRespect M annotation defs
   | _, .nil, _ => trivial
-  | _, .fn _ _ _ _ rest, empty => Defs.protocolsRespect_of_none rest empty
+  | _, .fn _ _ _ _ rest _, empty => Defs.protocolsRespect_of_none rest empty
   | _, .protocol _ _ _ _ _, empty => absurd empty (List.cons_ne_nil _ _)
 
 end

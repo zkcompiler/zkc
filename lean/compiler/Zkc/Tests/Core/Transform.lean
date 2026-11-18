@@ -18,7 +18,7 @@ admitted again. The two passes again on a function with a choice, a case analysi
 with unused and repeated operations inside and around them: each stored result compared whole,
 each step accepted, the second from the result of the first. Then one function whose loop runs
 as often as a value with an upper end, admitted, and one step from it, with each theorem applied
-to them: `checkFacts_sound`, the safety that the admitted function carries and
+to them: `TypedFn.check_assured`, the safety that the admitted function carries and
 `TypedFn.safe_iff_assured` to the function, and the safety and the bounds that the step's
 result carries (the loop of the target bounded as the step recorded), `admitFn_erases`,
 `AssuredFn.step_erases` and `AssuredFn.step_both` (with a second step from the same function)
@@ -368,6 +368,13 @@ example : outcome (admitFn [] boundedHeader boundedSource) = .ok [(place 3, 3)] 
     outcome (boundedFn.step boundedTarget) = .ok [(place 3, 3)] := by
   decide +kernel
 
+private theorem boundedFn_bounds : boundedFn.bounds = [(place 3, 3)] := by decide +kernel
+private theorem boundedStep_bounds : boundedStep.bounds = [(place 3, 3)] := by decide +kernel
+
+section
+-- These consumers use the admitted artifact's fields. Its construction was checked above.
+attribute [local irreducible] boundedFn boundedStep
+
 /-- The soundness of the check of facts, on the admitted function: on valid inputs, of which its
 empty summary requires nothing, its loop runs at most 3 times, and it never stops `undefined` and
 returns valid values. -/
@@ -378,14 +385,14 @@ example (M : Model field) (ins : HList M.Val boundedHeader.ins) (valid : ins.All
       (boundedFn.fn.body.denote (localSem M [] (noCallees M)) []
         (Env.empty.extend boundedFn.fn.inputs ins)).Every (fun _ _ => True)
         (fun outs => outs.All M.Valid) (· ≠ .undefined) :=
-  have sound := checkFacts_sound (noCallees_callees M) ⟨1⟩ boundedHeader.summary
-    boundedFn.fn.inputs boundedFn.fn.body boundedFn.fn.conditions.distinct
-    (admitFn_ok boundedFn_accepted).2
-    [(place 3, 3)] (fun _ _ inside _ _ => by
-      rw [show boundedFn.bounds = [(place 3, 3)] by decide +kernel]
-      exact inside)
-    ins valid (fun _ listed => nomatch listed)
-  ⟨sound.1, Process.every_mono _ _ (fun _ returned => returned.1) (fun _ stop => stop) sound.2⟩
+  let assured := boundedFn.fn.check_assured (admitFn_ok boundedFn_accepted).2
+  ⟨assured.bounded M (noCallees M) (noCallees_callees M) [(place 3, 3)]
+      (fun _ _ inside _ _ => boundedFn_bounds.symm ▸ inside) ins valid (fun _ h => nomatch h),
+    Process.every_mono _ _
+      (fun outs h => ((localSem M [] (noCallees M)).dyns_valid_iff outs).mp h.1)
+      (fun _ h => h)
+      (assured.safe M _ (noCallees_callees M) _ (((localSem M [] _).dyns_valid_iff ins).mpr valid)
+        (fun _ h => nomatch h))⟩
 
 /-- An admitted function carries its safety: it satisfies the empty summary of its header, so
 on every valid input it never stops `undefined` and returns valid values. -/
@@ -431,9 +438,11 @@ example (M : Model field) (ins : HList M.Val boundedHeader.ins) (valid : ins.All
       (Env.empty.extend boundedStep.fn.inputs ins) :=
   boundedStep.assured.bounded M (noCallees M) (noCallees_callees M) [(place 3, 3)]
     (fun _ _ inside _ _ => by
-      rw [show boundedStep.bounds = [(place 3, 3)] by decide +kernel]
+      rw [boundedStep_bounds]
       exact inside)
     ins valid (fun _ listed => nomatch listed)
+
+end
 
 /-- The stored forms of what admission and the step return are what they were given
 (`admitFn_erases`, `AssuredFn.step_erases`). -/

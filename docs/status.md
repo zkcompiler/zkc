@@ -2,19 +2,40 @@
 
 ## Active Core build
 
-The compiler admits named functions in definition order. On valid inputs satisfying the
-function's declared requirements, admission proves its summary and the recorded loop bounds.
-For a typed protocol supplied directly, the projection theorem relates each role's process
-to its part of the joint program. Admission currently refuses protocol definitions.
+The compiler admits named functions and protocols in definition order. On valid inputs satisfying
+a function's declared requirements, admission proves its summary and recorded bounds. Protocol
+admission checks each role's projected body. The public role-safety theorem excludes an
+undefined stop for valid inputs and permitted replies under unconditional function headers.
 See the [Core guide](../lean/compiler/Zkc/Core/README.md) and the
 [active build targets](development.md).
+
+## Interactive source proofs on typed Core
+
+The frontend emits the protocol into typed Core. Admission checks the program,
+and projection gives the process for each role. The formal theorems describe the admitted
+entry or its selected reduction call. The source clients check that the typed call and its
+emitted attachment select the same operands and function instance. For the table extension
+and GKR summand they also check the formal symbol named by that instance's `external` declaration.
+Interpreting the symbol in the mathematical model is a separate obligation. The tests exercise
+this source path with trusted elaboration and lowering.
+
+| Entry checked | Result and assumptions |
+|---|---|
+| Sumcheck verifier | A false sum is accepted with probability at most `n/S` for `n` rounds and a challenge set of size `S`, under the arithmetic and reached-challenge laws. The source checks instantiate 0, 1 and 10 rounds. |
+| Honest joint Sumcheck | A valid table of length `2ⁿ` with its true sum returns successfully for every reply under the table and arithmetic laws. Full reply mass at reached calls gives return probability one. |
+| GKR layer verifier | At the four-round `Reduce<Gate>` call, a false incoming claim yields a correct residual with probability at most `8/S`, under the gate, current-layer and challenge assumptions. Whole-circuit soundness also needs the wiring, line reduction, layer composition and terminal evaluation. |
+
+Run `just test-interactive` for the source checks, their mutation controls and the
+kernel audit. The [formal package guide](../lean/formal/README.md) gives the
+theorem entry points and the [source checks](../lean/formal/checks/SourceProtocols.lean)
+exercise the certificates.
 
 ## Earlier source and execution pipeline
 
 Use [the previous Lean compiler at `10ed903fc`](https://github.com/zkcompiler/zkc/tree/10ed903fc22d3f20b22ff2d1bbf607a740ef0718) for the working `.zkc` frontend,
 `zkc-check`, scheme construction and formal examples. The table records coverage at that revision.
 The current default targets build the redesigned Core, vocabulary, their tests and audit.
-The retained frontend and historical formal suites still need to be ported.
+The full frontend CLI and historical formal receipt suite still await migration.
 
 | Area | Coverage at `10ed903fc` |
 |---|---|

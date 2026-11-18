@@ -52,7 +52,7 @@ structure ResultStore where
   defaultInstances : Std.HashSet InstanceId := {}
   /-- The rows that bodies apply, by their identity. -/
   rows : Array Typing.Row := #[]
-  rowIndex : Std.HashMap Typing.RowKey Typing.RowId := {}
+  rowIndex : Std.HashMap Emit.PrimitiveName Typing.RowId := {}
   /-- The function instances in the order their typing finished. -/
   finished : Array InstanceId := #[]
   /-- The obligations of the laws typed, in the order they were typed. -/
@@ -110,16 +110,21 @@ def body? (store : ResultStore) (id : InstanceId) : Option Typing.BodyState :=
   | some { state := .exhausted exhaustion, .. } => some (.exhausted exhaustion)
   | none => none
 
-/-- The number of a row, entering it when it is new. -/
-def internRow (store : ResultStore) (row : Typing.Row) : ResultStore × Typing.RowId :=
-  match store.rowIndex[row.key]? with
-  | some id => (store, id)
+/-- Reuse a primitive only if its kind, domain and full signature agree. A
+conflict returns the original store to the caller unchanged. -/
+def internRow (store : ResultStore) (row : Typing.Row) : Option (ResultStore × Typing.RowId) := do
+  let key := Emit.primitiveName row.key
+  match store.rowIndex[key]? with
+  | some id =>
+    let previous ← store.rows[id]?
+    guard (Emit.sameRowSignature previous row)
+    return (store, id)
   | none =>
     let rows := store.rows
     let rowIndex := store.rowIndex
     let store := { store with rows := #[], rowIndex := {} }
     let id := rows.size
-    ({ store with rows := rows.push row, rowIndex := rowIndex.insert row.key id }, id)
+    return ({ store with rows := rows.push row, rowIndex := rowIndex.insert key id }, id)
 
 def checked? (store : ResultStore) (id : InstanceId) : Option Typed.Checked :=
   store.checked.result? id

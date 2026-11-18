@@ -38,36 +38,31 @@ mutual
   def eraseBody (printOp : ∀ {ins res : List D.Ty}, D.Op ins res → Raw) (printWho : D.Who → Who) :
       {Γ : Ctx D.Ty} → {outs : List D.Ty} → Term D Γ outs → List (Instruction Raw Who) × List Name
     | _, _, .ret exit => ([], HList.names exit)
-    | _, _, .op key o operands results rest =>
-        let erased := eraseBody printOp printWho rest
-        (.op key results.toList (printOp o) (HList.names operands) :: erased.1, erased.2)
-    | _, _, .guard key w c _ why rest =>
-        let erased := eraseBody printOp printWho rest
-        (.guard key (printWho w) c.name why :: erased.1, erased.2)
-    | _, _, .choose key w c _ _ onTrue onFalse results rest =>
+    | _, _, .step key i results rest =>
+        let tail := eraseBody printOp printWho rest
+        (eraseInstr printOp printWho key i results :: tail.1, tail.2)
+  /-- Erase one instruction, retaining its key, written binders and nested regions. -/
+  def eraseInstr (printOp : ∀ {ins res : List D.Ty}, D.Op ins res → Raw) (printWho : D.Who → Who)
+      (key : Key) : {Γ : Ctx D.Ty} → {mid : List D.Ty} → Instr D Γ mid → Names mid →
+        Instruction Raw Who
+    | _, _, .op o operands, results => .op key results.toList (printOp o) (HList.names operands)
+    | _, _, .guard w c _ why, _ => .guard key (printWho w) c.name why
+    | _, _, .choose w c _ _ onTrue onFalse, results =>
         let yes := eraseBody printOp printWho onTrue
         let no := eraseBody printOp printWho onFalse
-        let erased := eraseBody printOp printWho rest
-        (.choose key (printWho w) c.name results.toList (.mk [] yes.1 yes.2) (.mk [] no.1 no.2) ::
-          erased.1, erased.2)
-    | _, _, .cases key w x _ _ arms results rest =>
-        let erased := eraseBody printOp printWho rest
-        (.cases key (printWho w) x.name results.toList (eraseArms printOp printWho arms) ::
-          erased.1, erased.2)
-    | _, _, .loop key w times _ initial inputs body results rest =>
+        .choose key (printWho w) c.name results.toList (.mk [] yes.1 yes.2) (.mk [] no.1 no.2)
+    | _, _, .cases w x _ _ arms, results =>
+        .cases key (printWho w) x.name results.toList (eraseArms printOp printWho arms)
+    | _, _, .loop w times _ initial inputs body, results =>
         let inside := eraseBody printOp printWho body
-        let erased := eraseBody printOp printWho rest
-        (.loop key (printWho w) (eraseTimes times) (HList.names initial) results.toList
-            (.mk inputs.toList inside.1 inside.2) :: erased.1, erased.2)
-    | _, _, .block key number body results rest =>
+        .loop key (printWho w) (eraseTimes times) (HList.names initial) results.toList
+          (.mk inputs.toList inside.1 inside.2)
+    | _, _, .block number body, results =>
         let inside := eraseBody printOp printWho body
-        let erased := eraseBody printOp printWho rest
-        (.block key number results.toList (.mk [] inside.1 inside.2) :: erased.1, erased.2)
-    | _, _, .attempt key w _ inputs body results rest =>
+        .block key number results.toList (.mk [] inside.1 inside.2)
+    | _, _, .attempt w _ inputs body, results =>
         let inside := eraseBody printOp printWho body
-        let erased := eraseBody printOp printWho rest
-        (.attempt key (printWho w) results.toList (.mk inputs.toList inside.1 inside.2) ::
-          erased.1, erased.2)
+        .attempt key (printWho w) results.toList (.mk inputs.toList inside.1 inside.2)
   /-- The regions of the arms of a case analysis, each with the name of its payload. -/
   def eraseArms (printOp : ∀ {ins res : List D.Ty}, D.Op ins res → Raw) (printWho : D.Who → Who) :
       {Γ : Ctx D.Ty} → {mid payloads : List D.Ty} → Arms D Γ mid payloads → List (Region Raw Who)
@@ -217,57 +212,58 @@ mutual
         simp only [eraseBody, elabBody, lookupAll_names]
     | _, _, .op key o args results rest, armed, blocks, owner => by
         have ih := elabBody_erase lawful definition rest armed blocks none
-        simp only [eraseBody, elabBody, lookupAll_names, lawful.op, Names.ofList_toList, ih]
+        simp only [eraseBody, eraseInstr, elabBody, lookupAll_names, lawful.op, Names.ofList_toList, ih]
     | _, _, .guard key w c ok why rest, armed, blocks, owner => by
         have ih := elabBody_erase lawful definition rest armed blocks none
-        simp only [eraseBody, elabBody, lawful.who, lookup_var,
-          Decidable.eq_isTrue (rules.condition w _) ok, ih]
+        simp only [eraseBody, eraseInstr, elabBody, lawful.who, lookup_var,
+          Decidable.eq_isTrue (rules.condition w _) ok]
+        erw [ih]
     | _, _, .choose (mid := mid) key w c ok gives onTrue onFalse results rest, armed, blocks,
         owner => by
-        simp only [Term.armed, Bool.and_eq_true] at armed
+        simp only [Term.armed, Instr.armed, Bool.and_eq_true] at armed
         have yes := elabClosed_erase rules definition blocks key onTrue
           (elabBody_erase lawful definition onTrue armed.1.1 blocks (some key))
         have no := elabClosed_erase rules definition blocks key onFalse
           (elabBody_erase lawful definition onFalse armed.1.2 blocks (some key))
         have ih := elabBody_erase lawful definition rest armed.2 blocks none
-        simp only [eraseBody, elabBody, lawful.who, lookup_var,
+        simp only [eraseBody, eraseInstr, elabBody, lawful.who, lookup_var,
           Decidable.eq_isTrue (rules.condition w _) ok, yes, no,
           Decidable.eq_isTrue (rules.sameTys mid mid) rfl,
           Decidable.eq_isTrue (decideAll (D.Gives w) (rules.gives w) mid) gives,
           Names.ofList_toList, ih, cast_eq]
     | _, _, .cases (mid := mid) (payloads := payloads) key w x ok gives arms results rest, armed,
         blocks, owner => by
-        simp only [Term.armed, Bool.and_eq_true] at armed
+        simp only [Term.armed, Instr.armed, Bool.and_eq_true] at armed
         obtain ⟨found, alternatives⟩ := lawful.alternatives w _ payloads ok
         have elaborated := elabCases_erase lawful definition arms armed.1.1 armed.1.2 blocks key
         have ih := elabBody_erase lawful definition rest armed.2 blocks none
-        simp only [eraseBody, elabBody, lawful.who, lookup_var, alternatives,
+        simp only [eraseBody, eraseInstr, elabBody, lawful.who, lookup_var, alternatives,
           length_eraseArms, ↓reduceIte, elaborated,
           Decidable.eq_isTrue (decideAll (D.Gives w) (rules.gives w) mid) gives,
           Names.ofList_toList, ih]
     | _, _, .loop (carried := carried) (each := each) key w times gives init inputs body results
         rest, armed, blocks, owner => by
-        simp only [Term.armed, Bool.and_eq_true] at armed
+        simp only [Term.armed, Instr.armed, Bool.and_eq_true] at armed
         have inside := elabRegion_erase rules definition blocks key (D.index w :: carried) inputs
           body (elabBody_erase lawful definition body armed.1 blocks (some key))
         have ih := elabBody_erase lawful definition rest armed.2 blocks none
-        simp only [eraseBody, elabBody, lawful.who, lookupAll_names,
+        simp only [eraseBody, eraseInstr, elabBody, lawful.who, lookupAll_names,
           elabTimes_erase rules definition, inside,
           @splitPrefix_append _ rules.sameTy, cast_eq,
           Decidable.eq_isTrue (decideAll (D.Gives w) (rules.gives w) (carried ++ each)) gives,
           Names.ofList_toList, ih]
     | _, _, .block (mid := mid) key number body results rest, armed, blocks, owner => by
-        simp only [Term.armed, Bool.and_eq_true] at armed
+        simp only [Term.armed, Instr.armed, Bool.and_eq_true] at armed
         have inside := elabClosed_erase rules definition (blocks ++ [(key, number)]) key body
           (elabBody_erase lawful definition body armed.1 (blocks ++ [(key, number)]) (some key))
         have ih := elabBody_erase lawful definition rest armed.2 blocks none
-        simp only [eraseBody, elabBody, inside, Names.ofList_toList, ih]
+        simp only [eraseBody, eraseInstr, elabBody, inside, Names.ofList_toList, ih]
     | _, _, .attempt (mid := mid) key w owns inputs body results rest, armed, blocks, owner => by
-        simp only [Term.armed, Bool.and_eq_true] at armed
+        simp only [Term.armed, Instr.armed, Bool.and_eq_true] at armed
         have inside := elabRegion_erase rules definition blocks key [D.index w] inputs body
           (elabBody_erase lawful definition body armed.1 blocks (some key))
         have ih := elabBody_erase lawful definition rest armed.2 blocks none
-        simp only [eraseBody, elabBody, lawful.who,
+        simp only [eraseBody, eraseInstr, elabBody, lawful.who,
           Decidable.eq_isTrue (rules.attempt w) owns, inside, Names.ofList_toList, ih]
   /-- The erased arms of a case analysis elaborate as its arms, with what the first gives. -/
   theorem elabCases_erase (lawful : rules.Lawful) (definition : Key) :
@@ -350,7 +346,7 @@ mutual
               · contradiction
               · rename_i outs' t' elaborated
                 cases h
-                simp only [eraseBody,
+                simp only [eraseBody, eraseInstr,
                   eraseBody_elab canonical definition rest exit blocks none t' elaborated,
                   canonical.op raw o read, Names.toList_of_ofList res results bound named,
                   names_of_lookupAll found]
@@ -369,8 +365,8 @@ mutual
               · contradiction
               · rename_i outs' t' elaborated
                 cases h
-                simp only [eraseBody, eraseBody_elab canonical definition rest exit blocks none t'
-                    elaborated, canonical.who who w read, name_of_lookup found]
+                simp only [eraseBody, eraseInstr, canonical.who who w read, name_of_lookup found]
+                erw [eraseBody_elab canonical definition rest exit blocks none t' elaborated]
     | .choose key who condition results onTrue onFalse :: rest, exit, Γ, blocks, owner, outs, t,
         h => by
         simp only [elabBody] at h
@@ -410,7 +406,7 @@ mutual
                           cases h
                           subst yesRegion
                           subst noRegion
-                          simp only [eraseBody, cast_eq,
+                          simp only [eraseBody, eraseInstr, cast_eq,
                             eraseBody_elab canonical definition rest exit blocks none t' elaborated,
                             canonical.who who w read, name_of_lookup found,
                             Names.toList_of_ofList _ results bound named]
@@ -439,7 +435,7 @@ mutual
                       · contradiction
                       · rename_i outs' t' restFound
                         cases h
-                        simp only [eraseBody,
+                        simp only [eraseBody, eraseInstr,
                           eraseBody_elab canonical definition rest exit blocks none t' restFound,
                           canonical.who who w read, name_of_lookup found,
                           Names.toList_of_ofList _ results bound named,
@@ -477,7 +473,7 @@ mutual
                         subst split
                         cases h
                         subst region
-                        simp only [eraseBody, cast_eq,
+                        simp only [eraseBody, eraseInstr, cast_eq,
                           eraseBody_elab canonical definition rest exit blocks none t' restFound,
                           canonical.who who w read, names_of_lookupAll initFound,
                           eraseTimes_elab rules definition w blocks key written times timesFound,
@@ -497,7 +493,7 @@ mutual
                 key b bodyFound
               cases h
               subst region
-              simp only [eraseBody,
+              simp only [eraseBody, eraseInstr,
                 eraseBody_elab canonical definition rest exit blocks none t' restFound,
                 Names.toList_of_ofList _ results bound named]
     | .attempt key who results body :: rest, exit, Γ, blocks, owner, outs, t, h => by
@@ -521,7 +517,7 @@ mutual
                     bodyFound
                   cases h
                   subst region
-                  simp only [eraseBody,
+                  simp only [eraseBody, eraseInstr,
                     eraseBody_elab canonical definition rest exit blocks none t' restFound,
                     canonical.who who w read, Names.toList_of_ofList _ results bound named]
   /-- A region that elaborates is its input names with the erased form of its term. -/
@@ -622,6 +618,41 @@ mutual
               subst erased
               simp only [eraseArms, cast_eq, rest]
 end
+
+end
+
+section
+variable {D : Dialect}
+
+/-- What following a skeleton compares that a dialect must decide: its types, as elaboration
+compares them (`TypeEquality`), who performs, and whether two operations are the same. -/
+structure SkelRules (D : Dialect) extends TypeEquality D where
+  sameWho : DecidableEq D.Who
+  /-- Whether two operations on operands of the same types are the same operation. -/
+  sameOp : ∀ {ins res res' : List D.Ty}, D.Op ins res → D.Op ins res' → Bool
+
+/-- Operations that are found the same are the same. -/
+def SkelRules.Lawful (checks : SkelRules D) : Prop :=
+  ∀ {ins res res' : List D.Ty} (o : D.Op ins res) (o' : D.Op ins res'),
+    checks.sameOp o o' = true → res = res' ∧ HEq o o'
+
+/-- What following decides for a dialect, from the rules by which its regions are elaborated:
+types as the rules compare them, who performs by equality, and two operations by their written
+forms. -/
+def Rules.skel {Raw Who : Type} [DecidableEq Raw] [DecidableEq D.Who] (rules : Rules D Raw Who) :
+    SkelRules D where
+  toTypeEquality := rules.toTypeEquality
+  sameWho := inferInstance
+  sameOp := fun o o' => decide (rules.printOp o = rules.printOp o')
+
+/-- Following is lawful when elaboration's rules are: two operations written alike are read back
+as one operation (`Rules.Lawful`). -/
+theorem Rules.skel_lawful {Raw Who : Type} [DecidableEq Raw] [DecidableEq D.Who]
+    {rules : Rules D Raw Who} (lawful : rules.Lawful) : rules.skel.Lawful := by
+  intro ins res res' o o' found
+  have both := lawful.op o
+  rw [of_decide_eq_true found, lawful.op o'] at both
+  exact Sigma.mk.inj (Except.ok.inj both).symm
 
 end
 

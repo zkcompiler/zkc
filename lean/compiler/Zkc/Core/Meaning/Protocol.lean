@@ -164,7 +164,8 @@ theorem attempt_denote {hs : Headers V} (fnTable : FnTable M hs.fns)
         env =
       (body.denote (protocolSem M fnTable gTable) path
           (env.extend inputs (.cons (V := LVal M) (a := LTy.index w) (0 : Nat) .nil))).bind
-        fun mids => rest.denote (protocolSem M fnTable gTable) path (env.extend results mids) :=
+        fun mids => rest.denote (protocolSem M fnTable gTable) path (env.extend results mids) := by
+  rw [Term.denote_attempt]
   rfl
 
 /-! ## The record of a run -/
@@ -338,17 +339,17 @@ mutual
     | _, _, .op key o operands results rest, path, env => by
         refine (observeOp_fst M fnTable gTable key o path (env.all operands) fun values =>
           Term.observe M fnTable gTable rest path (env.extend results values)).trans ?_
-        simp only [Term.denote]
+        simp only [Term.denote_op]
         congr 1
         funext values
         exact Term.observe_fst rest path _
     | _, _, .guard key ps c ok why rest, path, env => by
-        simp only [Term.observe, Term.denote]
+        simp only [Term.observe, Term.denote_guard]
         cases asBool M ok.1 (env.get c)
         · rfl
         · exact Term.observe_fst rest path env
     | _, _, .choose _ _ c ok _ onTrue onFalse _ rest, path, env => by
-        simp only [Term.observe, Term.denote]
+        simp only [Term.observe, Term.denote_choose]
         rw [Process.map_bind]
         cases asBool M ok.1 (env.get c)
         · simp only [Bool.cond_false]
@@ -364,14 +365,14 @@ mutual
           rw [Process.map_map]
           exact Term.observe_fst rest path _
     | _, _, .cases _ _ x ok _ arms _ rest, path, env => by
-        simp only [Term.observe, Term.denote]
+        simp only [Term.observe, Term.denote_cases]
         rw [Process.map_bind, ← Arms.observe_fst arms path env, Process.bind_map]
         congr 1
         funext chosen
         rw [Process.map_map]
         exact Term.observe_fst rest path _
     | _, _, .loop key ps times _ initial inputs body _ rest, path, env => by
-        simp only [Term.observe, Term.denote]
+        simp only [Term.observe, Term.denote_loop]
         rw [Process.map_bind]
         refine Process.bind_iterate_fst ?_ ?_ _ _ _ _
         · intro i a x
@@ -381,7 +382,7 @@ mutual
           rw [Process.map_map]
           exact Term.observe_fst rest path _
     | _, _, .block key number body _ rest, path, env => by
-        simp only [Term.observe, Term.denote]
+        simp only [Term.observe, Term.denote_block]
         rw [Process.map_bind, ← Term.observe_fst body, Process.bind_map]
         congr 1
         funext inner

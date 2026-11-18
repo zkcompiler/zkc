@@ -1,4 +1,4 @@
-import Zkc.Core.Admission.Elaboration
+import Zkc.Core.Admission.Admit
 import Zkc.Core.Transform.Assured
 import Zkc.Core.Transform.Passes
 import Zkc.Tests.Core.Facts
@@ -18,11 +18,10 @@ caller that subtracts the result from the input: admitted, the guarantee learned
 returns; with the guarantee removed from the callee's summary, the caller is refused at the
 subtraction; and the callee itself is refused at its exit under a guarantee that its body does not
 establish. The dividing function satisfies its summary in every model, from the theorems
-(`TypedFn.check_assured`, `checkFacts_holds`); the control, in the field of two elements of
+(`TypedFn.check_assured`); the control, in the field of two elements of
 `Tests/Core/Transform.lean`: on a divisor of zero, which the summary excludes, its process is the
 stop `undefined`. A step from the dividing function admitted with an unused product to the same
-function without it is accepted, and the two mean the same (`AssuredFn.step_same`). A summary is
-over no written operation, so one that names an application cannot be written; elaboration refuses
+function without it is accepted, and the two mean the same (`AssuredFn.step_same`). A positional summary uses argument positions. Elaboration refuses
 one that names a position out of range, by the rule `summary` at the definition; and a stored
 function with a summary goes round trip in both directions.
 -/
@@ -171,16 +170,16 @@ what admission carries (`TypedFn.check_assured`). -/
 theorem divide_holds (M : Model field) :
     Summary.Holds (localSem M [] (noCallees M)) (fun _ _ => True) (localReading M) Empty.elim
       (ValidDyn M) (· = .undefined) divisorAtLeastOne (divideFn.fn.meaning M (noCallees M)) :=
-  divideFn.assured.safe M (noCallees M) (noCallees_callees M)
+  (HeaderSummary.positional_iff M _ divisorAtLeastOne _).mp
+    (divideFn.assured.safe M (noCallees M) (noCallees_callees M))
 
 /-- The same, from the theorem of the check of facts for a function under a summary
-(`checkFacts_holds`, from `Analysis.analyse_holds`). -/
+(`TypedFn.check_assured`). -/
 example (M : Model field) :
     Summary.Holds (localSem M [] (noCallees M)) (fun _ _ => True) (localReading M) Empty.elim
       (ValidDyn M) (· = .undefined) divisorAtLeastOne (divideFn.fn.meaning M (noCallees M)) :=
-  checkFacts_holds (noCallees_callees M) ⟨1⟩ divisorAtLeastOne divideFn.fn.inputs
-    divideFn.fn.body divideFn.fn.conditions.distinct (bounds := [])
-    (by decide +kernel)
+  (HeaderSummary.positional_iff M _ divisorAtLeastOne _).mp
+    ((divideFn.fn.check_assured (bounds := []) (by decide +kernel)).safe M (noCallees M) (noCallees_callees M))
 
 /-- The control: in the field of two elements, on the divisor zero, the dividing function's process
 is the stop `undefined`... -/
@@ -263,7 +262,7 @@ example : let ins : HList twoModel.Val divideHeader.ins := .cons (5 : Nat) (.con
 /-! ## Summaries that elaboration refuses -/
 
 /-- The first refusal of elaboration of a program; nothing when it elaborates. -/
-def elaborationRefusal (named : NamedProgram field) : Option (ProgramRefusal field) :=
+def elaborationRefusal (named : NamedProgram field) : Option (DefinitionRefusal field) :=
   match elaborateFunctions named with
   | .ok _ => none
   | .error refusals => refusals.head?
@@ -272,18 +271,16 @@ def elaborationRefusal (named : NamedProgram field) : Option (ProgramRefusal fie
 def divideNamed (summary : Summary Empty) : NamedProgram field :=
   ⟨[.fn ⟨1⟩ [.nat, .nat] [.nat] false none summary divideBody]⟩
 
--- A requirement on an application of a written operation cannot be written: a summary is over none.
-
 /-- A requirement on the position 2, which is the result's, not an input's: refused by the rule
 `summary`. -/
 example : elaborationRefusal (divideNamed ⟨[.atLeast (.arg 2) 1], []⟩) =
-    some ⟨.summary, whole 1, .requirement (.atLeast (.arg 2) 1)⟩ := by
+    some (.fn ⟨.summary, whole 1, .requirement (.atLeast (.arg 2) 1)⟩) := by
   decide +kernel
 
 /-- A guarantee on the position 3, beyond the two inputs and the result: refused by the rule
 `summary`. -/
 example : elaborationRefusal (divideNamed ⟨[], [.le (.arg 3) (.arg 0)]⟩) =
-    some ⟨.summary, whole 1, .requirement (.le (.arg 3) (.arg 0))⟩ := by
+    some (.fn ⟨.summary, whole 1, .requirement (.le (.arg 3) (.arg 0))⟩) := by
   decide +kernel
 
 /-- The position 2 in a guarantee is the result: elaborated. -/
@@ -302,15 +299,137 @@ def dividing : NamedProgram field :=
 program. -/
 example : (elaborateFunctions dividing).bind (fun p => elaborateFunctions (erase p)) =
     elaborateFunctions dividing := by
-  rfl
+  cases found : elaborateFunctions dividing with
+  | error _ => rfl
+  | ok p =>
+    change elaborateFunctions (erase p) = .ok p
+    rw [erase_elab dividing p found, found]
 
 /-- Elaborated then erased: it is the erased form of what it elaborates to, its summary
 included. -/
-example : (elaborateFunctions dividing).map erase = .ok dividing := by rfl
+example : (elaborateFunctions dividing).map erase = .ok dividing := by
+  have accepted : (elaborateFunctions dividing).isOk = true := by decide +kernel
+  cases found : elaborateFunctions dividing with
+  | error _ => rw [found] at accepted; cases accepted
+  | ok p => exact congrArg Except.ok (erase_elab dividing p found)
 
 /-- The summary is in the header that elaboration gives. -/
 example : (elaborateFunctions dividing).map (fun p => p.headers.fns.map (·.summary)) =
     .ok [Summary.empty, divisorAtLeastOne] := by
   decide +kernel
 
+namespace Stored
+open BodyAnalysis HeaderContracts
+open FactsTests (F fieldRow truth)
+
+-- A predicate over a row result. Both operations belong to the linked vocabulary.
+private def squareNonzero (i : Nat) : Clause field :=
+  ⟨unary (fieldRow .isNonzero) (binary (fieldRow .mul) (.arg i) (.arg i)), none⟩
+
+private def header (k : Nat) : FnHeader field :=
+  ⟨⟨k⟩, [F], [F], false, none, ⟨[.assertion (squareNonzero 0)], [.assertion (squareNonzero 1)]⟩⟩
+
+private def identity : Region (LocalRaw field) Unit := .mk [0] [] [0]
+private def call : Region (LocalRaw field) Unit := .mk [0] [.op ⟨1⟩ [1] (.call ⟨1⟩) [0]] [1]
+private def named (h : FnHeader field) (body : Region (LocalRaw field) Unit) : Definition field :=
+  .fn h.key h.ins h.outs h.canStop h.kernel h.summary body
+
+-- The caller must establish the callee's precondition and learn its postcondition.
+example : (admit ⟨[named (header 1) identity, named (header 2) call]⟩ ⟨[], [], [], [], []⟩).isOk :=
+  by decide +kernel
+
+example : verdict [header 1] {header 2 with summary := Summary.empty} call =
+    some (.inl [⟨.domain, at_ 2 1, .unjustifiedAssertion (.call ⟨1⟩) (squareNonzero 0)⟩]) := by decide +kernel
+
+private def callerFn : AssuredFn field [header 1] (header 2) :=
+  (accepted? (admitFn [header 1] (header 2) call)).get (by decide +kernel)
+
+-- Renaming the result in the replacement preserves its expression contract and its meaning.
+private def renamed : Region (LocalRaw field) Unit := .mk [0] [.op ⟨1⟩ [42] (.call ⟨1⟩) [0]] [42]
+private def replacement := (accepted? (callerFn.step renamed)).get (by decide +kernel)
+example : callerFn.fn.SameAs replacement.fn :=
+  AssuredFn.step_same (ok_of_accepted (by decide +kernel) :
+    callerFn.step renamed = .ok replacement)
+
+private def truthClause (b : Bool) : Clause field := ⟨.apply (truth b) .nil 0, none⟩
+private def post (cs : List (HeaderClause field)) : FnHeader field :=
+  ⟨⟨3⟩, [.nat], [.nat], false, none, ⟨[], cs⟩⟩
+
+example : verdict [] (post [.assertion (truthClause false)]) identity =
+    some (.inl [⟨.guarantee, whole 3, .contractAssertion (truthClause false)⟩]) := by decide +kernel
+
+-- Report the positional clause at its original index following a direct assertion.
+example : verdict [] (post [.assertion (truthClause true), .below (.arg 1) 4]) identity =
+    some (.inl [⟨.guarantee, whole 3, .unestablished (.below (.arg 1) 4) [anyNat]⟩]) := by decide +kernel
+
+private def bound (e : Assertion field) : Clause field :=
+  { truthClause true with staticBound := some e }
+
+example : verdict [] (post [.assertion (bound (add (number 2) (number 3)))]) identity = accepted :=
+  by decide +kernel
+example : verdict [] (post [.assertion (bound (.arg 0))]) identity =
+    some (.inl [⟨.guarantee, whole 3, .contractAssertion (bound (.arg 0))⟩]) := by decide +kernel
+
+private def malformed (c : Clause field) : Bool :=
+  decide (verdict [] (post [.assertion c]) identity =
+    some (.inl [⟨.summary, whole 3, .contractAssertion c⟩]))
+
+example : [⟨number 0, none⟩, ⟨unary (fieldRow .isNonzero) (.arg 0), none⟩,
+    ⟨.apply (truth true) .nil 1, none⟩, ⟨unary (.owned .seqLength [] []) (.arg 0), none⟩,
+    bound (truthClause true).assertion, bound (binary quotient (.arg 0) (number 1))].all malformed :=
+  by decide +kernel
+
+private def dependency : Assertion field := .apply (.call ⟨4⟩) (.cons (.arg 0) .nil) 0
+private def previous : FnHeader field := {post [] with key := ⟨4⟩}
+
+-- Even a resolved unconditional call cannot occur beneath a comparison or in a bound.
+example : [⟨less dependency (number 8), none⟩, bound (add dependency (number 1))].all
+    (fun c => decide (verdict [previous] (post [.assertion c]) identity =
+      some (.inl [⟨.summary, whole 3, .contractAssertion c⟩]))) := by decide +kernel
+
+private def restricted : Clause field := ⟨unary (fieldRow .isNonzero)
+  (unary (fieldRow .inverse) (.arg 0)), none⟩
+example : verdict [] {header 1 with summary := ⟨[.assertion restricted], []⟩} identity =
+    some (.inl [⟨.summary, whole 1, .contractAssertion restricted⟩]) := by decide +kernel
+
+-- The caller's position in a mixed list is the same one used to decide the callee's contract.
+example : verdict [{post [] with key := ⟨1⟩, summary := ⟨[.assertion (truthClause true),
+    .below (.arg 0) 4], []⟩}] (post []) call =
+    some (.inl [unjustifiedAt 3 1 (.call ⟨1⟩) (.below (.arg 0) 4) [anyNat]]) := by decide +kernel
+
+private theorem squareAt (x : Bool) :
+    (squareNonzero 0).assertion.Denotes (Runs twoModel (headerTable twoModel)) [⟨F, x⟩] ⟨.bool, x && x⟩ := by
+  let table := headerTable twoModel
+  let multiplication : LocalOp field [] [F, F] [F] :=
+    @LocalOp.row field [] .mul ⟨[F, F], [F], .pure⟩ rfl
+  let nonzero : LocalOp field [] [F] [.bool] :=
+    @LocalOp.row field [] .isNonzero ⟨[F], [.bool], .pure⟩ rfl
+  have mul : Runs twoModel table (fieldRow .mul) [⟨F,x⟩, ⟨F,x⟩] [⟨F,x && x⟩] := by
+    refine ⟨⟨[F,F], [F], multiplication, .cons x (.cons x .nil), .cons (x && x) .nil,
+      rfl, rfl, rfl, rfl⟩, ?_, ?_⟩
+    all_goals
+      intro v member
+      simp only [List.mem_cons, List.not_mem_nil, or_false, or_self] at member
+      subst v
+      trivial
+  have test : Runs twoModel table (fieldRow .isNonzero) [⟨F,x && x⟩] [⟨.bool,x && x⟩] := by
+    refine ⟨⟨[F], [.bool], nonzero, .cons (x && x) .nil, .cons (x && x) .nil,
+      rfl, rfl, rfl, rfl⟩, ?_, ?_⟩
+    all_goals
+      intro v member
+      simp only [List.mem_cons, List.not_mem_nil, or_false] at member
+      subst v
+      trivial
+  exact .apply (.cons (.apply (.cons (.arg rfl) (.cons (.arg rfl) .nil)) mul rfl) .nil) test rfl
+
+-- In a concrete model the same typed predicate holds of one field value and excludes the other.
+example (x : Bool) : (HeaderClause.assertion (squareNonzero 0)).Holds twoModel [⟨F,x⟩] ↔ x = true := by
+  simpa [HeaderClause.Holds] using holds_iff twoModel (headerTable twoModel) List.nodup_nil (squareAt x)
+
+example (M : Model field) {hs hs' : List (FnHeader field)} (f : FnTable M hs) (g : FnTable M hs')
+    (xs) (held : (squareNonzero 0).assertion.Holds (Runs M f) (localReading M) xs) :
+    (squareNonzero 0).assertion.Holds (Runs M g) (localReading M) xs :=
+  held.transport (validRun_transport M f g) (by rfl)
+
+end Stored
 end Zkc.Core.SummariesTests

@@ -195,6 +195,11 @@ def Tys.injectAt : (alternatives : Tys V.TypeKey) → {τ : V.Ty} → Member alt
   | .cons _ _, _, .head, v => .inl v
   | .cons _ rest, _, .tail position, v => .inr (Tys.injectAt rest position v)
 
+/-- All elements of a sequence as separate results, with an output for each element. -/
+def HList.ofItems {item : V.Ty} : (xs : List (M.Val item)) → HList M.Val (List.replicate xs.length item)
+  | [] => .nil
+  | x :: xs => .cons x (HList.ofItems xs)
+
 /-- The items of a sequence, from one value per item. -/
 def HList.toItems {item : V.Ty} : (count : Nat) → HList M.Val (List.replicate count item) →
     List (M.Val item)
@@ -307,6 +312,9 @@ def ownedOp : {ins outs : List V.Ty} → OwnedOp V ins outs → HList M.Val ins 
       .done (.cons (Tys.getAt M items position v) .nil)
   | _, _, .getRecord _ fields position _, .cons v .nil =>
       .done (.cons (Tys.getAt M fields position v) .nil)
+  | _, _, .takeSeq item count, .cons xs .nil =>
+    if size : xs.length = count then .done (size ▸ HList.ofItems M (item := item) xs)
+    else .halt .undefined
   | _, _, .takeTuple items, .cons v .nil => .done (Tys.toHList M items v)
   | _, _, .takeRecord _ _ fields, .cons v .nil => .done (Tys.toHList M fields v)
   | _, _, .variant _ alternatives position, .cons v .nil =>

@@ -71,28 +71,28 @@ mutual
         (t.denote (localSem M fns table) path env).Stops (· = .undefined)
     | _, _, .ret _, _, _, _ => trivial
     | _, _, .op _ o _ _ rest, path, _, quiet => by
-        simp only [Term.canStop, Bool.or_eq_false_iff] at quiet
-        simp only [Term.denote]
+        simp only [Term.canStop, Instr.canStop, Bool.or_eq_false_iff] at quiet
+        simp only [Term.denote_op]
         apply (Process.every_bind _ _ _ _ _).mpr
         exact Process.every_mono _ _ (fun _ _ => Term.stops_undefined callees rest path _ quiet.2)
           (fun _ e => e) (localOp_stops_undefined M table callees o _ quiet.1)
     | _, _, .guard .., _, _, quiet => by cases quiet
     | _, _, .choose _ _ _ _ _ onTrue onFalse _ rest, path, env, quiet => by
-        simp only [Term.canStop, Bool.or_eq_false_iff] at quiet
-        simp only [Term.denote]
+        simp only [Term.canStop, Instr.canStop, Bool.or_eq_false_iff] at quiet
+        simp only [Term.denote_choose]
         apply (Process.every_bind _ _ _ _ _).mpr
         exact Process.every_mono _ _ (fun _ _ => Term.stops_undefined callees rest path _ quiet.2)
           (fun _ e => e) (cond_every _ (Term.stops_undefined callees onTrue path env quiet.1.1)
             (Term.stops_undefined callees onFalse path env quiet.1.2))
     | _, _, .cases _ _ _ _ _ arms _ rest, path, env, quiet => by
-        simp only [Term.canStop, Bool.or_eq_false_iff] at quiet
-        simp only [Term.denote]
+        simp only [Term.canStop, Instr.canStop, Bool.or_eq_false_iff] at quiet
+        simp only [Term.denote_cases]
         apply (Process.every_bind _ _ _ _ _).mpr
         exact Process.every_mono _ _ (fun _ _ => Term.stops_undefined callees rest path _ quiet.2)
           (fun _ e => e) (Arms.stops_undefined callees arms path env _ quiet.1)
     | _, _, .loop _ _ _ _ _ _ body _ rest, path, _, quiet => by
-        simp only [Term.canStop, Bool.or_eq_false_iff] at quiet
-        simp only [Term.denote]
+        simp only [Term.canStop, Instr.canStop, Bool.or_eq_false_iff] at quiet
+        simp only [Term.denote_loop]
         apply (Process.every_bind _ _ _ _ _).mpr
         refine Process.every_mono _ _ (P := fun _ => True)
           (fun _ _ => Term.stops_undefined callees rest path _ quiet.2) (fun _ e => e) ?_
@@ -103,8 +103,8 @@ mutual
         exact Process.every_mono _ _ (fun _ _ => trivial) (fun _ e => e)
           (Term.stops_undefined callees body _ _ quiet.1)
     | _, _, .block _ _ body _ rest, path, env, quiet => by
-        simp only [Term.canStop, Bool.or_eq_false_iff] at quiet
-        simp only [Term.denote]
+        simp only [Term.canStop, Instr.canStop, Bool.or_eq_false_iff] at quiet
+        simp only [Term.denote_block]
         apply (Process.every_bind _ _ _ _ _).mpr
         exact Process.every_mono _ _ (fun _ _ => Term.stops_undefined callees rest path _ quiet.2)
           (fun _ e => e) (Term.stops_undefined callees body _ env quiet.1)
@@ -137,11 +137,11 @@ theorem Defs.fnTable_stops_undefined : ∀ {hs : Headers V} (defs : Defs V hs) (
     (f : Member hs.fns hdr) (ins : HList M.Val hdr.ins), hdr.canStop = false →
     (Defs.fnTable M defs hdr f ins).Stops (· = .undefined)
   | _, .nil, _, f, _, _ => nomatch f
-  | _, .fn _ _ body ok rest, _, .head, _, quiet =>
+  | _, .fn _ _ body ok rest _, _, .head, _, quiet =>
       Term.stops_undefined M (Defs.fnTable M rest)
         (fun hdr' f' ins' quiet' => Defs.fnTable_stops_undefined rest hdr' f' ins' quiet') body
         [] _ (ok.stops.symm.trans quiet)
-  | _, .fn _ _ _ _ rest, _, .tail f, ins, quiet => Defs.fnTable_stops_undefined rest _ f ins quiet
+  | _, .fn _ _ _ _ rest _, _, .tail f, ins, quiet => Defs.fnTable_stops_undefined rest _ f ins quiet
   | _, .protocol _ _ _ _ rest, _, f, ins, quiet => Defs.fnTable_stops_undefined rest _ f ins quiet
 
 end

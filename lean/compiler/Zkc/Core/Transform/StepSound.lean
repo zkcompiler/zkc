@@ -1,29 +1,13 @@
 module
 
 public import Zkc.Core.Transform.Step
-public import Zkc.Core.Facts.LocalLaws
+public import Zkc.Core.Transform.StoredDecisions
 public import Zkc.Core.Evidence.Claim
 
 @[expose] public section
 
-/-!
-What the judgments about a function rest on.
+/-! Semantic judgments for stored function checks and checked replacements. -/
 
-The check of facts is a producer of assurance: a function that it accepts under its header's
-summary satisfies the summary (`checkFacts_holds`, from `Analysis.analyse_holds`) and is assured
-with the bounds that it gives (`TypedFn.check_assured`, the bounds from `checkFacts_sound`).
-Following is another, from a source that is safe by any route: when a second function follows the
-analysis of a first that is safe with no refusal and no place that differs, the second is assured
-with the bounds recorded while it follows, and the two mean the same on the inputs that satisfy
-the requirements (`TypedFn.follows_assured`, from `localFollow_assured`, the theorem of the
-analysis for functions). The second is not analysed by itself, and the refusals of the first's
-own analysis are not read. "The same meaning" of functions is symmetric and transitive
-(`TypedFn.SameAs.symm`, `TypedFn.SameAs.trans`), and that a function is safe is that its body is
-assured, in the sense of `Evidence/Claim.lean`, in the scope of the empty path and its inputs bound
-to valid values that satisfy the requirements, and on each such input returns what satisfies the
-guarantees (`TypedFn.safe_iff_assured`). What a stored function is typed as is its elaboration
-(`typeFn_ok`).
--/
 namespace Zkc.Core
 
 /-! ## The judgments about a function -/
@@ -42,8 +26,8 @@ theorem TypedFn.SameAs.trans {f g h : TypedFn V fns hdr} (first : f.SameAs g)
     (first M table callees ins valid required).trans (second M table callees ins valid required)
 
 /-- What a stored function is typed as is its elaboration. -/
-theorem typeFn_ok {region : Region (LocalRaw V) Unit} {f : TypedFn V fns hdr}
-    (typed : typeFn fns hdr region = .ok f) :
+theorem typeFn_ok {region : Region (LocalRaw V) Unit} {notes : BodyAnalysis.Annotations (LocalRaw V)} {f : TypedFn V fns hdr}
+    (typed : typeFn fns hdr region notes = .ok f) :
     elabFn fns hdr region = .ok ⟨f.inputs, f.body, f.conditions⟩ := by
   unfold typeFn at typed
   split at typed
@@ -52,74 +36,28 @@ theorem typeFn_ok {region : Region (LocalRaw V) Unit} {f : TypedFn V fns hdr}
     cases typed
     exact elaborated
 
-/-- **The check of facts is a producer of assurance.** A function that the check of facts
-accepts under its header's summary satisfies the summary (`checkFacts_holds`, from
-`Analysis.analyse_holds`), and its loops respect the bounds that the check gives on the inputs
-that satisfy the requirements (`checkFacts_sound`). -/
+theorem typeFn_notes {region : Region (LocalRaw V) Unit} {notes : BodyAnalysis.Annotations (LocalRaw V)}
+    {f : TypedFn V fns hdr} (typed : typeFn fns hdr region notes = .ok f) : f.notes = notes := by
+  unfold typeFn at typed
+  split at typed <;> cases typed
+  rfl
+
+/-- Admission establishes safety and the recorded loop bounds. -/
 theorem TypedFn.check_assured (f : TypedFn V fns hdr) {bounds : List (Place × Nat)}
     (checked : f.check = .ok bounds) : f.Assured bounds :=
-  ⟨fun _ _ callees =>
-    checkFacts_holds callees hdr.key hdr.summary f.inputs f.body f.conditions.distinct checked,
-   fun _ _ callees F recorded ins valid required =>
-    (checkFacts_sound callees hdr.key hdr.summary f.inputs f.body f.conditions.distinct checked F
-      recorded ins valid required).1⟩
+  BodyAnalysis.checkStored_assured f checked
 
-open Analysis in
-/-- What it is for a second function to follow a first: it follows the analysis of the first
-with no refusal and no place that differs, and its bounds are those recorded while it
-follows. -/
-theorem TypedFn.follows_ok {source target : TypedFn V fns hdr} {bounds : List (Place × Nat)}
-    (followed : source.follows target = .ok bounds) :
-    (follow (localFactRules V fns) (localRules fns).skel hdr.key none hdr.summary.lift
-        (analyse (localFactRules V fns) (localRules fns).skel hdr.key none hdr.summary.lift
-          source.inputs source.body) target.inputs target.body).accepted = true ∧
-      bounds = (follow (localFactRules V fns) (localRules fns).skel hdr.key none hdr.summary.lift
-        (analyse (localFactRules V fns) (localRules fns).skel hdr.key none hdr.summary.lift
-          source.inputs source.body) target.inputs target.body).state.st.bounds.reverse := by
-  unfold TypedFn.follows at followed
-  dsimp only at followed
-  split at followed
-  · rename_i refused same
-    cases followed
-    exact ⟨by simp only [Exit.accepted, refused, same, List.isEmpty_nil, Bool.and_self], rfl⟩
-  · cases followed
+/-- The bounds returned by admission belong to the function being checked. -/
+theorem TypedFn.check_places (f : TypedFn V fns hdr) {bounds : List (Place × Nat)}
+    (checked : f.check = .ok bounds) :
+    ∀ q ∈ bounds, q.1.definition = hdr.key ∧ q.1.role = none :=
+  BodyAnalysis.checkStored_places f checked
 
-/-- **Following is a producer of assurance and of sameness, from a source that is safe by any
-route.** When a second function follows the analysis of a first that is safe, however that is
-known, both under their header's summary, the second is assured with the bounds recorded while it
-follows, and the two mean the same on the inputs that satisfy the requirements
-(`localFollow_assured`). The refusals of the first's own analysis are not read. -/
+/-- A checked replacement of a safe function preserves its meaning and is assured. -/
 theorem TypedFn.follows_assured {source target : TypedFn V fns hdr}
-    {bounds : List (Place × Nat)} (safe : source.Safe)
-    (followed : source.follows target = .ok bounds) :
-    target.Assured bounds ∧ source.SameAs target := by
-  obtain ⟨accepted, recordedBounds⟩ := TypedFn.follows_ok followed
-  have sound := fun (M : Model V) (table : FnTable M fns) (callees : Callees M table)
-      (F : List (Place × Nat))
-      (recorded : ∀ p b, (p, b) ∈ F → p.definition = hdr.key → p.role = none → (p, b) ∈ bounds)
-      (ins : HList M.Val hdr.ins) (valid : ins.All M.Valid)
-      (required : FnHeader.Required M table hdr ins) =>
-    localFollow_assured callees hdr.key hdr.key hdr.summary source.inputs target.inputs
-      source.body target.body target.conditions.distinct accepted F
-      (fun p b inside here unowned => by
-        have mine := recorded p b inside here unowned
-        rw [recordedBounds] at mine
-        exact List.mem_reverse.mp mine)
-      ins valid required
-      (Process.every_mono _ _ (fun _ _ => trivial) (fun _ stop => stop)
-        (safe M table callees ins (((localSem M fns table).dyns_valid_iff ins).mpr valid)
-          required))
-  exact ⟨⟨fun M table callees ins valid required =>
-      Process.every_mono _ _
-        (fun outs returned => ⟨((localSem M fns table).dyns_valid_iff outs).mpr returned.1,
-          returned.2⟩)
-        (fun _ stop => stop)
-        (sound M table callees [] (fun _ _ none => nomatch none) ins
-          (((localSem M fns table).dyns_valid_iff ins).mp valid) required).2.1,
-    fun M table callees F recorded ins valid required =>
-      (sound M table callees F recorded ins valid required).1⟩,
-    fun M table callees ins valid required =>
-      (sound M table callees [] (fun _ _ none => nomatch none) ins valid required).2.2⟩
+    {bounds : List (Place × Nat)} (safe : source.Safe) (followed : source.follows target = .ok bounds) :
+    target.Assured bounds ∧ source.SameAs target :=
+  BodyAnalysis.compareStored_assured source target safe followed
 
 /-- **A function is safe exactly when its body is assured** in the scope of a function, and returns
 what satisfies its guarantees: for every model and callees, on the empty path and the inputs bound
@@ -137,7 +75,7 @@ theorem TypedFn.safe_iff_assured (f : TypedFn V fns hdr) :
           Claim (localSem M fns table) (fun _ _ => True) f.body
             (fun path env => path = [] ∧ env = Env.empty.extend f.inputs ins)
             (fun outs => ∀ guarantee, guarantee ∈ hdr.summary.ensures →
-              guarantee.Holds Empty.elim (localReading M)
+              guarantee.Holds M
                 ((localSem M fns table).dyns ins ++ (localSem M fns table).dyns outs))
             (fun _ => True) := by
   constructor

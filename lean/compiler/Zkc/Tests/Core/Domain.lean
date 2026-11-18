@@ -1,45 +1,14 @@
-import Zkc.Core.Facts.Theorems
+import Zkc.Core.Facts.Body.Traversal
+import Zkc.Core.Facts.Body.Verdicts
+import Zkc.Core.Facts.Knowledge.Soundness
+import Zkc.Core.Evidence.Summary
+import Zkc.Core.Facts.Contracts.HeaderPredicates
 
-/-!
-The domain of an operation that is kept in order, what an operation kept in order guarantees,
-and a body analysed under a summary, on a dialect written here.
-
-The dialect has two types, a natural and a positive natural, and four operations, each kept in
-order. The decrement, from either type to a natural, has a domain and an effect: on zero it stops
-`undefined`; otherwise it asks the world one question, ignores the reply, and returns its operand
-less one; its written form requires its operand to be at least one. The half of a natural asks
-the world one question and returns the half of its operand, rounded down; its written form
-guarantees that its result is at most its operand. The opaque half computes the same, and its
-written form guarantees nothing. The subtraction of a natural from a natural stops `undefined`
-when the second is larger, and otherwise returns the first less the second; its written form
-requires the second to be at most the first. The rules are lawful for the semantics, with every
-law and for every permitted reply (`domainRules_lawful`): the law `effect` holds because the
-requirements are asked of the operands, and because the half of a natural is at most the natural.
-
-The decrement applied to a positive input: the check of facts accepts, and the soundness of the
-analysis (`Analysis.analyse_sound`) gives that it never stops `undefined`. Applied to a natural
-input: refused at the operation, with the requirement that is not justified and what was known of
-the operand. The control on the semantics: on the input zero the term on naturals stops
-`undefined`, so the refusal keeps out a term that does; on a positive input the term asks its
-question, then returns. Following: the term on positive naturals with other names follows the
-first and is accepted, so the requirement is decided while following too.
-
-Under a summary: the decrement applied to a natural input, under the summary that requires the
-input to be at least one, is accepted, and satisfies the summary (`Analysis.analyse_holds`);
-the input zero, on which it stops `undefined`, is excluded by the summary's requirement. A body
-that returns its input, under a summary that guarantees the result to be at least one, is
-accepted when the summary also requires the input to be at least one, and refused at the
-definition's exit by the rule `guarantee` when it does not. And a guarantee learned at an
-application: the subtraction of the half of the input from the input is accepted, since what the
-half guarantees is learned where it returns, and refused with the opaque half.
--/
+/-! A dialect of effectful operations, checked under contracts and compared after renaming.
+The predicates of its contracts are zero, numeric comparison and Boolean negation. -/
 
 namespace Zkc.Core.DomainTests
-
--- What the check of facts returns is compared whole.
-deriving instance DecidableEq for Except
-
-/-! ## A dialect with operations that have domains, effects and guarantees -/
+open BodyAnalysis
 
 /-- The types: a natural, and a positive natural. -/
 inductive DomainTy where
@@ -60,6 +29,7 @@ inductive DomainRaw where
   | decrement
   | half
   | opaqueHalf
+  | zero | less | negate
   | subtract
 deriving DecidableEq, Repr
 
@@ -117,36 +87,86 @@ def domainValid : domainSem.Dyn → Prop
 /-- How a value reads: as the natural that it is. -/
 def domainReading : Reading domainSem.Dyn where
   nat value := some value.2
-  bool _ := none
+  bool value := some (value.2 != 0)
 
-/-- The relation of written operations: empty, since no operation is shared and no requirement or
-guarantee names an application. -/
-def domainRun : DomainRaw → List domainSem.Dyn → List domainSem.Dyn → Prop := fun _ _ _ => False
+def bit (b : Bool) : domainSem.Dyn := ⟨.natural, b.toNat⟩
 
-/-- The rules: every operation is kept in order; the decrement requires its operand to be at
-least one, the subtraction its second operand to be at most its first, and the half guarantees
-that its result is at most its operand; the opaque half guarantees nothing; a natural is at least
-zero, a positive natural at least one; nothing commutes, no type is without value, and nothing is
-known of a result beyond what its type and its operation's guarantee say. -/
-def domainRules : FactRules domainDialect DomainRaw where
+@[simp] theorem read_bit (b : Bool) : domainReading.bool (bit b) = some b := by cases b <;> rfl
+
+/-- The relation of the operations available in assertions. The four instructions are effects. -/
+inductive domainRun : DomainRaw → List domainSem.Dyn → List domainSem.Dyn → Prop where
+  | zero : domainRun .zero [] [⟨.natural, 0⟩]
+  | less (a b : domainSem.Dyn) : domainRun .less [a,b] [bit (decide (a.2 < b.2))]
+  | negate (a : domainSem.Dyn) : domainRun .negate [a] [bit (a.2 == 0)]
+
+abbrev Runs := ValidRun domainSem domainRun domainValid
+
+def zero : Expr DomainRaw := .apply .zero .nil 0
+def lt (a b : Expr DomainRaw) : Expr DomainRaw := .apply .less (.cons a (.cons b .nil)) 0
+def neg (a : Expr DomainRaw) : Expr DomainRaw := .apply .negate (.cons a .nil) 0
+def positive (i : Nat) := lt zero (.arg i)
+def secondLeFirst := neg (lt (.arg 0) (.arg 1))
+
+def contract : DomainRaw → BodyAnalysis.Contract DomainRaw
+  | .decrement => ⟨[⟨positive 0, none⟩], []⟩
+  | .subtract => ⟨[⟨secondLeFirst, none⟩], []⟩
+  | .half => ⟨[], [⟨secondLeFirst, none⟩]⟩
+  | _ => ⟨[], []⟩
+
+def types : KnowledgeTypes DomainTy where
+  range t := some ⟨match t with | .natural => 0 | .positive => 1, none⟩
+  empty _ := false
+
+def observations : KnowledgeOperations DomainRaw where
+  ranges op _ := if op == .zero then [some (Range.point 0)] else []
+  form
+    | .less => some .less
+    | .negate => some .negation
+    | _ => none
+
+def domainRules : BodyAnalysis.Rules domainDialect DomainRaw where
   written := domainWritten
-  shared := fun _ => false
-  commutes := fun _ => false
-  range
-    | .natural => some ⟨0, none⟩
-    | .positive => some ⟨1, none⟩
-  noValue := fun _ => false
-  ops :=
-    { requires
-        | .decrement => [.atLeast (.arg 0) 1]
-        | .subtract => [.le (.arg 1) (.arg 0)]
-        | _ => []
-      ensures
-        | .half => [.le (.arg 1) (.arg 0)]
-        | _ => []
-      ranges := fun _ _ => []
-      form := fun _ => none }
-  place := fun _ => 0
+  shared _ := false
+  commutes _ := false
+  place := DomainRaw.ctorIdx
+  results _ := 1
+  contract := contract
+  assertable
+    | .zero | .less | .negate => true
+    | _ => false
+  numbered _ := true
+  indexAt _ _ := none
+  indexFromCount ok := nomatch ok
+  indexNext _ := none
+
+private def signature : DomainRaw → List DomainTy → Option (List DomainTy)
+  | .zero, [] => some [.natural]
+  | .less, [_,_] => some [.natural]
+  | .negate, [_] => some [.natural]
+  | _, _ => none
+
+/-- Recover source-operand order from the two predicates used by this dialect. -/
+private def diagnosticOperands : Expr DomainRaw → List Nat
+  | .apply .less (.cons (.apply .zero .nil 0) (.cons (.arg i) .nil)) 0 => [i]
+  | .apply .negate (.cons (.apply .less (.cons (.arg a) (.cons (.arg b) .nil)) 0) .nil) 0 => [b,a]
+  | _ => []
+
+def configFor (summary : BodyAnalysis.Contract DomainRaw) : Config domainDialect DomainRaw where
+  rules := domainRules
+  domain := Knowledge.domain types observations
+  lemmas := []
+  definition := ⟨1⟩
+  role := none
+  assertions := ⟨signature, fun _ => true⟩
+  explain concern index positions _ known :=
+    let clauses := match concern with
+      | .requirement op => (contract op).requires
+      | .guarantee => summary.ensures
+      | _ => []
+    ((clauses[index]?).toList.flatMap diagnosticOperands).map fun i => do
+      known.rangeOf (← (← positions[i]?).map Ident.key)
+
+def cfg := configFor ⟨[],[]⟩
 
 /-- Following decides types and performers by equality, and two operations on operands of the
 same types by their written forms, which with those types name them. -/
@@ -175,109 +195,166 @@ theorem domainChecks_lawful : domainChecks.Lawful := by
   intro ins res res' o o' same
   cases o <;> cases o' <;> first | exact ⟨rfl, HEq.rfl⟩ | exact absurd same (by decide)
 
-/-- **The rules of the dialect are lawful for its semantics**, for every permitted reply: with
-`domainRun`, the validity `domainValid`, the reading `domainReading` and the stop `undefined`. The
-law `effect` holds because an operation is applied only where its requirement holds (the operand
-of the decrement is at least one, the second operand of the subtraction at most the first), and
-because the half of a natural is at most the natural. -/
+theorem validResults {t : DomainTy} {n : Nat} (ok : domainValid ⟨t,n⟩) :
+    ∀ v ∈ [⟨t,n⟩], domainValid v := by simpa using ok
+
+private theorem zero_denotes (args : List domainSem.Dyn) : zero.Denotes Runs args ⟨.natural,0⟩ :=
+  .apply .nil ⟨.zero, by simp, validResults trivial⟩ rfl
+
+private theorem lt_denotes {args : List domainSem.Dyn} {a b x y}
+    (one : a.Denotes Runs args x) (two : b.Denotes Runs args y)
+    (vx : domainValid x) (vy : domainValid y) :
+    (lt a b).Denotes Runs args (bit (decide (x.2 < y.2))) :=
+  .apply (.cons one (.cons two .nil)) ⟨.less x y, by simpa using And.intro vx vy, validResults trivial⟩ rfl
+
+private theorem neg_denotes {args : List domainSem.Dyn} {a x}
+    (one : a.Denotes Runs args x) (vx : domainValid x) :
+    (neg a).Denotes Runs args (bit (x.2 == 0)) :=
+  .apply (.cons one .nil) ⟨.negate x, validResults vx, validResults trivial⟩ rfl
+
+theorem functional {w xs ys zs} (h : domainRun w xs ys) (h' : domainRun w xs zs) : ys = zs := by
+  cases h <;> cases h' <;> rfl
+
+private theorem agrees {e : Expr DomainRaw} {args v} (den : e.Denotes Runs args v) :
+    e.Holds Runs domainReading args ↔ domainReading.bool v = some true := by
+  constructor
+  · rintro ⟨v', other, yes⟩
+    obtain rfl := den.unique (fun _ _ _ _ x y => functional x.1 y.1) other
+    exact yes
+  · exact fun yes => ⟨v, den, yes⟩
+
+private theorem positive_iff {args : List domainSem.Dyn} {i t n}
+    (found : args[i]? = some ⟨t,n⟩) (valid : domainValid ⟨t,n⟩) :
+    (positive i).Holds Runs domainReading args ↔ 0 < n := by
+  unfold positive
+  rw [agrees (lt_denotes (zero_denotes args) (.arg found) trivial valid), read_bit]
+  simp
+
+private theorem le_iff {args : List domainSem.Dyn} {a b : Nat}
+    (left : args[0]? = some ⟨.natural,a⟩) (right : args[1]? = some ⟨.natural,b⟩) :
+    secondLeFirst.Holds Runs domainReading args ↔ b ≤ a := by
+  unfold secondLeFirst
+  rw [agrees (neg_denotes (lt_denotes (.arg left) (.arg right) trivial trivial) trivial), read_bit]
+  by_cases a < b <;> simp_all [bit]
+
 theorem domainRules_lawful (permitted : ∀ op, domainSem.S.Reply op → Prop) :
-    domainRules.Lawful domainSem permitted domainReading domainRun domainValid
-      (· = .undefined) where
-  binding :=
-    { computes := fun o raw written => by
-        cases (domainRules.values_written_kept (o := o) rfl).symm.trans written
-      functional := fun _ _ _ _ ran => ran.elim
-      commutative := fun _ _ _ _ _ ran => ran.elim }
-  ops :=
-    { functional := fun _ _ _ _ ran => ran.1.elim
-      form := fun _ _ _ _ _ ran => ran.1.elim
-      ranges := fun _ _ _ _ ran => ran.1.elim
-      ensures := fun _ _ _ ran => ran.1.elim }
-  keeps := fun _ _ _ ran => ran.elim
-  defined := fun _ shared => by cases shared
-  named := by
-    intro ins res o values _ requirement listed operand named written positions applied
-    subst applied
-    cases o <;>
-      simp only [domainRules, domainWritten, List.mem_singleton, List.not_mem_nil] at listed <;>
-      subst listed <;>
-      simp [Requirement.operands] at named
+    domainRules.Lawful domainSem permitted domainReading domainRun domainValid (· = .undefined) where
+  computes := fun _ h => nomatch h
+  observedOperand := by intro _ _ _ _ h; cases h
+  functional := fun _ _ _ _ => functional
+  commutative := fun _ h => nomatch h
+  keeps := by intro w xs ys run _; cases run <;> exact ⟨validResults trivial, rfl⟩
+  defined := fun _ h => nomatch h
+  assertable := by intro _ _ o; cases o <;> exact nofun
   effect := by
-    intro ins res o _ key path values _ required
+    intro ins outs o _ key path args valid req
     cases o with
-    | decrement τ =>
-        obtain ⟨n, rfl⟩ := HList.one values
-        obtain ⟨vs, denoted, relation⟩ := required (.atLeast (.arg 0) 1)
-          (by simp only [domainRules, domainWritten, List.mem_singleton])
-        obtain ⟨v, rfl, at0⟩ := DenotesAll.one denoted
-        have read : v = ⟨τ, n⟩ :=
-          (Option.some.inj (show (some ⟨τ, n⟩ : Option domainSem.Dyn) = some v from at0)).symm
-        subst read
-        obtain ⟨x, read, positive⟩ := relation
-        cases read
-        rw [decrement_nonzero τ key path n (Nat.pos_iff_ne_zero.mp positive)]
-        intro _ _
-        refine ⟨fun v returned => ?_, fun _ listed => nomatch listed⟩
-        cases returned with
-        | head => trivial
-        | tail _ rest => cases rest
+    | decrement t =>
+      obtain ⟨n,rfl⟩ := HList.one args
+      have pos := (positive_iff (args := [⟨t,n⟩]) (i := 0) rfl (valid _ List.mem_cons_self)).mp
+        (req _ List.mem_cons_self)
+      rw [decrement_nonzero _ _ _ _ (Nat.ne_of_gt pos)]
+      exact fun _ _ => ⟨validResults trivial, fun _ m => nomatch m⟩
     | half =>
-        obtain ⟨n, rfl⟩ := HList.one values
-        intro _ _
-        refine ⟨fun v returned => ?_, fun guarantee listed => ?_⟩
-        · cases returned with
-          | head => trivial
-          | tail _ rest => cases rest
-        · simp only [domainRules, domainWritten, List.mem_singleton] at listed
-          subst listed
-          exact ⟨[⟨.natural, n / 2⟩, ⟨.natural, n⟩], ⟨rfl, rfl, trivial⟩, n / 2, n, rfl, rfl,
-            Nat.div_le_self n 2⟩
+      obtain ⟨n,rfl⟩ := HList.one args
+      intro _ _
+      refine ⟨validResults trivial, fun g m => ?_⟩
+      obtain rfl := List.mem_singleton.mp m
+      exact (le_iff rfl rfl).mpr (Nat.div_le_self n 2)
     | opaqueHalf =>
-        obtain ⟨n, rfl⟩ := HList.one values
-        intro _ _
-        refine ⟨fun v returned => ?_, fun _ listed => nomatch listed⟩
-        cases returned with
-        | head => trivial
-        | tail _ rest => cases rest
+      obtain ⟨n,rfl⟩ := HList.one args
+      exact fun _ _ => ⟨validResults trivial, fun _ m => nomatch m⟩
     | subtract =>
-        cases values with
-        | cons first rest =>
-            cases rest with
-            | cons second rest =>
-                cases rest
-                obtain ⟨vs, denoted, relation⟩ := required (.le (.arg 1) (.arg 0))
-                  (by simp only [domainRules, domainWritten, List.mem_singleton])
-                obtain ⟨v, v', rfl, at1, at0⟩ := DenotesAll.two denoted
-                cases at1
-                cases at0
-                obtain ⟨x, y, readSecond, readFirst, within⟩ := relation
-                cases readSecond
-                cases readFirst
-                rw [subtract_within key path first second within]
-                refine ⟨fun v returned => ?_, fun _ listed => nomatch listed⟩
-                cases returned with
-                | head => trivial
-                | tail _ rest => cases rest
-  range := by
-    intro τ r v found valid
-    cases τ with
-    | natural =>
-        simp only [domainRules, Option.some.injEq] at found
-        subst found
-        exact ⟨v, rfl, Nat.zero_le _, fun _ e => nomatch e⟩
-    | positive =>
-        simp only [domainRules, Option.some.injEq] at found
-        subst found
-        exact ⟨v, rfl, valid, fun _ e => nomatch e⟩
-  noValue := fun _ _ _ => rfl
+      obtain ⟨a,b,rfl⟩ := HList.two args
+      have within := (le_iff (args := [⟨.natural,a⟩, ⟨.natural,b⟩]) rfl rfl).mp (req _ List.mem_cons_self)
+      rw [subtract_within _ _ _ _ within]
+      exact ⟨validResults trivial, fun _ m => nomatch m⟩
   condition := fun ok => nomatch ok
   count := fun ok => nomatch ok
   pick := fun ok => nomatch ok
-  index := fun _ _ => ⟨trivial, rfl⟩
+  index := fun _ _ => ⟨trivial, fun _ => rfl⟩
+  indexAt := fun _ _ _ h => nomatch h
+  indexFromCount := fun ok => nomatch ok
+  indexNext := fun _ _ h => nomatch h
   collect := fun _ _ _ _ _ => trivial
   begin := fun _ _ _ => trivial
   settle := fun _ _ _ => trivial
   stop := fun _ _ _ => nofun
+
+private theorem observationLaws : observations.Lawful domainReading Runs where
+  functional := fun _ _ _ _ x y => functional x.1 y.1
+  form := by
+    intro op xs ys f found run
+    cases run.1 <;> cases found
+    · exact ⟨_, rfl, _, _, _, _, rfl, rfl, rfl, read_bit _⟩
+    · exact ⟨_, rfl, _, _, rfl, rfl, by rw [read_bit]; change some _ = some (!(!( _ == 0))); simp⟩
+  preservesNumber := by intro _ _ _ h; cases h
+  ranges := by
+    intro op xs ys known run _ i r found
+    cases run.1 <;> cases i <;> simp [observations] at found
+    subst r
+    exact ⟨_, 0, rfl, rfl, Range.has_point.mpr rfl⟩
+
+private theorem typeLaws : types.Lawful domainReading (TypedValue domainSem domainValid) where
+  range := by
+    rintro _ ⟨t,n⟩ r ⟨valid,rfl⟩ found
+    cases t <;> cases found
+    · exact ⟨n, rfl, Nat.zero_le _, nofun⟩
+    · exact ⟨n, rfl, valid, nofun⟩
+  inhabited := fun _ => rfl
+
+private def setting (permitted : ∀ op, domainSem.S.Reply op → Prop) : Setting domainDialect DomainRaw where
+  cfg := cfg
+  notes := []
+  sem := domainSem
+  permitted := permitted
+  R := domainReading
+  Run := domainRun
+  Valid := domainValid
+  undefined := (· = .undefined)
+  domain := Knowledge.lawful observationLaws typeLaws
+  F := []
+
+private theorem settingLawful (permitted) : (setting permitted).Lawful where
+  rules := domainRules_lawful permitted
+  lemmas := fun _ m => nomatch m
+  requires := by
+    intro ins outs op e m args valid
+    cases op with
+    | decrement t =>
+      obtain rfl := List.mem_singleton.mp m
+      obtain ⟨n,rfl⟩ := HList.one args
+      exact ⟨_, lt_denotes (zero_denotes _) (.arg (position := 0) rfl) trivial (valid _ List.mem_cons_self)⟩
+    | subtract =>
+      obtain rfl := List.mem_singleton.mp m
+      obtain ⟨a,b,rfl⟩ := HList.two args
+      exact ⟨_, neg_denotes (lt_denotes (.arg (position := 0) rfl) (.arg (position := 1) rfl) trivial trivial) trivial⟩
+    | half | opaqueHalf => cases m
+
+private theorem readerLawful (permitted) : cfg.assertions.Lawful (setting permitted) where
+  admissible := by
+    intro op ins outs h
+    change signature op ins = some outs at h
+    unfold signature at h
+    split at h <;> cases h <;> rfl
+  total := by
+    intro op ins outs h args typed
+    change signature op ins = some outs at h
+    unfold signature at h
+    split at h <;> cases h
+    · cases typed
+      exact ⟨_, ⟨.zero, by simp, validResults trivial⟩, .cons ⟨trivial,rfl⟩ .nil⟩
+    · cases typed with
+      | cons a tail =>
+        cases tail with
+        | cons b tail =>
+          cases tail
+          exact ⟨_, ⟨.less _ _, by simpa using And.intro a.1 b.1, validResults trivial⟩, .cons ⟨trivial,rfl⟩ .nil⟩
+    · cases typed with
+      | cons a tail =>
+        cases tail
+        exact ⟨_, ⟨.negate _, validResults a.1, validResults trivial⟩, .cons ⟨trivial,rfl⟩ .nil⟩
+  boolean := fun _ _ _ => ⟨_,rfl⟩
 
 /-! ## The decrement applied -/
 
@@ -287,39 +364,16 @@ def decrementOf (τ : DomainTy) :
     Term domainDialect (Ctx.empty.extend (types := [τ]) (.cons 0 .nil)) [.natural] :=
   .op ⟨1⟩ (DomainOp.decrement τ) (.cons ⟨0, rfl⟩ .nil) (.cons 1 .nil) (.ret (.cons ⟨1, rfl⟩ .nil))
 
-/-- On a positive input the check of facts accepts: the type says that the operand is at least
-one. There is no loop, so no bound. -/
-example : checkFacts domainRules domainChecks ⟨1⟩ none Summary.empty (.cons 0 .nil)
-    (decrementOf .positive) = .ok [] := by
-  decide +kernel
+def check {ins outs : List DomainTy} (summary : BodyAnalysis.Contract DomainRaw) (inputs : Names ins)
+    (body : Term domainDialect (Ctx.empty.extend inputs) outs) :=
+  BodyAnalysis.checkFacts (configFor summary) [] summary inputs body
 
-/-- So, by the soundness of the analysis, on every valid input, which is at least one, and every
-permitted reply, the decrement applied to a positive input never stops `undefined` and returns a
-valid value. -/
-theorem decrementPositive_safe (permitted : ∀ op, domainSem.S.Reply op → Prop) (n : Nat)
-    (positive : 1 ≤ n) :
-    ((decrementOf .positive).denote domainSem []
-        (Env.empty.extend (.cons 0 .nil) (.cons n .nil))).Every
-      permitted (fun returned => ∀ v, v ∈ domainSem.dyns returned → domainValid v)
-      (fun stop => ¬ stop = .undefined) :=
-  Process.every_mono _ _ (fun _ returned => returned.1) (fun _ stop => stop)
-    (Analysis.analyse_sound domainRules domainChecks domainSem permitted domainReading domainRun
-      domainValid (· = .undefined) (domainRules_lawful permitted) domainChecks_lawful ⟨1⟩ none
-      Summary.empty (.cons 0 .nil) (decrementOf .positive) (by unfold Term.Distinct; decide +kernel)
-      (by decide +kernel) [] (fun _ _ inside => nomatch inside) (.cons n .nil)
-      (fun _ inputs => by
-        cases inputs with
-        | head => exact positive
-        | tail _ rest => cases rest)
-      (fun _ listed => nomatch listed)).2.1
+abbrev emptyContract : BodyAnalysis.Contract DomainRaw := ⟨[], []⟩
 
-/-- On a natural input the check of facts refuses the decrement, at its place, with the
-requirement that is not justified and what was known of its operand: at least zero. -/
-example : checkFacts domainRules domainChecks ⟨1⟩ none Summary.empty (.cons 0 .nil)
-    (decrementOf .natural) =
-    .error [⟨.domain, ⟨⟨1⟩, [], some ⟨1⟩, none⟩,
-      .unjustified .decrement (.atLeast (.arg 0) 1) [some ⟨0, none⟩]⟩] := by
-  decide +kernel
+example : check emptyContract (.cons 0 .nil) (decrementOf .positive) = .ok [] := rfl
+example : check emptyContract (.cons 0 .nil) (decrementOf .natural) =
+    .error (.refused [⟨⟨⟨1⟩, [], some ⟨1⟩, none⟩, .requirement .decrement, 0,
+      some (positive 0), .unknown, [some ⟨0, none⟩]⟩]) := rfl
 
 /-! ## The control on the semantics -/
 
@@ -344,39 +398,54 @@ def decrementOtherNames :
   .op ⟨1⟩ (DomainOp.decrement .positive) (.cons ⟨5, rfl⟩ .nil) (.cons 6 .nil)
     (.ret (.cons ⟨6, rfl⟩ .nil))
 
-/-- It follows the analysis of the first: the decrement is the skeleton's entry, its requirement
-is decided where it is applied, and nothing is refused. The whole verdict accepts it. -/
-example : (Analysis.follow domainRules domainChecks ⟨1⟩ none Summary.empty
-    (Analysis.analyse domainRules domainChecks ⟨1⟩ none Summary.empty (.cons 0 .nil)
-      (decrementOf .positive))
-    (.cons 5 .nil) decrementOtherNames).accepted = true := by
-  decide +kernel
+example : followChecked cfg domainChecks ⟨1⟩ [] [] emptyContract (.cons 0 .nil) (.cons 5 .nil)
+    (decrementOf .positive) decrementOtherNames = .ok [] := rfl
 
-/-! ## A body under a summary -/
+def pre : BodyAnalysis.Contract DomainRaw := ⟨[⟨positive 0, none⟩], []⟩
+example : check pre (.cons 0 .nil) (decrementOf .natural) = .ok [] := rfl
 
-/-- The summary that requires the input to be at least one, and guarantees nothing. -/
+/-- Project the public checker's soundness back to the original term and its valid results. -/
+private theorem decrementChecked (permitted) (t : DomainTy) (n : Nat)
+    (summary : BodyAnalysis.Contract DomainRaw)
+    (ok : BodyAnalysis.checkFacts cfg [] summary (.cons 0 .nil) (decrementOf t) = .ok [])
+    (valid : domainValid ⟨t,n⟩)
+    (requires : ∀ e ∈ summary.requires, e.Holds Runs domainReading [⟨t,n⟩]) :
+    ((decrementOf t).denote domainSem [] (Env.empty.extend (.cons 0 .nil) (.cons n .nil))).Every
+      permitted (fun ys => ∀ v ∈ domainSem.dyns ys, domainValid v) (· ≠ .undefined) := by
+  let σ := setting permitted
+  have safe := (checkFacts_safe σ (settingLawful _) (readerLawful _) summary (.cons 0 .nil)
+    (decrementOf t) [] ok (by cases t <;> decide +kernel) (fun _ _ m => nomatch m) []
+    (.cons n .nil) (validResults valid) requires (noGivenFacts σ rfl _ _ _)).2
+  exact Process.every_mono _ _ (fun _ ys => ys.1) (fun _ h => h) safe
+
+theorem decrementPositive_safe (permitted : ∀ op, domainSem.S.Reply op → Prop) (n : Nat)
+    (positive : 1 ≤ n) :
+    ((decrementOf .positive).denote domainSem []
+        (Env.empty.extend (.cons 0 .nil) (.cons n .nil))).Every
+      permitted (fun returned => ∀ v, v ∈ domainSem.dyns returned → domainValid v)
+      (fun stop => ¬ stop = .undefined) :=
+  decrementChecked permitted .positive n emptyContract rfl positive (fun _ m => nomatch m)
+
 def inputAtLeastOne : Summary DomainRaw := ⟨[.atLeast (.arg 0) 1], []⟩
 
-/-- Under the summary that requires its input to be at least one, the decrement applied to a
-natural input is accepted: the requirement is known at the start, so the requirement of the
-decrement is known where it is applied. Under the summary with no requirement it is refused, as
-above. -/
-example : checkFacts domainRules domainChecks ⟨1⟩ none inputAtLeastOne (.cons 0 .nil)
-    (decrementOf .natural) = .ok [] := by
-  decide +kernel
-
-/-- So, by the corollary of the soundness of the analysis, the decrement applied to a natural
-input satisfies the summary, as a function of its input: on every valid input that is at least
-one and every permitted reply, it never stops `undefined` and returns a valid value. -/
 theorem decrementNatural_holds (permitted : ∀ op, domainSem.S.Reply op → Prop) :
-    Summary.Holds domainSem permitted domainReading (ValidRun domainSem domainRun domainValid)
-      domainValid (· = .undefined) inputAtLeastOne
+    Summary.Holds domainSem permitted domainReading Runs domainValid (· = .undefined) inputAtLeastOne
       (fun values => (decrementOf .natural).denote domainSem [] (Env.empty.extend (.cons 0 .nil)
-        values)) :=
-  Analysis.analyse_holds domainRules domainChecks domainSem permitted domainReading domainRun
-    domainValid (· = .undefined) (domainRules_lawful permitted) domainChecks_lawful ⟨1⟩ none
-    inputAtLeastOne (.cons 0 .nil) (decrementOf .natural) (by unfold Term.Distinct; decide +kernel)
-    (by decide +kernel)
+        values)) := by
+  intro args _ req
+  obtain ⟨n,rfl⟩ := HList.one args
+  obtain ⟨vs, den, relation⟩ := req (.atLeast (.arg 0) 1) List.mem_cons_self
+  obtain ⟨v, eqs, first⟩ := DenotesAll.one den
+  subst vs
+  have eqv : some (⟨.natural,n⟩ : domainSem.Dyn) = some v := first
+  obtain rfl := Option.some.inj eqv
+  obtain ⟨_, read, positive⟩ := relation
+  cases read
+  have run := decrementChecked permitted .natural n pre rfl trivial (by
+    intro e m
+    obtain rfl := List.mem_singleton.mp m
+    exact (positive_iff (i := 0) (t := .natural) (n := n) rfl trivial).mpr positive)
+  exact Process.every_mono _ _ (fun _ valid => ⟨valid, fun _ m => nomatch m⟩) (fun _ h => h) run
 
 /-- The control: the input zero, on which the decrement applied to a natural is the stop
 `undefined` (above), is the one input that the summary's requirement excludes. -/
@@ -394,28 +463,11 @@ def returnsInput :
     Term domainDialect (Ctx.empty.extend (types := [.natural]) (.cons 0 .nil)) [.natural] :=
   .ret (.cons ⟨0, rfl⟩ .nil)
 
-/-- The summary that requires nothing and guarantees that the result is at least one. -/
-def resultAtLeastOne : Summary DomainRaw := ⟨[], [.atLeast (.arg 1) 1]⟩
-
-/-- The summary that requires the input to be at least one and guarantees that the result is. -/
-def bothAtLeastOne : Summary DomainRaw := ⟨[.atLeast (.arg 0) 1], [.atLeast (.arg 1) 1]⟩
-
-/-- A guarantee decided where the body returns: when the summary requires the input to be at least
-one, the result, which is the input, is known to be at least one, and the body is accepted. -/
-example : checkFacts domainRules domainChecks ⟨1⟩ none bothAtLeastOne (.cons 0 .nil)
-    returnsInput = .ok [] := by
-  decide +kernel
-
-/-- When the summary requires nothing, the guarantee is not known where the body returns: refused
-at the definition's exit (the place with no instruction) by the rule `guarantee`, with the
-guarantee and what was known of the result: at least zero. -/
-example : checkFacts domainRules domainChecks ⟨1⟩ none resultAtLeastOne (.cons 0 .nil)
-    returnsInput =
-    .error [⟨.guarantee, ⟨⟨1⟩, [], none, none⟩,
-      .unestablished (.atLeast (.arg 1) 1) [some ⟨0, none⟩]⟩] := by
-  decide +kernel
-
-/-! ## A guarantee learned at an application -/
+def post : BodyAnalysis.Contract DomainRaw := ⟨[], [⟨positive 1, none⟩]⟩
+example : check ⟨pre.preconditions, post.postconditions⟩ (.cons 0 .nil) returnsInput = .ok [] := rfl
+example : check post (.cons 0 .nil) returnsInput =
+    .error (.refused [⟨⟨⟨1⟩, [], none, none⟩, .guarantee, 0, some (positive 1),
+      .unknown, [some ⟨0, none⟩]⟩]) := rfl
 
 /-- A half, by the operation given, of the natural input `0`, with the key 1, named `1`; then the
 subtraction of it from the input, with the key 2, named `2`, which is returned. -/
@@ -425,19 +477,9 @@ def subtractHalf (halve : DomainOp [.natural] [.natural]) :
     (.op ⟨2⟩ DomainOp.subtract (.cons ⟨0, rfl⟩ (.cons ⟨1, rfl⟩ .nil)) (.cons 2 .nil)
       (.ret (.cons ⟨2, rfl⟩ .nil)))
 
-/-- After the half, what it guarantees, that its result is at most its operand, is learned, and the
-requirement of the subtraction follows from it: accepted. -/
-example : checkFacts domainRules domainChecks ⟨1⟩ none Summary.empty (.cons 0 .nil)
-    (subtractHalf .half) = .ok [] := by
-  decide +kernel
-
-/-- After the opaque half, which computes the same and guarantees nothing, the requirement of the
-subtraction is not known: refused at the subtraction, with what was known of its two operands, in
-the order in which the requirement names them: each at least zero. -/
-example : checkFacts domainRules domainChecks ⟨1⟩ none Summary.empty (.cons 0 .nil)
-    (subtractHalf .opaqueHalf) =
-    .error [⟨.domain, ⟨⟨1⟩, [], some ⟨2⟩, none⟩,
-      .unjustified .subtract (.le (.arg 1) (.arg 0)) [some ⟨0, none⟩, some ⟨0, none⟩]⟩] := by
-  decide +kernel
+example : check emptyContract (.cons 0 .nil) (subtractHalf .half) = .ok [] := rfl
+example : check emptyContract (.cons 0 .nil) (subtractHalf .opaqueHalf) =
+    .error (.refused [⟨⟨⟨1⟩, [], some ⟨2⟩, none⟩, .requirement .subtract, 0,
+      some secondLeFirst, .unknown, [some ⟨0, none⟩, some ⟨0, none⟩]⟩]) := rfl
 
 end Zkc.Core.DomainTests

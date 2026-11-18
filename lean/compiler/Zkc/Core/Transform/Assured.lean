@@ -39,9 +39,10 @@ structure AssuredFn (V : Vocabulary) (fns : List (FnHeader V)) (hdr : FnHeader V
 
 /-- The admission of a stored function by the source language's checks: it elaborates and the
 check of facts accepts it. The first way to have an assured function. -/
-def admitFn (fns : List (FnHeader V)) (hdr : FnHeader V) (region : Region (LocalRaw V) Unit) :
+def admitFn (fns : List (FnHeader V)) (hdr : FnHeader V) (region : Region (LocalRaw V) Unit)
+    (notes : BodyAnalysis.Annotations (LocalRaw V) := []) :
     Except (List (ProgramRefusal V)) (AssuredFn V fns hdr) :=
-  match typeFn fns hdr region with
+  match typeFn fns hdr region notes with
   | .error refusal => .error [refusal]
   | .ok f =>
       match checked : f.check with
@@ -51,8 +52,8 @@ def admitFn (fns : List (FnHeader V)) (hdr : FnHeader V) (region : Region (Local
 /-- A step from an assured function to a stored target: the target elaborates and follows the
 analysis of the source. The second way to have an assured function. -/
 def AssuredFn.step {fns : List (FnHeader V)} {hdr : FnHeader V} (source : AssuredFn V fns hdr)
-    (target : Region (LocalRaw V) Unit) : Except (StepRefusal V) (AssuredFn V fns hdr) :=
-  match typeFn fns hdr target with
+    (target : Region (LocalRaw V) Unit) (notes : BodyAnalysis.Annotations (LocalRaw V) := []) : Except (StepRefusal V) (AssuredFn V fns hdr) :=
+  match typeFn fns hdr target notes with
   | .error refusal => .error (.target [refusal] [])
   | .ok second =>
       match followed : source.fn.follows second with
@@ -68,9 +69,9 @@ variable {fns : List (FnHeader V)} {hdr : FnHeader V}
 
 /-- What admission gives: the stored function typed, whose facts the check accepts with the
 bounds given. -/
-theorem admitFn_ok {region : Region (LocalRaw V) Unit} {admitted : AssuredFn V fns hdr}
-    (accepted : admitFn fns hdr region = .ok admitted) :
-    typeFn fns hdr region = .ok admitted.fn ∧ admitted.fn.check = .ok admitted.bounds := by
+theorem admitFn_ok {region : Region (LocalRaw V) Unit} {notes : BodyAnalysis.Annotations (LocalRaw V)} {admitted : AssuredFn V fns hdr}
+    (accepted : admitFn fns hdr region notes = .ok admitted) :
+    typeFn fns hdr region notes = .ok admitted.fn ∧ admitted.fn.check = .ok admitted.bounds := by
   unfold admitFn at accepted
   split at accepted
   · cases accepted
@@ -83,9 +84,9 @@ theorem admitFn_ok {region : Region (LocalRaw V) Unit} {admitted : AssuredFn V f
 
 /-- What a step gives: the target typed, which follows the analysis of the source with the
 bounds given. -/
-theorem AssuredFn.step_ok {source next : AssuredFn V fns hdr} {target : Region (LocalRaw V) Unit}
-    (accepted : source.step target = .ok next) :
-    typeFn fns hdr target = .ok next.fn ∧ source.fn.follows next.fn = .ok next.bounds := by
+theorem AssuredFn.step_ok {source next : AssuredFn V fns hdr} {target : Region (LocalRaw V) Unit} {notes : BodyAnalysis.Annotations (LocalRaw V)}
+    (accepted : source.step target notes = .ok next) :
+    typeFn fns hdr target notes = .ok next.fn ∧ source.fn.follows next.fn = .ok next.bounds := by
   unfold AssuredFn.step at accepted
   split at accepted
   · cases accepted
@@ -99,32 +100,32 @@ theorem AssuredFn.step_ok {source next : AssuredFn V fns hdr} {target : Region (
 
 /-- **The target of a step means the same as its source.** -/
 theorem AssuredFn.step_same {source next : AssuredFn V fns hdr}
-    {target : Region (LocalRaw V) Unit} (accepted : source.step target = .ok next) :
+    {target : Region (LocalRaw V) Unit} {notes : BodyAnalysis.Annotations (LocalRaw V)} (accepted : source.step target notes = .ok next) :
     source.fn.SameAs next.fn :=
   (TypedFn.follows_assured source.assured.safe (AssuredFn.step_ok accepted).2).2
 
 /-- **Two steps compose**, with no condition on the middle function: the source of the first
 and the target of the second mean the same. The middle function is never admitted again. -/
 theorem AssuredFn.step_then {first second third : AssuredFn V fns hdr}
-    {middle last : Region (LocalRaw V) Unit} (accepted : first.step middle = .ok second)
-    (accepted' : second.step last = .ok third) : first.fn.SameAs third.fn :=
+    {middle last : Region (LocalRaw V) Unit} {notes notes' : BodyAnalysis.Annotations (LocalRaw V)} (accepted : first.step middle notes = .ok second)
+    (accepted' : second.step last notes' = .ok third) : first.fn.SameAs third.fn :=
   (AssuredFn.step_same accepted).trans (AssuredFn.step_same accepted')
 
 /-- **Two steps from one function give functions with the same meaning.** -/
 theorem AssuredFn.step_both {source one other : AssuredFn V fns hdr}
-    {left right : Region (LocalRaw V) Unit} (accepted : source.step left = .ok one)
-    (accepted' : source.step right = .ok other) : one.fn.SameAs other.fn :=
+    {left right : Region (LocalRaw V) Unit} {notes notes' : BodyAnalysis.Annotations (LocalRaw V)} (accepted : source.step left notes = .ok one)
+    (accepted' : source.step right notes' = .ok other) : one.fn.SameAs other.fn :=
   (AssuredFn.step_same accepted).symm.trans (AssuredFn.step_same accepted')
 
 /-- The stored form of what admission returns is what it was given. -/
-theorem admitFn_erases {region : Region (LocalRaw V) Unit} {admitted : AssuredFn V fns hdr}
-    (accepted : admitFn fns hdr region = .ok admitted) :
+theorem admitFn_erases {region : Region (LocalRaw V) Unit} {notes : BodyAnalysis.Annotations (LocalRaw V)} {admitted : AssuredFn V fns hdr}
+    (accepted : admitFn fns hdr region notes = .ok admitted) :
     eraseFn admitted.fn.inputs admitted.fn.body = region :=
   eraseFn_elab region (typeFn_ok (admitFn_ok accepted).1)
 
 /-- The stored form of what a step returns is the target that it was given. -/
 theorem AssuredFn.step_erases {source next : AssuredFn V fns hdr}
-    {target : Region (LocalRaw V) Unit} (accepted : source.step target = .ok next) :
+    {target : Region (LocalRaw V) Unit} {notes : BodyAnalysis.Annotations (LocalRaw V)} (accepted : source.step target notes = .ok next) :
     eraseFn next.fn.inputs next.fn.body = target :=
   eraseFn_elab target (typeFn_ok (AssuredFn.step_ok accepted).1)
 

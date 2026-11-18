@@ -1,9 +1,10 @@
 # Compiler
 
 The compiler package `zkc_compiler` has no external Lake dependencies. Its default targets build
-the Core, the standard vocabulary, their tests and the audit. The retained source frontend and
-the formal package that depends on the compiler await migration. See the
-[status](../../docs/status.md) for the revision that provides the earlier CLI and formal examples.
+the Core, standard vocabulary, their tests and the audit. To check source resolution and root
+signature instantiation, run `lake build Zkc.Frontend.Driver.SourcePhases` here. The root
+command `just test-interactive` also checks selected source entries through emission, admission
+and the formal certificates. See [status](../../docs/status.md) for the earlier full CLI.
 
 Libraries:
 

@@ -1,7 +1,7 @@
 module
 
 public import Zkc.Frontend.Typed.Summary
-public import Zkc.Frontend.Semantics.VocabularyTable
+public import Zkc.Frontend.Semantics.StandardTypes
 
 @[expose] public section
 
@@ -11,7 +11,7 @@ set_option autoImplicit false
 # The rows that the frontend applies
 
 A row is asked for by its catalogue name and its static arguments; its kind and its type at them
-are read from the vocabulary of the core (`Zkc.Core.Vocabulary.table`), which holds the rows of
+are read from the vocabulary of the core (`Zkc.Vocabulary.standard`), which holds the rows of
 §7.4 that are not operations the core owns, the rows of the units of a field, the function
 members of the sorts and the rows of the core library's modules. A row on a type of the
 vocabulary takes that type as its static argument: `field.add` on `koala-bear` is the row
@@ -39,23 +39,190 @@ structure RowRequest where
 
 def RowRequest.key (request : RowRequest) : RowKey := { name := request.name, statics := request.statics }
 
-/-- A static argument of a row as the vocabulary reads it. -/
-def RowStatic.toVocabulary : RowStatic → Option Zkc.Core.Vocabulary.Value
-  | .type closed => (vocabularyOfClosed closed).map .type
-  | .nat value => some (.natural value)
+namespace StandardRow
+open Zkc.Vocabulary (Among Atom Element FieldRow GroupRow SeqRow)
+open StandardNames
 
-/-- The row of the vocabulary that a request names, with its kind and its type. -/
-def rowOf? (request : RowRequest) : Option Row := do
-  let arguments ← request.statics.toList.mapM RowStatic.toVocabulary
-  let signature ← Zkc.Core.Vocabulary.table.signature? request.name arguments
-  let kind : RowKind := match signature.kind with
-    | .pure => .pure
-    | .restricted none => .restricted none
-    | .restricted (some domain) => .restricted (some { name := domain, statics := request.statics })
-    | .sampling => .sampling
-  return { key := request.key, kind
-           inputs := (signature.inputs.map closedOfVocabulary).toArray
-           outputs := (signature.outputs.map closedOfVocabulary).toArray }
+def fieldOp : String → Option FieldRow
+  | "field.add" => some .add
+  | "field.sub" => some .sub
+  | "field.mul" => some .mul
+  | "field.neg" => some .neg
+  | "field.inverse" => some .inverse
+  | "field.pow" => some .pow
+  | "field.equal" => some .equal
+  | "field.is_nonzero" => some .isNonzero
+  | "field.nonzero" => some .nonzero
+  | "field.from_nonzero" => some .fromNonzero
+  | "field.from_nat" => some .fromNat
+  | "field.to_nat" => some .toNat
+  | "field.components" => some .components
+  | "field.from_components" => some .fromComponents
+  | "field.embed" => some .embed
+  | "field.coefficients" => some .coefficients
+  | "field.from_coefficients" => some .fromCoefficients
+  | "field.root" => some .root
+  | "ring.mul" => some .mul
+  | "ring.pow" => some .pow
+  | _ => none
+
+def groupOp : String → Option GroupRow
+  | "group.zero" => some .zero
+  | "group.add" => some .add
+  | "group.sub" => some .sub
+  | "group.neg" => some .neg
+  | "group.scale" => some .scale
+  | "group.equal" => some .equal
+  | "group.generator" => some .generator
+  | _ => none
+
+def seqOp : String → Option SeqRow
+  | "seq.add" => some .add
+  | "seq.sub" => some .sub
+  | "seq.scale" => some .scale
+  | "seq.sum" => some .sum
+  | "seq.product" => some .product
+  | "seq.inner" => some .inner
+  | "seq.equal" => some .equal
+  | _ => none
+
+def atomOf? (type : ClosedType) : Option Atom :=
+  (fieldOf? type).map .field <|> (groupOf? type).map .group
+
+partial def elementOf? : ClosedType → Option Element
+  | .seq item (some size) => return .sized (← elementOf? item) size
+  | t => (atomOf? t).map .atom
+
+/-- The source signature of scale and inner names the element's Scalar member.
+A sized collection has the group operations but declares no such source member. -/
+def sequenceKey? (name : String) (t : ClosedType) (size : Option Nat) : Option Zkc.Vocabulary.RowKey := do
+  let op ← seqOp name
+  let element ← elementOf? t
+  match op, element with
+  | .scale, .sized .. | .inner, .sized .. => none
+  | _, _ => return .seq op element size
+
+/-- Resolve a source row and its static arguments to the corresponding standard key.
+The core signature decides whether the operation exists at those arguments. -/
+def resolve (request : RowRequest) : Option Zkc.Vocabulary.RowKey := do
+  match request.name, request.statics.toList with
+  | "pairing.pair", [] => return .pair
+  | "hash.sha256", [] => return .hash .sha256
+  | "hash.keccak256", [] => return .hash .keccak256
+  | "hash.shake128", [.nat n] => return .hash (.shake128 n)
+  | "hash.shake256", [.nat n] => return .hash (.shake256 n)
+  | name, [.type t, .nat n] => sequenceKey? name t (some n)
+  | name, [.type t] =>
+    if let some op := fieldOp name then
+      match t with
+      | .nonzero base =>
+        match name with
+        | "field.mul" | "field.neg" | "field.pow" => return .field op (← fieldOf? base) .nonzero
+        | _ => none
+      | base =>
+        let among := if op = .inverse || op = .fromNonzero then Among.nonzero else .all
+        return .field op (← fieldOf? base) among
+    else if let some op := groupOp name then return .group op (← atomOf? t)
+    else sequenceKey? name t none
+  | _, _ => none
+
+end StandardRow
+
+/-- Resolve a source operation against the same typed vocabulary used by admission.
+A draw reads its law signature at the requested result type. -/
+def executableRow? (request : RowRequest) : Option Row := do
+  if request.name == "law.uniform" then
+    let [.type result] := request.statics.toList | none
+    let law ← Zkc.Vocabulary.law (.uniform (← StandardNames.typeOf? result))
+    return ⟨request.key, .sampling, (← law.ins.mapM StandardNames.closed?).toArray, #[← StandardNames.closed? law.out]⟩
+  let row ← Zkc.Vocabulary.row (← StandardRow.resolve request)
+  let kind ← match row.kind with
+    | .pure => some RowKind.pure
+    | .restricted (.field .isNonzero f .all) =>
+      some (.restricted (some ⟨"field.is_nonzero", #[.type (StandardNames.fieldType f)]⟩))
+    | .restricted _ => none
+  return ⟨request.key, kind, (← row.ins.mapM StandardNames.closed?).toArray, (← row.outs.mapM StandardNames.closed?).toArray⟩
+
+/-- A type argument representable in the source row catalogue. Named tuple
+components give the same row signature as their positional representation. -/
+partial def sourceArgument? : ClosedType → Option ClosedType
+  | .bool => some .bool
+  | .nat => some .nat
+  | .index n => some (.index n)
+  | .nonzero t => return .nonzero (← sourceArgument? t)
+  | .seq t n => return .seq (← sourceArgument? t) n
+  | .tuple ts _ => do
+    let ts ← ts.mapM sourceArgument?
+    return .tuple ts (ts.map fun _ => none)
+  | .nominal row #[] => some (.nominal row #[])
+  | _ => none
+
+partial def lawArgument (type : ClosedType) : Bool :=
+  match StandardNames.typeOf? type with
+  | some t => Zkc.Vocabulary.isLaw t
+  | none => match type with
+    | .seq _ (some 0) => true
+    | .tuple ts _ => ts.all lawArgument
+    | .seq t (some _) => lawArgument t
+    | _ => false
+
+/-- Several source signatures are supplied by the linked deployment provider or
+refer to types outside the standard core rows. Source typing still checks their ABI. -/
+def sourceRow? (request : RowRequest) : Option Row := do
+  let pureRow (ins outs : Array ClosedType) : Row := ⟨request.key, .pure, ins, outs⟩
+  let bytes : ClosedType := .seq (.index 256) none
+  let state := StandardNames.named "suite.merlin3.bls12-381.fr64be/0.state"
+  let label := StandardNames.named "suite.merlin3.bls12-381.fr64be/0.label"
+  match request.name, request.statics.toList with
+  | "seq.equal", [.type t, .nat n] =>
+    let collection := ClosedType.seq (← sourceArgument? t) (some n)
+    return pureRow #[collection, collection] #[.bool]
+  | "seq.equal", [.type t] =>
+    let collection := ClosedType.seq (← sourceArgument? t) none
+    return pureRow #[collection, collection] #[.bool]
+  | "group.zero", [.type (.seq t (some n))] =>
+    let _ ← StandardRow.elementOf? t
+    return pureRow #[] #[.seq t (some n)]
+  | name, [.type (.seq t (some n))] =>
+    if ["group.add", "group.sub", "group.equal", "group.neg"].contains name then
+      let _ ← StandardRow.elementOf? t
+      let item := ClosedType.seq t (some n)
+      return pureRow (if name == "group.neg" then #[item] else #[item, item])
+        (if name == "group.equal" then #[.bool] else #[item])
+    else unary name (.seq t (some n)) bytes state label pureRow
+  | name, [.type t] => unary name t bytes state label pureRow
+  | "suite.merlin3.bls12-381.fr64be/0.start", [] => return pureRow #[label] #[state]
+  | "layout.canonical.open", [] => return pureRow #[] #[bytes]
+  | "layout.canonical.close", [] | "layout.canonical.read", [] => return pureRow #[bytes] #[bytes]
+  | "layout.canonical.exhausted", [] => return pureRow #[bytes] #[.bool]
+  | _, _ => none
+where
+  unary (name : String) (t bytes state label : ClosedType)
+      (pureRow : Array ClosedType → Array ClosedType → Row) : Option Row := do
+    let t ← sourceArgument? t
+    match name with
+    | "layout.canonical.put" => return pureRow #[bytes, t] #[bytes]
+    | "layout.canonical.take" => return pureRow #[bytes] #[.bool, t, bytes]
+    | "suite.merlin3.bls12-381.fr64be/0.absorb" => return pureRow #[state, label, t] #[state]
+    | "suite.merlin3.bls12-381.fr64be/0.derive" =>
+      guard (lawArgument t)
+      return pureRow #[state, label] #[t, state]
+    | "law.uniform" =>
+      guard (lawArgument t)
+      return ⟨request.key, .sampling, #[], #[t]⟩
+    | _ => none
+
+def rowOf? (request : RowRequest) : Option Row :=
+  executableRow? request <|> sourceRow? request
+
+/-- Names owned by the standard source vocabulary. A failed lookup at given
+arguments cannot fall back to a declaration of a new project primitive. -/
+def reservedRow (name : String) : Bool :=
+  (StandardRow.fieldOp name).isSome || (StandardRow.groupOp name).isSome || (StandardRow.seqOp name).isSome ||
+    ["pairing.pair", "hash.sha256", "hash.keccak256", "hash.shake128", "hash.shake256", "law.uniform",
+      "layout.canonical.open", "layout.canonical.put", "layout.canonical.close", "layout.canonical.read",
+      "layout.canonical.take", "layout.canonical.exhausted", "suite.merlin3.bls12-381.fr64be/0.start",
+      "suite.merlin3.bls12-381.fr64be/0.absorb", "suite.merlin3.bls12-381.fr64be/0.derive"].contains name
 
 /-- A row whose one static argument is a type. -/
 def rowAt (name : String) (type : ClosedType) : RowRequest := { name, statics := #[.type type] }

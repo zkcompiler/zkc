@@ -105,9 +105,9 @@ variable {V : Vocabulary} (c : Functions V)
 
 /-- A frontend calls `admit`, `deploy`, `prove` and `verify`, and nothing else of the core. -/
 def compile (named : NamedProgram V) (assoc : Association) (scheme : Declaration) :
-    Except (List (ProgramRefusal V)) (Deployed V) := do
-  let admitted ← c.admit named assoc
-  c.deploy admitted scheme
+    Except (List (AdmissionRefusal V) ⊕ List (ProgramRefusal V)) (Deployed V) := do
+  let admitted ← (c.admit named assoc).mapError Sum.inl
+  (c.deploy admitted scheme).mapError Sum.inr
 
 /-- A proof and its check, with the executor of the core. -/
 def proveAndVerify (d : Deployed V) (M : Model V) (prover verifier : Role)
@@ -167,7 +167,7 @@ variable {V : Vocabulary} (c : Functions V)
 /-- The erased program of each role of each protocol: its projection, erased. -/
 def Defs.erasedRole : {hs : Headers V} → Defs V hs → {hdr : ProtocolHeader V} →
     Member hs.protocols hdr → Role → Region (RoleRaw V) (List Role)
-  | _, .fn _ _ _ _ rest, _, x, r => rest.erasedRole x r
+  | _, .fn _ _ _ _ rest _, _, x, r => rest.erasedRole x r
   | _, .protocol _ _ body _ _, _, .head, r => c.eraseRole r (project r body)
   | _, .protocol _ _ _ _ rest, _, .tail x, r => rest.erasedRole x r
 

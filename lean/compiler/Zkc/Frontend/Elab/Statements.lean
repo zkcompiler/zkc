@@ -480,7 +480,9 @@ mutual
       -- nothing of the loop exists at the instance: it carries nothing
       return #[.«for» span (.loop index (domain.typed item) binders apart) {}]
     -- one typing for every iteration: the loop is uniform when every `mut` name keeps its type
-    let uniform ← try
+    let linearItems := domain.source.isSome && domain.count.isSome &&
+      Static.isLinear (← getThe Compile.State) domain.element
+    let uniform ← if linearItems then pure none else try
         let result ← inSuite do
           let (index, item) ← bindItem domain none
           let statements ← elabStmtsR body
