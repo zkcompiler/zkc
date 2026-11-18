@@ -233,13 +233,14 @@ private def checkExample (root : System.FilePath) (gkr : Bool) (variant : Varian
     let some circuit := port "c" | throw (IO.userError "missing circuit input")
     let some inputs := port "inputs" | throw (IO.userError "missing layer inputs")
     let requested : Emit.LocalApplication := ⟨target,[.binder circuit,.binder inputs,.bounded 4 layer,.binder point]⟩
-    let fits := emission.matchesLocalApplication s ⟨id⟩ site callee [0,1] "p" requested
+    let fits := emission.externalApplicationAt? s ⟨id⟩ site callee [0,1] "p" "Zkc.Circuit.summand" == some requested
     unless instanceName s target == "summand" && fits == !fixedLayer do throw (IO.userError "incorrect summand attachment")
     IO.println s!"Checked source application to summand at the current layer {fits}"
   else
     let some values := port "values" | throw (IO.userError "missing public table")
     unless instanceName s target == "extension" &&
-        emission.matchesLocalApplication s ⟨id⟩ site callee [0,1] "p" ⟨target,[.binder values]⟩ do
+        emission.externalApplicationAt? s ⟨id⟩ site callee [0,1] "p" "Zkc.Polynomial.extension" ==
+          some ⟨target,[.binder values]⟩ do
       throw (IO.userError "incorrect extension attachment")
     let some reduce := s.results.checked? callee.number | throw (IO.userError "missing Reduce")
     let .protocol rb := reduce.definition.body | throw (IO.userError "expected Reduce protocol")

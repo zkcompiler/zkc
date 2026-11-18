@@ -82,5 +82,10 @@ def run (root : System.FilePath) (samples : Nat) : IO Unit := do
   compare "constant-layer-executable" (fun _ => (Automatic.gkr fixed ⟨17⟩ ⟨11⟩ [15,16,9] ⟨28⟩).isSome)
     (fun _ => (Manual.gkr fixed [15,16,9] ⟨28⟩).isSome) true true samples
   gkrCase "constant-layer-source-claim" fixed [15,16,9] ⟨28⟩ false samples
+  let rebound ← admitRoot gkr (editModule root "examples/support/circuits/layered.zkc" "layered"
+    "external(\"Zkc.Circuit.summand\")" "external(\"Example.otherSummand\")")
+  compare "rebound-layer-executable" (fun _ => (Automatic.gkr rebound ⟨17⟩ ⟨11⟩ [15,16,9] ⟨28⟩).isSome)
+    (fun _ => (Manual.gkr rebound [15,16,9] ⟨28⟩).isSome) true true samples
+  gkrCase "rebound-layer-source-claim" rebound [15,16,9] ⟨28⟩ false samples
 
 end Zkc.Tests.Formal.Reuse

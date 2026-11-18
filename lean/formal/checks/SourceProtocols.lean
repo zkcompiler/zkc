@@ -30,20 +30,20 @@ open Zkc.Core Zkc.Frontend Zkc.Tests.Formal
     let c ← SourceProtocolRoots.admitRoot entry load
     let e := c.emission
     let key : Key := ⟨c.id⟩
-    let some (red,_) := SourceHonestSumcheck.callKeys e key | throw (IO.userError s!"{label}: caller keys")
-    let some origin := e.origins.find? (·.definition == key) | throw (IO.userError "missing caller origin")
-    let #[a] := origin.specification | throw (IO.userError "ambiguous specification")
-    let #[("p",.apply _ (.instance target) _)] := a.arguments | throw (IO.userError "missing extension")
-    let name (id : Nat) := c.state.table.entries[id]?.map fun v => c.state.program.nameOf v.key.declaration
-    let some caller := c.state.results.checked? c.id | throw (IO.userError "missing checked caller")
-    let .protocol body := caller.definition.body | throw (IO.userError "expected a protocol")
-    let some values := body.ports.find? (·.binder.name == "values") | throw (IO.userError "missing table port")
-    unless name red.number == some "Reduce" && name target == some "extension" &&
-        e.matchesLocalApplication c.state key a.instruction red [0,1] "p" ⟨target,[.binder values.binder.id]⟩ do
-      throw (IO.userError s!"{label}: source association")
-    let found := (SourceHonestSumcheck.certificate e c.evidence key n variant).isSome
+    let found := (SourceHonestSumcheck.atSource c n variant).isSome
     unless found == edit.isNone do throw (IO.userError s!"{label}: joint certificate={found}")
     if label ∈ ["swapped honest endpoints","wrong private restriction"] then
       unless SourceHonestSumcheck.openVerifier e c.evidence key n == some true do
         throw (IO.userError s!"{label}: expected open verifier certificate")
     IO.println s!"{label}: rounds={n}, admitted definitions={e.named.definitions.length}, certificate={found}"
+
+  let entry ← SourcePairReadback.source .original (root / "examples/sumcheck_example.zkc")
+  let changed ← SourceProtocolRoots.admitRoot entry fun parts => do
+    if parts.back? == some "polynomial" then
+      return some (← SourceProtocolRoots.replaceOnce (root / "libraries/zkc/polynomial.zkc")
+        "external(\"Zkc.Polynomial.extension\")" "external(\"Example.otherExtension\")")
+    SourcePairReadback.loadModule root .original parts
+  unless (SourceHonestSumcheck.certificate changed.emission changed.evidence ⟨changed.id⟩ 10 .original).isSome &&
+      (SourceHonestSumcheck.atSource changed 10 .original).isNone do
+    throw (IO.userError "expected joint completeness with a different source binding")
+  IO.println "Alternative extension binding: joint completeness retained, source association refused"

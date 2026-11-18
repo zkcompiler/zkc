@@ -48,12 +48,12 @@ def installGate {b : Emit.Bindings} {p : Core.Typed b.vocabulary} {rootKey red s
 structure SourceGate (c : SourceProtocolRoots.CheckedRoot) (red site loopKey : Key) (args : List Name)
     (claim : Emit.LocalApplication) where
   component : GateEndpoint c.emission.bindings c.evidence.admitted.program ⟨c.id⟩ red site loopKey args
-  association : c.emission.matchesLocalApplication c.state ⟨c.id⟩ site red [0,1] "p" claim = true
+  association : c.emission.externalApplicationAt? c.state ⟨c.id⟩ site red [0,1] "p" "Zkc.Circuit.summand" = some claim
 
 def atSource {c : SourceProtocolRoots.CheckedRoot} {red site loopKey : Key} {args : List Name}
     (component : GateEndpoint c.emission.bindings c.evidence.admitted.program ⟨c.id⟩ red site loopKey args)
     (claim : Emit.LocalApplication) : Option (SourceGate c red site loopKey args claim) :=
-  if associated : c.emission.matchesLocalApplication c.state ⟨c.id⟩ site red [0,1] "p" claim = true then
+  if associated : c.emission.externalApplicationAt? c.state ⟨c.id⟩ site red [0,1] "p" "Zkc.Circuit.summand" = some claim then
     some ⟨component,associated⟩
   else none
 

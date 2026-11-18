@@ -12,9 +12,12 @@ See the [Core guide](../lean/compiler/Zkc/Core/README.md) and the
 ## Interactive source proofs on typed Core
 
 The frontend emits the protocol into typed Core. Admission checks the program,
-and projection gives the process for each role. The formal library relates a certificate to the
-emitted entry, including the resolved callee and its source arguments.
-Source elaboration and lowering remain trusted.
+and projection gives the process for each role. The formal theorems describe the admitted
+entry or its selected reduction call. The source clients check that the typed call and its
+emitted attachment select the same operands and function instance. For the table extension
+and GKR summand they also check the formal symbol named by that instance's `external` declaration.
+Interpreting the symbol in the mathematical model is a separate obligation. The tests exercise
+this source path with trusted elaboration and lowering.
 
 | Entry checked | Result and assumptions |
 |---|---|
