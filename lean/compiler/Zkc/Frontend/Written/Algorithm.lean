@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Frontend.Written.Program
+public import Zkc.Frontend.Semantics.StandardTypes
 public import Zkc.Frontend.Syntax.Spans
 
 @[expose] public section
@@ -12,8 +13,25 @@ open Syntax
 def refuse {α : Type} (span : Span) (code message : String) : ExportM α :=
   .error s!"{span.file}:{span.render}: {code}: {message}"
 
-inductive ValueSort where | point | scalar | boolean | runs
+inductive ValueSort where | point | scalar | boolean | runs | tuple (items : List ValueSort)
   deriving BEq, Repr, Inhabited
+
+/-- The commitment is the value of the first exchange, including its Core tuple layout. -/
+partial def historySort (t : ClosedType) (sp : Span) : ExportM ValueSort := do
+  if StandardNames.groupOf? t == some .g1 then return .point
+  if let .tuple items _ := t then return .tuple (← items.toList.mapM (historySort · sp))
+  refuse sp "WK-VIEW" "expected a group commitment or a tuple of group commitments"
+
+def publicProduct (components : List String) : String :=
+  String.intercalate " × " components
+
+/-- A public statement uses ordinary Lean products. A Core tuple has a terminal Unit. -/
+def component (base : String) (index : Nat) (last : Bool) : String :=
+  base ++ String.join (List.replicate index ".2") ++ (if last then "" else ".1")
+
+partial def ValueSort.leanType : ValueSort → String
+  | .point => "G" | .scalar => "F" | .boolean => "Bool" | .runs => "Unit"
+  | .tuple items => "(" ++ publicProduct (items.map ValueSort.leanType ++ ["Unit"]) ++ ")"
 
 structure Value where
   sort : ValueSort
@@ -26,6 +44,7 @@ structure View where
   response : Typing.SiteEntry
   prover : Nat
   verifier : Nat
+  history : ValueSort
 
 def atSort (where_ : Span) (t : ValueSort) (v : Value) : ExportM String :=
   if v.sort == t then pure v.term else refuse where_ "WK-TYPE" s!"expected {repr t}, got {repr v.sort}"
@@ -58,10 +77,19 @@ partial def value (view : View) (locals : Locals) (e : Expr) : ExportM Value := 
     let leaf ← match n.value with
       | 0 => pure "left" | 1 => pure "right"
       | _ => refuse n.span "WK-VIEW" "leaf index is outside Runs<2>"
-    if view.commitment.name == some field.text then return ⟨.point, "commitment"⟩
+    if view.commitment.name == some field.text then return ⟨view.history, "commitment"⟩
     if view.challenge.name == some field.text then return ⟨.scalar, leaf ++ ".challenge"⟩
     if view.response.name == some field.text then return ⟨.scalar, leaf ++ ".suffix"⟩
     refuse field.span "WK-VIEW" s!"field {field.text} is absent from the deciding role's run"
+  | .position _ source index =>
+    let x ← child source
+    let .tuple items := x.sort | bad "expected a tuple"
+    let some t := items[index.value]? | bad "tuple projection out of range"
+    return ⟨t, component x.term index.value false⟩
+  | .andExpr _ a b =>
+    let lhs ← atSort a.span .boolean (← child a)
+    let rhs ← atSort b.span .boolean (← child b)
+    return ⟨.boolean, s!"(← (if {lhs} then do return {rhs} else pure false))"⟩
   | .sum _ .subtract a b =>
     return ⟨.scalar, s!"(ops.sub {← atSort a.span .scalar (← child a)} {← atSort b.span .scalar (← child b)})"⟩
   | .sum _ .add a b =>

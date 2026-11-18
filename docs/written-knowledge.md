@@ -1,13 +1,13 @@
-# Written Schnorr knowledge
+# Written knowledge for three-message group protocols
 
-The command `zkc-knowledge` exports the written knowledge clause of a selected scheme to a Lean module. The example entry is `Proof` in [schnorr_example.zkc](../examples/schnorr_example.zkc). Its [protocol module](../examples/schnorr.zkc) supplies all three inputs to the proof.
+`zkc-knowledge` takes a scheme entry and generates a Lean module for its written knowledge clause. Two source programs exercise the same compiler and formal library.
 
-```text
-spec for Schnorr:
-    knowledge DLog(base, point) by response_difference
-```
+| Scheme | Public statement | Shared first message | Written relation on the extracted scalar |
+| --- | --- | --- | --- |
+| `Proof` in [schnorr_example.zkc](../examples/schnorr_example.zkc) | base and point | one point | `point == base * scalar` |
+| `SameLogProof` in [chaum_pedersen.zkc](../examples/chaum_pedersen.zkc) | `g, h, u, v` | two points sent as one tuple | `u == g * x and v == h * x` |
 
-`DLog` is a source relation with two public group elements and one scalar witness. Its body tests `point == base * scalar`. The source function `response_difference` takes the public statement and two leaves of `Schnorr<G>::Runs<2>`. It guards the challenge difference against zero and divides the difference of the responses by that difference. `SpecialSoundness` is a Lean library definition parameterized by an acceptance predicate, a relation and the successful return of an extractor.
+The Schnorr clause selects `DLog` and `response_difference`. The Chaum–Pedersen clause selects `SameLog` and `extract`. Each name resolves to an executable source declaration. The clauses, the relation operands, the extractors and the verifier guards all affect the generated result.
 
 ## Generate and check
 
@@ -16,29 +16,24 @@ From the repository root, run
 ```sh
 (cd lean/compiler && lake -q exe zkc-knowledge ../../examples/schnorr_example.zkc ../.. Proof) > /tmp/WrittenSchnorr.lean
 (cd lean/formal && lake -q lean /tmp/WrittenSchnorr.lean)
+(cd lean/compiler && lake -q exe zkc-knowledge ../../examples/chaum_pedersen.zkc ../.. SameLogProof) > /tmp/WrittenSameLog.lean
+(cd lean/formal && lake -q lean /tmp/WrittenSameLog.lean)
 ```
 
-The first command selects the source instance and emits Lean. The second elaborates the exported declarations and checks their proofs. The module lists the file and span of the clause, relation, extractor and three named sites in `WrittenKnowledge.sourceLocations`.
+Pass `--target-only` before the input path to generate the admission facts, executable relation and extractor, verifier and proposition for a companion. `WrittenKnowledge.obligation` quantifies over a public statement, a shared commitment and two branches. If the actual projected verifier returns on both transcripts at the given call path, and their challenges differ, the selected extractor must return a witness that satisfies the selected relation. Each transcript contains the precise Core operation, its occurrence and its typed reply.
 
-Pass `--target-only` before the input path to emit the same admitted program, executable relation, extractor and `WrittenKnowledge.obligation`. The module also exports the checked decision and its equivalence to a returning run. Authors can place that file in a Lean package that depends on `zkc_formal` and import it from a companion. The type of `obligation` specifies the goal even when the supplied proof strategy fails. Applying `of_obligation` to a companion proof transfers it to the actual admission result. A failed built-in proof reports `WK-PROOF` with source locations.
+`replayCheck` executes the projected verifier against exactly those inputs. The process theorem `replay_iff` proves that a successful replay is equivalent to a complete returning trace, including consumption of every input. It needs no group laws. A companion can import the target, prove `obligation`, and use `of_obligation` to obtain `admittedObligation` for the actual admission result. The target-only module imports the source semantics. The optional built-in certificate also imports the group proof strategy and produces the same result as `certified_admitted`. The module also proves `admitted_exists` and records source spans in `sourceLocations`.
 
-## What the theorem says
+## How the shared proof works
 
-Fix the selected verifier role, a public statement, a call path and a commitment. Suppose the emitted verifier returns once for `(challenge₁, response₁)` and once for `(challenge₂, response₂)`, with distinct challenges. Then the selected extractor returns `some w` and the selected relation on that same statement and `w` returns `some true`. The statement quantifies over the replies to the verifier. An adversary may supply either response.
+1. **Source and admission.** The frontend resolves the scheme, relation and extractor. It checks their deployed types, binds public operands in the written order, and resolves the names of the three observed instructions. The emitter prints the stored program and its typed body. The kernel checks that erasure gives that stored program and that the independently run admission returns that body. A typed first message can carry a product, while a private prover port contributes no verifier input.
+2. **Verifier equations.** A formal-library tactic reads the stored instructions, tracks visible values and tuple components and proposes the conjunction of all verifier guards. The singleton-root theorem connects the installed verifier to the projection of its typed body. The proof then uses rules for a pure step, an interaction with its typed reply, a guard followed by an arbitrary continuation, and return. Lean checks each proposed calculation against the actual projection. For Schnorr the resulting theorem exposes one equation. For Chaum–Pedersen it exposes both equations, in source order.
+3. **One extracted witness.** For each pair of matching equations on the two branches, `extract_difference` cancels the shared commitment and divides by the nonzero challenge gap. In Chaum–Pedersen both equations use the same two challenges and responses, hence the same scalar. Lean's `Std.WP.vcgen` checks the selected extractor's guard and division and the returned scalar against the entire written relation. The proof constructor uses the equations and source declarations for each input program.
 
-`certified_admitted` gives this result for an entry of the typed program actually returned by Core admission. `admitted_exists` proves that admission succeeds on the exported package. The theorem assumes a Core model, interpretations of the verifier's three group rows, and elementary scalar and group-action laws. These laws describe subtraction, cancellation, scaling and inversion of a nonzero scalar. The conclusion is an interactive, two-transcript extraction result. Probabilities, a model of the production curve, and security after Fiat–Shamir require additional theorems.
+The target supports the exported straight-line, two-role, three-message G1/scalar fragment with a nonempty list of public group inputs, one private scalar witness, a group point or tuple of points as commitment and a scalar challenge and response. The automatic algebraic proof interprets the three verifier rows for group scaling, addition and equality, along with Core tuple operations. An unsupported row in the automatic strategy leaves the companion target available. `WK-PROOF` identifies residual proof failures by source location. Source parsing, resolution and translation are trusted compiler operations. The written theorem is conditional on the declared row interpretations and group-action laws. Production-curve instantiation, probabilities, zero knowledge and security after Fiat–Shamir are separate obligations.
 
-## How the proof is constructed
+## Evidence
 
-1. The frontend resolves the protocol instance and the declaration IDs after `knowledge` and `by`. It checks the deployed types, the public operands in their written order and the two-leaf run type at that instance. Named event occurrences from the typed body identify the commitment, challenge and response instructions. A local binder may be renamed under a stable `#[site(name)]`.
-2. The exporter prints the stored program and the typed body from the source emission. Lean checks the typed body's erasure against the stored program, proves admission succeeds and identifies the result using Core's readback theorem. Parsing, name resolution and lowering the source to these terms are trusted frontend operations.
-3. The formal library defines a returning transcript over the actual role process. Each exchange retains the operation, occurrence and typed reply. A replay uses common rules for local computation, a reply, the final guard and return. Lean checks each proposed intermediate value and proves that this process returns exactly when the decision read from its Core operands succeeds.
-4. Lean's `Std.WP.vcgen` classifies both outcomes of that decision. For Schnorr, acceptance gives one group equation per transcript. The reusable `extract_difference` lemma cancels the common commitment and uses the nonzero challenge gap. A second `vcgen` pass on the source extractor checks its explicit guard and division domain, and proves the returned witness satisfies the written relation.
+Run `just test-written-knowledge`. It elaborates both source-issued certificates and audits their axioms. It also checks the same Chaum–Pedersen certificate after exchanging the order of the two guards. The finite two-element field and group provide concrete returning branches. Removing the second Chaum–Pedersen guard leaves the original relation and extractor intact. With public inputs `(1,1,1,0)`, commitment `(0,0)`, and challenge/response pairs `(0,0)` and `(1,1)`, the changed verifier returns on both permitted branches. No scalar satisfies both relation equations. The suite proves the negation of the claim for the admitted mutant, checks rejection by the original verifier, and exercises diagnostics and changes to the Schnorr relation, extractor and verifier.
 
-The transcript and special-soundness definitions do not depend on Schnorr. The acceptance rules concern Core operations. The group equations and deterministic algebra are the inputs specific to this proof strategy. The current exporter covers straight-line two-role, three-message forks at the G1/scalar specialization, two public group inputs, one private scalar, one terminal verifier guard and one written knowledge clause. Extending the supported source bodies or transcript shape requires extending the exporter. A new Lean property can reuse these formal definitions; selecting arbitrary third-party properties from source needs a further source interface.
-
-## Reproduce the evidence
-
-Run `just test-written-knowledge`. It generates the theorem from the repository example and checks its axiom dependencies. It also elaborates returning branches in a concrete two-element field and group model, shows that their replies are permitted, and computes the recovered witness. The same fork supplies counterexamples after replacing the selected extractor by zero or negating the relation. A third counterexample supplies a bad response to a weakened verifier. Other controls swap the public operands, rename a binder under a stable site, edit an unrelated simulator and exercise source diagnostics. The two-element model demonstrates an inhabited instance. The main proof quantifies over every model satisfying its hypotheses.
-
-The common property and algebra are in [Extraction.lean](../lean/formal/Zkc/Formal/Written/Extraction.lean), the process rules in [Steps.lean](../lean/formal/Zkc/Formal/Written/Steps.lean), and the source-to-theorem connection in [Export.lean](../lean/compiler/Zkc/Frontend/Written/Export.lean).
+The [source exporter](../lean/compiler/Zkc/Frontend/Written/Export.lean), [process semantics](../lean/formal/Zkc/Formal/Written/Execution.lean), [group verifier replay](../lean/formal/Zkc/Formal/Written/GroupReplay.lean), [step rules](../lean/formal/Zkc/Formal/Written/Steps.lean) and [extraction lemma](../lean/formal/Zkc/Formal/Written/Extraction.lean) implement these boundaries.

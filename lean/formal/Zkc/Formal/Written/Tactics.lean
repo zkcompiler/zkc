@@ -34,20 +34,62 @@ elab "expose_projection" : tactic => withMainContext do
     return .continue)
   replaceMainGoal [← goal.replaceTargetDefEq target]
 
-/-- Instantiate the return rule with the context already on the goal. Inferring a
-dependent environment from an empty exit can otherwise normalize all earlier bindings. -/
-elab "finish_return" : tactic => withMainContext do
+/-- Apply the projection equation at one source constructor. Its right-hand side keeps
+the real continuation as a recursive call. The recursive call keeps the source context and suffix shared across instructions. -/
+private def projectOne (projected : Expr) : MetaM (Expr × Expr) := do
+  unless projected.isAppOfArity ``Zkc.Core.project 6 do throwError "expected a source projection"
+  let p := projected.getAppArgs
+  let term ← whnf p[5]!
+  let t := term.getAppArgs
+  let initial := p.extract 0 5
+  let equation ← if term.isAppOfArity ``Zkc.Core.Term.ret 4 then
+    pure (mkAppN (mkConst ``Zkc.Core.project.eq_1) (initial.push t[3]!))
+  else if term.isAppOfArity ``Zkc.Core.Term.step 8 then do
+    let ins ← whnf t[5]!
+    let i := ins.getAppArgs
+    if ins.isAppOfArity ``Zkc.Core.Instr.op 6 then
+      pure (mkAppN (mkConst ``Zkc.Core.project.eq_2) (initial ++ #[t[3]!,t[4]!,i[2]!,i[4]!,t[6]!,i[5]!,t[7]!]))
+    else throwError "unsupported projected instruction"
+  else throwError "expected a straight-line source term"
+  let eq ← whnf (← inferType equation)
+  return (← whnf eq.getAppArgs[2]!, equation)
+
+/-- Expose a single instruction, retaining the projected continuation as a shared term. -/
+elab "expose_cursor" : tactic => withMainContext do
   let goal ← getMainGoal
   let target ← instantiateMVars (← goal.getType)
+  let lhs := target.getArg! 0
+  let process := lhs.getArg! 3
+  let args := process.getAppArgs
+  let (head, headEq) ← projectOne args[4]!
+  let exposedProcess := mkAppN process.getAppFn (args.set! 4 head)
+  let exposedLhs := mkAppN lhs.getAppFn (lhs.getAppArgs.set! 3 exposedProcess)
+  let prop := target.getArg! 1
+  let pending ← mkFreshExprSyntheticOpaqueMVar (mkApp2 (mkConst ``Iff) exposedLhs prop)
+  let congr := mkAppN (mkConst ``returnsTerm)
+    #[args[0]!,args[1]!,args[2]!,args[3]!,args[5]!,args[6]!,lhs.getArg! 4,prop,
+      args[4]!,head,headEq,pending]
+  goal.assign congr
+  replaceMainGoal [pending.mvarId!]
+
+/-- Instantiate the return rule with the context already on the goal. Inferring a
+dependent environment from an empty exit can otherwise normalize all earlier bindings. -/
+private def closeReturn (equivalence : Bool) : TacticM Unit := withMainContext do
+  let goal ← getMainGoal
+  let target ← instantiateMVars (← goal.getType)
+  let target := if equivalence && target.isAppOfArity ``Iff 2 then target.getArg! 0 else target
   unless target.isAppOfArity ``Returns 5 do throwError "expected a returning Core trace"
   let process := target.getArg! 3
   unless process.isAppOfArity ``Zkc.Core.Term.denote 7 do throwError "expected a Core term"
   let args := process.getAppArgs
   let term := args[4]!
   unless term.isAppOfArity ``Zkc.Core.Term.ret 4 do throwError "expected the end of the verifier"
-  let proof := mkAppN (mkConst ``afterReturn) #[args[0]!,args[1]!,args[2]!,args[3]!,term.getAppArgs.back!,args[6]!,args[5]!]
+  let proof := mkAppN (mkConst (if equivalence then ``afterReturnIff else ``afterReturn)) #[args[0]!,args[1]!,args[2]!,args[3]!,term.getAppArgs.back!,args[6]!,args[5]!]
   goal.assign proof
   replaceMainGoal []
+
+elab "finish_return" : tactic => closeReturn false
+elab "finish_guard_replay" : tactic => closeReturn true
 
 /-- Keep a residual failure attached to the declaration that produced the obligation. -/
 elab "source_proof " place:str " => " steps:tacticSeq : tactic => do

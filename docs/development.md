@@ -41,7 +41,7 @@ Run every command from the root of the repository.
 | `just build` | `lake build` in `lean/compiler`: all active targets |
 | `just test` | `lake build` and `lake test` in `lean/compiler`, then `just audit` |
 | `just test-interactive` | build the interactive formal modules, check emitted source entries and mutations, and audit the interactive library and its mathematical controls |
-| `just test-written-knowledge` | compile the written Schnorr clause, check its admission and extraction theorem, and test returning runs, source mutations and diagnostics |
+| `just test-written-knowledge` | compile both Schnorr and Chaum–Pedersen written clauses, check admission and extraction, and test permitted forks, source mutations and diagnostics |
 | `just audit` | `lake exe zkc-audit` in `lean/compiler`: core, vocabulary and their tests |
 | `just check` | the checks that need no build: `bash .github/scripts/public-tree-guard.sh`, `python3 scripts/check_docs.py --all`, and `python3 lean/compiler/scripts/generate_unicode_tables.py --check` |
 

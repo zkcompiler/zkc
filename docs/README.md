@@ -4,7 +4,7 @@
 |---|---|
 | [Status](status.md) | what the repository supports now and what it does not |
 | [Development](development.md) | prerequisites, layout, commands, tests and CI |
-| [Written Schnorr knowledge](written-knowledge.md) | export and check a source-selected extractor over two admitted verifier executions |
+| [Written three-message knowledge](written-knowledge.md) | export and check Schnorr and Chaum–Pedersen extraction from two admitted verifier executions |
 | [Lean toolchain](lean-toolchain.md) | pinned compiler, audit boundary and feature-adoption policy |
 | [The core language](spec/core/README.md) | the specification of the core language: its types and admission, its meaning, the declaration of a scheme, the package format and the stages |
 | [The source language](../language/README.md) | the reference of the source language, its libraries and its conformance tests |

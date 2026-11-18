@@ -17,10 +17,13 @@ def names (xs : List Nat) (variableRefs := false) := xs.foldr (fun x rest =>
   let head := if variableRefs then s!"⟨{x}, rfl⟩" else toString x
   s!"(.cons {head} {rest})") ".nil"
 
-def ty {b : Emit.Bindings} (t : b.vocabulary.Ty) : ExportM String :=
+partial def ty {b : Emit.Bindings} (t : b.vocabulary.Ty) : ExportM String := do
   match t with
   | .bool => pure ".bool"
   | .nominal (.inl k) => pure s!"(.nominal (.inl ({reprStr (show Zkc.Vocabulary.TypeKey from k)})))"
+  | .tuple ts =>
+    let items ← ts.toList.mapM (ty (b := b))
+    return "(.tuple " ++ items.foldr (fun x rest => s!"(.cons {x} {rest})") ".nil" ++ ")"
   | _ => unsupported "Core value type in the written scalar/group profile"
 
 def located {b : Emit.Bindings} (ts : List (LTy b.vocabulary)) : ExportM String := do
@@ -35,6 +38,8 @@ def coin (k : Zkc.Vocabulary.LawKey) : ExportM String :=
 
 def rawOp {b : Emit.Bindings} : ProtocolRaw b.vocabulary → ExportM String
   | .compute who (.row (.inl k)) => pure s!"(.compute {numbers who} (.row {row k}))"
+  | .compute who (.owned name types args) => do
+    return s!"(.compute {numbers who} (.owned ({reprStr name}) {list (← types.mapM (ty (b := b)))} {numbers args}))"
   | .event (.flow .message who peers) t => do return s!"(.event (.flow .message {who} {numbers peers}) {← ty (b := b) t})"
   | .event (.given (.coin k) who peers) t => do return s!"(.event (.given {← coin k} {who} {numbers peers}) {← ty (b := b) t})"
   | _ => unsupported "protocol operation"
@@ -49,6 +54,11 @@ def typedOp {b : Emit.Bindings} {hs : Headers b.vocabulary} {ins outs} :
   | .compute who (.row key _ _) operands _ _ => do
     let .inl k := (show Sum Zkc.Vocabulary.RowKey Emit.PrimitiveName from key) | unsupported "external row"
     return s!"(ProtocolOp.compute (V := V) (hs := ⟨[], []⟩) {numbers who} (.row {row k} _ rfl) {← located (b := b) operands} rfl (by decide))"
+  | .compute who (.owned op) operands _ _ => do
+    let (name, types, args) := op.name
+    let types ← types.mapM (ty (b := b))
+    let owned := s!"(OwnedOp.resolve (V := V) ({reprStr name}) {list types} {numbers args}).get (by decide)"
+    return s!"(ProtocolOp.compute (V := V) (hs := ⟨[], []⟩) {numbers who} (.owned ({owned}).2.2) {← located (b := b) operands} rfl (by decide))"
   | .flow .message who peers _ _ => pure s!"(ProtocolOp.flow (V := V) (hs := ⟨[], []⟩) .message {who} {numbers peers} (by decide) (by decide))"
   | .given (.coin k) who peers [] t _ _ _ => do
     return s!"(ProtocolOp.given (V := V) (hs := ⟨[], []⟩) {← coin k} {who} {numbers peers} [] {← ty (b := b) t} ⟨_, rfl, rfl, rfl⟩ (by decide) (by decide))"

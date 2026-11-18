@@ -24,7 +24,7 @@ test-interactive:
 # Export the written knowledge claim and kernel-check the returning fork and source mutations.
 test-written-knowledge:
     cd lean/compiler && lake build zkc-knowledge
-    cd lean/formal && lake build Zkc.Formal.Written.Tactics Zkc.Formal.Written.FiniteModel
+    cd lean/formal && lake build Zkc.Formal.Written.GroupReplay Zkc.Formal.Written.FiniteModel
     cd lean/formal && lake env python3 checks/written_knowledge.py
 
 # Audit the compiler package: the kernel's replay of the core, the vocabulary and their tests, no `sorry`, no axiom beyond `propext` and `Quot.sound`, the import rules.

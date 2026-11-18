@@ -1,4 +1,9 @@
+@[expose] public section
+
 open Zkc.Core Zkc.Formal.Written Zkc.Formal.Written.FiniteModel
+
+set_option maxRecDepth 4000
+set_option maxHeartbeats 1800000
 
 namespace WrittenControls
 
@@ -71,13 +76,79 @@ theorem wrong_relation : ¬ OtherRelation.obligation model ops [] := by
 theorem wrong_verifier : ¬ OtherVerifier.obligation model ops [] := by
   intro claim
   let changed : Branch (model.Val scalarTy) := ⟨true,false⟩
-  have one := (OtherVerifier.verifier_returns model ops rows statement [] commitment left).2 (by decide)
-  have two := (OtherVerifier.verifier_returns model ops rows statement [] commitment changed).2 (by decide)
+  have one := (OtherVerifier.replay_returns model statement [] commitment left).2 (by decide +kernel)
+  have two := (OtherVerifier.replay_returns model statement [] commitment changed).2 (by decide +kernel)
   obtain ⟨w, returned, holds⟩ := claim statement commitment left changed one two (by decide)
   have eq : (some false : Option Bool) = some w := returned
   cases Option.some.inj eq
   exact (by decide : OtherVerifier.relation ops statement false ≠ some true) holds
 
+abbrev good : SameLog.Statement Bool := (false, true, false, true)
+abbrev bad : SameLog.Statement Bool := (true, true, true, false)
+abbrev pairCommitment : SameLog.Commitment Bool := (false, false, ())
+
+-- A zero first base leaves the second equation responsible for the witness.
+example : SameLog.accepts model good [] pairCommitment left :=
+  (SameLog.verifier_equation model ops rows good [] pairCommitment left).2 (by decide)
+example : SameLog.accepts model good [] pairCommitment right :=
+  (SameLog.verifier_equation model ops rows good [] pairCommitment right).2 (by decide)
+example : SameLog.extractor ops good pairCommitment left right = some true ∧
+    SameLog.relation ops good true = some true := by decide
+
+-- The original verifier rejects the right branch. The mutant accepts both branches.
+example : ¬ SameLog.accepts model bad [] pairCommitment right := by
+  intro h
+  exact (by unfold SameLog.verifierConditions; decide : ¬ SameLog.verifierConditions ops bad pairCommitment right)
+    ((SameLog.verifier_equations model ops rows bad [] pairCommitment right).mp h)
+
+private theorem missing_left : MissingGuard.accepts model bad [] pairCommitment left :=
+  (MissingGuard.replay_returns model ..).2 (by decide +kernel)
+private theorem missing_right : MissingGuard.accepts model bad [] pairCommitment right :=
+  (MissingGuard.replay_returns model ..).2 (by decide +kernel)
+
+theorem permitted_counterexample : ∀ leaf ∈ [left, right], ∃ value,
+    (roleMeaning model MissingGuard.installed (Member.head : Member [MissingGuard.header] MissingGuard.header)
+      1 [] (MissingGuard.inputValues model bad)).CanReturn (Permitted model) value := by
+  intro leaf mem
+  have allowed : ∀ e ∈ (MissingGuard.observed model [] pairCommitment leaf).map Input.entry,
+      Permitted model e.1 e.2 := by
+    apply Zkc.Formal.Written.permitted_fork
+    · exact ⟨trivial, trivial, trivial⟩
+    · exact ⟨trivial, ⟨[], scalarTy⟩, rfl, rfl, rfl, trivial⟩
+    · trivial
+  simp only [List.mem_cons, List.not_mem_nil, or_false] at mem
+  rcases mem with rfl | rfl
+  · exact missing_left.canReturn (Permitted model) allowed
+  · exact missing_right.canReturn (Permitted model) allowed
+
+theorem missing_guard : ¬ MissingGuard.obligation model ops [] := by
+  intro claim
+  obtain ⟨w, _, valid⟩ := claim bad pairCommitment left right missing_left missing_right (by decide)
+  exact (by decide : ∀ x : Bool, MissingGuard.relation ops bad x ≠ some true) w valid
+
+theorem missing_guard_admitted {adm : Admitted MissingGuard.V}
+    (h : admit MissingGuard.stored ⟨[],[],[],[],[]⟩ = .ok adm) :
+    ¬ MissingGuard.admittedObligation model ops adm [] := by
+  obtain ⟨program, annotations, association, assured⟩ := adm
+  have same := MissingGuard.readback h
+  change program = MissingGuard.installed at same
+  subst program
+  rintro ⟨root, property⟩
+  cases root with
+  | head => exact missing_guard property
+  | tail rest => cases rest
+
+-- Target generation and concrete replay also work for an extra field equality,
+-- outside the verifier rows currently interpreted by the algebraic proof strategy.
+example : ScalarGuard.accepts model good [] pairCommitment left ↔
+    ScalarGuard.replayCheck model good [] pairCommitment left = some () :=
+  ScalarGuard.replay_returns model ..
+
+#print axioms Baseline.certified_admitted
+#print axioms SameLog.certified_admitted
+#print axioms Reordered.certified_admitted
+#print axioms missing_guard_admitted
+#print axioms permitted_counterexample
 #print axioms wrong_verifier
 #print axioms left_returns
 #print axioms wrong_extractor

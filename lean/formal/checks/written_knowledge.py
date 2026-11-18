@@ -11,6 +11,7 @@ ROOT = Path(__file__).resolve().parents[3]
 COMPILER = ROOT / "lean/compiler/.lake/build/bin/zkc-knowledge"
 SOURCE = ROOT / "examples/schnorr.zkc"
 ENTRY = ROOT / "examples/schnorr_example.zkc"
+CHAUM_PEDERSEN = ROOT / "examples/chaum_pedersen.zkc"
 CONTROL = Path(__file__).with_name("WrittenKnowledgeControls.lean.in")
 
 
@@ -43,7 +44,8 @@ def replace_once(text, original, replacement):
 
 
 def check(work):
-    names = ["Baseline", "Renamed", "Zero", "OtherRelation", "OtherVerifier", "Simulator", "Swapped"]
+    names = ["Baseline", "Renamed", "Zero", "OtherRelation", "OtherVerifier", "Simulator", "Swapped",
+             "SameLog", "Reordered", "MissingGuard", "ScalarGuard"]
     formal = ROOT / "lean/formal"
     (work / "lean-toolchain").write_text((formal / "lean-toolchain").read_text())
     (work / "lakefile.toml").write_text(
@@ -56,20 +58,19 @@ def check(work):
     original = SOURCE.read_text()
     input_file = work / SOURCE.name
 
-    def generate(source, proof=True, failure=None):
-        input_file.write_text(source)
+    def generate(source, proof=True, failure=None, *, same_log=False):
+        selected_entry = work / CHAUM_PEDERSEN.name if same_log else entry
+        selected_input = selected_entry if same_log else input_file
+        selected_input.write_text(source)
         flags = [] if proof else ["--target-only"]
-        return run([COMPILER, *flags, entry, ROOT, "Proof"], failure=failure)
+        return run([COMPILER, *flags, selected_entry, ROOT, "SameLogProof" if same_log else "Proof"], failure=failure)
 
-    def module(name, source, proof=False):
-        generated = generate(source, proof)
+    def module(name, source, proof=False, *, same_log=False):
+        generated = generate(source, proof, same_log=same_log)
         for keyword in ["namespace", "end"]:
             generated = replace_once(generated, f"{keyword} WrittenKnowledge", f"{keyword} {name}")
         path = work / f"{name}.lean"
         path.write_text(generated)
-        if proof:
-            audit = run(["lake", "-q", "lean", path], cwd=work)
-            check_axioms(f"{name}.certified_admitted", audit)
         return generated
 
     base = module("Baseline", original, proof=True)
@@ -103,17 +104,33 @@ spec for Schnorr:""")
     module("Simulator", replace_once(original, "inputs.base * response - inputs.point * coins.challenge",
                                     "inputs.point * response - inputs.base * coins.challenge"))
 
+    same_log = CHAUM_PEDERSEN.read_text()
+    module("SameLog", same_log, proof=True, same_log=True)
+    second_guard = "        guard @V h * z == b + v * c\n"
+    first_guard = "        guard @V g * z == a + u * c\n"
+    reordered = replace_once(same_log, first_guard + second_guard, second_guard + first_guard)
+    module("Reordered", reordered, proof=True, same_log=True)
+    missing = replace_once(same_log, second_guard, "")
+    module("MissingGuard", missing, same_log=True)
+    scalar_guard = replace_once(same_log, second_guard, second_guard + "        guard @V z == c\n")
+    module("ScalarGuard", scalar_guard, same_log=True)
+
     controls = work / "Checks.lean"
-    imports = [f"import {name}" for name in [*names, "Zkc.Formal.Written.FiniteModel"]]
+    imports = [f"public import {name}" for name in [*names, "Zkc.Formal.Written.FiniteModel"]]
     controls.write_text("\n".join(["module", "", *imports, "", CONTROL.read_text()]))
-    run(["lake", "-q", "lean", controls], cwd=work)
-    print("Checked companion imports, permitted returning branches, their witness, and three source counterexamples.", flush=True)
+    report = run(["lake", "-q", "lean", controls], cwd=work)
+    for theorem in ["Baseline.certified_admitted", "SameLog.certified_admitted", "Reordered.certified_admitted",
+                    "WrittenControls.missing_guard_admitted", "WrittenControls.permitted_counterexample",
+                    "WrittenControls.wrong_extractor", "WrittenControls.wrong_relation",
+                    "WrittenControls.wrong_verifier"]:
+        check_axioms(theorem, report)
+    print("Checked both admitted certificates, permitted forks, and four source counterexamples.", flush=True)
 
     failed = work / "Rejected.lean"
-    for changed in [zero, other_verifier]:
-        failed.write_text(generate(changed))
+    for changed, is_same_log in [(zero, False), (other_verifier, False), (missing, True), (scalar_guard, True)]:
+        failed.write_text(generate(changed, same_log=is_same_log))
         diagnostic = run(["lake", "-q", "lean", failed], failure="WK-PROOF", cwd=work)
-        if str(input_file) not in diagnostic:
+        if str(work / CHAUM_PEDERSEN.name if is_same_log else input_file) not in diagnostic:
             raise RuntimeError("residual proof failure did not identify the source module")
     for source, diagnostic in [
         (replace_once(original, "Schnorr<G>::Runs<2>", "Schnorr<G>::Runs<3>"), "WK-VIEW"),

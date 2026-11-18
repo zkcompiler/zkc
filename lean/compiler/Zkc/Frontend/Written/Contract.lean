@@ -13,14 +13,14 @@ def portView (code : Typing.ProtocolCode) (where_ : Span) : ExportM View := do
   let #[.exchange p v pt ci, .draw owner #[peer] _ di, .exchange sender receiver fr ri] := code.flows
     | refuse where_ "WK-VIEW" "expected a commitment, a verifier draw and a response"
   unless code.roles.size == 2 && p != v && owner == v && peer == p && sender == p && receiver == v &&
-      StandardNames.groupOf? pt == some .g1 && StandardNames.fieldOf? fr == some .bls12381Fr do
+      StandardNames.fieldOf? fr == some .bls12381Fr do
     refuse where_ "WK-VIEW" "incompatible message roles or types"
   let site i := do
     let some s := code.sites[i]? | refuse where_ "WK-VIEW" "missing emitted occurrence"
     unless s.name.isSome && s.part == "value" && s.instruction.isSome && s.iteration.isEmpty do
       refuse s.place "WK-VIEW" "expected a named, unambiguous top-level event"
     pure s
-  return ⟨← site ci, ← site di, ← site ri, p, v⟩
+  return ⟨← site ci, ← site di, ← site ri, p, v, ← historySort pt where_⟩
 
 def reference (s : Compile.State) (file : FileId) (path : Path) : ExportM DeclarationId := do
   let some resolution := s.resolutions.find? file path | refuse path.span "WK-REF" "unresolved path"
@@ -80,13 +80,23 @@ def checkRuns (s : Compile.State) (env : Static.Env) (t : TypeExpr) (key : Insta
   let some (Segment.segment _ _ (some (.staticArgs _ #[.term _ none (.number n)]))) := segs.back?
     | refuse t.span "WK-VIEW" "expected an explicit leaf count"
   unless n.value == 2 do refuse n.span "WK-VIEW" "expected two leaves"
-  let some (Segment.segment _ _ (some (.staticArgs _ #[.term _ none arg]))) := segs.toList.reverse[1]?
-    | refuse t.span "WK-VIEW" "expected the selected protocol type parameter"
-  let argument ← evaluated s arg.span (Static.evalWrittenAny env arg)
-  unless key.arguments == #[argument] do refuse arg.span "WK-VIEW" "different protocol specialization"
+  let some (Segment.segment _ _ args) := segs.toList.reverse[1]?
+    | refuse t.span "WK-VIEW" "missing protocol in run view"
+  let arguments ← match args with
+    | some (.staticArgs _ #[.term _ none arg]) => do
+      pure #[← evaluated s arg.span (Static.evalWrittenAny env arg)]
+    | none => do
+      let some root := s.program.declarations[id]? | refuse t.span "WK-REF" "missing run-view protocol"
+      (Static.deployedParameters s.program root).mapM fun (ref, _) =>
+        match env.values[ref]? with
+        | some v => pure v
+        | none => refuse t.span "WK-VIEW" "run view needs an explicit protocol specialization"
+    | _ => refuse t.span "WK-VIEW" "unsupported protocol arguments in run view"
+  unless key.arguments == arguments do refuse t.span "WK-VIEW" "different protocol specialization"
 
 structure WrittenClause where
   view : View
+  publicCount : Nat
   source : ClauseSource
   verifierSpan : Span
   relationName : String
@@ -127,34 +137,36 @@ def declarations (s : Compile.State) (scheme : SchemeEntry) : ExportM WrittenCla
   let point := StandardNames.groupType .g1
   let scalar := StandardNames.fieldType .bls12381Fr
   unless key.arguments == #[.type point] do refuse scheme.span "WK-ROOT" "expected a G1 specialization"
-  let #[.port _ a _ _ false, .port _ b _ _ false, .port _ _ _ _ _] := proto.head.ports
-    | refuse proto.span "WK-PORT" "expected two public group ports and one prover witness"
-  let #[x,y] := r.statement | refuse r.span "WK-TYPE" "expected two relation statement parameters"
+  let some (.port ..) := proto.head.ports.back?
+    | refuse proto.span "WK-PORT" "expected a prover witness"
+  let publicNames ← proto.head.ports.pop.mapM fun
+    | .port _ name _ _ false => pure name.text
+    | _ => refuse proto.span "WK-PORT" "expected public group ports before the witness"
+  unless !publicNames.isEmpty && r.statement.size == publicNames.size &&
+      e.params.size == r.statement.size + 1 && item.args.size == r.statement.size do
+    refuse item.where_ "WK-PORT" "statement, relation and extractor arities must agree"
   let some #[w] := r.witness | refuse r.span "WK-TYPE" "expected one relation witness"
-  let #[ex,ey,runs] := e.params | refuse e.span "WK-TYPE" "expected two statement parameters and a run view"
+  let some runs := e.params.back? | refuse e.span "WK-VIEW" "missing extractor run view"
   let some result := e.result | refuse e.span "WK-TYPE" "extractor needs a witness result"
   let re := Static.instanceEnv s.program rd key.arguments
   let ee := Static.instanceEnv s.program ed key.arguments
   evaluated s r.span (Static.checkBounds re rd r.name.text)
   evaluated s e.span (Static.checkBounds ee ed e.name.text)
-  checkType s re x.type point
-  checkType s re y.type point
+  for param in r.statement do checkType s re param.type point
   checkType s re w.type scalar
-  checkType s ee ex.type point
-  checkType s ee ey.type point
+  for param in e.params.pop do checkType s ee param.type point
   checkType s ee result scalar
   checkRuns s ee runs.type key
   let operand := fun arg => do
     let .positional sp expr := arg | refuse item.where_ "WK-PORT" "expected positional statement operands"
     let n ← localName expr
-    if n == a.text then pure "statement.1"
-    else if n == b.text then pure "statement.2"
-    else refuse sp "WK-PORT" s!"unknown public input {n}"
-  let #[v1,v2] ← item.args.mapM operand | refuse item.where_ "WK-PORT" "relation statement arity"
-  let relation ← algorithm view [(x.name.text, ⟨.point,v1⟩),(y.name.text, ⟨.point,v2⟩),
-    (w.name.text, ⟨.scalar,"witness"⟩)] .boolean rb
-  let extraction ← algorithm view [(ex.name.text, ⟨.point,v1⟩),(ey.name.text, ⟨.point,v2⟩),
-    (runs.name.text, ⟨.runs,""⟩)] .scalar eb
-  return ⟨view,item,proto.span,r.name.text,r.span,e.name.text,e.span,relation,extraction⟩
+    let some index := publicNames.idxOf? n | refuse sp "WK-PORT" s!"unknown public input {n}"
+    pure (component "statement" index (index + 1 == publicNames.size))
+  let operands ← item.args.mapM operand
+  let bind (params : Array Param) : Locals := (params.zip operands).toList.map fun (p, v) =>
+    (p.name.text, ⟨.point, v⟩)
+  let relation ← algorithm view ((w.name.text, ⟨.scalar,"witness"⟩) :: bind r.statement) .boolean rb
+  let extraction ← algorithm view ((runs.name.text, ⟨.runs,""⟩) :: bind e.params.pop) .scalar eb
+  return ⟨view,publicNames.size,item,proto.span,r.name.text,r.span,e.name.text,e.span,relation,extraction⟩
 
 end Zkc.Frontend.Written

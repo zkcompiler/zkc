@@ -42,4 +42,45 @@ theorem Returns.canReturn {p : Process S H A} {trace} (h : Returns p trace)
     obtain ⟨a, h⟩ := ih (fun x hx => valid x (List.mem_cons_of_mem _ hx))
     exact ⟨a, .call _ v (valid _ (List.mem_cons_self ..)) h⟩
 
+/-- An observed input whose operation can be compared with an arbitrary process call.
+Only the expected operation needs decidable equality. -/
+structure Input (S : Sig) where
+  op : S.Op
+  reply : S.Reply op
+  compareOp : (actual : S.Op) → Decidable (actual = op)
+
+def Input.entry {S : Sig} (x : Input S) : (op : S.Op) × S.Reply op := ⟨x.op, x.reply⟩
+
+def replay {S : Sig} {H A : Type} : List (Input S) → Process S H A → Option Unit
+  | [], .done _ => some ()
+  | x :: xs, .call op k =>
+    match x.compareOp op with
+    | .isTrue h => replay xs (k (h ▸ x.reply))
+    | .isFalse _ => none
+  | _, _ => none
+
+theorem replay_iff {S : Sig} {H A : Type} (inputs : List (Input S)) (p : Process S H A) :
+    Returns p (inputs.map Input.entry) ↔ replay inputs p = some () := by
+  induction inputs generalizing p with
+  | nil =>
+    cases p with
+    | done value => exact ⟨fun _ => rfl, fun _ => .done value⟩
+    | halt | call => constructor <;> intro h <;> cases h
+  | cons x xs ih =>
+    cases p with
+    | done | halt => constructor <;> intro h <;> cases h
+    | call op k =>
+      simp only [List.map_cons, replay]
+      split
+      next h =>
+        subst op
+        exact returns_call.trans (ih _)
+      next noMatch _ =>
+        constructor
+        · intro run
+          cases x with | mk expected reply _ =>
+            cases run
+            exact False.elim (noMatch rfl)
+        · intro no; cases no
+
 end Zkc.Formal.Written

@@ -30,9 +30,9 @@ kernel audit. The [formal package guide](../lean/formal/README.md) gives the
 theorem entry points and the [source checks](../lean/formal/checks/SourceProtocols.lean)
 exercise the certificates.
 
-## Written Schnorr knowledge
+## Written three-message knowledge
 
-For the interactive G1 instance in `examples/schnorr_example.zkc`, `zkc-knowledge` exports the written relation, extractor and a two-transcript claim over the actual admitted verifier. Lean proves that two accepting executions with a shared commitment and different challenges give a successful return of the declared extractor satisfying the declared relation. The theorem assumes the three verifier row interpretations and elementary group-action laws. The finite model and mutation checks run with `just test-written-knowledge`. See the [usage and proof boundary](written-knowledge.md).
+The G1 instances of Schnorr and Chaum–Pedersen use the same source-to-Lean certificate generator. It exports the written relation, extractor and two-transcript target over the actual admitted verifier. Lean checks extraction under the three verifier row interpretations and elementary group-action laws. An independent target is available for a companion. The finite-model controls include a proof that removing the second Chaum–Pedersen guard falsifies the admitted target. Run `just test-written-knowledge`. See the [usage and proof boundary](written-knowledge.md).
 
 ## Earlier source and execution pipeline
 
