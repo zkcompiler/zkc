@@ -239,6 +239,27 @@ theorem divideStep_accepted : divideWithUnusedFn.step divideWithoutUnused = .ok 
 every callees (`AssuredFn.step_same`). -/
 example : divideWithUnusedFn.fn.SameAs divideStep.fn := AssuredFn.step_same divideStep_accepted
 
+/-! Removing an unused quotient is legal under the positive-divisor requirement. The two
+functions deliberately differ outside that requirement. -/
+
+private def unusedQuotient : Region (LocalRaw field) Unit :=
+  .mk [0, 1] [.op ⟨1⟩ [10] quotient [0, 1]] [0]
+
+private def withQuotient : AssuredFn field [] divideHeader :=
+  (accepted? (admitFn [] divideHeader unusedQuotient)).get (by decide +kernel)
+
+private def withoutQuotient : AssuredFn field [] divideHeader :=
+  (accepted? (withQuotient.step (removeUnused [] unusedQuotient))).get (by decide +kernel)
+
+example : withQuotient.fn.SameAs withoutQuotient.fn :=
+  AssuredFn.step_same (ok_of_accepted (by decide +kernel) :
+    withQuotient.step (removeUnused [] unusedQuotient) = .ok withoutQuotient)
+
+example : let ins : HList twoModel.Val divideHeader.ins := .cons (5 : Nat) (.cons (0 : Nat) .nil)
+    withQuotient.fn.meaning twoModel (noCallees twoModel) ins = .halt .undefined ∧
+      withoutQuotient.fn.meaning twoModel (noCallees twoModel) ins = .done (.cons (5 : Nat) .nil) :=
+  ⟨rfl, rfl⟩
+
 /-! ## Summaries that elaboration refuses -/
 
 /-- The first refusal of elaboration of a program; nothing when it elaborates. -/

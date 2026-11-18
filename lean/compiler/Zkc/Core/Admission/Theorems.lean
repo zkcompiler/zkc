@@ -63,21 +63,30 @@ theorem admitFrom_elaborates : ∀ (p : Typed V) (bounds : List (Place × Nat))
       simp only [elaborateFrom, elaborated]
       exact admitFrom_elaborates (p.add e) (mine ++ bounds) rest q bounds' later
 
+/-- Incremental checking and the definition phase of admission agree on the headers or the
+entire list of refusals, starting at any already typed prefix. Association resolution follows
+this phase. -/
+theorem checkAll_eq_admitFrom (p : Typed V) (bounds : List (Place × Nat))
+    (definitions : List (Definition V)) :
+    checkAll check p.headers definitions =
+      (admitFrom p bounds definitions).map (fun result => result.1.headers) := by
+  induction definitions generalizing p bounds with
+  | nil => rfl
+  | cons definition rest ih =>
+      cases h : checkDefinition p.headers definition with
+      | error refusals => simp only [checkAll, check, admitFrom, h, Except.map, Except.bind]
+      | ok checked =>
+          obtain ⟨e, mine⟩ := checked
+          simpa only [checkAll, check, admitFrom, h, Except.map, Except.bind, Typed.add_headers]
+            using ih (p.add e) (mine ++ bounds)
+
 /-- The checks in order give the headers of the program, one definition at a time. -/
-theorem admitFrom_checkAll : ∀ (p : Typed V) (bounds : List (Place × Nat))
-    (definitions : List (Definition V)) (q : Typed V) (bounds' : List (Place × Nat)),
-    admitFrom p bounds definitions = .ok (q, bounds') →
-      checkAll check p.headers definitions = .ok q.headers
-  | p, bounds, [], q, bounds', h => by
-      cases h
-      rfl
-  | p, bounds, definition :: rest, q, bounds', h => by
-      obtain ⟨⟨e, mine⟩, checked, later⟩ := ok_of_bind h
-      have one : check p.headers definition = .ok e.headers := by
-        simp only [check, checked, Except.map]
-      simp only [checkAll, one, Except.bind]
-      rw [← Typed.add_headers p e]
-      exact admitFrom_checkAll (p.add e) (mine ++ bounds) rest q bounds' later
+theorem admitFrom_checkAll (p : Typed V) (bounds : List (Place × Nat))
+    (definitions : List (Definition V)) (q : Typed V) (bounds' : List (Place × Nat))
+    (h : admitFrom p bounds definitions = .ok (q, bounds')) :
+    checkAll check p.headers definitions = .ok q.headers := by
+  rw [checkAll_eq_admitFrom p bounds, h]
+  rfl
 
 /-! ## The statements
 
