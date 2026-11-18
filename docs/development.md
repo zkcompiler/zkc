@@ -27,7 +27,7 @@ Both packages pin Lean 4.36.0. See the [toolchain guide](lean-toolchain.md) for 
 feature choices and upgrade checks. Rebuild artifacts for the exact toolchain; do not reuse
 4.35 `.olean` files.
 
-This branch's active targets are the core, vocabulary, their tests and the audit. The retained
+The active default targets are the core, vocabulary, their tests and the audit. The retained
 frontend and formal package await their port to the redesigned core and are not built by the
 root commands. Their matching toolchain pin does not mean that port is complete.
 
@@ -53,7 +53,7 @@ The checks run during compilation. For a focused change, build the affected modu
 After the change stabilizes, `just test` also performs the audit.
 
 The retained frontend's separate driver and its optional `--trees` comparison belong to the
-pending frontend port; they are not the active test driver on this branch. Its
+pending frontend port; they are not the active test driver. Its
 [guide](../lean/compiler/Zkc/Frontend/README.md) describes those tests.
 
 ### Lean proof tools
@@ -114,7 +114,7 @@ Beam does not replace either acceptance check.
   Neither imports tests or tools. Root imports cover every library source file, and every
   test source is built and loaded.
 
-The audit accepts a positive fixture of generated helpers, refuses all 15 negative controls
+The audit accepts a positive fixture of generated helpers, refuses all 16 negative controls
 and fails if any expected result changes. Private declarations are loaded from
 `.olean.private`; the controls also check private native attributes. The
 [compiler guide](../lean/compiler/README.md#build-test-and-audit) describes the entry points.

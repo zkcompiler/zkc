@@ -1,13 +1,9 @@
 # Compiler
 
-The Lake package `zkc_compiler`: the compiler of the zkc source language, in Lean. The frontend
-reads the source and emits packages of the core; the core admits a package as a program,
-constructs its schemes, projects it to role programs and runs them. It has no Lake dependency;
-the formal package (`../formal`) requires it.
-
-On this branch the package builds the core, the vocabulary, their tests and the audit. The
-frontend (its libraries and executables below) and the formal package are not built on this
-branch until they are attached again to the core.
+The compiler package `zkc_compiler` has no external Lake dependencies. Its default targets build
+the Core, the standard vocabulary, their tests and the audit. The retained source frontend and
+the formal package that depends on the compiler await migration. See the
+[status](../../docs/status.md) for the revision that provides the earlier CLI and formal examples.
 
 Libraries:
 
@@ -24,15 +20,15 @@ Libraries:
   with the replay of its declarations through the kernel.
 - `ZkcFrontend`, `ZkcFrontendTools`, `ZkcFrontendTests` (`Zkc.Frontend`, `Zkc.Tools.Frontend`,
   `Zkc.Tests.Frontend`): the lexer, the parser, the checker and the emitter of the source
-  language ([guide](Zkc/Frontend/README.md)), the code of its executables and its tests; not
-  built on this branch.
+  language ([guide](Zkc/Frontend/README.md)), the code of its executables and its tests; outside
+  the default build.
 
 Executables:
 
 - `zkc-audit`: the audit of `ZkcCore`, `ZkcVocabulary`, `ZkcCoreTests` and
   `ZkcVocabularyTests`.
 - `zkc-syntax`, `zkc-check`, `zkc-frontend-tests`: the frontend's lexer, parser and canonical
-  printer on source files, its checks, and its test driver; not built on this branch.
+  printer on source files, its checks, and its test driver; outside the default build.
 
 ## Build, test and audit
 
@@ -60,7 +56,7 @@ imported by its root module (`Zkc/Core.lean`, `Zkc/Vocabulary.lean`); and that e
 tests is built and audited. It prints each library's `partial` definitions, recursive native
 implementations and recognized constructor indices, what it replayed and what it took as built.
 It exits with 0 only when the libraries pass, the generated-helper positive control passes and
-all 15 negative controls are refused by their intended rules. These include private attributes
+all 16 negative controls are refused by their intended rules. These include private attributes
 and counterfeit constructor-index bodies/targets. The build also checks ten isolated mutations
 of a recognized helper. See the [toolchain guide](../../docs/lean-toolchain.md) for the upgrade's
 trust boundary and feature choices.

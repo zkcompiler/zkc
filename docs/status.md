@@ -11,11 +11,12 @@ See the [Core guide](../lean/compiler/Zkc/Core/README.md) and the
 
 ## Earlier source and execution pipeline
 
-The following table describes the retained sources and fixtures from before the Core port.
-The active targets build the redesigned Core, vocabulary and their tests. The frontend and
-formal suites in the table still need to be ported.
+Use [the previous Lean compiler at `10ed903fc`](https://github.com/zkcompiler/zkc/tree/10ed903fc22d3f20b22ff2d1bbf607a740ef0718) for the working `.zkc` frontend,
+`zkc-check`, scheme construction and formal examples. The table records coverage at that revision.
+The current default targets build the redesigned Core, vocabulary, their tests and audit.
+The retained frontend and historical formal suites still need to be ported.
 
-| Area | Supported |
+| Area | Coverage at `10ed903fc` |
 |---|---|
 | Source language | `.zkc` source of the frozen layer, and the scheme declarations that derive a proof by Fiat–Shamir with the canonical layout. A root that uses a form of a later layer waits, with the form it waits for |
 | Admission | elaboration of a package of the core language, its types, the check of facts (an admitted program never stops `undefined`) and the check of copies |

@@ -6,7 +6,7 @@ dependency; the formal package requires only `../compiler`. Install the pins thr
 use the [development commands](development.md). Keep package pins identical and rebuild
 artifacts for the selected compiler; build caches from different Lean versions are incompatible.
 
-The active targets on this branch are the redesigned core, vocabulary, their tests and audit.
+The active default targets are the redesigned core, vocabulary, their tests and audit.
 The frontend and formal sources are retained for their separate architectural port. Updating
 their toolchain file does not complete that port.
 
@@ -34,7 +34,7 @@ The audit accepts generated public, private, empty, indexed, mutual, nested and 
 rejects counterfeit logical bodies, native bodies and replacement targets. Private `extern`
 and `implemented_by` controls verify that the imported private metadata remains visible.
 Ten isolated mutations additionally check the recognizer during its build. The complete
-suite has 15 negative controls; every control must fail by its intended rule.
+suite has 16 negative controls; every control must fail by its intended rule.
 
 Lean 4.36 also removed a redundant natural-number equality instance. Default instance search
 now finds `LawfulBEq Nat` through the order of naturals, and a proof that uses it (for example
