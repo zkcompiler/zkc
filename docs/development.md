@@ -27,9 +27,9 @@ Both packages pin Lean 4.36.0. See the [toolchain guide](lean-toolchain.md) for 
 feature choices and upgrade checks. Rebuild artifacts for the exact toolchain; do not reuse
 4.35 `.olean` files.
 
-The active default targets are the core, vocabulary, their tests and the audit. The retained
-frontend and formal package await their port to the redesigned core and are not built by the
-root commands. Their matching toolchain pin does not mean that port is complete.
+The default targets build the core, vocabulary, their tests and the audit. The separate
+interactive suite checks selected source protocols through admission and replays their formal
+proofs. The full frontend CLI and historical formal receipt suite still await migration.
 
 ## Commands
 
@@ -40,11 +40,12 @@ Run every command from the root of the repository.
 | `just` | lists the recipes |
 | `just build` | `lake build` in `lean/compiler`: all active targets |
 | `just test` | `lake build` and `lake test` in `lean/compiler`, then `just audit` |
+| `just test-interactive` | build the interactive formal modules, check emitted source entries and mutations, and audit the interactive library and its mathematical controls |
 | `just audit` | `lake exe zkc-audit` in `lean/compiler`: core, vocabulary and their tests |
 | `just check` | the checks that need no build: `bash .github/scripts/public-tree-guard.sh`, `python3 scripts/check_docs.py --all`, and `python3 lean/compiler/scripts/generate_unicode_tables.py --check` |
 
 Lake builds incrementally, so `just build` after a change rebuilds only the modules that the
-change affects. `just test` is the whole validation of the active Lean targets.
+change affects. Run both `just test` and `just test-interactive` for changes that cross the compiler and interactive proof boundary.
 
 ### The tests
 

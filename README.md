@@ -6,16 +6,19 @@ that decide acceptance. The Core gives these programs a meaning that Lean proofs
 
 ## What builds today
 
-The default build admits programs of named functions. Admission checks each definition against
-earlier headers and proves its summary and loop bounds on valid inputs satisfying its requirements.
-A checked transformation preserves the function's behavior under those requirements. For a
-protocol supplied as a typed Core term, projection relates each role's process to its part in
-the protocol. Protocol definitions in named programs still await admission.
+The Core admits mixed programs of named functions and protocols. It checks each definition
+against earlier headers, proves function summaries on valid inputs satisfying their requirements,
+checks projected roles and records loop bounds. A checked transformation preserves function
+behavior under its input requirements.
 
-For the working `.zkc` frontend, `zkc-check`, scheme construction and the Schnorr and Sumcheck
+The interactive source checks follow selected Sumcheck and GKR entries through frontend emission,
+Core admission and role projection to the formal certificates. Run `just test-interactive`
+for the verifier bound, honest Sumcheck completeness and the conditional four-round GKR bound.
+The [status](docs/status.md) gives their hypotheses and scope.
+
+For the earlier full `.zkc` CLI, scheme construction and historical Schnorr and Sumcheck
 formal examples, use [the previous Lean compiler at `10ed903fc`](https://github.com/zkcompiler/zkc/tree/10ed903fc22d3f20b22ff2d1bbf607a740ef0718).
-Those consumers await migration to the rebuilt Core. The [status](docs/status.md) records
-which paths the current build exercises.
+Those consumers still await a full port.
 
 ## Repository
 
@@ -70,6 +73,7 @@ and `python3`, from the root of the repository:
 ```sh
 just build   # build the active compiler targets
 just test    # build, test and audit the active targets
+just test-interactive  # check the source certificates and audit the interactive proofs
 just check   # check the public tree, the documents and the generated Unicode tables
 ```
 

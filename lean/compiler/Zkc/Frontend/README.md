@@ -1,8 +1,9 @@
 # Source language frontend
 
 This guide describes the frontend at [the previous Lean compiler at `10ed903fc`](https://github.com/zkcompiler/zkc/tree/10ed903fc22d3f20b22ff2d1bbf607a740ef0718).
-Use that revision for the commands below. The current default build covers the Core and its
-vocabulary while the frontend is being ported. See [status](../../../../docs/status.md).
+Use that revision for the historical commands below. On the current checkout, run
+`just test-interactive` from the repository root for the source paths used by the Sumcheck
+and GKR certificates. See [status](../../../../docs/status.md).
 
 ## Previous frontend
 
