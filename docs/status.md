@@ -30,6 +30,10 @@ kernel audit. The [formal package guide](../lean/formal/README.md) gives the
 theorem entry points and the [source checks](../lean/formal/checks/SourceProtocols.lean)
 exercise the certificates.
 
+## Written Schnorr knowledge
+
+For the interactive G1 instance in `examples/schnorr_example.zkc`, `zkc-knowledge` exports the written relation, extractor and a two-transcript claim over the actual admitted verifier. Lean proves that two accepting executions with a shared commitment and different challenges give a successful return of the declared extractor satisfying the declared relation. The theorem assumes the three verifier row interpretations and elementary group-action laws. The finite model and mutation checks run with `just test-written-knowledge`. See the [usage and proof boundary](written-knowledge.md).
+
 ## Earlier source and execution pipeline
 
 Use [the previous Lean compiler at `10ed903fc`](https://github.com/zkcompiler/zkc/tree/10ed903fc22d3f20b22ff2d1bbf607a740ef0718) for the working `.zkc` frontend,

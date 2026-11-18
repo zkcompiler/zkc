@@ -1,0 +1,86 @@
+open Zkc.Core Zkc.Formal.Written Zkc.Formal.Written.FiniteModel
+
+namespace WrittenControls
+
+def statement : model.Val pointTy × model.Val pointTy := (true,true)
+def commitment : model.Val pointTy := false
+def left : Branch (model.Val scalarTy) := ⟨false,false⟩
+def right : Branch (model.Val scalarTy) := ⟨true,true⟩
+
+theorem left_returns : Baseline.accepts model statement [] commitment left :=
+  (Baseline.verifier_equation model ops rows statement [] commitment left).2 (by decide)
+theorem right_returns : Baseline.accepts model statement [] commitment right :=
+  (Baseline.verifier_equation model ops rows statement [] commitment right).2 (by decide)
+
+theorem permitted_fork (b : Branch (model.Val scalarTy)) :
+    ∀ e ∈ forkTrace model [] 0 ⟨2⟩ ⟨3⟩ ⟨6⟩ commitment b, Permitted model e.1 e.2 := by
+  intro e mem
+  simp only [forkTrace, List.mem_cons, List.not_mem_nil, or_false] at mem
+  rcases mem with rfl | rfl | rfl
+  · trivial
+  · exact ⟨trivial, ⟨[], scalarTy⟩, rfl, rfl, rfl, trivial⟩
+  · trivial
+
+example : ∃ v, (roleMeaning model Baseline.installed (Member.head : Member [Baseline.header] Baseline.header)
+    1 [] (.cons true (.cons true (.cons () .nil)))).CanReturn (Permitted model) v :=
+  left_returns.canReturn (Permitted model) (permitted_fork left)
+
+example : ∃ v, (roleMeaning model Baseline.installed (Member.head : Member [Baseline.header] Baseline.header)
+    1 [] (.cons true (.cons true (.cons () .nil)))).CanReturn (Permitted model) v :=
+  right_returns.canReturn (Permitted model) (permitted_fork right)
+
+example : Baseline.extractor ops statement commitment left right = some true ∧
+    Baseline.relation ops statement true = some true ∧ left.challenge ≠ right.challenge := by decide
+
+example : Baseline.extractor ops statement commitment left left = none := by decide
+
+example : Baseline.obligation model ops [] := Baseline.certified model ops rows laws []
+
+example {a : Admitted Renamed.V} (admitted : admit Renamed.stored ⟨[],[],[],[],[]⟩ = .ok a) :
+    Renamed.admittedObligation model ops a [] :=
+  Renamed.of_obligation model ops admitted [] (Baseline.certified model ops rows laws [])
+
+example : Renamed.stored = Baseline.stored := rfl
+example : Renamed.obligation model ops [] = Baseline.obligation model ops [] := rfl
+example : Simulator.obligation model ops [] = Baseline.obligation model ops [] := rfl
+-- The source clause swaps both arguments passed to the relation and extractor.
+example : Swapped.relation ops (true,false) false = some false := by decide
+example : Swapped.extractor ops (true,false) commitment left right = none := by decide
+example : Swapped.extractor ops (false,true) commitment left right = some true := by decide
+example : Zero.stored = Baseline.stored := rfl
+example : OtherRelation.stored = Baseline.stored := rfl
+example : OtherVerifier.stored ≠ Baseline.stored := by decide +kernel
+
+/-- The same pair returns in both source variants. One extractor returns zero and
+the other relation rejects the witness that the original extractor returns. -/
+theorem wrong_extractor : ¬ Zero.obligation model ops [] := by
+  intro claim
+  obtain ⟨w, returned, holds⟩ := claim statement commitment left right left_returns right_returns (by decide)
+  have eq : (some false : Option Bool) = some w := returned
+  cases Option.some.inj eq
+  exact (by decide : Zero.relation ops statement false ≠ some true) holds
+
+theorem wrong_relation : ¬ OtherRelation.obligation model ops [] := by
+  intro claim
+  obtain ⟨w, returned, holds⟩ := claim statement commitment left right left_returns right_returns (by decide)
+  have eq : (some true : Option Bool) = some w := returned
+  cases Option.some.inj eq
+  exact (by decide : OtherRelation.relation ops statement true ≠ some true) holds
+
+/-- A verifier accepting an arbitrary response admits a bad fork even with the original extractor. -/
+theorem wrong_verifier : ¬ OtherVerifier.obligation model ops [] := by
+  intro claim
+  let changed : Branch (model.Val scalarTy) := ⟨true,false⟩
+  have one := (OtherVerifier.verifier_returns model ops rows statement [] commitment left).2 (by decide)
+  have two := (OtherVerifier.verifier_returns model ops rows statement [] commitment changed).2 (by decide)
+  obtain ⟨w, returned, holds⟩ := claim statement commitment left changed one two (by decide)
+  have eq : (some false : Option Bool) = some w := returned
+  cases Option.some.inj eq
+  exact (by decide : OtherVerifier.relation ops statement false ≠ some true) holds
+
+#print axioms wrong_verifier
+#print axioms left_returns
+#print axioms wrong_extractor
+#print axioms wrong_relation
+
+end WrittenControls

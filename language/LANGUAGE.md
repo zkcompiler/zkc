@@ -596,7 +596,7 @@ formatter), when it is wrong (an error), and when it is kept.
 | `@S` on the binder of `=` or `mut` | `S` and the holders of the expression (HO2) are the same set of roles | when equal | when `S` is not a subset | when `S` is a proper subset: it restricts |
 | `from p` on a `send` | `p` is the only role that holds the payload and is not a receiver | when so | when `p` does not hold the payload or is a receiver | when several roles could send |
 | `from o` on a `query` | `o` is the only holder of the handle's data | when so | when `o` does not hold the data | when the data has several holders |
-| `#[site(x)]` | the binder of the event is the single name `x` | when so | when the binder is another single name | when the binder is a pattern, or the event is an `open` |
+| `#[site(x)]` | the event binds the single name `x` | when so | — | to give any event a stable name independent of its local binder |
 | a role-map entry `O = P` | `O` and `P` are the same name | when so | when `P` is not a role of the caller, or the map is not injective | when the names differ |
 | `else reject` on a guard | `reject` is the default reason | always | — | never |
 | `@R` on `reduces` or `proves` | `R` is the only role that can decide the clause (SX6) | when so | when `R` cannot decide it | when several roles can |
@@ -2157,9 +2157,8 @@ in an expression, and it occurs only in a protocol body. **Message:** "an event 
 **EV3. Sites.** One event has one site. The sites of a definition are numbered from 0 in the
 order of the text, depth first (the arms of a choice in the order written, the body of a loop
 once), before any expansion. A site in a loop whose iterations are emitted in sequence (§7.5) is
-one site of the source with one occurrence per iteration. The *name* of a site is the binder of
-its event when the binder is
-one name; otherwise the name in `#[site(name)]` on the line before it; otherwise it has none. A
+one site of the source with one occurrence per iteration. An explicit `#[site(name)]` on the
+preceding line names the site. Otherwise a single event binder supplies the site name. A
 site without a name is not referred to; its field in a generated record is `site<n>` (§8). Two
 events of one definition do not share a name. A site of an arm that a static condition does not
 take (TY9) has its number and no occurrence at that instance. *Layer D, not implemented in stage
@@ -2177,8 +2176,7 @@ part and its iteration (§7.5):
 | `query` | `rows`, then `opening` |
 | `open` | `opening`; before it, one part `reduce k` per claim of a derived kind (§7.6) |
 
-**Messages:** "the site of `<x> <- …` is named `<x>`; `#[site(<y>)]` names it otherwise"; "two
-events are named `<x>` (lines <m>, <n>)".
+**Message:** "two events are named `<x>` (lines <m>, <n>)".
 
 **EV4. Site references.** `sites.a.….z` names the site `z` reached through the applications
 named `a`, …, outermost first, starting at the protocol the clause or scheme belongs to. A site
@@ -2307,7 +2305,7 @@ written after the others; an argument `spec name = e` whose name is no `spec` po
 is refused by this rule. A handle argument has the mapped placement of its port. The results of
 an application are bound by one name (`y.r` reads result `r`; with one result, `y` is the
 result) or by a tuple pattern in the order of the head. An application without results needs no
-binder (EV1); written `y <- C(args)`, the name `y` names its site. **Message:** "`<C>` has no
+binder (EV1); written `y <- C(args)`, the name `y` supplies the default site name (EV3). **Message:** "`<C>` has no
 specification port `<q>`".
 
 **RM4. Keys are inputs.** By convention a library protocol takes keys as inputs; only a protocol

@@ -2,6 +2,8 @@
 
 Run `just test-interactive` from the repository root to check the emitted Sumcheck verifier and the GKR layer application. The source controls exercise zero, one and ten Sumcheck rounds, the four-coordinate GKR reduction, and changes to the evaluator, residual, guard and lexical specification arguments. The command compares both client implementations and replays the interactive formal library and its mathematical controls with the compiler's kernel audit.
 
+Run `just test-written-knowledge` for the source-selected Schnorr extractor, the admitted verifier, its two accepting test runs and mutation counterexamples. The [written knowledge guide](../../docs/written-knowledge.md) describes the generic Lean property, the generated target and the model assumptions.
+
 The receipt suite documented below uses the Core interfaces and fixtures from
 [the previous Lean compiler at `10ed903fc`](https://github.com/zkcompiler/zkc/tree/10ed903fc22d3f20b22ff2d1bbf607a740ef0718). Run its commands at that revision.
 See [status](../../docs/status.md).

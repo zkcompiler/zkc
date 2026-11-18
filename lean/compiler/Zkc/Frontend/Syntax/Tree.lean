@@ -962,4 +962,12 @@ structure SourceFile where
   source : ByteArray := ByteArray.empty
   deriving Inhabited
 
+/-- The explicit site is stable across a local binder rename. A single binder supplies
+the default source-facing name when an event has no site attribute. -/
+def eventSiteName (site : Option SiteAttr) (pattern : Option Pattern) : Option String :=
+  match site, pattern with
+  | some attribute_, _ => some attribute_.name.text
+  | none, some (.name name) => some name.text
+  | none, _ => none
+
 end Zkc.Frontend.Syntax

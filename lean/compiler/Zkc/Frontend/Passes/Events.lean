@@ -16,8 +16,8 @@ event of an arm that a static condition does not take has its number and no occu
 instance.
 
 The names of the sites are a matter of the text of the declaration, the same at every instance:
-two events of one definition do not share a name, and `#[site(n)]` does not name an event whose
-binder already names it.
+each explicit `#[site(n)]` provides its stable name, a single binder supplies the default, and
+two events of one definition may not share a name.
 -/
 
 namespace Zkc.Frontend.Passes
@@ -54,13 +54,7 @@ end Events
 /-- The occurrences of the events of a protocol body. -/
 def occurrences (body : ProtocolBody) : Array Occurrence := Events.occurrencesOf #[] #[] body.statements
 
-/-- The name of the site of an event: its binder when it is one name, otherwise the name of
-`#[site(…)]`. -/
-def siteName (site : Option Syntax.SiteAttr) (pattern : Option Syntax.Pattern) : Option String :=
-  match pattern, site with
-  | some (.name name), _ => some name.text
-  | _, some siteAttribute => some siteAttribute.name.text
-  | _, _ => none
+abbrev siteName := Syntax.eventSiteName
 
 /-- The events of statements as the text has them, in its order, depth first: the place, the
 `#[site(…)]` and the pattern of each. -/
@@ -91,15 +85,11 @@ partial def writtenLoops (statements : Array Syntax.Stmt) : Array Syntax.Span :=
     | .«for» span _ _ _ body => #[span] ++ writtenLoops body
     | _ => #[]
 
-/-- The names of the sites of a protocol (EV3): `#[site(n)]` names a site only when its binder
-does not, and two events do not share a name. Every refusal is reported. -/
+/-- The names of the sites of a protocol (EV3): `#[site(n)]` names a site independently of its binder,
+and two events do not share a name. Every refusal is reported. -/
 def checkSiteNames (node : Syntax.Protocol) : CompileM Unit := do
   let mut named : Array (String × Syntax.Span) := #[]
   for (span, site, pattern) in writtenEvents node.body do
-    if let (some (.name binder), some siteAttribute) := (pattern, site) then
-      unless siteAttribute.name.text == binder.text do
-        logError "EV3" siteAttribute.span
-          (.ofText s!"the site of `{binder.text} <- …` is named `{binder.text}`; `#[site({binder.text})]` names it otherwise")
     if let some text := siteName site pattern then
       match named.find? (·.1 == text) with
       | some (_, earlier) =>

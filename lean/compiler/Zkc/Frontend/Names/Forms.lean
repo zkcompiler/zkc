@@ -127,12 +127,7 @@ def reasonOf : Option Syntax.Reason → Zkc.Core.Reason
   | some (.exhausted _) => .exhausted
   | _ => .reject
 
-/-- The site name of an event: its binder when it is one name, otherwise `#[site(…)]`. -/
-def siteName (site : Option SiteAttr) (pattern : Option Pattern) : Option String :=
-  match pattern, site with
-  | some (.name name), _ => some name.text
-  | _, some siteAttribute => some siteAttribute.name.text
-  | _, _ => none
+abbrev siteName := Syntax.eventSiteName
 
 /-- The parts of an event (EV3): one per receiver of a send to several, otherwise one. -/
 def eventParts : Syntax.Event → Array String

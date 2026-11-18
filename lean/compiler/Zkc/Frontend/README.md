@@ -623,7 +623,7 @@ Each reading is followed by the alternative it rules out.
   argument that reads a specification-only parameter is refused by SP11 where it stands.
 - Events are numbered in the order of the text, depth first, the arms of a choice in order and the
   body of a loop once; a send to several receivers has a part per receiver, each a core site of
-  its own. `#[site(…)]` names the site of a tuple pattern.
+  its own. An explicit `#[site(…)]` names an event independently of its local binding pattern.
 - Linearity: any read of a linear name in deployed code is a use, a read of a field included;
   the right operand of `and` and `or` is a path of its own; both arms of a static `if` are
   checked; `[v; s]` is a loop over the copies of `v`. *Otherwise* a field read would leave the
