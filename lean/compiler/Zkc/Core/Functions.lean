@@ -19,13 +19,12 @@ namespace Zkc.Core
 /-! ## The functions to be built -/
 
 /-- The functions of elaboration, admission, deployment and execution. The erased form of a
-typed program is the definition `erase`. For a program of functions, `elaborate`, `admit` and
-`check` are the definitions `elaborateFunctions`, `admit` and `check`, which refuse a protocol;
-the record gets them when protocols are elaborated. The others are still to be built. -/
+typed program is the definition `erase`. The named elaborator is
+`elaborateProgram`. The definition checks and admission use the function analysis. -/
 structure Functions (V : Vocabulary) where
   /-- The typed program of a program by names, of functions and protocols; the refusals of
   elaboration. -/
-  elaborate : NamedProgram V → Except (List (ProgramRefusal V)) (Typed V)
+  elaborate : NamedProgram V → Except (List (DefinitionRefusal V)) (Typed V)
   /-- The erased form of a role's code, in a context of names: of its program, and of a
   clause of a handler. -/
   eraseRole : ∀ {hs : Headers V} (r : Role) {Γ : Ctx (LTy V)} {outs : List (LTy V)},
@@ -34,11 +33,11 @@ structure Functions (V : Vocabulary) where
   carriers that a model with codecs gives. -/
   format : ∀ (M : Model V), Codecs M → ∀ τ : V.Ty, Format (M.Val τ)
   /-- Admission: elaboration, then the check of facts. -/
-  admit : NamedProgram V → Association → Except (List (ProgramRefusal V)) (Admitted V)
+  admit : NamedProgram V → Association → Except (List (AdmissionRefusal V)) (Admitted V)
   /-- The check of one definition against the headers of those before it: what `admit` does
   for each definition, and what a frontend calls while a program is being written. It gives
   the headers with the definition's. -/
-  check : Headers V → Definition V → Except (List (ProgramRefusal V)) (Headers V)
+  check : Headers V → Definition V → Except (List (AdmissionRefusal V)) (Headers V)
   deploy : Admitted V → Declaration → Except (List (ProgramRefusal V)) (Deployed V)
   /-- The identity of a deployed scheme: what its proofs and its transcript are bound to. -/
   identity : Deployed V → List Nat

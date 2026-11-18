@@ -2137,6 +2137,10 @@ to the end makes the caller wait or not checked; a refused body abandons the cal
   per iteration. Every derived form that types a body over a domain goes through this. -/
   partial def onceOrPerIteration {α : Type} (domain : LoopDomain) (span : Span) (once : ElabM α)
       (each : Nat → ElabM α) : ElabM α := do
+    if let some count := domain.count then
+      if count > 0 && domain.source.isSome && Static.isLinear (← getThe Compile.State) domain.element then
+        checkStepped count span
+        return ← each count
     try once
     catch failure =>
       let .staticIndex name := failure | throw failure

@@ -19,8 +19,8 @@ guarantees (`Summary`, `Program/Requirement.lean`).
 
 A definition satisfies a summary when, on valid inputs of which every requirement holds, it never
 stops undefined, and what it returns is valid and, with the inputs, satisfies every guarantee
-(`Summary.Holds`). A requirement over no written operation, as the summary of a function is, is
-read with no relation of written operations (`Empty.elim`); read as a requirement over the written
+(`Summary.Holds`). A positional header clause uses `Empty.elim` for its operation relation. Read as
+a requirement over the written
 operations of a dialect (`Requirement.lift`), it holds of the same values whatever the relation
 (`Requirement.holds_lift`), and so does such a summary (`Summary.holds_lift`).
 -/

@@ -1,115 +1,111 @@
 module
 
-public import Zkc.Core.Explain
-public import Zkc.Frontend.Emit.Definitions
+public import Zkc.Frontend.Emit.Root
 public import Zkc.Frontend.Typed.Find
+public import Zkc.Core.Admission.Check
 
 @[expose] public section
-
 set_option autoImplicit false
-
-/-!
-# The check of a definition
-
-A refusal of facts is made per definition, as soon as its body has passed elaboration: the
-definition is emitted alone and the core checks it. The functions it calls are headers: the
-check of facts reads the signature of a callee and nothing of its body, so a body is checked
-whatever became of its callees. The emission tolerates what a package does not have (a type
-or an operation of specifications, an error node; `Emit.Named`), so that every body is
-checked.
-
-What the core does not justify comes back explained (`Zkc.Core.Explain`), each application at
-the node it was emitted for. The package of this check is never written, run or admitted: the
-package of a root is emitted with bodies and admitted whole.
--/
-
 namespace Zkc.Frontend.Emit
-
 open Static
-open Typing (EmitM EmitFailure toTy rowNumber)
+open Typing (EmitM EmitFailure)
 
-/-- An application that the core does not justify: the node it was emitted for, the role for
-which it is a copy in a protocol body, and the core's explanation. -/
+/-- Source diagnostic groups interpreted from a concrete Core refusal. -/
+inductive Requirement where
+  | ordered | positive | position | slice | size | bound | domain | maximum
+  | core (rule : Core.Rule)
+  deriving DecidableEq, Repr, Inhabited
+
+inductive Condition where
+  | order | upperSize | upperLength | other
+  deriving Inhabited
+
+structure Explained where
+  requirement : Requirement
+  condition : Condition := .other
+  operands : Nat → Option Core.Range := fun _ => none
+
 structure Finding where
   node : Option Typed.NodeId
   role : Option Nat
-  explained : Zkc.Core.Explain.Explained
-  deriving Inhabited
+  explained : Explained
 
-/-- What the core does not justify in the definitions of a checked package that satisfy
-`own`, each at its node. -/
-def findings (emitter : Typing.Emitter) (own : Zkc.Core.Refusal.Definition → Bool) :
-    Except EmitFailure (List Finding) := do
-  let named ← emitter.named
-  let lowered ← match Zkc.Core.Named.lower named with
-    | .ok lowered => pure lowered
-    | .error (_, defect) =>
-      throw (.defect s!"the lowering refuses the check of a definition at node {defect.tag}: {defect.message}")
-  let typed ← match Zkc.Core.elaborate (Zkc.Core.fillMaxima lowered.package) with
-    | .ok typed => pure typed
-    | .error refusal => throw (.defect s!"the core refuses the check of a definition: {reprStr refusal}")
-  return typed.explain.filterMap fun (definition, explained) =>
-    if own definition then
-      let origins := match definition with
-        | .function number => lowered.functionOrigins.getD number []
-        | .protocol number => lowered.protocolOrigins.getD number []
-      let origin := origins.find? (·.path == explained.path)
-      some { node := origin.map (·.tag), role := (origin.bind (·.role)).orElse fun _ => explained.role
-             explained }
-    else none
+def explainOperation {V : Core.Vocabulary} (op : Core.LocalRaw V) (q : Core.Requirement (Core.LocalRaw V))
+    (ranges : List (Option Core.Range)) : Explained :=
+  let operandRange (index : Nat) := (q.operands.zip ranges).findSome? fun
+    | (.arg i, r) => if i == index then r else none
+    | _ => none
+  let (requirement, condition) : Requirement × Condition := match op with
+    | .owned .natSub .. => (.ordered, .other)
+    | .owned .natDiv .. | .owned .natRem .. => (.positive, .other)
+    | .owned .seqAt .. => (.position, .other)
+    | .owned .seqSlice types _ =>
+      let why := match q with
+        | .le (.arg 1) (.arg 2) => Condition.order
+        | .le _ (.apply ..) => if types.head? matches some (.seq _ (some _)) then .upperSize else .upperLength
+        | _ => .other
+      (.slice, why)
+    | .owned .seqSized .. => (.size, .other)
+    | .owned .natBelow .. => (.bound, .other)
+    | .row _ => (.domain, .other)
+    | _ => (.core .domain, .other)
+  ⟨requirement, condition, operandRange⟩
 
-/-- The check of the body of a function instance: what the core does not justify in it.
-`specification` says whether the function is one of specifications; `result` is its result
-type. -/
-def checkFunction (state : Compile.State) (callees : Typed.Callees) (specification : Bool)
-    (body : Typed.FunctionBody) (result : ClosedType) : Except EmitFailure (List Finding) := do
-  let emission : EmitM Unit := do
-    modify fun emitter => { emitter with checking := true }
-    let region ← Named.emitFunction { (← bodyContext) with callees } body
-    let inputs ← body.parameters.toList.mapM fun binder => toTy binder.type
-    let outputs := [← toTy result]
-    modify fun emitter =>
-      { emitter with functions := emitter.functions.push
-                       { specificationOnly := specification, inputs, outputs, body := some region }
-                     names := emitter.names.push "checked"
-                     stops := emitter.stops.push true }
-  let (_, emitter) ← (emission.run state).run {}
-  let number := emitter.functions.size - 1
-  findings emitter fun
-    | .function found => found == number
-    | .protocol _ => false
+def localFinding {V : Core.Vocabulary} (nodes : Array Typed.NodeId) (r : Core.ProgramRefusal V) : Finding :=
+  let explained : Explained := match r.detail with
+    | .unjustified op q ranges => explainOperation op q ranges
+    | _ => { requirement := .core r.rule }
+  ⟨r.place.instruction.bind fun k => nodes[k.number]?, r.place.role, explained⟩
 
-/-- What the check of a protocol definition gives: what the core does not justify in it, and
-the keys of its sites in the order of their numbers. -/
+/-- Check the actual executable definition against previously resolved call signatures. -/
+def checkFunction (state : Compile.State) (inst : InstanceId) (body : Typed.FunctionBody) (result : ClosedType) :
+    Except EmitFailure (List Finding) := (do
+  let calls := calledIn body
+  let b ← bindCalls {} calls
+  let headers ← calleeHeaders b calls
+  let (definition, nodes) ← Named.functionDefinition (← bodyContext b) ⟨inst⟩ result body
+  match Core.check headers definition with
+  | .ok _ => return []
+  | .error errors => errors.mapM fun
+    | .definition (.fn failure) => pure (localFinding nodes failure)
+    | _ => Typing.defect "non-function refusal during function checking" : EmitM _).run state
+
 structure ProtocolChecked where
+  origin : DefinitionOrigin
   findings : List Finding
-  keys : List Zkc.Core.SiteKey
 
-/-- The check of the body of a protocol instance: the protocol alone, with the protocols it
-applies before it and the functions that any of them calls as headers. -/
-def checkProtocol (state : Compile.State) (inst : InstanceId) (checked : Typed.Checked) :
-    Except EmitFailure ProtocolChecked := do
-  let emission : EmitM Unit := do
-    modify fun emitter => { emitter with checking := true }
-    let protocol ← protocolOfChecked inst checked
-    modify fun emitter =>
-      { emitter with protocols := emitter.protocols.push protocol
-                     protocolNames := emitter.protocolNames.push "checked"
-                     protocolRoles := emitter.protocolRoles.push
-                       (match checked.definition.body with
-                         | .protocol body => body.roster.toList
-                         | _ => []) }
-  let (_, emitter) ← (emission.run state).run {}
-  let number := emitter.protocols.size - 1
-  let found ← findings emitter fun
-    | .protocol found => found == number
-    | .function _ => false
-  -- the keys of the sites, in the order of their numbers
-  let named ← emitter.named
-  let keys ← match Zkc.Core.Named.lower named with
-    | .ok lowered => pure (lowered.keys.getD number [])
-    | .error (_, refused) =>
-      throw (.defect s!"the lowering refuses the check of a definition at node {refused.tag}: {refused.message}")
-  return { findings := found, keys }
+/-- Recover the source diagnostic group from the exact clause reported by the role checker. -/
+def roleFinding {V : Core.Vocabulary} (nodes : Array Typed.NodeId) (r : Core.Refusal (Core.LTy V) (Core.RoleRaw V)) :
+    Finding :=
+  let explained : Explained := match r.detail with
+    | .unjustifiedAssertion (.compute holders op) clause =>
+      match ((Core.localOpFacts ([] : List (Core.FnHeader V))).requires op).find? (fun q =>
+          Core.BodyAnalysis.RoleContracts.clause holders (Core.BodyAnalysis.builtinClause q) == clause) with
+      | some q => explainOperation op q []
+      | none => {requirement := .core r.rule}
+    | _ => {requirement := .core r.rule}
+  ⟨r.place.instruction.bind fun k => nodes[k.number]?, r.place.role, explained⟩
+
+def checkProtocol (state : Compile.State) (inst : InstanceId) : Except EmitFailure ProtocolChecked := do
+  let root ← Typing.emitRoot state inst
+  let some origin := root.origins.back? | throw (.defect "missing protocol origin")
+  unless origin.definition.number == inst do throw (.defect "wrong root definition")
+  match Core.admitFrom .empty [] root.named.definitions with
+  | .ok (_, bounds) =>
+    let missing := origin.dynamicLoops.toList.flatMap fun (key, roles) =>
+      roles.filterMap fun role =>
+        if bounds.any (fun (place, _) => place.definition == origin.definition &&
+            place.instruction == some key && place.role == some role) then none
+        else some (⟨origin.nodes[key.number]?, some role, { requirement := .maximum }⟩ : Finding)
+    return ⟨origin, missing⟩
+  | .error errors =>
+    let findings ← errors.mapM (fun refusal => match refusal with
+      | .projection r => do
+        unless r.place.definition.number == inst do throw (.defect "previously checked dependency refused")
+        pure (roleFinding origin.nodes r)
+      | .definition (.protocol r) => pure ⟨r.place.instruction.bind fun k => origin.nodes[k.number]?,
+          r.place.role, {requirement := .core r.rule}⟩
+      | _ => throw (.defect "non-protocol refusal during protocol checking"))
+    return ⟨origin, findings⟩
 
 end Zkc.Frontend.Emit

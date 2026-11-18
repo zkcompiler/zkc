@@ -24,3 +24,5 @@ import Zkc.Tests.Frontend.Trees
 import Zkc.Tests.Frontend.Keys
 import Zkc.Tests.Frontend.FormatCases
 import Zkc.Tests.Frontend.Formatting
+import Zkc.Tests.Frontend.PrimitiveBindings
+import Zkc.Tests.Frontend.ProtocolEmission

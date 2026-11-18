@@ -83,67 +83,19 @@ def primitiveRow (inst : InstanceId) (found : Declaration) (row : String)
     | none =>
       -- a name of the vocabulary at static arguments for which it has no row is no row of a
       -- project
-      if Zkc.Core.Vocabulary.table.rows.any (·.name == row) then
+      if Typing.reservedRow row then
         refuse "NL9" place
           s!"`{row}` is a row of the vocabulary, and the vocabulary has no row of that name at the static arguments of this instance; write them: `primitive(\"{row}\", …)`"
       pure { key := request.key, kind := .pure, inputs := parameters, outputs := #[result] }
-  internRow found
-
-mutual
-  /-- The function instances that an expression applies, added to those found, each once. -/
-  partial def calledInExpr (found : Array InstanceId) : Typed.Expr → Array InstanceId
-    | .literal .. | .staticValue .. | .local .. => found
-    | .apply _ callee arguments =>
-      let found := match callee with
-        | .instance inst => if found.contains inst then found else found.push inst
-        | _ => found
-      arguments.foldl calledInExpr found
-    | .construct _ _ parts => parts.foldl calledInExpr found
-    | .project _ target _ _ => calledInExpr found target
-    | .convert _ _ value _ => calledInExpr found value
-    | .conditional _ _ condition onTrue onFalse =>
-      calledInExpr (calledInExpr (calledInExpr found condition) onTrue) onFalse
-    | .block _ statements result => calledInExpr (statements.foldl calledInStmt found) result
-    | .error _ evaluated => evaluated.foldl calledInExpr found
-
-  partial def calledInStmt (found : Array InstanceId) : Typed.Stmt → Array InstanceId
-    | .bind _ _ value _ | .unpack _ _ value _ | .update _ _ value _ => calledInExpr found value
-    | .guard _ condition _ _ => calledInExpr found condition
-    | .if _ condition onTrue onFalse _ =>
-      onFalse.foldl calledInStmt (onTrue.foldl calledInStmt (calledInExpr found condition))
-    | .match _ scrutinee _ _ cases _ =>
-      cases.foldl (init := calledInExpr found scrutinee) fun found (.case _ _ _ body) =>
-        body.foldl calledInStmt found
-    | .for _ (.loop _ domain _ body) _ =>
-      let found := match domain with
-        | .range start stop _ => calledInExpr (calledInExpr found start) stop
-        | .collection source _ _ => calledInExpr found source
-      match body with
-      | .uniform statements values => values.foldl calledInExpr (statements.foldl calledInStmt found)
-      | .stepped iterations =>
-        iterations.foldl (init := found) fun found (Typed.Iteration.iteration _ statements values) =>
-          values.foldl calledInExpr (statements.foldl calledInStmt found)
-      | .empty .. => found
-    | .scope _ body => body.foldl calledInStmt found
-    | .event _ _ what =>
-      match what with
-      | .send _ payload _ _ => calledInExpr found payload
-      | .apply _ _ arguments _ _ _ => arguments.foldl calledInExpr found
-      | .draw .. | .sample .. | .attempt .. => found
-    | .error .. => found
-end
-
-/-- The function instances that a body applies, each once. -/
-def calledIn (body : Typed.FunctionBody) : Array InstanceId :=
-  calledInExpr (body.statements.foldl calledInStmt #[]) body.result
+  internRow found place
 
 /-- What the session keeps of a function body that elaboration typed: whether it can stop and
 what it waits for, read from the tree and from its callees, after the core has checked the
 facts of the body. A refusal of facts is worded at its node and logged; a body with one is
 refused. `refused` says that elaboration refused something of the body: a refusal of facts
 before the first error node in the order of the tree is reported beside it. -/
-def checkedFunction (description : String) (tree : Typed.FunctionBody) (result : ClosedType)
-    (specification : Bool) (refused : Bool) : CompileM FunctionCode := do
+def checkedFunction (inst : InstanceId) (description : String) (tree : Typed.FunctionBody) (result : ClosedType)
+    (refused : Bool) : CompileM FunctionCode := do
   -- the numbers of the nodes are the tags by which the core names them
   let body := match (Typed.Body.function tree).numbered.1 with
     | .function numbered => numbered
@@ -153,13 +105,7 @@ def checkedFunction (description : String) (tree : Typed.FunctionBody) (result :
   let stops (callee : InstanceId) : Bool := match results.body? callee with
     | some (.done code) => code.canStop
     | _ => false
-  let restricted (callee : InstanceId) : Bool := match results.body? callee with
-    | some (.row row) =>
-      (match (results.rows[row]?).map fun (entry : Typing.Row) => entry.kind with
-        | some (Typing.RowKind.restricted _) => true
-        | _ => false)
-    | _ => false
-  let (found, unchecked) ← match checkFunction state { stops, restricted } specification body result with
+  let (found, unchecked) ← match checkFunction state inst body result with
     | .ok found => pure (found, none)
     | .error (.defect message) => throw (.defect message)
     -- a form of a later layer in the body: its facts are not checked here, and the function
@@ -244,10 +190,10 @@ def elaborateBody (inst : InstanceId) (description : String) (env : Env)
   let errors := (← get).log.errors
   let (tree, state) ← Elab.runElab context locals (Elab.elabFunctionBody parameters result body)
   trace "elab.tree" fun _ => .ofText s!"{description}:\n{(Typed.Body.function tree).print}"
-  let code ← checkedFunction description tree result specification ((← get).log.errors > errors)
-  -- the uses of the linear values (LN1, LN2)
+  if (← get).log.errors > errors || tree.firstError?.isSome then throw .abandoned
   unless specification do
     if let .error (span, message) := Linear.check tree then refuse "LN2" span message
+  let code ← checkedFunction inst description tree result false
   return (code, state.resolved, tree, state.nextLocal)
 
 /-- The type members of a module parameter that a `where` in scope equates with a type: in both

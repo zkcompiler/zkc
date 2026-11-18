@@ -355,31 +355,30 @@ mutual
         (blocks : List (Key × Nat)) (env : Env sem.Val Γ),
         t.EveryLoop sem permitted B path blocks env
     | _, _, .ret _, _, _, _ => trivial
-    | _, _, .op _ _ _ _ rest, path, blocks, _ =>
-        every_of_all permitted (fun _ => Term.everyLoop_of_all all rest path blocks _) _
-    | _, _, .guard _ _ _ _ _ rest, path, blocks, env =>
-        fun _ => Term.everyLoop_of_all all rest path blocks env
-    | _, _, .choose _ _ c ok _ onTrue onFalse _ rest, path, blocks, env => by
-        refine ⟨?_, every_of_all permitted
-          (fun _ => Term.everyLoop_of_all all rest path blocks _) _⟩
+    | _, _, .step key i results rest, path, blocks, env =>
+        ⟨Instr.everyLoop_of_all all key i path blocks env,
+          every_of_all permitted (fun vs =>
+            Term.everyLoop_of_all all rest path blocks (env.extend results vs)) _⟩
+  theorem Instr.everyLoop_of_all (all : ∀ blocks key count, B blocks key count) (key : Key) :
+      ∀ {Γ : Ctx D.Ty} {mid : List D.Ty} (i : Instr D Γ mid) (path : List Frame)
+        (blocks : List (Key × Nat)) (env : Env sem.Val Γ),
+        i.EveryLoop sem permitted B key path blocks env
+    | _, _, .op .., _, _, _ | _, _, .guard .., _, _, _ => trivial
+    | _, _, .choose _ c ok _ onTrue onFalse, path, blocks, env => by
+        unfold Instr.EveryLoop
         cases sem.holds ok (env.get c)
         · exact Term.everyLoop_of_all all onFalse path blocks env
         · exact Term.everyLoop_of_all all onTrue path blocks env
-    | _, _, .cases _ _ _ _ _ arms _ rest, path, blocks, env =>
-        ⟨Arms.everyLoop_of_all all arms path blocks env _,
-          every_of_all permitted (fun _ => Term.everyLoop_of_all all rest path blocks _) _⟩
-    | _, _, .loop key _ _ _ _ _ body _ rest, path, blocks, _ =>
+    | _, _, .cases _ _ _ _ arms, path, blocks, env =>
+        Arms.everyLoop_of_all all arms path blocks env _
+    | _, _, .loop _ _ _ _ _ body, path, blocks, _ =>
         ⟨all _ _ _, fun i _ => every_of_all permitted
-            (fun _ => Term.everyLoop_of_all all body (path ++ [.iteration key i]) blocks _) _,
-          every_of_all permitted (fun _ => Term.everyLoop_of_all all rest path blocks _) _⟩
-    | _, _, .block key number body _ rest, path, blocks, env =>
-        ⟨Term.everyLoop_of_all all body (path ++ [.iteration key number])
-            (blocks ++ [(key, number)]) env,
-          every_of_all permitted (fun _ => Term.everyLoop_of_all all rest path blocks _) _⟩
-    | _, _, .attempt _ _ _ _ body _ rest, path, blocks, _ =>
-        every_of_all permitted (fun _ => ⟨Term.everyLoop_of_all all body path blocks _,
-          every_of_all permitted (fun _ => every_of_all permitted
-            (fun _ => Term.everyLoop_of_all all rest path blocks _) _) _⟩) _
+          (fun _ => Term.everyLoop_of_all all body (path ++ [.iteration key i]) blocks _) _⟩
+    | _, _, .block number body, path, blocks, env => by
+        unfold Instr.EveryLoop
+        exact Term.everyLoop_of_all all body (path ++ [.iteration key number]) (blocks ++ [(key, number)]) env
+    | _, _, .attempt _ _ _ body, path, blocks, _ =>
+        every_of_all permitted (fun _ => Term.everyLoop_of_all all body path blocks _) _
   /-- Every loop that a run of the arm of an alternative reaches satisfies what every count
   does. -/
   theorem Arms.everyLoop_of_all (all : ∀ blocks key count, B blocks key count) :

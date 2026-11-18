@@ -90,3 +90,4 @@ public import Zkc.Frontend.Syntax.Parser.Decl
 public import Zkc.Frontend.Syntax.Parser.Expr
 public import Zkc.Frontend.Syntax.Parser.Stmt
 public import Zkc.Frontend.Syntax.UnicodeData
+public import Zkc.Frontend.Emit.Application

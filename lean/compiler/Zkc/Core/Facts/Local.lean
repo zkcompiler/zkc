@@ -1,34 +1,11 @@
 module
 
-public import Zkc.Core.Facts.State
+public import Zkc.Core.Facts.Range
+public import Zkc.Core.Facts.OpFacts
+public import Zkc.Core.Program.BitTree
 public import Zkc.Core.Program.LocalRules
 
 @[expose] public section
-
-/-!
-What the analysis knows of the written operations of a function, and what the local dialect
-tells it.
-
-Per written operation: what it requires (the table of requirements), what it guarantees of its
-operands and results, the ranges of its natural results from those of its operands (the table of
-ranges of arithmetic), and how its result reads. One value for `LocalRaw V` against the headers
-of the callees: a role program's computations are local operations and read it too. An operation
-that the core owns is described by one table, from its name to the parts of its contract
-(`ownedContract`): what it requires, what it guarantees, the ranges of its results, how its first
-result reads, and whether the table places its operands in one order; the analysis reads every
-part of it there (`localOpFacts`, `LocalRaw.commutes`). No operation that the core owns guarantees
-anything yet. A call requires and guarantees what the summary of its callee's header says
-(`summaryOf`), read as a summary over the written operations of a function (`Summary.lift`), so
-that the analysis decides the callee's requirements at the call and learns its guarantees. Every operation of a function is written as it is printed, and has the requirements
-of that written form; every one is shared, a value, except a call of a function that can stop
-with a reason, which is kept in order. The sum and the product of naturals and the equalities
-commute; the conjunction and the disjunction, whose meaning is symmetric too, keep the order
-written, since the check of facts learns their operands in that order; a row of the vocabulary
-and a call do not commute (`localFactRules`).
-What following decides for a function is what the rules of its elaboration give
-(`(localRules fns).skel`, `Rules.skel`): types and performers by equality, and two operations by
-their written forms.
--/
 
 namespace Zkc.Core
 
@@ -84,7 +61,7 @@ before either is learned (`Known.pushEqual`, `Known.pushDifferent`); the equalit
 has no form, and teaches nothing. Not the conjunction and the disjunction of truth values: their
 meaning is symmetric, but the check of facts learns the operands of a conjunction learned true,
 and of a disjunction learned false, one after the other in the order of the table's entry
-(`assume`, `Facts/State.lean`), and what the second teaches can depend on what the first taught
+(`Knowledge.learnTruth`, `Facts/Knowledge/Inference.lean`), and what the second teaches can depend on what the first taught
 (`Known.pushLess` reads the number of the other side when it learns); so their operands are
 placed, and learned, in the order written, as the source's `and` and `or` are. Not the
 difference, the quotient, the remainder, the power or the order of naturals; not a
@@ -189,8 +166,8 @@ def ownedContract : OwnedName → OwnedContract V
         commutes := false }
 
 /-- The summary of the first header with the key; the empty summary when no header has it. -/
-def summaryOf (key : Key) : List (FnHeader V) → Summary Empty
-  | [] => Summary.empty
+def summaryOf (key : Key) : List (FnHeader V) → HeaderSummary V
+  | [] => ⟨[], []⟩
   | hdr :: rest => if hdr.key = key then hdr.summary else summaryOf key rest
 
 /-- Among headers with distinct keys, the summary with the key of a header is that header's. -/
@@ -206,20 +183,18 @@ theorem summaryOf_member : ∀ {fns : List (FnHeader V)} {hdr : FnHeader V},
 
 /-- What the check of facts knows of the written operations of a function, against the headers
 of its callees: of an operation that the core owns, what its contract says (`ownedContract`); of a
-row, what its domain row says (`rowRequires`); of a call, what the summary of the header with the
-callee's key requires and guarantees (`summaryOf`), read over the written operations of a function
-(`Summary.lift`), nothing when no header has it; of a literal,
+row, what its domain row says (`rowRequires`); calls read their checked header separately; of a literal,
 its natural (`literalRanges`), and a written truth value reads as itself. A row and a literal
 guarantee nothing. -/
-def localOpFacts (fns : List (FnHeader V)) : OpFacts (LocalRaw V) where
+def localOpFacts (_fns : List (FnHeader V)) : OpFacts (LocalRaw V) where
   requires
     | .owned name types _ => (ownedContract name).requires types
     | .row key => rowRequires key
-    | .call key => (summaryOf key fns).lift.requires
+    | .call _ => []
     | .literal .. => []
   ensures
     | .owned name types _ => (ownedContract name).ensures types
-    | .call key => (summaryOf key fns).lift.ensures
+    | .call _ => []
     | .row _ => []
     | .literal .. => []
   ranges
@@ -259,20 +234,6 @@ def LocalRaw.commutes : LocalRaw V → Bool
   | .row _ => false
   | .literal _ _ => false
   | .call _ => false
-
-variable (V) in
-/-- What the local dialect tells the analysis: every operation of a function is written as it is
-printed; every one is shared, a value, except a call of a function that can stop with a reason,
-which is kept in order; the sum and the product of naturals and the equalities commute
-(`LocalRaw.commutes`). -/
-def localFactRules (fns : List (FnHeader V)) : FactRules (localDialect V fns) (LocalRaw V) where
-  written := fun o => LocalOp.print o
-  shared := fun o => !LocalOp.canStop o
-  commutes := LocalRaw.commutes
-  range := localRange
-  noValue := Ty.noValue
-  ops := localOpFacts fns
-  place := localPlace
 
 end
 

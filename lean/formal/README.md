@@ -1,8 +1,10 @@
 # Formal
 
+Run `just test-interactive` from the repository root to check the emitted Sumcheck verifier and the GKR layer application. The source controls exercise zero, one and ten Sumcheck rounds, the four-coordinate GKR reduction, and changes to the evaluator, residual, guard and lexical specification arguments. The command compares both client implementations and replays the interactive formal library and its mathematical controls with the compiler's kernel audit.
+
 The receipt suite documented below uses the Core interfaces and fixtures from
 [the previous Lean compiler at `10ed903fc`](https://github.com/zkcompiler/zkc/tree/10ed903fc22d3f20b22ff2d1bbf607a740ef0718). Run its commands at that revision.
-The current root build covers the Core and vocabulary. See [status](../../docs/status.md).
+See [status](../../docs/status.md).
 
 ## Historical receipt suite
 
@@ -72,10 +74,22 @@ composes the ten: in the model of any arithmetic, when the claims are the sum of
 the verifier's ten checks pass. It does not reach the instructions after the tenth round or
 the model that runs.
 
-Run `lake build`, `lake test` and `lake exe zkc-formal-audit` from this directory. The audit
+The historical receipt suite used `lake build`, `lake test` and `lake exe zkc-formal-audit`. Its old frontend and Core imports await migration on this branch. The historical audit
 (`Zkc.Tools.Audit` of the compiler's package) checks that a module of `Zkc.Formal` imports only
 modules of the core and of the formal library, besides Lean's prelude; and, for every declaration
 of `Zkc.Formal` and of its tests `Zkc.Tests.Formal`, its axioms, `@[extern]` and
 `@[implemented_by]`, and that the kernel accepts it when it is replayed from the built files,
 together with every module that it imports outside Lean's libraries (of the core, of the tests of
 the core and of the tools), on an environment that takes only Lean's libraries as built.
+
+## Interactive security
+
+The Core process runs against a stateful service with finite, possibly incomplete reply mass. A rejected path or a missing reply contributes zero acceptance mass. Both source certificates recover the actual function and protocol members from the emitted, admitted program.
+
+`TableVerifier.Certified.soundValid` takes the Core validity of the flat input table and a false claim about its list sum. Its cube form `Certified.soundFrom` bounds the probability of accepting an incorrect Boolean-cube sum by the number of rounds divided by the challenge-set size. It checks the boundary guard, the caller's table evaluator and the returned point in order. Its challenge law bounds each reached post-message draw by the uniform law on a nonempty set of distinct field points. The peer may depend on its history. Project scalar and vector interpretations are explicit parameters.
+
+`SourceCompleteness.Certificate.everyValid` covers the joint program on a correctly summed table of the declared length. It follows the honest prover's messages and restrictions through the same terminal evaluator. `Certificate.probability_one` requires full reply mass at reached service calls. The source checks include changed private messages and restrictions.
+
+`ReductionRound.AtSite.gate_soundFrom` applies the same reduction theorem at GKR's emitted `Reduce` call inside the layer loop. Its four degree-two rounds bound the probability of a correction by eight divided by the challenge-set size, conditional on the gate and current-layer interpretations. The test client also checks the source specification argument at that call. An end-to-end GKR or Fiat–Shamir theorem requires further composition.
+
+Run `just test-interactive` from the repository root. The audit replays the interactive library and its mathematical controls and permits `propext` and `Quot.sound`.

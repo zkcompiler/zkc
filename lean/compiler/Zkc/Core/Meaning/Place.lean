@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Core.Meaning.Fold
+public import Zkc.Core.Meaning.Stepped
 public import Zkc.Core.Process.Same
 public import Zkc.Core.Program.Place
 
@@ -97,74 +97,43 @@ mutual
         Env.Agrees keeps wide narrow →
         (t.reindex keeps).denote sem path wide = t.denote sem path narrow
     | _, _, _, keeps, .ret exit, path, wide, narrow, agrees => by
-        simp only [Term.reindex, Term.denote, agrees.all]
-    | _, _, _, keeps, .op key o operands results rest, path, wide, narrow, agrees => by
-        simp only [Term.reindex, Term.denote, agrees.all]
+        simp only [Term.reindex, Term.denote_ret, agrees.all]
+    | _, _, _, keeps, .step key i results rest, path, wide, narrow, agrees => by
+        simp only [Term.reindex, Term.denote_step, Instr.denote_reindex sem keeps key i path agrees]
         congr 1
         funext values
         exact Term.denote_reindex sem (keeps.extend results) rest path (agrees.extend results values)
-    | _, _, _, keeps, .guard key w c ok why rest, path, wide, narrow, agrees => by
-        simp only [Term.reindex, Term.denote, agrees.get,
-          Term.denote_reindex sem keeps rest path agrees]
-    | _, _, _, keeps, .choose key w c ok gives onTrue onFalse results rest, path, wide, narrow,
-        agrees => by
-        simp only [Term.reindex, Term.denote, agrees.get,
-          Term.denote_reindex sem keeps onTrue path agrees,
-          Term.denote_reindex sem keeps onFalse path agrees]
-        congr 1
-        funext mids
-        exact Term.denote_reindex sem (keeps.extend results) rest path (agrees.extend results mids)
-    | _, _, _, keeps, .cases key w x ok gives arms results rest, path, wide, narrow, agrees => by
-        simp only [Term.reindex, Term.denote, agrees.get,
-          Arms.denote_reindex sem keeps arms path agrees]
-        congr 1
-        funext mids
-        exact Term.denote_reindex sem (keeps.extend results) rest path (agrees.extend results mids)
-    | _, _, _, keeps, .loop key w (.fixed n) gives initial inputs body results rest, path, wide,
-        narrow, agrees => by
+  /-- Reindexing preserves the instruction process, including effects under its regions. -/
+  theorem Instr.denote_reindex (sem : Semantics D) :
+      ∀ {Γ Δ : Ctx D.Ty} {mid : List D.Ty} (keeps : Γ.Within Δ) (key : Key) (i : Instr D Γ mid)
+        (path : List Frame) {wide : Env sem.Val Δ} {narrow : Env sem.Val Γ}, Env.Agrees keeps wide narrow →
+        (i.reindex keeps).denote sem key path wide = i.denote sem key path narrow
+    | _, _, _, keeps, _, .op o args, _, _, _, agrees => by
+        simp only [Instr.reindex, Instr.denote_op, agrees.all]
+    | _, _, _, keeps, _, .guard w c ok why, _, _, _, agrees => by
+        simp only [Instr.reindex, Instr.denote_guard, agrees.get]
+    | _, _, _, keeps, _, .choose _ _ _ _ t f, path, _, _, agrees => by
+        simp only [Instr.reindex, Instr.denote_choose, agrees.get,
+          Term.denote_reindex sem keeps t path agrees, Term.denote_reindex sem keeps f path agrees]
+    | _, _, _, keeps, _, .cases _ _ _ _ arms, path, _, _, agrees => by
+        simp only [Instr.reindex, Instr.denote_cases, agrees.get, Arms.denote_reindex sem keeps arms path agrees]
+    | _, _, _, keeps, key, .loop w times _ initial inputs body, path, wide, narrow, agrees => by
         have step : sem.loopStep w inputs
-              (fun path' env' => (body.reindex (keeps.extend inputs)).denote sem path' env') key
-              path wide =
+              (fun path' env' => (body.reindex (keeps.extend inputs)).denote sem path' env') key path wide =
             sem.loopStep w inputs (fun path' env' => body.denote sem path' env') key path narrow := by
           funext i state
           simp only [Semantics.loopStep]
           rw [Term.denote_reindex sem (keeps.extend inputs) body _ (agrees.extend inputs _)]
-        simp only [Term.reindex, Term.denote, Semantics.times, agrees.all]
-        rw [step]
-        congr 1
-        funext state
-        exact Term.denote_reindex sem (keeps.extend results) rest path (agrees.extend results _)
-    | _, _, _, keeps, .loop key w (.value count ok) gives initial inputs body results rest, path,
-        wide, narrow, agrees => by
-        have step : sem.loopStep w inputs
-              (fun path' env' => (body.reindex (keeps.extend inputs)).denote sem path' env') key
-              path wide =
-            sem.loopStep w inputs (fun path' env' => body.denote sem path' env') key path narrow := by
-          funext i state
-          simp only [Semantics.loopStep]
-          rw [Term.denote_reindex sem (keeps.extend inputs) body _ (agrees.extend inputs _)]
-        simp only [Term.reindex, Term.denote, Semantics.times, agrees.all, agrees.get]
-        rw [step]
-        congr 1
-        funext state
-        exact Term.denote_reindex sem (keeps.extend results) rest path (agrees.extend results _)
-    | _, _, _, keeps, .block key number body results rest, path, wide, narrow, agrees => by
-        simp only [Term.reindex, Term.denote,
-          Term.denote_reindex sem keeps body _ agrees]
-        congr 1
-        funext mids
-        exact Term.denote_reindex sem (keeps.extend results) rest path (agrees.extend results mids)
-    | _, _, _, keeps, .attempt key w owns inputs body results rest, path, wide, narrow, agrees => by
-        simp only [Term.reindex, Term.denote]
-        congr 1
-        funext n
-        rw [Term.denote_reindex sem (keeps.extend inputs) body path
-          (agrees.extend inputs (.cons n .nil))]
-        congr 1
-        funext mids
-        congr 1
-        funext _
-        exact Term.denote_reindex sem (keeps.extend results) rest path (agrees.extend results mids)
+        cases times <;> simp only [Instr.reindex] <;> erw [Instr.denote_loop, Instr.denote_loop]
+        · simp only [agrees.all, step, Semantics.times]
+          rfl
+        · simp only [agrees.all, step, Semantics.times, agrees.get]
+          rfl
+    | _, _, _, keeps, _, .block _ body, _, _, _, agrees => by
+        simp only [Instr.reindex, Instr.denote_block, Term.denote_reindex sem keeps body _ agrees]
+    | _, _, _, keeps, _, .attempt _ _ inputs body, _, _, _, agrees => by
+        simp only [Instr.reindex, Instr.denote_attempt,
+          Term.denote_reindex sem (keeps.extend inputs) body _ (agrees.extend inputs _)]
   /-- The arms of a case analysis in a wider context mean the same on environments that agree. -/
   theorem Arms.denote_reindex (sem : Semantics D) :
       ∀ {Γ Δ : Ctx D.Ty} {mid payloads : List D.Ty} (keeps : Γ.Within Δ)
@@ -174,11 +143,11 @@ mutual
           (arms.reindex keeps).denote sem path wide pick = arms.denote sem path narrow pick
     | _, _, _, _, _, .nil, _, _, _, _, pick => nomatch pick
     | _, _, _, _, keeps, .cons inputs arm rest, path, wide, narrow, agrees, .here v => by
-        simp only [Arms.reindex, Arms.denote]
+        simp only [Arms.reindex, Arms.denote_cons]
         exact Term.denote_reindex sem (keeps.extend inputs) arm path
           (agrees.extend inputs (.cons v .nil))
     | _, _, _, _, keeps, .cons inputs arm rest, path, wide, narrow, agrees, .there pick => by
-        simp only [Arms.reindex, Arms.denote]
+        simp only [Arms.reindex, Arms.denote_cons]
         exact Arms.denote_reindex sem keeps rest path agrees pick
 end
 
@@ -196,33 +165,9 @@ mutual
       Hole D Γ outs Δ mid → Term D Δ mid → List Frame → Env sem.Val Γ → List Frame →
       Env sem.Val Δ → Prop
     | _, _, _, _, .here, _, path, env, path', env' => path' = path ∧ env' = env
-    | _, _, _, _, .op key o operands results rest, filling, path, env, path', env' =>
-        ∃ values, (sem.op key o path (env.all operands)).CanReturn permitted values ∧
+    | _, _, _, _, .step key i results rest, filling, path, env, path', env' =>
+        ∃ values, (i.denote sem key path env).CanReturn permitted values ∧
           rest.Reaches filling path (env.extend results values) path' env'
-    | _, _, _, _, .guard _ _ c ok _ rest, filling, path, env, path', env' =>
-        sem.holds ok (env.get c) = true ∧ rest.Reaches filling path env path' env'
-    | _, _, _, _, .choose _ _ c ok _ onTrue onFalse results rest, filling, path, env, path', env' =>
-        ∃ mids, (bif sem.holds ok (env.get c) then onTrue.denote sem path env
-            else onFalse.denote sem path env).CanReturn permitted mids ∧
-          rest.Reaches filling path (env.extend results mids) path' env'
-    | _, _, _, _, .cases _ _ x ok _ arms results rest, filling, path, env, path', env' =>
-        ∃ mids, (arms.denote sem path env (sem.pick ok (env.get x))).CanReturn permitted mids ∧
-          rest.Reaches filling path (env.extend results mids) path' env'
-    | _, _, _, _, .loop (each := each) key w times _ initial inputs body results rest, filling, path, env,
-        path', env' =>
-        ∃ state, (Process.iterate (sem.times times env)
-              (sem.loopStep w inputs (fun at_ inside => body.denote sem at_ inside) key path env)
-              0 (env.all initial, HList.empties each)).CanReturn permitted state ∧
-          rest.Reaches filling path
-            (env.extend results (state.1.append (sem.collected times.size state.2))) path' env'
-    | _, _, _, _, .block key number body results rest, filling, path, env, path', env' =>
-        ∃ mids, (body.denote sem (path ++ [.iteration key number]) env).CanReturn permitted mids ∧
-          rest.Reaches filling path (env.extend results mids) path' env'
-    | _, _, _, _, .attempt key w _ inputs body results rest, filling, path, env, path', env' =>
-        ∃ mids, ((sem.begin w key path).bind fun n =>
-              (body.denote sem path (env.extend inputs (.cons n .nil))).bind fun inner =>
-                (sem.settle w key path).bind fun _ => .done inner).CanReturn permitted mids ∧
-          rest.Reaches filling path (env.extend results mids) path' env'
     | _, _, _, _, .inTrue _ _ c ok _ onTrue _ _ _, filling, path, env, path', env' =>
         sem.holds ok (env.get c) = true ∧ onTrue.Reaches filling path env path' env'
     | _, _, _, _, .inFalse _ _ c ok _ _ onFalse _ _, filling, path, env, path', env' =>
@@ -255,6 +200,21 @@ mutual
         rest.Reaches filling path env p path' env'
 end
 
+/-- Reaching the end of a prefix preserves the path and returns the reached environment. -/
+theorem Prefix.return_of_reaches {outs : List D.Ty} {Γ Δ : Ctx D.Ty}
+    (p : Prefix D Γ Δ) (t : Term D Δ outs) (path : List Frame) (env : Env sem.Val Γ)
+    (path' : List Frame) (env' : Env sem.Val Δ)
+    (reach : p.hole.Reaches sem permitted t path env path' env') :
+    path' = path ∧ (p.run sem path env).CanReturn permitted env' := by
+  induction p with
+  | nil =>
+    obtain ⟨rfl, rfl⟩ := reach
+    exact ⟨rfl, .done _⟩
+  | step key i results rest ih =>
+    obtain ⟨values, returned, later⟩ := reach
+    obtain ⟨same, ended⟩ := ih t _ _ later
+    exact ⟨same, returned.bind ended⟩
+
 /-- A fact at a place: it holds of every path and environment with which a run reaches the
 place. It says nothing that would allow removing what established it. -/
 def Hole.Holds {Γ : Ctx D.Ty} {outs : List D.Ty} {Δ : Ctx D.Ty} {mid : List D.Ty}
@@ -276,48 +236,13 @@ mutual
         ((hole.fill t').denote sem path env) :=
     match Γ, outs, Δ, mid, hole, t, t', path, env, same with
     | _, _, _, _, .here, t, t', path, env, same => same path env ⟨rfl, rfl⟩
-    | _, _, _, _, .op key o operands results rest, t, t', path, env, same => by
-        simp only [Hole.fill, Term.denote]
+    | _, _, _, _, .step key i results rest, t, t', path, env, same => by
+        simp only [Hole.fill, Term.denote_step]
         exact Process.SameWhen.bind (.refl _) (Process.every_canReturn _) fun values returns =>
           Hole.fill_same rest t t' path _ fun path' env' reach =>
             same path' env' ⟨values, returns, reach⟩
-    | _, _, _, _, .guard key w c ok why rest, t, t', path, env, same => by
-        simp only [Hole.fill, Term.denote]
-        cases holds : sem.holds ok (env.get c) with
-        | false => exact .refl _
-        | true =>
-            exact Hole.fill_same rest t t' path env fun path' env' reach =>
-              same path' env' ⟨holds, reach⟩
-    | _, _, _, _, .choose key w c ok gives onTrue onFalse results rest, t, t', path, env, same => by
-        simp only [Hole.fill, Term.denote]
-        exact Process.SameWhen.bind (.refl _) (Process.every_canReturn _) fun mids returns =>
-          Hole.fill_same rest t t' path _ fun path' env' reach =>
-            same path' env' ⟨mids, returns, reach⟩
-    | _, _, _, _, .cases key w x ok gives arms results rest, t, t', path, env, same => by
-        simp only [Hole.fill, Term.denote]
-        exact Process.SameWhen.bind (.refl _) (Process.every_canReturn _) fun mids returns =>
-          Hole.fill_same rest t t' path _ fun path' env' reach =>
-            same path' env' ⟨mids, returns, reach⟩
-    | _, _, _, _, .loop key w times gives initial inputs body results rest, t, t', path, env,
-        same => by
-        simp only [Hole.fill, Term.denote]
-        exact Process.SameWhen.bind (.refl _) (Process.every_canReturn _) fun state returns =>
-          Hole.fill_same rest t t' path _ fun path' env' reach =>
-            same path' env' ⟨state, returns, reach⟩
-    | _, _, _, _, .block key number body results rest, t, t', path, env, same => by
-        simp only [Hole.fill, Term.denote]
-        exact Process.SameWhen.bind (.refl _) (Process.every_canReturn _) fun mids returns =>
-          Hole.fill_same rest t t' path _ fun path' env' reach =>
-            same path' env' ⟨mids, returns, reach⟩
-    | _, _, _, _, .attempt key w owns inputs body results rest, t, t', path, env, same => by
-        simp only [Hole.fill, Term.denote]
-        exact Process.SameWhen.bind (.refl _) (Process.every_canReturn _) fun n began =>
-          Process.SameWhen.bind (.refl _) (Process.every_canReturn _) fun mids ran =>
-            Process.SameWhen.bind (.refl _) (Process.every_canReturn _) fun _ settled =>
-              Hole.fill_same rest t t' path _ fun path' env' reach =>
-                same path' env' ⟨mids, began.bind (ran.bind (settled.bind (.done mids))), reach⟩
     | _, _, _, _, .inTrue key w c ok gives onTrue onFalse results rest, t, t', path, env, same => by
-        simp only [Hole.fill, Term.denote]
+        simp only [Hole.fill, Term.denote_choose]
         cases holds : sem.holds ok (env.get c) with
         | false => exact .refl _
         | true =>
@@ -327,7 +252,7 @@ mutual
               (Process.every_true _ _) fun _ _ => .refl _
     | _, _, _, _, .inFalse key w c ok gives onTrue onFalse results rest, t, t', path, env,
         same => by
-        simp only [Hole.fill, Term.denote]
+        simp only [Hole.fill, Term.denote_choose]
         cases holds : sem.holds ok (env.get c) with
         | false =>
             exact Process.SameWhen.bind
@@ -336,13 +261,13 @@ mutual
               (Process.every_true _ _) fun _ _ => .refl _
         | true => exact .refl _
     | _, _, _, _, .inArm key w x ok gives arms results rest, t, t', path, env, same => by
-        simp only [Hole.fill, Term.denote]
+        simp only [Hole.fill, Term.denote_cases]
         exact Process.SameWhen.bind
           (ArmsHole.fill_same arms t t' path env _ fun path' env' reach => same path' env' reach)
           (Process.every_true _ _) fun _ _ => .refl _
     | _, _, _, _, .inLoop (each := each) key w times gives initial inputs body results rest, t, t',
         path, env, same => by
-        simp only [Hole.fill, Term.denote]
+        simp only [Hole.fill, Term.denote_loop]
         refine Process.SameWhen.bind ?_ (Process.every_true _ _) fun _ _ => .refl _
         refine Process.SameWhen.iterate_below
           (fun i state => (Process.iterate i
@@ -363,12 +288,12 @@ mutual
           rw [Nat.zero_add]
           exact returns
     | _, _, _, _, .inBlock key number body results rest, t, t', path, env, same => by
-        simp only [Hole.fill, Term.denote]
+        simp only [Hole.fill, Term.denote_block]
         exact Process.SameWhen.bind
           (Hole.fill_same body t t' _ env fun path' env' reach => same path' env' reach)
           (Process.every_true _ _) fun _ _ => .refl _
     | _, _, _, _, .inAttempt key w owns inputs body results rest, t, t', path, env, same => by
-        simp only [Hole.fill, Term.denote]
+        simp only [Hole.fill, Term.denote_attempt]
         exact Process.SameWhen.bind (.refl _) (Process.every_canReturn _) fun n began =>
           Process.SameWhen.bind
             (Hole.fill_same body t t' path _ fun path' env' reach =>
@@ -385,16 +310,16 @@ mutual
         ((arms.fill t').denote sem path env pick) :=
     match Γ, inner, payloads, Δ, mid, arms, t, t', path, env, pick, same with
     | _, _, _, _, _, .first inputs arm rest, t, t', path, env, .here v, same => by
-        simp only [ArmsHole.fill, Arms.denote]
+        simp only [ArmsHole.fill, Arms.denote_cons]
         exact Hole.fill_same arm t t' path _ fun path' env' reach => same path' env' reach
     | _, _, _, _, _, .first inputs arm rest, t, t', path, env, .there pick, same => by
-        simp only [ArmsHole.fill, Arms.denote]
+        simp only [ArmsHole.fill, Arms.denote_cons]
         exact .refl _
     | _, _, _, _, _, .later inputs arm rest, t, t', path, env, .here v, same => by
-        simp only [ArmsHole.fill, Arms.denote]
+        simp only [ArmsHole.fill, Arms.denote_cons]
         exact .refl _
     | _, _, _, _, _, .later inputs arm rest, t, t', path, env, .there pick, same => by
-        simp only [ArmsHole.fill, Arms.denote]
+        simp only [ArmsHole.fill, Arms.denote_cons]
         exact ArmsHole.fill_same rest t t' path env pick same
 end
 
@@ -419,21 +344,21 @@ mutual
       t.denote sem path env = t.denote sem path env' :=
     match Γ, outs, t, env, env', agree with
     | _, _, .ret exit, env, env', agree => by
-        simp only [Term.denote]
+        simp only [Term.denote_ret]
         rw [Env.all_same exit agree]
     | _, _, .op key o operands results rest, env, env', agree => by
-        simp only [Term.denote]
+        simp only [Term.denote_op]
         rw [Env.all_same operands fun name mem => agree name (List.mem_append.mpr (.inl mem))]
         congr 1
         funext values
         exact Term.denote_reads rest path _ _ (Env.extend_same values fun name mem =>
           agree name (List.mem_append.mpr (.inr mem)))
     | _, _, .guard key w c ok why rest, env, env', agree => by
-        simp only [Term.denote]
+        simp only [Term.denote_guard]
         rw [Env.get_same c (agree c.name (.head _)),
           Term.denote_reads rest path env env' fun name mem => agree name (.tail _ mem)]
     | _, _, .choose key w c ok gives onTrue onFalse results rest, env, env', agree => by
-        simp only [Term.denote]
+        simp only [Term.denote_choose]
         rw [Env.get_same c (agree c.name (.head _)),
           Term.denote_reads onTrue path env env' fun name mem =>
             agree name (.tail _ (List.mem_append.mpr (.inl mem))),
@@ -444,7 +369,7 @@ mutual
         exact Term.denote_reads rest path _ _ (Env.extend_same mids fun name mem =>
           agree name (.tail _ (List.mem_append.mpr (.inr (List.mem_append.mpr (.inr mem))))))
     | _, _, .cases key w x ok gives arms results rest, env, env', agree => by
-        simp only [Term.denote]
+        simp only [Term.denote_cases]
         rw [Env.get_same x (agree x.name (.head _)),
           Arms.denote_reads arms path env env' fun name mem =>
             agree name (.tail _ (List.mem_append.mpr (.inl mem)))]
@@ -461,7 +386,7 @@ mutual
           rw [Term.denote_reads body _ _ _ (Env.extend_same _ fun name mem =>
             agree name (List.mem_append.mpr (.inr (List.mem_append.mpr
               (.inr (List.mem_append.mpr (.inl mem)))))))]
-        simp only [Term.denote]
+        simp only [Term.denote_loop]
         rw [sem.times_same times fun name mem => agree name (List.mem_append.mpr (.inl mem)),
           Env.all_same initial fun name mem =>
             agree name (List.mem_append.mpr (.inr (List.mem_append.mpr (.inl mem)))),
@@ -472,7 +397,7 @@ mutual
           agree name (List.mem_append.mpr (.inr (List.mem_append.mpr
             (.inr (List.mem_append.mpr (.inr mem)))))))
     | _, _, .block key number body results rest, env, env', agree => by
-        simp only [Term.denote]
+        simp only [Term.denote_block]
         rw [Term.denote_reads body _ env env' fun name mem =>
           agree name (List.mem_append.mpr (.inl mem))]
         congr 1
@@ -480,7 +405,7 @@ mutual
         exact Term.denote_reads rest path _ _ (Env.extend_same mids fun name mem =>
           agree name (List.mem_append.mpr (.inr mem)))
     | _, _, .attempt key w owns inputs body results rest, env, env', agree => by
-        simp only [Term.denote]
+        simp only [Term.denote_attempt]
         congr 1
         funext n
         rw [Term.denote_reads body path _ _ (Env.extend_same _ fun name mem =>
@@ -501,11 +426,11 @@ mutual
     match Γ, mid, payloads, arms, env, env', agree, pick with
     | _, _, _, .nil, _, _, _, pick => nomatch pick
     | _, _, _, .cons inputs arm rest, env, env', agree, .here v => by
-        simp only [Arms.denote]
+        simp only [Arms.denote_cons]
         exact Term.denote_reads arm path _ _ (Env.extend_same _ fun name mem =>
           agree name (List.mem_append.mpr (.inl mem)))
     | _, _, _, .cons inputs arm rest, env, env', agree, .there pick => by
-        simp only [Arms.denote]
+        simp only [Arms.denote_cons]
         exact Arms.denote_reads rest path env env' (fun name mem =>
           agree name (List.mem_append.mpr (.inr mem))) pick
 end

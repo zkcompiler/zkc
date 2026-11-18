@@ -2,6 +2,7 @@ module
 
 public import Zkc.Core.Program.Dialects
 public import Zkc.Core.Program.Linear
+public import Zkc.Core.Program.NamedProgram
 
 @[expose] public section
 
@@ -84,7 +85,7 @@ carries the names of its inputs and what elaboration decided about its body, onc
 inductive Defs (V : Vocabulary) : Headers V → Type where
   | nil : Defs V ⟨[], []⟩
   | fn {hs} (hdr : FnHeader V) (inputs : Names hdr.ins) (body : Fn V hs.fns hdr inputs)
-      (ok : FnConditions body) (rest : Defs V hs) : Defs V ⟨hdr :: hs.fns, hs.protocols⟩
+      (ok : FnConditions body) (rest : Defs V hs) (notes : BodyAnalysis.Annotations (LocalRaw V) := []) : Defs V ⟨hdr :: hs.fns, hs.protocols⟩
   | protocol {hs} (hdr : ProtocolHeader V) (inputs : Names hdr.ins) (body : Prot V hs hdr inputs)
       (ok : ProtocolConditions hdr body) (rest : Defs V hs) : Defs V ⟨hs.fns, hdr :: hs.protocols⟩
 
@@ -107,7 +108,7 @@ check of one definition gives while a program is being written, and what a progr
 by. -/
 inductive Elaborated (V : Vocabulary) (hs : Headers V) where
   | fn (hdr : FnHeader V) (inputs : Names hdr.ins) (body : Fn V hs.fns hdr inputs)
-      (ok : FnConditions body) (fresh : hdr.key ∉ hs.keys)
+      (ok : FnConditions body) (fresh : hdr.key ∉ hs.keys) (notes : BodyAnalysis.Annotations (LocalRaw V) := [])
   | protocol (hdr : ProtocolHeader V) (inputs : Names hdr.ins) (body : Prot V hs hdr inputs)
       (ok : ProtocolConditions hdr body) (fresh : hdr.key ∉ hs.keys)
 
@@ -138,8 +139,8 @@ theorem Headers.distinct_protocol {V : Vocabulary} {hs : Headers V} {key : Key}
 
 /-- A program with one more definition, elaborated against its headers. -/
 def Typed.add {V : Vocabulary} (p : Typed V) : Elaborated V p.headers → Typed V
-  | .fn hdr inputs body ok fresh =>
-      ⟨⟨hdr :: p.headers.fns, p.headers.protocols⟩, .fn hdr inputs body ok p.defs,
+  | .fn hdr inputs body ok fresh notes =>
+      ⟨⟨hdr :: p.headers.fns, p.headers.protocols⟩, .fn hdr inputs body ok p.defs notes,
         List.nodup_cons.mpr ⟨fresh, p.distinct⟩⟩
   | .protocol hdr inputs body ok fresh =>
       ⟨⟨p.headers.fns, hdr :: p.headers.protocols⟩, .protocol hdr inputs body ok p.defs,
@@ -252,7 +253,7 @@ theorem Typed.findProtocol_key {V : Vocabulary} {p : Typed V} {key : Key}
 applications, itself included. -/
 def Defs.closureOf {V : Vocabulary} : {hs : Headers V} → Defs V hs → Key → List Key
   | _, .nil, _ => []
-  | _, .fn hdr _ body _ rest, key =>
+  | _, .fn hdr _ body _ rest _, key =>
       if hdr.key = key then
         hdr.key :: (Term.calls (fun o => LocalOp.calls o) body).flatMap (Defs.closureOf rest)
       else Defs.closureOf rest key

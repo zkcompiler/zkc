@@ -27,31 +27,15 @@ variable {V : Vocabulary} {M : Model V}
 theorem Env.insert_valid {Γ : Ctx V.Ty} {env : Env M.Val Γ}
     (valid : ∀ τ (x : Var Γ τ), M.Valid τ (env.get x)) (bound : Name) {τ : V.Ty} (v : M.Val τ)
     (valid' : M.Valid τ v) :
-    ∀ σ (x : Var (Γ.insert bound τ) σ), M.Valid σ ((env.insert bound v).get x) := by
-  intro σ x
-  obtain ⟨name, found⟩ := x
-  show M.Valid σ (env.insert bound v name σ found)
-  by_cases same : name = bound
-  · have typed : σ = τ := by
-      have look := found
-      rw [Ctx.find?_insert, ite_eq_left same] at look
-      exact (Option.some.inj look).symm
-    subst typed
-    rw [eq_of_heq (Env.insert_at_bound env bound v same found)]
-    exact valid'
-  · rw [Env.insert_at_other env bound v same]
-    exact valid σ ⟨name, (ite_eq_right same).symm.trans
-      ((Ctx.find?_insert Γ bound τ name).symm.trans found)⟩
+    ∀ σ (x : Var (Γ.insert bound τ) σ), M.Valid σ ((env.insert bound v).get x) :=
+  Env.insert_preserves valid bound v valid'
 
 /-- The names of a binding bound to valid values keep every value in scope valid. -/
 theorem Env.extend_valid : ∀ {Γ : Ctx V.Ty} {env : Env M.Val Γ},
     (∀ τ (x : Var Γ τ), M.Valid τ (env.get x)) →
     ∀ {types : List V.Ty} (bound : Names types) (vs : HList M.Val types), vs.All M.Valid →
-      ∀ τ (x : Var (Γ.extend bound) τ), M.Valid τ ((env.extend bound vs).get x)
-  | _, _, valid, [], .nil, .nil, _ => valid
-  | _, _, valid, _ :: _, .cons name rest, .cons v vs, all =>
-      Env.extend_valid (Env.insert_valid valid name v (HList.all_cons.mp all).1) rest vs
-        (HList.all_cons.mp all).2
+      ∀ τ (x : Var (Γ.extend bound) τ), M.Valid τ ((env.extend bound vs).get x) :=
+  by exact @Env.extend_preserves _ _ M.Valid
 
 /-- What a local process returns has a property when every value that it returns as `.done`
 has it. -/
@@ -137,7 +121,7 @@ mutual
         ((localSem M fns table).dyns_valid_iff (Valid := ValidDyn M) _).mp
           (env_all_valid valid exit)
     | _, _, .op _ o operands results rest, path, env, valid => by
-        simp only [Term.denote]
+        simp only [Term.denote_op]
         apply (Process.every_bind _ _ _ _ _).mpr
         exact Process.every_mono _ _
           (fun values valid' => Term.denote_valid keeps rest path _
@@ -147,10 +131,10 @@ mutual
               (((localSem M fns table).dyns_valid_iff (Valid := ValidDyn M) _).mp
                 (env_all_valid valid operands)) ran)
     | _, _, .guard .., path, env, valid => by
-        simp only [Term.denote]
+        simp only [Term.denote_guard]
         exact cond_every _ (Term.denote_valid keeps _ path env valid) trivial
     | _, _, .choose _ _ _ _ _ onTrue onFalse results rest, path, env, valid => by
-        simp only [Term.denote]
+        simp only [Term.denote_choose]
         apply (Process.every_bind _ _ _ _ _).mpr
         exact cond_every _
           (Process.every_mono _ _ (fun mids valid' => Term.denote_valid keeps rest path _
@@ -160,14 +144,14 @@ mutual
             (Env.extend_valid valid results mids valid')) (fun _ h => h)
             (Term.denote_valid keeps onFalse path env valid))
     | _, _, .cases _ _ x ok _ arms results rest, path, env, valid => by
-        simp only [Term.denote]
+        simp only [Term.denote_cases]
         apply (Process.every_bind _ _ _ _ _).mpr
         exact Process.every_mono _ _ (fun mids valid' => Term.denote_valid keeps rest path _
             (Env.extend_valid valid results mids valid')) (fun _ h => h)
           (Arms.denote_valid keeps arms path env valid _ (localPick_valid ok _ (valid _ x)))
     | _, _, .loop (carried := carried) (each := each) key w times _ initial inputs body results
         rest, path, env, valid => by
-        simp only [Term.denote]
+        simp only [Term.denote_loop]
         apply (Process.every_bind _ _ _ _ _).mpr
         have fits : ∀ m, times.size = some m → 0 + (localSem M fns table).times times env = m := by
           intro m sized
@@ -197,7 +181,7 @@ mutual
         exact ⟨parts.1, collectedOK_push stateValid.2
           (((localSem M fns table).dyns_valid_iff (Valid := ValidDyn M) _).mpr parts.2)⟩
     | _, _, .block _ _ body results rest, path, env, valid => by
-        simp only [Term.denote]
+        simp only [Term.denote_block]
         apply (Process.every_bind _ _ _ _ _).mpr
         exact Process.every_mono _ _ (fun mids valid' => Term.denote_valid keeps rest path _
             (Env.extend_valid valid results mids valid')) (fun _ h => h)
@@ -236,7 +220,7 @@ mutual
         have operandsValid :=
           ((localSem M fns table).dyns_valid_iff (Valid := ValidDyn M) _).mp
             (env_all_valid valid operands)
-        simp only [Term.denote]
+        simp only [Term.denote_op]
         show (localOp M table' o (env.all operands)).bind _ =
           (localOp M table o (env.all operands)).bind _
         rw [localOp_tables agree o _ operandsValid]
@@ -246,10 +230,10 @@ mutual
           fun values valid' => Term.denote_tables keeps agree rest path _
             (Env.extend_valid valid results values valid')
     | _, _, .guard _ _ c ok _ rest, path, env, valid => by
-        simp only [Term.denote]
+        simp only [Term.denote_guard]
         rw [Term.denote_tables keeps agree rest path env valid]
     | _, _, .choose _ _ c ok _ onTrue onFalse results rest, path, env, valid => by
-        simp only [Term.denote]
+        simp only [Term.denote_choose]
         rw [Term.denote_tables keeps agree onTrue path env valid,
           Term.denote_tables keeps agree onFalse path env valid]
         exact Local.bind_congr
@@ -258,7 +242,7 @@ mutual
           fun mids valid' => Term.denote_tables keeps agree rest path _
             (Env.extend_valid valid results mids valid')
     | _, _, .cases _ _ x ok _ arms results rest, path, env, valid => by
-        simp only [Term.denote]
+        simp only [Term.denote_cases]
         show (arms.denote (localSem M fns table') path env (localPick M ok (env.get x))).bind _ =
           (arms.denote (localSem M fns table) path env (localPick M ok (env.get x))).bind _
         rw [Arms.denote_tables keeps agree arms path env valid _ (localPick_valid ok _ (valid _ x))]
@@ -268,7 +252,7 @@ mutual
             (Env.extend_valid valid results mids valid')
     | _, _, .loop (carried := carried) (each := each) key w times _ initial inputs body results
         rest, path, env, valid => by
-        simp only [Term.denote]
+        simp only [Term.denote_loop]
         have fits : ∀ m, times.size = some m → 0 + (localSem M fns table).times times env = m := by
           intro m sized
           cases times with
@@ -314,7 +298,7 @@ mutual
             ((localSem M fns table).dyns_valid_iff (Valid := ValidDyn M) _).mp
               (collected_valid localCollect_valid times.size fits loopValid.2)⟩))
     | _, _, .block _ _ body results rest, path, env, valid => by
-        simp only [Term.denote]
+        simp only [Term.denote_block]
         rw [Term.denote_tables keeps agree body _ env valid]
         exact Local.bind_congr (Term.denote_valid table keeps body _ env valid)
           fun mids valid' => Term.denote_tables keeps agree rest path _

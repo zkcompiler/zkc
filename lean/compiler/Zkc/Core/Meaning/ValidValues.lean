@@ -19,6 +19,42 @@ of a function is in `Meaning/Validity.lean`.
 
 namespace Zkc.Core
 
+section
+variable {T : Type} {F : T → Type} {P : ∀ t, F t → Prop}
+
+/-- One more name bound to a valid value keeps every value in scope valid. -/
+theorem Env.insert_preserves {Γ : Ctx T} {env : Env F Γ}
+    (valid : ∀ τ (x : Var Γ τ), P τ (env.get x)) (bound : Name) {τ : T} (v : F τ)
+    (valid' : P τ v) :
+    ∀ σ (x : Var (Γ.insert bound τ) σ), P σ ((env.insert bound v).get x) := by
+  intro σ x
+  obtain ⟨name, found⟩ := x
+  show P σ (env.insert bound v name σ found)
+  by_cases same : name = bound
+  · have typed : σ = τ := by
+      have look := found
+      rw [Ctx.find?_insert, ite_eq_left same] at look
+      exact (Option.some.inj look).symm
+    subst typed
+    rw [eq_of_heq (Env.insert_at_bound env bound v same found)]
+    exact valid'
+  · rw [Env.insert_at_other env bound v same]
+    exact valid σ ⟨name, (ite_eq_right same).symm.trans
+      ((Ctx.find?_insert Γ bound τ name).symm.trans found)⟩
+
+/-- The names of a binding bound to valid values keep every value in scope valid. -/
+theorem Env.extend_preserves : ∀ {Γ : Ctx T} {env : Env F Γ},
+    (∀ τ (x : Var Γ τ), P τ (env.get x)) →
+    ∀ {types : List T} (bound : Names types) (vs : HList F types), vs.All P →
+      ∀ τ (x : Var (Γ.extend bound) τ), P τ ((env.extend bound vs).get x)
+  | _, _, valid, [], .nil, .nil, _ => valid
+  | _, _, valid, _ :: _, .cons name rest, .cons v vs, all =>
+      Env.extend_preserves (Env.insert_preserves valid name v (HList.all_cons.mp all).1) rest vs
+        (HList.all_cons.mp all).2
+
+end
+
+
 /-! ## Valid values of any dialect -/
 
 section
@@ -94,6 +130,22 @@ theorem collected_valid
           (fun m e => by rw [List.length_reverse, length]; exact fits m e)
           (fun v found => valid v (List.mem_reverse.mp found)), ?_⟩)
       exact (sem.dyns_valid_iff _).mp (collected_valid collect size fits others)
+
+end
+
+section
+variable {D : Dialect} {Raw : Type}
+
+/-- A written operation gives results on valid operands, and the results are valid: the relation
+that the facts of the table are about. -/
+def ValidRun (sem : Semantics D) (Run : Raw → List sem.Dyn → List sem.Dyn → Prop)
+    (Valid : sem.Dyn → Prop) (raw : Raw) (operands results : List sem.Dyn) : Prop :=
+  Run raw operands results ∧ (∀ v, v ∈ operands → Valid v) ∧ ∀ v, v ∈ results → Valid v
+
+/-- The payload of the alternative of a variant is valid. -/
+def PickValid (sem : Semantics D) (Valid : sem.Dyn → Prop) {payloads : List D.Ty}
+    (p : Pick sem.Val payloads) : Prop :=
+  p.All fun τ v => Valid ⟨τ, v⟩
 
 end
 

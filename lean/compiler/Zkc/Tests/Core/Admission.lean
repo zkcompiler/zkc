@@ -9,7 +9,7 @@ definition that is refused, with every refusal of that definition and nothing of
 one whose check of facts refuses an application, and one whose elaboration is refused. `check`,
 one definition at a time, gives the headers of the admitted program. An association whose key
 names a definition is resolved in the admitted program; one whose key is no definition is
-refused by the rule `association`. A protocol is refused.
+refused by the rule `association`. Other cases exercise mixed admission and per-role bounds and refusals.
 -/
 
 namespace Zkc.Core.AdmissionTests
@@ -20,7 +20,7 @@ open FactsTests (field natural less plus item elements F lengthOf anyNat)
 def noAssociation : Association := ⟨[], [], [], [], []⟩
 
 /-- What admission says of a program: its refusals, or the bounds of its annotation. -/
-def admission (named : NamedProgram field) : List (ProgramRefusal field) ⊕ List (Place × Nat) :=
+def admission (named : NamedProgram field) : List (AdmissionRefusal field) ⊕ List (Place × Nat) :=
   match admit named noAssociation with
   | .ok admitted => .inr admitted.annotation.bounds
   | .error refusals => .inl refusals
@@ -76,14 +76,14 @@ def unguardedRefusal (key instruction : Nat) : ProgramRefusal field :=
 /-- The second function's check of facts refuses both of its reads: admission gives those two
 refusals, and nothing of the third function, which is refused as well. -/
 example : admission ⟨[addition 1, unguardedTwice 2, unguarded 3]⟩ =
-    .inl [unguardedRefusal 2 1, unguardedRefusal 2 2] := by
+    .inl [.definition (.fn (unguardedRefusal 2 1)), .definition (.fn (unguardedRefusal 2 2))] := by
   decide +kernel
 
 /-- The first function's elaboration refuses an operand that is not in scope: admission gives
 that refusal, and nothing of the second function. -/
 example : admission ⟨[.fn ⟨1⟩ [.nat, .nat] [.nat] false none Summary.empty
       (.mk [0, 1] [.op ⟨1⟩ [2] plus [0, 5]] [2]), unguarded 2]⟩ =
-    .inl [⟨.scope, at_ 1 1, .name 5⟩] := by
+    .inl [.definition (.fn ⟨.scope, at_ 1 1, .name 5⟩)] := by
   decide +kernel
 
 /-! ## One definition at a time -/
@@ -106,7 +106,7 @@ example : (admit ⟨[bounded, caller]⟩ noAssociation).map (·.program.headers)
 
 /-- `check` gives the refusals of a definition, against the headers before it: `caller` alone
 calls a function that is not there. -/
-example : check ⟨[], []⟩ caller = .error [⟨.callee, at_ 2 1, .callee ⟨1⟩ 0⟩] := by
+example : check ⟨[], []⟩ caller = .error [.definition (.fn ⟨.callee, at_ 2 1, .callee ⟨1⟩ 0⟩)] := by
   rfl
 
 /-! ## The association -/
@@ -120,7 +120,7 @@ def instanceOf (definition : Nat) : Association :=
 in the association, its generic declaration, its arguments and the key of the definition found
 in the program. -/
 def resolution (named : NamedProgram field) (association : Association) :
-    List (ProgramRefusal field) ⊕ List (Key × List Static × Key) :=
+    List (AdmissionRefusal field) ⊕ List (Key × List Static × Key) :=
   match admit named association with
   | .ok admitted =>
       .inr (admitted.association.families.map fun family =>
@@ -135,14 +135,42 @@ example : resolution ⟨[addition 1, addition 2]⟩ (instanceOf 2) =
 /-- A key that is no definition of the program: refused by the rule `association`, at the
 key. -/
 example : resolution ⟨[addition 1, addition 2]⟩ (instanceOf 9) =
-    .inl [refuseWhole ⟨9⟩ .association (.key ⟨9⟩)] := by
+    .inl [.association (refuseWhole ⟨9⟩ .association (.key ⟨9⟩))] := by
   decide +kernel
 
 /-! ## A protocol -/
 
-/-- A protocol is refused: its role programs are not walked yet. -/
-example : admission ⟨[addition 1, .protocol ⟨2⟩ 2 [] [] (.mk [] [] [])]⟩ =
-    .inl [refuseWhole ⟨2⟩ .protocol (.key ⟨2⟩)] := by
+/-- A function and an empty protocol are admitted together. -/
+example : admission ⟨[addition 1, .protocol ⟨2⟩ 2 [] [] (.mk [] [] [])]⟩ = .inr [] := by
   decide +kernel
+
+private def rolePlace (key instr : Nat) (r : Role) : Place :=
+  ⟨⟨key⟩, [], some ⟨instr⟩, some r⟩
+
+/-- Both participants run the bounded loop, while the third one skips its region. -/
+private def locatedLoop : Definition field :=
+  .protocol ⟨3⟩ 3 [] [] (.mk [] [
+    .op ⟨1⟩ [0] (.compute [0,1] (natural 4)) [],
+    .loop ⟨2⟩ [0,1] (.count 0) [] [] (.mk [1] [] [])] [])
+
+example : admission ⟨[bounded, locatedLoop, caller]⟩ =
+    .inr [(at_ 2 5, 4), (rolePlace 3 2 0, 4), (rolePlace 3 2 1, 4), (at_ 1 4, 9)] := by
+  decide +kernel
+
+/-- Each participant sees its own domain obligation when a shared read is out of proof. -/
+private def unsafeRead : Definition field :=
+  .protocol ⟨4⟩ 3 [⟨elements,[0,1]⟩, ⟨.nat,[0,1]⟩] [] (.mk [0,1]
+    [.op ⟨8⟩ [2] (.compute [0,1] (item elements)) [0,1]] [])
+
+private def rejectedReads : Option (List (Place × RoleRaw field)) :=
+  match admission ⟨[unsafeRead]⟩ with
+  | .inl refusals => refusals.mapM fun
+    | .projection ⟨.domain, place, .unjustifiedAssertion op _⟩ => some (place, op)
+    | _ => none
+  | .inr _ => none
+
+example : rejectedReads =
+    some [(rolePlace 4 8 0, .compute [0,1] (item elements)),
+     (rolePlace 4 8 1, .compute [0,1] (item elements))] := by decide +kernel
 
 end Zkc.Core.AdmissionTests

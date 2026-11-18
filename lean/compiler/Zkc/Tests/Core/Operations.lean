@@ -165,8 +165,8 @@ example : erasesBack variant := by rfl
 
 /-- A refusal of the operation of a function of one operation. -/
 def refusedAs (name : OwnedName) (types : List plain.Ty) (numbers : List Nat) :
-    Option (ProgramRefusal plain) :=
-  some ⟨.owned, at_ 1 1, .operation (.owned name types numbers)⟩
+    Option (DefinitionRefusal plain) :=
+  functionError ⟨.owned, at_ 1 1, .operation (.owned name types numbers)⟩
 
 example : refusal (one [.nat] [.nat] .seqLength [.nat] []) = refusedAs .seqLength [.nat] [] := by
   decide +kernel

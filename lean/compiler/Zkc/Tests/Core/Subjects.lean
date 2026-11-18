@@ -431,6 +431,15 @@ def guardedRef : Member [guardedHeader] guardedHeader := .head
 /-- The stop of the guard, under a call. -/
 def guardStop : Stop := .declared .reject ⟨[], ⟨4⟩⟩
 
+private theorem guarded_return (M : Model field) (flag : Bool)
+    (k : HList M.Val [] → Local (HList M.Val [.nat])) (value : HList M.Val [.nat])
+    (returns : k .nil = .done value) :
+    ((bif flag then .done .nil else .halt guardStop : Local (HList M.Val [])).bind k).Every
+      (fun _ _ => True) (· = value) (· = guardStop) := by
+  cases flag with
+  | false => rfl
+  | true => change (k .nil).Every _ _ _; rw [returns]; rfl
+
 /-- The guarded callee's contract: where it returns, it returns the sum of two products of its
 inputs; where it stops, it stops at its guard. -/
 theorem guarded_contract (M : Model field) :
@@ -440,8 +449,8 @@ theorem guarded_contract (M : Model field) :
   intro args _
   match args with
   | .cons a (.cons b (.cons c (.cons d .nil))) =>
-      show (cond (Nat.blt (a * b) (c * d)) _ _ : Local (HList M.Val [.nat])).Every _ _ _
-      cases Nat.blt (a * b) (c * d) <;> exact rfl
+      apply guarded_return M (Nat.blt (a * b) (c * d))
+      rfl
 
 /-- **The call of the guarded callee satisfies its contract**, with the stop of the guard
 allowed (`Contract.satisfies`)... -/

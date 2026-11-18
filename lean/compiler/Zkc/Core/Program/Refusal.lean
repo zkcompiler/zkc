@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Core.Program.Identity
+public import Zkc.Core.Program.Annotations
 public import Zkc.Core.Program.Requirement
 
 @[expose] public section
@@ -64,8 +64,14 @@ inductive Rule where
   | stops
   /-- No definition before a definition has its key. -/
   | key
-  /-- A definition is a function: the rules of the protocol dialect are not built. -/
+  /-- Admission requires a checked protocol projection. -/
   | protocol
+  /-- Each participant in the body belongs to the enclosing protocol. -/
+  | participants
+  /-- Every holder of a protocol port is a declared role. -/
+  | portHolders
+  /-- Participants in the alternatives and iterations belong to that control. -/
+  | enclosed
   /-- The association of a program names definitions of the program. -/
   | association
   /-- An application of an operation with a domain is inside it, by what is known there. -/
@@ -76,6 +82,14 @@ inductive Rule where
   /-- The summary of a function names, by their positions, its inputs in a requirement and its
   inputs followed by its results in a guarantee, and nothing else. -/
   | summary
+  /-- A body annotation resolves and is well typed at its lexical site. -/
+  | annotation
+  /-- A supplied fact has evidence at its lexical site. -/
+  | factEvidence
+  /-- A lemma used by a step has established premises. -/
+  | lemmaPremise
+  /-- A loop establishes and preserves its invariant. -/
+  | loopInvariant
 deriving DecidableEq, Repr
 
 /-- What a rule found, with the types `T` of a dialect and its written operations `Raw` as
@@ -114,6 +128,11 @@ inductive Detail (T Raw : Type) where
   | unestablished (guarantee : Requirement Raw) (known : List (Option Range))
   /-- A requirement or a guarantee that the rule does not allow there. -/
   | requirement (requirement : Requirement Raw)
+  | contractAssertion (clause : BodyAnalysis.ContractClause Raw)
+  | unjustifiedAssertion (operation : Raw) (clause : BodyAnalysis.ContractClause Raw)
+  | annotationSite (site : BodyAnalysis.AnnotationSite)
+  | premise (site : BodyAnalysis.AnnotationSite) (index : Nat)
+  | invariant (site : BodyAnalysis.AnnotationSite) (index : Nat) (preservation : Bool)
   /-- Nothing beyond the rule and the place. -/
   | nothing
 deriving DecidableEq

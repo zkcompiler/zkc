@@ -4,7 +4,7 @@ public import Zkc.Core.Program.Term
 public import Zkc.Core.Program.Located
 public import Zkc.Core.Program.Shape
 public import Zkc.Core.Program.Syntax
-public import Zkc.Core.Program.Requirement
+public import Zkc.Core.Program.HeaderSummary
 
 @[expose] public section
 
@@ -14,9 +14,9 @@ types) and the role one (one role; the same located types, read as what the role
 context of a protocol and of a role program has the same names at the same located types
 (`Ctx (LTy V)`). A term carries the proof of each "held by at least", so projection is total.
 A callee is named by its place among the headers (`Member`), and a component, a field or an
-alternative by its place among the types. The header of a function carries its summary
-(`Summary`): what a call requires of its inputs and what it guarantees of its inputs followed by
-its results, over no written operation, so that it names them by their positions only.
+alternative by its place among the types. The header of a function carries a `HeaderSummary`. Its preconditions refer to the inputs,
+and its guarantees refer to the inputs followed by the results. A clause may be positional
+or contain a stable assertion over those values.
 -/
 
 namespace Zkc.Core
@@ -34,8 +34,8 @@ structure FnHeader (V : Vocabulary) where
   the body. The function always has its body. -/
   kernel : Option Key
   /-- What a call must establish of the inputs, and what it may then take of the inputs followed
-  by the results, each by position: over no written operation, it applies none. -/
-  summary : Summary Empty
+  by the results. Both kinds of clause use the same positions. -/
+  summary : HeaderSummary V
 
 /-- What an application needs of a protocol: its ports and results, located in its own
 roles, and its shape. -/
@@ -143,6 +143,8 @@ inductive OwnedOp (V : Vocabulary) : List V.Ty → List V.Ty → Type where
   | getRecord (key : Key) (fields : Tys V.TypeKey) {τ : V.Ty}
       (position : Member fields.toList τ) (free : Tys.anyLinear V fields = false) :
       OwnedOp V [.record key false fields] [τ]
+  /-- Consume a sized sequence once, producing its elements in index order. -/
+  | takeSeq (item : V.Ty) (count : Nat) : OwnedOp V [.seq item (some count)] (List.replicate count item)
   /-- Every component of a tuple: how a tuple with a linear component is used. -/
   | takeTuple (items : Tys V.TypeKey) : OwnedOp V [.tuple items] items.toList
   /-- Every field of a record: how a linear record is used. -/

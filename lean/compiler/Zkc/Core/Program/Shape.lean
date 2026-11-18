@@ -39,6 +39,7 @@ deriving DecidableEq
 inductive EventClass (V : Vocabulary) where
   | flow (kind : FlowKind) (giver : Role) (getters : List Role)
   | given (kind : GivenKind V) (owner : Role) (hearers : List Role)
+deriving DecidableEq
 
 /-- A role's part of an event, naming its peers. -/
 inductive Part (V : Vocabulary) where

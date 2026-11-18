@@ -18,7 +18,7 @@ it. A wrong result of either is refused there.
   regions of a form of control are walked.
 - `shareRepeated` drops an operation that has the written form and the operand names of an
   earlier operation in scope, and puts the earlier operation's results for its results in what
-  follows. Only an operation that the analysis calls a value (`(localFactRules V fns).shared`)
+  follows. Only an operation that the analysis calls a value (`FunctionContracts.rules`)
   is shared: every operation except a call of a function that can stop.
 
 Both read the headers of the callees for whether a call can stop: a call is dropped or shared
@@ -31,7 +31,7 @@ section
 variable {V : Vocabulary}
 
 /-- Whether a written operation of a function is a value for the analysis, as
-`(localFactRules V fns).shared` says of the operation that it writes, by the headers of the
+the typed operation’s `canStop` flag says of the operation that it writes, by the headers of the
 callees: every operation except a call of a function that can stop. A call whose key no header
 has is not taken for a value. -/
 def LocalRaw.isValue (fns : List (FnHeader V)) : LocalRaw V → Bool

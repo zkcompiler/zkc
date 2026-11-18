@@ -8,17 +8,9 @@ public import Zkc.Core.Statements
 @[expose] public section
 
 /-!
-The statements of `Statements.lean` about functions. Those about what `admit`, `check` and
-`elaborate` return are proved for every record of functions whose `admit`, `check` and
-`elaborate` are `admit`, `check` and `elaborateFunctions`: each theorem has the statement as its
-type, except the round trip from a typed program, which holds of the typed programs without
-protocols (`roundTrip`), since `elaborateFunctions` refuses a protocol. Those about an admitted
-program hold of every admitted program, from what it carries (`Admitted.assured`), and those
-about functions and programs of functions are the theorems that prove them.
-
-A program that elaboration gives erases to what was elaborated (`eraseOfElaborated`), and the
-erased form of a typed program of functions elaborates as the program (`roundTrip`), by the
-round trip of `Admission/Elaboration.lean`.
+The named elaborator satisfies both round-trip statements for every typed program.
+Admission and transformation establish the function judgments from the returned
+evidence. The table theorem supplies the safety of every open role on permitted replies.
 
 Admission checks one definition at a time, each against the headers before it: so what it
 returns is the elaboration of what was given (`admitsWhatWasGiven`), and the check of each
@@ -59,9 +51,27 @@ theorem admitFrom_elaborates : ∀ (p : Typed V) (bounds : List (Place × Nat))
       rfl
   | p, bounds, definition :: rest, q, bounds', h => by
       obtain ⟨⟨e, mine⟩, checked, later⟩ := ok_of_bind h
-      have elaborated := (checkDefinition_fn checked).1
+      have elaborated := (checkDefinition_ok checked).1
       simp only [elaborateFrom, elaborated]
       exact admitFrom_elaborates (p.add e) (mine ++ bounds) rest q bounds' later
+
+/-- Equality with the complete erasure of a proof's typed subject identifies the actual
+admitted program, including its lexical bodies, operation keys, headers and annotations. -/
+theorem admitted_eq_of_readback {named : NamedProgram V} {assoc : Association} {a : Admitted V}
+    {expected : Typed V} (accepted : admit named assoc = .ok a) (same : named = erase expected) :
+    a.program = expected := by
+  have found : elaborateProgram named = .ok a.program :=
+    admitFrom_elaborates _ _ _ _ _ (admit_ok accepted).1
+  rw [same, elaborateProgram_erase] at found
+  exact (Except.ok.inj found).symm
+
+/-- Decide program identity using the input that admission actually checked. A caller can
+transport a meaning theorem in the positive case. The source association is a separate input. -/
+def identifyAdmitted {named : NamedProgram V} {assoc : Association} {a : Admitted V}
+    (accepted : admit named assoc = .ok a) (expected : Typed V) : Decidable (a.program = expected) :=
+  decidable_of_iff (named = erase expected) ⟨admitted_eq_of_readback accepted, fun same => by
+    have found := admitFrom_elaborates _ _ _ _ _ (admit_ok accepted).1
+    exact (erase_elab named a.program found).symm.trans (congrArg erase same)⟩
 
 /-- Incremental checking and the definition phase of admission agree on the headers or the
 entire list of refusals, starting at any already typed prefix. Association resolution follows
@@ -92,19 +102,18 @@ theorem admitFrom_checkAll (p : Typed V) (bounds : List (Place × Nat))
 
 Each theorem has its statement as its type: for any record of functions whose `admit`, `check`
 and `elaborate`, those that the statement reads, are the definitions here, and for every admitted
-program; `roundTrip` has it for the typed programs without protocols. -/
+program. -/
 
-/-- Execution and state: elaborating the erased form of a typed program of functions gives the
-program. This is `Statements.roundTrip` for the typed programs without protocols, which are those
-that `elaborateFunctions` can give. -/
-theorem roundTrip (c : Functions V) (elaborates : c.elaborate = elaborateFunctions) :
-    ∀ p : Typed V, p.headers.protocols = [] → c.elaborate (erase p) = .ok p := by
+/-- The named elaborator recovers every typed program, including protocol applications. -/
+theorem roundTrip (c : Functions V) (elaborates : c.elaborate = elaborateProgram) :
+    Statements.roundTrip c := by
+  unfold Statements.roundTrip
   rw [elaborates]
-  exact elaborateFunctions_erase
+  exact elaborateProgram_erase
 
 /-- Execution and state: a program that elaboration gives erases to the program by names that
 was elaborated. -/
-theorem eraseOfElaborated (c : Functions V) (elaborates : c.elaborate = elaborateFunctions) :
+theorem eraseOfElaborated (c : Functions V) (elaborates : c.elaborate = elaborateProgram) :
     Statements.eraseOfElaborated c := by
   unfold Statements.eraseOfElaborated
   rw [elaborates]
@@ -113,7 +122,7 @@ theorem eraseOfElaborated (c : Functions V) (elaborates : c.elaborate = elaborat
 /-- Execution and state: an admitted program is the elaboration of what was given, and its
 association is the resolution in it of the association given. -/
 theorem admitsWhatWasGiven (c : Functions V) (admits : c.admit = admit)
-    (elaborates : c.elaborate = elaborateFunctions) : Statements.admitsWhatWasGiven c := by
+    (elaborates : c.elaborate = elaborateProgram) : Statements.admitsWhatWasGiven c := by
   unfold Statements.admitsWhatWasGiven
   rw [admits, elaborates]
   intro named assoc a h
@@ -129,6 +138,16 @@ theorem checkAgrees (c : Functions V) (admits : c.admit = admit) (checks : c.che
   rw [admits, checks]
   intro named assoc a h
   exact admitFrom_checkAll .empty [] named.definitions _ _ (admit_ok h).1
+
+/-- The actual projected role process runs safely at every invocation path, against
+permitted peer replies, under any accepted function contracts. -/
+theorem rolesSafe (c : Functions V) (implements : c.admit = admit) : Statements.rolesSafe c := by
+  intro named assoc a accepted _ M hdr callee r path args valid
+  rw [implements] at accepted
+  have checked := admitFrom_accepted .empty [] named.definitions a.program a.annotation.bounds rfl (admit_ok accepted).1
+  have roles := (BodyAnalysis.RoleContracts.checkedTables M a.program.defs
+    (List.nodup_append.mp a.program.distinct).1 (acceptedBodies _ checked)).2
+  exact Process.every_mono _ _ (fun _ _ => trivial) (fun _ h => h) (roles hdr callee r path args valid)
 
 /-- Validity: a function of an admitted program never stops `undefined`, on any valid inputs that
 satisfy the requirements of its header's summary: what every admitted program carries, that its

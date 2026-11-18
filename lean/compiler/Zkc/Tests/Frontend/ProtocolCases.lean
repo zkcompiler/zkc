@@ -490,6 +490,31 @@ protocol T roles(P, V)(xs: [F] @(P, V)):
 // says `P` computes `xs[1]` without a fact that `V` holds
 // says or restrict the binder to `@V`
 
+=== length-at-both-roles | accept | each role checks the same length before indexing together
+module t
+type F = primitive(\"bls12-381.fr\")
+protocol T roles(P, V)(xs: [F] @(P, V)):
+    guard @P length(xs) == 2
+    guard @V length(xs) == 2
+    y = xs[1]
+
+=== length-of-other-operand | refuse TY7 6 | length evidence keeps the identity of its operand
+module t
+type F = primitive(\"bls12-381.fr\")
+protocol T roles(P, V)(xs: [F] @(P, V), ys: [F] @(P, V)):
+    guard @P length(xs) == 2
+    guard @V length(xs) == 2
+    y = ys[1]
+
+=== length-at-one-holder | refuse TY4 6 | the right operand is established at only one role
+module t
+type F = primitive(\"bls12-381.fr\")
+protocol T roles(P, V)(xs: [F] @(P, V), ys: [F] @(P, V)):
+    guard @P length(xs) == 2
+    guard @V length(ys) == 2
+    y = xs[1]
+// says `V` computes `xs[1]` without a fact that `P` holds
+
 === facts-restricted | accept | the binding restricted to the role that holds the fact (TY4, HO2)
 module t
 type F = primitive(\"bls12-381.fr\")

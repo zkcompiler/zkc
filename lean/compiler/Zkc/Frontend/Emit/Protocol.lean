@@ -30,22 +30,6 @@ open Syntax
 open Static
 open Typing (ProtocolCode BodyState SiteEntry FlowEntry SpecificationArgument)
 
-/-- The protocol instances that statements apply. -/
-partial def appliedIn (found : Array InstanceId) (statements : Array Typed.Stmt) : Array InstanceId :=
-  statements.foldl (init := found) fun found statement =>
-    match statement with
-    | .event _ _ (.apply _ callee ..) => if found.contains callee then found else found.push callee
-    | .if _ _ onTrue onFalse _ => appliedIn (appliedIn found onTrue) onFalse
-    | .match _ _ _ _ cases _ => cases.foldl (init := found) fun found (.case _ _ _ body) => appliedIn found body
-    | .for _ (.loop _ _ _ body) _ =>
-      match body with
-      | .uniform statements _ | .empty statements _ => appliedIn found statements
-      | .stepped iterations =>
-        iterations.foldl (init := found) fun found (Typed.Iteration.iteration _ statements _) =>
-          appliedIn found statements
-    | .scope _ body => appliedIn found body
-    | _ => found
-
 /-- The passes over the numbered tree of a protocol body: the roles, the uses of linear values,
 and the occurrences of its events. Their refusals are logged. -/
 def checkedProtocol (definition : Typed.Definition) (body : Typed.ProtocolBody) :
@@ -138,79 +122,10 @@ def reportProtocolFindings (body : Typed.ProtocolBody) (roles : Typed.Roles)
         else logError worded.rule worded.span (.ofText worded.message) (origin := .instances)
       | _, _ => logError worded.rule worded.span (.ofText worded.message) (origin := .instances)
 
-mutual
-  /-- The flows of statements, each with the key of its site: an exchange per receiver of a
-  send, a draw, an application. -/
-  partial def flowsOf (context : Named.ProtocolContext) (statements : Array Typed.Stmt) :
-      CompileM (Array (Zkc.Core.SiteKey × FlowEntry)) := do
-    let mut flows := #[]
-    for statement in statements do flows := flows ++ (← flowsOfStmt context statement)
-    return flows
-
-  partial def flowsOfStmt (context : Named.ProtocolContext) :
-      Typed.Stmt → CompileM (Array (Zkc.Core.SiteKey × FlowEntry))
-    | .event mark event what => do
-      let key (part : String) : Zkc.Core.SiteKey := (context.site mark.id event part).key
-      match what with
-      | .send _ payload _ receivers =>
-        let some sender := context.roles.senders[mark.id]? | return #[]
-        return receivers.map fun receiver =>
-          let part := if receivers.size ≤ 1 then "value"
-            else s!"to {(context.roster[receiver]?).getD "?"}"
-          (key part, .exchange sender receiver payload.type 0)
-      | .draw _ law owner receivers =>
-        let row ← internRow (← vocabularyRow law.request)
-        return #[(key "value", .draw owner receivers row 0)]
-      | .apply _ callee _ _ roleMap _ => return #[(key "value", .apply callee roleMap)]
-      | .sample .. | .attempt .. => return #[]
-    | .if _ _ onTrue onFalse _ => do return (← flowsOf context onTrue) ++ (← flowsOf context onFalse)
-    | .match _ _ _ _ cases _ => do
-      let mut flows := #[]
-      for (.case _ _ _ body) in cases do flows := flows ++ (← flowsOf context body)
-      return flows
-    | .for _ (.loop _ _ _ body) _ => do
-      match body with
-      | .uniform inner _ => flowsOf context inner
-      | .stepped iterations =>
-        let mut flows := #[]
-        for (Typed.Iteration.iteration _ inner _) in iterations do flows := flows ++ (← flowsOf context inner)
-        return flows
-      | .empty .. => return #[]
-    | .scope _ body => flowsOf context body
-    | _ => return #[]
-end
-
-/-- The specification arguments of the applications of statements, each with the key of the
-site of its application. -/
-partial def specificationArgumentsOf (context : Named.ProtocolContext) (statements : Array Typed.Stmt) :
-    CompileM (Array (Zkc.Core.SiteKey × SpecificationArgument)) := do
-  let mut found := #[]
-  for statement in statements do
-    match statement with
-    | .event mark event (.apply _ _ _ specification _ _) =>
-      for (port, value) in specification do
-        found := found.push ((context.site mark.id event "value").key,
-          { site := 0, port, text := ← textAt value.span, type := ← renderTypeM value.type
-            place := value.span })
-    | .if _ _ onTrue onFalse _ =>
-      found := found ++ (← specificationArgumentsOf context onTrue) ++ (← specificationArgumentsOf context onFalse)
-    | .match _ _ _ _ cases _ =>
-      for (.case _ _ _ body) in cases do found := found ++ (← specificationArgumentsOf context body)
-    | .for _ (.loop _ _ _ body) _ =>
-      match body with
-      | .uniform inner _ => found := found ++ (← specificationArgumentsOf context inner)
-      | .stepped iterations =>
-        for (Typed.Iteration.iteration _ inner _) in iterations do
-          found := found ++ (← specificationArgumentsOf context inner)
-      | .empty .. => pure ()
-    | .scope _ body => found := found ++ (← specificationArgumentsOf context body)
-    | _ => pure ()
-  return found
-
 /-- What the session keeps of a checked protocol body. `keys` are the keys of its sites in the
 order of their numbers, as the lowering of its check numbered them. -/
 def protocolSummary (description : String) (head : Lowered.ProtocolHead) (checked : Typed.Checked)
-    (body : Typed.ProtocolBody) (keys : List Zkc.Core.SiteKey)
+    (body : Typed.ProtocolBody) (origin : DefinitionOrigin)
     (resolved : Array (Typing.ResolvedPlace × ParameterRef)) (waiting : Option String) :
     CompileM ProtocolCode := do
   -- one input per holder of each port that is not `spec`, one output per holder of each result
@@ -233,31 +148,39 @@ def protocolSummary (description : String) (head : Lowered.ProtocolHead) (checke
     if holders.size > 1 then
       agreements := agreements.push (true, (Array.range holders.size).map (outputs.size + ·))
     for holder in holders do outputs := outputs.push (result.value.type, holder)
-  -- the sites in the order of their numbers
-  let sites : Array SiteEntry := keys.toArray.map fun key =>
-    let event := head.events[key.event]?
-    { event := key.event, part := key.part, name := event.bind (·.name)
-      place := (event.map (·.span)).getD default, iteration := key.iteration.toArray }
-  let numberOf (key : Zkc.Core.SiteKey) : Nat := (keys.findIdx? (· == key)).getD keys.length
-  -- every flow and every specification argument is at a site of the body
-  let known (key : Zkc.Core.SiteKey) : CompileM Unit := do
-    unless keys.contains key do
-      throw (.defect s!"an event of `{description}` at a site that its body does not have")
-  let context : Named.ProtocolContext :=
-    { roster := body.roster, roles := checked.roles, occurrences := checked.occurrences
-      events := head.events, loops := #[], callee := fun _ => throw (.defect "no package") }
-  -- the flows in the order of the sites
-  let found ← flowsOf context body.statements
-  for (key, _) in found do known key
-  let flows := (found.map fun (key, flow) =>
-    (numberOf key, match flow with
-      | .exchange sender receiver type _ => FlowEntry.exchange sender receiver type (numberOf key)
-      | .draw owner receivers law _ => .draw owner receivers law (numberOf key)
-      | other => other)).qsort (·.1 < ·.1)
-  let specificationArguments := (← specificationArgumentsOf context body.statements).map
-    fun (key, argument) => { argument with site := numberOf key }
+  let mut sites := #[]
+  let mut flows := #[]
+  let mut specificationArguments : Array SpecificationArgument := #[]
+  for occurrence in checked.occurrences do
+    let some (.stmt (.event _ _ what)) := body.find? occurrence.node | throw (.defect "event missing from numbered tree")
+    let #[(_, instruction)] := origin.nodes.zipIdx.filter (·.1 == occurrence.node)
+      | throw (.defect "expected one emitted instruction for the source event")
+    let event := head.events[occurrence.event]?
+    let site (part : String) : SiteEntry :=
+      { event := occurrence.event, part, name := event.bind (·.name)
+        place := (event.map (·.span)).getD default, iteration := occurrence.iteration, instruction }
+    let n := sites.size
+    match what with
+    | .send _ payload _ receivers =>
+      let some sender := checked.roles.senders[occurrence.node]? | throw (.defect "unplaced send")
+      for receiver in receivers do
+        let part := if receivers.size ≤ 1 then "value" else s!"to {body.roster[receiver]!}"
+        flows := flows.push (.exchange sender receiver payload.type sites.size)
+        sites := sites.push (site part)
+    | .draw _ law owner receivers =>
+      let row ← internRow (← vocabularyRow law.request) (site "value").place
+      sites := sites.push (site "value")
+      flows := flows.push (.draw owner receivers row n)
+    | .apply _ callee _ _ roleMap _ =>
+      sites := sites.push (site "value")
+      flows := flows.push (.apply callee roleMap)
+      if let some attached := origin.specification.find? (·.instruction.number == instruction) then
+        for (port, expr) in attached.arguments do
+          specificationArguments := specificationArguments.push
+            {site := n, port, text := ← textAt expr.span, type := ← renderTypeM expr.type, place := expr.span}
+    | .sample .. | .attempt .. => sites := sites.push (site "value")
   return { name := description, roles := body.roster, inputs, inputPorts, outputs, agreements
-           sites, flows := flows.map (·.2), specificationArguments, resolved
+           sites, flows, specificationArguments, resolved
            waiting, specificationOnly := head.specification }
 
 /-- The body of a protocol that a body applies, asked for from the place of the application: a
@@ -337,7 +260,7 @@ def protocolBody (inst : InstanceId) (typeBody : InstanceId → Span → Compile
     trees := (results.trees.intern inst requested none).1.setStateOf inst (.done checked.definition) }
   if (← get).log.errors > errors || checked.definition.body.hasError then throw .abandoned
   -- the facts of the body, by the core, each role with its own
-  let outcome ← match checkProtocol (← get) inst checked with
+  let outcome ← match checkProtocol (← get) inst with
     | .ok outcome => pure outcome
     | .error (.defect message) => throw (.defect message)
     -- a form of a later layer in the body: the instance waits for it
@@ -353,7 +276,6 @@ def protocolBody (inst : InstanceId) (typeBody : InstanceId → Span → Compile
     match results.body? callee with
     | some (.done code) => code.waiting
     | _ => none
-  let keys := outcome.keys
-  return .protocol (← protocolSummary description head checked body keys resolutions.toArray waiting)
+  return .protocol (← protocolSummary description head checked body outcome.origin resolutions.toArray waiting)
 
 end Zkc.Frontend.Emit

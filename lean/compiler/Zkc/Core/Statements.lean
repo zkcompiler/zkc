@@ -20,8 +20,8 @@ process or a run is the same), a view (what one reader sees is the same), validi
 or stop outside what is allowed), or progress (a run goes on or ends as said).
 
 That every role program is a projection of its protocol is not a statement: it is the
-theorem `Zkc.Core.projection` (`Projection/Theorem.lean`). For a program of functions, the
-round trip in both directions is the theorems `Zkc.Core.elaborateFunctions_erase` and
+theorem `Zkc.Core.projection` (`Projection/Theorem.lean`). The
+round trip in both directions is the theorems `Zkc.Core.elaborateProgram_erase` and
 `Zkc.Core.erase_elab` (`Admission/Elaboration.lean`).
 -/
 

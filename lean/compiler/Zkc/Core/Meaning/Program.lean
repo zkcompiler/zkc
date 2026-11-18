@@ -27,7 +27,7 @@ variable {V : Vocabulary} (M : Model V)
 /-- The process of each function of a program. -/
 def Defs.fnTable : {hs : Headers V} → Defs V hs → FnTable M hs.fns
   | _, .nil => fun _ f => nomatch f
-  | _, .fn _ inputs body _ rest => fun hdr' f ins =>
+  | _, .fn _ inputs body _ rest _ => fun hdr' f ins =>
       match hdr', f, ins with
       | _, .head, ins =>
           body.denote (localSem M _ (Defs.fnTable rest)) [] (Env.empty.extend inputs ins)
@@ -37,7 +37,7 @@ def Defs.fnTable : {hs : Headers V} → Defs V hs → FnTable M hs.fns
 /-- The process of each protocol of a program, with the record of its run. -/
 def Defs.gTable : {hs : Headers V} → Defs V hs → GTable M hs.protocols
   | _, .nil => fun _ p => nomatch p
-  | _, .fn (hs := hs) _ _ _ _ rest => Defs.gTable (hs := hs) rest
+  | _, .fn (hs := hs) _ _ _ _ rest _ => Defs.gTable (hs := hs) rest
   | _, .protocol _ inputs body ok rest => fun hdr' p path ins =>
       match hdr', p, ins with
       | _, .head, ins =>
@@ -50,7 +50,7 @@ def Defs.gTable : {hs : Headers V} → Defs V hs → GTable M hs.protocols
 to the role, over the tables of the definitions before it. -/
 def Defs.rTable : {hs : Headers V} → Defs V hs → RTable M hs.protocols
   | _, .nil => fun _ p => nomatch p
-  | _, .fn (hs := hs) _ _ _ _ rest => Defs.rTable (hs := hs) rest
+  | _, .fn (hs := hs) _ _ _ _ rest _ => Defs.rTable (hs := hs) rest
   | _, .protocol _ inputs body _ rest => fun hdr' p j path ins =>
       match hdr', p, ins with
       | _, .head, ins =>

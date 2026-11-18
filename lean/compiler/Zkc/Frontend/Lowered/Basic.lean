@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Core.Types
+public import Zkc.Core.Program.Identity
 public import Zkc.Frontend.Semantics.Program
 
 @[expose] public section

@@ -15,6 +15,12 @@ test:
     cd lean/compiler && lake build && lake test
     just audit
 
+# Check source verifier certificates and replay the interactive formal library through the kernel.
+test-interactive:
+    cd lean/formal && lake build Zkc.Formal.Interactive Zkc.Tests.Formal.Interactive Zkc.Tests.Formal.Reuse.Controls Zkc.Tests.Formal.SourceHonestSumcheck
+    cd lean/formal && lake lean checks/SourceProtocols.lean
+    cd lean/formal && lake env lean --run checks/AuditInteractive.lean
+
 # Audit the compiler package: the kernel's replay of the core, the vocabulary and their tests, no `sorry`, no axiom beyond `propext` and `Quot.sound`, the import rules.
 audit:
     cd lean/compiler && lake exe zkc-audit

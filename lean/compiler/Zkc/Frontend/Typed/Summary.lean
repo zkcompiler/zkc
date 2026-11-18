@@ -1,7 +1,6 @@
 module
 
 public import Std.Data.HashMap
-public import Zkc.Core.Types
 public import Zkc.Frontend.Basic.Diagnostic
 public import Zkc.Frontend.Semantics.Static
 
@@ -93,6 +92,8 @@ structure SiteEntry where
   /-- The iteration of each loop around the event whose iterations are in sequence, outermost
   first; empty for an event of no such loop, whose site stands for all its occurrences. -/
   iteration : Array Nat := #[]
+  /-- Key of the emitted Core instruction. The parts of one broadcast share it. -/
+  instruction : Option Nat := none
   deriving Inhabited
 
 /-- A specification argument of an application: the core site of the application, the port, the

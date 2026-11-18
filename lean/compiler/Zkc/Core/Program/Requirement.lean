@@ -6,15 +6,11 @@ module
 What an operation with a domain asks of an application, as data. The same requirement is what
 an operation asks, what the check of facts decides, and what a refusal says when it is not
 known. An operand of a requirement that applies a written operation names its operands by their
-positions among the application's (`atPositions`). The summary of a definition is two lists of
-requirements, on its inputs and on its inputs followed by its results (`Summary`), the summary with
-neither being `Summary.empty`. The summary of a function is a summary over no written operation
-(`Summary Empty`), so that it names its inputs, and its results for a guarantee, by their positions
-only, by construction; an analysis reads it as a summary over the written operations of its
-dialect, which it does not apply (`Summary.lift`). That those positions are within the inputs, and
-for a guarantee the inputs and the results, is what elaboration decides (`Summary.misplaced`,
-`Summary.InRange`). What it is for a requirement to hold of values, and for a definition to satisfy
-a summary, is in `Meaning/Requirement.lean`.
+positions among the application's (`atPositions`). The positional format stores requirements on the inputs and on the inputs
+followed by the results (`Summary`). A function header retains these original clauses as
+`Requirement Empty`, alongside directly written assertions in `HeaderSummary`.
+`Summary.lift` embeds the positional form into another dialect and `Summary.misplaced`
+checks its positions. The meaning of positional requirements is in `Meaning/Requirement.lean`.
 -/
 
 namespace Zkc.Core
@@ -78,9 +74,15 @@ structure Summary (Raw : Type) where
   ensures : List (Requirement Raw)
 deriving DecidableEq
 
+/-- Select the empty summary in the format expected by the caller. -/
+class Summary.EmptyOf (S : Type) (Raw : outParam Type) where
+  value : S
+
+@[default_instance] instance {Raw : Type} : Summary.EmptyOf (Summary Raw) Raw := ⟨⟨[], []⟩⟩
+
 /-- The summary with no requirement and no guarantee: a definition that has it is asked nothing
 at a call and promises nothing beyond being assured. -/
-def Summary.empty {Raw : Type} : Summary Raw := ⟨[], []⟩
+def Summary.empty {Raw S : Type} [EmptyOf S Raw] : S := EmptyOf.value
 
 /-! ## The summary of a function, by positions -/
 
@@ -102,9 +104,8 @@ def Requirement.lift {Raw : Type} : Requirement Empty → Requirement Raw
   | .holds value => .holds value.lift
   | .bounded value => .bounded value.lift
 
-/-- A summary over no written operation, the summary of a function, as a summary over the written
-operations `Raw` of a dialect, which is how an analysis reads it: the same requirements and
-guarantees, which apply none of them. -/
+/-- Embed a positional summary into the written operations of a dialect while preserving its
+requirements and guarantees. -/
 def Summary.lift {Raw : Type} (summary : Summary Empty) : Summary Raw :=
   ⟨summary.requires.map Requirement.lift, summary.ensures.map Requirement.lift⟩
 

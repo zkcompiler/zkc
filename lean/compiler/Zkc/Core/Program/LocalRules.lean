@@ -69,6 +69,7 @@ def OwnedOp.name {ins outs : List V.Ty} : OwnedOp V ins outs → OwnedName × Li
   | .makeRecord key linear fields => (.make, [.record key linear fields], [])
   | .getTuple items position _ => (.get, [.tuple items], [position.index])
   | .getRecord key fields position _ => (.get, [.record key false fields], [position.index])
+  | .takeSeq item count => (.take, [.seq item (some count)], [])
   | .takeTuple items => (.take, [.tuple items], [])
   | .takeRecord key linear fields => (.take, [.record key linear fields], [])
   | .variant key alternatives position =>
@@ -124,6 +125,7 @@ def OwnedOp.resolve : OwnedName → List V.Ty → List Nat →
         (Member.atIndex fields.toList position).map fun found =>
           ⟨_, _, .getRecord key fields found.2 free⟩
       else none
+  | .take, [.seq item (some count)], [] => some ⟨_, _, .takeSeq item count⟩
   | .take, [.tuple items], [] => some ⟨_, _, .takeTuple items⟩
   | .take, [.record key linear fields], [] => some ⟨_, _, .takeRecord key linear fields⟩
   | .variant, [.variant key alternatives], [position] =>
@@ -166,6 +168,7 @@ theorem OwnedOp.resolve_name : ∀ {ins outs : List V.Ty} (o : OwnedOp V ins out
   | _, _, .getRecord _ _ position free => by
       simp only [OwnedOp.name, OwnedOp.resolve, free, ↓reduceDIte, Member.atIndex_index position,
         Option.map_some]
+  | _, _, .takeSeq .. => rfl
   | _, _, .takeTuple _ => rfl
   | _, _, .takeRecord .. => rfl
   | _, _, .variant _ _ position => by

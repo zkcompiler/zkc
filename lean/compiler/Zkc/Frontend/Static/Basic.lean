@@ -126,11 +126,15 @@ def refuse {α : Type} (rule : String) (span : Span) (message : String) : Compil
 def addRoot (inst : InstanceId) (kind : Emit.EntryKind := .root) : CompileM Unit :=
   modifyResults (·.addRoot inst kind)
 
-/-- The number of a row of the table, entered when new. -/
-def internRow (row : Typing.Row) : CompileM Typing.RowId :=
-  modifyGetResults fun results =>
-    let (results, id) := results.internRow row
-    (id, results)
+/-- Enter a primitive at its source occurrence or report a conflicting declaration. -/
+def internRow (row : Typing.Row) (place : Span) : CompileM Typing.RowId := do
+  let id ← modifyGetResults fun results =>
+    match results.internRow row with
+    | some (next, id) => (some id, next)
+    | none => (none, results)
+  match id with
+  | some id => return id
+  | none => refuse "NL9" place s!"the declarations of primitive `{row.key.name}` at these static arguments have different signatures"
 
 /-- Reports a text once. -/
 def report (text : String) : CompileM Unit :=

@@ -165,7 +165,7 @@ example : ¬ Process.SameWhen any (withoutUnused.denote bitsSem [] carriedApart)
 
 /-- A guard on the input, with what follows it left open. -/
 def afterGuard : Hole bits one [()] one [()] :=
-  .guard ⟨1⟩ () (var 0) trivial .reject .here
+  .step ⟨1⟩ (.guard () (var 0) trivial .reject) .nil .here
 
 /-- What follows: the input. -/
 def readsInput : Term bits one [()] := .ret (.cons (var 0) .nil)
@@ -195,9 +195,16 @@ example (path : List Frame) (env : Env bitsSem.Val one) :
     Process.SameWhen any ((afterGuard.fill readsInput).denote bitsSem path env)
       ((afterGuard.fill writesTrue).denote bitsSem path env) :=
   Hole.fill_same bitsSem any afterGuard readsInput writesTrue path env
-    fun path' _ ⟨holds, _, reached⟩ => by
-      rw [reached]
-      exact readsInput_writesTrue path' env holds
+    fun path' env' reached => by
+      obtain ⟨values, returned, _, sameEnv⟩ := reached
+      cases values
+      rw [sameEnv]
+      cases holds : env.get (var 0 : Var one ()) with
+      | false =>
+        change (bif env.get (var 0) then Process.done (.nil : HList bitsSem.Val []) else .halt Reason.reject).CanReturn any .nil at returned
+        rw [holds] at returned
+        cases returned
+      | true => exact readsInput_writesTrue path' env holds
 
 /-- The two do differ where the input is `false`: reading it gives `false`. -/
 example : ¬ Process.SameWhen any (readsInput.denote bitsSem [] withFalse)
@@ -215,7 +222,7 @@ example : ¬ afterGuard.Holds bitsSem any readsInput [] withTrue fun path' env' 
     Process.SameWhen any (readsInput.denote bitsSem path' env')
       (writesFalse.denote bitsSem path' env') := by
   intro holds
-  have same := holds [] withTrue (And.intro rfl (And.intro rfl rfl))
+  have same := holds [] withTrue ⟨.nil, .done _, rfl, rfl⟩
   cases same
 
 /-- And the two wholes do not mean the same on the input `true`: one gives `true`, the other

@@ -33,9 +33,8 @@ its key. Then the theorem for functions, applied to two pairs, the second of the
 
 Last, on the walk of the analysis over a toy dialect, which has attempts: an attempt followed by
 the same attempt with other names, accepted, and by one with another key, which differs at the
-attempt; and the two controls on the definitions of the value form: why following asks for
-leaves made in order (`Skel.Fresh`), and why what follows an attempt runs only from an end of the
-attempt that can return (`Skel.Runs.attempt`).
+attempt. Two controls distinguish the input leaf from a fresh reply and show why the
+continuation of an attempt runs only after a settlement that can return (`Skel.Runs.attempt`).
 -/
 namespace Zkc.Core.FollowingTests
 
@@ -602,30 +601,41 @@ def toySem : Semantics toy where
   settle := fun _ _ _ => .call () fun _ => .done ()
   collect := fun _ _ _ => false
 
-/-- Asking is kept in order; failing is a value; nothing commutes; nothing is known of a type or
-of an operation. -/
-def toyRules : FactRules toy Unit where
-  written := fun _ => ()
-  shared := fun {_ _} o => match o with
-    | .ask => false
-    | .fail => true
-  commutes := fun _ => false
-  range := fun _ => none
-  noValue := fun _ => false
-  ops := ⟨fun _ => [], fun _ => [], fun _ _ => [], fun _ => none⟩
-  place := fun _ => 0
+open BodyAnalysis
 
-/-- Following decides types and performers by equality, and finds any two operations the
-same. -/
+def toyWritten : {ins outs : List Unit} → ToyOp ins outs → Bool
+  | _, _, .ask => false
+  | _, _, .fail => true
+
+/-- Asking is an ordered effect. Failing is a shared operation that stops undefined. -/
+def toyConfig : Config toy Bool where
+  rules := {
+    written := toyWritten
+    shared := toyWritten
+    commutes _ := false
+    place := Bool.toNat
+    results _ := 1
+    contract _ := ⟨[], []⟩
+    assertable _ := false
+    numbered _ := false
+    indexAt _ _ := none
+    indexFromCount ok := nomatch ok
+    indexNext _ := none }
+  domain := Knowledge.domain ⟨fun _ => none, fun _ => false⟩ { ranges := fun _ _ => [], form := fun _ => none }
+  assertions := ⟨fun _ _ => none, fun _ => false⟩
+  lemmas := []
+  definition := ⟨1⟩
+  role := none
+
 def toyChecks : SkelRules toy where
   sameTy := inferInstanceAs (DecidableEq Unit)
   sameWho := inferInstanceAs (DecidableEq Unit)
-  sameOp := fun _ _ => true
+  sameOp := fun o o' => toyWritten o == toyWritten o'
 
 /-! ### An attempt followed
 
 A function has no attempt, so following an attempt is exercised in the toy dialect: the analysis
-of a term with an attempt, and a second term that follows it (`Analysis.follow`). -/
+of a term with an attempt, and a second term that follows it (`followChecked`). -/
 
 /-- An attempt with the key 1 whose body asks and gives the reply, with the names `0` for its
 number, `1` for the reply and `2` for what it gives, which is returned. -/
@@ -646,20 +656,12 @@ def attemptedOtherKey : Term toy Ctx.empty [()] :=
     (.op ⟨2⟩ ToyOp.ask .nil (.cons 1 .nil) (.ret (.cons ⟨1, rfl⟩ .nil)))
     (.cons 2 .nil) (.ret (.cons ⟨2, rfl⟩ .nil))
 
-/-- The attempt with other names follows the analysis of the first: the attempt is the
-skeleton's entry, the leaves of its number and of what it gives are the entry's, and the call in
-its body is the entry's next. The whole verdict accepts it. -/
-example : (Analysis.follow toyRules toyChecks ⟨1⟩ none Summary.empty
-    (Analysis.analyse toyRules toyChecks ⟨1⟩ none Summary.empty .nil attempted) .nil
-    attemptedOtherNames).accepted = true := by
-  decide +kernel
+example : followChecked toyConfig toyChecks ⟨1⟩ [] [] ⟨[],[]⟩ .nil .nil
+    attempted attemptedOtherNames = .ok [] := rfl
 
-/-- The attempt with another key differs, at the attempt: where it stops is part of what it
-does. -/
-example : (Analysis.follow toyRules toyChecks ⟨1⟩ none Summary.empty
-    (Analysis.analyse toyRules toyChecks ⟨1⟩ none Summary.empty .nil attempted) .nil
-    attemptedOtherKey).state.differs = [⟨⟨1⟩, [], some ⟨3⟩, none⟩] := by
-  decide +kernel
+example : followChecked toyConfig toyChecks ⟨1⟩ [] [] ⟨[],[]⟩ .nil .nil
+    attempted attemptedOtherKey =
+      .error (.body [] [⟨⟨1⟩, [], some ⟨3⟩, none⟩]) := rfl
 
 /-! ### Leaves made in order -/
 
@@ -674,31 +676,13 @@ def returnsReply : Term toy oneName [()] :=
 def returnsInput : Term toy oneName [()] :=
   .op ⟨1⟩ ToyOp.ask .nil (.cons 1 .nil) (.ret (.cons ⟨0, rfl⟩ .nil))
 
-/-- The skeleton of `returnsReply` made with its leaf at the identifier `5` of the name `0`:
-asking, then returning the leaf. -/
-def reusedLeaf : Skel toy [()] := .effect ⟨1⟩ ToyOp.ask [] 5 (.ret [5])
+/-- The input is leaf zero. The effect allocates a distinct reply leaf. Comparison
+detects which one is returned, even though both bodies ask exactly the same question. -/
+example : followChecked toyConfig toyChecks ⟨1⟩ [] [] ⟨[],[]⟩
+    (.cons 0 .nil : Names [()]) (.cons 0 .nil) returnsReply returnsInput =
+      .error (.body [] [⟨⟨1⟩, [], none, none⟩]) := rfl
 
-/-- The name `0` at the identifier `5`. -/
-def atFive : Ctx Nat := Ctx.empty.insert 0 5
-
-/-- A state of the walk above the identifier `5`. -/
-def aboveFive : Analysis.State Unit Unit :=
-  ⟨⟨FactCheck.Table.empty toyRules.place, 6, [], []⟩, []⟩
-
-/-- Both terms follow the skeleton from the state above `5` with no place that differs: following
-binds the name of the reply to the skeleton's leaf, which is the identifier of the name `0`. -/
-example : (Analysis.walk toyRules toyChecks ⟨1⟩ none [] returnsReply (some reusedLeaf) atFive
-    FactCheck.Known.empty aboveFive).state.differs = [] := by
-  decide +kernel
-example : (Analysis.walk toyRules toyChecks ⟨1⟩ none [] returnsInput (some reusedLeaf) atFive
-    FactCheck.Known.empty aboveFive).state.differs = [] := by
-  decide +kernel
-
-/-- The skeleton's leaf is not made above the values that the run already has. -/
-example : ¬ reusedLeaf.Fresh 6 := fun fresh => absurd (fresh : 6 ≤ 5 ∧ _).1 (by decide)
-
-/-- And the two terms do not mean the same: on the reply `false`, one returns `false` and the
-other `true`. So following needs `Skel.Fresh` (`Analysis.ValueSide.walk_runs_followed`). -/
+/-- On the reply false, the first returns false and the second returns the true input. -/
 example : ¬ Process.SameWhen (fun _ _ => True)
     (returnsReply.denote toySem [] fun _ _ _ => true)
     (returnsInput.denote toySem [] fun _ _ _ => true) := by
@@ -719,40 +703,34 @@ theorem failsAfterAttempt_safe : (failsAfterAttempt.denote toySem [] Env.empty).
     (fun _ _ => False) (fun _ => True) (fun stop => ¬ stop = true) :=
   fun _ never => never.elim
 
-/-- Failing is a value of the dialect: it stops with `true`, which stands for `undefined`. -/
-theorem toyBinding : toyRules.values.Binding toySem (fun _ _ _ => False) (· = true) where
-  computes := by
-    intro _ _ o raw written key path values
-    cases o with
-    | ask => cases (toyRules.values_written_kept rfl).symm.trans written
-    | fail => exact .inr ⟨true, rfl, rfl⟩
-  functional := fun _ _ _ _ ran => ran.elim
-  commutative := fun _ _ _ _ _ ran => ran.elim
+private def exitAfterAttempt :=
+  analyse toyConfig [] ⟨[],[]⟩ .nil failsAfterAttempt
 
-/-- The walk of the analysis from the empty table. -/
-def fromEmpty : Analysis.State Unit Unit := ⟨⟨FactCheck.Table.empty toyRules.place, 0, [], []⟩, []⟩
+private def toyReading : Reading toySem.Dyn := ⟨fun _ => none, fun v => some v.2⟩
 
-/-- The term runs the skeleton that the walk builds (`Analysis.ValueSide.walk_runs_built`), whose
-attempt asks nothing of what follows it, since its end cannot return. -/
-example : Skel.Runs toySem (fun _ _ => False) (fun _ _ _ => False)
-    (Analysis.walk toyRules toyChecks ⟨1⟩ none [] failsAfterAttempt none Ctx.empty
-      FactCheck.Known.empty fromEmpty).state.st.table [] (fun _ => none)
-    (Analysis.walk toyRules toyChecks ⟨1⟩ none [] failsAfterAttempt none Ctx.empty
-      FactCheck.Known.empty fromEmpty).skel
-    (failsAfterAttempt.denote toySem [] Env.empty) :=
-  Analysis.ValueSide.walk_runs_built toyRules toyChecks ⟨1⟩ none toySem (fun _ _ => False)
-    (fun _ _ _ => False) toyBinding [] failsAfterAttempt Ctx.empty FactCheck.Known.empty fromEmpty
-    [] Env.empty (fun _ => none) trivial (fun _ _ => rfl)
-    (fun _ x => nomatch (Ctx.find?_empty x.name).symm.trans x.typed) failsAfterAttempt_safe
+/-- The actual skeleton of this body runs: the body returns, but the settlement requires
+an unavailable reply, so the failing continuation is never reached. -/
+example : Skel.Runs toySem (fun _ _ => False) (fun (_ : Bool) _ _ => False) toyReading
+    exitAfterAttempt.state.values.table [] (fun _ => none) exitAfterAttempt.skel .nil
+    (failsAfterAttempt.denote toySem [] Env.empty) := by
+  change Skel.Runs toySem (fun _ _ => False) (fun (_ : Bool) _ _ => False) toyReading
+    exitAfterAttempt.state.values.table [] (fun _ => none)
+    (.step ⟨1⟩ (.attempt (mid := []) () 0 (.ret []) 1) (.ret [])) .nil _
+  apply Skel.Runs.attempt (sem := toySem) (w := ()) (region := [])
+    (bodyOf := fun _ => .done .nil) (k := fun _ => .halt true)
+  · intro n _
+    exact .ret .nil .nil (.done .nil)
+  · intro _ _ _ _ settled
+    cases settled with
+    | call _ _ impossible _ => exact impossible.elim
 
-/-- What follows the attempt stops `undefined`, and so does not run what follows it in the
-skeleton: a run of the attempt that asked for what follows from every end, not only from one
-that can return, would not hold of this term. -/
-example : ¬ Skel.Runs toySem (fun _ _ => False) (fun _ _ _ => False)
-    (FactCheck.Table.empty toyRules.place) [] (fun _ => none) (.ret [] : Skel toy [])
+/-- The failing continuation cannot run its return skeleton by itself. -/
+example : ¬ Skel.Runs toySem (fun _ _ => False) (fun (_ : Bool) _ _ => False) toyReading
+    exitAfterAttempt.state.values.table [] (fun _ => none) (.ret [] : Skel toy []) .nil
     ((Term.op ⟨2⟩ ToyOp.fail .nil (.cons 1 .nil) (.ret .nil) : Term toy Ctx.empty []).denote
       toySem [] Env.empty) := by
   intro runs
-  cases runs
+  cases runs with
+  | ret _ _ resume => cases resume
 
 end Zkc.Core.FollowingTests

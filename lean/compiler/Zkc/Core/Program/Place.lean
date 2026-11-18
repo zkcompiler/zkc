@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Core.Program.Erase
+public import Zkc.Core.Program.Stepped
 
 @[expose] public section
 
@@ -42,27 +43,22 @@ mutual
   def Term.reindex : {Γ Δ : Ctx D.Ty} → {outs : List D.Ty} → Γ.Within Δ → Term D Γ outs →
       Term D Δ outs
     | _, _, _, keeps, .ret exit => .ret (HList.reindex keeps exit)
-    | _, _, _, keeps, .op key o operands results rest =>
-        .op key o (HList.reindex keeps operands) results (rest.reindex (keeps.extend results))
-    | _, _, _, keeps, .guard key w c ok why rest =>
-        .guard key w (c.reindex keeps) ok why (rest.reindex keeps)
-    | _, _, _, keeps, .choose key w c ok gives onTrue onFalse results rest =>
-        .choose key w (c.reindex keeps) ok gives (onTrue.reindex keeps) (onFalse.reindex keeps)
-          results (rest.reindex (keeps.extend results))
-    | _, _, _, keeps, .cases key w x ok gives arms results rest =>
-        .cases key w (x.reindex keeps) ok gives (arms.reindex keeps) results
-          (rest.reindex (keeps.extend results))
-    | _, _, _, keeps, .loop key w (.fixed n) gives initial inputs body results rest =>
-        .loop key w (.fixed n) gives (HList.reindex keeps initial) inputs
-          (body.reindex (keeps.extend inputs)) results (rest.reindex (keeps.extend results))
-    | _, _, _, keeps, .loop key w (.value count ok) gives initial inputs body results rest =>
-        .loop key w (.value (count.reindex keeps) ok) gives (HList.reindex keeps initial) inputs
-          (body.reindex (keeps.extend inputs)) results (rest.reindex (keeps.extend results))
-    | _, _, _, keeps, .block key number body results rest =>
-        .block key number (body.reindex keeps) results (rest.reindex (keeps.extend results))
-    | _, _, _, keeps, .attempt key w owns inputs body results rest =>
-        .attempt key w owns inputs (body.reindex (keeps.extend inputs)) results
-          (rest.reindex (keeps.extend results))
+    | _, _, _, keeps, .step key i results rest =>
+        .step key (i.reindex keeps) results (rest.reindex (keeps.extend results))
+  def Instr.reindex : {Γ Δ : Ctx D.Ty} → {mid : List D.Ty} → Γ.Within Δ → Instr D Γ mid →
+      Instr D Δ mid
+    | _, _, _, keeps, .op o operands => .op o (HList.reindex keeps operands)
+    | _, _, _, keeps, .guard w c ok why => .guard w (c.reindex keeps) ok why
+    | _, _, _, keeps, .choose w c ok gives onTrue onFalse =>
+        .choose w (c.reindex keeps) ok gives (onTrue.reindex keeps) (onFalse.reindex keeps)
+    | _, _, _, keeps, .cases w x ok gives arms => .cases w (x.reindex keeps) ok gives (arms.reindex keeps)
+    | _, _, _, keeps, .loop w (.fixed n) gives initial inputs body =>
+        .loop w (.fixed n) gives (HList.reindex keeps initial) inputs (body.reindex (keeps.extend inputs))
+    | _, _, _, keeps, .loop w (.value count ok) gives initial inputs body =>
+        .loop w (.value (count.reindex keeps) ok) gives (HList.reindex keeps initial) inputs
+          (body.reindex (keeps.extend inputs))
+    | _, _, _, keeps, .block number body => .block number (body.reindex keeps)
+    | _, _, _, keeps, .attempt w owns inputs body => .attempt w owns inputs (body.reindex (keeps.extend inputs))
   /-- The arms of a case analysis, in a context that has at least the names of their own. -/
   def Arms.reindex : {Γ Δ : Ctx D.Ty} → {mid payloads : List D.Ty} → Γ.Within Δ →
       Arms D Γ mid payloads → Arms D Δ mid payloads
@@ -90,41 +86,33 @@ mutual
         eraseBody printOp printWho (t.reindex keeps) = eraseBody printOp printWho t
     | _, _, _, keeps, .ret exit => by
         simp only [Term.reindex, eraseBody, HList.names_reindex]
-    | _, _, _, keeps, .op key o operands results rest => by
-        simp only [Term.reindex, eraseBody, HList.names_reindex,
+    | _, _, _, keeps, .step key i results rest => by
+        simp only [Term.reindex, eraseBody, eraseInstr_reindex printOp printWho keeps key i results,
           eraseBody_reindex printOp printWho (keeps.extend results) rest]
-    | _, _, _, keeps, .guard key w c ok why rest => by
-        simp only [Term.reindex, eraseBody, Var.reindex,
-          eraseBody_reindex printOp printWho keeps rest]
-    | _, _, _, keeps, .choose key w c ok gives onTrue onFalse results rest => by
-        simp only [Term.reindex, eraseBody, Var.reindex,
-          eraseBody_reindex printOp printWho keeps onTrue,
-          eraseBody_reindex printOp printWho keeps onFalse,
-          eraseBody_reindex printOp printWho (keeps.extend results) rest]
-    | _, _, _, keeps, .cases key w x ok gives arms results rest => by
-        simp only [Term.reindex, eraseBody, Var.reindex,
-          eraseArms_reindex printOp printWho keeps arms,
-          eraseBody_reindex printOp printWho (keeps.extend results) rest]
-    | _, _, _, keeps, .loop key w (.fixed n) gives initial inputs body results rest => by
-        -- The context of the reindexed `rest` names the size of the loop at the wider context,
-        -- equal to it only by unfolding `Times.size`, so this rewrite is up to unfolding.
-        simp only [Term.reindex, eraseBody, HList.names_reindex,
+  theorem eraseInstr_reindex {Raw Who : Type}
+      (printOp : ∀ {ins res : List D.Ty}, D.Op ins res → Raw) (printWho : D.Who → Who) :
+      ∀ {Γ Δ : Ctx D.Ty} {mid : List D.Ty} (keeps : Γ.Within Δ) (key : Key) (i : Instr D Γ mid)
+        (results : Names mid), eraseInstr printOp printWho key (i.reindex keeps) results =
+          eraseInstr printOp printWho key i results
+    | _, _, _, keeps, _, .op o args, _ => by simp only [Instr.reindex, eraseInstr, HList.names_reindex]
+    | _, _, _, _, _, .guard .., _ => rfl
+    | _, _, _, keeps, _, .choose _ _ _ _ t f, _ => by
+        simp only [Instr.reindex, eraseInstr, Var.reindex, eraseBody_reindex printOp printWho keeps t,
+          eraseBody_reindex printOp printWho keeps f]
+    | _, _, _, keeps, _, .cases _ _ _ _ arms, _ => by
+        simp only [Instr.reindex, eraseInstr, Var.reindex, eraseArms_reindex printOp printWho keeps arms]
+    | _, _, _, keeps, _, .loop _ (.fixed _) _ _ inputs body, _ => by
+        simp only [Instr.reindex, eraseInstr, HList.names_reindex,
           eraseBody_reindex printOp printWho (keeps.extend inputs) body]
-        erw [eraseBody_reindex printOp printWho (keeps.extend results) rest]
         rfl
-    | _, _, _, keeps, .loop key w (.value count ok) gives initial inputs body results rest => by
-        simp only [Term.reindex, eraseBody, HList.names_reindex, eraseTimes, Var.reindex,
+    | _, _, _, keeps, _, .loop _ (.value ..) _ _ inputs body, _ => by
+        simp only [Instr.reindex, eraseInstr, HList.names_reindex, eraseTimes, Var.reindex,
           eraseBody_reindex printOp printWho (keeps.extend inputs) body]
-        erw [eraseBody_reindex printOp printWho (keeps.extend results) rest]
         rfl
-    | _, _, _, keeps, .block key number body results rest => by
-        simp only [Term.reindex, eraseBody,
-          eraseBody_reindex printOp printWho keeps body,
-          eraseBody_reindex printOp printWho (keeps.extend results) rest]
-    | _, _, _, keeps, .attempt key w owns inputs body results rest => by
-        simp only [Term.reindex, eraseBody,
-          eraseBody_reindex printOp printWho (keeps.extend inputs) body,
-          eraseBody_reindex printOp printWho (keeps.extend results) rest]
+    | _, _, _, keeps, _, .block _ body, _ => by
+        simp only [Instr.reindex, eraseInstr, eraseBody_reindex printOp printWho keeps body]
+    | _, _, _, keeps, _, .attempt _ _ inputs body, _ => by
+        simp only [Instr.reindex, eraseInstr, eraseBody_reindex printOp printWho (keeps.extend inputs) body]
   /-- The arms of a case analysis in a wider context erase to the same regions by names. -/
   theorem eraseArms_reindex {Raw Who : Type}
       (printOp : ∀ {ins res : List D.Ty}, D.Op ins res → Raw) (printWho : D.Who → Who) :
@@ -147,38 +135,9 @@ mutual
   inductive Hole (D : Dialect) : Ctx D.Ty → List D.Ty → Ctx D.Ty → List D.Ty → Type where
     /-- The place itself. -/
     | here {Γ outs} : Hole D Γ outs Γ outs
-    /-- After an operation. -/
-    | op {Γ outs Δ mid ins res} (key : Key) (o : D.Op ins res) (operands : HList (Var Γ) ins)
-        (results : Names res) (rest : Hole D (Γ.extend results) outs Δ mid) : Hole D Γ outs Δ mid
-    /-- After a guard. -/
-    | guard {Γ outs Δ mid t} (key : Key) (w : D.Who) (c : Var Γ t) (ok : D.Condition w t)
-        (why : Reason) (rest : Hole D Γ outs Δ mid) : Hole D Γ outs Δ mid
-    /-- After a choice. -/
-    | choose {Γ outs Δ mid inner t} (key : Key) (w : D.Who) (c : Var Γ t) (ok : D.Condition w t)
-        (gives : ∀ a, a ∈ inner → D.Gives w a) (onTrue onFalse : Term D Γ inner)
-        (results : Names inner) (rest : Hole D (Γ.extend results) outs Δ mid) :
-        Hole D Γ outs Δ mid
-    /-- After a case analysis. -/
-    | cases {Γ outs Δ mid inner t payloads} (key : Key) (w : D.Who) (x : Var Γ t)
-        (ok : D.Alternatives w t payloads) (gives : ∀ a, a ∈ inner → D.Gives w a)
-        (arms : Arms D Γ inner payloads) (results : Names inner)
+    /-- After an instruction returns and binds its results. -/
+    | step {Γ outs Δ mid inner} (key : Key) (i : Instr D Γ inner) (results : Names inner)
         (rest : Hole D (Γ.extend results) outs Δ mid) : Hole D Γ outs Δ mid
-    /-- After a loop. -/
-    | loop {Γ outs Δ mid carried each} (key : Key) (w : D.Who) (times : Times D w Γ)
-        (gives : ∀ a, a ∈ carried ++ each → D.Gives w a) (initial : HList (Var Γ) carried)
-        (inputs : Names (D.index w :: carried))
-        (body : Term D (Γ.extend inputs) (carried ++ each))
-        (results : Names (carried ++ each.map (D.collected times.size)))
-        (rest : Hole D (Γ.extend results) outs Δ mid) : Hole D Γ outs Δ mid
-    /-- After a block. -/
-    | block {Γ outs Δ mid inner} (key : Key) (number : Nat) (body : Term D Γ inner)
-        (results : Names inner) (rest : Hole D (Γ.extend results) outs Δ mid) :
-        Hole D Γ outs Δ mid
-    /-- After an attempt. -/
-    | attempt {Γ outs Δ mid inner} (key : Key) (w : D.Who) (owns : D.Attempt w)
-        (inputs : Names [D.index w]) (body : Term D (Γ.extend inputs) inner)
-        (results : Names inner) (rest : Hole D (Γ.extend results) outs Δ mid) :
-        Hole D Γ outs Δ mid
     /-- Inside the region of a choice that runs when its condition holds. -/
     | inTrue {Γ outs Δ mid inner t} (key : Key) (w : D.Who) (c : Var Γ t) (ok : D.Condition w t)
         (gives : ∀ a, a ∈ inner → D.Gives w a) (onTrue : Hole D Γ inner Δ mid)
@@ -226,18 +185,7 @@ mutual
   def Hole.fill : {Γ : Ctx D.Ty} → {outs : List D.Ty} → {Δ : Ctx D.Ty} → {mid : List D.Ty} →
       Hole D Γ outs Δ mid → Term D Δ mid → Term D Γ outs
     | _, _, _, _, .here, t => t
-    | _, _, _, _, .op key o operands results rest, t => .op key o operands results (rest.fill t)
-    | _, _, _, _, .guard key w c ok why rest, t => .guard key w c ok why (rest.fill t)
-    | _, _, _, _, .choose key w c ok gives onTrue onFalse results rest, t =>
-        .choose key w c ok gives onTrue onFalse results (rest.fill t)
-    | _, _, _, _, .cases key w x ok gives arms results rest, t =>
-        .cases key w x ok gives arms results (rest.fill t)
-    | _, _, _, _, .loop key w times gives initial inputs body results rest, t =>
-        .loop key w times gives initial inputs body results (rest.fill t)
-    | _, _, _, _, .block key number body results rest, t =>
-        .block key number body results (rest.fill t)
-    | _, _, _, _, .attempt key w owns inputs body results rest, t =>
-        .attempt key w owns inputs body results (rest.fill t)
+    | _, _, _, _, .step key i results rest, t => .step key i results (rest.fill t)
     | _, _, _, _, .inTrue key w c ok gives onTrue onFalse results rest, t =>
         .choose key w c ok gives (onTrue.fill t) onFalse results rest
     | _, _, _, _, .inFalse key w c ok gives onTrue onFalse results rest, t =>
@@ -260,40 +208,26 @@ end
 
 /-! ## What follows some instructions -/
 
-/-- A term, as its first `n` instructions with what follows them left open, and what follows
-them. With fewer instructions, all of them. -/
-def Term.splitAt : (n : Nat) → {Γ : Ctx D.Ty} → {outs : List D.Ty} → Term D Γ outs →
-    (Δ : Ctx D.Ty) × Hole D Γ outs Δ outs × Term D Δ outs
-  | 0, Γ, _, t => ⟨Γ, .here, t⟩
-  | _ + 1, Γ, _, .ret exit => ⟨Γ, .here, .ret exit⟩
-  | n + 1, _, _, .op key o operands results rest =>
-      let after := Term.splitAt n rest
-      ⟨after.1, .op key o operands results after.2.1, after.2.2⟩
-  | n + 1, _, _, .guard key w c ok why rest =>
-      let after := Term.splitAt n rest
-      ⟨after.1, .guard key w c ok why after.2.1, after.2.2⟩
-  | n + 1, _, _, .choose key w c ok gives onTrue onFalse results rest =>
-      let after := Term.splitAt n rest
-      ⟨after.1, .choose key w c ok gives onTrue onFalse results after.2.1, after.2.2⟩
-  | n + 1, _, _, .cases key w x ok gives arms results rest =>
-      let after := Term.splitAt n rest
-      ⟨after.1, .cases key w x ok gives arms results after.2.1, after.2.2⟩
-  | n + 1, _, _, .loop key w times gives initial inputs body results rest =>
-      let after := Term.splitAt n rest
-      ⟨after.1, .loop key w times gives initial inputs body results after.2.1, after.2.2⟩
-  | n + 1, _, _, .block key number body results rest =>
-      let after := Term.splitAt n rest
-      ⟨after.1, .block key number body results after.2.1, after.2.2⟩
-  | n + 1, _, _, .attempt key w owns inputs body results rest =>
-      let after := Term.splitAt n rest
-      ⟨after.1, .attempt key w owns inputs body results after.2.1, after.2.2⟩
+/-- The place immediately following a prefix. -/
+def Prefix.hole {outs : List D.Ty} : {Γ Δ : Ctx D.Ty} → Prefix D Γ Δ → Hole D Γ outs Δ outs
+  | _, _, .nil => .here
+  | _, _, .step key i results rest => .step key i results rest.hole
 
-/-- A term is its first instructions with what follows them filled in. -/
+theorem Prefix.fill_hole {Γ Δ : Ctx D.Ty} {outs : List D.Ty} (p : Prefix D Γ Δ)
+    (t : Term D Δ outs) : p.hole.fill t = p.fill t := by
+  induction p with
+  | nil => rfl
+  | step key i results rest ih => exact congrArg (Term.step key i results) (ih t)
+
+/-- Split at the place after the first `n` instructions, or at the exit. -/
+def Term.splitAt (n : Nat) {Γ : Ctx D.Ty} {outs : List D.Ty} (t : Term D Γ outs) :
+    (Δ : Ctx D.Ty) × Hole D Γ outs Δ outs × Term D Δ outs :=
+  let after := t.splitPrefix n
+  ⟨after.1, after.2.1.hole, after.2.2⟩
+
 theorem Term.fill_splitAt (n : Nat) {Γ : Ctx D.Ty} {outs : List D.Ty} (t : Term D Γ outs) :
-    (t.splitAt n).2.1.fill (t.splitAt n).2.2 = t := by
-  induction n generalizing Γ with
-  | zero => rfl
-  | succ n ih => cases t <;> simp only [Term.splitAt, Hole.fill, ih]
+    (t.splitAt n).2.1.fill (t.splitAt n).2.2 = t :=
+  (Prefix.fill_hole _ _).trans (Term.fill_splitPrefix n t)
 
 /-! ## The names that a term reads -/
 
