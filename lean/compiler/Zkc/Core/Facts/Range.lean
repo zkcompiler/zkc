@@ -164,7 +164,7 @@ def digitsWithin : Nat → Nat → Nat
   | steps + 1, n => if n = 0 then 0 else digitsWithin steps (n / 2) + 1
 
 /-- The number of binary digits of a natural, zero being written with one. -/
-def binaryDigits (n : Nat) : Nat := if n = 0 then 1 else digitsWithin n n
+def binaryDigits (n : Nat) : Nat := n.log2 + 1
 
 /-- Whether an end of the range of a power is computed: when its exponent times the number of
 binary digits of its base is at most 65536 (TY8). -/
