@@ -2,7 +2,7 @@ module
 
 public import Zkc.Core.Run.Run
 public import Zkc.Core.Format.Format
-public import Zkc.Core.Program.Syntax
+public import Zkc.Core.Program.NamedProgram
 
 @[expose] public section
 

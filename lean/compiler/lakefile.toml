@@ -53,13 +53,12 @@ roots = ["Zkc.Tests.Frontend"]
 globs = ["Zkc.Tests.Frontend", "Zkc.Tests.Frontend.+"]
 allowNonModules = true
 
-# The audit of the libraries: only its checking function is in the library. The controls under
-# `Zkc.Tools.Audit.Controls` are in no glob, and are built because the audit's executables import
-# them.
+# The audit and its pinned-compiler helper recognizer. Controls are in no glob and are built
+# because both audit executables import them; they are not part of an audited project library.
 [[lean_lib]]
 name = "ZkcAudit"
 roots = ["Zkc.Tools.Audit"]
-globs = ["Zkc.Tools.Audit"]
+globs = ["Zkc.Tools.Audit", "Zkc.Tools.Audit.CompilerHelpers"]
 allowNonModules = true
 
 [[lean_exe]]

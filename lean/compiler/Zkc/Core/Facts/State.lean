@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Core.Facts.OpFacts
+public import Zkc.Core.Facts.Range
 public import Zkc.Core.Program.BitTree
 public import Zkc.Core.Program.Refusal
 public import Zkc.Core.Value.Table
@@ -8,16 +9,16 @@ public import Zkc.Core.Value.Table
 @[expose] public section
 
 /-!
-What the analysis knows, the rules that decide what is known, and the check of the
-requirements of an application.
+What the analysis knows, the rules that decide what is known, the check of the requirements of
+an application, and what is learned from requirements that hold.
 
 The analysis walks a term over the table of applications and its state (`Value/Table.lean`;
 the walk is `Analysis.walk`, `Facts/Walk.lean`). Beside them it keeps what is known (ranges,
 orders, truths, the two shapes of a choice, whether the region runs at all), which this file
-defines with what is learned from a truth value (`assume`), and which is scoped: what is learned
-in a region is dropped at its exit. How an identifier reads, when it is the first result of an
-entry whose operation has a form, is what the dialect tells the analysis of the entry's
-operation (`Table.formOf`).
+defines with what is learned from a truth value (`assume`) and from a requirement that holds
+(`learn`), and which is scoped: what is learned in a region is dropped at its exit. How an
+identifier reads, when it is the first result of an entry whose operation has a form, is what the
+dialect tells the analysis of the entry's operation (`Table.formOf`).
 
 The walk reads what is known through the functions here (how an identifier reads, the range of an
 identifier, whether an order or a truth is known) and through whether a region is dead; how what
@@ -25,111 +26,16 @@ is known enters a region and the range of a carried natural after a loop are in 
 Each part of what is known is placed by an identifier (`Program/BitTree.lean`): a list, read as a
 list; nothing else depends on that. A requirement of an application is decided from the
 identifiers and the ranges of the values that it names, an application among them found in the
-table or entered; each that is not known is refused at its place (`checkRequirements`). The
-arithmetic of the ranges that this file defines is proved beside it.
+table or entered; each that is not known is refused at its place (`checkRequirements`).
+Requirements that hold of values, what an operation guarantees of its operands and results and
+what a summary requires of a definition's inputs, are learned with their operands resolved in the
+same way, and nothing is refused (`learnRequirements`). The guarantees of a summary are decided
+where a definition returns, over the identifiers of its inputs and of what it returns; each that
+is not known is refused there (`checkGuarantees`). The arithmetic of ranges, with its lemmas, is
+in `Facts/Range.lean`.
 -/
 
 namespace Zkc.Core
-
-/-! ## Ranges -/
-
-namespace Range
-
-/-- The numbers in both ranges. -/
-def inter (a b : Range) : Range :=
-  ⟨max a.lo b.lo, match a.hi, b.hi with
-    | some x, some y => some (min x y)
-    | some x, none => some x
-    | none, y => y⟩
-
-/-- The numbers between the two ranges, both included. -/
-def hull (a b : Range) : Range :=
-  ⟨min a.lo b.lo, match a.hi, b.hi with
-    | some x, some y => some (max x y)
-    | _, _ => none⟩
-
-/-- The range of one number. -/
-def point (n : Nat) : Range := ⟨n, some n⟩
-
-/-- The range of no number. -/
-def nothing : Range := ⟨1, some 0⟩
-
-/-- The numbers below a number of the range: from zero to its upper end less one; no number
-when the upper end is zero, every natural when it has none. -/
-def below (r : Range) : Range :=
-  match r.hi with
-  | some 0 => Range.nothing
-  | some (h + 1) => ⟨0, some h⟩
-  | none => ⟨0, none⟩
-
-end Range
-
-/-- What two pieces of knowledge of one natural say together; nothing known is the absence. -/
-def Range.meet : Option Range → Option Range → Option Range
-  | some a, some b => some (a.inter b)
-  | some a, none => some a
-  | none, b => b
-
-namespace Range
-
-theorem Has.inter {a b : Range} {n : Nat} (ha : a.Has n) (hb : b.Has n) : (a.inter b).Has n := by
-  obtain ⟨la, ua⟩ := ha
-  obtain ⟨lb, ub⟩ := hb
-  refine ⟨Nat.max_le.mpr ⟨la, lb⟩, fun h e => ?_⟩
-  rcases a with ⟨alo, _ | ahi⟩ <;> rcases b with ⟨blo, _ | bhi⟩ <;>
-    simp only [Range.inter, Option.some.injEq, reduceCtorEq] at e
-  · subst e; exact ub _ rfl
-  · subst e; exact ua _ rfl
-  · subst e; exact Nat.le_min.mpr ⟨ua _ rfl, ub _ rfl⟩
-
-theorem Has.hull_left {a b : Range} {n : Nat} (ha : a.Has n) : (a.hull b).Has n := by
-  obtain ⟨la, ua⟩ := ha
-  refine ⟨Nat.le_trans (Nat.min_le_left _ _) la, fun h e => ?_⟩
-  rcases a with ⟨alo, _ | ahi⟩ <;> rcases b with ⟨blo, _ | bhi⟩ <;>
-    simp only [Range.hull, Option.some.injEq, reduceCtorEq] at e
-  subst e
-  exact Nat.le_trans (ua _ rfl) (Nat.le_max_left _ _)
-
-theorem Has.hull_right {a b : Range} {n : Nat} (hb : b.Has n) : (a.hull b).Has n := by
-  obtain ⟨lb, ub⟩ := hb
-  refine ⟨Nat.le_trans (Nat.min_le_right _ _) lb, fun h e => ?_⟩
-  rcases a with ⟨alo, _ | ahi⟩ <;> rcases b with ⟨blo, _ | bhi⟩ <;>
-    simp only [Range.hull, Option.some.injEq, reduceCtorEq] at e
-  subst e
-  exact Nat.le_trans (ub _ rfl) (Nat.le_max_right _ _)
-
-theorem has_point {n m : Nat} : (Range.point n).Has m ↔ m = n :=
-  ⟨fun ⟨l, u⟩ => Nat.le_antisymm (u n rfl) l,
-    fun e => by subst e; exact ⟨Nat.le_refl _, fun h e => by cases e; exact Nat.le_refl _⟩⟩
-
-/-- Below a natural in the range, a natural is in the range below it. -/
-theorem Has.below {r : Range} {c i : Nat} (h : r.Has c) (lt : i < c) : r.below.Has i := by
-  rcases r with ⟨lo, _ | _ | hi⟩
-  · exact ⟨Nat.zero_le _, fun _ e => nomatch e⟩
-  · have := h.2 0 rfl
-    exfalso
-    omega
-  · have := h.2 (hi + 1) rfl
-    exact ⟨Nat.zero_le _, fun h' e => by cases e; omega⟩
-
-end Range
-
-theorem Range.meet_has {a b : Option Range} {r : Range} {n : Nat} (h : Range.meet a b = some r)
-    (ha : ∀ r, a = some r → r.Has n) (hb : ∀ r, b = some r → r.Has n) : r.Has n := by
-  cases a with
-  | none =>
-      simp only [Range.meet] at h
-      exact hb r h
-  | some a =>
-      cases b with
-      | none =>
-          simp only [Range.meet, Option.some.injEq] at h
-          subst h
-          exact ha a rfl
-      | some b =>
-          simp only [Range.meet, Option.some.injEq] at h
-          subst h
-          exact (ha a rfl).inter (hb b rfl)
 
 namespace FactCheck
 
@@ -305,6 +211,21 @@ def assume : Nat → Known → Nat → Bool → Known
             assume fuel (assume fuel known choice.condition value) choice.other value
           else known) k₂
 
+/-- What is known after a requirement that holds, on the identifiers that its operands resolve to
+(as `operandIds` resolves them): an order as `Known.pushLe` and `Known.pushLess` learn it, a
+bound or a number as a range of the identifier, a truth value as `assume` learns it. A
+requirement of these forms says that its values read as naturals, so it teaches its order, bound
+or number whatever is known of them. A difference and "has an upper bound" teach nothing, and
+neither does an operand that did not resolve. -/
+def learn (fuel : Nat) (k : Known) : Requirement Raw → List (Option Nat) → Known
+  | .le .., [some first, some second] => k.pushLe first second
+  | .lt .., [some first, some second] => k.pushLess first second
+  | .atLeast _ n, [some id] => k.addRange id ⟨n, none⟩
+  | .below _ n, [some id] => k.addRange id (Range.below (Range.point n))
+  | .exactly _ n, [some id] => k.addRange id (Range.point n)
+  | .holds _, [some id] => assume ops tbl fuel k id true
+  | _, _ => k
+
 end
 
 /-! ## Deciding a requirement -/
@@ -356,9 +277,10 @@ def rangesOrder (first second : Option Range) (strict : Bool) : Bool :=
       | none => false
   | _, _ => false
 
-/-- Whether `first ≤ second` is known, with the ranges given of each. -/
+/-- Whether `first ≤ second` is known, with the ranges given of each. One identifier is at most
+itself when a range of it is known, by which it reads as a natural. -/
 def knownLe (first second : Nat) (rf rs : Option Range) : Bool :=
-  rangesOrder rf rs false || first == second || k.hasOrder first second false ||
+  rangesOrder rf rs false || (first == second && rf.isSome) || k.hasOrder first second false ||
     sumAbove ops tbl k first second false || differenceBelow ops tbl k first second false
 
 /-- Whether `first < second` is known, with the ranges given of each. -/
@@ -485,6 +407,39 @@ def checkRequirements [DecidableEq Raw] (ops : OpFacts Raw) (k : Known) (place :
         else { st₁ with refusals :=
           ⟨.domain, place, .unjustified written requirement ranges⟩ :: st₁.refusals }
       checkRequirements ops k place written argIds rest st₂
+
+/-- Learn requirements that hold of the values with the identifiers given, in order: the operands
+of each are resolved as `checkRequirements` resolves them, entering applications in the table,
+and what each teaches is learned (`learn`). Nothing is refused. -/
+def learnRequirements [DecidableEq Raw] (ops : OpFacts Raw) (ids : List Nat) :
+    List (Requirement Raw) → Known → St T Raw → Known × St T Raw
+  | [], k, st => (k, st)
+  | requirement :: rest, k, st =>
+      let resolved := operandIds ids requirement.operands st
+      learnRequirements ops ids rest
+        (learn ops resolved.2.table resolved.2.next k requirement resolved.1) resolved.2
+
+/-- The identifiers of the values that a guarantee names where a definition returns, among the
+identifiers given: an operand by its position; nothing for an application of a written
+operation, of which the analysis does not know that it has a value there. -/
+def exitIds (ids : List Nat) : List (Operand Raw) → List (Option Nat)
+  | [] => []
+  | .arg position :: rest => ids[position]? :: exitIds ids rest
+  | .apply .. :: rest => none :: exitIds ids rest
+
+/-- Decide the guarantees of a summary where a definition returns, in order, from what is known
+there, over the identifiers given (the inputs' followed by those that the body returns): each
+that is not known is refused at the place, added before the refusals given; nothing is refused
+where the region never runs. A guarantee that names an application is never known. -/
+def checkGuarantees (ops : OpFacts Raw) (tbl : Table Raw) (k : Known) (place : Place)
+    (ids : List Nat) : List (Requirement Raw) → List (Refusal T Raw) → List (Refusal T Raw)
+  | [], refusals => refusals
+  | guarantee :: rest, refusals =>
+      let found := exitIds ids guarantee.operands
+      let ranges := List.zipWith (operandRange ops k ids) guarantee.operands found
+      checkGuarantees ops tbl k place ids rest
+        (if k.dead || decideRequirement ops tbl k guarantee found ranges then refusals
+        else ⟨.guarantee, place, .unestablished guarantee ranges⟩ :: refusals)
 
 end
 

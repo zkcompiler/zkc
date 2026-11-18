@@ -14,7 +14,9 @@ it. Of a valuation, what is known says that the region runs, that each range, or
 and shape of a choice holds (`Known.Holds`). The operations are a relation `Run` from a written
 form and the values of its operands to the values of its results, and how the check reads a
 value (as a natural, as a truth value) is a `Reading`: both are given by the dialect, with the
-laws that `OpFacts` satisfies against them (`OpFacts.Lawful`). What a requirement says of values
+laws that `OpFacts` satisfies against them (`OpFacts.Lawful`), among them that what a written
+operation guarantees holds of its operands and results where its requirements hold. What a
+requirement says of values
 (`Reading`, `Requirement.Holds`) is in `Meaning/Requirement.lean`; here, the identifiers that the
 operands of a requirement resolve to have values that they name (`OperandsAt`). One step of the
 walk, of a valuation and a state, grows both and keeps the refusals and the bounds (`Stepped`).
@@ -87,7 +89,9 @@ def FormHolds (R : Reading Val) : ResultForm → List Val → Val → Prop
 
 /-- What `OpFacts` says of written operations is true of a relation from a written operation and
 its operands' values to its results' values: the relation is a function; the first result reads
-by the form; the ranges of the results hold where those of the operands do. -/
+by the form; the ranges of the results hold where those of the operands do; and what a written
+operation guarantees holds of its operands followed by its results where its requirements hold
+of its operands, which is what a shared operation, a value, guarantees. -/
 structure OpFacts.Lawful (ops : OpFacts Raw) (R : Reading Val)
     (Run : Raw → List Val → List Val → Prop) : Prop where
   functional : ∀ w args rs rs', Run w args rs → Run w args rs' → rs = rs'
@@ -98,6 +102,9 @@ structure OpFacts.Lawful (ops : OpFacts Raw) (R : Reading Val)
       ∃ v n, args[i]? = some v ∧ R.nat v = some n ∧ r.Has n) →
     ∀ (i : Nat) (r : Range), (ops.ranges w known)[i]? = some (some r) →
       ∃ v n, rs[i]? = some v ∧ R.nat v = some n ∧ r.Has n
+  ensures : ∀ w args rs, Run w args rs →
+    (∀ requirement, requirement ∈ ops.requires w → requirement.Holds Run R args) →
+    ∀ guarantee, guarantee ∈ ops.ensures w → guarantee.Holds Run R (args ++ rs)
 
 /-! ## The values that a requirement names, of a valuation -/
 

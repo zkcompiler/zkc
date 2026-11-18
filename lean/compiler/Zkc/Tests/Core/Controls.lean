@@ -1,7 +1,7 @@
 import Zkc.Tests.Core.Consumers
 import Zkc.Tests.Core.Shapes
 import Zkc.Core.Projection.Theorem
-import Zkc.Core.Meaning.Call
+import Zkc.Core.Evidence.Call
 
 /-!
 Controls: examples that exercise the definitions at their edges, each with what it shows, and
@@ -586,8 +586,8 @@ theorem lower_clause_answers :
 
 /-! ## A law of a function, installed at its calls -/
 
-def weightedHeader : FnHeader Shapes.plain := ⟨⟨410⟩, [.nat, .nat], [.nat], false, Option.none⟩
-def identityHeader : FnHeader Shapes.plain := ⟨⟨411⟩, [.nat], [.nat], false, Option.none⟩
+def weightedHeader : FnHeader Shapes.plain := ⟨⟨410⟩, [.nat, .nat], [.nat], false, Option.none, Summary.empty⟩
+def identityHeader : FnHeader Shapes.plain := ⟨⟨411⟩, [.nat], [.nat], false, Option.none, Summary.empty⟩
 
 /-- `x + (y + y)`, of `x` and `y`. -/
 def weightedBody : Fn Shapes.plain [] weightedHeader (Names.counting 0 _) :=
@@ -601,9 +601,11 @@ def identityBody : Fn Shapes.plain [weightedHeader] identityHeader (Names.counti
 /-- The weighted sum, then the identity, which comes later. -/
 def library : Defs Shapes.plain ⟨[identityHeader, weightedHeader], []⟩ :=
   .fn identityHeader _ identityBody ⟨by exact rfl, by exact rfl, by exact rfl, by exact rfl,
-    by unfold Term.BoundOnce; decide⟩ <|
+    by unfold Term.BoundOnce; decide,
+    by exact rfl⟩ <|
   .fn weightedHeader _ weightedBody ⟨by exact rfl, by exact rfl, by exact rfl, by exact rfl,
-    by unfold Term.BoundOnce; decide⟩ .nil
+    by unfold Term.BoundOnce; decide,
+    by exact rfl⟩ .nil
 
 def libraryTyped : Typed Shapes.plain := ⟨_, library, by decide⟩
 
@@ -667,7 +669,8 @@ theorem twice_by_the_law (x y : Nat) (path : List Frame) :
 /-- The weighted sum alone, moved to the first position. -/
 def movedLibrary : Defs Shapes.plain ⟨[weightedHeader], []⟩ :=
   .fn weightedHeader _ weightedBody ⟨by exact rfl, by exact rfl, by exact rfl, by exact rfl,
-    by unfold Term.BoundOnce; decide⟩ .nil
+    by unfold Term.BoundOnce; decide,
+    by exact rfl⟩ .nil
 
 def movedTyped : Typed Shapes.plain := ⟨_, movedLibrary, by decide⟩
 
@@ -684,9 +687,11 @@ def changedBody : Fn Shapes.plain [] weightedHeader (Names.counting 0 _) :=
 
 def changedLibrary : Defs Shapes.plain ⟨[identityHeader, weightedHeader], []⟩ :=
   .fn identityHeader _ identityBody ⟨by exact rfl, by exact rfl, by exact rfl, by exact rfl,
-    by unfold Term.BoundOnce; decide⟩ <|
+    by unfold Term.BoundOnce; decide,
+    by exact rfl⟩ <|
   .fn weightedHeader _ changedBody ⟨by exact rfl, by exact rfl, by exact rfl, by exact rfl,
-    by unfold Term.BoundOnce; decide⟩ .nil
+    by unfold Term.BoundOnce; decide,
+    by exact rfl⟩ .nil
 
 /-- A changed body under the same key does not keep the law. -/
 theorem changed_body_loses_law :
@@ -722,14 +727,15 @@ theorem swapped_operands_seen :
   cases bad
 
 /-- A function that rejects when its flag is false, and returns its number otherwise. -/
-def checkedHeader : FnHeader Shapes.plain := ⟨⟨420⟩, [.bool, .nat], [.nat], true, Option.none⟩
+def checkedHeader : FnHeader Shapes.plain := ⟨⟨420⟩, [.bool, .nat], [.nat], true, Option.none, Summary.empty⟩
 
 def checkedBody : Fn Shapes.plain [] checkedHeader (Names.counting 0 _) :=
   .guard ⟨421⟩ () (var 0) rfl .reject (.ret (.cons (var 1) .nil))
 
 def checkedDefs : Defs Shapes.plain ⟨[checkedHeader], []⟩ :=
   .fn checkedHeader _ checkedBody ⟨by exact rfl, by exact rfl, by exact rfl, by exact rfl,
-    by unfold Term.BoundOnce; decide⟩ .nil
+    by unfold Term.BoundOnce; decide,
+    by exact rfl⟩ .nil
 
 def checkedTable : FnTable plainModel [checkedHeader] := Defs.fnTable plainModel checkedDefs
 
@@ -792,18 +798,19 @@ theorem duplicate_and_missing_refused :
     (⟨[weightedHeader, weightedHeader], []⟩ : Headers Shapes.plain).find ⟨410⟩ = Option.none ∧
       libraryTyped.find ⟨999⟩ = Option.none := ⟨rfl, rfl⟩
 
-def callerHeader : FnHeader Shapes.plain := ⟨⟨412⟩, [.nat, .nat], [.nat], false, Option.none⟩
+def callerHeader : FnHeader Shapes.plain := ⟨⟨412⟩, [.nat, .nat], [.nat], false, Option.none, Summary.empty⟩
 
 /-- A caller of the weighted sum, before the library. -/
 def callerTyped : Typed Shapes.plain :=
   ⟨_, .fn callerHeader _ twice ⟨by exact rfl, by exact rfl, by exact rfl, by exact rfl,
-    by unfold Term.BoundOnce; decide⟩ library,
+    by unfold Term.BoundOnce; decide,
+    by exact rfl⟩ library,
     by decide⟩
 
 /-- The closure of the caller has the caller and, twice, the weighted sum that it calls; not
 the identity. -/
 theorem caller_closure :
-    (callerTyped.find ⟨412⟩).map (fun subject => subject.closure) = some [⟨412⟩, ⟨410⟩, ⟨410⟩] :=
+    (callerTyped.find ⟨412⟩).map (fun definition => definition.closure) = some [⟨412⟩, ⟨410⟩, ⟨410⟩] :=
   rfl
 
 end Zkc.Core.Controls

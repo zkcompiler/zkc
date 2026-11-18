@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Core.Program.Syntax
+public import Zkc.Core.Program.Identity
 public import Zkc.Core.Program.Requirement
 
 @[expose] public section
@@ -9,7 +9,9 @@ public import Zkc.Core.Program.Requirement
 Refusals: the rules of the core, what a rule found, and the place of a program where it found
 it, as data. Elaboration, the conditions of a body and the check of facts refuse in this one
 form. The core words nothing: a frontend words a refusal from its rule, its place and what was
-found, with its own map from places to source.
+found, with its own map from places to source. What a rule found has the types and the written
+operations of a dialect as parameters, so nothing here is about a dialect or the vocabulary; a
+refusal of a program of functions (`ProgramRefusal`) is in `Program/NamedProgram.lean`.
 -/
 
 namespace Zkc.Core
@@ -68,8 +70,12 @@ inductive Rule where
   | association
   /-- An application of an operation with a domain is inside it, by what is known there. -/
   | domain
-  /-- A loop as often as a count repeats at most a number of times that is known. -/
-  | bound
+  /-- A definition establishes each guarantee of its summary, by what is known where it
+  returns. -/
+  | guarantee
+  /-- The summary of a function names, by their positions, its inputs in a requirement and its
+  inputs followed by its results in a guarantee, and nothing else. -/
+  | summary
 deriving DecidableEq, Repr
 
 /-- What a rule found, with the types `T` of a dialect and its written operations `Raw` as
@@ -103,6 +109,11 @@ inductive Detail (T Raw : Type) where
   operation, the requirement that is not known, and what is known of the values that the
   requirement names, in the order in which it names them. -/
   | unjustified (operation : Raw) (requirement : Requirement Raw) (known : List (Option Range))
+  /-- A guarantee of a summary that is not known where the definition returns: the guarantee, and
+  what is known of the values that it names, in the order in which it names them. -/
+  | unestablished (guarantee : Requirement Raw) (known : List (Option Range))
+  /-- A requirement or a guarantee that the rule does not allow there. -/
+  | requirement (requirement : Requirement Raw)
   /-- Nothing beyond the rule and the place. -/
   | nothing
 deriving DecidableEq
@@ -138,9 +149,5 @@ def Finding.refuseAt (finding : Finding T Raw) (definition : Key) (blocks : List
   Zkc.Core.refuseAt definition blocks instruction finding.rule finding.detail
 
 end
-
-/-- A refusal of a program: of a function, with its types and its written operations as
-values. -/
-abbrev ProgramRefusal (V : Vocabulary) : Type := Refusal V.Ty (LocalRaw V)
 
 end Zkc.Core

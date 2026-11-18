@@ -2,7 +2,8 @@ module
 
 public import Zkc.Core.Facts.Walk
 public import Zkc.Core.Facts.Local
-public import Zkc.Core.Facts.LocalLaws
+public import Zkc.Core.Facts.Facts
+public import Zkc.Core.Meaning.Validity
 public import Zkc.Core.Program.ElaborateLocal
 
 @[expose] public section
@@ -13,32 +14,28 @@ decisions of the analysis that produce them.
 
 There is one record of data for a function, the elaborated function (`TypedFn`): its input
 names, its body and what elaboration decided about it (`typeFn`). What is said of it is a
-proposition, against every table of callees with distinct keys that never stop `undefined` on
-valid inputs, keep validity, and stop only `undefined` where their headers say that they cannot
-stop (`Callees`): it is safe, never stopping `undefined` on valid inputs and returning valid
-values (`TypedFn.Safe`); its loops respect bounds (`TypedFn.Bounded`); both, it is assured with
-those bounds (`TypedFn.Assured`); two of them mean the same on every valid input
-(`TypedFn.SameAs`).
+proposition, against every table of callees with distinct keys, each satisfying its summary, which
+keep validity and stop only `undefined` where their headers say that they cannot stop
+(`Callees`), and on the valid inputs that
+satisfy the requirements of its header's summary: it is safe, satisfying its summary, never
+stopping `undefined` and returning valid values that satisfy its guarantees (`TypedFn.Safe`); its
+loops respect bounds (`TypedFn.Bounded`); both, it is assured with those bounds
+(`TypedFn.Assured`); two of them mean the same on every such input (`TypedFn.SameAs`).
 
-Two decisions produce these judgments (`Transform/StepSound.lean`). The check of facts of a
-function (`TypedFn.check`) gives the bounds of its loops or its refusals; when it accepts, the
-function is assured. Whether a second function follows the analysis of a first
-(`TypedFn.follows`): the second is elaborated and follows the analysis of the first
-(`Analysis.follow`); it is not analysed by itself: every instruction that it keeps in order must
-be the next entry of the first's skeleton, its values join the first's table, and its
-requirements are decided from what is known where it evaluates them. It gives the refusals of the
+Two decisions produce these judgments (`Transform/StepSound.lean`), each of a body under its
+header's summary, which the analysis reads lifted (`Summary.lift`). The check of facts of a
+function (`TypedFn.check`) gives the bounds of its
+loops or its refusals; when it accepts, the function is assured. Whether a second function
+follows the analysis of a first (`TypedFn.follows`): the second is elaborated and follows the
+analysis of the first (`Analysis.follow`); it is not analysed by itself: every instruction that
+it keeps in order must be the next entry of the first's skeleton, its values join the first's
+table, and its requirements are decided from what is known where it evaluates them. It gives the refusals of the
 analysis while the second follows and the places where the second is not the next entry of the
 skeleton, or, when there is neither, the bounds of the second's loops. The refusals of the
 first's own analysis are not read: when the first is safe, by whatever route, the second is
 assured and means the same. Why a step from one function to a stored one is refused is
 `StepRefusal`; the step itself, which takes an assured function and gives one, is
 `AssuredFn.step` (`Transform/Assured.lean`).
-
-Two programs over the same headers are compared function by function (`Defs.functionsFollow`):
-each function of the second follows the analysis of the function of the first with its header
-with no refusal and no place that differs. That the functions of the second then mean what those
-of the first mean, their callers included, and are safe and keep validity, when the first program
-is accepted, is `Defs.functionsFollow_sound` (`Admission/Programs.lean`).
 -/
 
 namespace Zkc.Core
@@ -71,21 +68,21 @@ def TypedFn.meaning (f : TypedFn V fns hdr) (M : Model V) (table : FnTable M fns
     (ins : HList M.Val hdr.ins) : Local (HList M.Val hdr.outs) :=
   f.body.denote (localSem M fns table) [] (Env.empty.extend f.inputs ins)
 
-/-- A function is safe: against every callees, on valid inputs, it never stops `undefined` and
-returns valid values. -/
+/-- A function is safe: against every callees, it satisfies the summary of its header
+(`Summary.Holds`, with no written operation): on valid inputs that satisfy its requirements, it
+never stops `undefined` and returns valid values that, with the inputs, satisfy its guarantees. -/
 def TypedFn.Safe (f : TypedFn V fns hdr) : Prop :=
   ∀ (M : Model V) (table : FnTable M fns), Callees M table →
-    ∀ ins : HList M.Val hdr.ins, ins.All M.Valid →
-      (f.meaning M table ins).Every (fun _ _ => True) (fun outs => outs.All M.Valid)
-        (· ≠ .undefined)
+    Summary.Holds (localSem M fns table) (fun _ _ => True) (localReading M) Empty.elim
+      (ValidDyn M) (· = .undefined) hdr.summary (f.meaning M table)
 
-/-- The loops of a function respect bounds: against every callees, on valid inputs, every loop
-that a run reaches runs at most as often as an annotation says, for every annotation whose
-entries at this function are among the bounds. -/
+/-- The loops of a function respect bounds: against every callees, on valid inputs that satisfy
+the requirements of its header's summary, every loop that a run reaches runs at most as often as
+an annotation says, for every annotation whose entries at this function are among the bounds. -/
 def TypedFn.Bounded (f : TypedFn V fns hdr) (bounds : List (Place × Nat)) : Prop :=
   ∀ (M : Model V) (table : FnTable M fns), Callees M table → ∀ F : List (Place × Nat),
     (∀ p b, (p, b) ∈ F → p.definition = hdr.key → p.role = none → (p, b) ∈ bounds) →
-    ∀ ins : HList M.Val hdr.ins, ins.All M.Valid →
+    ∀ ins : HList M.Val hdr.ins, ins.All M.Valid → FnHeader.Required M table hdr ins →
       f.body.EveryLoop (localSem M fns table) (fun _ _ => True)
         (Annotation.Bounded ⟨F⟩ hdr.key none) [] [] (Env.empty.extend f.inputs ins)
 
@@ -94,27 +91,31 @@ structure TypedFn.Assured (f : TypedFn V fns hdr) (bounds : List (Place × Nat))
   safe : f.Safe
   bounded : f.Bounded bounds
 
-/-- Two functions have the same meaning on every valid input, against every callees. -/
+/-- Two functions have the same meaning on every valid input that satisfies the requirements of
+their header's summary, against every callees. -/
 def TypedFn.SameAs (f g : TypedFn V fns hdr) : Prop :=
   ∀ (M : Model V) (table : FnTable M fns), Callees M table →
-    ∀ ins : HList M.Val hdr.ins, ins.All M.Valid → f.meaning M table ins = g.meaning M table ins
+    ∀ ins : HList M.Val hdr.ins, ins.All M.Valid → FnHeader.Required M table hdr ins →
+      f.meaning M table ins = g.meaning M table ins
 
 /-! ## The two decisions -/
 
-/-- The check of facts of an elaborated function: its refusals, or the bounds of its loops. -/
+/-- The check of facts of an elaborated function under its header's summary: its refusals, or the
+bounds of its loops. -/
 def TypedFn.check (f : TypedFn V fns hdr) : Except (List (ProgramRefusal V)) (List (Place × Nat)) :=
-  checkFacts (localFactRules V fns) (localSkelRules V fns) hdr.key none f.inputs f.body
+  checkFacts (localFactRules V fns) (localRules fns).skel hdr.key none hdr.summary.lift f.inputs
+    f.body
 
-/-- Whether a second function follows the analysis of a first: the refusals of the analysis
-while it follows and the places where it is not the next entry of the first's skeleton, or,
-when there is neither, the bounds of the second's loops. The refusals of the first's own
-analysis are not read: the first is assured by whoever gives it. -/
+/-- Whether a second function follows the analysis of a first, both under their header's summary:
+the refusals of the analysis while it follows and the places where it is not the next entry of
+the first's skeleton, or, when there is neither, the bounds of the second's loops. The refusals
+of the first's own analysis are not read: the first is assured by whoever gives it. -/
 def TypedFn.follows (source target : TypedFn V fns hdr) :
     Except (List (ProgramRefusal V) × List Place) (List (Place × Nat)) :=
-  let first := analyse (localFactRules V fns) (localSkelRules V fns) hdr.key none source.inputs
-    source.body
-  let second := follow (localFactRules V fns) (localSkelRules V fns) hdr.key none first
-    target.inputs target.body
+  let first := analyse (localFactRules V fns) (localRules fns).skel hdr.key none hdr.summary.lift
+    source.inputs source.body
+  let second := follow (localFactRules V fns) (localRules fns).skel hdr.key none hdr.summary.lift
+    first target.inputs target.body
   match second.state.st.refusals, second.state.differs with
   | [], [] => .ok second.state.st.bounds.reverse
   | refusals, places => .error (refusals.reverse, places.reverse)
@@ -127,45 +128,5 @@ with no refusal, the places where it differs. -/
 inductive StepRefusal (V : Vocabulary) where
   | target (refusals : List (ProgramRefusal V)) (differs : List Place)
   | differs (places : List Place)
-
-/-! ## Two programs over the same headers -/
-
-/-- A function of the first program, against a program whose headers are said to be the first's
-up to that function: when the second's last definition is a function too, whether it follows
-the analysis of the first's with no refusal and no place that differs (`Exit.accepted`) and the
-definitions before it follow (`rest`); a protocol there does not follow. -/
-def Defs.followsFn (fns : List (FnHeader V)) (protocols : List (ProtocolHeader V))
-    (hdr : FnHeader V) (inputs : Names hdr.ins) (body : Fn V fns hdr inputs)
-    (rest : Defs V ⟨fns, protocols⟩ → Bool) :
-    {hs : Headers V} → Defs V hs → hs = ⟨hdr :: fns, protocols⟩ → Bool
-  | _, .nil, impossible => nomatch impossible
-  | _, .fn (hs := hs) _ inputs' body' _ rest', rfl =>
-      (follow (localFactRules V hs.fns) (localSkelRules V hs.fns) hdr.key none
-          (analyse (localFactRules V hs.fns) (localSkelRules V hs.fns) hdr.key none inputs body)
-          inputs' body').accepted && rest rest'
-  | _, .protocol .., _ => false
-
-/-- A protocol of the first program, against a program whose headers are said to be the first's
-up to that protocol: when the second's last definition is a protocol too, whether the
-definitions before it follow (`rest`); the protocols are not compared. A function there does not
-follow. -/
-def Defs.followsProtocol (fns : List (FnHeader V)) (protocols : List (ProtocolHeader V))
-    (hdr : ProtocolHeader V) (rest : Defs V ⟨fns, protocols⟩ → Bool) :
-    {hs : Headers V} → Defs V hs → hs = ⟨fns, hdr :: protocols⟩ → Bool
-  | _, .nil, same => nomatch same
-  | _, .fn .., _ => false
-  | _, .protocol _ _ _ _ rest', rfl => rest rest'
-
-/-- Whether the functions of the second program follow those of the first, one by one: the two
-programs have the same headers, and each function follows the analysis of the one with its
-header with no refusal and no place that differs. A protocol is not compared. -/
-def Defs.functionsFollow : {hs : Headers V} → Defs V hs → Defs V hs → Bool
-  | _, .nil, _ => true
-  | _, .fn (hs := hs) hdr inputs body _ rest, defs' =>
-      Defs.followsFn hs.fns hs.protocols hdr inputs body
-        (fun rest' => Defs.functionsFollow rest rest') defs' rfl
-  | _, .protocol (hs := hs) hdr _ _ _ rest, defs' =>
-      Defs.followsProtocol hs.fns hs.protocols hdr
-        (fun rest' => Defs.functionsFollow rest rest') defs' rfl
 
 end Zkc.Core

@@ -15,17 +15,32 @@ namespace Zkc.Core
 
 /-! ## Deployment -/
 
-/-- A deployed scheme: the admitted program, the declaration, the entry, and each role's
-handlers in order, the nearest to its program first. -/
+/-- A deployed scheme: the admitted program, the declaration, that the declaration's entry is a
+protocol of the program, and each role's handlers in order, the nearest to its program first.
+The entry and its reference are found from the declaration (`Deployed.entry`,
+`Deployed.callee`). -/
 structure Deployed (V : Vocabulary) where
   admitted : Admitted V
   declaration : Declaration
-  entry : ProtocolHeader V
-  callee : Member admitted.program.headers.protocols entry
-  stack : (r : Role) → List (Layer V admitted.program.headers r entry.ins)
+  found : (admitted.program.findProtocol declaration.entry).isSome
+  stack : (r : Role) →
+    List (Layer V admitted.program.headers r
+      ((admitted.program.findProtocol declaration.entry).get found).1.ins)
 
 section
 variable {V : Vocabulary}
+
+/-- The entry of a deployment: the protocol of the program that its declaration names. -/
+def Deployed.entry (d : Deployed V) : ProtocolHeader V :=
+  ((d.admitted.program.findProtocol d.declaration.entry).get d.found).1
+
+/-- The reference of the entry among the protocols of the program. -/
+def Deployed.callee (d : Deployed V) : Member d.admitted.program.headers.protocols d.entry :=
+  ((d.admitted.program.findProtocol d.declaration.entry).get d.found).2
+
+/-- The entry of a deployment has the key that its declaration names. -/
+theorem Deployed.entry_key (d : Deployed V) : d.entry.key = d.declaration.entry :=
+  Typed.findProtocol_key (Option.some_get d.found).symm
 
 /-- The attempts of a deployment: the bound and the site of the attempt. -/
 def Deployed.retry (d : Deployed V) : Option (Nat × Site) :=

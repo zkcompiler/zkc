@@ -13,11 +13,15 @@ of each name in scope, a map from names to identifiers (`Ctx Nat`): where the te
 its context, the walk binds the same names to the new identifiers, a later name hiding an earlier
 one as in the context (`bindIds`, `Value/Table.lean`).
 
-At a value, every requirement of its written form is decided from what is known where the value
-is evaluated; each that is not known is refused at the place, and the walk goes on as if it were
-known. The results are then those of the table, with the operands of an operation that commutes
-in one order (`ValueRules.order`), and what the operation's ranges say of them is learned. An
-operation that is kept in order gets new identifiers, the leaves of its entry in the skeleton. A
+At an operation, shared or kept in order, every requirement of its written form is decided first,
+from what is known where it is applied; each that is not known is refused at the place, and the
+walk goes on as if it were known. Then a shared operation, a value, has the results of the table,
+with the operands of an operation that commutes in one order (`ValueRules.order`), and what the
+operation's ranges say of them is learned (`valueStep`); an operation that is kept in order gets
+new identifiers, the leaves of its entry in the skeleton. Once the results of either have their
+identifiers, what its written form guarantees of its operands, as written, followed by its
+results is learned (`valueStep`, `effectStep`); an operation that guarantees nothing teaches
+nothing more. A
 guard learns its condition; a choice learns its condition in one region and its negation in the
 other; what a choice, a case analysis or a block returns has the hull of the ranges that its
 regions that run give it, and the result of a choice whose other region returns a written truth
@@ -40,8 +44,13 @@ identifiers of the table. With a skeleton to follow, the same walk follows it in
 instruction that the term keeps in order must be the skeleton's next entry and takes the entry's
 leaves; where it is not, the place is recorded and the walk goes on without a skeleton. The
 analysis of a definition (`Analysis.analyse`) starts from the empty table; a second definition
-follows the analysis of a first from the first's table (`Analysis.follow`). The check of facts
-is the refusals of the analysis, or the bounds that it recorded (`checkFacts`).
+follows the analysis of a first from the first's table (`Analysis.follow`). Both analyse a body
+under a summary of its definition (`Summary`): what the summary requires of the inputs is
+learned at the start, over the inputs' identifiers (`Analysis.startUnder`), and what it guarantees
+of the inputs followed by the results is decided where the body returns, from what is known there
+(`Analysis.exitUnder`): each guarantee that is not known is refused at the definition's exit by
+the rule `guarantee`, unless the body never returns. The check of facts is the refusals of the
+analysis, or the bounds that it recorded (`checkFacts`).
 -/
 
 namespace Zkc.Core
@@ -143,52 +152,6 @@ def carriedTerm {T Raw : Type} (ops : OpFacts Raw) (body : Exit T Raw) (carriedI
   | some (.sum, [x, y]) => if x = carriedId then some y else if y = carriedId then some x else none
   | _ => none
 
-/-- The range of a natural from an initial range, after at most `high` iterations that each add
-a term of a range: it starts where the initial range starts (TY8). -/
-def Range.afterSums (initial term : Range) (high : Option Nat) : Range :=
-  ⟨initial.lo,
-    match initial.hi, high, term.hi with
-    | some h₀, some n, some ht => some (h₀ + n * ht)
-    | _, _, _ => none⟩
-
-namespace Range
-
-theorem afterSums_zero {r₀ rt : Range} {n : Nat} (h : r₀.Has n) :
-    (Range.afterSums r₀ rt (some 0)).Has n := by
-  obtain ⟨lo, hi⟩ := h
-  refine ⟨lo, fun h e => ?_⟩
-  simp only [Range.afterSums] at e
-  rcases r₀ with ⟨l₀, _ | h₀⟩ <;> rcases rt with ⟨lt, _ | ht⟩ <;> simp at e
-  have := hi h₀ rfl
-  omega
-
-theorem afterSums_step {r₀ rt : Range} {i n t : Nat}
-    (h : (Range.afterSums r₀ rt (some i)).Has n) (ht : rt.Has t) :
-    (Range.afterSums r₀ rt (some (i + 1))).Has (n + t) := by
-  obtain ⟨lo, hi⟩ := h
-  obtain ⟨tlo, thi⟩ := ht
-  simp only [Range.afterSums] at lo hi ⊢
-  refine ⟨Nat.le_trans lo (Nat.le_add_right _ _), fun h e => ?_⟩
-  rcases r₀ with ⟨l₀, _ | h₀⟩ <;> rcases rt with ⟨lt, _ | ht'⟩ <;> simp at e hi thi
-  subst e
-  have := hi
-  have := thi
-  rw [Nat.add_mul, Nat.one_mul]
-  omega
-
-theorem afterSums_widen {r₀ rt : Range} {N n : Nat} {high : Option Nat}
-    (h : (Range.afterSums r₀ rt (some N)).Has n)
-    (hhigh : ∀ m, high = some m → N ≤ m) : (Range.afterSums r₀ rt high).Has n := by
-  obtain ⟨lo, hi⟩ := h
-  simp only [Range.afterSums] at lo hi ⊢
-  refine ⟨lo, fun h e => ?_⟩
-  rcases r₀ with ⟨l₀, _ | h₀⟩ <;> rcases high with _ | m <;> rcases rt with ⟨lt, _ | ht⟩ <;>
-    simp at e hi
-  subst e
-  have := hhigh m rfl
-  exact Nat.le_trans hi (Nat.add_le_add_left (Nat.mul_le_mul_right _ this) _)
-
-end Range
 
 /-- The range of a carried natural after a loop: the range of the sum, when the body returns
 it as itself plus a term; the initial range when no iteration can end. -/
@@ -394,15 +357,25 @@ section
 variable [DecidableEq Raw] (rules : FactRules D Raw) (checks : SkelRules D) (definition : Key)
   (role : Option Role)
 
-/-- A value: its requirements decided where it is evaluated, its results from the table with its
-operands in the table's order, and what its ranges and the types say of them learned. -/
-def valueStep (place : Place) (written : Raw) (res : List D.Ty) (argIds : List Nat) (k : Known)
+/-- A value, once its requirements are decided: its results from the table with its operands in
+the table's order; what its ranges and the types say of them, then what its written form
+guarantees of its operands, as written, followed by its results, learned. -/
+def valueStep (written : Raw) (res : List D.Ty) (argIds : List Nat) (k : Known)
     (st : St D.Ty Raw) : List Nat × Known × St D.Ty Raw :=
-  let st₁ := checkRequirements rules.ops k place written argIds (rules.ops.requires written) st
-  let made := share written (rules.values.order written argIds) res.length st₁
+  let made := share written (rules.values.order written argIds) res.length st
   let k₁ := k.addRanges made.1 (rules.ops.ranges written (argIds.map k.rangeOf))
   let k₂ := k₁.addOffset rules.ops made.2.table k written argIds made.1
-  (made.1, (k₂.addRanges made.1 (res.map rules.range)).enter rules res, made.2)
+  let learned := learnRequirements rules.ops (argIds ++ made.1) (rules.ops.ensures written)
+    ((k₂.addRanges made.1 (res.map rules.range)).enter rules res) made.2
+  (made.1, learned.1, learned.2)
+
+/-- An operation kept in order, once its results have their identifiers: what the types say of
+its results, then what its written form guarantees of its operands followed by its results,
+learned. -/
+def effectStep (written : Raw) (res : List D.Ty) (argIds made : List Nat) (k : Known)
+    (st : St D.Ty Raw) : Known × St D.Ty Raw :=
+  learnRequirements rules.ops (argIds ++ made) (rules.ops.ensures written)
+    ((k.addRanges made (res.map rules.range)).enter rules res) st
 
 mutual
   /-- The walk of a term, from a skeleton to follow or none, the identifiers of the names in its
@@ -418,17 +391,20 @@ mutual
     | _, _, .op (res := res) key o args results rest, followed, ids, k, s =>
         let place : Place := ⟨definition, blocks, some key, role⟩
         let argIds := idsOf ids args
-        match rules.written o with
-        | some written =>
-            let step := valueStep rules place written res argIds k s.st
+        let checked := checkRequirements rules.ops k place (rules.written o) argIds
+          (rules.ops.requires (rules.written o)) s.st
+        match rules.shared o with
+        | true =>
+            let step := valueStep rules (rules.written o) res argIds k checked
             walk blocks rest followed (bindIds ids results step.1) step.2.1
               { s with st := step.2.2 }
-        | none =>
+        | false =>
             let hit := effectEntry checks key o argIds followed
-            let s₁ := miss place followed.isSome hit.isSome s
+            let s₁ := miss place followed.isSome hit.isSome { s with st := checked }
             let made := leaves (hit.map (·.1)) res.length s₁
+            let learned := effectStep rules (rules.written o) res argIds made.1 k made.2.st
             let after := walk blocks rest (hit.map (·.2)) (bindIds ids results made.1)
-              ((k.addRanges made.1 (res.map rules.range)).enter rules res) made.2
+              learned.1 { made.2 with st := learned.2 }
             { after with skel := kept followed (.effect key o argIds s₁.st.next after.skel) }
     | _, _, .guard (t := t) key w c ok why rest, followed, ids, k, s =>
         let condition := idOf ids c.name
@@ -529,23 +505,45 @@ def start (types : List D.Ty) : Known :=
   (Known.empty.addRanges (List.range types.length) (types.map rules.range)).enter rules
     types
 
-/-- The analysis of a body in the context of its inputs, from the empty table: its skeleton, the
-table of its values, every application that is not known to be inside its operation's domain,
-and the bound of each loop that runs as often as a count with an upper end. -/
-def analyse {types outs : List D.Ty} (inputs : Names types)
-    (body : Term D (Ctx.empty.extend inputs) outs) : Exit D Raw outs :=
-  walk rules checks definition role [] body none
-    (bindIds Ctx.empty inputs (List.range types.length)) (start rules types)
-    ⟨⟨Table.empty rules.place, types.length, [], []⟩, []⟩
+/-- The start of the analysis of a body under a summary, from a state: what is known of its
+inputs (`start`), with what the summary's requirements teach learned over the inputs'
+identifiers, which may enter applications in the table. -/
+def startUnder (summary : Summary Raw) (types : List D.Ty) (st : St D.Ty Raw) :
+    Known × St D.Ty Raw :=
+  learnRequirements rules.ops (List.range types.length) summary.requires (start rules types) st
 
-/-- The analysis of a second body that follows the skeleton of a first, from the table of the
-first, with the inputs of both on the same identifiers: the table with the second's values, its
-refusals and bounds, and the places where it is not the next entry of the skeleton. -/
-def follow {types outs : List D.Ty} (first : Exit D Raw outs) (inputs : Names types)
+/-- The exit of the analysis of a body under a summary: the summary's guarantees decided over the
+inputs' identifiers followed by those that the body returns, from what is known where it
+returns, each that is not known refused at the definition's exit (the place with no
+instruction). -/
+def exitUnder (summary : Summary Raw) (types : List D.Ty) {outs : List D.Ty}
+    (e : Exit D Raw outs) : Exit D Raw outs :=
+  { e with state := { e.state with st := { e.state.st with
+      refusals := checkGuarantees rules.ops e.state.st.table e.known ⟨definition, [], none, role⟩
+        (List.range types.length ++ e.rets) summary.ensures e.state.st.refusals } } }
+
+/-- The analysis of a body in the context of its inputs under a summary, from the empty table:
+its skeleton, the table of its values, every application that is not known to be inside its
+operation's domain and every guarantee of the summary that is not known where it returns, and the
+bound of each loop that runs as often as a count with an upper end. What the summary requires is
+known at the start. -/
+def analyse {types outs : List D.Ty} (summary : Summary Raw) (inputs : Names types)
     (body : Term D (Ctx.empty.extend inputs) outs) : Exit D Raw outs :=
-  walk rules checks definition role [] body (some first.skel)
-    (bindIds Ctx.empty inputs (List.range types.length)) (start rules types)
-    ⟨{ first.state.st with refusals := [], bounds := [] }, []⟩
+  let entered := startUnder rules summary types ⟨Table.empty rules.place, types.length, [], []⟩
+  exitUnder rules definition role summary types
+    (walk rules checks definition role [] body none
+      (bindIds Ctx.empty inputs (List.range types.length)) entered.1 ⟨entered.2, []⟩)
+
+/-- The analysis of a second body under a summary that follows the skeleton of a first, from the
+table of the first, with the inputs of both on the same identifiers: the table with the second's
+values, its refusals and bounds, and the places where it is not the next entry of the
+skeleton. -/
+def follow {types outs : List D.Ty} (summary : Summary Raw) (first : Exit D Raw outs)
+    (inputs : Names types) (body : Term D (Ctx.empty.extend inputs) outs) : Exit D Raw outs :=
+  let entered := startUnder rules summary types { first.state.st with refusals := [], bounds := [] }
+  exitUnder rules definition role summary types
+    (walk rules checks definition role [] body (some first.skel)
+      (bindIds Ctx.empty inputs (List.range types.length)) entered.1 ⟨entered.2, []⟩)
 
 /-- Whether an analysis refuses nothing and differs nowhere. -/
 def Exit.accepted {outs : List D.Ty} (e : Exit D Raw outs) : Bool :=
@@ -558,14 +556,16 @@ end
 end Analysis
 
 open Analysis in
-/-- The check of facts of a body in the context of its inputs: every application that the
-analysis does not know to be inside its operation's domain, refused at its place; or, when
-there is none, the bound of each loop that runs as often as a count with an upper end. -/
+/-- The check of facts of a body in the context of its inputs under a summary: every application
+that the analysis does not know to be inside its operation's domain, refused at its place, and
+every guarantee of the summary that it does not know where the body returns, refused at the
+definition's exit; or, when there is none, the bound of each loop that runs as often as a count
+with an upper end. -/
 def checkFacts {D : Dialect} {Raw : Type} [DecidableEq Raw] (rules : FactRules D Raw)
     (checks : SkelRules D) (definition : Key) (role : Option Role) {types outs : List D.Ty}
-    (inputs : Names types) (body : Term D (Ctx.empty.extend inputs) outs) :
+    (summary : Summary Raw) (inputs : Names types) (body : Term D (Ctx.empty.extend inputs) outs) :
     Except (List (Refusal D.Ty Raw)) (List (Place × Nat)) :=
-  let found := analyse rules checks definition role inputs body
+  let found := analyse rules checks definition role summary inputs body
   match found.state.st.refusals with
   | [] => .ok found.state.st.bounds.reverse
   | refusals => .error refusals.reverse

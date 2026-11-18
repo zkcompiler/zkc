@@ -32,7 +32,7 @@ def at_ (definition instruction : Nat) : Place := ⟨⟨definition⟩, [], some 
 
 /-- A function that loops as often as its input, which it requires to be below 10. -/
 def bounded : Definition field :=
-  .fn ⟨1⟩ [.nat] [.nat] true none (.mk [0] [
+  .fn ⟨1⟩ [.nat] [.nat] true none Summary.empty (.mk [0] [
     .op ⟨1⟩ [10] (natural 10) [],
     .op ⟨2⟩ [11] less [0, 10],
     .guard ⟨3⟩ () 11 .reject,
@@ -41,7 +41,7 @@ def bounded : Definition field :=
 /-- A function that calls `bounded` and loops as often as what it returns, which it requires to
 be below 5. -/
 def caller : Definition field :=
-  .fn ⟨2⟩ [.nat] [.nat] true none (.mk [0] [
+  .fn ⟨2⟩ [.nat] [.nat] true none Summary.empty (.mk [0] [
     .op ⟨1⟩ [10] (.call ⟨1⟩) [0],
     .op ⟨2⟩ [11] (natural 5) [],
     .op ⟨3⟩ [12] less [10, 11],
@@ -56,15 +56,15 @@ example : admission ⟨[bounded, caller]⟩ = .inr [(at_ 2 5, 4), (at_ 1 4, 9)] 
 
 /-- A function that adds its inputs. -/
 def addition (key : Nat) : Definition field :=
-  .fn ⟨key⟩ [.nat, .nat] [.nat] false none (.mk [0, 1] [.op ⟨1⟩ [10] plus [0, 1]] [10])
+  .fn ⟨key⟩ [.nat, .nat] [.nat] false none Summary.empty (.mk [0, 1] [.op ⟨1⟩ [10] plus [0, 1]] [10])
 
 /-- A function that reads an item at an index that nothing bounds. -/
 def unguarded (key : Nat) : Definition field :=
-  .fn ⟨key⟩ [elements, .nat] [F] false none (.mk [0, 1] [.op ⟨1⟩ [10] (item elements) [0, 1]] [10])
+  .fn ⟨key⟩ [elements, .nat] [F] false none Summary.empty (.mk [0, 1] [.op ⟨1⟩ [10] (item elements) [0, 1]] [10])
 
 /-- A function that reads two items at indices that nothing bounds. -/
 def unguardedTwice (key : Nat) : Definition field :=
-  .fn ⟨key⟩ [elements, .nat, .nat] [F] false none (.mk [0, 1, 2] [
+  .fn ⟨key⟩ [elements, .nat, .nat] [F] false none Summary.empty (.mk [0, 1, 2] [
     .op ⟨1⟩ [10] (item elements) [0, 1],
     .op ⟨2⟩ [11] (item elements) [0, 2]] [11])
 
@@ -81,7 +81,7 @@ example : admission ⟨[addition 1, unguardedTwice 2, unguarded 3]⟩ =
 
 /-- The first function's elaboration refuses an operand that is not in scope: admission gives
 that refusal, and nothing of the second function. -/
-example : admission ⟨[.fn ⟨1⟩ [.nat, .nat] [.nat] false none
+example : admission ⟨[.fn ⟨1⟩ [.nat, .nat] [.nat] false none Summary.empty
       (.mk [0, 1] [.op ⟨1⟩ [2] plus [0, 5]] [2]), unguarded 2]⟩ =
     .inl [⟨.scope, at_ 1 1, .name 5⟩] := by
   decide +kernel
@@ -89,16 +89,20 @@ example : admission ⟨[.fn ⟨1⟩ [.nat, .nat] [.nat] false none
 /-! ## One definition at a time -/
 
 /-- The headers of `bounded` and `caller`. -/
-def boundedHeader : FnHeader field := ⟨⟨1⟩, [.nat], [.nat], true, none⟩
-def callerHeader : FnHeader field := ⟨⟨2⟩, [.nat], [.nat], true, none⟩
+def boundedHeader : FnHeader field := ⟨⟨1⟩, [.nat], [.nat], true, none, Summary.empty⟩
+def callerHeader : FnHeader field := ⟨⟨2⟩, [.nat], [.nat], true, none, Summary.empty⟩
+
+-- The headers that the checks give are compared whole.
+deriving instance DecidableEq for EventClass, Shape, Shapes, ProtocolHeader, FnHeader, Headers,
+  Except
 
 /-- `check`, one definition at a time from no headers, gives the headers of the admitted
 program. -/
 example : checkAll check ⟨[], []⟩ [bounded, caller] = .ok ⟨[callerHeader, boundedHeader], []⟩ := by
-  rfl
+  decide +kernel
 example : (admit ⟨[bounded, caller]⟩ noAssociation).map (·.program.headers) =
     .ok ⟨[callerHeader, boundedHeader], []⟩ := by
-  rfl
+  decide +kernel
 
 /-- `check` gives the refusals of a definition, against the headers before it: `caller` alone
 calls a function that is not there. -/
@@ -120,7 +124,7 @@ def resolution (named : NamedProgram field) (association : Association) :
   match admit named association with
   | .ok admitted =>
       .inr (admitted.association.families.map fun family =>
-        (family.generic, family.arguments, family.subject.key))
+        (family.generic, family.arguments, family.definition.key))
   | .error refusals => .inl refusals
 
 /-- A key that names a definition of the program: admitted, with that definition found. -/

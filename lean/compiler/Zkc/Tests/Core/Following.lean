@@ -5,22 +5,21 @@ import Zkc.Tests.Core.Facts
 Following: whether a function follows the analysis of another, on functions written by names,
 elaborated and walked by the kernel.
 
-Each pair is two bodies of a function with the key 1 over the same callees, each elaborated
-against them; the first is analysed, and the second follows its analysis
-(`Analysis.follow`): `decided` says whether the second follows with no place that differs, and
-`safelyFollows` gives the whole verdict, no place that differs and no refusal
-(`Analysis.Exit.accepted`). Accepted: a repeated computation shared; two computations between
-guards in the other order, with one computation that nothing uses; computations moved around
-guards that stay in their order; a computation moved out of a loop; the same program with other
-names for its values; a call of a function that cannot stop, shared; `x + y` against `y + x`,
-since addition commutes, and `x == y` against `y == x`, of naturals and of truth values, since
-an equality commutes; a product and a sum with their operands exchanged inside a loop after a
-guard. Refused: `x - y` against `y - x`; `(x + y) + z` against `x + (y + z)` (associativity is
-not a law that following knows); a row of the vocabulary with its operands exchanged; a
-conjunction with its operands exchanged, since the check of facts learns them in the order
-written; two guards in the other order; a guard dropped; a call of a function that can stop
-moved across a guard; two loops against one loop that computes the same; a different key on a
-guard.
+Each pair is two bodies of a function with the key 1, one header, over the same callees, each
+typed against them (`typeFn`); the second follows the analysis of the first (`TypedFn.follows`):
+`decided` says whether the second follows with no place that differs, and `safelyFollows` gives
+the whole verdict, no place that differs and no refusal. Accepted: a repeated computation shared;
+two computations between guards in the other order, with one computation that nothing uses;
+computations moved around guards that stay in their order; a computation moved out of a loop; the
+same program with other names for its values; a call of a function that cannot stop, shared;
+`x + y` against `y + x`, since addition commutes, and `x == y` against `y == x`, of naturals and
+of truth values, since an equality commutes; a product and a sum with their operands exchanged
+inside a loop after a guard. Refused: `x - y` against `y - x`; `(x + y) + z` against
+`x + (y + z)` (associativity is not a law that following knows); a row of the vocabulary with its
+operands exchanged; a conjunction with its operands exchanged, since the check of facts learns
+them in the order written; two guards in the other order; one of two guards dropped; a call of a
+function that can stop moved across a guard; two loops against one loop that computes the same; a
+different key on a guard.
 
 Then each instruction that following keeps in order, accepted: a choice, a case analysis, a
 block, a loop as often as a value says and a call of a function that can stop, each the same
@@ -47,35 +46,35 @@ deriving instance DecidableEq for Except
 
 /-! ## Following -/
 
-/-- Following on two bodies of a function with the key 1, the input and result types and the
-callees given, each elaborated against the callees with whether it can stop: whether the second
-follows the analysis of the first with no place that differs; nothing when one of them does not
-elaborate. -/
-def decided (fns : List (FnHeader field)) (ins outs : List field.Ty) (stops stops' : Bool)
+/-- Following on two bodies of a function with the key 1, the input and result types, whether it
+can stop and the callees given, each typed against the callees (`typeFn`): whether the second
+follows the analysis of the first with no place that differs (`TypedFn.follows`); nothing when
+one of them does not elaborate. -/
+def decided (fns : List (FnHeader field)) (ins outs : List field.Ty) (stops : Bool)
     (body body' : Region (LocalRaw field) Unit) : Option Bool :=
-  match elabFn fns ⟨⟨1⟩, ins, outs, stops, none⟩ body,
-      elabFn fns ⟨⟨1⟩, ins, outs, stops', none⟩ body' with
-  | .ok ⟨inputs, fn, _⟩, .ok ⟨inputs', fn', _⟩ =>
-      some (Analysis.follow (localFactRules field fns) (localSkelRules field fns) ⟨1⟩ none
-        (Analysis.analyse (localFactRules field fns) (localSkelRules field fns) ⟨1⟩ none inputs fn)
-        inputs' fn').state.differs.isEmpty
+  match typeFn fns ⟨⟨1⟩, ins, outs, stops, none, Summary.empty⟩ body,
+      typeFn fns ⟨⟨1⟩, ins, outs, stops, none, Summary.empty⟩ body' with
+  | .ok source, .ok target =>
+      some (match source.follows target with
+        | .ok _ => true
+        | .error (_, places) => places.isEmpty)
   | _, _ => none
 
 /-- The whole verdict of following on two bodies, as `decided`: whether the second follows the
-analysis of the first with no place that differs and no refusal; nothing when one of them does
-not elaborate. -/
-def safelyFollows (fns : List (FnHeader field)) (ins outs : List field.Ty) (stops stops' : Bool)
+analysis of the first with no place that differs and no refusal (`TypedFn.follows`); nothing
+when one of them does not elaborate. -/
+def safelyFollows (fns : List (FnHeader field)) (ins outs : List field.Ty) (stops : Bool)
     (body body' : Region (LocalRaw field) Unit) : Option Bool :=
-  match elabFn fns ⟨⟨1⟩, ins, outs, stops, none⟩ body,
-      elabFn fns ⟨⟨1⟩, ins, outs, stops', none⟩ body' with
-  | .ok ⟨inputs, fn, _⟩, .ok ⟨inputs', fn', _⟩ =>
-      some (Analysis.follow (localFactRules field fns) (localSkelRules field fns) ⟨1⟩ none
-        (Analysis.analyse (localFactRules field fns) (localSkelRules field fns) ⟨1⟩ none inputs fn)
-        inputs' fn').accepted
+  match typeFn fns ⟨⟨1⟩, ins, outs, stops, none, Summary.empty⟩ body,
+      typeFn fns ⟨⟨1⟩, ins, outs, stops, none, Summary.empty⟩ body' with
+  | .ok source, .ok target =>
+      some (match source.follows target with
+        | .ok _ => true
+        | .error _ => false)
   | _, _ => none
 
 /-- A callee with the key 9 from a natural to a natural, which can stop or cannot. -/
-def callee (canStop : Bool) : FnHeader field := ⟨⟨9⟩, [.nat], [.nat], canStop, none⟩
+def callee (canStop : Bool) : FnHeader field := ⟨⟨9⟩, [.nat], [.nat], canStop, none, Summary.empty⟩
 
 /-- Two naturals and two truth values. -/
 abbrev guarded : List field.Ty := [.nat, .nat, .bool, .bool]
@@ -83,13 +82,13 @@ abbrev guarded : List field.Ty := [.nat, .nat, .bool, .bool]
 /-! ## Accepted -/
 
 /-- A repeated computation is one value. -/
-example : decided [] [.nat, .nat] [.nat, .nat] false false
+example : decided [] [.nat, .nat] [.nat, .nat] false
     (.mk [0, 1] [.op ⟨1⟩ [10] plus [0, 1], .op ⟨2⟩ [11] plus [0, 1]] [10, 11])
     (.mk [0, 1] [.op ⟨1⟩ [10] plus [0, 1]] [10, 10]) = some true := by
   decide +kernel
 
 /-- Two computations between guards in the other order, with a computation that nothing uses. -/
-example : decided [] guarded [.nat, .nat] true true
+example : decided [] guarded [.nat, .nat] true
     (.mk [0, 1, 2, 3] [
       .guard ⟨1⟩ () 2 .reject,
       .op ⟨2⟩ [10] plus [0, 1],
@@ -118,7 +117,7 @@ def afterGuards : Region (LocalRaw field) Unit := .mk [0, 1, 2, 3] [
   .op ⟨3⟩ [11] times [0, 1],
   .op ⟨1⟩ [10] plus [0, 1]] [10, 11]
 
-example : decided [] guarded [.nat, .nat] true true aroundGuards afterGuards = some true := by
+example : decided [] guarded [.nat, .nat] true aroundGuards afterGuards = some true := by
   decide +kernel
 
 /-- A sum of a computation that does not depend on the loop, inside the loop. -/
@@ -129,7 +128,7 @@ def insideLoop : Region (LocalRaw field) Unit := .mk [0, 1] [
     .op ⟨4⟩ [23] plus [21, 22]] [23])] [11]
 
 /-- A computation moved out of a loop. -/
-example : decided [] [.nat, .nat] [.nat] false false insideLoop
+example : decided [] [.nat, .nat] [.nat] false insideLoop
     (.mk [0, 1] [
       .op ⟨1⟩ [10] (natural 0) [],
       .op ⟨3⟩ [12] plus [0, 1],
@@ -139,7 +138,7 @@ example : decided [] [.nat, .nat] [.nat] false false insideLoop
 
 /-- The same program with other names for its values, the inputs and those of the loop's region
 among them. -/
-example : decided [] [.nat, .nat] [.nat] false false insideLoop
+example : decided [] [.nat, .nat] [.nat] false insideLoop
     (.mk [7, 8] [
       .op ⟨1⟩ [40] (natural 0) [],
       .loop ⟨2⟩ () (.fixed 3) [40] [41] (.mk [50, 51] [
@@ -148,7 +147,7 @@ example : decided [] [.nat, .nat] [.nat] false false insideLoop
   decide +kernel
 
 /-- A call of a function that cannot stop is a value: two calls on one operand are one. -/
-example : decided [callee false] [.nat] [.nat] false false
+example : decided [callee false] [.nat] [.nat] false
     (.mk [0] [
       .op ⟨1⟩ [10] (.call ⟨9⟩) [0],
       .op ⟨2⟩ [11] (.call ⟨9⟩) [0],
@@ -166,7 +165,7 @@ def commutedSum : Region (LocalRaw field) Unit := .mk [0, 1] [.op ⟨1⟩ [10] p
 
 /-- `x + y` against `y + x`: accepted, since addition commutes; the table places `y + x` with its
 operands in the order of `x + y`, so the two are one value. -/
-example : decided [] [.nat, .nat] [.nat] false false sum commutedSum = some true := by
+example : decided [] [.nat, .nat] [.nat] false sum commutedSum = some true := by
   decide +kernel
 
 /-- The equality of truth values. -/
@@ -174,20 +173,20 @@ abbrev sameTruth : LocalRaw field := .owned .boolEqual [] []
 
 /-- `x == y` against `y == x`, of naturals: the whole verdict accepts it, since the equality
 commutes. -/
-example : safelyFollows [] [.nat, .nat] [.bool] false false
+example : safelyFollows [] [.nat, .nat] [.bool] false
     (.mk [0, 1] [.op ⟨1⟩ [10] equal [0, 1]] [10])
     (.mk [0, 1] [.op ⟨1⟩ [10] equal [1, 0]] [10]) = some true := by
   decide +kernel
 
 /-- `x == y` against `y == x`, of truth values: accepted too. -/
-example : safelyFollows [] [.bool, .bool] [.bool] false false
+example : safelyFollows [] [.bool, .bool] [.bool] false
     (.mk [0, 1] [.op ⟨1⟩ [10] sameTruth [0, 1]] [10])
     (.mk [0, 1] [.op ⟨1⟩ [10] sameTruth [1, 0]] [10]) = some true := by
   decide +kernel
 
 /-- A product and a sum with their operands exchanged, inside a loop that comes after a guard,
 and the product again after the loop: each is the value of the first. -/
-example : decided [] [.nat, .nat, .bool] [.nat, .nat] true true
+example : decided [] [.nat, .nat, .bool] [.nat, .nat] true
     (.mk [0, 1, 2] [
       .guard ⟨1⟩ () 2 .reject,
       .op ⟨2⟩ [10] (natural 0) [],
@@ -207,14 +206,14 @@ example : decided [] [.nat, .nat, .bool] [.nat, .nat] true true
 /-! ## Refused -/
 
 /-- `x - y` against `y - x`: a difference does not commute. -/
-example : decided [] [.nat, .nat] [.nat] false false
+example : decided [] [.nat, .nat] [.nat] false
     (.mk [0, 1] [.op ⟨1⟩ [10] minus [0, 1]] [10])
     (.mk [0, 1] [.op ⟨1⟩ [10] minus [1, 0]] [10]) = some false := by
   decide +kernel
 
 /-- `(x + y) + z` against `x + (y + z)`: the same value only by the associativity of addition,
 which is not a law that following knows; only the order of two operands is. -/
-example : decided [] [.nat, .nat, .nat] [.nat] false false
+example : decided [] [.nat, .nat, .nat] [.nat] false
     (.mk [0, 1, 2] [.op ⟨1⟩ [10] plus [0, 1], .op ⟨2⟩ [11] plus [10, 2]] [11])
     (.mk [0, 1, 2] [.op ⟨1⟩ [10] plus [1, 2], .op ⟨2⟩ [11] plus [0, 10]] [11]) = some false := by
   decide +kernel
@@ -222,7 +221,7 @@ example : decided [] [.nat, .nat, .nat] [.nat] false false
 /-- A row of the vocabulary with its operands exchanged: the addition of field elements does not
 commute for the analysis, whatever a model does; that a row commutes would be a law of the
 model. -/
-example : decided [] [F, F] [F] false false
+example : decided [] [F, F] [F] false
     (.mk [0, 1] [.op ⟨1⟩ [10] (fieldRow .add) [0, 1]] [10])
     (.mk [0, 1] [.op ⟨1⟩ [10] (fieldRow .add) [1, 0]] [10]) = some false := by
   decide +kernel
@@ -238,31 +237,31 @@ def conjunctionOf (equalityFirst : Bool) : Region (LocalRaw field) Unit := .mk [
 /-- `c := e && t` against `c := t && e`: refused. The conjunction does not commute for the table,
 since the check of facts learns its operands in the order written (`FactsTests.learnedInOrder`):
 the two are other values, and the guard of the second is not the skeleton's entry. -/
-example : decided [] [.nat, .nat] [.nat] true true (conjunctionOf true) (conjunctionOf false) =
+example : decided [] [.nat, .nat] [.nat] true (conjunctionOf true) (conjunctionOf false) =
     some false := by
   decide +kernel
 
 /-- Two guards in the other order: which one stops first is kept. -/
-example : decided [] [.bool, .bool] [] true true
+example : decided [] [.bool, .bool] [] true
     (.mk [0, 1] [.guard ⟨1⟩ () 0 .reject, .guard ⟨2⟩ () 1 .reject] [])
     (.mk [0, 1] [.guard ⟨2⟩ () 1 .reject, .guard ⟨1⟩ () 0 .reject] []) = some false := by
   decide +kernel
 
-/-- A guard dropped. -/
-example : decided [] [.nat, .bool] [.nat] true false
-    (.mk [0, 1] [.guard ⟨1⟩ () 1 .reject] [0])
-    (.mk [0, 1] [] [0]) = some false := by
+/-- A guard dropped, the other kept: the function can still stop, with the same header. -/
+example : decided [] [.nat, .bool, .bool] [.nat] true
+    (.mk [0, 1, 2] [.guard ⟨1⟩ () 1 .reject, .guard ⟨2⟩ () 2 .reject] [0])
+    (.mk [0, 1, 2] [.guard ⟨2⟩ () 2 .reject] [0]) = some false := by
   decide +kernel
 
 /-- A call of a function that can stop, moved across a guard: such a call is kept in order. -/
-example : decided [callee true] [.nat, .bool] [.nat] true true
+example : decided [callee true] [.nat, .bool] [.nat] true
     (.mk [0, 1] [.op ⟨1⟩ [10] (.call ⟨9⟩) [0], .guard ⟨2⟩ () 1 .reject] [10])
     (.mk [0, 1] [.guard ⟨2⟩ () 1 .reject, .op ⟨1⟩ [10] (.call ⟨9⟩) [0]] [10]) = some false := by
   decide +kernel
 
 /-- Two loops against one loop that computes the same: following keeps every loop in order, as an
 entry of the skeleton, and does not decide the fusion of loops. -/
-example : decided [] [.nat, .nat] [.nat, .nat] false false
+example : decided [] [.nat, .nat] [.nat, .nat] false
     (.mk [0, 1] [
       .op ⟨1⟩ [10] (natural 0) [],
       .loop ⟨2⟩ () (.fixed 3) [10] [11] (.mk [20, 21] [.op ⟨3⟩ [22] plus [21, 0]] [22]),
@@ -276,7 +275,7 @@ example : decided [] [.nat, .nat] [.nat, .nat] false false
   decide +kernel
 
 /-- A different key on a guard: where it stops is part of what it does. -/
-example : decided [] [.nat, .bool] [.nat] true true
+example : decided [] [.nat, .bool] [.nat] true
     (.mk [0, 1] [.guard ⟨1⟩ () 1 .reject] [0])
     (.mk [0, 1] [.guard ⟨2⟩ () 1 .reject] [0]) = some false := by
   decide +kernel
@@ -296,7 +295,7 @@ def chosen : Region (LocalRaw field) Unit := .mk [0, 1, 2] [
 
 /-- A choice: the same program with other names for its inputs, the values of its regions and
 its result. -/
-example : decided [] [.bool, .nat, .nat] [.nat] false false chosen
+example : decided [] [.bool, .nat, .nat] [.nat] false chosen
     (.mk [5, 6, 7] [
       .choose ⟨1⟩ () 5 [40]
         (.mk [] [.op ⟨2⟩ [50] plus [6, 7]] [50])
@@ -307,7 +306,7 @@ example : decided [] [.bool, .nat, .nat] [.nat] false false chosen
 /-- A value moved out of a region of a choice, to before the choice: the sum, which has no
 domain, so that computing it where the region does not run is safe. The first region gives it.
 -/
-example : decided [] [.bool, .nat, .nat] [.nat] false false chosen
+example : decided [] [.bool, .nat, .nat] [.nat] false chosen
     (.mk [0, 1, 2] [
       .op ⟨2⟩ [20] plus [1, 2],
       .choose ⟨1⟩ () 0 [10]
@@ -318,7 +317,7 @@ example : decided [] [.bool, .nat, .nat] [.nat] false false chosen
 
 /-- A value moved into a region of a choice: the product computed before the choice and given
 by its second region, against the product computed in that region. -/
-example : decided [] [.bool, .nat, .nat] [.nat] false false
+example : decided [] [.bool, .nat, .nat] [.nat] false
     (.mk [0, 1, 2] [
       .op ⟨3⟩ [30] times [1, 2],
       .choose ⟨1⟩ () 0 [10]
@@ -338,7 +337,7 @@ def analysed : Region (LocalRaw field) Unit := .mk [0, 1] [
 
 /-- A case analysis: the same program with other names for its inputs, the payloads of its arms,
 their values and its result. -/
-example : decided [] [natOrTruth, .nat] [.nat] false false analysed
+example : decided [] [natOrTruth, .nat] [.nat] false analysed
     (.mk [3, 4] [
       .cases ⟨1⟩ () 3 [40]
         [.mk [50] [.op ⟨2⟩ [51] plus [50, 4]] [51],
@@ -352,7 +351,7 @@ def blocked : Region (LocalRaw field) Unit := .mk [0, 1] [
   .op ⟨3⟩ [11] times [10, 0]] [11]
 
 /-- A block: the same program with other names. -/
-example : decided [] [.nat, .nat] [.nat] false false blocked
+example : decided [] [.nat, .nat] [.nat] false blocked
     (.mk [5, 6] [
       .block ⟨1⟩ 0 [40] (.mk [] [.op ⟨2⟩ [50] plus [5, 6]] [50]),
       .op ⟨3⟩ [41] times [40, 5]] [41]) = some true := by
@@ -365,7 +364,7 @@ def counted : Region (LocalRaw field) Unit := .mk [0, 1] [
 
 /-- A loop as often as a value says: the same program with other names, the count's among them.
 -/
-example : decided [] [.nat, .nat] [.nat] false false counted
+example : decided [] [.nat, .nat] [.nat] false counted
     (.mk [5, 6] [
       .loop ⟨1⟩ () (.count 6) [5] [40] (.mk [50, 51] [.op ⟨2⟩ [52] plus [51, 50]] [52])] [40]) =
     some true := by
@@ -379,7 +378,7 @@ def calling : Region (LocalRaw field) Unit := .mk [0, 1] [
 
 /-- A call of a function that can stop, an effect kept in order: the same program with other
 names. -/
-example : decided [callee true] [.nat, .nat] [.nat, .nat] true true calling
+example : decided [callee true] [.nat, .nat] [.nat, .nat] true calling
     (.mk [5, 6] [
       .op ⟨1⟩ [40] plus [5, 6],
       .op ⟨2⟩ [41] (.call ⟨9⟩) [40],
@@ -387,7 +386,7 @@ example : decided [callee true] [.nat, .nat] [.nat, .nat] true true calling
   decide +kernel
 
 /-- A value moved across a call of a function that can stop: the product, before the call. -/
-example : decided [callee true] [.nat, .nat] [.nat, .nat] true true calling
+example : decided [callee true] [.nat, .nat] [.nat, .nat] true calling
     (.mk [0, 1] [
       .op ⟨1⟩ [10] plus [0, 1],
       .op ⟨3⟩ [12] times [0, 1],
@@ -401,14 +400,14 @@ by the comparison of that part. -/
 
 /-- Only a guard's condition differs, with the same key and the same reason: refused by the
 comparison of the condition's identifier. -/
-example : decided [] [.bool, .bool] [] true true
+example : decided [] [.bool, .bool] [] true
     (.mk [0, 1] [.guard ⟨1⟩ () 0 .reject] [])
     (.mk [0, 1] [.guard ⟨1⟩ () 1 .reject] []) = some false := by
   decide +kernel
 
 /-- Only a guard's reason differs, with the same key and the same condition: refused by the
 comparison of the reasons, since the reason is what the guard stops with. -/
-example : decided [] [.bool] [] true true
+example : decided [] [.bool] [] true
     (.mk [0] [.guard ⟨1⟩ () 0 .reject] [])
     (.mk [0] [.guard ⟨1⟩ () 0 .refused] []) = some false := by
   decide +kernel
@@ -421,7 +420,7 @@ def choiceOn (condition : Nat) : Region (LocalRaw field) Unit := .mk [0, 1, 2, 3
     (.mk [] [.op ⟨3⟩ [30] times [2, 3]] [30])] [10]
 
 /-- Only a choice's condition differs: refused by the comparison of the condition's identifier. -/
-example : decided [] [.bool, .bool, .nat, .nat] [.nat] false false (choiceOn 0) (choiceOn 1) =
+example : decided [] [.bool, .bool, .nat, .nat] [.nat] false (choiceOn 0) (choiceOn 1) =
     some false := by
   decide +kernel
 
@@ -434,13 +433,13 @@ def casesOn (subject : Nat) : Region (LocalRaw field) Unit := .mk [0, 1, 2] [
 
 /-- Only the subject of a case analysis differs: refused by the comparison of the subject's
 identifier. -/
-example : decided [] [natOrTruth, natOrTruth, .nat] [.nat] false false (casesOn 0) (casesOn 1) =
+example : decided [] [natOrTruth, natOrTruth, .nat] [.nat] false (casesOn 0) (casesOn 1) =
     some false := by
   decide +kernel
 
 /-- Only a loop's initial values differ: refused by the comparison of the identifiers of the
 initial values. -/
-example : decided [] [.nat, .nat] [.nat] false false
+example : decided [] [.nat, .nat] [.nat] false
     (.mk [0, 1] [
       .loop ⟨1⟩ () (.fixed 2) [0] [10] (.mk [20, 21] [.op ⟨2⟩ [22] plus [21, 21]] [22])] [10])
     (.mk [0, 1] [
@@ -454,19 +453,19 @@ def countedBy (count : Nat) : Region (LocalRaw field) Unit := .mk [0, 1, 2] [
   .loop ⟨1⟩ () (.count count) [0] [10] (.mk [20, 21] [.op ⟨2⟩ [22] plus [21, 20]] [22])] [10]
 
 /-- Only a loop's count differs: refused by the comparison of the count's identifier. -/
-example : decided [] [.nat, .nat, .nat] [.nat] false false (countedBy 1) (countedBy 2) =
+example : decided [] [.nat, .nat, .nat] [.nat] false (countedBy 1) (countedBy 2) =
     some false := by
   decide +kernel
 
 /-- Only a block's number differs: refused by the comparison of the numbers. -/
-example : decided [] [.nat, .nat] [.nat] false false blocked
+example : decided [] [.nat, .nat] [.nat] false blocked
     (.mk [0, 1] [
       .block ⟨1⟩ 1 [10] (.mk [] [.op ⟨2⟩ [20] plus [0, 1]] [20]),
       .op ⟨3⟩ [11] times [10, 0]] [11]) = some false := by
   decide +kernel
 
 /-- Only a block's key differs: refused by the comparison of the keys. -/
-example : decided [] [.nat, .nat] [.nat] false false blocked
+example : decided [] [.nat, .nat] [.nat] false blocked
     (.mk [0, 1] [
       .block ⟨4⟩ 0 [10] (.mk [] [.op ⟨2⟩ [20] plus [0, 1]] [20]),
       .op ⟨3⟩ [11] times [10, 0]] [11]) = some false := by
@@ -474,24 +473,24 @@ example : decided [] [.nat, .nat] [.nat] false false blocked
 
 /-- Only the operand of a call of a function that can stop differs: refused by the comparison of
 the identifiers of the effect's operands. -/
-example : decided [callee true] [.nat, .nat] [.nat] true true
+example : decided [callee true] [.nat, .nat] [.nat] true
     (.mk [0, 1] [.op ⟨1⟩ [10] (.call ⟨9⟩) [0]] [10])
     (.mk [0, 1] [.op ⟨1⟩ [10] (.call ⟨9⟩) [1]] [10]) = some false := by
   decide +kernel
 
 /-- A second callee, with the key 8, from a natural to a natural, which can stop too. -/
-def otherCallee : FnHeader field := ⟨⟨8⟩, [.nat], [.nat], true, none⟩
+def otherCallee : FnHeader field := ⟨⟨8⟩, [.nat], [.nat], true, none, Summary.empty⟩
 
 /-- Only the callee of a call of a function that can stop differs, between two callees of one
 header but their keys: refused by the comparison of the effects' written operations. -/
-example : decided [callee true, otherCallee] [.nat] [.nat] true true
+example : decided [callee true, otherCallee] [.nat] [.nat] true
     (.mk [0] [.op ⟨1⟩ [10] (.call ⟨9⟩) [0]] [10])
     (.mk [0] [.op ⟨1⟩ [10] (.call ⟨8⟩) [0]] [10]) = some false := by
   decide +kernel
 
 /-- Only the key of a call of a function that can stop differs: refused by the comparison of the
 effects' keys, since where it stops is part of what it does. -/
-example : decided [callee true] [.nat] [.nat] true true
+example : decided [callee true] [.nat] [.nat] true
     (.mk [0] [.op ⟨1⟩ [10] (.call ⟨9⟩) [0]] [10])
     (.mk [0] [.op ⟨2⟩ [10] (.call ⟨9⟩) [0]] [10]) = some false := by
   decide +kernel
@@ -508,11 +507,11 @@ theorem noCallees_callees (M : Model field) : Callees M (noCallees M) :=
 
 /-- The whole verdict on the two bodies: the second follows the first with no place that differs
 and no refusal. -/
-example : safelyFollows [] guarded [.nat, .nat] true true aroundGuards afterGuards = some true := by
+example : safelyFollows [] guarded [.nat, .nat] true aroundGuards afterGuards = some true := by
   decide +kernel
 
 /-- The header of the two bodies: the key 1, no callee, and it can stop. -/
-def guardedHeader : FnHeader field := ⟨⟨1⟩, guarded, [.nat, .nat], true, none⟩
+def guardedHeader : FnHeader field := ⟨⟨1⟩, guarded, [.nat, .nat], true, none, Summary.empty⟩
 
 /-- A stored function typed against no callee; nothing when it does not elaborate. -/
 def typed (hdr : FnHeader field) (body : Region (LocalRaw field) Unit) :
@@ -535,18 +534,20 @@ example : afterGuardsFn.Assured [] ∧ aroundGuardsFn.SameAs afterGuardsFn :=
   TypedFn.follows_assured (aroundGuardsFn.check_assured (bounds := []) (by decide +kernel)).safe
     (by decide +kernel)
 
-/-- So the two processes are equal, in a model and on valid inputs. -/
+/-- So the two processes are equal, in a model and on valid inputs, of which the empty summary
+requires nothing. -/
 example (M : Model field) (ins : HList M.Val guarded) (valid : ins.All M.Valid) :
     aroundGuardsFn.meaning M (noCallees M) ins = afterGuardsFn.meaning M (noCallees M) ins :=
   (TypedFn.follows_assured (aroundGuardsFn.check_assured (bounds := []) (by decide +kernel)).safe
     (bounds := []) (by decide +kernel)).2 M (noCallees M) (noCallees_callees M) ins valid
+    (fun _ listed => nomatch listed)
 
 /-- The whole verdict on `x + y` and `y + x`: accepted. -/
-example : safelyFollows [] [.nat, .nat] [.nat] false false sum commutedSum = some true := by
+example : safelyFollows [] [.nat, .nat] [.nat] false sum commutedSum = some true := by
   decide +kernel
 
 /-- The header of the sum: the key 1, no callee, and it cannot stop. -/
-def sumHeader : FnHeader field := ⟨⟨1⟩, [.nat, .nat], [.nat], false, none⟩
+def sumHeader : FnHeader field := ⟨⟨1⟩, [.nat, .nat], [.nat], false, none, Summary.empty⟩
 
 /-- `x + y`, as a typed function. -/
 def sumFn := (typed sumHeader sum).get (by decide +kernel)
@@ -560,6 +561,7 @@ example (M : Model field) (ins : HList M.Val [.nat, .nat]) (valid : ins.All M.Va
     sumFn.meaning M (noCallees M) ins = commutedSumFn.meaning M (noCallees M) ins :=
   (TypedFn.follows_assured (sumFn.check_assured (bounds := []) (by decide +kernel)).safe
     (bounds := []) (by decide +kernel)).2 M (noCallees M) (noCallees_callees M) ins valid
+    (fun _ listed => nomatch listed)
 
 /-! ## Controls on the definitions of the value form -/
 
@@ -603,13 +605,14 @@ def toySem : Semantics toy where
 /-- Asking is kept in order; failing is a value; nothing commutes; nothing is known of a type or
 of an operation. -/
 def toyRules : FactRules toy Unit where
-  written := fun {_ _} o => match o with
-    | .ask => none
-    | .fail => some ()
+  written := fun _ => ()
+  shared := fun {_ _} o => match o with
+    | .ask => false
+    | .fail => true
   commutes := fun _ => false
   range := fun _ => none
   noValue := fun _ => false
-  ops := ⟨fun _ => [], fun _ _ => [], fun _ => none⟩
+  ops := ⟨fun _ => [], fun _ => [], fun _ _ => [], fun _ => none⟩
   place := fun _ => 0
 
 /-- Following decides types and performers by equality, and finds any two operations the
@@ -646,15 +649,15 @@ def attemptedOtherKey : Term toy Ctx.empty [()] :=
 /-- The attempt with other names follows the analysis of the first: the attempt is the
 skeleton's entry, the leaves of its number and of what it gives are the entry's, and the call in
 its body is the entry's next. The whole verdict accepts it. -/
-example : (Analysis.follow toyRules toyChecks ⟨1⟩ none
-    (Analysis.analyse toyRules toyChecks ⟨1⟩ none .nil attempted) .nil
+example : (Analysis.follow toyRules toyChecks ⟨1⟩ none Summary.empty
+    (Analysis.analyse toyRules toyChecks ⟨1⟩ none Summary.empty .nil attempted) .nil
     attemptedOtherNames).accepted = true := by
   decide +kernel
 
 /-- The attempt with another key differs, at the attempt: where it stops is part of what it
 does. -/
-example : (Analysis.follow toyRules toyChecks ⟨1⟩ none
-    (Analysis.analyse toyRules toyChecks ⟨1⟩ none .nil attempted) .nil
+example : (Analysis.follow toyRules toyChecks ⟨1⟩ none Summary.empty
+    (Analysis.analyse toyRules toyChecks ⟨1⟩ none Summary.empty .nil attempted) .nil
     attemptedOtherKey).state.differs = [⟨⟨1⟩, [], some ⟨3⟩, none⟩] := by
   decide +kernel
 
@@ -721,7 +724,7 @@ theorem toyBinding : toyRules.values.Binding toySem (fun _ _ _ => False) (· = t
   computes := by
     intro _ _ o raw written key path values
     cases o with
-    | ask => cases written
+    | ask => cases (toyRules.values_written_kept rfl).symm.trans written
     | fail => exact .inr ⟨true, rfl, rfl⟩
   functional := fun _ _ _ _ ran => ran.elim
   commutative := fun _ _ _ _ _ ran => ran.elim

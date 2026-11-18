@@ -7,7 +7,8 @@ public import Zkc.Core.Program.Linear
 
 /-!
 A typed program: its definitions, each with the names of its inputs and what elaboration decided
-about its body, and the lookup of a definition by its key. The body of a definition is a term in
+about its body, and the lookup of a definition, and of a protocol (`Typed.findProtocol`), by its
+key. The body of a definition is a term in
 the context of its inputs, by their names; a header has no names, since a caller passes by
 position. Also one definition elaborated against the headers before it (`Elaborated`), the
 program extended by it (`Typed.add`), whether a function or a local operation can stop
@@ -48,9 +49,10 @@ def Fn.canStop {V : Vocabulary} {fns : List (FnHeader V)} {hdr : FnHeader V}
 
 /-- What elaboration decides about the body of a function: its instructions have their own
 addresses, every value of a linear type is used once, its header says whether it can stop
-with a reason as its body does, its case analyses without an arm give nothing, and every name
-is bound at one place. With these a typed function is one that a program by names writes: its
-erased form elaborates to it. -/
+with a reason as its body does, its case analyses without an arm give nothing, every name
+is bound at one place, and the positions that the summary of its header names are within its
+inputs, and for a guarantee its inputs and results. With these a typed function is one that a
+program by names writes: its erased form elaborates to it. -/
 structure FnConditions {V : Vocabulary} {fns : List (FnHeader V)} {hdr : FnHeader V}
     {inputs : Names hdr.ins} (body : Fn V fns hdr inputs) : Prop where
   distinct : Term.Distinct body
@@ -58,6 +60,7 @@ structure FnConditions {V : Vocabulary} {fns : List (FnHeader V)} {hdr : FnHeade
   stops : hdr.canStop = body.canStop
   armed : body.armed = true
   once : body.BoundOnce inputs.toList
+  summary : hdr.summary.InRange hdr.ins.length hdr.outs.length
 
 /-- What elaboration decides about the body of a protocol: its roles are those below the
 number in its header (nobody else acts in the body, and its ports and results are held by no
@@ -173,6 +176,11 @@ theorem Member.key_mem (keyOf : α → Key) : ∀ {items : List α} {a : α}, Me
   | _ :: _, _, .head => List.mem_cons_self
   | _ :: _, _, .tail x => List.mem_cons_of_mem _ (Member.key_mem keyOf x)
 
+/-- An item at a position of a list is in the list. -/
+theorem Member.mem : ∀ {items : List α} {a : α}, Member items a → a ∈ items
+  | _ :: _, _, .head => List.mem_cons_self
+  | _ :: _, _, .tail x => List.mem_cons_of_mem _ (Member.mem x)
+
 theorem Member.withKey_absent (keyOf : α → Key) (key : Key) : ∀ {items : List α},
     key ∉ items.map keyOf → Member.withKey keyOf key items = []
   | [], _ => rfl
@@ -223,12 +231,21 @@ def Headers.find {V : Vocabulary} (hs : Headers V) (key : Key) : Option (Ref hs)
   | [found] => some found
   | _ => none
 
-/-- A definition of a typed program, as a typed reference. -/
-abbrev Subject {V : Vocabulary} (p : Typed V) : Type := Ref p.headers
-
-/-- The definition of a typed program with the key. -/
-def Typed.find {V : Vocabulary} (p : Typed V) (key : Key) : Option (Subject p) :=
+/-- The definition of a typed program with the key, as a typed reference. -/
+def Typed.find {V : Vocabulary} (p : Typed V) (key : Key) : Option (Ref p.headers) :=
   p.headers.find key
+
+/-- The protocol of a typed program with the key, with its reference among the program's
+protocols. -/
+def Typed.findProtocol {V : Vocabulary} (p : Typed V) (key : Key) :
+    Option ((hdr : ProtocolHeader V) × Member p.headers.protocols hdr) :=
+  (Member.withKey (·.key) key p.headers.protocols).head?
+
+/-- The protocol found with a key has that key. -/
+theorem Typed.findProtocol_key {V : Vocabulary} {p : Typed V} {key : Key}
+    {found : (hdr : ProtocolHeader V) × Member p.headers.protocols hdr}
+    (h : p.findProtocol key = some found) : found.1.key = key :=
+  Member.key_of_withKey (fun hdr : ProtocolHeader V => hdr.key) key (List.mem_of_mem_head? h)
 
 
 /-- The keys of the definitions that the definition with the key reaches by calls and
@@ -246,7 +263,7 @@ def Defs.closureOf {V : Vocabulary} : {hs : Headers V} → Defs V hs → Key →
 
 /-- The keys of the definitions that a definition reaches by calls and applications, itself
 included. -/
-def Subject.closure {V : Vocabulary} {p : Typed V} (s : Subject p) : List Key :=
-  p.defs.closureOf s.key
+def Ref.closure {V : Vocabulary} {p : Typed V} (definition : Ref p.headers) : List Key :=
+  p.defs.closureOf definition.key
 
 end Zkc.Core

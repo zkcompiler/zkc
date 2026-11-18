@@ -13,6 +13,13 @@ attempts that reached it, then its key.
 
 namespace Zkc.Core
 
+/-- That the equality of naturals as a truth value is equality, from its decision. Names, roles
+and the numbers of keys are naturals, and lemmas about `==` on them ask for this fact. Since
+Lean 4.36 instance search finds it through the order of naturals, in a way that depends on
+`Classical.choice`; the core takes the one that depends on no axiom. It is scoped: it applies
+inside `Zkc.Core` and its namespaces and to nobody who only imports the core. -/
+scoped instance (priority := high) lawfulEqualityOfNaturals : LawfulBEq Nat := instLawfulBEq
+
 /-- The key of a definition or of an instruction: of the event, the block, the loop, the
 choice, the guard or the application that the instruction is. The producer gives it. The meaning
 of an interactive protocol does not depend on which keys are chosen; the identity of a deployed

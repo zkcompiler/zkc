@@ -29,7 +29,8 @@ instruction that is found, that instruction's entry, with the parts that the wal
 lemmas `*Entry_hit`). That new identifiers and a shared application keep the table well formed,
 and that binding names keeps every name in scope with an identifier below the next
 (`FactCheck.InScope`), is in `Value/Valuation.lean`; that deciding the requirements of an
-application does, here (`FactCheck.checkRequirements_grows`).
+application does, and learning requirements that hold, here (`FactCheck.checkRequirements_grows`,
+`FactCheck.learnRequirements_grows`).
 -/
 
 namespace Zkc.Core
@@ -111,6 +112,20 @@ theorem checkRequirements_grows (ops : OpFacts Raw) (k : Known) (place : Place) 
           rcases List.mem_append.mp m with m | m
           · exact Nat.le_trans g1.next (l2 e m)
           · exact l1 e m⟩⟩
+
+theorem learnRequirements_grows (ops : OpFacts Raw) (ids : List Nat) :
+    ∀ (reqs : List (Requirement Raw)) (k : Known) (st : St T Raw), Table.WF st.next st.table →
+      (∀ a, a ∈ ids → a < st.next) →
+      Table.WF (learnRequirements ops ids reqs k st).2.next
+          (learnRequirements ops ids reqs k st).2.table ∧
+        St.Grows st (learnRequirements ops ids reqs k st).2
+  | [], _, st, wf, _ => ⟨wf, St.Grows.refl st⟩
+  | req :: rest, k, st, wf, hlt => by
+      simp only [learnRequirements]
+      obtain ⟨wf1, g1⟩ := operandIds_grows ids req.operands st wf hlt
+      obtain ⟨wf2, g2⟩ := learnRequirements_grows ops ids rest _ _ wf1
+        (fun a m => Nat.lt_of_lt_of_le (hlt a m) g1.next)
+      exact ⟨wf2, g1.trans g2⟩
 
 end
 
@@ -519,22 +534,48 @@ theorem Adds.leaves (A : List (List (Key × Nat) × Key)) (followed : Option Nat
   · exact Adds.of_refusals ⟨[], rfl⟩ rfl rfl
   · exact Adds.refl A s
 
+/-- Deciding the requirements of an application adds refusals, and keeps the bounds and the
+places. -/
+theorem Adds.requirements [DecidableEq Raw] (A : List (List (Key × Nat) × Key))
+    (ops : OpFacts Raw) (k : Known) (place : Place) (written : Raw) (argIds : List Nat)
+    (reqs : List (Requirement Raw)) (s : State D.Ty Raw) :
+    Adds definition role A s
+      { s with st := checkRequirements ops k place written argIds reqs s.st } :=
+  Adds.of_refusals (checkRequirements_state ops k place written argIds reqs s.st).1
+    (checkRequirements_state ops k place written argIds reqs s.st).2 rfl
+
 end
 
 section
 variable {D : Dialect} {Raw : Type} [DecidableEq Raw] (rules : FactRules D Raw)
 
-/-- A value adds refusals and keeps the bounds. -/
-theorem valueStep_state (place : Place) (written : Raw) (res : List D.Ty) (argIds : List Nat)
-    (k : Known) (st : St D.Ty Raw) :
-    (∃ new, (valueStep rules place written res argIds k st).2.2.refusals = new ++ st.refusals) ∧
-      (valueStep rules place written res argIds k st).2.2.bounds = st.bounds := by
+/-- A value keeps the refusals and the bounds. -/
+theorem valueStep_state (written : Raw) (res : List D.Ty) (argIds : List Nat) (k : Known)
+    (st : St D.Ty Raw) :
+    (valueStep rules written res argIds k st).2.2.refusals = st.refusals ∧
+      (valueStep rules written res argIds k st).2.2.bounds = st.bounds := by
   simp only [valueStep]
-  obtain ⟨⟨new, e⟩, b⟩ := checkRequirements_state rules.ops k place written argIds
-    (rules.ops.requires written) st
-  obtain ⟨r2, b2⟩ := share_state written (rules.values.order written argIds) res.length
-    (checkRequirements rules.ops k place written argIds (rules.ops.requires written) st)
-  exact ⟨⟨new, by rw [r2, e]⟩, by rw [b2, b]⟩
+  obtain ⟨r1, b1⟩ := share_state written (rules.values.order written argIds) res.length st
+  obtain ⟨r2, b2⟩ := learnRequirements_state rules.ops _ (rules.ops.ensures written) _
+    (share written (rules.values.order written argIds) res.length st).2
+  exact ⟨r2.trans r1, b2.trans b1⟩
+
+/-- An operation kept in order, once its results have their identifiers, keeps the refusals and
+the bounds. -/
+theorem effectStep_state (written : Raw) (res : List D.Ty) (argIds made : List Nat) (k : Known)
+    (st : St D.Ty Raw) :
+    (effectStep rules written res argIds made k st).2.refusals = st.refusals ∧
+      (effectStep rules written res argIds made k st).2.bounds = st.bounds :=
+  learnRequirements_state rules.ops _ _ _ st
+
+/-- What an operation kept in order learns once its results have their identifiers adds nothing
+to the state. -/
+theorem Adds.effect {definition : Key} {role : Option Role} (A : List (List (Key × Nat) × Key))
+    (written : Raw) (res : List D.Ty) (argIds made : List Nat) (k : Known) (s : State D.Ty Raw) :
+    Adds definition role A s
+      { s with st := (effectStep rules written res argIds made k s.st).2 } := by
+  obtain ⟨r, b⟩ := effectStep_state rules written res argIds made k s.st
+  exact Adds.of_refusals ⟨[], by rw [r]; rfl⟩ b rfl
 
 variable (checks : SkelRules D) (definition : Key) (role : Option Role)
 
@@ -559,20 +600,27 @@ mutual
     | _, _, .ret _, followed, ids, k, s => by
         simp only [walk]
         exact Adds.miss _ _ _ _ s
-    | _, _, .op key o args results rest, followed, ids, k, s => by
-        cases hw : rules.written o with
-        | some written =>
-            simp only [walk, hw]
-            obtain ⟨r, b⟩ := valueStep_state rules ⟨definition, blocks, some key, role⟩ written _
-              (idsOf ids args) k s.st
+    | _, _, .op (res := res) key o args results rest, followed, ids, k, s => by
+        have checked := Adds.requirements (definition := definition) (role := role) [] rules.ops k
+          ⟨definition, blocks, some key, role⟩ (rules.written o) (idsOf ids args)
+          (rules.ops.requires (rules.written o)) s
+        cases hs : rules.shared o with
+        | true =>
+            simp only [walk, hs]
+            obtain ⟨r, b⟩ := valueStep_state rules (rules.written o) res (idsOf ids args) k
+              (checkRequirements rules.ops k ⟨definition, blocks, some key, role⟩ (rules.written o)
+                (idsOf ids args) (rules.ops.requires (rules.written o)) s.st)
             refine Adds.trans (A := []) ?_ (walk_adds blocks rest _ _ _ _) (fun _ m => nomatch m)
               (fun _ m => List.mem_cons_of_mem _ m)
-            exact Adds.of_refusals r b rfl
-        | none =>
-            simp only [walk, hw]
+            exact checked.trans (Adds.of_refusals ⟨[], by rw [r]; rfl⟩ b rfl) (fun _ m => m)
+              (fun _ m => m)
+        | false =>
+            simp only [walk, hs]
             refine Adds.trans (A := []) ?_ (walk_adds blocks rest _ _ _ _) (fun _ m => nomatch m)
               (fun _ m => List.mem_cons_of_mem _ m)
-            exact (Adds.miss [] _ _ _ s).trans (Adds.leaves [] _ _ _) (fun _ m => m) (fun _ m => m)
+            exact checked.trans (((Adds.miss [] _ _ _ _).trans (Adds.leaves [] _ _ _)
+              (fun _ m => m) (fun _ m => m)).trans (Adds.effect rules [] _ _ _ _ _ _)
+              (fun _ m => m) (fun _ m => m)) (fun _ m => m) (fun _ m => m)
     | _, _, .guard key _ c _ _ rest, followed, ids, k, s => by
         simp only [walk]
         exact (Adds.miss [] _ _ _ s).trans (walk_adds blocks rest _ _ _ _) (fun _ m => nomatch m)
@@ -1111,21 +1159,33 @@ theorem leaves_fits {T : Type} (hit : Option Nat) (count : Nat) (s : State T Raw
 
 /-- A value builds above the state: the table stays well formed and grows, and its results are as
 many as its types and below the next identifier. -/
-theorem valueStep_grows (place : Place) (written : Raw) (res : List D.Ty) (argIds : List Nat)
-    (k : Known) (st : St D.Ty Raw) (wf : Table.WF st.next st.table)
-    (hlt : ∀ a, a ∈ argIds → a < st.next) :
-    Table.WF (valueStep rules place written res argIds k st).2.2.next
-        (valueStep rules place written res argIds k st).2.2.table ∧
-      St.Grows st (valueStep rules place written res argIds k st).2.2 ∧
-      (∀ i, i ∈ (valueStep rules place written res argIds k st).1 →
-        i < (valueStep rules place written res argIds k st).2.2.next) ∧
-      (valueStep rules place written res argIds k st).1.length = res.length := by
+theorem valueStep_grows (written : Raw) (res : List D.Ty) (argIds : List Nat) (k : Known)
+    (st : St D.Ty Raw) (wf : Table.WF st.next st.table) (hlt : ∀ a, a ∈ argIds → a < st.next) :
+    Table.WF (valueStep rules written res argIds k st).2.2.next
+        (valueStep rules written res argIds k st).2.2.table ∧
+      St.Grows st (valueStep rules written res argIds k st).2.2 ∧
+      (∀ i, i ∈ (valueStep rules written res argIds k st).1 →
+        i < (valueStep rules written res argIds k st).2.2.next) ∧
+      (valueStep rules written res argIds k st).1.length = res.length := by
   simp only [valueStep]
-  obtain ⟨wf1, g1⟩ := checkRequirements_grows rules.ops k place written argIds
-    (rules.ops.requires written) st wf hlt
-  obtain ⟨wf2, g2, lt⟩ := share_grows written (rules.values.order written argIds) res.length _ wf1
-    (rules.values.order_lt fun a m => Nat.lt_of_lt_of_le (hlt a m) g1.next)
-  exact ⟨wf2, g1.trans g2, lt, share_length _ _ _ _⟩
+  obtain ⟨wf2, g2, lt⟩ := share_grows written (rules.values.order written argIds) res.length _ wf
+    (rules.values.order_lt hlt)
+  obtain ⟨wf3, g3⟩ := learnRequirements_grows rules.ops _ (rules.ops.ensures written) _ _ wf2
+    (fun a m => by
+      rcases List.mem_append.mp m with m | m
+      · exact Nat.lt_of_lt_of_le (hlt a m) g2.next
+      · exact lt a m)
+  exact ⟨wf3, g2.trans g3, fun i m => Nat.lt_of_lt_of_le (lt i m) g3.next, share_length _ _ _ _⟩
+
+/-- An operation kept in order, once its results have their identifiers below the next, builds
+above the state. -/
+theorem effectStep_grows (written : Raw) (res : List D.Ty) (argIds made : List Nat) (k : Known)
+    (st : St D.Ty Raw) (wf : Table.WF st.next st.table)
+    (hlt : ∀ a, a ∈ argIds ++ made → a < st.next) :
+    Table.WF (effectStep rules written res argIds made k st).2.next
+        (effectStep rules written res argIds made k st).2.table ∧
+      St.Grows st (effectStep rules written res argIds made k st).2 :=
+  learnRequirements_grows rules.ops _ _ _ st wf hlt
 
 variable (checks : SkelRules D) (definition : Key) (role : Option Role)
 
@@ -1144,35 +1204,56 @@ mutual
         simp only [walk, miss_st]
         exact ⟨⟨fits.1, idsOf_lt fits.2 xs⟩, St.Grows.refl _⟩
     | _, _, .op (res := res) key o args results rest, followed, ids, k, s, fits, below => by
-        cases hw : rules.written o with
-        | some written =>
-            simp only [walk, hw]
-            obtain ⟨wf1, g1, lt1, len1⟩ := valueStep_grows rules ⟨definition, blocks, some key, role⟩
-              written res (idsOf ids args) k s.st fits.1 (idsOf_lt fits.2 args)
-            generalize valueStep rules ⟨definition, blocks, some key, role⟩ written res
-              (idsOf ids args) k s.st = step at wf1 g1 lt1 len1 ⊢
-            obtain ⟨fits2, g2⟩ := walk_grows blocks rest followed (bindIds ids results step.1)
+        obtain ⟨wf₁, g₁⟩ := checkRequirements_grows rules.ops k ⟨definition, blocks, some key, role⟩
+          (rules.written o) (idsOf ids args) (rules.ops.requires (rules.written o)) s.st fits.1
+          (idsOf_lt fits.2 args)
+        cases hs : rules.shared o with
+        | true =>
+            simp only [walk, hs]
+            generalize checkRequirements rules.ops k ⟨definition, blocks, some key, role⟩
+              (rules.written o) (idsOf ids args) (rules.ops.requires (rules.written o)) s.st = st₁
+              at wf₁ g₁ ⊢
+            obtain ⟨wf2, g2, lt2, len2⟩ := valueStep_grows rules (rules.written o) res
+              (idsOf ids args) k st₁ wf₁
+              (fun a m => Nat.lt_of_lt_of_le (idsOf_lt fits.2 args a m) g₁.next)
+            generalize valueStep rules (rules.written o) res (idsOf ids args) k st₁ = step
+              at wf2 g2 lt2 len2 ⊢
+            obtain ⟨fits3, g3⟩ := walk_grows blocks rest followed (bindIds ids results step.1)
               step.2.1 { s with st := step.2.2 }
-              ⟨wf1, (fits.2.mono g1.next).bind results _ len1 lt1⟩ (below.mono g1.next)
-            exact ⟨fits2, g1.trans g2⟩
-        | none =>
-            simp only [walk, hw]
+              ⟨wf2, (fits.2.mono (g₁.trans g2).next).bind results _ len2 lt2⟩
+              (below.mono (g₁.trans g2).next)
+            exact ⟨fits3, (g₁.trans g2).trans g3⟩
+        | false =>
+            simp only [walk, hs]
+            generalize checkRequirements rules.ops k ⟨definition, blocks, some key, role⟩
+              (rules.written o) (idsOf ids args) (rules.ops.requires (rules.written o)) s.st = st₁
+              at wf₁ g₁ ⊢
             obtain ⟨atLeaves, belowRest⟩ :=
-              effectEntry_below checks (key := key) (o := o) (operands := idsOf ids args) below
+              effectEntry_below checks (key := key) (o := o) (operands := idsOf ids args)
+                (below.mono g₁.next)
             generalize effectEntry checks key o (idsOf ids args) followed = hit
               at atLeaves belowRest ⊢
-            have s1 := miss_st ⟨definition, blocks, some key, role⟩ followed.isSome hit.isSome s
-            generalize miss ⟨definition, blocks, some key, role⟩ followed.isSome hit.isSome s = s₁
-              at s1 ⊢
-            obtain ⟨wf1, g1, len1, lt1⟩ := leaves_fits (hit.map (·.1)) res.length s₁
-              (by rw [s1]; exact fits.1) (by rw [s1]; exact atLeaves)
-            rw [s1] at g1
-            obtain ⟨fits2, g2⟩ := walk_grows blocks rest (hit.map (·.2))
-              (bindIds ids results (leaves (hit.map (·.1)) res.length s₁).1)
-              ((k.addRanges (leaves (hit.map (·.1)) res.length s₁).1 (res.map rules.range)).enter
-                rules res) (leaves (hit.map (·.1)) res.length s₁).2
-              ⟨wf1, (fits.2.mono g1.next).bind results _ len1 lt1⟩ (belowRest.mono g1.next)
-            exact ⟨fits2, g1.trans g2⟩
+            have s1 := miss_st ⟨definition, blocks, some key, role⟩ followed.isSome hit.isSome
+              { s with st := st₁ }
+            generalize miss ⟨definition, blocks, some key, role⟩ followed.isSome hit.isSome
+              { s with st := st₁ } = s₁ at s1 ⊢
+            obtain ⟨wf2, g2, len2, lt2⟩ := leaves_fits (hit.map (·.1)) res.length s₁
+              (by rw [s1]; exact wf₁) (by rw [s1]; exact atLeaves)
+            rw [s1] at g2
+            generalize leaves (hit.map (·.1)) res.length s₁ = made at wf2 g2 len2 lt2 ⊢
+            obtain ⟨wf4, g4⟩ := effectStep_grows rules (rules.written o) res (idsOf ids args) made.1
+              k made.2.st wf2 (fun a m => by
+                rcases List.mem_append.mp m with m | m
+                · exact Nat.lt_of_lt_of_le (idsOf_lt fits.2 args a m) (g₁.trans g2).next
+                · exact lt2 a m)
+            generalize effectStep rules (rules.written o) res (idsOf ids args) made.1 k made.2.st =
+              learned at wf4 g4 ⊢
+            obtain ⟨fits3, g3⟩ := walk_grows blocks rest (hit.map (·.2))
+              (bindIds ids results made.1) learned.1 { made.2 with st := learned.2 }
+              ⟨wf4, (fits.2.mono ((g₁.trans g2).trans g4).next).bind results _ len2
+                (fun i m => Nat.lt_of_lt_of_le (lt2 i m) g4.next)⟩
+              (belowRest.mono (g2.trans g4).next)
+            exact ⟨fits3, ((g₁.trans g2).trans g4).trans g3⟩
     | _, _, .guard (t := t) key w c _ why rest, followed, ids, k, s, fits, below => by
         simp only [walk]
         have belowRest := guardEntry_below checks (t := t) (key := key) (w := w)
@@ -1430,32 +1511,49 @@ mutual
         simp only [walk, kept, Option.map_none, Option.getD_none, Option.isSome_none, miss_free]
         exact ⟨Nat.le_refl _, trivial⟩
     | _, _, .op (res := res) key o args results rest, ids, k, s, fits => by
-        cases hw : rules.written o with
-        | some written =>
-            simp only [walk, hw]
-            obtain ⟨wf1, g1, lt1, len1⟩ := valueStep_grows rules ⟨definition, blocks, some key, role⟩
-              written res (idsOf ids args) k s.st fits.1 (idsOf_lt fits.2 args)
-            generalize valueStep rules ⟨definition, blocks, some key, role⟩ written res
-              (idsOf ids args) k s.st = step at wf1 g1 lt1 len1 ⊢
+        obtain ⟨wf₁, g₁⟩ := checkRequirements_grows rules.ops k ⟨definition, blocks, some key, role⟩
+          (rules.written o) (idsOf ids args) (rules.ops.requires (rules.written o)) s.st fits.1
+          (idsOf_lt fits.2 args)
+        cases hs : rules.shared o with
+        | true =>
+            simp only [walk, hs]
+            generalize checkRequirements rules.ops k ⟨definition, blocks, some key, role⟩
+              (rules.written o) (idsOf ids args) (rules.ops.requires (rules.written o)) s.st = st₁
+              at wf₁ g₁ ⊢
+            obtain ⟨wf2, g2, lt2, len2⟩ := valueStep_grows rules (rules.written o) res
+              (idsOf ids args) k st₁ wf₁
+              (fun a m => Nat.lt_of_lt_of_le (idsOf_lt fits.2 args a m) g₁.next)
+            generalize valueStep rules (rules.written o) res (idsOf ids args) k st₁ = step
+              at wf2 g2 lt2 len2 ⊢
             obtain ⟨ordered, apart⟩ := walk_skeleton blocks rest (bindIds ids results step.1)
               step.2.1 { s with st := step.2.2 }
-              ⟨wf1, (fits.2.mono g1.next).bind results _ len1 lt1⟩
-            exact ⟨Skel.Ordered.low ordered g1.next, apart⟩
-        | none =>
-            simp only [walk, hw, effectEntry, kept, Option.map_none, Option.getD_none,
+              ⟨wf2, (fits.2.mono (g₁.trans g2).next).bind results _ len2 lt2⟩
+            exact ⟨Skel.Ordered.low ordered (g₁.trans g2).next, apart⟩
+        | false =>
+            simp only [walk, hs, effectEntry, kept, Option.map_none, Option.getD_none,
               Option.isSome_none, miss_free, leaves]
-            obtain ⟨wf1, g1, lt1⟩ := fresh_grows res.length s.st fits.1
-            have scope := (fits.2.mono g1.next).bind results (fresh res.length s.st).1
-              (by simp [fresh]) lt1
+            generalize checkRequirements rules.ops k ⟨definition, blocks, some key, role⟩
+              (rules.written o) (idsOf ids args) (rules.ops.requires (rules.written o)) s.st = st₁
+              at wf₁ g₁ ⊢
+            obtain ⟨wf2, g2, lt2⟩ := fresh_grows res.length st₁ wf₁
+            obtain ⟨wf4, g4⟩ := effectStep_grows rules (rules.written o) res (idsOf ids args)
+              (fresh res.length st₁).1 k (fresh res.length st₁).2 wf2 (fun a m => by
+                rcases List.mem_append.mp m with m | m
+                · exact Nat.lt_of_lt_of_le (idsOf_lt fits.2 args a m) (g₁.trans g2).next
+                · exact lt2 a m)
+            generalize effectStep rules (rules.written o) res (idsOf ids args)
+              (fresh res.length st₁).1 k (fresh res.length st₁).2 = learned at wf4 g4 ⊢
+            have scope := (fits.2.mono ((g₁.trans g2).trans g4).next).bind results
+              (fresh res.length st₁).1 (by simp [fresh])
+              (fun i m => Nat.lt_of_lt_of_le (lt2 i m) g4.next)
             obtain ⟨ordered, apart⟩ := walk_skeleton blocks rest
-              (bindIds ids results (fresh res.length s.st).1)
-              ((k.addRanges (fresh res.length s.st).1 (res.map rules.range)).enter rules res)
-              { s with st := (fresh res.length s.st).2 } ⟨wf1, scope⟩
-            obtain ⟨-, g2⟩ := walk_grows rules checks definition role blocks rest none
-              (bindIds ids results (fresh res.length s.st).1)
-              ((k.addRanges (fresh res.length s.st).1 (res.map rules.range)).enter rules res)
-              { s with st := (fresh res.length s.st).2 } ⟨wf1, scope⟩ trivial
-            exact ⟨⟨Nat.le_refl _, ordered⟩, LeavesApart.of_fresh res.length fits.1 g2, apart⟩
+              (bindIds ids results (fresh res.length st₁).1) learned.1
+              { s with st := learned.2 } ⟨wf4, scope⟩
+            obtain ⟨-, g3⟩ := walk_grows rules checks definition role blocks rest none
+              (bindIds ids results (fresh res.length st₁).1) learned.1
+              { s with st := learned.2 } ⟨wf4, scope⟩ trivial
+            exact ⟨⟨g₁.next, Skel.Ordered.low ordered g4.next⟩,
+              LeavesApart.of_fresh res.length wf₁ (g4.trans g3), apart⟩
     | _, _, .guard key w c _ why rest, ids, k, s, fits => by
         simp only [walk, guardEntry, kept, Option.getD_none, Option.isSome_none, miss_free]
         exact walk_skeleton blocks rest ids _ s fits
@@ -1690,12 +1788,12 @@ mutual
     | _, _, .ret _, ids, k, s => by
         simp only [walk, Option.isSome_none, miss_free]
     | _, _, .op key o args results rest, ids, k, s => by
-        cases hw : rules.written o with
-        | some written =>
-            simp only [walk, hw]
+        cases hs : rules.shared o with
+        | true =>
+            simp only [walk, hs]
             exact walk_free_differs blocks rest _ _ _
-        | none =>
-            simp only [walk, hw, effectEntry, Option.map_none, Option.isSome_none, miss_free,
+        | false =>
+            simp only [walk, hs, effectEntry, Option.map_none, Option.isSome_none, miss_free,
               leaves]
             exact walk_free_differs blocks rest _ _ _
     | _, _, .guard key _ c _ _ rest, ids, k, s => by
@@ -1743,11 +1841,12 @@ open Analysis in
 it recorded, in the order of the term. -/
 theorem checkFacts_ok {D : Dialect} {Raw : Type} [DecidableEq Raw] {rules : FactRules D Raw}
     {checks : SkelRules D} {definition : Key} {role : Option Role} {types outs : List D.Ty}
-    {inputs : Names types} {body : Term D (Ctx.empty.extend inputs) outs}
+    {summary : Summary Raw} {inputs : Names types} {body : Term D (Ctx.empty.extend inputs) outs}
     {bounds : List (Place × Nat)}
-    (accepted : checkFacts rules checks definition role inputs body = .ok bounds) :
-    (analyse rules checks definition role inputs body).state.st.refusals = [] ∧
-      bounds = (analyse rules checks definition role inputs body).state.st.bounds.reverse := by
+    (accepted : checkFacts rules checks definition role summary inputs body = .ok bounds) :
+    (analyse rules checks definition role summary inputs body).state.st.refusals = [] ∧
+      bounds =
+        (analyse rules checks definition role summary inputs body).state.st.bounds.reverse := by
   simp only [checkFacts] at accepted
   split at accepted
   · next refused =>
@@ -1760,17 +1859,21 @@ open FactCheck Analysis Analysis.Facts in
 its role. -/
 theorem checkFacts_places {D : Dialect} {Raw : Type} [DecidableEq Raw] (rules : FactRules D Raw)
     (checks : SkelRules D) (definition : Key) (role : Option Role) {types outs : List D.Ty}
-    (inputs : Names types) (body : Term D (Ctx.empty.extend inputs) outs)
+    (summary : Summary Raw) (inputs : Names types) (body : Term D (Ctx.empty.extend inputs) outs)
     {bounds : List (Place × Nat)}
-    (accepted : checkFacts rules checks definition role inputs body = .ok bounds) :
+    (accepted : checkFacts rules checks definition role summary inputs body = .ok bounds) :
     ∀ q, q ∈ bounds → q.1.definition = definition ∧ q.1.role = role := by
   obtain ⟨_, ⟨new, enew, at_⟩, _⟩ := walk_adds rules checks definition role [] body none
-    (bindIds Ctx.empty inputs (List.range types.length)) (start rules types)
-    ⟨⟨Table.empty rules.place, types.length, [], []⟩, []⟩
+    (bindIds Ctx.empty inputs (List.range types.length))
+    (startUnder rules summary types ⟨Table.empty rules.place, types.length, [], []⟩).1
+    ⟨(startUnder rules summary types ⟨Table.empty rules.place, types.length, [], []⟩).2, []⟩
+  have started : (startUnder rules summary types
+      ⟨Table.empty rules.place, types.length, [], []⟩).2.bounds = [] :=
+    (learnRequirements_state rules.ops _ _ _ _).2
   intro q m
   rw [(checkFacts_ok accepted).2, List.mem_reverse] at m
-  simp only [analyse] at m
-  rw [enew, List.append_nil] at m
+  simp only [analyse, exitUnder] at m
+  rw [enew, started, List.append_nil] at m
   obtain ⟨bl, key, eq, _⟩ := at_ q m
   rw [eq]
   exact ⟨rfl, rfl⟩

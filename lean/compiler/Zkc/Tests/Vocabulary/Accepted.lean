@@ -26,14 +26,14 @@ def «N-SP3b» := check [F] [.nat] false <| .mk [0] [
   .op ⟨4⟩ [13] remainder [11, 12]] [13]
 
 /-- `Naturals::add` and `Naturals::zero`, with `T = nat`. -/
-def addHeader (key : Nat) : FnHeader V := ⟨⟨key⟩, [.nat, .nat], [.nat], false, none⟩
-def zeroHeader (key : Nat) : FnHeader V := ⟨⟨key⟩, [], [.nat], false, none⟩
+def addHeader (key : Nat) : FnHeader V := ⟨⟨key⟩, [.nat, .nat], [.nat], false, none, Summary.empty⟩
+def zeroHeader (key : Nat) : FnHeader V := ⟨⟨key⟩, [], [.nat], false, none, Summary.empty⟩
 def «Naturals-add» := run [] (addHeader 1) (.mk [0, 1] [.op ⟨1⟩ [10] plus [0, 1]] [10])
 
 /-- `N-SP12h` at `ends<X = Naturals, n>`: `pair = (xs[0], xs[n]); return (pair.0 + pair.1,
 pair.1)`, `+` on `X::T` the member `add` (NL6). -/
 abbrev twoNat : Ty := .tuple (.cons .nat (.cons .nat .nil))
-def «N-SP12h» (n : Nat) := run [addHeader 1] ⟨⟨2⟩, [sized .nat (n + 1)], [twoNat], false, none⟩ <|
+def «N-SP12h» (n : Nat) := run [addHeader 1] ⟨⟨2⟩, [sized .nat (n + 1)], [twoNat], false, none, Summary.empty⟩ <|
   .mk [0] [
     .op ⟨1⟩ [10] (natural 0) [],
     .op ⟨2⟩ [11] (item (sized .nat (n + 1))) [0, 10],
@@ -48,7 +48,7 @@ def «N-SP12h» (n : Nat) := run [addHeader 1] ⟨⟨2⟩, [sized .nat (n + 1)],
 /-- `N-NL6c` at `total<X = Naturals, n>`: `∑ x ∈ xs, x` on a type member with `add` and `zero`: a
 loop that carries the accumulator over `add` from `zero()` (§7.4). -/
 def «N-NL6c» (n : Nat) :=
-  run [zeroHeader 1, addHeader 2] ⟨⟨3⟩, [sized .nat n], [.nat], false, none⟩ <|
+  run [zeroHeader 1, addHeader 2] ⟨⟨3⟩, [sized .nat n], [.nat], false, none, Summary.empty⟩ <|
   .mk [0] [
     .op ⟨1⟩ [10] (.call ⟨1⟩) [],
     .loop ⟨2⟩ () (.fixed n) [10] [11]
@@ -58,9 +58,9 @@ def «N-NL6c» (n : Nat) :=
 
 /-- `R-NL6c`: `total(xs: [Pair; 4]) -> Pair: ∑ x ∈ xs, x` with the module's `add` and `zero`. -/
 abbrev pairRec : Ty := .record ⟨40⟩ false (.cons F (.cons F .nil))
-def pairAdd : FnHeader V := ⟨⟨1⟩, [pairRec, pairRec], [pairRec], false, none⟩
-def pairZero : FnHeader V := ⟨⟨2⟩, [], [pairRec], false, none⟩
-def «R-NL6c» := run [pairAdd, pairZero] ⟨⟨3⟩, [sized pairRec 4], [pairRec], false, none⟩ <|
+def pairAdd : FnHeader V := ⟨⟨1⟩, [pairRec, pairRec], [pairRec], false, none, Summary.empty⟩
+def pairZero : FnHeader V := ⟨⟨2⟩, [], [pairRec], false, none, Summary.empty⟩
+def «R-NL6c» := run [pairAdd, pairZero] ⟨⟨3⟩, [sized pairRec 4], [pairRec], false, none, Summary.empty⟩ <|
   .mk [0] [
     .op ⟨1⟩ [10] (.call ⟨2⟩) [],
     .loop ⟨2⟩ () (.fixed 4) [10] [11]

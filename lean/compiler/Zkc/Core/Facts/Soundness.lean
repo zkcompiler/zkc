@@ -2,7 +2,8 @@ module
 
 public import Zkc.Core.Facts.Laws
 public import Zkc.Core.Facts.Growth
-public import Zkc.Core.Facts.Facts
+public import Zkc.Core.Facts.Loops
+public import Zkc.Core.Meaning.ValidValues
 
 @[expose] public section
 
@@ -20,10 +21,17 @@ loop starts from the valuation before the loop, with the iteration number and th
 set at the leaves of the loop's body.
 
 The facts of the table are about the results of a written operation on valid operands
-(`ValidRun`). A value is entered with its operands in the table's order; the law `binding` gives
-the results on the operands in that order. An operation kept in order gets new leaves, whose
-values are what it returned (`laws.effect`), and so does an attempt, at its number and at its
-results (`laws.begin`, `laws.settle`).
+(`ValidRun`). At every operation the requirements are decided first: where none is refused they
+hold of the operands' values, and the applications that they enter in the table get values
+(`requirements_sound`, by the law `named`). A shared operation is then entered with its operands
+in the table's order; the law `binding` gives the results on the operands in that order, and the
+law `defined` that it returns (`value_sound`). An operation kept in order gets new leaves, whose
+values are what it returned, valid where its requirements hold (`laws.effect`), and so does an
+attempt, at its number and at its results (`laws.begin`, `laws.settle`). What the written form of
+either guarantees then holds of its operands followed by its results, by the law `ops` for a
+shared operation and the law `effect` for one kept in order, and what is learned from it holds
+(`learnRequirements_fills`, `effectStep_fills`). At the start of a body under a summary whose
+requirements hold of the inputs, what is learned from them holds (`startUnder_inv`).
 -/
 
 namespace Zkc.Core.Analysis.Facts
@@ -195,12 +203,6 @@ theorem agree_valid {Γ : Ctx D.Ty} {ρ : Valuation σ.sem.Dyn} {ids : Ctx Nat}
     ∀ τ (x : Var Γ τ), σ.Valid ⟨τ, env.get x⟩ := fun τ x => by
   obtain ⟨i, _, hv⟩ := h τ x
   exact valid _ _ hv
-
-theorem env_all_valid {Γ : Ctx D.Ty} {env : Env σ.sem.Val Γ}
-    (h : ∀ τ (x : Var Γ τ), σ.Valid ⟨τ, env.get x⟩) :
-    ∀ {items : List D.Ty} (xs : HList (Var Γ) items), σ.AllValid (env.all xs)
-  | [], .nil => fun _ m => nomatch m
-  | _ :: _, .cons x rest => allValid_cons.mpr ⟨h _ x, env_all_valid h rest⟩
 
 /-- Values that identifiers have are valid when every value is. -/
 theorem allValid_of_valuesOf {ρ : Valuation σ.sem.Dyn} {made : List Nat} {items : List D.Ty}
@@ -809,12 +811,17 @@ theorem fill_fills {ρ : Valuation Val} {tbl : Table Raw} {e : Entry Raw} (m : e
 results of entries. -/
 theorem share_fills [DecidableEq Raw] (lawful : OpFacts.Lawful ops R Run) {T : Type}
     {ρ : Valuation Val} {st : St T Raw} (coh : Coherent Run Valid ρ st) {w : Raw}
-    {argIds : List Nat} {as rs : List Val} (hargs : valuesOf ρ argIds = some as)
-    (hlt : ∀ a, a ∈ argIds → a < st.next) (run : Run w as rs) (hvalid : ∀ r, r ∈ rs → Valid r) :
-    ∃ ρ', Stepped Run Valid ρ ρ' st (share w argIds rs.length st).2 ∧
-      valuesOf ρ' (share w argIds rs.length st).1 = some rs ∧
-      Fills ρ ρ' (share w argIds rs.length st).2.table := by
+    {argIds : List Nat} {as rs : List Val} {count : Nat} (hargs : valuesOf ρ argIds = some as)
+    (hlt : ∀ a, a ∈ argIds → a < st.next) (run : Run w as rs) (hcount : count ≤ rs.length)
+    (hvalid : ∀ r, r ∈ rs → Valid r) :
+    ∃ ρ', Stepped Run Valid ρ ρ' st (share w argIds count st).2 ∧
+      valuesOf ρ' (share w argIds count st).1 = some (rs.take count) ∧
+      Fills ρ ρ' (share w argIds count st).2.table := by
   have hfun : ∀ rs', Run w as rs' → rs' = rs := fun rs' r' => lawful.functional _ _ _ _ r' run
+  have hvalid' : ∀ r, r ∈ rs.take count → Valid r := fun r m => hvalid r (List.mem_of_mem_take m)
+  have taken : (rs.take count).length = count := by
+    rw [List.length_take]
+    omega
   simp only [share]
   split
   · next lo found =>
@@ -823,20 +830,22 @@ theorem share_fills [DecidableEq Raw] (lawful : OpFacts.Lawful ops R Run) {T : T
       have hvs : valuesOf ρ e.args = some as := by rw [ea]; exact hargs
       have hrun : Run e.written as rs := by rw [ew]; exact run
       obtain ⟨le, sup, cons, clo, look⟩ := fill_entry coh.wf coh.consistent coh.closed
-        coh.support m hvs hrun ec.symm (by rw [ew]; exact hfun)
-      refine ⟨ρ.fill e.lo rs, ⟨le, ⟨sup, coh.wf, cons, clo, fill_valid coh.valid hvalid⟩,
-        ⟨Nat.le_refl _, [], rfl, fun _ m => nomatch m⟩, rfl, rfl⟩, ?_, fill_fills m ec.symm⟩
-      rw [← ec]; exact look
-  · let e : Entry Raw := ⟨w, argIds, st.next, rs.length⟩
-    have wf' : Table.WF (st.next + rs.length) (st.table.add e) :=
+        coh.support m hvs hrun (by rw [ec]; exact hcount) (by rw [ew]; exact hfun)
+      rw [ec] at le sup cons clo look
+      exact ⟨ρ.fill e.lo (rs.take count), ⟨le, ⟨sup, coh.wf, cons, clo,
+        fill_valid coh.valid hvalid'⟩, ⟨Nat.le_refl _, [], rfl, fun _ m => nomatch m⟩, rfl, rfl⟩,
+        look, fill_fills m (by rw [taken, ec])⟩
+  · let e : Entry Raw := ⟨w, argIds, st.next, count⟩
+    have wf' : Table.WF (st.next + count) (st.table.add e) :=
       show EntriesWF _ (e :: st.table.entries) from ⟨hlt, Nat.le_refl _, coh.wf⟩
     obtain ⟨cons', clo'⟩ := consistent_extend (tbl' := st.table.add e) (new := [e]) coh.support
       coh.consistent coh.closed rfl (fun e' m => by simp at m; subst m; exact Nat.le_refl _)
     obtain ⟨le, sup, cons, clo, look⟩ := fill_entry wf' cons' clo'
-      (coh.support.mono (Nat.le_add_right _ _)) (e := e) List.mem_cons_self hargs run rfl hfun
-    exact ⟨ρ.fill st.next rs, ⟨le, ⟨sup, wf', cons, clo, fill_valid coh.valid hvalid⟩,
+      (coh.support.mono (Nat.le_add_right _ _)) (e := e) List.mem_cons_self hargs run hcount hfun
+    exact ⟨ρ.fill st.next (rs.take count), ⟨le, ⟨sup, wf', cons, clo,
+      fill_valid coh.valid hvalid'⟩,
       ⟨Nat.le_add_right _ _, [e], rfl, fun e' m => by simp at m; subst m; exact Nat.le_refl _⟩,
-      rfl, rfl⟩, look, fill_fills (e := e) List.mem_cons_self rfl⟩
+      rfl, rfl⟩, look, fill_fills (e := e) List.mem_cons_self taken⟩
 
 /-- Resolving an operand of a requirement: as `operandId_sound`, and the new values are results
 of entries. -/
@@ -846,7 +855,7 @@ theorem operandId_fills [DecidableEq Raw] (lawful : OpFacts.Lawful ops R Run)
     {argIds : List Nat} {args : List Val} (hargs : valuesOf ρ argIds = some args)
     (hlt : ∀ a, a ∈ argIds → a < st.next) {operand : Operand Raw}
     (runs : ∀ w ps, operand = .apply w ps →
-      ∃ as rs, atPositions args ps = some as ∧ Run w as rs ∧ rs.length = 1) :
+      ∃ as rs, atPositions args ps = some as ∧ Run w as rs ∧ rs ≠ []) :
     ∃ ρ', Stepped Run Valid ρ ρ' st (operandId argIds st operand).2 ∧
       (∀ id, (operandId argIds st operand).1 = some id →
         ∃ v, ρ' id = some v ∧ operand.Denotes Run args v) ∧
@@ -864,7 +873,8 @@ theorem operandId_fills [DecidableEq Raw] (lawful : OpFacts.Lawful ops R Run)
           rw [hv] at this
           exact ⟨v, this, hv⟩
   | apply w ps =>
-      obtain ⟨as, rs, has, run, one⟩ := runs w ps rfl
+      obtain ⟨as, rs, has, run, nonempty⟩ := runs w ps rfl
+      obtain ⟨r, others, rfl⟩ := List.exists_cons_of_ne_nil nonempty
       simp only [operandId]
       split
       · next ids' e =>
@@ -872,23 +882,21 @@ theorem operandId_fills [DecidableEq Raw] (lawful : OpFacts.Lawful ops R Run)
           rw [has] at hvalues
           cases hvalues
           have hlt' : ∀ a, a ∈ ids' → a < st.next := fun a m => hlt a (atPositions_mem e a m)
-          have hvalid : ∀ r, r ∈ rs → Valid r :=
-            runValid w as rs run (valuesOf_valid hl coh.valid)
-          obtain ⟨ρ', step, look, fills⟩ := share_fills lawful coh hl hlt' run hvalid
-          rw [one] at step look fills
+          have hvalid : ∀ v, v ∈ r :: others → Valid v :=
+            runValid w as _ run (valuesOf_valid hl coh.valid)
+          obtain ⟨ρ', step, look, fills⟩ := share_fills (count := 1) lawful coh hl hlt' run
+            (by simp) hvalid
           refine ⟨ρ', step, fun id hid => ?_, fills⟩
-          match rs, one with
-          | [r], _ =>
-              obtain ⟨rest, hrest⟩ : ∃ rest, (share w ids' 1 st).1 = id :: rest := by
-                cases h : (share w ids' 1 st).1 with
-                | nil => rw [h] at hid; cases hid
-                | cons a rest =>
-                    rw [h] at hid
-                    simp only [List.head?_cons, Option.some.injEq] at hid
-                    exact ⟨rest, by rw [hid]⟩
-              rw [hrest] at look
-              refine ⟨r, ?_, as, [r], has, run, rfl⟩
-              simpa using valuesOf_get look 0 (by simp)
+          obtain ⟨rest, hrest⟩ : ∃ rest, (share w ids' 1 st).1 = id :: rest := by
+            cases h : (share w ids' 1 st).1 with
+            | nil => rw [h] at hid; cases hid
+            | cons a rest =>
+                rw [h] at hid
+                simp only [List.head?_cons, Option.some.injEq] at hid
+                exact ⟨rest, by rw [hid]⟩
+          rw [hrest] at look
+          refine ⟨r, ?_, as, r :: others, has, run, rfl⟩
+          simpa using valuesOf_get look 0 (by simp)
       · refine ⟨ρ, Stepped.refl coh, fun id e => ?_, Fills.refl ρ _⟩
         cases e
 
@@ -899,7 +907,7 @@ theorem operandIds_fills [DecidableEq Raw] (lawful : OpFacts.Lawful ops R Run)
       Coherent Run Valid ρ st → valuesOf ρ argIds = some args →
       (∀ a, a ∈ argIds → a < st.next) →
       (∀ o, o ∈ os → ∀ w ps, o = .apply w ps →
-        ∃ as rs, atPositions args ps = some as ∧ Run w as rs ∧ rs.length = 1) →
+        ∃ as rs, atPositions args ps = some as ∧ Run w as rs ∧ rs ≠ []) →
       ∃ ρ', Stepped Run Valid ρ ρ' st (operandIds argIds os st).2 ∧
         OperandsAt Run args ρ' os (operandIds argIds os st).1 ∧
         Fills ρ ρ' (operandIds argIds os st).2.table
@@ -925,7 +933,7 @@ theorem checkRequirements_fills [DecidableEq Raw] (lawful : OpFacts.Lawful ops R
       Coherent Run Valid ρ st → k.Holds R ρ → valuesOf ρ argIds = some args →
       (∀ a, a ∈ argIds → a < st.next) →
       (∀ req, req ∈ reqs → ∀ o, o ∈ req.operands → ∀ w ps, o = .apply w ps →
-        ∃ as rs, atPositions args ps = some as ∧ Run w as rs ∧ rs.length = 1) →
+        ∃ as rs, atPositions args ps = some as ∧ Run w as rs ∧ rs ≠ []) →
       (checkRequirements ops k place written argIds reqs st).refusals = [] →
       ∃ ρ', Stepped Run Valid ρ ρ' st (checkRequirements ops k place written argIds reqs st) ∧
         (∀ req, req ∈ reqs → req.Holds Run R args) ∧
@@ -944,25 +952,9 @@ theorem checkRequirements_fills [DecidableEq Raw] (lawful : OpFacts.Lawful ops R
         have dec : decideRequirement ops resolved.2.table k req resolved.1
             (List.zipWith (operandRange ops k argIds) req.operands resolved.1) = true := by
           simpa [hk.alive] using cond
-        have holds : req.Holds Run R args := by
-          have all := decideRequirement_some dec
-          obtain ⟨vs, hl, hvs, hds⟩ := res.values all
-          refine ⟨vs, hds, decideRequirement_sound lawful step₁.coherent.consistent
-            step₁.coherent.closed hk₁ hvs hl ?_ dec⟩
-          intro j v hv
-          have lt : j < resolved.1.length := by
-            have := (List.getElem?_eq_some_iff.mp hv).1
-            omega
-          obtain ⟨id, hid⟩ : ∃ id, resolved.1[j]? = some (some id) := by
-            have m := List.getElem_mem lt
-            obtain ⟨id, e⟩ := Option.ne_none_iff_exists'.mp (all _ m)
-            exact ⟨id, by rw [List.getElem?_eq_getElem lt, e]⟩
-          obtain ⟨o, v', ho, hv', hd⟩ := res.get j id hid
-          have := hvs j id hid
-          rw [hv', hv] at this
-          cases this
-          rw [List.getD_eq_getElem?_getD, List.getElem?_zipWith, ho, hid]
-          exact operandRange_sound lawful hk₁ (valuesOf_le step₁.le hargs) hv' hd
+        have holds : req.Holds Run R args :=
+          decided_holds lawful step₁.coherent.consistent step₁.coherent.closed hk₁
+            (valuesOf_le step₁.le hargs) res dec
         obtain ⟨ρ₂, step₂, others, fills₂⟩ := checkRequirements_fills lawful runValid rest
           step₁.coherent hk₁ (valuesOf_le step₁.le hargs)
           (fun a m => Nat.lt_of_lt_of_le (hlt a m) step₁.grows.next)
@@ -980,6 +972,40 @@ theorem checkRequirements_fills [DecidableEq Raw] (lawful : OpFacts.Lawful ops R
               resolved.2.refusals }
         rw [e] at hnone
         simp at hnone
+
+/-- Learning requirements that hold of the values of the identifiers given: what is known after
+them holds of the valuation grown by the values of the applications that they enter in the table,
+which are results of entries, and the state and the valuation still agree. -/
+theorem learnRequirements_fills [DecidableEq Raw] (lawful : OpFacts.Lawful ops R Run)
+    (runValid : ∀ w as rs, Run w as rs → (∀ a, a ∈ as → Valid a) → ∀ r, r ∈ rs → Valid r)
+    {T : Type} {ids : List Nat} {args : List Val} :
+    ∀ (reqs : List (Requirement Raw)) {k : Known} {ρ : Valuation Val} {st : St T Raw},
+      Coherent Run Valid ρ st → k.Holds R ρ → valuesOf ρ ids = some args →
+      (∀ a, a ∈ ids → a < st.next) → (∀ req, req ∈ reqs → req.Holds Run R args) →
+      ∃ ρ', Stepped Run Valid ρ ρ' st (learnRequirements ops ids reqs k st).2 ∧
+        (learnRequirements ops ids reqs k st).1.Holds R ρ' ∧
+        Fills ρ ρ' (learnRequirements ops ids reqs k st).2.table
+  | [], k, ρ, st, coh, hk, _, _, _ => ⟨ρ, Stepped.refl coh, hk, Fills.refl ρ _⟩
+  | req :: rest, k, ρ, st, coh, hk, hargs, hlt, holds => by
+      simp only [learnRequirements]
+      have holdsHere := holds req List.mem_cons_self
+      have runs : ∀ o, o ∈ req.operands → ∀ w ps, o = .apply w ps →
+          ∃ as rs, atPositions args ps = some as ∧ Run w as rs ∧ rs ≠ [] := by
+        intro o m w ps e
+        obtain ⟨vs, denoted, _⟩ := holdsHere
+        obtain ⟨v, d⟩ := DenotesAll.denotes denoted o m
+        subst e
+        obtain ⟨as, rs, has, run, head⟩ := d
+        exact ⟨as, rs, has, run, fun empty => by rw [empty] at head; cases head⟩
+      obtain ⟨ρ₁, step₁, resolved, fills₁⟩ := operandIds_fills lawful runValid req.operands coh
+        hargs hlt runs
+      have learned := learn_holds lawful step₁.coherent.consistent step₁.coherent.closed
+        (operandIds ids req.operands st).2.next (hk.le step₁.le) holdsHere resolved
+      obtain ⟨ρ₂, step₂, after, fills₂⟩ := learnRequirements_fills lawful runValid rest
+        step₁.coherent learned (valuesOf_le step₁.le hargs)
+        (fun a m => Nat.lt_of_lt_of_le (hlt a m) step₁.grows.next)
+        (fun req' m => holds req' (List.mem_cons_of_mem _ m))
+      exact ⟨ρ₂, step₁.trans step₂, after, fills₁.trans fills₂ step₂.grows.sub⟩
 
 end
 
@@ -1080,74 +1106,82 @@ theorem ret_sound (blocks : List (Key × Nat)) {Γ : Ctx D.Ty} {outs : List D.Ty
     trivial⟩
 
 include laws in
-/-- A value: its requirements hold, so it returns; its results have the identifiers that the table
-gives, with what is learned of them. -/
-theorem value_sound (blocks : List (Key × Nat)) {Γ : Ctx D.Ty} {outs ins res : List D.Ty}
-    (key : Key) (o : D.Op ins res) (written : Raw) (hw : σ.rules.written o = some written)
-    (args : HList (Var Γ) ins) (results : Names res)
-    (rest : Term D (Γ.extend results) outs) (followed : Option (Skel D outs))
-    (path : List Frame) (ρ : Valuation σ.sem.Dyn) (ids : Ctx Nat) (env : Env σ.sem.Val Γ)
-    (k : Known) (s : State D.Ty Raw) (inv : Inv σ ρ ids env k s.st)
-    (refusals : (walk σ.rules σ.checks σ.definition σ.role blocks rest followed
-      (bindIds ids results (valueStep σ.rules ⟨σ.definition, blocks, some key, σ.role⟩ written res
-        (idsOf ids args) k s.st).1)
-      (valueStep σ.rules ⟨σ.definition, blocks, some key, σ.role⟩ written res (idsOf ids args) k
-        s.st).2.1
-      { s with st := (valueStep σ.rules ⟨σ.definition, blocks, some key, σ.role⟩ written res
-        (idsOf ids args) k s.st).2.2 }).state.st.refusals = []) :
-    ∃ values : HList σ.sem.Val res, ∃ ρ₂ : Valuation σ.sem.Dyn,
-      σ.sem.op key o path (env.all args) = .done values ∧ ρ.Le ρ₂ ∧
-      Inv σ ρ₂ (bindIds ids results (valueStep σ.rules ⟨σ.definition, blocks, some key, σ.role⟩
-          written res (idsOf ids args) k s.st).1) (env.extend results values)
-        (valueStep σ.rules ⟨σ.definition, blocks, some key, σ.role⟩ written res (idsOf ids args) k
-          s.st).2.1
-        (valueStep σ.rules ⟨σ.definition, blocks, some key, σ.role⟩ written res (idsOf ids args) k
-          s.st).2.2 ∧
-      Fills ρ ρ₂ (valueStep σ.rules ⟨σ.definition, blocks, some key, σ.role⟩ written res
-        (idsOf ids args) k s.st).2.2.table := by
+/-- The requirements of an operation, decided where it is applied: where none is refused, they
+hold of the values of its operands, and the valuation, grown by the values of the applications
+that they enter in the table, which are results of entries, agrees with the state after them. -/
+theorem requirements_sound {Γ : Ctx D.Ty} {ins res : List D.Ty} (place : Place)
+    (o : D.Op ins res) (args : HList (Var Γ) ins) {ρ : Valuation σ.sem.Dyn} {ids : Ctx Nat}
+    {env : Env σ.sem.Val Γ} {k : Known} {st : St D.Ty Raw} (inv : Inv σ ρ ids env k st)
+    (refusals : (checkRequirements σ.rules.ops k place (σ.rules.written o) (idsOf ids args)
+      (σ.rules.ops.requires (σ.rules.written o)) st).refusals = []) :
+    ∃ ρ₁ : Valuation σ.sem.Dyn, ρ.Le ρ₁ ∧
+      Inv σ ρ₁ ids env k (checkRequirements σ.rules.ops k place (σ.rules.written o)
+        (idsOf ids args) (σ.rules.ops.requires (σ.rules.written o)) st) ∧
+      σ.rules.Required σ.sem σ.R σ.Run σ.Valid o (env.all args) ∧
+      Fills ρ ρ₁ (checkRequirements σ.rules.ops k place (σ.rules.written o) (idsOf ids args)
+        (σ.rules.ops.requires (σ.rules.written o)) st).table := by
   have lawful : OpFacts.Lawful σ.rules.ops σ.R σ.Runs := laws.ops
   have runValid : ∀ w as rs, σ.Runs w as rs → (∀ a, a ∈ as → σ.Valid a) → ∀ r, r ∈ rs →
       σ.Valid r := fun _ _ _ run _ => run.2.2
   have va : σ.AllValid (env.all args) :=
     env_all_valid (agree_valid inv.agree inv.coherent.valid) args
-  have hargs := valuesOf_idsOf inv.agree args
-  have hlt : ∀ a, a ∈ idsOf ids args → a < s.st.next := idsOf_lt inv.scoped.2 args
-  simp only [valueStep] at refusals ⊢
-  generalize hst₁ : checkRequirements σ.rules.ops k ⟨σ.definition, blocks, some key, σ.role⟩
-    written (idsOf ids args) (σ.rules.ops.requires written) s.st = st₁ at refusals ⊢
-  have refs₁ : st₁.refusals = [] := by
-    obtain ⟨⟨new, e⟩, _⟩ := walk_adds σ.rules σ.checks σ.definition σ.role blocks rest followed
-      _ _ _
-    rw [refusals] at e
-    have := (share_state written (σ.rules.values.order written (idsOf ids args)) res.length st₁).1
-    rw [← this]
-    exact (List.append_eq_nil_iff.mp e.symm).2
   obtain ⟨ρ₁, step₁, hreq, fills₁⟩ := checkRequirements_fills lawful runValid
-    (σ.rules.ops.requires written) inv.coherent inv.holds hargs hlt
-    (fun req m operand mo w ps e => laws.named o written hw (env.all args) va req m operand mo w ps e)
-    (by rw [hst₁]; exact refs₁)
-  rw [hst₁] at step₁ fills₁
-  obtain ⟨values, ran⟩ := laws.defined o written hw key path (env.all args) va hreq
-  have run : σ.Run written (σ.sem.dyns (env.all args)) (σ.sem.dyns values) := by
-    rcases laws.binding.computes o written hw key path (env.all args) with
-      ⟨values', ran', run⟩ | ⟨stop, halted, _⟩
+    (σ.rules.ops.requires (σ.rules.written o)) inv.coherent inv.holds
+    (valuesOf_idsOf inv.agree args) (idsOf_lt inv.scoped.2 args)
+    (fun req m operand mo w ps e => by
+      obtain ⟨as, rs, has, run, one⟩ := laws.named o (env.all args) va req m operand mo w ps e
+      exact ⟨as, rs, has, run, fun empty => by rw [empty] at one; cases one⟩)
+    refusals
+  exact ⟨ρ₁, step₁.le, ⟨step₁.coherent, inv.agree.le step₁.le, inv.holds.le step₁.le⟩, hreq,
+    fills₁⟩
+
+include laws in
+/-- A shared operation whose requirements hold: it returns; its results have the identifiers that
+the table gives, with what is learned of them. -/
+theorem value_sound {Γ : Ctx D.Ty} {ins res : List D.Ty} (key : Key) (o : D.Op ins res)
+    (shared : σ.rules.shared o = true) (args : HList (Var Γ) ins) (results : Names res)
+    (path : List Frame) (ρ : Valuation σ.sem.Dyn) (ids : Ctx Nat) (env : Env σ.sem.Val Γ)
+    (k : Known) (st : St D.Ty Raw) (inv : Inv σ ρ ids env k st)
+    (required : σ.rules.Required σ.sem σ.R σ.Run σ.Valid o (env.all args)) :
+    ∃ values : HList σ.sem.Val res, ∃ ρ₂ : Valuation σ.sem.Dyn,
+      σ.sem.op key o path (env.all args) = .done values ∧ ρ.Le ρ₂ ∧
+      Inv σ ρ₂ (bindIds ids results
+          (valueStep σ.rules (σ.rules.written o) res (idsOf ids args) k st).1)
+        (env.extend results values)
+        (valueStep σ.rules (σ.rules.written o) res (idsOf ids args) k st).2.1
+        (valueStep σ.rules (σ.rules.written o) res (idsOf ids args) k st).2.2 ∧
+      Fills ρ ρ₂ (valueStep σ.rules (σ.rules.written o) res (idsOf ids args) k st).2.2.table := by
+  have lawful : OpFacts.Lawful σ.rules.ops σ.R σ.Runs := laws.ops
+  have va : σ.AllValid (env.all args) :=
+    env_all_valid (agree_valid inv.agree inv.coherent.valid) args
+  have hargs := valuesOf_idsOf inv.agree args
+  have hlt : ∀ a, a ∈ idsOf ids args → a < st.next := idsOf_lt inv.scoped.2 args
+  obtain ⟨values, ran⟩ := laws.defined o shared key path (env.all args) va required
+  have run : σ.Run (σ.rules.written o) (σ.sem.dyns (env.all args)) (σ.sem.dyns values) := by
+    rcases laws.binding.computes o (σ.rules.written o) (σ.rules.values_written_shared shared) key
+      path (env.all args) with ⟨values', ran', run⟩ | ⟨stop, halted, _⟩
     · rw [ran] at ran'
       cases ran'
       exact run
     · rw [ran] at halted
       cases halted
-  have vr : σ.AllValid values := laws.keeps written _ _ run va
-  have runs : σ.Runs written (σ.sem.dyns (env.all args)) (σ.sem.dyns values) := ⟨run, va, vr⟩
-  obtain ⟨ordered, hordered, runOrdered⟩ :=
-    order_values laws written (valuesOf_le step₁.le hargs) runs
-  obtain ⟨ρ₂, step₂, look, fills₂⟩ := share_fills lawful step₁.coherent hordered
-    (fun a m => Nat.lt_of_lt_of_le (σ.rules.values.order_lt hlt a m) step₁.grows.next)
-    runOrdered vr
-  rw [σ.sem.dyns_length] at step₂ look fills₂
-  have le := step₁.le.trans step₂.le
-  refine ⟨values, ρ₂, ran, le, ⟨step₂.coherent, agree_extend results values _
-    (inv.agree.le le) look, ?_⟩, fills₁.trans fills₂ step₂.grows.sub⟩
-  · rw [enter_of_valid laws vr]
+  have vr : σ.AllValid values := laws.keeps (σ.rules.written o) _ _ run va
+  have runs : σ.Runs (σ.rules.written o) (σ.sem.dyns (env.all args)) (σ.sem.dyns values) :=
+    ⟨run, va, vr⟩
+  obtain ⟨ordered, hordered, runOrdered⟩ := order_values laws (σ.rules.written o) hargs runs
+  simp only [valueStep]
+  obtain ⟨-, -, madeBelow⟩ := share_grows (σ.rules.written o)
+    (σ.rules.values.order (σ.rules.written o) (idsOf ids args)) res.length st inv.coherent.wf
+    (σ.rules.values.order_lt hlt)
+  obtain ⟨ρ₂, step₂, look, fills₂⟩ := share_fills (count := res.length) lawful inv.coherent
+    hordered (σ.rules.values.order_lt hlt) runOrdered
+    (by rw [σ.sem.dyns_length]; exact Nat.le_refl _) vr
+  rw [List.take_of_length_le (by rw [σ.sem.dyns_length]; exact Nat.le_refl _)] at look
+  have le := step₂.le
+  -- What the ranges and the types say of the results holds, before the guarantees are learned.
+  generalize hbefore : Known.enter σ.rules _ res = before
+  have holds : before.Holds σ.R ρ₂ := by
+    rw [← hbefore, enter_of_valid laws vr]
     refine addTypeRanges_holds laws (Known.Holds.addOffset lawful step₂.coherent.consistent
       step₂.coherent.closed (inv.holds.le le)
       ((inv.holds.le le).addRanges fun j id rr e1 e2 => ?_) (valuesOf_le le hargs) look
@@ -1171,11 +1205,43 @@ theorem value_sound (blocks : List (Key × Nat)) {Γ : Ctx D.Ty} {outs ins res :
     have := valuesOf_getElem look e1
     rw [hv] at this
     exact ⟨n, ⟨v, this, hn⟩, has⟩
+  -- What the operation guarantees of its operands, as written, followed by its results.
+  obtain ⟨ρ₃, step₃, after, fills₃⟩ := learnRequirements_fills lawful (fun _ _ _ run _ => run.2.2)
+    (σ.rules.ops.ensures (σ.rules.written o)) step₂.coherent holds
+    (valuesOf_append (valuesOf_le le hargs) look)
+    (fun a m => by
+      rcases List.mem_append.mp m with m | m
+      · exact Nat.lt_of_lt_of_le (hlt a m) step₂.grows.next
+      · exact madeBelow a m)
+    (lawful.ensures _ _ _ runs required)
+  exact ⟨values, ρ₃, ran, le.trans step₃.le, ⟨step₃.coherent, agree_extend results values _
+    (inv.agree.le (le.trans step₃.le)) (valuesOf_le step₃.le look), after⟩,
+    fills₂.trans fills₃ step₃.grows.sub⟩
 
 include laws in
-/-- An operation, when no skeleton is followed: a value returns, with its results where the table
-places them; an operation kept in order returns valid values on permitted replies, or stops with
-a stop that is not `undefined`, and its results are at new leaves. -/
+/-- An operation kept in order, once its results have their identifiers and their values: where
+what the types say of them is known to hold, and every guarantee of its written form holds of the
+values of its operands followed by those of its results, what is known after `effectStep` holds
+of the valuation grown by the values of the applications that it enters in the table, which are
+results of entries, and the state and the valuation still agree. -/
+theorem effectStep_fills {written : Raw} {res : List D.Ty} {argIds made : List Nat} {k : Known}
+    {ρ : Valuation σ.sem.Dyn} {st : St D.Ty Raw} {values : List σ.sem.Dyn}
+    (coh : Coherent σ.Runs σ.Valid ρ st)
+    (hk : ((k.addRanges made (res.map σ.rules.range)).enter σ.rules res).Holds σ.R ρ)
+    (hvalues : valuesOf ρ (argIds ++ made) = some values)
+    (hlt : ∀ a, a ∈ argIds ++ made → a < st.next)
+    (guaranteed : ∀ guarantee, guarantee ∈ σ.rules.ops.ensures written →
+      guarantee.Holds σ.Runs σ.R values) :
+    ∃ ρ', Stepped σ.Runs σ.Valid ρ ρ' st (effectStep σ.rules written res argIds made k st).2 ∧
+      (effectStep σ.rules written res argIds made k st).1.Holds σ.R ρ' ∧
+      Fills ρ ρ' (effectStep σ.rules written res argIds made k st).2.table :=
+  learnRequirements_fills laws.ops (fun _ _ _ run _ => run.2.2) _ coh hk hvalues hlt guaranteed
+
+include laws in
+/-- An operation, when no skeleton is followed: its requirements hold, since none is refused; a
+shared operation returns, with its results where the table places them; an operation kept in
+order returns valid values on permitted replies, or stops with a stop that is not `undefined`,
+and its results are at new leaves. -/
 theorem op_sound (blocks : List (Key × Nat)) {Γ : Ctx D.Ty} {outs ins res : List D.Ty}
     (key : Key) (o : D.Op ins res) (args : HList (Var Γ) ins) (results : Names res)
     (rest : Term D (Γ.extend results) outs) (ih : Sound σ blocks rest none) :
@@ -1185,63 +1251,102 @@ theorem op_sound (blocks : List (Key × Nat)) {Γ : Ctx D.Ty} {outs ins res : Li
   have recorded' := fun (st : St D.Ty Raw) (h : Recorded σ (Term.addresses blocks
     (.op key o args results rest)) st) =>
       Recorded.sub (σ := σ) h fun _ m => List.mem_cons_of_mem _ m
-  cases hw : σ.rules.written o with
-  | some written =>
-      simp only [walk, hw] at differs hnone recorded ⊢
-      obtain ⟨values, ρ₂, ran, le, inv', -⟩ := value_sound laws blocks key o written hw args
-        results rest none path ρ ids env k s inv hnone
-      obtain ⟨-, bounds⟩ := valueStep_state σ.rules ⟨σ.definition, blocks, some key, σ.role⟩ written
-        res (idsOf ids args) k s.st
+  obtain ⟨-, b₁⟩ := checkRequirements_state σ.rules.ops k ⟨σ.definition, blocks, some key, σ.role⟩
+    (σ.rules.written o) (idsOf ids args) (σ.rules.ops.requires (σ.rules.written o)) s.st
+  cases hs : σ.rules.shared o with
+  | true =>
+      simp only [walk, hs] at differs hnone recorded ⊢
+      generalize hst₁ : checkRequirements σ.rules.ops k ⟨σ.definition, blocks, some key, σ.role⟩
+        (σ.rules.written o) (idsOf ids args) (σ.rules.ops.requires (σ.rules.written o)) s.st = st₁
+        at b₁ differs hnone recorded ⊢
+      obtain ⟨r₂, b₂⟩ := valueStep_state σ.rules (σ.rules.written o) res (idsOf ids args) k st₁
+      have refs₁ : st₁.refusals = [] := by
+        rw [← r₂]
+        exact refusals_before (walk_adds σ.rules σ.checks σ.definition σ.role blocks rest none
+          _ _ { s with st := (valueStep σ.rules (σ.rules.written o) res (idsOf ids args) k
+            st₁).2.2 }).1 hnone
+      obtain ⟨ρ₁, le₁, inv₁, required, -⟩ := requirements_sound laws
+        ⟨σ.definition, blocks, some key, σ.role⟩ o args inv (by rw [hst₁]; exact refs₁)
+      rw [hst₁] at inv₁
+      obtain ⟨values, ρ₂, ran, le, inv', -⟩ := value_sound laws key o hs args results path ρ₁ ids
+        env k st₁ inv₁ required
       have shows := ih path ρ₂ _ _ _ _ lo hi inv' trivial differs hnone nodup'
-        (fun q m bl key' eq inR => apart q (by rw [← bounds]; exact m) bl key' eq
+        (fun q m bl key' eq inR => apart q (by rw [← b₁, ← b₂]; exact m) bl key' eq
           (List.mem_cons_of_mem _ inR)) (recorded' _ recorded)
       simp only [Shows, Term.EveryLoop, Term.denote, ran, Process.bind, Process.Every]
       exact ⟨shows.1, Process.every_mono _ _ (fun vs h => by
         obtain ⟨ρ', le', ex, f⟩ := h
-        exact ⟨ρ', le.trans le', ex, f⟩) (fun _ h => h) shows.2⟩
-  | none =>
-      simp only [walk, hw, effectEntry, Option.map_none, Option.isSome_none, miss_free, leaves,
+        exact ⟨ρ', le₁.trans (le.trans le'), ex, f⟩) (fun _ h => h) shows.2⟩
+  | false =>
+      simp only [walk, hs, effectEntry, Option.map_none, Option.isSome_none, miss_free, leaves,
         Exit.region_skel] at differs hnone recorded ⊢
+      generalize hst₁ : checkRequirements σ.rules.ops k ⟨σ.definition, blocks, some key, σ.role⟩
+        (σ.rules.written o) (idsOf ids args) (σ.rules.ops.requires (σ.rules.written o)) s.st = st₁
+        at b₁ differs hnone recorded ⊢
+      obtain ⟨r₂, b₂⟩ := effectStep_state σ.rules (σ.rules.written o) res (idsOf ids args)
+        (fresh res.length st₁).1 k (fresh res.length st₁).2
+      generalize hlearned : effectStep σ.rules (σ.rules.written o) res (idsOf ids args)
+        (fresh res.length st₁).1 k (fresh res.length st₁).2 = learned
+        at r₂ b₂ differs hnone recorded ⊢
+      have refs₁ : st₁.refusals = [] := by
+        have none := refusals_before (walk_adds σ.rules σ.checks σ.definition σ.role blocks rest
+          none _ _ { s with st := learned.2 }).1 hnone
+        rw [r₂] at none
+        exact none
+      obtain ⟨ρ₁, le₁, inv₁, required, -⟩ := requirements_sound laws
+        ⟨σ.definition, blocks, some key, σ.role⟩ o args inv (by rw [hst₁]; exact refs₁)
+      rw [hst₁] at inv₁
+      have apart₁ : BoundsApart σ learned.2 (Term.addresses blocks (.op key o args results rest)) :=
+        fun q m => apart q (by rw [← b₁]; rw [b₂] at m; exact m)
       have va : σ.AllValid (env.all args) :=
         env_all_valid (agree_valid inv.agree inv.coherent.valid) args
       have restShows : ∀ values : HList σ.sem.Val res, σ.AllValid values →
+          (∀ guarantee, guarantee ∈ σ.rules.ops.ensures (σ.rules.written o) →
+            guarantee.Holds σ.Runs σ.R (σ.sem.dyns (env.all args) ++ σ.sem.dyns values)) →
           Shows σ blocks rest path (env.extend results values) (fun vs => ∃ ρ', ρ.Le ρ' ∧
             ExitInv σ ρ' (walk σ.rules σ.checks σ.definition σ.role blocks rest none
-              (bindIds ids results (fresh res.length s.st).1)
-              ((k.addRanges (fresh res.length s.st).1 (res.map σ.rules.range)).enter
-                σ.rules res) { s with st := (fresh res.length s.st).2 }).region
+              (bindIds ids results (fresh res.length st₁).1) learned.1
+              { s with st := learned.2 }).region
               (walk σ.rules σ.checks σ.definition σ.role blocks rest none
-                (bindIds ids results (fresh res.length s.st).1)
-                ((k.addRanges (fresh res.length s.st).1 (res.map σ.rules.range)).enter
-                  σ.rules res) { s with st := (fresh res.length s.st).2 }).state.st vs ∧
+                (bindIds ids results (fresh res.length st₁).1) learned.1
+                { s with st := learned.2 }).state.st vs ∧
             Followed (none : Option (Skel D outs)) hi ρ'
               (walk σ.rules σ.checks σ.definition σ.role blocks rest none
-                (bindIds ids results (fresh res.length s.st).1)
-                ((k.addRanges (fresh res.length s.st).1 (res.map σ.rules.range)).enter
-                  σ.rules res) { s with st := (fresh res.length s.st).2 }).state.st) := by
-        intro values valid
-        obtain ⟨coh, le, look⟩ := leaves_fresh (s := s) inv.coherent (σ.sem.dyns values) valid
+                (bindIds ids results (fresh res.length st₁).1) learned.1
+                { s with st := learned.2 }).state.st) := by
+        intro values valid guaranteed
+        obtain ⟨coh, le, look⟩ := leaves_fresh (s := { s with st := st₁ }) inv₁.coherent
+          (σ.sem.dyns values) valid
         simp only [leaves, σ.sem.dyns_length] at coh look
-        have inv' : Inv σ (ρ.setFrom s.st.next (σ.sem.dyns values))
-            (bindIds ids results (fresh res.length s.st).1) (env.extend results values)
-            ((k.addRanges (fresh res.length s.st).1 (res.map σ.rules.range)).enter
-              σ.rules res) (fresh res.length s.st).2 := by
-          refine ⟨coh, agree_extend results values _ (inv.agree.le le) look, ?_⟩
+        have before : ((k.addRanges (fresh res.length st₁).1 (res.map σ.rules.range)).enter
+            σ.rules res).Holds σ.R (ρ₁.setFrom st₁.next (σ.sem.dyns values)) := by
           rw [enter_of_valid laws valid]
-          exact addTypeRanges_holds laws (inv.holds.le le) coh.valid (valuesOf_typed look)
-        have shows := ih path _ _ _ _ { s with st := (fresh res.length s.st).2 } lo hi inv' trivial
-          differs hnone nodup' (BoundsApart.sub apart fun _ m => List.mem_cons_of_mem _ m)
+          exact addTypeRanges_holds laws (inv₁.holds.le le) coh.valid (valuesOf_typed look)
+        obtain ⟨ρ₂, step₂, after, -⟩ := effectStep_fills laws coh before
+          (valuesOf_append (valuesOf_le le (valuesOf_idsOf inv₁.agree args)) look)
+          (fun a m => by
+            rcases List.mem_append.mp m with m | m
+            · exact Nat.lt_of_lt_of_le (idsOf_lt inv₁.scoped.2 args a m) (Nat.le_add_right _ _)
+            · exact (fresh_grows res.length st₁ inv₁.coherent.wf).2.2 a m)
+          guaranteed
+        rw [hlearned] at step₂ after
+        have inv' : Inv σ ρ₂ (bindIds ids results (fresh res.length st₁).1)
+            (env.extend results values) learned.1 learned.2 :=
+          ⟨step₂.coherent, agree_extend results values _ (inv₁.agree.le (le.trans step₂.le))
+            (valuesOf_le step₂.le look), after⟩
+        have shows := ih path _ _ _ _ { s with st := learned.2 } lo hi inv' trivial
+          differs hnone nodup' (BoundsApart.sub apart₁ fun _ m => List.mem_cons_of_mem _ m)
           (recorded' _ recorded)
         exact ⟨shows.1, Process.every_mono _ _ (fun vs h => by
           obtain ⟨ρ', le', ex, f⟩ := h
-          exact ⟨ρ', le.trans le', ex, f⟩) (fun _ h => h) shows.2⟩
-      have effect := laws.effect o hw key path (env.all args) va
+          exact ⟨ρ', le₁.trans (le.trans (step₂.le.trans le')), ex, f⟩) (fun _ h => h) shows.2⟩
+      have effect := laws.effect o hs key path (env.all args) va required
       simp only [Shows, Term.EveryLoop, Term.denote]
-      refine ⟨Process.every_mono _ _ (fun values valid => (restShows values valid).1)
-        (fun _ _ => trivial) effect, ?_⟩
+      refine ⟨Process.every_mono _ _
+        (fun values valid => (restShows values valid.1 valid.2).1) (fun _ _ => trivial) effect, ?_⟩
       rw [Process.every_bind]
-      exact Process.every_mono _ _ (fun values valid => (restShows values valid).2) (fun _ h => h)
-        effect
+      exact Process.every_mono _ _ (fun values valid => (restShows values valid.1 valid.2).2)
+        (fun _ h => h) effect
 
 include laws in
 /-- A guard: where its condition is false it stops, with a stop that is not `undefined`; where it
@@ -1787,45 +1892,6 @@ theorem cases_sound (blocks : List (Key × Nat)) {Γ : Ctx D.Ty} {outs mid paylo
 
 /-! ### Loops -/
 
-/-- Values collected so far: as many of each type as iterations, each valid. -/
-def CollectedOK (σ : Setting D Raw) :
-    {each : List D.Ty} → HList (fun a => List (σ.sem.Val a)) each → Nat → Prop
-  | [], .nil, _ => True
-  | a :: _, .cons vs rest, i =>
-      vs.length = i ∧ (∀ v, v ∈ vs → σ.Valid ⟨a, v⟩) ∧ CollectedOK σ rest i
-
-omit [DecidableEq Raw] in
-theorem collectedOK_empties : ∀ (each : List D.Ty),
-    CollectedOK σ (HList.empties (V := σ.sem.Val) each) 0
-  | [] => trivial
-  | _ :: rest => ⟨rfl, fun _ m => (nomatch m), collectedOK_empties rest⟩
-
-omit [DecidableEq Raw] in
-theorem collectedOK_push : ∀ {each : List D.Ty} {acc : HList (fun a => List (σ.sem.Val a)) each}
-    {i : Nat} {vs : HList σ.sem.Val each}, CollectedOK σ acc i → σ.AllValid vs →
-    CollectedOK σ (acc.push vs) (i + 1)
-  | [], .nil, _, .nil, _, _ => trivial
-  | _ :: _, .cons xs rest, _, .cons v more, h, all => by
-      obtain ⟨len, valid, others⟩ := h
-      refine ⟨by simp [len], fun w m => ?_, collectedOK_push others (allValid_cons.mp all).2⟩
-      rcases List.mem_cons.mp m with m | m
-      · subst m
-        exact (allValid_cons.mp all).1
-      · exact valid w m
-
-omit [DecidableEq Raw] in
-include laws in
-theorem collected_valid (size : Option Nat) {n : Nat} (fits : ∀ m, size = some m → n = m) :
-    ∀ {each : List D.Ty} {acc : HList (fun a => List (σ.sem.Val a)) each}, CollectedOK σ acc n →
-      σ.AllValid (σ.sem.collected size acc)
-  | [], .nil, _ => fun _ m => nomatch m
-  | a :: _, .cons vs rest, h => by
-      obtain ⟨len, valid, others⟩ := h
-      exact allValid_cons.mpr ⟨laws.collect size a vs.reverse
-          (fun m e => by rw [List.length_reverse, len]; exact fits m e)
-          (fun v m => valid v (List.mem_reverse.mp m)),
-        collected_valid size fits others⟩
-
 include laws in
 omit [DecidableEq Raw] in
 /-- The value of the count of a loop as often as a count reads as the number of iterations. -/
@@ -2054,7 +2120,7 @@ structure LoopAt (e : FactCheck.Exit D.Ty Raw) (initials : List (Option Range))
     (carriedIds : List Nat) {carried each : List D.Ty} (init0 : HList σ.sem.Val carried) (i : Nat)
     (state : HList σ.sem.Val carried × HList (fun a => List (σ.sem.Val a)) each) : Prop where
   carriedValid : σ.AllValid state.1
-  collected : CollectedOK σ state.2 i
+  collected : CollectedOK σ.sem σ.Valid state.2 i
   alive : 0 < i → e.known.dead = false
   initial : i = 0 → state.1 = init0
   sums : ∀ (j : Nat) (r₀ : Range) (t : Nat) (rt : Range), initials[j]? = some (some r₀) →
@@ -2333,7 +2399,8 @@ theorem loop_sound (blocks : List (Key × Nat)) {Γ : Ctx D.Ty} {outs carried ea
       | fixed n => simp only [Times.size, Option.some.injEq] at e'; subst e'; rfl
       | value => cases e'
     have validR : σ.AllValid (state.1.append (σ.sem.collected times.size state.2)) :=
-      (allValid_append _ _).mpr ⟨la.carriedValid, collected_valid laws times.size fits la.collected⟩
+      (allValid_append _ _).mpr ⟨la.carriedValid,
+        collected_valid laws.collect times.size fits la.collected⟩
     have lenR : (σ.sem.dyns (state.1.append (σ.sem.collected times.size state.2))).length =
         carried.length + each.length := by
       rw [σ.sem.dyns_length]
@@ -2516,6 +2583,16 @@ mutual
 end
 
 omit [DecidableEq Raw] in
+/-- The inputs of a body, set at the first identifiers, are the values of those identifiers. -/
+theorem start_values {types : List D.Ty} (values : HList σ.sem.Val types) :
+    valuesOf (Valuation.setFrom (fun _ => none : Valuation σ.sem.Dyn) 0 (σ.sem.dyns values))
+      (List.range types.length) = some (σ.sem.dyns values) := by
+  have := valuesOf_setFrom (fun _ => none : Valuation σ.sem.Dyn) 0 (σ.sem.dyns values)
+  rw [σ.sem.dyns_length] at this
+  rw [List.range_eq_range']
+  exact this
+
+omit [DecidableEq Raw] in
 /-- At the start of a body: its inputs, bound to their names, have the first identifiers, and the
 table is empty. -/
 theorem start_inv (laws : σ.Lawful) {types : List D.Ty} (inputs : Names types)
@@ -2531,12 +2608,7 @@ theorem start_inv (laws : σ.Lawful) {types : List D.Ty} (inputs : Names types)
     exact this
   have validS := setFrom_valid (Valid := σ.Valid) (ρ := (fun _ => none : Valuation σ.sem.Dyn))
     (lo := 0) (fun _ _ e => by cases e) valid
-  have look : valuesOf (Valuation.setFrom (fun _ => none : Valuation σ.sem.Dyn) 0
-      (σ.sem.dyns values)) (List.range types.length) = some (σ.sem.dyns values) := by
-    have := valuesOf_setFrom (fun _ => none : Valuation σ.sem.Dyn) 0 (σ.sem.dyns values)
-    rw [σ.sem.dyns_length] at this
-    rw [List.range_eq_range']
-    exact this
+  have look := start_values (σ := σ) values
   have nothing : Agree σ (Valuation.setFrom (fun _ => none : Valuation σ.sem.Dyn) 0
       (σ.sem.dyns values)) Ctx.empty (Env.empty : Env σ.sem.Val Ctx.empty) :=
     fun _ x => nomatch (Ctx.find?_empty (T := D.Ty) x.name).symm.trans x.typed
@@ -2551,6 +2623,32 @@ theorem start_inv (laws : σ.Lawful) {types : List D.Ty} (inputs : Names types)
   simp only [start]
   rw [enter_of_valid laws valid]
   exact addTypeRanges_holds laws empty validS (valuesOf_typed look)
+
+/-- At the start of a body under a summary whose requirements hold of the values of its inputs,
+from a state where the walk agrees with the valuation of the inputs: what is known once the
+summary's requirements are learned holds of the valuation grown by the values of the
+applications that they enter in the table, which are results of entries, and the state grew. -/
+theorem startUnder_inv (laws : σ.Lawful) {types : List D.Ty} (inputs : Names types)
+    (values : HList σ.sem.Val types) (summary : Summary Raw)
+    (required : ∀ requirement, requirement ∈ summary.requires →
+      requirement.Holds σ.Runs σ.R (σ.sem.dyns values))
+    {st : St D.Ty Raw}
+    (inv : Inv σ (Valuation.setFrom (fun _ => none) 0 (σ.sem.dyns values))
+      (bindIds Ctx.empty inputs (List.range types.length)) (Env.empty.extend inputs values)
+      (start σ.rules types) st) :
+    ∃ ρ : Valuation σ.sem.Dyn,
+      (Valuation.setFrom (fun _ => none) 0 (σ.sem.dyns values)).Le ρ ∧
+      Inv σ ρ (bindIds Ctx.empty inputs (List.range types.length)) (Env.empty.extend inputs values)
+        (startUnder σ.rules summary types st).1 (startUnder σ.rules summary types st).2 ∧
+      St.Grows st (startUnder σ.rules summary types st).2 ∧
+      Fills (Valuation.setFrom (fun _ => none) 0 (σ.sem.dyns values)) ρ
+        (startUnder σ.rules summary types st).2.table := by
+  have look := start_values (σ := σ) values
+  obtain ⟨ρ, step, holds, fills⟩ := learnRequirements_fills laws.ops (fun _ _ _ run _ => run.2.2)
+    summary.requires inv.coherent inv.holds look
+    (fun a m => Nat.lt_of_not_le fun le => valuesOf_mem look a m (inv.coherent.support a le))
+    required
+  exact ⟨ρ, step.le, ⟨step.coherent, inv.agree.le step.le, holds⟩, step.grows, fills⟩
 
 end
 

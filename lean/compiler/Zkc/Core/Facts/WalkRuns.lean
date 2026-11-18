@@ -10,10 +10,12 @@ The runs of the walk of the analysis, for any dialect and any semantics whose va
 laws of `ValueRules.Binding`: without a skeleton to follow, a term that never stops `undefined`
 runs the skeleton that the walk builds, over the table that the walk gives
 (`walk_runs_built`); with a skeleton to follow and no place that differs, it runs the skeleton
-that it follows (`walk_runs_followed`). A value of the walk also checks its requirements, which
-may enter applications in the table before the value is shared: the table only grows across it
-(`valueStep_reads`). What the walk does to its state, to the places that differ and to the
-skeleton is in `Facts/Growth.lean`.
+that it follows (`walk_runs_followed`). At every operation the walk first decides its
+requirements, which may enter applications in the table before a value is shared or an operation
+kept in order gets its leaves, and learning what the operation guarantees may enter more after
+them: the table only grows across them, and a value reads, over the table after it, as what its
+written operation gives (`valueStep_reads`). What the walk does to
+its state, to the places that differ and to the skeleton is in `Facts/Growth.lean`.
 -/
 
 namespace Zkc.Core.Analysis.ValueSide
@@ -27,22 +29,27 @@ variable {D : Dialect} {Raw : Type} [DecidableEq Raw] (rules : FactRules D Raw) 
   {undefined : sem.H → Prop}
 
 /-- The results of a value read, over the table after it, as what its written operation gives on
-the operands: its requirements may enter applications first, and the operands of an operation
-that commutes are placed in the table's order. -/
-theorem valueStep_reads (binding : rules.values.Binding sem Run undefined) (place : Place)
-    (raw : Raw) (res : List D.Ty) (argIds : List Nat) (k : Known) (st : St D.Ty Raw)
+the operands: the operands of an operation that commutes are placed in the table's order. -/
+theorem valueStep_reads (binding : rules.values.Binding sem Run undefined) (raw : Raw)
+    (res : List D.Ty) (argIds : List Nat) (k : Known) (st : St D.Ty Raw)
     {ρ : Valuation sem.Dyn} {operands results : List sem.Dyn} (wf : Table.WF st.next st.table)
     (below : ∀ a, a ∈ argIds → a < st.next) (read : ReadsAll Run st.table ρ argIds operands)
     (ran : Run raw operands results) (length : results.length = res.length) :
-    ReadsAll Run (valueStep rules place raw res argIds k st).2.2.table ρ
-      (valueStep rules place raw res argIds k st).1 results := by
-  obtain ⟨wf1, grows1⟩ := checkRequirements_grows rules.ops k place raw argIds
-    (rules.ops.requires raw) st wf below
-  obtain ⟨-, grows2, -⟩ := share_grows raw (rules.values.order raw argIds) res.length _ wf1
-    (rules.values.order_lt fun a m => Nat.lt_of_lt_of_le (below a m) grows1.next)
+    ReadsAll Run (valueStep rules raw res argIds k st).2.2.table ρ
+      (valueStep rules raw res argIds k st).1 results := by
+  obtain ⟨wf₁, grows, lt⟩ := share_grows raw (rules.values.order raw argIds) res.length _ wf
+    (rules.values.order_lt below)
   obtain ⟨_, readOrdered, runOrdered⟩ := binding.reads_order raw
-    (ReadsAll.mono Run _ (grows1.trans grows2).sub (.refl ρ) read) ran
-  exact share_reads raw (rules.values.order raw argIds) res.length _ readOrdered runOrdered length
+    (ReadsAll.mono Run _ grows.sub (.refl ρ) read) ran
+  have reads :=
+    share_reads raw (rules.values.order raw argIds) res.length _ readOrdered runOrdered length
+  simp only [valueStep]
+  refine ReadsAll.mono Run _ (learnRequirements_grows rules.ops _ _ _ _ wf₁ ?_).2.sub (.refl ρ)
+    reads
+  intro a m
+  rcases List.mem_append.mp m with m | m
+  · exact Nat.lt_of_lt_of_le (below a m) grows.next
+  · exact lt a m
 
 /-! ## Without a skeleton to follow -/
 
@@ -64,43 +71,62 @@ mutual
         exact .ret _ (by rw [miss_st]; exact agrees.readsAll exit)
     | _, _, .op (res := res) key o args results rest, ids, k, s, path, env, ρ, wf, support,
         agrees, safe => by
-        cases written : rules.written o with
-        | some raw =>
-            simp only [walk, written]
-            rcases binding.computes o raw written key path (env.all args) with
-              ⟨values, ran, run⟩ | ⟨stop, halted, bad⟩
+        have scope := agrees.inScope
+        obtain ⟨wf₁, g₁⟩ := checkRequirements_grows rules.ops k ⟨definition, blocks, some key, role⟩
+          (rules.written o) (idsOf ids args) (rules.ops.requires (rules.written o)) s.st wf
+          (idsOf_lt scope args)
+        have agrees₁ := agrees.mono g₁.sub g₁.next (.refl ρ)
+        cases shared : rules.shared o with
+        | true =>
+            simp only [walk, shared]
+            generalize checkRequirements rules.ops k ⟨definition, blocks, some key, role⟩
+              (rules.written o) (idsOf ids args) (rules.ops.requires (rules.written o)) s.st = st₁
+              at wf₁ g₁ agrees₁ ⊢
+            rcases binding.computes o (rules.written o) (rules.values_written_shared shared) key
+              path (env.all args) with ⟨values, ran, run⟩ | ⟨stop, halted, bad⟩
             · simp only [Term.denote, ran, Process.bind] at safe ⊢
-              have scope := agrees.inScope
-              obtain ⟨wf1, grows1, made1, -⟩ := valueStep_grows rules
-                ⟨definition, blocks, some key, role⟩ raw res (idsOf ids args) k s.st wf
-                (idsOf_lt scope args)
-              have reads := valueStep_reads rules sem Run binding
-                ⟨definition, blocks, some key, role⟩ raw res (idsOf ids args) k s.st wf
-                (idsOf_lt scope args) (agrees.readsAll args) run (sem.dyns_length values)
-              generalize valueStep rules _ raw res (idsOf ids args) k s.st = step
-                at wf1 grows1 made1 reads ⊢
+              have lt₁ : ∀ a, a ∈ idsOf ids args → a < st₁.next :=
+                fun a m => Nat.lt_of_lt_of_le (idsOf_lt scope args a m) g₁.next
+              obtain ⟨wf2, grows2, made2, -⟩ := valueStep_grows rules (rules.written o) res
+                (idsOf ids args) k st₁ wf₁ lt₁
+              have reads := valueStep_reads rules sem Run binding (rules.written o) res
+                (idsOf ids args) k st₁ wf₁ lt₁ (agrees₁.readsAll args) run (sem.dyns_length values)
+              generalize valueStep rules (rules.written o) res (idsOf ids args) k st₁ = step
+                at wf2 grows2 made2 reads ⊢
               exact walk_runs_built binding blocks rest _ step.2.1 { s with st := step.2.2 } path
-                _ ρ wf1 (support.mono grows1.next)
-                (Agrees.bind results values _ (agrees.mono grows1.sub grows1.next (.refl ρ)) reads
-                  made1) safe
+                _ ρ wf2 (support.mono (g₁.trans grows2).next)
+                (Agrees.bind results values _ (agrees₁.mono grows2.sub grows2.next (.refl ρ)) reads
+                  made2) safe
             · simp only [Term.denote, halted, Process.bind] at safe
               exact absurd bad safe
-        | none =>
-            simp only [walk, written, effectEntry_none, Option.isSome_none, miss_free,
+        | false =>
+            simp only [walk, shared, effectEntry_none, Option.isSome_none, miss_free,
               Option.map_none, leaves_none, kept_none]
             simp only [Term.denote] at safe ⊢
-            obtain ⟨wf1, grows1, made1⟩ := fresh_grows res.length s.st wf
-            generalize Known.enter rules _ _ = k1
-            have scope1 := (agrees.inScope.mono grows1.next).bind results _ (by simp [fresh]) made1
-            obtain ⟨-, grows2⟩ := walk_grows rules checks definition role blocks rest none _ k1
-              { s with st := (fresh res.length s.st).2 } ⟨wf1, scope1⟩ trivial
+            generalize checkRequirements rules.ops k ⟨definition, blocks, some key, role⟩
+              (rules.written o) (idsOf ids args) (rules.ops.requires (rules.written o)) s.st = st₁
+              at wf₁ g₁ agrees₁ ⊢
+            obtain ⟨wf2, grows2, made2⟩ := fresh_grows res.length st₁ wf₁
+            obtain ⟨wf3, grows3⟩ := effectStep_grows rules (rules.written o) res (idsOf ids args)
+              (fresh res.length st₁).1 k (fresh res.length st₁).2 wf2 (fun a m => by
+                rcases List.mem_append.mp m with m | m
+                · exact Nat.lt_of_lt_of_le (idsOf_lt scope args a m) (g₁.trans grows2).next
+                · exact made2 a m)
+            generalize effectStep rules (rules.written o) res (idsOf ids args)
+              (fresh res.length st₁).1 k (fresh res.length st₁).2 = learned at wf3 grows3 ⊢
+            have scope1 := (agrees₁.inScope.mono (grows2.trans grows3).next).bind results _
+              (by simp [fresh]) (fun i m => Nat.lt_of_lt_of_le (made2 i m) grows3.next)
+            obtain ⟨-, grows4⟩ := walk_grows rules checks definition role blocks rest none _
+              learned.1 { s with st := learned.2 } ⟨wf3, scope1⟩ trivial
             refine .effect (env.all args)
-              (ReadsAll.mono Run _ (grows1.trans grows2).sub (.refl ρ) (agrees.readsAll args))
+              (ReadsAll.mono Run _ (g₁.trans (grows2.trans (grows3.trans grows4))).sub (.refl ρ)
+                (agrees.readsAll args))
               fun returned returns => ?_
-            have bound := (agrees.mono grows1.sub grows1.next (.refl ρ)).leaves support results
-              returned s.st.next res.length rfl (Nat.le_refl _) (Nat.le_refl _)
-            exact walk_runs_built binding blocks rest _ k1
-              { s with st := (fresh res.length s.st).2 } path _ _ wf1 bound.1 bound.2
+            have bound := (agrees₁.mono (grows2.trans grows3).sub (grows2.trans grows3).next
+              (.refl ρ)).leaves (support.mono g₁.next) results returned st₁.next res.length rfl
+              (Nat.le_refl _) grows3.next
+            exact walk_runs_built binding blocks rest _ learned.1
+              { s with st := learned.2 } path _ _ wf3 (bound.1.mono grows3.next) bound.2
               (safe.of_bind_canReturn returns)
     | _, _, .guard key w c ok why rest, ids, k, s, path, env, ρ, wf, support, agrees, safe => by
         simp only [walk, guardEntry_none, Option.isSome_none, miss_free, kept_none]
@@ -395,30 +421,42 @@ mutual
         exact .ret _ (agrees.readsAll exit)
     | _, _, .op (res := res) key o args results rest, skel, ids, k, s, path, env, ρ, lo, noPlace,
         wf, below, apart, support, inOrder, agrees, safe => by
-        cases written : rules.written o with
-        | some raw =>
-            simp only [walk, written] at noPlace ⊢
-            rcases binding.computes o raw written key path (env.all args) with
-              ⟨values, ran, run⟩ | ⟨stop, halted, bad⟩
+        have scope := agrees.inScope
+        obtain ⟨wf₁, g₁⟩ := checkRequirements_grows rules.ops k ⟨definition, blocks, some key, role⟩
+          (rules.written o) (idsOf ids args) (rules.ops.requires (rules.written o)) s.st wf
+          (idsOf_lt scope args)
+        have agrees₁ := agrees.mono g₁.sub g₁.next (.refl ρ)
+        have below₁ := Skel.Below.mono (skel := skel) below g₁.next
+        have apart₁ := Skel.Apart.grows g₁ skel apart below
+        cases shared : rules.shared o with
+        | true =>
+            simp only [walk, shared] at noPlace ⊢
+            generalize checkRequirements rules.ops k ⟨definition, blocks, some key, role⟩
+              (rules.written o) (idsOf ids args) (rules.ops.requires (rules.written o)) s.st = st₁
+              at wf₁ g₁ agrees₁ below₁ apart₁ noPlace ⊢
+            rcases binding.computes o (rules.written o) (rules.values_written_shared shared) key
+              path (env.all args) with ⟨values, ran, run⟩ | ⟨stop, halted, bad⟩
             · simp only [Term.denote, ran, Process.bind] at safe ⊢
-              have scope := agrees.inScope
-              obtain ⟨wf1, grows1, made1, -⟩ := valueStep_grows rules
-                ⟨definition, blocks, some key, role⟩ raw res (idsOf ids args) k s.st wf
-                (idsOf_lt scope args)
-              have reads := valueStep_reads rules sem Run binding
-                ⟨definition, blocks, some key, role⟩ raw res (idsOf ids args) k s.st wf
-                (idsOf_lt scope args) (agrees.readsAll args) run (sem.dyns_length values)
-              generalize valueStep rules _ raw res (idsOf ids args) k s.st = step
-                at wf1 grows1 made1 reads noPlace ⊢
+              have lt₁ : ∀ a, a ∈ idsOf ids args → a < st₁.next :=
+                fun a m => Nat.lt_of_lt_of_le (idsOf_lt scope args a m) g₁.next
+              obtain ⟨wf2, grows2, made2, -⟩ := valueStep_grows rules (rules.written o) res
+                (idsOf ids args) k st₁ wf₁ lt₁
+              have reads := valueStep_reads rules sem Run binding (rules.written o) res
+                (idsOf ids args) k st₁ wf₁ lt₁ (agrees₁.readsAll args) run (sem.dyns_length values)
+              generalize valueStep rules (rules.written o) res (idsOf ids args) k st₁ = step
+                at wf2 grows2 made2 reads noPlace ⊢
               exact walk_runs_followed binding lawful blocks rest skel _ step.2.1
-                { s with st := step.2.2 } path _ ρ lo noPlace wf1 (below.mono grows1.next)
-                (Skel.Apart.grows grows1 skel apart below) support inOrder
-                (Agrees.bind results values _ (agrees.mono grows1.sub grows1.next (.refl ρ)) reads
-                  made1) safe
+                { s with st := step.2.2 } path _ ρ lo noPlace wf2 (below₁.mono grows2.next)
+                (Skel.Apart.grows grows2 skel apart₁ below₁) support inOrder
+                (Agrees.bind results values _ (agrees₁.mono grows2.sub grows2.next (.refl ρ)) reads
+                  made2) safe
             · simp only [Term.denote, halted, Process.bind] at safe
               exact absurd bad safe
-        | none =>
-            simp only [walk, written] at noPlace ⊢
+        | false =>
+            simp only [walk, shared] at noPlace ⊢
+            generalize checkRequirements rules.ops k ⟨definition, blocks, some key, role⟩
+              (rules.written o) (idsOf ids args) (rules.ops.requires (rules.written o)) s.st = st₁
+              at wf₁ g₁ agrees₁ below₁ apart₁ noPlace ⊢
             generalize hhit : effectEntry checks key o (idsOf ids args) (some skel) = hit
               at noPlace ⊢
             obtain ⟨⟨r, rest'⟩, rfl⟩ : ∃ a, hit = some a := hit_of_no_place (by
@@ -432,20 +470,33 @@ mutual
             simp only [Option.isSome_some, miss_found, Option.map_some, leaves_some]
               at noPlace ⊢
             simp only [Term.denote] at safe ⊢
-            generalize Known.enter rules _ _ = k1 at noPlace ⊢
-            have scope1 := agrees.inScope.bind results (List.range' r res.length) (by simp)
-              fun i m => by
+            obtain ⟨wf3, grows3⟩ := effectStep_grows rules (rules.written o) res (idsOf ids args)
+              (List.range' r res.length) k st₁ wf₁ (fun a m => by
+                rcases List.mem_append.mp m with m | m
+                · exact Nat.lt_of_lt_of_le (idsOf_lt scope args a m) g₁.next
+                · have := mem_range'_bounds m
+                  have := below₁.1
+                  omega)
+            generalize effectStep rules (rules.written o) res (idsOf ids args)
+              (List.range' r res.length) k st₁ = learned at wf3 grows3 noPlace ⊢
+            have scope1 := (agrees₁.inScope.mono grows3.next).bind results
+              (List.range' r res.length) (by simp) fun i m => by
                 have := mem_range'_bounds m
-                have := below.1
+                have := below₁.1
+                have := grows3.next
                 omega
             obtain ⟨-, grows⟩ := walk_grows rules checks definition role blocks rest (some rest') _
-              k1 s ⟨wf, scope1⟩ below.2
+              learned.1 { s with st := learned.2 } ⟨wf3, scope1⟩ (below₁.2.mono grows3.next)
             refine .effect (env.all args)
-              (ReadsAll.mono Run _ grows.sub (.refl ρ) (agrees.readsAll args))
+              (ReadsAll.mono Run _ (g₁.trans (grows3.trans grows)).sub (.refl ρ)
+                (agrees.readsAll args))
               fun returned returns => ?_
-            have bound := agrees.leaves support results returned r res.length rfl inOrder.1 below.1
-            exact walk_runs_followed binding lawful blocks rest rest' _ k1 s path _ _ _ noPlace wf
-              below.2 apart.2 bound.1 inOrder.2 bound.2 (safe.of_bind_canReturn returns)
+            have bound := (agrees₁.mono grows3.sub grows3.next (.refl ρ)).leaves support results
+              returned r res.length rfl inOrder.1 (Nat.le_trans below₁.1 grows3.next)
+            exact walk_runs_followed binding lawful blocks rest rest' _ learned.1
+              { s with st := learned.2 } path _ _ _ noPlace wf3 (below₁.2.mono grows3.next)
+              (Skel.Apart.grows grows3 rest' apart₁.2 below₁.2) bound.1 inOrder.2 bound.2
+              (safe.of_bind_canReturn returns)
     | _, _, .guard (t := t) key w c ok why rest, skel, ids, k, s, path, env, ρ, lo, noPlace, wf,
         below, apart, support, inOrder, agrees, safe => by
         simp only [walk] at noPlace ⊢

@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Core.Program.Term
+public import Zkc.Core.Program.Syntax
 public import Zkc.Core.Program.Refusal
 
 @[expose] public section
@@ -28,10 +29,18 @@ case analyses without an arm give nothing (`elabBody_armed`).
 
 namespace Zkc.Core
 
+/-- How a dialect decides that two of its types are equal: what elaboration (`Rules`) and following
+(`SkelRules`, `Value/Skeleton.lean`) compare types with. -/
+structure TypeEquality (D : Dialect) where
+  sameTy : DecidableEq D.Ty
+
+/-- Whether two lists of types are equal, by the dialect's decision for types. -/
+def TypeEquality.sameTys {D : Dialect} (types : TypeEquality D) : DecidableEq (List D.Ty) :=
+  @instDecidableEqList D.Ty types.sameTy
+
 /-- The rules of a dialect, by which its regions by names are elaborated and its terms are
 printed. `Raw` is what is written for an operation, `Who` what is written for who performs. -/
-structure Rules (D : Dialect) (Raw Who : Type) where
-  sameTy : DecidableEq D.Ty
+structure Rules (D : Dialect) (Raw Who : Type) extends TypeEquality D where
   /-- The operation that is written, on operands of the types given, with its result types. -/
   op : Raw → (operands : List D.Ty) →
     Except (Finding D.Ty Raw) ((res : List D.Ty) × D.Op operands res)
@@ -45,11 +54,6 @@ structure Rules (D : Dialect) (Raw Who : Type) where
   /-- What is written for an operation, and for who performs. -/
   printOp : ∀ {ins res : List D.Ty}, D.Op ins res → Raw
   printWho : D.Who → Who
-
-/-- The equality of lists of types of a dialect. -/
-def Rules.sameTys {D : Dialect} {Raw Who : Type} (rules : Rules D Raw Who) :
-    DecidableEq (List D.Ty) :=
-  @instDecidableEqList D.Ty rules.sameTy
 
 /-- Whether a property holds of every item of a list. -/
 def decideAll {α : Type} (P : α → Prop) (dec : ∀ a, Decidable (P a)) :

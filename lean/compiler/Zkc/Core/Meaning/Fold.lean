@@ -1,6 +1,7 @@
 module
 
-public import Zkc.Core.Meaning.Events
+public import Zkc.Core.Program.Term
+public import Zkc.Core.Process.Process
 
 @[expose] public section
 
@@ -22,8 +23,10 @@ that a run reaches (`Term.EveryLoop`), the uses of linear values (`Term.linearUs
 of `Program/Term.lean` (addresses, block keys, whether every case analysis is armed, whether a
 term can stop, its calls, its bindings) and of `Program/Dialects.lean` (who acts, enclosure, the
 shape), the place of a name bound twice (`Term.reboundAt`), projection, elaboration and erasure,
-the walk of the check of facts, and the proofs about each. A new constructor of `Term` is added
-to all of them.
+the walk of the check of facts, the translation to the term in steps (`Term.toStepped`,
+`Program/Stepped.lean`), and the proofs about each, among them that the translation keeps the
+meaning and the loops that a run reaches (`Term.denote_toStepped`, `Term.everyLoop_toStepped`). A
+new constructor of `Term` is added to all of them.
 
 A value is read and bound by name: a variable is read from the environment (`Env.get`,
 `Env.all`), and a binding binds its names to its values (`Env.extend`), a later name anew.
@@ -61,6 +64,12 @@ end HList
 inductive Pick {α : Type} (V : α → Type) : List α → Type where
   | here {a : α} {rest : List α} : V a → Pick V (a :: rest)
   | there {a : α} {rest : List α} : Pick V rest → Pick V (a :: rest)
+
+/-- The payload of the alternative of a variant satisfies a predicate of its type. -/
+def Pick.All {α : Type} {V : α → Type} (P : ∀ a, V a → Prop) :
+    {items : List α} → Pick V items → Prop
+  | _, .here v => P _ v
+  | _, .there p => p.All P
 
 structure Semantics (D : Dialect) where
   Val : D.Ty → Type
@@ -114,14 +123,29 @@ theorem Semantics.dyn_inj (sem : Semantics D) {τ : D.Ty} {v v' : sem.Val τ}
     (same : (⟨τ, v⟩ : sem.Dyn) = ⟨τ, v'⟩) : v = v' :=
   eq_of_heq (Sigma.mk.inj same).2
 
+
+/-- Values that are equal with their types are of the same types, and equal. -/
+theorem Semantics.dyns_heq (sem : Semantics D) :
+    ∀ {as bs : List D.Ty} (xs : HList sem.Val as) (ys : HList sem.Val bs),
+      sem.dyns xs = sem.dyns ys → as = bs ∧ HEq xs ys
+  | [], [], .nil, .nil, _ => ⟨rfl, HEq.rfl⟩
+  | [], _ :: _, .nil, .cons _ _, same => by simp [Semantics.dyns] at same
+  | _ :: _, [], .cons _ _, .nil, same => by simp [Semantics.dyns] at same
+  | _ :: _, _ :: _, .cons x xs, .cons y ys, same => by
+      simp only [Semantics.dyns, List.cons.injEq, Sigma.mk.injEq] at same
+      obtain ⟨⟨sameType, sameValue⟩, others⟩ := same
+      subst sameType
+      cases eq_of_heq sameValue
+      obtain ⟨sameTypes, sameValues⟩ := sem.dyns_heq xs ys others
+      subst sameTypes
+      cases eq_of_heq sameValues
+      exact ⟨rfl, HEq.rfl⟩
+
 /-- Values of the same types that are equal with their types are equal. -/
-theorem Semantics.dyns_injective (sem : Semantics D) :
-    ∀ {items : List D.Ty} {values values' : HList sem.Val items},
-      sem.dyns values = sem.dyns values' → values = values'
-  | [], .nil, .nil, _ => rfl
-  | _ :: _, .cons v rest, .cons v' rest', same => by
-      simp only [Semantics.dyns, List.cons.injEq] at same
-      rw [sem.dyn_inj same.1, sem.dyns_injective same.2]
+theorem Semantics.dyns_injective (sem : Semantics D) {items : List D.Ty}
+    {values values' : HList sem.Val items} (same : sem.dyns values = sem.dyns values') :
+    values = values' :=
+  eq_of_heq (sem.dyns_heq values values' same).2
 
 /-- Values of two lists, one after the other, with their types. -/
 theorem Semantics.dyns_append (sem : Semantics D) :

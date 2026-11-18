@@ -63,7 +63,7 @@ def «N-TY16b» := check [sized byte 4] [.nat] false <| .mk [0] [
 `low<byte, 1>` and `low<byte, 0>` (keys 1, 2, 3), then `shrink` (key 4). Each value of `rest`
 has its own name: block `j` reads `j` and binds `j + 1`. -/
 def lowHeader (key m : Nat) : FnHeader V :=
-  ⟨⟨key⟩, [sized byte (2 ^ (m + 1))], [sized byte (2 ^ m)], false, none⟩
+  ⟨⟨key⟩, [sized byte (2 ^ (m + 1))], [sized byte (2 ^ m)], false, none, Summary.empty⟩
 def lowBody (m : Nat) : Region Raw Unit := .mk [0] [
   .op ⟨1⟩ [10] (natural 0) [],
   .op ⟨2⟩ [11] (natural (2 ^ m)) [],
@@ -72,7 +72,7 @@ def «N-TY10d-low» := (run [] (lowHeader 1 2) (lowBody 2),
   run [lowHeader 1 2] (lowHeader 2 1) (lowBody 1),
   run [lowHeader 1 2, lowHeader 2 1] (lowHeader 3 0) (lowBody 0))
 def «N-TY10d» := run [lowHeader 1 2, lowHeader 2 1, lowHeader 3 0]
-    ⟨⟨4⟩, [sized byte 8], [byte], false, none⟩ <| .mk [0] [
+    ⟨⟨4⟩, [sized byte 8], [byte], false, none, Summary.empty⟩ <| .mk [0] [
   .block ⟨1⟩ 0 [1] (.mk [] [.op ⟨2⟩ [20] (.call ⟨1⟩) [0]] [20]),
   .block ⟨1⟩ 1 [2] (.mk [] [.op ⟨2⟩ [30] (.call ⟨2⟩) [1]] [30]),
   .block ⟨1⟩ 2 [3] (.mk [] [.op ⟨2⟩ [40] (.call ⟨3⟩) [2]] [40]),

@@ -1,6 +1,7 @@
 module
 
-public import Zkc.Core.Program.Vocabulary
+public import Zkc.Core.Program.Identity
+public import Zkc.Core.Program.Lists
 
 @[expose] public section
 

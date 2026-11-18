@@ -3,6 +3,8 @@ module
 public import Zkc.Core.Program.Term
 public import Zkc.Core.Program.Located
 public import Zkc.Core.Program.Shape
+public import Zkc.Core.Program.Syntax
+public import Zkc.Core.Program.Requirement
 
 @[expose] public section
 
@@ -12,7 +14,9 @@ types) and the role one (one role; the same located types, read as what the role
 context of a protocol and of a role program has the same names at the same located types
 (`Ctx (LTy V)`). A term carries the proof of each "held by at least", so projection is total.
 A callee is named by its place among the headers (`Member`), and a component, a field or an
-alternative by its place among the types.
+alternative by its place among the types. The header of a function carries its summary
+(`Summary`): what a call requires of its inputs and what it guarantees of its inputs followed by
+its results, over no written operation, so that it names them by their positions only.
 -/
 
 namespace Zkc.Core
@@ -29,6 +33,9 @@ structure FnHeader (V : Vocabulary) where
   /-- The native kernel that may stand for the body, under the assumption that it computes
   the body. The function always has its body. -/
   kernel : Option Key
+  /-- What a call must establish of the inputs, and what it may then take of the inputs followed
+  by the results, each by position: over no written operation, it applies none. -/
+  summary : Summary Empty
 
 /-- What an application needs of a protocol: its ports and results, located in its own
 roles, and its shape. -/
@@ -46,6 +53,16 @@ abbrev ProtocolHeader.record {V : Vocabulary} (hdr : ProtocolHeader V) : Fields 
 structure Headers (V : Vocabulary) where
   fns : List (FnHeader V)
   protocols : List (ProtocolHeader V)
+
+/-- No function of the headers has a requirement in its summary: a call of any of them asks
+nothing of its inputs beyond that they are valid. -/
+def Headers.Unconditional {V : Vocabulary} (hs : Headers V) : Prop :=
+  ∀ hdr, hdr ∈ hs.fns → hdr.summary.requires = []
+
+/-- Whether no function of the headers has a requirement is decided header by header. -/
+instance Headers.decideUnconditional {V : Vocabulary} (hs : Headers V) :
+    Decidable hs.Unconditional :=
+  inferInstanceAs (Decidable (∀ hdr, hdr ∈ hs.fns → hdr.summary.requires = []))
 
 /-! ## The local dialect -/
 

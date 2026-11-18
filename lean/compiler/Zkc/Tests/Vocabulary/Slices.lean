@@ -32,17 +32,17 @@ def «T-Z3» := check [sized F 4, sized F 4] [twoSlices] false <| .mk [0, 1] [
   .op ⟨7⟩ [16] (make twoSlices) [12, 15]] [16]
 
 /-- `half<k = 3>`: `xs[0..2^k]` on `[F; 16]` (`T-Z4`); `use_half<4>` calls it (`T-Z5`). -/
-def halfHeader : FnHeader V := ⟨⟨1⟩, [sized F 16], [sized F 8], false, none⟩
+def halfHeader : FnHeader V := ⟨⟨1⟩, [sized F 16], [sized F 8], false, none, Summary.empty⟩
 def «T-Z4» := run [] halfHeader <| .mk [0] [
   .op ⟨1⟩ [10] (natural 0) [],
   .op ⟨2⟩ [11] (natural 8) [],
   .op ⟨3⟩ [12] (slice (sized F 16) (sized F 8)) [0, 10, 11]] [12]
-def «T-Z5» := run [halfHeader] ⟨⟨2⟩, [sized F 16], [sized F 8], false, none⟩ <|
+def «T-Z5» := run [halfHeader] ⟨⟨2⟩, [sized F 16], [sized F 8], false, none, Summary.empty⟩ <|
   .mk [0] [.op ⟨1⟩ [10] (.call ⟨1⟩) [0]] [10]
 
 /-- `T-Z9` at `outer<1, 2, 3, 4>`, which calls `pick<1, 2, 7>`: `xs[a + b + 1]`, the sum written as
 applications of `nat.add` to numbers (the frontend may as well write the number 4). -/
-def pickHeader : FnHeader V := ⟨⟨1⟩, [sized F 7], [F], false, none⟩
+def pickHeader : FnHeader V := ⟨⟨1⟩, [sized F 7], [F], false, none, Summary.empty⟩
 def «T-Z9-pick» := run [] pickHeader <| .mk [0] [
   .op ⟨1⟩ [10] (natural 1) [],
   .op ⟨2⟩ [11] (natural 2) [],
@@ -50,7 +50,7 @@ def «T-Z9-pick» := run [] pickHeader <| .mk [0] [
   .op ⟨4⟩ [13] (natural 1) [],
   .op ⟨5⟩ [14] plus [12, 13],
   .op ⟨6⟩ [15] (item (sized F 7)) [0, 14]] [15]
-def «T-Z9-outer» := run [pickHeader] ⟨⟨2⟩, [sized F 7], [F], false, none⟩ <|
+def «T-Z9-outer» := run [pickHeader] ⟨⟨2⟩, [sized F 7], [F], false, none, Summary.empty⟩ <|
   .mk [0] [.op ⟨1⟩ [10] (.call ⟨1⟩) [0]] [10]
 
 /-- `R-TY2a` at `fold_all<3>`: the index is static in a slice bound, so the loop is three blocks
@@ -222,7 +222,7 @@ example : «L-SEQ3» = .refused [unjustified 2 (slice (unsized .bool) (unsized .
 
 /-- `interpolate<F, k>`, as a header. -/
 def interpolateHeader (k : Nat) : FnHeader V :=
-  ⟨⟨1⟩, [sized F (2 ^ k), cosetTy], [sized F (2 ^ k)], false, none⟩
+  ⟨⟨1⟩, [sized F (2 ^ k), cosetTy], [sized F (2 ^ k)], false, none, Summary.empty⟩
 
 /-- `L-COS3` at `coefficients<t, k>`: `all_coefficients = interpolate(values, domain)`;
 `guard ∀ j ∈ 2^t..2^k, all_coefficients[j] == 0 else refused` (a loop that carries the truth value,
@@ -231,7 +231,7 @@ def interpolateHeader (k : Nat) : FnHeader V :=
 def «L-COS3» (t k : Nat) :=
   let n := 2 ^ k
   let m := 2 ^ t
-  run [interpolateHeader k] ⟨⟨2⟩, [sized F n, cosetTy], [sized F m], true, none⟩ <| .mk [0, 1] [
+  run [interpolateHeader k] ⟨⟨2⟩, [sized F n, cosetTy], [sized F m], true, none, Summary.empty⟩ <| .mk [0, 1] [
     .op ⟨1⟩ [10] (.call ⟨1⟩) [0, 1],
     .op ⟨2⟩ [11] (truth true) [],
     .loop ⟨3⟩ () (.fixed (n - m)) [11] [12]
@@ -286,14 +286,14 @@ def «L-SEQ2» (n m : Nat) :=
         .op ⟨6⟩ [25] (item inner) [23, 24]] [25])] [10]
 
 /-- `reverse<F, n>`, as a header. -/
-def reverseHeader (n : Nat) : FnHeader V := ⟨⟨1⟩, [sized F n], [sized F n], false, none⟩
+def reverseHeader (n : Nat) : FnHeader V := ⟨⟨1⟩, [sized F n], [sized F n], false, none, Summary.empty⟩
 
 /-- `L-POLY1` at `divide_linear<F, n>`: the loop collects `carry` at the end of each iteration;
 the index is not static in the body, so it is one `local.loop` (§7.4). -/
 def «L-POLY1» (n : Nat) :=
   let c := sized F (n + 1)
   let result : Ty := .tuple (.cons (sized F n) (.cons F .nil))
-  run [reverseHeader n] ⟨⟨2⟩, [c, F], [result], false, none⟩ <| .mk [0, 1] [
+  run [reverseHeader n] ⟨⟨2⟩, [c, F], [result], false, none, Summary.empty⟩ <| .mk [0, 1] [
     .op ⟨1⟩ [10] (element 0) [],
     .loop ⟨2⟩ () (.fixed n) [10] [11, 12]
       (.mk [20, 21] [
