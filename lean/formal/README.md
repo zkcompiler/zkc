@@ -1,5 +1,11 @@
 # Formal
 
+The receipt suite documented below uses the Core interfaces and fixtures from
+[the previous Lean compiler at `10ed903fc`](https://github.com/zkcompiler/zkc/tree/10ed903fc22d3f20b22ff2d1bbf607a740ef0718). Run its commands at that revision.
+The current root build covers the Core and vocabulary. See [status](../../docs/status.md).
+
+## Historical receipt suite
+
 Statements about admitted programs, over the meaning that Core gives them, and their proofs.
 The package requires the package `zkc_compiler` (`../compiler`) and nothing else: its library
 imports only the core, and its tests import checks of the core's tests and read the core's

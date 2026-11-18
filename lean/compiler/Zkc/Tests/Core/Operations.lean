@@ -1,0 +1,365 @@
+import Zkc.Tests.Core.Elaboration
+
+/-!
+The operations that the core owns. For each written name, a function that elaborates, whose
+erased form elaborates back to it and is the function by names that was elaborated; written forms
+with other types or numbers refused; the
+operations that would copy or drop a part refused at a linear type; each meaning at a value;
+each domain at a value outside it. The kernel evaluates each.
+-/
+
+namespace Zkc.Core.Operations
+
+open Elaboration
+
+/-- A function of one operation that the core owns, on the inputs named 0, 1, …; its result is
+named after them. -/
+def one (ins outs : List plain.Ty) (name : OwnedName) (types : List plain.Ty)
+    (numbers : List Nat) : NamedProgram plain :=
+  single ins outs false (.mk ((List.range ins.length))
+    [.op ⟨1⟩ ((List.range outs.length).map (· + ins.length)) (.owned name types numbers)
+      (List.range ins.length)]
+    ((List.range outs.length).map (· + ins.length)))
+
+/-- Whether the erased form of what a program elaborates to elaborates to the same. -/
+def roundTrips (named : NamedProgram plain) : Prop :=
+  again named = elaborateFunctions named
+
+/-- Whether the erased form of what a program elaborates to is the program. -/
+def erasesBack (named : NamedProgram plain) : Prop :=
+  erased named = .ok named
+
+def pair : plain.Ty := .tuple (.cons .nat (.cons .bool .nil))
+def point : plain.Ty := .record ⟨3⟩ false (.cons .nat (.cons .bool .nil))
+def handle : plain.Ty := .record ⟨4⟩ true (.cons .nat (.cons .bool .nil))
+
+/-! ## Each written name elaborates, its erased form elaborates back, and is the program -/
+
+def natAdd := one [.nat, .nat] [.nat] .natAdd [] []
+def natSub := one [.nat, .nat] [.nat] .natSub [] []
+def natMul := one [.nat, .nat] [.nat] .natMul [] []
+def natDiv := one [.nat, .nat] [.nat] .natDiv [] []
+def natRem := one [.nat, .nat] [.nat] .natRem [] []
+def natPow := one [.nat, .nat] [.nat] .natPow [] []
+def natEqual := one [.nat, .nat] [.bool] .natEqual [] []
+def natLess := one [.nat, .nat] [.bool] .natLess [] []
+def boolAnd := one [.bool, .bool] [.bool] .boolAnd [] []
+def boolOr := one [.bool, .bool] [.bool] .boolOr [] []
+def boolNot := one [.bool] [.bool] .boolNot [] []
+def boolEqual := one [.bool, .bool] [.bool] .boolEqual [] []
+def seqLength := one [.seq .nat none] [.nat] .seqLength [.seq .nat none] []
+def seqAt := one [.seq .nat (some 3), .nat] [.nat] .seqAt [.seq .nat (some 3)] []
+def seqSlice := one [.seq .nat none, .nat, .nat] [.seq .nat (some 2)] .seqSlice
+  [.seq .nat none, .seq .nat (some 2)] []
+def seqConcat := one [.seq .nat (some 2), .seq .nat (some 3)] [.seq .nat (some 5)] .seqConcat
+  [.seq .nat (some 2), .seq .nat (some 3)] []
+def seqFill := one [.nat] [.seq .nat (some 3)] .seqFill [.seq .nat (some 3)] []
+def seqSized := one [.seq .nat none] [.seq .nat (some 2)] .seqSized [.seq .nat (some 2)] []
+def natBelow := one [.nat] [.fin 4] .natBelow [.fin 4] []
+def seqUnsized := one [.seq .nat (some 2)] [.seq .nat none] .seqUnsized [.seq .nat (some 2)] []
+def finToNat := one [.fin 4] [.nat] .finToNat [.fin 4] []
+def finWiden := one [.fin 4] [.fin 8] .finWiden [.fin 4, .fin 8] []
+def makeSeq := one [.nat, .nat] [.seq .nat (some 2)] .make [.seq .nat (some 2)] []
+def makeTuple := one [.nat, .bool] [pair] .make [pair] []
+def makeRecord := one [.nat, .bool] [point] .make [point] []
+def getTuple := one [pair] [.bool] .get [pair] [1]
+def getRecord := one [point] [.nat] .get [point] [0]
+def takeTuple := one [pair] [.nat, .bool] .take [pair] []
+def takeRecord := one [handle] [.nat, .bool] .take [handle] []
+def variant := one [.bool] [natOrBool] .variant [natOrBool] [1]
+
+example : refusal natAdd = none := by decide +kernel
+example : refusal natSub = none := by decide +kernel
+example : refusal natMul = none := by decide +kernel
+example : refusal natDiv = none := by decide +kernel
+example : refusal natRem = none := by decide +kernel
+example : refusal natPow = none := by decide +kernel
+example : refusal natEqual = none := by decide +kernel
+example : refusal natLess = none := by decide +kernel
+example : refusal boolAnd = none := by decide +kernel
+example : refusal boolOr = none := by decide +kernel
+example : refusal boolNot = none := by decide +kernel
+example : refusal boolEqual = none := by decide +kernel
+example : refusal seqLength = none := by decide +kernel
+example : refusal seqAt = none := by decide +kernel
+example : refusal seqSlice = none := by decide +kernel
+example : refusal seqConcat = none := by decide +kernel
+example : refusal seqFill = none := by decide +kernel
+example : refusal seqSized = none := by decide +kernel
+example : refusal natBelow = none := by decide +kernel
+example : refusal seqUnsized = none := by decide +kernel
+example : refusal finToNat = none := by decide +kernel
+example : refusal finWiden = none := by decide +kernel
+example : refusal makeSeq = none := by decide +kernel
+example : refusal makeTuple = none := by decide +kernel
+example : refusal makeRecord = none := by decide +kernel
+example : refusal getTuple = none := by decide +kernel
+example : refusal getRecord = none := by decide +kernel
+example : refusal takeTuple = none := by decide +kernel
+example : refusal takeRecord = none := by decide +kernel
+example : refusal variant = none := by decide +kernel
+
+example : roundTrips natAdd := by rfl
+example : roundTrips natSub := by rfl
+example : roundTrips natMul := by rfl
+example : roundTrips natDiv := by rfl
+example : roundTrips natRem := by rfl
+example : roundTrips natPow := by rfl
+example : roundTrips natEqual := by rfl
+example : roundTrips natLess := by rfl
+example : roundTrips boolAnd := by rfl
+example : roundTrips boolOr := by rfl
+example : roundTrips boolNot := by rfl
+example : roundTrips boolEqual := by rfl
+example : roundTrips seqLength := by rfl
+example : roundTrips seqAt := by rfl
+example : roundTrips seqSlice := by rfl
+example : roundTrips seqConcat := by rfl
+example : roundTrips seqFill := by rfl
+example : roundTrips seqSized := by rfl
+example : roundTrips natBelow := by rfl
+example : roundTrips seqUnsized := by rfl
+example : roundTrips finToNat := by rfl
+example : roundTrips finWiden := by rfl
+example : roundTrips makeSeq := by rfl
+example : roundTrips makeTuple := by rfl
+example : roundTrips makeRecord := by rfl
+example : roundTrips getTuple := by rfl
+example : roundTrips getRecord := by rfl
+example : roundTrips takeTuple := by rfl
+example : roundTrips takeRecord := by rfl
+example : roundTrips variant := by rfl
+
+example : erasesBack natAdd := by rfl
+example : erasesBack natSub := by rfl
+example : erasesBack natMul := by rfl
+example : erasesBack natDiv := by rfl
+example : erasesBack natRem := by rfl
+example : erasesBack natPow := by rfl
+example : erasesBack natEqual := by rfl
+example : erasesBack natLess := by rfl
+example : erasesBack boolAnd := by rfl
+example : erasesBack boolOr := by rfl
+example : erasesBack boolNot := by rfl
+example : erasesBack boolEqual := by rfl
+example : erasesBack seqLength := by rfl
+example : erasesBack seqAt := by rfl
+example : erasesBack seqSlice := by rfl
+example : erasesBack seqConcat := by rfl
+example : erasesBack seqFill := by rfl
+example : erasesBack seqSized := by rfl
+example : erasesBack natBelow := by rfl
+example : erasesBack seqUnsized := by rfl
+example : erasesBack finToNat := by rfl
+example : erasesBack finWiden := by rfl
+example : erasesBack makeSeq := by rfl
+example : erasesBack makeTuple := by rfl
+example : erasesBack makeRecord := by rfl
+example : erasesBack getTuple := by rfl
+example : erasesBack getRecord := by rfl
+example : erasesBack takeTuple := by rfl
+example : erasesBack takeRecord := by rfl
+example : erasesBack variant := by rfl
+
+/-! ## Written forms with other types are refused -/
+
+/-- A refusal of the operation of a function of one operation. -/
+def refusedAs (name : OwnedName) (types : List plain.Ty) (numbers : List Nat) :
+    Option (ProgramRefusal plain) :=
+  some ⟨.owned, at_ 1 1, .operation (.owned name types numbers)⟩
+
+example : refusal (one [.nat] [.nat] .seqLength [.nat] []) = refusedAs .seqLength [.nat] [] := by
+  decide +kernel
+
+/-- The two sequences of a slice are of one item type. -/
+example : refusal (one [.seq .nat none, .nat, .nat] [.seq .bool none] .seqSlice
+    [.seq .nat none, .seq .bool none] []) =
+    refusedAs .seqSlice [.seq .nat none, .seq .bool none] [] := by
+  decide +kernel
+
+/-- A bound is widened, not narrowed. -/
+example : refusal (one [.fin 8] [.fin 4] .finWiden [.fin 8, .fin 4] []) =
+    refusedAs .finWiden [.fin 8, .fin 4] [] := by
+  decide +kernel
+
+/-- A sequence is made of a written number of items: its type has a size. -/
+example : refusal (one [.nat] [.seq .nat none] .make [.seq .nat none] []) =
+    refusedAs .make [.seq .nat none] [] := by
+  decide +kernel
+
+/-- A position past the last component. -/
+example : refusal (one [pair] [.nat] .get [pair] [2]) = refusedAs .get [pair] [2] := by
+  decide +kernel
+
+/-- Two sequences concatenated are of one item type. -/
+example : refusal (one [.seq .nat none, .seq .bool none] [.seq .nat none] .seqConcat
+    [.seq .nat none, .seq .bool none] []) =
+    refusedAs .seqConcat [.seq .nat none, .seq .bool none] [] := by
+  decide +kernel
+
+/-- `nat.sub` is written with no type. -/
+example : refusal (one [.nat, .nat] [.nat] .natSub [.nat] []) = refusedAs .natSub [.nat] [] := by
+  decide +kernel
+
+/-- `seq.length` is written with no number. -/
+example : refusal (one [.seq .nat none] [.nat] .seqLength [.seq .nat none] [0]) =
+    refusedAs .seqLength [.seq .nat none] [0] := by
+  decide +kernel
+
+/-- `get` is written with one position. -/
+example : refusal (one [pair] [.bool] .get [pair] [1, 0]) = refusedAs .get [pair] [1, 0] := by
+  decide +kernel
+
+/-- `variant` is written with one position. -/
+example : refusal (one [.bool] [natOrBool] .variant [natOrBool] [1, 0]) =
+    refusedAs .variant [natOrBool] [1, 0] := by
+  decide +kernel
+
+/-- `make` of a tuple is written with no number. -/
+example : refusal (one [.nat, .bool] [pair] .make [pair] [0]) = refusedAs .make [pair] [0] := by
+  decide +kernel
+
+/-- `fin.to_nat` is written with one type. -/
+example : refusal (one [.fin 4] [.nat] .finToNat [.fin 4, .fin 4] []) =
+    refusedAs .finToNat [.fin 4, .fin 4] [] := by
+  decide +kernel
+
+/-! ## The operations that would copy or drop a part are not typed at a linear type -/
+
+example : refusal (one [.seq token none] [.nat] .seqLength [.seq token none] []) =
+    refusedAs .seqLength [.seq token none] [] := by
+  decide +kernel
+
+example : refusal (one [.seq token (some 2), .nat] [token] .seqAt [.seq token (some 2)] []) =
+    refusedAs .seqAt [.seq token (some 2)] [] := by
+  decide +kernel
+
+example : refusal (one [.seq token none, .nat, .nat] [.seq token none] .seqSlice
+    [.seq token none, .seq token none] []) =
+    refusedAs .seqSlice [.seq token none, .seq token none] [] := by
+  decide +kernel
+
+example : refusal (one [token] [.seq token (some 2)] .seqFill [.seq token (some 2)] []) =
+    refusedAs .seqFill [.seq token (some 2)] [] := by
+  decide +kernel
+
+/-- Giving a sequence a size, whose domain is its length, which cannot be read at a linear
+item. -/
+example : refusal (one [.seq token none] [.seq token (some 2)] .seqSized
+    [.seq token (some 2)] []) = refusedAs .seqSized [.seq token (some 2)] [] := by
+  decide +kernel
+
+/-- One component of a tuple with a linear component. -/
+example : refusal (one [.tuple (.cons token (.cons .nat .nil))] [.nat] .get
+    [.tuple (.cons token (.cons .nat .nil))] [1]) =
+    refusedAs .get [.tuple (.cons token (.cons .nat .nil))] [1] := by
+  decide +kernel
+
+/-- One field of a linear record. -/
+example : refusal (one [handle] [.nat] .get [handle] [0]) = refusedAs .get [handle] [0] := by
+  decide +kernel
+
+/-- Every field of a linear record is how it is used. -/
+example : refusal (one [handle] [.nat, .bool] .take [handle] []) = none := by decide +kernel
+
+/-! ## Each meaning at a value -/
+
+abbrev model := Shapes.plainModel
+
+example : ownedOp model .natAdd (.cons (2 : Nat) (.cons (3 : Nat) .nil)) =
+    .done (.cons (5 : Nat) .nil) := rfl
+example : ownedOp model .natSub (.cons (5 : Nat) (.cons (3 : Nat) .nil)) =
+    .done (.cons (2 : Nat) .nil) := rfl
+example : ownedOp model .natMul (.cons (2 : Nat) (.cons (3 : Nat) .nil)) =
+    .done (.cons (6 : Nat) .nil) := rfl
+/-- A division rounds down. -/
+example : ownedOp model .natDiv (.cons (7 : Nat) (.cons (2 : Nat) .nil)) =
+    .done (.cons (3 : Nat) .nil) := rfl
+example : ownedOp model .natRem (.cons (7 : Nat) (.cons (2 : Nat) .nil)) =
+    .done (.cons (1 : Nat) .nil) := rfl
+example : ownedOp model .natPow (.cons (2 : Nat) (.cons (3 : Nat) .nil)) =
+    .done (.cons (8 : Nat) .nil) := rfl
+/-- A number to the power zero is one, zero too. -/
+example : ownedOp model .natPow (.cons (0 : Nat) (.cons (0 : Nat) .nil)) =
+    .done (.cons (1 : Nat) .nil) := rfl
+example : ownedOp model .natEqual (.cons (2 : Nat) (.cons (2 : Nat) .nil)) =
+    .done (.cons true .nil) := rfl
+example : ownedOp model .natLess (.cons (2 : Nat) (.cons (2 : Nat) .nil)) =
+    .done (.cons false .nil) := rfl
+example : ownedOp model .natLess (.cons (2 : Nat) (.cons (3 : Nat) .nil)) =
+    .done (.cons true .nil) := rfl
+example : ownedOp model .boolAnd (.cons true (.cons false .nil)) = .done (.cons false .nil) :=
+  rfl
+example : ownedOp model .boolOr (.cons true (.cons false .nil)) = .done (.cons true .nil) := rfl
+example : ownedOp model .boolNot (.cons true .nil) = .done (.cons false .nil) := rfl
+example : ownedOp model .boolEqual (.cons false (.cons false .nil)) = .done (.cons true .nil) :=
+  rfl
+example : ownedOp model (.seqLength .nat none rfl) (.cons ([5, 6, 7] : List Nat) .nil) =
+    .done (.cons (3 : Nat) .nil) := rfl
+/-- Positions count from zero. -/
+example : ownedOp model (.seqAt .nat none rfl)
+    (.cons ([5, 6, 7] : List Nat) (.cons (1 : Nat) .nil)) = .done (.cons (6 : Nat) .nil) := rfl
+/-- A slice excludes its upper bound. -/
+example : ownedOp model (.seqSlice .nat none (some 2) rfl)
+    (.cons ([5, 6, 7, 8] : List Nat) (.cons (1 : Nat) (.cons (3 : Nat) .nil))) =
+    .done (.cons ([6, 7] : List Nat) .nil) := rfl
+/-- A concatenation puts the first first. -/
+example : ownedOp model (.seqConcat .nat (some 2) (some 1))
+    (.cons ([1, 2] : List Nat) (.cons ([3] : List Nat) .nil)) =
+    .done (.cons ([1, 2, 3] : List Nat) .nil) := rfl
+example : ownedOp model (.seqFill .nat 3 rfl) (.cons (4 : Nat) .nil) =
+    .done (.cons ([4, 4, 4] : List Nat) .nil) := rfl
+example : ownedOp model (.seqSized .nat 2 rfl) (.cons ([5, 6] : List Nat) .nil) =
+    .done (.cons ([5, 6] : List Nat) .nil) := rfl
+example : ownedOp model (.natBelow 4) (.cons (3 : Nat) .nil) = .done (.cons (3 : Nat) .nil) :=
+  rfl
+example : ownedOp model (.seqUnsized .nat 2) (.cons ([5, 6] : List Nat) .nil) =
+    .done (.cons ([5, 6] : List Nat) .nil) := rfl
+example : ownedOp model (.finToNat 4) (.cons (3 : Nat) .nil) = .done (.cons (3 : Nat) .nil) :=
+  rfl
+example : ownedOp model (.finWiden 4 8 (by decide)) (.cons (3 : Nat) .nil) =
+    .done (.cons (3 : Nat) .nil) := rfl
+example : ownedOp model (.makeSeq .nat 2) (.cons (1 : Nat) (.cons (2 : Nat) .nil)) =
+    .done (.cons ([1, 2] : List Nat) .nil) := rfl
+example : ownedOp model (.makeTuple (.cons .nat (.cons .bool .nil)))
+    (.cons (1 : Nat) (.cons true .nil)) = .done (.cons ((1 : Nat), true, ()) .nil) := rfl
+example : ownedOp model (.makeRecord ⟨3⟩ false (.cons .nat (.cons .bool .nil)))
+    (.cons (1 : Nat) (.cons true .nil)) = .done (.cons ((1 : Nat), true, ()) .nil) := rfl
+example : ownedOp model (.getTuple (.cons .nat (.cons .bool .nil)) (.tail .head) rfl)
+    (.cons ((1 : Nat), true, ()) .nil) = .done (.cons true .nil) := rfl
+example : ownedOp model (.getRecord ⟨3⟩ (.cons .nat (.cons .bool .nil)) .head rfl)
+    (.cons ((1 : Nat), true, ()) .nil) = .done (.cons (1 : Nat) .nil) := rfl
+example : ownedOp model (.takeTuple (.cons .nat (.cons .bool .nil)))
+    (.cons ((1 : Nat), true, ()) .nil) = .done (.cons (1 : Nat) (.cons true .nil)) := rfl
+example : ownedOp model (.takeRecord ⟨4⟩ true (.cons .nat (.cons .bool .nil)))
+    (.cons ((1 : Nat), true, ()) .nil) = .done (.cons (1 : Nat) (.cons true .nil)) := rfl
+example : ownedOp model (.variant ⟨7⟩ (.cons .nat (.cons .bool .nil)) .head)
+    (.cons (2 : Nat) .nil) = .done (.cons (.inl 2) .nil) := rfl
+
+/-! ## Each domain at a value outside it -/
+
+example : ownedOp model .natSub (.cons (3 : Nat) (.cons (5 : Nat) .nil)) = .halt .undefined :=
+  rfl
+example : ownedOp model .natDiv (.cons (3 : Nat) (.cons (0 : Nat) .nil)) = .halt .undefined :=
+  rfl
+example : ownedOp model .natRem (.cons (3 : Nat) (.cons (0 : Nat) .nil)) = .halt .undefined :=
+  rfl
+example : ownedOp model (.seqAt .nat none rfl) (.cons ([5, 6] : List Nat) (.cons (2 : Nat) .nil)) =
+    .halt .undefined := rfl
+/-- The first bound of a slice is at most the second. -/
+example : ownedOp model (.seqSlice .nat none none rfl)
+    (.cons ([5, 6] : List Nat) (.cons (2 : Nat) (.cons (1 : Nat) .nil))) = .halt .undefined :=
+  rfl
+/-- The second bound of a slice is at most the length. -/
+example : ownedOp model (.seqSlice .nat none none rfl)
+    (.cons ([5, 6] : List Nat) (.cons (1 : Nat) (.cons (3 : Nat) .nil))) = .halt .undefined :=
+  rfl
+/-- Into a sized result, the bounds are as far apart as its size. -/
+example : ownedOp model (.seqSlice .nat none (some 3) rfl)
+    (.cons ([5, 6, 7] : List Nat) (.cons (0 : Nat) (.cons (2 : Nat) .nil))) = .halt .undefined :=
+  rfl
+example : ownedOp model (.seqSized .nat 2 rfl) (.cons ([5] : List Nat) .nil) = .halt .undefined :=
+  rfl
+example : ownedOp model (.natBelow 4) (.cons (4 : Nat) .nil) = .halt .undefined := rfl
+
+end Zkc.Core.Operations

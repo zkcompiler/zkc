@@ -15,5 +15,6 @@ pub use zkc::oracle::{Oracle, Pending, data}
 // [source] A byte. `b"…"` and `hex"…"` are `[byte; k]`.
 pub type byte = index<256>
 
-// [item] [row seq.length] The number of elements of a collection; a term of the fact calculus.
-pub def length<T: linear>(values: [T]) -> nat = primitive("seq.length")
+// [item] [operation seq.length] The number of elements of a collection; a term of the fact
+// calculus.
+pub def length<T>(values: [T]) -> nat = primitive("seq.length")

@@ -1,15 +1,21 @@
 # zkc
 
-zkc is a compiler for zero-knowledge proof protocols. A protocol is written in the zkc source
-language with its roles, the values each role holds, the messages they exchange, the challenges
-they draw and the checks that decide acceptance. zkc checks the program, projects it to one
-program per role and constructs a non-interactive proof scheme from it.
+zkc is a compiler for zero-knowledge proof protocols, written in Lean. The source language
+describes roles, the values each role holds, the messages they exchange, and the checks
+that decide acceptance. The Core gives these programs a meaning that Lean proofs can use.
 
-zkc is written in Lean. The core language has its meaning in Lean, and the functions that admit
-a program, project it and run it are the ones that the core's theorems are about: the theorems of
-admission state what an admitted program never does, and a formal package proves properties of
-compiled programs over that meaning. The frontend, which reads the source, and the reader of a
-package file are not proved; admission checks what they produce.
+## What builds today
+
+The default build admits programs of named functions. Admission checks each definition against
+earlier headers and proves its summary and loop bounds on valid inputs satisfying its requirements.
+A checked transformation preserves the function's behavior under those requirements. For a
+protocol supplied as a typed Core term, projection relates each role's process to its part in
+the protocol. Protocol definitions in named programs still await admission.
+
+For the working `.zkc` frontend, `zkc-check`, scheme construction and the Schnorr and Sumcheck
+formal examples, use [the previous Lean compiler at `10ed903fc`](https://github.com/zkcompiler/zkc/tree/10ed903fc22d3f20b22ff2d1bbf607a740ef0718).
+Those consumers await migration to the rebuilt Core. The [status](docs/status.md) records
+which paths the current build exercises.
 
 ## Repository
 
@@ -22,27 +28,6 @@ package file are not proved; admission checks what they produce.
 | [`lean/formal/`](lean/formal/README.md) | a second Lake package: statements and proofs over the meaning of the core |
 | [`docs/`](docs/README.md) | the status, the development guide and the specification of the core language |
 | [`scripts/`](scripts/) | the document checker |
-
-## What it does now
-
-- The frontend reads `.zkc` source of the frozen layer of the language, and the scheme
-  declarations that derive a proof by Fiat–Shamir, and emits programs of the core language.
-- The core elaborates and admits these programs. Admission checks their types, checks facts so
-  that an admitted program never stops `undefined`, and checks the copies of a value that
-  several roles hold.
-- The core projects a protocol to one program per role, constructs a non-interactive scheme by
-  the Fiat–Shamir and serialize steps, and runs role programs with a total executor.
-- The formal package states and proves properties over the meaning of the core. It has two
-  worked results: the completeness of the Schnorr scheme of
-  [`examples/schnorr_example.zkc`](examples/schnorr_example.zkc), and an invariant of ten rounds
-  of Sumcheck (when the claims are the sum of the table, the verifier's ten checks pass). Neither
-  is a statement of soundness.
-
-zkc does not currently run role programs natively, target WASM or the EVM, or compile the forms
-of the language beyond the frozen layer, such as oracles and commitments, STARK and constraint
-systems. These are being rebuilt on this structure. The [status](docs/status.md) lists what is
-supported. The earlier implementation, which had some of these, is at the tag
-`old-route-2026-11-14`.
 
 ## A protocol in zkc
 
@@ -66,8 +51,8 @@ pub protocol Schnorr<G: PrimeOrderGroup> roles(P, V)(
 ```
 
 [`examples/schnorr_example.zkc`](examples/schnorr_example.zkc) declares a non-interactive scheme
-over the group G1 of BLS12-381. zkc derives its prover and verifier by the Fiat–Shamir step with
-the suite `Merlin3Bls12381` and the canonical layout of the proof:
+over the group G1 of BLS12-381. The declaration selects Fiat–Shamir with the suite
+`Merlin3Bls12381` and the canonical proof layout.
 
 ```zkc
 scheme Proof = Schnorr<G1>:
@@ -76,13 +61,15 @@ scheme Proof = Schnorr<G1>:
 
 ## Build and test
 
+Both packages pin Lean 4.36.0. The [toolchain guide](docs/lean-toolchain.md) describes the audit.
+
 The Lean toolchain is named in `lean/compiler/lean-toolchain` and installed by
 [elan](https://github.com/leanprover/elan). With `elan`, [just](https://github.com/casey/just)
 and `python3`, from the root of the repository:
 
 ```sh
-just build   # build the compiler package, then the formal package
-just test    # build and test both packages, then audit them
+just build   # build the active compiler targets
+just test    # build, test and audit the active targets
 just check   # check the public tree, the documents and the generated Unicode tables
 ```
 

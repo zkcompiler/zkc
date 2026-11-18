@@ -1,0 +1,1432 @@
+module
+
+public import Zkc.Core.Facts.Valuation
+
+@[expose] public section
+
+/-!
+The rules of what is known are true: what is learned of a valuation where what was known holds
+holds too, a requirement that the rules decide holds of the values it names (`decided_holds`),
+and what is learned from a requirement that holds of the values that its operands name, on the
+identifiers that they resolve to, holds (`learn_holds`). Beside them, the sharing of the table (an
+application found or entered, with as many results as asked, the first that the operation
+gives, `share_sound`), the identifiers of the operands of a requirement, whose applications give
+a result there (`operandId_sound`, `operandIds_sound`), the check of the requirements of an
+application (`checkRequirements_sound`), and the check of the guarantees of a summary where a
+definition returns (`checkGuarantees_sound`), in which a guarantee is known only of the values of
+the identifiers given, never of an application.
+
+Over any values, any reading of them and any relation of operations whose `OpFacts` are lawful.
+-/
+
+namespace Zkc.Core
+
+namespace FactCheck
+
+section
+variable {Val Raw : Type} {R : Reading Val} {ρ : Valuation Val}
+
+/-! ## Ranges of identifiers -/
+
+theorem rangeIn_has {id n : Nat} :
+    ∀ {facts : List (Nat × Range)} {r : Range}, (∀ r', (id, r') ∈ facts → r'.Has n) →
+      rangeIn id facts = some r → r.Has n
+  | [], _, _, h => by simp [rangeIn] at h
+  | (id', r') :: rest, r, all, h => by
+      simp only [rangeIn] at h
+      split at h
+      · next same =>
+          have same : id' = id := same
+          subst same
+          exact Range.meet_has h (fun r e => by cases e; exact all r' List.mem_cons_self)
+            (fun r e => rangeIn_has (fun r'' m => all r'' (List.mem_cons_of_mem _ m)) e)
+      · exact rangeIn_has (fun r'' m => all r'' (List.mem_cons_of_mem _ m)) h
+
+theorem rangeIn_mem {id : Nat} :
+    ∀ {facts : List (Nat × Range)} {r : Range}, rangeIn id facts = some r →
+      ∃ r', (id, r') ∈ facts
+  | [], _, h => by simp [rangeIn] at h
+  | (id', r') :: rest, r, h => by
+      simp only [rangeIn] at h
+      split at h
+      · next same =>
+          have same : id' = id := same
+          subst same
+          exact ⟨r', List.mem_cons_self⟩
+      · obtain ⟨r'', m⟩ := rangeIn_mem h
+        exact ⟨r'', List.mem_cons_of_mem _ m⟩
+
+/-- A range that is known of an identifier holds of its value. -/
+theorem Known.Holds.rangeOf {k : Known} (hk : k.Holds R ρ) {id : Nat} {r : Range}
+    (h : k.rangeOf id = some r) : ∃ n, NatAt R ρ id n ∧ r.Has n := by
+  obtain ⟨r', m⟩ := rangeIn_mem h
+  obtain ⟨n, hn, _⟩ := hk.ranges id r' (BitTree.mem_of_find _ _ _ _ m)
+  refine ⟨n, hn, rangeIn_has (fun r'' m'' => ?_) h⟩
+  obtain ⟨n', hn', has⟩ := hk.ranges id r'' (BitTree.mem_of_find _ _ _ _ m'')
+  rw [hn.unique hn']
+  exact has
+
+theorem Known.Holds.rangeOf_at {k : Known} (hk : k.Holds R ρ) {id n : Nat} (hn : NatAt R ρ id n)
+    {r : Range} (h : k.rangeOf id = some r) : r.Has n := by
+  obtain ⟨n', hn', has⟩ := hk.rangeOf h
+  rw [hn.unique hn']
+  exact has
+
+/-- The lower end of what is known of an identifier is at most its value. -/
+theorem Known.Holds.low {k : Known} (hk : k.Holds R ρ) {id n : Nat} (hn : NatAt R ρ id n) :
+    k.low id ≤ n := by
+  simp only [Known.low]
+  cases h : k.rangeOf id with
+  | none => simp
+  | some r => simpa using (hk.rangeOf_at hn h).1
+
+/-! ## Learning -/
+
+theorem Known.Holds.addRange {k : Known} (hk : k.Holds R ρ) {id n : Nat} (hn : NatAt R ρ id n)
+    {r : Range} (has : r.Has n) : (k.addRange id r).Holds R ρ := by
+  refine ⟨hk.alive, ?_, hk.orders, hk.truths, hk.choices⟩
+  · intro id' r' m
+    rcases BitTree.mem_insert _ _ _ _ _ m with m | e
+    · exact hk.ranges id' r' m
+    · cases e; exact ⟨n, hn, has⟩
+
+theorem Known.Holds.addRange? {k : Known} (hk : k.Holds R ρ) {id : Nat} {o : Option Range}
+    (h : ∀ r : Range, o = some r → ∃ n, NatAt R ρ id n ∧ r.Has n) :
+    (k.addRange? id o).Holds R ρ := by
+  cases o with
+  | none => exact hk
+  | some r =>
+      obtain ⟨n, hn, has⟩ := h r rfl
+      exact hk.addRange hn has
+
+theorem Known.Holds.addRanges :
+    ∀ {k : Known} {ids : List Nat} {rs : List (Option Range)}, k.Holds R ρ →
+      (∀ (j id : Nat) (r : Range), ids[j]? = some id → rs[j]? = some (some r) →
+        ∃ n, NatAt R ρ id n ∧ r.Has n) →
+      (k.addRanges ids rs).Holds R ρ
+  | k, [], _, hk, _ => by cases ‹List (Option Range)› <;> exact hk
+  | k, _ :: _, [], hk, _ => hk
+  | k, id :: ids, r :: rs, hk, h => by
+      simp only [Known.addRanges]
+      refine Known.Holds.addRanges (hk.addRange? fun r' e => h 0 id r' rfl (by simp [e])) ?_
+      intro j id' r' e1 e2
+      exact h (j + 1) id' r' (by simpa using e1) (by simpa using e2)
+
+theorem Known.Holds.addOrder {k : Known} (hk : k.Holds R ρ) {a b x y : Nat} {strict : Bool}
+    {byLoop : Bool} (ha : NatAt R ρ a x) (hb : NatAt R ρ b y)
+    (o : if strict then x < y else x ≤ y) : (k.addOrder a b strict byLoop).Holds R ρ := by
+  refine ⟨hk.alive, hk.ranges, ?_, hk.truths, hk.choices⟩
+  intro fact m
+  rcases BitTree.mem_insert _ _ _ _ _ m with m | e
+  · exact hk.orders fact m
+  · subst e; exact ⟨x, y, ha, hb, o⟩
+
+theorem Known.Holds.addTruth {k : Known} (hk : k.Holds R ρ) {id : Nat} {b : Bool}
+    (h : BoolAt R ρ id b) : (k.addTruth id b).Holds R ρ := by
+  refine ⟨hk.alive, hk.ranges, hk.orders, ?_, hk.choices⟩
+  intro id' b' m
+  rcases BitTree.mem_insert _ _ _ _ _ m with m | e
+  · exact hk.truths id' b' m
+  · cases e; exact h
+
+theorem Known.Holds.addChoice {k : Known} (hk : k.Holds R ρ) {c : ChoiceFact}
+    (h : ρ c.result ≠ none ∧ ∀ b, BoolAt R ρ c.result b →
+      b = c.conjunction → BoolAt R ρ c.condition b ∧ BoolAt R ρ c.other b) :
+    (k.addChoice c).Holds R ρ := by
+  refine ⟨hk.alive, hk.ranges, hk.orders, hk.truths, ?_⟩
+  intro c' m
+  rcases BitTree.mem_insert _ _ _ _ _ m with m | e
+  · exact hk.choices c' m
+  · cases e; exact h
+
+theorem Known.Holds.hasTruth {k : Known} (hk : k.Holds R ρ) {id : Nat} {b : Bool}
+    (h : k.hasTruth id b = true) : BoolAt R ρ id b := by
+  simp only [Known.hasTruth, List.any_eq_true, Bool.and_eq_true, beq_iff_eq] at h
+  obtain ⟨⟨id', b'⟩, m, e1, e2⟩ := h
+  simp only at e1 e2
+  subst e1; subst e2
+  exact hk.truths _ _ (BitTree.mem_of_find _ _ _ _ m)
+
+theorem Known.Holds.hasOrder {k : Known} (hk : k.Holds R ρ) {a b : Nat} {strict : Bool}
+    (h : k.hasOrder a b strict = true) :
+    ∃ x y, NatAt R ρ a x ∧ NatAt R ρ b y ∧ (if strict then x < y else x ≤ y) := by
+  simp only [Known.hasOrder, List.any_eq_true] at h
+  obtain ⟨⟨a', b', s, l⟩, m, e⟩ := h
+  simp only [Bool.and_eq_true, beq_iff_eq, Bool.or_eq_true, Bool.not_eq_true'] at e
+  obtain ⟨⟨rfl, rfl⟩, e3⟩ := e
+  obtain ⟨x, y, hx, hy, o⟩ := hk.orders _ (BitTree.mem_of_find _ _ _ _ m)
+  refine ⟨x, y, hx, hy, ?_⟩
+  cases strict <;> cases s
+  · exact o
+  · simp only [Bool.false_eq_true, ↓reduceIte] at o ⊢
+    omega
+  · simp at e3
+  · exact o
+
+/-- The one number of an identifier, when its range is one number, is its value. -/
+theorem Known.Holds.pointOf_at {k : Known} (hk : k.Holds R ρ) {id n p : Nat}
+    (hn : NatAt R ρ id n) (h : k.pointOf id = some p) : n = p := by
+  simp only [Known.pointOf] at h
+  cases hr : k.rangeOf id with
+  | none => rw [hr] at h; cases h
+  | some r =>
+      rw [hr] at h
+      obtain ⟨lo, hi⟩ := r
+      cases hi with
+      | none => cases h
+      | some hi =>
+          simp only at h
+          split at h
+          · next same =>
+              have hp : lo = p := Option.some.inj h
+              have has := hk.rangeOf_at hn hr
+              have h1 : lo ≤ n := has.1
+              have h2 : n ≤ hi := has.2 hi rfl
+              omega
+          · cases h
+
+theorem Known.Holds.pushLess {k : Known} (hk : k.Holds R ρ) {a b x y : Nat}
+    (ha : NatAt R ρ a x) (hb : NatAt R ρ b y) (lt : x < y) : (k.pushLess a b).Holds R ρ := by
+  simp only [Known.pushLess]
+  have h1 := hk.addOrder (strict := true) (byLoop := false) ha hb (by simpa using lt)
+  refine (h1.addRange? fun r e => ?_).addRange? fun r e => ?_
+  · cases hs : k.pointOf b with
+    | none => rw [hs] at e; cases e
+    | some p =>
+        rw [hs] at e
+        cases e
+        rw [← hk.pointOf_at hb hs]
+        exact ⟨x, ha, (Range.has_point.mpr rfl : (Range.point y).Has y).below lt⟩
+  · cases hf : k.pointOf a with
+    | none => rw [hf] at e; cases e
+    | some p =>
+        rw [hf] at e
+        cases e
+        rw [← hk.pointOf_at ha hf]
+        exact ⟨y, hb, ⟨by show x + 1 ≤ y; omega, fun _ e => nomatch e⟩⟩
+
+theorem Known.Holds.pushLe {k : Known} (hk : k.Holds R ρ) {a b x y : Nat}
+    (ha : NatAt R ρ a x) (hb : NatAt R ρ b y) (le : x ≤ y) : (k.pushLe a b).Holds R ρ := by
+  simp only [Known.pushLe]
+  have h1 := hk.addOrder (strict := false) (byLoop := false) ha hb (by simpa using le)
+  refine (h1.addRange? fun r e => ?_).addRange? fun r e => ?_
+  · cases hs : k.pointOf b with
+    | none => rw [hs] at e; cases e
+    | some p =>
+        rw [hs] at e
+        cases e
+        rw [← hk.pointOf_at hb hs]
+        exact ⟨x, ha, Nat.zero_le _, fun h e => by cases e; exact le⟩
+  · cases hf : k.pointOf a with
+    | none => rw [hf] at e; cases e
+    | some p =>
+        rw [hf] at e
+        cases e
+        rw [← hk.pointOf_at ha hf]
+        exact ⟨y, hb, le, fun _ e => nomatch e⟩
+
+theorem Known.Holds.pushEqual {k : Known} (hk : k.Holds R ρ) {a b x : Nat}
+    (ha : NatAt R ρ a x) (hb : NatAt R ρ b x) : (k.pushEqual a b).Holds R ρ := by
+  simp only [Known.pushEqual]
+  have h1 := (hk.addOrder (strict := false) (byLoop := false) ha hb (by simp)).addOrder
+    (strict := false) (byLoop := false) hb ha (by simp)
+  refine (h1.addRange? fun r e => ?_).addRange? fun r e => ?_
+  · cases hs : k.pointOf b with
+    | none => rw [hs] at e; cases e
+    | some p =>
+        rw [hs] at e
+        cases e
+        exact ⟨x, ha, Range.has_point.mpr (hk.pointOf_at hb hs)⟩
+  · cases hf : k.pointOf a with
+    | none => rw [hf] at e; cases e
+    | some p =>
+        rw [hf] at e
+        cases e
+        exact ⟨x, hb, Range.has_point.mpr (hk.pointOf_at ha hf)⟩
+
+theorem Known.Holds.oneDifferent {k : Known} (hk : k.Holds R ρ) {a b x y : Nat}
+    (ha : NatAt R ρ a x) (hb : NatAt R ρ b y) (ne : x ≠ y) :
+    (if k.rangeOf b = some (Range.point 0) then k.addRange a ⟨1, none⟩ else k).Holds R ρ := by
+  split
+  · next e =>
+      have := Range.has_point.mp (hk.rangeOf_at hb e)
+      exact hk.addRange ha ⟨by show 1 ≤ x; omega, fun _ e => nomatch e⟩
+  · exact hk
+
+theorem Known.Holds.pushDifferent {k : Known} (hk : k.Holds R ρ) {a b x y : Nat}
+    (ha : NatAt R ρ a x) (hb : NatAt R ρ b y) (ne : x ≠ y) :
+    (k.pushDifferent a b).Holds R ρ := by
+  simp only [Known.pushDifferent]
+  have learned := hk.oneDifferent ha hb ne
+  by_cases zero : k.rangeOf a = some (Range.point 0)
+  · rw [ite_eq_left zero]
+    have := Range.has_point.mp (hk.rangeOf_at ha zero)
+    exact learned.addRange hb ⟨by show 1 ≤ y; omega, fun _ e => nomatch e⟩
+  · rw [ite_eq_right zero]
+    exact learned
+
+/-! ## Assuming a truth value -/
+
+variable {Run : Raw → List Val → List Val → Prop} {ops : OpFacts Raw}
+
+/-- The values of the operands of the entry of an identifier that has a value, and how the value
+reads by the entry's form. -/
+theorem formOf_values (lawful : OpFacts.Lawful ops R Run) {tbl : Table Raw}
+    (hc : Consistent Run ρ tbl) (hcl : Closed ρ tbl) {id : Nat} {f : ResultForm}
+    {args : List Nat} (h : tbl.formOf ops id = some (f, args)) {v : Val} (hv : ρ id = some v) :
+    ∃ vs, valuesOf ρ args = some vs ∧ FormHolds R f vs v := by
+  obtain ⟨e, m, lo, pos, form, eargs⟩ := Table.formOf_spec h
+  subst eargs
+  have valued : ρ (e.lo + 0) ≠ none := by rw [Nat.add_zero, lo, hv]; simp
+  obtain ⟨vs, hvs⟩ := valuesOf_of_mem (hcl e m 0 pos valued)
+  obtain ⟨rs, run, at0⟩ := hc e m vs hvs 0 pos v (by rw [Nat.add_zero, lo, hv])
+  obtain ⟨r, head, holds⟩ := lawful.form _ _ _ _ form run
+  have : r = v := by
+    rw [List.head?_eq_getElem?] at head
+    rw [head] at at0
+    cases at0
+    rfl
+  subst this
+  exact ⟨vs, hvs, holds⟩
+
+theorem valuesOf_pair {a b : Nat} {vs : List Val} (h : valuesOf ρ [a, b] = some vs) :
+    ∃ va vb, vs = [va, vb] ∧ ρ a = some va ∧ ρ b = some vb := by
+  have hl := valuesOf_length h
+  match vs, hl with
+  | [va, vb], _ =>
+      exact ⟨va, vb, rfl, by simpa using valuesOf_get h 0 (by simp),
+        by simpa using valuesOf_get h 1 (by simp)⟩
+
+theorem valuesOf_single {a : Nat} {vs : List Val} (h : valuesOf ρ [a] = some vs) :
+    ∃ va, vs = [va] ∧ ρ a = some va := by
+  have hl := valuesOf_length h
+  match vs, hl with
+  | [va], _ => exact ⟨va, rfl, by simpa using valuesOf_get h 0 (by simp)⟩
+
+/-- Assuming the truth value that an identifier has: what is learned holds. -/
+theorem assume_holds (lawful : OpFacts.Lawful ops R Run) {tbl : Table Raw}
+    (hc : Consistent Run ρ tbl) (hcl : Closed ρ tbl) :
+    ∀ (fuel : Nat) {k : Known} {id : Nat} {value : Bool}, k.Holds R ρ → BoolAt R ρ id value →
+      (assume ops tbl fuel k id value).Holds R ρ
+  | 0, k, id, value, hk, hb => by
+      simp only [assume]
+      exact hk.addTruth hb
+  | fuel + 1, k, id, value, hk, hb => by
+      simp only [assume]
+      split
+      · exact hk
+      have k₁ := hk.addTruth hb
+      have hb0 := hb
+      obtain ⟨v, hv, hbool⟩ := hb0
+      apply foldl_invariant
+      · split
+        · next first second e =>
+            obtain ⟨vs, hvs, a, b, x, y, eq, hx, hy, hr⟩ := formOf_values lawful hc hcl e hv
+            obtain ⟨va, vb, rfl, ha, hb'⟩ := valuesOf_pair hvs
+            cases eq
+            rw [hbool] at hr
+            cases value
+            · simp only [Bool.false_eq_true, ↓reduceIte]
+              exact k₁.pushLe ⟨_, hb', hy⟩ ⟨_, ha, hx⟩ (by simp at hr; omega)
+            · simp only [↓reduceIte]
+              exact k₁.pushLess ⟨_, ha, hx⟩ ⟨_, hb', hy⟩ (by simpa using hr.symm)
+        · next first second e =>
+            obtain ⟨vs, hvs, a, b, x, y, eq, hx, hy, hr⟩ := formOf_values lawful hc hcl e hv
+            obtain ⟨va, vb, rfl, ha, hb'⟩ := valuesOf_pair hvs
+            cases eq
+            rw [hbool] at hr
+            cases value
+            · simp only [Bool.false_eq_true, ↓reduceIte]
+              exact k₁.pushDifferent ⟨_, ha, hx⟩ ⟨_, hb', hy⟩ (by simpa using hr.symm)
+            · simp only [↓reduceIte]
+              have : x = y := by simpa using hr.symm
+              subst this
+              exact k₁.pushEqual ⟨_, ha, hx⟩ ⟨_, hb', hy⟩
+        · next operand e =>
+            obtain ⟨vs, hvs, a, x, eq, hx, hr⟩ := formOf_values lawful hc hcl e hv
+            obtain ⟨va, rfl, ha⟩ := valuesOf_single hvs
+            cases eq
+            rw [hbool] at hr
+            have : x = !value := by cases x <;> cases value <;> simp_all
+            subst this
+            exact assume_holds lawful hc hcl fuel k₁ ⟨_, ha, hx⟩
+        · next first second e =>
+            obtain ⟨vs, hvs, a, b, x, y, eq, hx, hy, hr⟩ := formOf_values lawful hc hcl e hv
+            obtain ⟨va, vb, rfl, ha, hb'⟩ := valuesOf_pair hvs
+            cases eq
+            rw [hbool] at hr
+            cases value
+            · simpa using k₁
+            · simp only [↓reduceIte]
+              have both : x = true ∧ y = true := by
+                cases x <;> cases y <;> simp_all
+              obtain ⟨rfl, rfl⟩ := both
+              exact assume_holds lawful hc hcl fuel
+                (assume_holds lawful hc hcl fuel k₁ ⟨_, ha, hx⟩) ⟨_, hb', hy⟩
+        · next first second e =>
+            obtain ⟨vs, hvs, a, b, x, y, eq, hx, hy, hr⟩ := formOf_values lawful hc hcl e hv
+            obtain ⟨va, vb, rfl, ha, hb'⟩ := valuesOf_pair hvs
+            cases eq
+            rw [hbool] at hr
+            cases value
+            · simp only [Bool.false_eq_true, ↓reduceIte]
+              have both : x = false ∧ y = false := by
+                cases x <;> cases y <;> simp_all
+              obtain ⟨rfl, rfl⟩ := both
+              exact assume_holds lawful hc hcl fuel
+                (assume_holds lawful hc hcl fuel k₁ ⟨_, ha, hx⟩) ⟨_, hb', hy⟩
+            · simpa using k₁
+        · exact k₁
+      · intro known c m hknown
+        split
+        · next same =>
+            obtain ⟨rfl, rfl⟩ := same
+            obtain ⟨_, imp⟩ := hk.choices c (BitTree.mem_of_find _ _ _ _ m)
+            obtain ⟨hcond, hother⟩ := imp _ hb rfl
+            exact assume_holds lawful hc hcl fuel (assume_holds lawful hc hcl fuel hknown hcond)
+              hother
+        · exact hknown
+
+/-! ## Deciding a requirement -/
+
+section
+variable {tbl : Table Raw} {k : Known}
+
+theorem sumAbove_sound (lawful : OpFacts.Lawful ops R Run) (hc : Consistent Run ρ tbl)
+    (hcl : Closed ρ tbl) (hk : k.Holds R ρ) {first second : Nat} {strict : Bool} {vf vs : Val}
+    (hf : ρ first = some vf) (hs : ρ second = some vs)
+    (h : sumAbove ops tbl k first second strict = true) :
+    ∃ x y, R.nat vf = some x ∧ R.nat vs = some y ∧ if strict then x < y else x ≤ y := by
+  simp only [sumAbove] at h
+  split at h
+  · next a b e =>
+      obtain ⟨vals, hvals, va, vb, x', y', eq, hx', hy', hsum⟩ := formOf_values lawful hc hcl e hs
+      obtain ⟨wa, wb, rfl, ha, hb⟩ := valuesOf_pair hvals
+      cases eq
+      simp only [Bool.or_eq_true, Bool.and_eq_true, beq_iff_eq, Bool.not_eq_true',
+        decide_eq_true_eq] at h
+      rcases h with ⟨rfl, hs'⟩ | ⟨rfl, hs'⟩
+      · rw [hf] at ha
+        cases ha
+        refine ⟨x', x' + y', hx', hsum, ?_⟩
+        cases strict
+        · simp
+        · simp only [↓reduceIte]
+          have := hk.low ⟨_, hb, hy'⟩
+          simp at hs'
+          omega
+      · rw [hf] at hb
+        cases hb
+        refine ⟨y', x' + y', hy', hsum, ?_⟩
+        cases strict
+        · simp
+        · simp only [↓reduceIte]
+          have := hk.low ⟨_, ha, hx'⟩
+          simp at hs'
+          omega
+  · cases h
+
+theorem differenceBelow_sound (lawful : OpFacts.Lawful ops R Run) (hc : Consistent Run ρ tbl)
+    (hcl : Closed ρ tbl) (hk : k.Holds R ρ) {first second : Nat} {strict : Bool} {vf vs : Val}
+    (hf : ρ first = some vf) (hs : ρ second = some vs)
+    (h : differenceBelow ops tbl k first second strict = true) :
+    ∃ x y, R.nat vf = some x ∧ R.nat vs = some y ∧ if strict then x < y else x ≤ y := by
+  simp only [differenceBelow] at h
+  split at h
+  · next a u e =>
+      obtain ⟨vals, hvals, va, vu, x', y', eq, hx', hy', le, hdiff⟩ :=
+        formOf_values lawful hc hcl e hf
+      obtain ⟨wa, wu, rfl, ha, hu⟩ := valuesOf_pair hvals
+      cases eq
+      simp only [Bool.and_eq_true, beq_iff_eq, Bool.or_eq_true, Bool.not_eq_true',
+        decide_eq_true_eq] at h
+      obtain ⟨rfl, hs'⟩ := h
+      rw [hs] at ha
+      cases ha
+      refine ⟨x' - y', x', hdiff, hx', ?_⟩
+      cases strict
+      · simp only [Bool.false_eq_true, ↓reduceIte]
+        omega
+      · simp only [↓reduceIte]
+        have := hk.low ⟨_, hu, hy'⟩
+        simp at hs'
+        omega
+  · cases h
+
+theorem offsetBelow_sound (lawful : OpFacts.Lawful ops R Run) (hc : Consistent Run ρ tbl)
+    (hcl : Closed ρ tbl) (hk : k.Holds R ρ) {first second : Nat} {vf vs : Val}
+    (hf : ρ first = some vf) (hs : ρ second = some vs)
+    (h : offsetBelow ops tbl k first second = true) :
+    ∃ x y, R.nat vf = some x ∧ R.nat vs = some y ∧ x < y := by
+  -- One reading of the sum: `t < second - o` is the order that a loop made for its index `t`.
+  have below : ∀ {o t o0 t0 : Nat} {fact : OrderFact}, fact ∈ k.orders.find factDepth t →
+      fact.first = t → fact.strict = true →
+      tbl.formOf ops fact.second = some (.difference, [second, o]) →
+      NatAt R ρ o o0 → NatAt R ρ t t0 → ∃ y, R.nat vs = some y ∧ o0 + t0 < y := by
+    intro o t o0 t0 fact m hfirst hstrict e ho ht
+    obtain ⟨t1, d0, ht1, ⟨vd, hvd, hdn⟩, lt⟩ := hk.orders _ (BitTree.mem_of_find _ _ _ _ m)
+    simp only [hstrict, ↓reduceIte] at lt
+    rw [hfirst] at ht1
+    obtain ⟨vals, hvals, vr, vo, r0, o1, eq, hr0, ho1, le, hdiff⟩ :=
+      formOf_values lawful hc hcl e hvd
+    obtain ⟨wr, wo, rfl, hr, ho'⟩ := valuesOf_pair hvals
+    cases eq
+    have e1 := ht1.unique ht
+    have e2 := NatAt.unique ⟨_, ho', ho1⟩ ho
+    rw [hs] at hr
+    cases hr
+    rw [hdn] at hdiff
+    cases hdiff
+    exact ⟨r0, hr0, by omega⟩
+  simp only [offsetBelow] at h
+  split at h
+  · next a b e =>
+      obtain ⟨vals, hvals, va, vb, a0, b0, eq, ha0, hb0, hsum⟩ := formOf_values lawful hc hcl e hf
+      obtain ⟨wa, wb, rfl, ha, hb⟩ := valuesOf_pair hvals
+      cases eq
+      simp only [Bool.or_eq_true, List.any_eq_true, Bool.and_eq_true, beq_iff_eq] at h
+      rcases h with ⟨fact, m, ⟨⟨hfirst, hstrict⟩, _⟩, hd⟩ | ⟨fact, m, ⟨⟨hfirst, hstrict⟩, _⟩, hd⟩
+      · split at hd
+        · next r a' e' =>
+            simp only [Bool.and_eq_true, beq_iff_eq] at hd
+            obtain ⟨rfl, rfl⟩ := hd
+            obtain ⟨y, hy, lt⟩ := below m hfirst hstrict e' ⟨_, ha, ha0⟩ ⟨_, hb, hb0⟩
+            exact ⟨a0 + b0, y, hsum, hy, lt⟩
+        · cases hd
+      · split at hd
+        · next r b' e' =>
+            simp only [Bool.and_eq_true, beq_iff_eq] at hd
+            obtain ⟨rfl, rfl⟩ := hd
+            obtain ⟨y, hy, lt⟩ := below m hfirst hstrict e' ⟨_, hb, hb0⟩ ⟨_, ha, ha0⟩
+            exact ⟨a0 + b0, y, hsum, hy, by omega⟩
+        · cases hd
+  · cases h
+
+/-- A sum `x + t` is below the `r` that `offsetBound` gives: `t < r - x` is the order that a
+loop made for `t`, and `r - x` is a difference. -/
+theorem offsetBound_sound (lawful : OpFacts.Lawful ops R Run) (hc : Consistent Run ρ tbl)
+    (hcl : Closed ρ tbl) (hk : k.Holds R ρ) {x t r a b : Nat}
+    (h : offsetBound ops tbl k x t = some r) (hx : NatAt R ρ x a) (ht : NatAt R ρ t b) :
+    ∃ c, NatAt R ρ r c ∧ a + b < c := by
+  unfold offsetBound at h
+  obtain ⟨⟨t', d, s, l⟩, m, hf⟩ := List.exists_of_findSome?_eq_some h
+  split at hf
+  · next c =>
+      simp only [Bool.and_eq_true, beq_iff_eq] at c
+      obtain ⟨⟨rfl, rfl⟩, -⟩ := c
+      obtain ⟨t1, d0, ht1, hd0, lt⟩ := hk.orders _ (BitTree.mem_of_find _ _ _ _ m)
+      simp only [↓reduceIte] at lt
+      have := ht1.unique ht
+      subst this
+      split at hf
+      · next r' x' e' =>
+          split at hf
+          · next same =>
+              cases hf
+              simp only [beq_iff_eq] at same
+              subst same
+              obtain ⟨vd, hvd, hdn⟩ := hd0
+              obtain ⟨vals', hvals', vr, vx, r0, a1, eq', hr0, ha1, le, hdiff⟩ :=
+                formOf_values lawful hc hcl e' hvd
+              obtain ⟨wr, wx, rfl, hr, hx'⟩ := valuesOf_pair hvals'
+              cases eq'
+              obtain ⟨va, hva, ha⟩ := hx
+              rw [hva] at hx'
+              cases hx'
+              rw [ha] at ha1
+              cases ha1
+              rw [hdn] at hdiff
+              cases hdiff
+              exact ⟨r0, ⟨vr, hr, hr0⟩, by omega⟩
+          · cases hf
+      · cases hf
+  · cases hf
+
+/-- What `offsetRange` says of the first result of an application holds of it, when the form of
+the written operation holds of the operands' values and the result. -/
+theorem offsetRange_sound (lawful : OpFacts.Lawful ops R Run) (hc : Consistent Run ρ tbl)
+    (hcl : Closed ρ tbl) (hk : k.Holds R ρ) {written : Raw} {args : List Nat} {vs : List Val}
+    {v : Val} (hargs : valuesOf ρ args = some vs)
+    (hform : ∀ f, ops.form written = some f → FormHolds R f vs v) {rr : Range}
+    (h : offsetRange ops tbl k written args = some rr) : ∃ n, R.nat v = some n ∧ rr.Has n := by
+  unfold offsetRange at h
+  split at h
+  · next x t hsum =>
+      obtain ⟨a', b', x0, y0, eq, hx0, hy0, hv0⟩ := hform .sum hsum
+      obtain ⟨wa, wb, rfl, ha, hb'⟩ := valuesOf_pair hargs
+      cases eq
+      -- The range below that of an `r` above the sum holds of the sum.
+      have below : ∀ {r : Nat}, (∃ c, NatAt R ρ r c ∧ x0 + y0 < c) →
+          (k.rangeOf r).map Range.below = some rr → ∃ n, R.nat v = some n ∧ rr.Has n := by
+        intro r ⟨c, hcr, lt⟩ e
+        cases hr : k.rangeOf r with
+        | none => rw [hr] at e; cases e
+        | some rr' =>
+            rw [hr, Option.map_some, Option.some.injEq] at e
+            subst e
+            obtain ⟨n, hn, has⟩ := hk.rangeOf hr
+            have := hn.unique hcr
+            subst this
+            exact ⟨x0 + y0, hv0, has.below lt⟩
+      split at h
+      · next r hb =>
+          exact below (offsetBound_sound lawful hc hcl hk hb ⟨_, ha, hx0⟩ ⟨_, hb', hy0⟩) h
+      · split at h
+        · next r hb =>
+            obtain ⟨c, hcr, lt⟩ :=
+              offsetBound_sound lawful hc hcl hk hb ⟨_, hb', hy0⟩ ⟨_, ha, hx0⟩
+            exact below ⟨c, hcr, by omega⟩ h
+        · cases h
+  · cases h
+
+/-- What `offsetRange` says of the first result of an application, learned, holds. -/
+theorem Known.Holds.addOffset {k₁ : Known} (lawful : OpFacts.Lawful ops R Run)
+    (hc : Consistent Run ρ tbl) (hcl : Closed ρ tbl) (hk : k.Holds R ρ) (hk₁ : k₁.Holds R ρ)
+    {written : Raw} {args made : List Nat} {vs rs : List Val}
+    (hargs : valuesOf ρ args = some vs) (hres : valuesOf ρ made = some rs)
+    (hform : ∀ f, ops.form written = some f → ∃ r, rs.head? = some r ∧ FormHolds R f vs r) :
+    (k₁.addOffset ops tbl k written args made).Holds R ρ := by
+  cases made with
+  | nil => exact hk₁
+  | cons first rest =>
+      refine hk₁.addRange? fun rr e => ?_
+      simp only [valuesOf] at hres
+      split at hres
+      · next v vs' e1 _ =>
+          cases hres
+          have hform' : ∀ f, ops.form written = some f → FormHolds R f vs v := fun f hf => by
+            obtain ⟨r, head, holds⟩ := hform f hf
+            cases head
+            exact holds
+          obtain ⟨n, hn, has⟩ := offsetRange_sound lawful hc hcl hk hargs hform' e
+          exact ⟨n, ⟨v, e1, hn⟩, has⟩
+      · cases hres
+
+theorem rangesOrder_sound {rf rs : Option Range} {strict : Bool} {x y : Nat}
+    (hrf : ∀ r, rf = some r → r.Has x) (hrs : ∀ r, rs = some r → r.Has y)
+    (h : rangesOrder rf rs strict = true) : if strict then x < y else x ≤ y := by
+  simp only [rangesOrder] at h
+  split at h
+  · next a b =>
+      have ha := hrf a rfl
+      have hb := (hrs b rfl).1
+      split at h
+      · next hi e =>
+          have := ha.2 hi e
+          cases strict
+          · simp only [Bool.false_eq_true, ↓reduceIte, decide_eq_true_eq] at h ⊢
+            omega
+          · simp only [↓reduceIte, decide_eq_true_eq] at h ⊢
+            omega
+      · cases h
+  · cases h
+
+/-- The ranges given for the operands of a requirement hold of the values of the operands. -/
+def RangesHold (R : Reading Val) (rf : Option Range) (v : Val) : Prop :=
+  ∀ r, rf = some r → ∃ x, R.nat v = some x ∧ r.Has x
+
+theorem RangesHold.has {rf : Option Range} {v : Val} {x : Nat} (h : RangesHold R rf v)
+    (hx : R.nat v = some x) : ∀ r, rf = some r → r.Has x := fun r e => by
+  obtain ⟨x', hx', has⟩ := h r e
+  rw [hx] at hx'
+  cases hx'
+  exact has
+
+/-- Ranges that say an order are both known. -/
+theorem rangesOrder_some {rf rs : Option Range} {strict : Bool}
+    (h : rangesOrder rf rs strict = true) : ∃ a b, rf = some a ∧ rs = some b := by
+  simp only [rangesOrder] at h
+  split at h
+  · next a b => exact ⟨a, b, rfl, rfl⟩
+  · cases h
+
+/-- Two values whose ranges say an order read as naturals in that order. -/
+theorem rangesOrder_read {rf rs : Option Range} {strict : Bool} {vf vs : Val}
+    (hrf : RangesHold R rf vf) (hrs : RangesHold R rs vs) (h : rangesOrder rf rs strict = true) :
+    ∃ x y, R.nat vf = some x ∧ R.nat vs = some y ∧ if strict then x < y else x ≤ y := by
+  obtain ⟨a, b, rfl, rfl⟩ := rangesOrder_some h
+  obtain ⟨x, hx, -⟩ := hrf a rfl
+  obtain ⟨y, hy, -⟩ := hrs b rfl
+  exact ⟨x, y, hx, hy, rangesOrder_sound (hrf.has hx) (hrs.has hy) h⟩
+
+/-- An order that is known of two identifiers holds of their values, which read as naturals. -/
+theorem Known.Holds.hasOrder_read {k : Known} (hk : k.Holds R ρ) {first second : Nat}
+    {strict : Bool} {vf vs : Val} (hf : ρ first = some vf) (hs : ρ second = some vs)
+    (h : k.hasOrder first second strict = true) :
+    ∃ x y, R.nat vf = some x ∧ R.nat vs = some y ∧ if strict then x < y else x ≤ y := by
+  obtain ⟨x, y, ⟨v, hv, hx⟩, ⟨w, hw, hy⟩, o⟩ := hk.hasOrder h
+  rw [hf] at hv
+  cases hv
+  rw [hs] at hw
+  cases hw
+  exact ⟨x, y, hx, hy, o⟩
+
+theorem knownLe_sound (lawful : OpFacts.Lawful ops R Run) (hc : Consistent Run ρ tbl)
+    (hcl : Closed ρ tbl) (hk : k.Holds R ρ) {first second : Nat} {vf vs : Val}
+    {rf rs : Option Range} (hf : ρ first = some vf) (hs : ρ second = some vs)
+    (hrf : RangesHold R rf vf) (hrs : RangesHold R rs vs)
+    (h : knownLe ops tbl k first second rf rs = true) :
+    ∃ x y, R.nat vf = some x ∧ R.nat vs = some y ∧ x ≤ y := by
+  simp only [knownLe, Bool.or_eq_true, Bool.and_eq_true, beq_iff_eq] at h
+  rcases h with (((h | ⟨h, known⟩) | h) | h) | h
+  · simpa using rangesOrder_read hrf hrs h
+  · subst h
+    rw [hf] at hs
+    cases hs
+    obtain ⟨r, hr⟩ := Option.isSome_iff_exists.mp known
+    obtain ⟨x, hx, -⟩ := hrf r hr
+    exact ⟨x, x, hx, hx, Nat.le_refl _⟩
+  · simpa using hk.hasOrder_read hf hs h
+  · simpa using sumAbove_sound lawful hc hcl hk hf hs h
+  · simpa using differenceBelow_sound lawful hc hcl hk hf hs h
+
+theorem knownLt_sound (lawful : OpFacts.Lawful ops R Run) (hc : Consistent Run ρ tbl)
+    (hcl : Closed ρ tbl) (hk : k.Holds R ρ) {first second : Nat} {vf vs : Val}
+    {rf rs : Option Range} (hf : ρ first = some vf) (hs : ρ second = some vs)
+    (hrf : RangesHold R rf vf) (hrs : RangesHold R rs vs)
+    (h : knownLt ops tbl k first second rf rs = true) :
+    ∃ x y, R.nat vf = some x ∧ R.nat vs = some y ∧ x < y := by
+  simp only [knownLt, Bool.or_eq_true] at h
+  rcases h with (((h | h) | h) | h) | h
+  · simpa using rangesOrder_read hrf hrs h
+  · simpa using hk.hasOrder_read hf hs h
+  · simpa using sumAbove_sound lawful hc hcl hk hf hs h
+  · simpa using differenceBelow_sound lawful hc hcl hk hf hs h
+  · exact offsetBelow_sound lawful hc hcl hk hf hs h
+
+theorem knownDifference_sound (lawful : OpFacts.Lawful ops R Run) (hc : Consistent Run ρ tbl)
+    (hcl : Closed ρ tbl) (hk : k.Holds R ρ) {first second : Nat} {vf vs : Val}
+    {rf rs : Option Range} {n : Nat} (hf : ρ first = some vf) (hs : ρ second = some vs)
+    (hrf : RangesHold R rf vf) (hrs : RangesHold R rs vs)
+    (h : knownDifference ops tbl k second first rs rf n = true) :
+    ∃ x y, R.nat vs = some x ∧ R.nat vf = some y ∧ x - y = n := by
+  simp only [knownDifference, Bool.or_eq_true] at h
+  rcases h with h | h
+  · split at h
+    · next p p' q q' =>
+        simp only [decide_eq_true_eq] at h
+        obtain ⟨rfl, rfl, le, eq⟩ := h
+        obtain ⟨x, hx, hp⟩ := hrs _ rfl
+        obtain ⟨y, hy, hq⟩ := hrf _ rfl
+        have e1 : x = p := by have h1 := hp.2 p rfl; have h2 : p ≤ x := hp.1; omega
+        have e2 : y = q := by have h1 := hq.2 q rfl; have h2 : q ≤ y := hq.1; omega
+        subst e1; subst e2
+        exact ⟨x, y, hx, hy, eq⟩
+    · cases h
+  · split at h
+    · next a c e =>
+        obtain ⟨vals, hvals, va, vc, x', c0, eq, ha', hc', hsum⟩ := formOf_values lawful hc hcl e hs
+        obtain ⟨wa, wc, rfl, ha, hcv⟩ := valuesOf_pair hvals
+        cases eq
+        simp only [Bool.or_eq_true, Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at h
+        rcases h with ⟨rfl, hr⟩ | ⟨rfl, hr⟩
+        · rw [hf] at ha
+          cases ha
+          have := Range.has_point.mp (hk.rangeOf_at ⟨_, hcv, hc'⟩ hr)
+          exact ⟨x' + c0, x', hsum, ha', by omega⟩
+        · rw [hf] at hcv
+          cases hcv
+          have := Range.has_point.mp (hk.rangeOf_at ⟨_, ha, ha'⟩ hr)
+          exact ⟨x' + c0, c0, hsum, hc', by omega⟩
+    · cases h
+
+/-- A requirement that the rules decide holds of the values it names. -/
+theorem decideRequirement_sound (lawful : OpFacts.Lawful ops R Run) (hc : Consistent Run ρ tbl)
+    (hcl : Closed ρ tbl) (hk : k.Holds R ρ) {req : Requirement Raw} {ids : List (Option Nat)}
+    {ranges : List (Option Range)} {vs : List Val}
+    (hvals : ∀ (j id : Nat), ids[j]? = some (some id) → ρ id = vs[j]?)
+    (hlen : vs.length = ids.length)
+    (hranges : ∀ (j : Nat) (v : Val), vs[j]? = some v → RangesHold R (ranges.getD j none) v)
+    (h : decideRequirement ops tbl k req ids ranges = true) : req.Relation R vs := by
+  have pair : ∀ {a b : Nat}, ids = [some a, some b] →
+      ∃ va vb, vs = [va, vb] ∧ ρ a = some va ∧ ρ b = some vb := fun {a b} e => by
+    subst e
+    match vs, hlen with
+    | [va, vb], _ =>
+        exact ⟨va, vb, rfl, by simpa using hvals 0 a rfl, by simpa using hvals 1 b rfl⟩
+  have single : ∀ {a : Nat}, ids = [some a] → ∃ va, vs = [va] ∧ ρ a = some va := fun {a} e => by
+    subst e
+    match vs, hlen with
+    | [va], _ => exact ⟨va, rfl, by simpa using hvals 0 a rfl⟩
+  unfold decideRequirement at h
+  split at h
+  · next a b ra rb =>
+      obtain ⟨va, vb, rfl, ha, hb⟩ := pair rfl
+      exact knownLe_sound lawful hc hcl hk ha hb (by simpa using hranges 0 va rfl)
+        (by simpa using hranges 1 vb rfl) h
+  · next a b ra rb =>
+      obtain ⟨va, vb, rfl, ha, hb⟩ := pair rfl
+      exact knownLt_sound lawful hc hcl hk ha hb (by simpa using hranges 0 va rfl)
+        (by simpa using hranges 1 vb rfl) h
+  · next n a ra =>
+      obtain ⟨va, rfl, ha⟩ := single rfl
+      have hr : RangesHold R ra va := by simpa using hranges 0 va rfl
+      split at h
+      · next r =>
+          obtain ⟨x, hx, has⟩ := hr r rfl
+          have := has.1
+          simp only [decide_eq_true_eq] at h
+          exact ⟨x, hx, by omega⟩
+      · cases h
+  · next n a ra =>
+      obtain ⟨va, rfl, ha⟩ := single rfl
+      have hr : RangesHold R ra va := by simpa using hranges 0 va rfl
+      split at h
+      · next lo hi =>
+          obtain ⟨x, hx, has⟩ := hr _ rfl
+          have := has.2 hi rfl
+          simp only [decide_eq_true_eq] at h
+          exact ⟨x, hx, by omega⟩
+      · cases h
+  · next n a ra =>
+      obtain ⟨va, rfl, ha⟩ := single rfl
+      have hr : RangesHold R ra va := by simpa using hranges 0 va rfl
+      split at h
+      · next lo hi =>
+          obtain ⟨x, hx, has⟩ := hr _ rfl
+          have h1 := has.2 hi rfl
+          have h2 : lo ≤ x := has.1
+          simp only [decide_eq_true_eq] at h
+          exact ⟨x, hx, by omega⟩
+      · cases h
+  · next n b a rb ra =>
+      obtain ⟨vb, va, rfl, hb, ha⟩ := pair rfl
+      exact knownDifference_sound lawful hc hcl hk ha hb (by simpa using hranges 1 va rfl)
+        (by simpa using hranges 0 vb rfl) h
+  · next a rest =>
+      obtain ⟨va, rfl, ha⟩ := single rfl
+      obtain ⟨v, hv, hb⟩ := hk.hasTruth h
+      rw [ha] at hv
+      cases hv
+      exact hb
+  · next a ra =>
+      obtain ⟨va, rfl, ha⟩ := single rfl
+      have hr : RangesHold R ra va := by simpa using hranges 0 va rfl
+      split at h
+      · next lo hi =>
+          obtain ⟨x, hx, _⟩ := hr _ rfl
+          exact ⟨x, hx⟩
+      · cases h
+  · cases h
+
+end
+
+/-! ## Resolving the values of a requirement -/
+
+variable {Valid : Val → Prop}
+
+theorem valuesOf_valid {ρ : Valuation Val} :
+    ∀ {ids : List Nat} {vs : List Val}, valuesOf ρ ids = some vs →
+      (∀ i v, ρ i = some v → Valid v) → ∀ v, v ∈ vs → Valid v
+  | [], vs, h, _, v, m => by
+      simp only [valuesOf, Option.some.injEq] at h
+      subst h
+      cases m
+  | i :: is, vs, h, valid, v, m => by
+      simp only [valuesOf] at h
+      split at h
+      · next w ws e1 e2 =>
+          cases h
+          rcases List.mem_cons.mp m with rfl | m
+          · exact valid i _ e1
+          · exact valuesOf_valid e2 valid v m
+      · cases h
+
+/-- The values of identifiers, one list after another. -/
+theorem valuesOf_append {ρ : Valuation Val} :
+    ∀ {ids ids' : List Nat} {vs vs' : List Val}, valuesOf ρ ids = some vs →
+      valuesOf ρ ids' = some vs' → valuesOf ρ (ids ++ ids') = some (vs ++ vs')
+  | [], _, vs, _, h, h' => by
+      simp only [valuesOf, Option.some.injEq] at h
+      subst h
+      exact h'
+  | i :: is, ids', vs, vs', h, h' => by
+      simp only [valuesOf] at h
+      split at h
+      · next v rest e1 e2 =>
+          cases h
+          simp only [List.cons_append, valuesOf, e1, valuesOf_append e2 h']
+      · cases h
+
+theorem Stepped.refl {T : Type} {ρ : Valuation Val} {st : St T Raw}
+    (coh : Coherent Run Valid ρ st) : Stepped Run Valid ρ ρ st st :=
+  ⟨Valuation.Le.refl ρ, coh, ⟨Nat.le_refl _, [], rfl, fun _ m => nomatch m⟩, rfl, rfl⟩
+
+theorem Stepped.trans {T : Type} {ρ₁ ρ₂ ρ₃ : Valuation Val} {st₁ st₂ st₃ : St T Raw}
+    (h1 : Stepped Run Valid ρ₁ ρ₂ st₁ st₂) (h2 : Stepped Run Valid ρ₂ ρ₃ st₂ st₃) :
+    Stepped Run Valid ρ₁ ρ₃ st₁ st₃ :=
+  ⟨h1.le.trans h2.le, h2.coherent, h1.grows.trans h2.grows, by rw [h2.refusals, h1.refusals],
+    by rw [h2.bounds, h1.bounds]⟩
+
+theorem fill_valid {ρ : Valuation Val} {lo : Nat} {rs : List Val}
+    (valid : ∀ i v, ρ i = some v → Valid v) (hrs : ∀ r, r ∈ rs → Valid r) :
+    ∀ i v, ρ.fill lo rs i = some v → Valid v := fun i v e => by
+  simp only [Valuation.fill] at e
+  split at e
+  · next w hw =>
+      cases e
+      exact valid i _ hw
+  · split at e
+    · exact hrs v (List.mem_of_getElem? e)
+    · cases e
+
+theorem setFrom_valid {ρ : Valuation Val} {lo : Nat} {rs : List Val}
+    (valid : ∀ i v, ρ i = some v → Valid v) (hrs : ∀ r, r ∈ rs → Valid r) :
+    ∀ i v, ρ.setFrom lo rs i = some v → Valid v := fun i v e => by
+  simp only [Valuation.setFrom] at e
+  split at e
+  · exact hrs v (List.mem_of_getElem? e)
+  · exact valid i v e
+
+/-- An application of a written operation, shared, with as many results as asked, no more than
+the operation gives: its results have the first values that it gives, and the state and the
+valuation still agree. -/
+theorem share_sound [DecidableEq Raw] (lawful : OpFacts.Lawful ops R Run) {T : Type}
+    {ρ : Valuation Val} {st : St T Raw} (coh : Coherent Run Valid ρ st) {w : Raw}
+    {argIds : List Nat} {as rs : List Val} {count : Nat} (hargs : valuesOf ρ argIds = some as)
+    (hlt : ∀ a, a ∈ argIds → a < st.next) (run : Run w as rs) (hcount : count ≤ rs.length)
+    (hvalid : ∀ r, r ∈ rs → Valid r) :
+    ∃ ρ', Stepped Run Valid ρ ρ' st (share w argIds count st).2 ∧
+      valuesOf ρ' (share w argIds count st).1 = some (rs.take count) ∧
+      ∀ i, i ∈ (share w argIds count st).1 → i < (share w argIds count st).2.next := by
+  have hfun : ∀ rs', Run w as rs' → rs' = rs := fun rs' r' => lawful.functional _ _ _ _ r' run
+  have hvalid' : ∀ r, r ∈ rs.take count → Valid r := fun r m => hvalid r (List.mem_of_mem_take m)
+  simp only [share]
+  split
+  · next lo found =>
+      obtain ⟨e, m, ew, ea, ec, el⟩ := Table.find_spec found
+      subst el
+      have hvs : valuesOf ρ e.args = some as := by rw [ea]; exact hargs
+      have hrun : Run e.written as rs := by rw [ew]; exact run
+      obtain ⟨le, sup, cons, clo, look⟩ := fill_entry coh.wf coh.consistent coh.closed
+        coh.support m hvs hrun (by rw [ec]; exact hcount) (by rw [ew]; exact hfun)
+      rw [ec] at le sup cons clo look
+      refine ⟨ρ.fill e.lo (rs.take count), ⟨le, ⟨sup, coh.wf, cons, clo,
+        fill_valid coh.valid hvalid'⟩, ⟨Nat.le_refl _, [], rfl, fun _ m => nomatch m⟩, rfl, rfl⟩,
+        look, ?_⟩
+      intro i hi
+      have := (coh.wf.mem m).2
+      rw [ec] at this
+      have hi := mem_range'_bounds hi
+      show i < st.next
+      omega
+  · let e : Entry Raw := ⟨w, argIds, st.next, count⟩
+    have wf' : Table.WF (st.next + count) (st.table.add e) :=
+      show EntriesWF _ (e :: st.table.entries) from ⟨hlt, Nat.le_refl _, coh.wf⟩
+    obtain ⟨cons', clo'⟩ := consistent_extend (tbl' := st.table.add e) (new := [e]) coh.support
+      coh.consistent coh.closed rfl (fun e' m => by simp at m; subst m; exact Nat.le_refl _)
+    obtain ⟨le, sup, cons, clo, look⟩ := fill_entry wf' cons' clo'
+      (coh.support.mono (Nat.le_add_right _ _)) (e := e) List.mem_cons_self hargs run hcount hfun
+    refine ⟨ρ.fill st.next (rs.take count), ⟨le, ⟨sup, wf', cons, clo,
+      fill_valid coh.valid hvalid'⟩,
+      ⟨Nat.le_add_right _ _, [e], rfl, fun e' m => by simp at m; subst m; exact Nat.le_refl _⟩,
+      rfl, rfl⟩, look, ?_⟩
+    intro i hi
+    have hi := mem_range'_bounds hi
+    simp only
+    omega
+
+/-- Resolving an operand of a requirement: the identifier it resolves to has a value that the
+operand names, when the operation that it applies, if any, gives a result there. -/
+theorem operandId_sound [DecidableEq Raw] (lawful : OpFacts.Lawful ops R Run)
+    (runValid : ∀ w as rs, Run w as rs → (∀ a, a ∈ as → Valid a) → ∀ r, r ∈ rs → Valid r)
+    {T : Type} {ρ : Valuation Val} {st : St T Raw} (coh : Coherent Run Valid ρ st)
+    {argIds : List Nat} {args : List Val} (hargs : valuesOf ρ argIds = some args)
+    (hlt : ∀ a, a ∈ argIds → a < st.next) {operand : Operand Raw}
+    (runs : ∀ w ps, operand = .apply w ps →
+      ∃ as rs, atPositions args ps = some as ∧ Run w as rs ∧ rs ≠ []) :
+    ∃ ρ', Stepped Run Valid ρ ρ' st (operandId argIds st operand).2 ∧
+      ∀ id, (operandId argIds st operand).1 = some id →
+        ∃ v, ρ' id = some v ∧ operand.Denotes Run args v := by
+  cases operand with
+  | arg position =>
+      refine ⟨ρ, Stepped.refl coh, fun id e => ?_⟩
+      simp only [operandId] at e
+      have := valuesOf_getElem hargs e
+      cases hv : args[position]? with
+      | none =>
+          rw [hv] at this
+          exact absurd this (valuesOf_mem hargs id (List.mem_of_getElem? e))
+      | some v =>
+          rw [hv] at this
+          exact ⟨v, this, hv⟩
+  | apply w ps =>
+      obtain ⟨as, rs, has, run, nonempty⟩ := runs w ps rfl
+      obtain ⟨r, others, rfl⟩ := List.exists_cons_of_ne_nil nonempty
+      simp only [operandId]
+      split
+      · next ids' e =>
+          obtain ⟨values, hvalues, hl⟩ := atPositions_valuesOf hargs e
+          rw [has] at hvalues
+          cases hvalues
+          have hlt' : ∀ a, a ∈ ids' → a < st.next := fun a m => hlt a (atPositions_mem e a m)
+          have hvalid : ∀ v, v ∈ r :: others → Valid v :=
+            runValid w as _ run (valuesOf_valid hl coh.valid)
+          obtain ⟨ρ', step, look, _⟩ := share_sound (count := 1) lawful coh hl hlt' run
+            (by simp) hvalid
+          refine ⟨ρ', step, fun id hid => ?_⟩
+          obtain ⟨rest, hrest⟩ : ∃ rest, (share w ids' 1 st).1 = id :: rest := by
+            cases h : (share w ids' 1 st).1 with
+            | nil => rw [h] at hid; cases hid
+            | cons a rest =>
+                rw [h] at hid
+                simp only [List.head?_cons, Option.some.injEq] at hid
+                exact ⟨rest, by rw [hid]⟩
+          rw [hrest] at look
+          refine ⟨r, ?_, as, r :: others, has, run, rfl⟩
+          simpa using valuesOf_get look 0 (by simp)
+      · refine ⟨ρ, Stepped.refl coh, fun id e => ?_⟩
+        cases e
+
+/-! ### The refusals and bounds of a step -/
+
+theorem share_state [DecidableEq Raw] {T : Type} (w : Raw) (args : List Nat) (count : Nat)
+    (st : St T Raw) : (share w args count st).2.refusals = st.refusals ∧
+      (share w args count st).2.bounds = st.bounds := by
+  simp only [share]
+  split <;> exact ⟨rfl, rfl⟩
+
+theorem operandId_state [DecidableEq Raw] {T : Type} (argIds : List Nat) (st : St T Raw)
+    (o : Operand Raw) : (operandId argIds st o).2.refusals = st.refusals ∧
+      (operandId argIds st o).2.bounds = st.bounds := by
+  cases o with
+  | arg => exact ⟨rfl, rfl⟩
+  | apply w ps =>
+      simp only [operandId]
+      split
+      · exact share_state _ _ _ _
+      · exact ⟨rfl, rfl⟩
+
+theorem operandIds_state [DecidableEq Raw] {T : Type} (argIds : List Nat) :
+    ∀ (os : List (Operand Raw)) (st : St T Raw), (operandIds argIds os st).2.refusals =
+      st.refusals ∧ (operandIds argIds os st).2.bounds = st.bounds
+  | [], _ => ⟨rfl, rfl⟩
+  | o :: os, st => by
+      simp only [operandIds]
+      obtain ⟨r1, b1⟩ := operandId_state argIds st o
+      obtain ⟨r2, b2⟩ := operandIds_state argIds os (operandId argIds st o).2
+      exact ⟨r2.trans r1, b2.trans b1⟩
+
+theorem checkRequirements_state [DecidableEq Raw] {T : Type} (ops : OpFacts Raw) (k : Known)
+    (place : Place) (written : Raw) (argIds : List Nat) :
+    ∀ (reqs : List (Requirement Raw)) (st : St T Raw),
+      (∃ new, (checkRequirements ops k place written argIds reqs st).refusals =
+        new ++ st.refusals) ∧
+        (checkRequirements ops k place written argIds reqs st).bounds = st.bounds
+  | [], st => ⟨⟨[], rfl⟩, rfl⟩
+  | req :: rest, st => by
+      simp only [checkRequirements]
+      obtain ⟨r1, b1⟩ := operandIds_state argIds req.operands st
+      generalize operandIds argIds req.operands st = resolved at r1 b1 ⊢
+      split
+      · obtain ⟨⟨new, e⟩, b⟩ := checkRequirements_state ops k place written argIds rest resolved.2
+        exact ⟨⟨new, by rw [e, r1]⟩, by rw [b, b1]⟩
+      · refine ⟨?_, ?_⟩
+        · obtain ⟨⟨new, e⟩, _⟩ := checkRequirements_state ops k place written argIds rest
+            { resolved.2 with refusals := _ :: resolved.2.refusals }
+          exact ⟨new ++ [⟨.domain, place, .unjustified written req
+            (List.zipWith (operandRange ops k argIds) req.operands resolved.1)⟩],
+            by rw [e]; simp [r1]⟩
+        · rw [(checkRequirements_state ops k place written argIds rest _).2]
+          exact b1
+
+theorem learnRequirements_state [DecidableEq Raw] {T : Type} (ops : OpFacts Raw)
+    (ids : List Nat) :
+    ∀ (reqs : List (Requirement Raw)) (k : Known) (st : St T Raw),
+      (learnRequirements ops ids reqs k st).2.refusals = st.refusals ∧
+        (learnRequirements ops ids reqs k st).2.bounds = st.bounds
+  | [], _, _ => ⟨rfl, rfl⟩
+  | req :: rest, k, st => by
+      simp only [learnRequirements]
+      obtain ⟨r1, b1⟩ := operandIds_state ids req.operands st
+      obtain ⟨r2, b2⟩ := learnRequirements_state ops ids rest _ (operandIds ids req.operands st).2
+      exact ⟨r2.trans r1, b2.trans b1⟩
+
+/-! ### Resolving and deciding the requirements of an application -/
+
+theorem OperandsAt.le {ρ ρ' : Valuation Val} (h : ρ.Le ρ') {args : List Val} :
+    ∀ {os : List (Operand Raw)} {is : List (Option Nat)}, OperandsAt Run args ρ os is →
+      OperandsAt Run args ρ' os is
+  | [], [], _ => trivial
+  | _ :: _, _ :: _, ⟨first, rest⟩ =>
+      ⟨fun id e => by
+        obtain ⟨v, hv, hd⟩ := first id e
+        exact ⟨v, h _ _ hv, hd⟩, OperandsAt.le h rest⟩
+
+theorem OperandsAt.values {ρ : Valuation Val} {args : List Val} :
+    ∀ {os : List (Operand Raw)} {is : List (Option Nat)}, OperandsAt Run args ρ os is →
+      (∀ i, i ∈ is → i ≠ none) →
+      ∃ vs, vs.length = is.length ∧ (∀ (j id : Nat), is[j]? = some (some id) → ρ id = vs[j]?) ∧
+        DenotesAll Run args os vs
+  | [], [], _, _ => ⟨[], rfl, fun j id e => by simp at e, trivial⟩
+  | o :: os, i :: is, ⟨first, rest⟩, all => by
+      obtain ⟨id, rfl⟩ := Option.ne_none_iff_exists'.mp (all i List.mem_cons_self)
+      obtain ⟨v, hv, hd⟩ := first id rfl
+      obtain ⟨vs, hl, hvs, hds⟩ := OperandsAt.values rest
+        (fun i' m => all i' (List.mem_cons_of_mem _ m))
+      refine ⟨v :: vs, by simp [hl], fun j id' e => ?_, hd, hds⟩
+      cases j with
+      | zero =>
+          simp only [List.getElem?_cons_zero, Option.some.injEq] at e
+          cases e
+          simpa using hv
+      | succ j =>
+          simp only [List.getElem?_cons_succ] at e ⊢
+          exact hvs j id' e
+
+theorem OperandsAt.get {ρ : Valuation Val} {args : List Val} :
+    ∀ {os : List (Operand Raw)} {is : List (Option Nat)}, OperandsAt Run args ρ os is →
+      ∀ (j id : Nat), is[j]? = some (some id) →
+        ∃ o v, os[j]? = some o ∧ ρ id = some v ∧ o.Denotes Run args v
+  | [], [], _, j, id, e => by simp at e
+  | o :: os, i :: is, ⟨first, rest⟩, j, id, e => by
+      cases j with
+      | zero =>
+          simp only [List.getElem?_cons_zero, Option.some.injEq] at e
+          obtain ⟨v, hv, hd⟩ := first id e
+          exact ⟨o, v, rfl, hv, hd⟩
+      | succ j =>
+          simp only [List.getElem?_cons_succ] at e ⊢
+          exact OperandsAt.get rest j id e
+
+theorem operandIds_sound [DecidableEq Raw] (lawful : OpFacts.Lawful ops R Run)
+    (runValid : ∀ w as rs, Run w as rs → (∀ a, a ∈ as → Valid a) → ∀ r, r ∈ rs → Valid r)
+    {T : Type} {argIds : List Nat} {args : List Val} :
+    ∀ (os : List (Operand Raw)) {ρ : Valuation Val} {st : St T Raw},
+      Coherent Run Valid ρ st → valuesOf ρ argIds = some args →
+      (∀ a, a ∈ argIds → a < st.next) →
+      (∀ o, o ∈ os → ∀ w ps, o = .apply w ps →
+        ∃ as rs, atPositions args ps = some as ∧ Run w as rs ∧ rs ≠ []) →
+      ∃ ρ', Stepped Run Valid ρ ρ' st (operandIds argIds os st).2 ∧
+        OperandsAt Run args ρ' os (operandIds argIds os st).1
+  | [], ρ, st, coh, _, _, _ => ⟨ρ, Stepped.refl coh, trivial⟩
+  | o :: os, ρ, st, coh, hargs, hlt, runs => by
+      simp only [operandIds]
+      obtain ⟨ρ₁, step₁, first⟩ := operandId_sound lawful runValid coh hargs hlt
+        (runs o List.mem_cons_self)
+      obtain ⟨ρ₂, step₂, rest⟩ := operandIds_sound lawful runValid os step₁.coherent
+        (valuesOf_le step₁.le hargs) (fun a m => Nat.lt_of_lt_of_le (hlt a m) step₁.grows.next)
+        (fun o' m => runs o' (List.mem_cons_of_mem _ m))
+      refine ⟨ρ₂, step₁.trans step₂, fun id e => ?_, rest⟩
+      obtain ⟨v, hv, hd⟩ := first id e
+      exact ⟨v, step₂.le _ _ hv, hd⟩
+
+theorem operandRange_sound (lawful : OpFacts.Lawful ops R Run) {k : Known} (hk : k.Holds R ρ)
+    {argIds : List Nat} {args : List Val} (hargs : valuesOf ρ argIds = some args)
+    {operand : Operand Raw} {id : Nat} {v : Val} (hv : ρ id = some v)
+    (hd : operand.Denotes Run args v) :
+    RangesHold R (operandRange ops k argIds operand (some id)) v := by
+  cases operand with
+  | arg position =>
+      intro r e
+      obtain ⟨n, ⟨w, hw, hn⟩, has⟩ := hk.rangeOf e
+      rw [hv] at hw
+      cases hw
+      exact ⟨n, hn, has⟩
+  | apply w ps =>
+      obtain ⟨as, rs, has, run, head⟩ := hd
+      have known : ∀ (i : Nat) (r : Range),
+          (ps.map fun p => (argIds[p]?).bind k.rangeOf)[i]? = some (some r) →
+          ∃ v n, as[i]? = some v ∧ R.nat v = some n ∧ r.Has n := by
+        intro i r e
+        simp only [List.getElem?_map] at e
+        cases hp : ps[i]? with
+        | none => rw [hp] at e; cases e
+        | some p =>
+            rw [hp] at e
+            simp only [Option.map_some, Option.some.injEq] at e
+            cases hid : argIds[p]? with
+            | none => rw [hid] at e; cases e
+            | some idp =>
+                rw [hid] at e
+                simp only [Option.bind_some] at e
+                obtain ⟨n, ⟨w', hw', hn⟩, hasr⟩ := hk.rangeOf e
+                have := valuesOf_getElem hargs hid
+                rw [hw'] at this
+                exact ⟨w', n, by rw [atPositions_getElem has i p hp, ← this], hn, hasr⟩
+      have fromOps : ∀ r, (ops.ranges w (ps.map fun p => (argIds[p]?).bind k.rangeOf)).head?.join
+          = some r → ∃ n, R.nat v = some n ∧ r.Has n := by
+        intro r e
+        have e0 : (ops.ranges w (ps.map fun p => (argIds[p]?).bind k.rangeOf))[0]? =
+            some (some r) := by
+          rw [← List.head?_eq_getElem?]
+          cases hh : (ops.ranges w (ps.map fun p => (argIds[p]?).bind k.rangeOf)).head? with
+          | none => rw [hh] at e; cases e
+          | some o => rw [hh] at e; simp at e; rw [e]
+        obtain ⟨v', n, hv', hn, hasr⟩ := lawful.ranges _ _ _ _ run known 0 r e0
+        rw [← List.head?_eq_getElem?, head] at hv'
+        cases hv'
+        exact ⟨n, hn, hasr⟩
+      intro r e
+      simp only [operandRange] at e
+      have nat : ∃ n, R.nat v = some n := by
+        cases h1 : k.rangeOf id with
+        | some r1 =>
+            obtain ⟨n, ⟨w', hw', hn⟩, _⟩ := hk.rangeOf h1
+            rw [hv] at hw'
+            cases hw'
+            exact ⟨n, hn⟩
+        | none =>
+            rw [h1] at e
+            simp only [Range.meet] at e
+            obtain ⟨n, hn, _⟩ := fromOps r e
+            exact ⟨n, hn⟩
+      obtain ⟨n, hn⟩ := nat
+      refine ⟨n, hn, Range.meet_has e (fun r1 e1 => ?_) (fun r2 e2 => ?_)⟩
+      · obtain ⟨n', ⟨w', hw', hn'⟩, has'⟩ := hk.rangeOf e1
+        rw [hv] at hw'
+        cases hw'
+        rw [hn] at hn'
+        cases hn'
+        exact has'
+      · obtain ⟨n', hn', has'⟩ := fromOps r2 e2
+        rw [hn] at hn'
+        cases hn'
+        exact has'
+
+theorem decideRequirement_some {tbl : Table Raw} {k : Known} {req : Requirement Raw}
+    {ids : List (Option Nat)} {ranges : List (Option Range)}
+    (h : decideRequirement ops tbl k req ids ranges = true) : ∀ i, i ∈ ids → i ≠ none := by
+  unfold decideRequirement at h
+  split at h <;> first
+    | (intro i m; simp only [List.mem_cons, List.not_mem_nil, or_false] at m
+       rcases m with rfl | rfl <;> simp)
+    | (intro i m; simp only [List.mem_cons, List.not_mem_nil, or_false] at m
+       subst m; simp)
+    | cases h
+
+/-- A requirement that the rules decide, on the identifiers that its operands resolve to and the
+ranges that `operandRange` gives of them, holds of the values of the operands. -/
+theorem decided_holds (lawful : OpFacts.Lawful ops R Run) {tbl : Table Raw}
+    (hc : Consistent Run ρ tbl) (hcl : Closed ρ tbl) {k : Known} (hk : k.Holds R ρ)
+    {argIds : List Nat} {args : List Val} (hargs : valuesOf ρ argIds = some args)
+    {req : Requirement Raw} {ids : List (Option Nat)}
+    (resolved : OperandsAt Run args ρ req.operands ids)
+    (dec : decideRequirement ops tbl k req ids
+      (List.zipWith (operandRange ops k argIds) req.operands ids) = true) :
+    req.Holds Run R args := by
+  have all := decideRequirement_some dec
+  obtain ⟨vs, hl, hvs, hds⟩ := resolved.values all
+  refine ⟨vs, hds, decideRequirement_sound lawful hc hcl hk hvs hl ?_ dec⟩
+  intro j v hv
+  have lt : j < ids.length := by
+    have := (List.getElem?_eq_some_iff.mp hv).1
+    omega
+  obtain ⟨id, hid⟩ : ∃ id, ids[j]? = some (some id) := by
+    have m := List.getElem_mem lt
+    obtain ⟨id, e⟩ := Option.ne_none_iff_exists'.mp (all _ m)
+    exact ⟨id, by rw [List.getElem?_eq_getElem lt, e]⟩
+  obtain ⟨o, v', ho, hv', hd⟩ := resolved.get j id hid
+  have := hvs j id hid
+  rw [hv', hv] at this
+  cases this
+  rw [List.getD_eq_getElem?_getD, List.getElem?_zipWith, ho, hid]
+  exact operandRange_sound lawful hk hargs hv' hd
+
+/-- The requirements of an application that the walk decides hold of its operands' values. -/
+theorem checkRequirements_sound [DecidableEq Raw] (lawful : OpFacts.Lawful ops R Run)
+    (runValid : ∀ w as rs, Run w as rs → (∀ a, a ∈ as → Valid a) → ∀ r, r ∈ rs → Valid r)
+    {T : Type} {k : Known} {place : Place} {written : Raw} {argIds : List Nat}
+    {args : List Val} :
+    ∀ (reqs : List (Requirement Raw)) {ρ : Valuation Val} {st : St T Raw},
+      Coherent Run Valid ρ st → k.Holds R ρ → valuesOf ρ argIds = some args →
+      (∀ a, a ∈ argIds → a < st.next) →
+      (∀ req, req ∈ reqs → ∀ o, o ∈ req.operands → ∀ w ps, o = .apply w ps →
+        ∃ as rs, atPositions args ps = some as ∧ Run w as rs ∧ rs ≠ []) →
+      (checkRequirements ops k place written argIds reqs st).refusals = [] →
+      ∃ ρ', Stepped Run Valid ρ ρ' st (checkRequirements ops k place written argIds reqs st) ∧
+        ∀ req, req ∈ reqs → req.Holds Run R args
+  | [], ρ, st, coh, _, _, _, _, _ => ⟨ρ, Stepped.refl coh, fun _ m => nomatch m⟩
+  | req :: rest, ρ, st, coh, hk, hargs, hlt, runs, hnone => by
+      obtain ⟨ρ₁, step₁, res⟩ := operandIds_sound lawful runValid req.operands coh hargs hlt
+        (runs req List.mem_cons_self)
+      simp only [checkRequirements] at hnone ⊢
+      generalize operandIds argIds req.operands st = resolved at step₁ res hnone ⊢
+      have hk₁ := hk.le step₁.le
+      by_cases cond : (k.dead || decideRequirement ops resolved.2.table k req resolved.1
+          (List.zipWith (operandRange ops k argIds) req.operands resolved.1)) = true
+      · simp only [cond, ↓reduceIte] at hnone ⊢
+        have dec : decideRequirement ops resolved.2.table k req resolved.1
+            (List.zipWith (operandRange ops k argIds) req.operands resolved.1) = true := by
+          simpa [hk.alive] using cond
+        have holds : req.Holds Run R args :=
+          decided_holds lawful step₁.coherent.consistent step₁.coherent.closed hk₁
+            (valuesOf_le step₁.le hargs) res dec
+        obtain ⟨ρ₂, step₂, others⟩ := checkRequirements_sound lawful runValid rest
+          step₁.coherent hk₁ (valuesOf_le step₁.le hargs)
+          (fun a m => Nat.lt_of_lt_of_le (hlt a m) step₁.grows.next)
+          (fun req' m => runs req' (List.mem_cons_of_mem _ m)) hnone
+        refine ⟨ρ₂, step₁.trans step₂, fun req' m => ?_⟩
+        rcases List.mem_cons.mp m with rfl | m
+        · exact holds
+        · exact others req' m
+      · exfalso
+        simp only [Bool.not_eq_true] at cond
+        simp only [cond, Bool.false_eq_true, ↓reduceIte] at hnone
+        obtain ⟨⟨new, e⟩, _⟩ := checkRequirements_state ops k place written argIds rest
+          { resolved.2 with refusals := ⟨.domain, place, .unjustified written req
+            (List.zipWith (operandRange ops k argIds) req.operands resolved.1)⟩ ::
+              resolved.2.refusals }
+        rw [e] at hnone
+        simp at hnone
+
+/-! ### The guarantees of a summary, where a definition returns -/
+
+theorem checkGuarantees_adds {T : Type} (ops : OpFacts Raw) (tbl : Table Raw) (k : Known)
+    (place : Place) (ids : List Nat) :
+    ∀ (guarantees : List (Requirement Raw)) (refusals : List (Refusal T Raw)),
+      ∃ new, checkGuarantees ops tbl k place ids guarantees refusals = new ++ refusals
+  | [], refusals => ⟨[], rfl⟩
+  | g :: rest, refusals => by
+      simp only [checkGuarantees]
+      split
+      · exact checkGuarantees_adds ops tbl k place ids rest refusals
+      · obtain ⟨new, e⟩ := checkGuarantees_adds ops tbl k place ids rest (_ :: refusals)
+        rw [e]
+        exact ⟨new ++ [_], by rw [List.append_assoc]; rfl⟩
+
+/-- The identifiers that a guarantee names where a definition returns have the values that its
+operands name, among the values of the identifiers given. -/
+theorem exitIds_operandsAt {ids : List Nat} {args : List Val}
+    (hargs : valuesOf ρ ids = some args) :
+    ∀ (os : List (Operand Raw)), OperandsAt Run args ρ os (exitIds ids os)
+  | [] => trivial
+  | .arg position :: rest => by
+      refine ⟨fun id e => ?_, exitIds_operandsAt hargs rest⟩
+      have := valuesOf_getElem hargs e
+      cases hv : args[position]? with
+      | none =>
+          rw [hv] at this
+          exact absurd this (valuesOf_mem hargs id (List.mem_of_getElem? e))
+      | some v =>
+          rw [hv] at this
+          exact ⟨v, this, hv⟩
+  | .apply .. :: rest => ⟨fun _ e => (nomatch e), exitIds_operandsAt hargs rest⟩
+
+/-- The guarantees of a summary that the exit of a definition decides hold of the values of the
+identifiers given, when none is refused, what is known there holds of a valuation and the table
+is true of it. -/
+theorem checkGuarantees_sound (lawful : OpFacts.Lawful ops R Run) {tbl : Table Raw}
+    (hc : Consistent Run ρ tbl) (hcl : Closed ρ tbl) {k : Known} (hk : k.Holds R ρ) {T : Type}
+    {place : Place} {ids : List Nat} {args : List Val} (hargs : valuesOf ρ ids = some args) :
+    ∀ (guarantees : List (Requirement Raw)) (refusals : List (Refusal T Raw)),
+      checkGuarantees ops tbl k place ids guarantees refusals = [] →
+      ∀ guarantee, guarantee ∈ guarantees → guarantee.Holds Run R args
+  | [], _, _, _, m => nomatch m
+  | g :: rest, refusals, accepted, guarantee, m => by
+      simp only [checkGuarantees] at accepted
+      by_cases known : (k.dead || decideRequirement ops tbl k g (exitIds ids g.operands)
+          (List.zipWith (operandRange ops k ids) g.operands (exitIds ids g.operands))) = true
+      · simp only [known, ↓reduceIte] at accepted
+        rcases List.mem_cons.mp m with rfl | m
+        · have dec : decideRequirement ops tbl k guarantee (exitIds ids guarantee.operands)
+              (List.zipWith (operandRange ops k ids) guarantee.operands
+                (exitIds ids guarantee.operands)) = true := by
+            simpa [hk.alive] using known
+          exact decided_holds lawful hc hcl hk hargs (exitIds_operandsAt hargs _) dec
+        · exact checkGuarantees_sound lawful hc hcl hk hargs rest refusals accepted guarantee m
+      · exfalso
+        simp only [Bool.not_eq_true] at known
+        simp only [known, Bool.false_eq_true, ↓reduceIte] at accepted
+        obtain ⟨new, e⟩ := checkGuarantees_adds ops tbl k place ids rest
+          (⟨.guarantee, place, .unestablished g
+            (List.zipWith (operandRange ops k ids) g.operands (exitIds ids g.operands))⟩ ::
+            refusals)
+        rw [e] at accepted
+        simp at accepted
+
+/-! ## Learning a requirement that holds -/
+
+/-- An operand of a requirement names one value, when the relation of written operations is a
+function. -/
+theorem Operand.Denotes.unique (functional : ∀ w as rs rs', Run w as rs → Run w as rs' → rs = rs')
+    {args : List Val} {o : Operand Raw} {v v' : Val} (first : o.Denotes Run args v)
+    (second : o.Denotes Run args v') : v = v' := by
+  cases o with
+  | arg position => exact Option.some.inj (first.symm.trans second)
+  | apply w ps =>
+      obtain ⟨as, rs, has, run, head⟩ := first
+      obtain ⟨as', rs', has', run', head'⟩ := second
+      rw [has] at has'
+      cases has'
+      rw [functional _ _ _ _ run run'] at head
+      exact Option.some.inj (head.symm.trans head')
+
+/-- Each operand of a list that names values names one. -/
+theorem DenotesAll.denotes {args : List Val} :
+    ∀ {os : List (Operand Raw)} {vs : List Val}, DenotesAll Run args os vs →
+      ∀ o, o ∈ os → ∃ v, o.Denotes Run args v
+  | _ :: _, v :: _, ⟨d, ds⟩, o, m => by
+      rcases List.mem_cons.mp m with rfl | m
+      · exact ⟨v, d⟩
+      · exact DenotesAll.denotes ds o m
+
+/-- The identifiers that the operands of a requirement resolve to have the values that the
+operands name. -/
+theorem OperandsAt.agrees (functional : ∀ w as rs rs', Run w as rs → Run w as rs' → rs = rs')
+    {ρ : Valuation Val} {args : List Val} :
+    ∀ {os : List (Operand Raw)} {is : List (Option Nat)} {vs : List Val},
+      OperandsAt Run args ρ os is → DenotesAll Run args os vs →
+      ∀ (j id : Nat), is[j]? = some (some id) → ρ id = vs[j]?
+  | [], [], [], _, _, j, id, e => by simp at e
+  | o :: os, i :: is, v :: vs, ⟨first, rest⟩, ⟨d, ds⟩, j, id, e => by
+      cases j with
+      | zero =>
+          simp only [List.getElem?_cons_zero, Option.some.injEq] at e ⊢
+          obtain ⟨v', hv', d'⟩ := first id e
+          rw [hv', Operand.Denotes.unique functional d' d]
+      | succ j =>
+          simp only [List.getElem?_cons_succ] at e ⊢
+          exact OperandsAt.agrees functional rest ds j id e
+
+/-- **What is learned from a requirement that holds holds.** Where what is known holds of a
+valuation that the table is true of, a requirement that holds of the values of the operands,
+learned on the identifiers that its operands resolve to, which have the values that they name:
+what is known after it holds too. -/
+theorem learn_holds (lawful : OpFacts.Lawful ops R Run) {tbl : Table Raw}
+    (hc : Consistent Run ρ tbl) (hcl : Closed ρ tbl) (fuel : Nat) {k : Known} (hk : k.Holds R ρ)
+    {req : Requirement Raw} {args : List Val} {ids : List (Option Nat)}
+    (holds : req.Holds Run R args) (resolved : OperandsAt Run args ρ req.operands ids) :
+    (learn ops tbl fuel k req ids).Holds R ρ := by
+  obtain ⟨vs, denoted, relation⟩ := holds
+  have agrees := OperandsAt.agrees lawful.functional resolved denoted
+  unfold learn
+  split
+  · next first second =>
+      obtain ⟨a, b, rfl, -, -⟩ := DenotesAll.two denoted
+      have ha : ρ first = some a := agrees 0 first rfl
+      have hb : ρ second = some b := agrees 1 second rfl
+      obtain ⟨x, y, hx, hy, le⟩ := relation
+      exact hk.pushLe ⟨a, ha, hx⟩ ⟨b, hb, hy⟩ le
+  · next first second =>
+      obtain ⟨a, b, rfl, -, -⟩ := DenotesAll.two denoted
+      have ha : ρ first = some a := agrees 0 first rfl
+      have hb : ρ second = some b := agrees 1 second rfl
+      obtain ⟨x, y, hx, hy, lt⟩ := relation
+      exact hk.pushLess ⟨a, ha, hx⟩ ⟨b, hb, hy⟩ lt
+  · next n id =>
+      obtain ⟨a, rfl, -⟩ := DenotesAll.one denoted
+      have ha : ρ id = some a := agrees 0 id rfl
+      obtain ⟨x, hx, le⟩ := relation
+      exact hk.addRange ⟨a, ha, hx⟩ ⟨le, fun _ e => nomatch e⟩
+  · next n id =>
+      obtain ⟨a, rfl, -⟩ := DenotesAll.one denoted
+      have ha : ρ id = some a := agrees 0 id rfl
+      obtain ⟨x, hx, lt⟩ := relation
+      exact hk.addRange ⟨a, ha, hx⟩ ((Range.has_point.mpr rfl : (Range.point n).Has n).below lt)
+  · next n id =>
+      obtain ⟨a, rfl, -⟩ := DenotesAll.one denoted
+      have ha : ρ id = some a := agrees 0 id rfl
+      obtain ⟨x, hx, same⟩ := relation
+      exact hk.addRange ⟨a, ha, hx⟩ (Range.has_point.mpr same)
+  · next id =>
+      obtain ⟨a, rfl, -⟩ := DenotesAll.one denoted
+      have ha : ρ id = some a := agrees 0 id rfl
+      exact assume_holds lawful hc hcl fuel hk ⟨a, ha, relation⟩
+  · exact hk
+
+end
+
+end FactCheck
+
+end Zkc.Core

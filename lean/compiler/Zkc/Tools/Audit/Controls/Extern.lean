@@ -10,4 +10,7 @@ namespace Zkc.Tools.Audit.Controls
 @[extern "lean_nat_add"]
 public def externalAdd (left right : @& Nat) : Nat := left + right
 
+@[extern "lean_nat_add"]
+private def privateExternalAdd (left right : @& Nat) : Nat := left + right
+
 end Zkc.Tools.Audit.Controls

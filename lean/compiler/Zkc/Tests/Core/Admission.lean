@@ -1,297 +1,148 @@
-import Zkc.Tests.Core.Check
-import Zkc.Tests.Core.Reflexivity
-import Zkc.Tests.Core.Runs
-import Zkc.Core.RoundTrip
-import Zkc.Core.ProtocolFactsProject
-import Zkc.Core.VocabularyModel
+import Zkc.Core.Admission.Theorems
+import Zkc.Tests.Core.Facts
 
-/-! The admission of a package by the vocabulary, and what follows from it.
+/-!
+`check` and `admit` on programs of functions written by names, run by the kernel.
 
-- A package of `koala-bear` and its units with three rows of the vocabulary, `field.is_nonzero`,
-  the restricted row `field.nonzero` that names it as its domain row, and `field.inverse`, built
-  here. Its function guards `field.is_nonzero`, then applies `field.nonzero` and inverts the
-  unit. Its protocol does the same between two roles: the first guards and sends the unit, the
-  second inverts it. The rows of the package are the vocabulary's, which the kernel computes,
-  and the vocabulary admits the package: the model implements every row.
-- The model of the vocabulary satisfies the domain laws of the package's table
-  (`Vocabulary.model_domainLaws`), so the statements that take the domain laws apply to the
-  model that runs the package: its function and the program of each role of its protocol never
-  stop `undefined`. The same holds of the model that the checks of the executor run, the one
-  of the package unelaborated from the typed one.
-- The laws are a condition on the model: under it the function without the guard stops
-  `undefined` at 0, where `field.nonzero` has no value, and returns the inverse at 2. The check
-  of facts does not pass that function.
-- A row with a name of the vocabulary and another signature is reported, each with its
-  reason: other inputs, other outputs, another kind, a domain row of another name, a domain row
-  at other static arguments, a restricted row without the domain row that the vocabulary
-  gives, and static arguments at which the vocabulary has no row of the name. The core admits
-  each of these packages; the vocabulary does not.
-
-The runs, the reports and the admission are computed by Lean's interpreter; the comparison of the
-rows with the vocabulary and the conditions of the statements by the kernel.
+A program of two functions is admitted with its whole annotation. Admission stops at the first
+definition that is refused, with every refusal of that definition and nothing of a later one:
+one whose check of facts refuses an application, and one whose elaboration is refused. `check`,
+one definition at a time, gives the headers of the admitted program. An association whose key
+names a definition is resolved in the admitted program; one whose key is no definition is
+refused by the rule `association`. A protocol is refused.
 -/
 
-set_option autoImplicit false
+namespace Zkc.Core.AdmissionTests
 
-open Zkc.Source Zkc.Core
+open FactsTests (field natural less plus item elements F lengthOf anyNat)
 
-namespace Admission
+/-- Nothing beyond the definitions. -/
+def noAssociation : Association := ⟨[], [], [], [], []⟩
 
-/-! ## A package that the vocabulary admits -/
+/-- What admission says of a program: its refusals, or the bounds of its annotation. -/
+def admission (named : NamedProgram field) : List (ProgramRefusal field) ⊕ List (Place × Nat) :=
+  match admit named noAssociation with
+  | .ok admitted => .inr admitted.annotation.bounds
+  | .error refusals => .inl refusals
 
-/-- A row at the one static argument `koala-bear`, the type row 0. -/
-abbrev row (name : String) (inputs outputs : List Ty) (kind : OperationKind) : Operation :=
-  ⟨⟨Name.ofString name, [.type (.nominal 0)]⟩, ⟨inputs, outputs, kind⟩⟩
+/-- The place of an instruction of the function with the key. -/
+def at_ (definition instruction : Nat) : Place := ⟨⟨definition⟩, [], some ⟨instruction⟩, none⟩
 
-/-- The types `koala-bear` and `nonzero<koala-bear>`. -/
-abbrev types : List CatalogueRow :=
-  [⟨Name.ofString "koala-bear", []⟩, ⟨Name.ofString "nonzero", [.type (.nominal 0)]⟩]
+/-! ## A program admitted -/
 
-/-- `field.is_nonzero`, the restricted row `field.nonzero` with it as its domain row, and
-`field.inverse`. -/
-abbrev rows : List Operation :=
-  [row "field.is_nonzero" [.nominal 0] [.bool] .pure,
-   row "field.nonzero" [.nominal 0] [.nominal 1] (.restricted (some 0)),
-   row "field.inverse" [.nominal 1] [.nominal 1] .pure]
+/-- A function that loops as often as its input, which it requires to be below 10. -/
+def bounded : Definition field :=
+  .fn ⟨1⟩ [.nat] [.nat] true none Summary.empty (.mk [0] [
+    .op ⟨1⟩ [10] (natural 10) [],
+    .op ⟨2⟩ [11] less [0, 10],
+    .guard ⟨3⟩ () 11 .reject,
+    .loop ⟨4⟩ () (.count 0) [] [] (.mk [20] [] [])] [0])
 
-/-- `guard is_nonzero(x); return inverse(nonzero(x))`. -/
-abbrev guarded : Raw.Function :=
-  ⟨false, [.nominal 0], [.nominal 1], some <|
-    .step (.op 0 [0]) <|
-    .step (.guard .reject 1) <|
-    .step (.op 1 [0]) <|
-    .step (.op 2 [2]) <|
-    .ret [3]⟩
+/-- A function that calls `bounded` and loops as often as what it returns, which it requires to
+be below 5. -/
+def caller : Definition field :=
+  .fn ⟨2⟩ [.nat] [.nat] true none Summary.empty (.mk [0] [
+    .op ⟨1⟩ [10] (.call ⟨1⟩) [0],
+    .op ⟨2⟩ [11] (natural 5) [],
+    .op ⟨3⟩ [12] less [10, 11],
+    .guard ⟨4⟩ () 12 .reject,
+    .loop ⟨5⟩ () (.count 10) [] [] (.mk [20] [] [])] [10])
 
-/-- The first role guards `is_nonzero(x)` and sends `nonzero(x)`; the second inverts it. -/
-abbrev relayed : Raw.Protocol :=
-  ⟨false, 2, [⟨.nominal 0, 0⟩], [⟨.nominal 1, 1⟩], [],
-    .step (.at 0 (.op 0 [0])) <|
-    .step (.at 0 (.guard .reject 1)) <|
-    .step (.at 0 (.op 1 [0])) <|
-    .step (.exchange 0 1 0 2) <|
-    .step (.at 1 (.op 2 [3])) <|
-    .ret [4]⟩
+/-- Both functions are admitted; the annotation has the bound of each loop, the latest
+definition's first. -/
+example : admission ⟨[bounded, caller]⟩ = .inr [(at_ 2 5, 4), (at_ 1 4, 9)] := by decide +kernel
 
-abbrev raw : Raw.Package := ⟨types, [], [], rows, [guarded], [relayed], none⟩
+/-! ## The first refused definition, whole -/
 
-kernel_refl elaborates : (elaborate raw).isOk equals true
+/-- A function that adds its inputs. -/
+def addition (key : Nat) : Definition field :=
+  .fn ⟨key⟩ [.nat, .nat] [.nat] false none Summary.empty (.mk [0, 1] [.op ⟨1⟩ [10] plus [0, 1]] [10])
 
-noncomputable def elaborated : Typed := Typed.ofRaw raw elaborates
+/-- A function that reads an item at an index that nothing bounds. -/
+def unguarded (key : Nat) : Definition field :=
+  .fn ⟨key⟩ [elements, .nat] [F] false none Summary.empty (.mk [0, 1] [.op ⟨1⟩ [10] (item elements) [0, 1]] [10])
 
-typed_literal typed := elaborated
+/-- A function that reads two items at indices that nothing bounds. -/
+def unguardedTwice (key : Nat) : Definition field :=
+  .fn ⟨key⟩ [elements, .nat, .nat] [F] false none Summary.empty (.mk [0, 1, 2] [
+    .op ⟨1⟩ [10] (item elements) [0, 1],
+    .op ⟨2⟩ [11] (item elements) [0, 2]] [11])
 
-kernel_refl elaborate_eq : elaborate raw equals Except.ok typed
-kernel_refl unelaborate_eq : unelaborate typed equals raw
+/-- The refusal of the read of an index that nothing bounds, at an instruction of a function. -/
+def unguardedRefusal (key instruction : Nat) : ProgramRefusal field :=
+  ⟨.domain, at_ key instruction,
+    .unjustified (item elements) (.lt (.arg 1) lengthOf) [anyNat, anyNat]⟩
 
--- The package has a restricted row that names a domain row.
-kernel_refl kinds :
-    (typed.table.map (·.signature.kind)) equals [.pure, .restricted (some 0), .pure]
+/-- The second function's check of facts refuses both of its reads: admission gives those two
+refusals, and nothing of the third function, which is refused as well. -/
+example : admission ⟨[addition 1, unguardedTwice 2, unguarded 3]⟩ =
+    .inl [unguardedRefusal 2 1, unguardedRefusal 2 2] := by
+  decide +kernel
 
--- The rows of the package are the vocabulary's.
-kernel_refl matched : Vocabulary.mismatches Vocabulary.table raw equals []
+/-- The first function's elaboration refuses an operand that is not in scope: admission gives
+that refusal, and nothing of the second function. -/
+example : admission ⟨[.fn ⟨1⟩ [.nat, .nat] [.nat] false none Summary.empty
+      (.mk [0, 1] [.op ⟨1⟩ [2] plus [0, 5]] [2]), unguarded 2]⟩ =
+    .inl [⟨.scope, at_ 1 1, .name 5⟩] := by
+  decide +kernel
 
--- Every function and every protocol passes the check of facts.
-kernel_refl justified : typed.program.justified equals true
+/-! ## One definition at a time -/
 
-/-! ## The domain laws and what they give -/
+/-- The headers of `bounded` and `caller`. -/
+def boundedHeader : FnHeader field := ⟨⟨1⟩, [.nat], [.nat], true, none, Summary.empty⟩
+def callerHeader : FnHeader field := ⟨⟨2⟩, [.nat], [.nat], true, none, Summary.empty⟩
 
-/-- The model of the vocabulary's rows of the package. -/
-abbrev model : Model := Vocabulary.model Vocabulary.table raw
+-- The headers that the checks give are compared whole.
+deriving instance DecidableEq for EventClass, Shape, Shapes, ProtocolHeader, FnHeader, Headers,
+  Except
 
-/-- The model satisfies the domain laws of the package's table. -/
-theorem laws : model.DomainLaws (typed.table.map (·.signature)) :=
-  Vocabulary.model_domainLaws elaborate_eq matched
+/-- `check`, one definition at a time from no headers, gives the headers of the admitted
+program. -/
+example : checkAll check ⟨[], []⟩ [bounded, caller] = .ok ⟨[callerHeader, boundedHeader], []⟩ := by
+  decide +kernel
+example : (admit ⟨[bounded, caller]⟩ noAssociation).map (·.program.headers) =
+    .ok ⟨[callerHeader, boundedHeader], []⟩ := by
+  decide +kernel
 
-/-- Under the model of the vocabulary, every function of the package never stops `undefined`,
-on any arguments. -/
-theorem function_defined {header : FunctionHeader} (callee : Var typed.functions header)
-    (arguments : Values model.Value header.inputs) :
-    NeverStops .undefined ((typed.program.functionTable model).get callee arguments) :=
-  Program.never_undefined laws typed.program justified callee arguments
+/-- `check` gives the refusals of a definition, against the headers before it: `caller` alone
+calls a function that is not there. -/
+example : check ⟨[], []⟩ caller = .error [⟨.callee, at_ 2 1, .callee ⟨1⟩ 0⟩] := by
+  rfl
 
-/-- The function of the package. -/
-abbrev invert : Var typed.functions ⟨[.nominal 0], [.nominal 1], false⟩ := ⟨0, rfl⟩
+/-! ## The association -/
 
-/-- The statement at the function and the element 0, where `field.nonzero` has no value. -/
-theorem invert_defined_at_zero :
-    NeverStops .undefined
-      ((typed.program.functionTable model).get invert (.cons (Concrete.Datum.number 0) .nil)) :=
-  function_defined invert _
+/-- An association with one instance of the generic declaration with the key 7, at the argument
+3, whose definition has the key `definition`. -/
+def instanceOf (definition : Nat) : Association :=
+  ⟨[⟨⟨7⟩, [.nat 3], ⟨definition⟩⟩], [], [], [], []⟩
 
-/-- The value of a result that is known to be one. -/
-def okValue {ε α : Type} (result : Except ε α) (accepted : result.isOk = true) : α :=
-  match result, accepted with
-  | .ok value, _ => value
+/-- What admission says of a program with an association: its refusals, or for each instance
+in the association, its generic declaration, its arguments and the key of the definition found
+in the program. -/
+def resolution (named : NamedProgram field) (association : Association) :
+    List (ProgramRefusal field) ⊕ List (Key × List Static × Key) :=
+  match admit named association with
+  | .ok admitted =>
+      .inr (admitted.association.families.map fun family =>
+        (family.generic, family.arguments, family.definition.key))
+  | .error refusals => .inl refusals
 
-theorem okValue_eq {ε α : Type} (result : Except ε α) (accepted : result.isOk = true) :
-    result = .ok (okValue result accepted) := by
-  match result, accepted with
-  | .ok value, _ => rfl
+/-- A key that names a definition of the program: admitted, with that definition found. -/
+example : resolution ⟨[addition 1, addition 2]⟩ (instanceOf 2) =
+    .inr [(⟨7⟩, [.nat 3], ⟨2⟩)] := by
+  decide +kernel
 
-kernel_refl projects : (projectProtocols typed.program.protocols).isOk equals true
+/-- A key that is no definition of the program: refused by the rule `association`, at the
+key. -/
+example : resolution ⟨[addition 1, addition 2]⟩ (instanceOf 9) =
+    .inl [refuseWhole ⟨9⟩ .association (.key ⟨9⟩)] := by
+  decide +kernel
 
-/-- The role programs of the package. -/
-noncomputable def projected :
-    Projected (typed.table.map (·.signature)) typed.functions typed.protocols :=
-  okValue (projectProtocols typed.program.protocols) projects
+/-! ## A protocol -/
 
-theorem projected_eq : projectProtocols typed.program.protocols = .ok projected :=
-  okValue_eq (projectProtocols typed.program.protocols) projects
+/-- A protocol is refused: its role programs are not walked yet. -/
+example : admission ⟨[addition 1, .protocol ⟨2⟩ 2 [] [] (.mk [] [] [])]⟩ =
+    .inl [refuseWhole ⟨2⟩ .protocol (.key ⟨2⟩)] := by
+  decide +kernel
 
-/-- Under the model of the vocabulary, the program of every role of every protocol of the
-package never stops `undefined`, under any path and on any arguments, whatever the replies of
-its effects. -/
-theorem role_defined (identities : Identities) {header : ProtocolHeader}
-    (callee : Var typed.protocols header) (role : Nat)
-    (program : Var projected.headers (roleHeader role header))
-    (named : projected.callees.find callee role = some program) (path : List Nat)
-    (arguments : Values model.Value (roleHeader role header).inputs) :
-    NeverStops .undefined
-      ((projected.programs.table model (typed.program.functionTable model) identities).get
-        program path arguments) :=
-  Program.role_never_undefined laws typed.program justified identities projected projected_eq
-    callee role program named path arguments
-
-/-- The protocol of the package. -/
-abbrev relay : Var typed.protocols ⟨2, [⟨.nominal 0, 0⟩], [⟨.nominal 1, 1⟩], .none, false⟩ :=
-  ⟨0, rfl⟩
-
--- Both roles of the protocol have a program, to which the statement applies.
-kernel_refl first_named : (projected.callees.find relay 0).isSome equals true
-kernel_refl second_named : (projected.callees.find relay 1).isSome equals true
-
-/-- The model that the checks of the executor run, the one of the package unelaborated from
-the typed one, satisfies the domain laws too. -/
-theorem executor_laws : (Runs.modelOf typed).DomainLaws (typed.table.map (·.signature)) :=
-  Vocabulary.model_domainLaws (elaborate_unelaborate typed)
-    (show Vocabulary.mismatches Vocabulary.table (unelaborate typed) = [] from
-      unelaborate_eq ▸ matched)
-
-#print axioms Vocabulary.mismatches_of_admitted
-#print axioms Vocabulary.model_domainLaws
-#print axioms laws
-#print axioms function_defined
-#print axioms role_defined
-#print axioms executor_laws
-
-/-! ## The laws are a condition -/
-
-/-- The function without the guard: `return inverse(nonzero(x))`. -/
-abbrev unguarded : Raw.Function :=
-  ⟨false, [.nominal 0], [.nominal 1], some <|
-    .step (.op 1 [0]) <|
-    .step (.op 2 [1]) <|
-    .ret [2]⟩
-
-abbrev unguardedRaw : Raw.Package := ⟨types, [], [], rows, [unguarded], [], none⟩
-
-kernel_refl unguarded_elaborates : (elaborate unguardedRaw).isOk equals true
-
-noncomputable def unguardedElaborated : Typed := Typed.ofRaw unguardedRaw unguarded_elaborates
-
-typed_literal unguardedTyped := unguardedElaborated
-
--- The rows of the package are the vocabulary's, and the check of facts does not pass its
--- function.
-kernel_refl unguarded_matched : Vocabulary.mismatches Vocabulary.table unguardedRaw equals []
-kernel_refl unguarded_fails : unguardedTyped.program.justified equals false
-
-/-! ## Runs and reports -/
-
-open Zkc.Core.Concrete (Datum)
-open Zkc.Core.Vocabulary (Run)
-
-def check (label : String) (condition : Bool) : IO Unit :=
-  unless condition do throw (IO.userError s!"admission: {label}")
-
-def describe : Run → String
-  | .returned outputs => s!"returned {reprStr outputs}"
-  | .stopped reason => s!"stopped {reprStr reason}"
-  | .limit elements => s!"reached the limit of {elements} elements"
-  | .failed message => s!"failed: {message}"
-
-/-- A package of the two types with the rows given and no program. -/
-def tableOf (types : List CatalogueRow) (rows : List Operation) : Raw.Package :=
-  ⟨types, [], [], rows, [], [], none⟩
-
-/-- Whether the vocabulary reports exactly one row of a package, with a message that has both
-texts. -/
-def reports (package : Raw.Package) (name reason : String) : Bool :=
-  match Vocabulary.missing Vocabulary.table package with
-  | [message] => (message.splitOn name).length > 1 && (message.splitOn reason).length > 1
-  | _ => false
-
-#eval show IO Unit from do
-  let inverse := (Vocabulary.koalaBearOrder + 1) / 2
-  -- The guarded function: the inverse at 2, `reject` at 0.
-  let returned := describe (Vocabulary.runData Vocabulary.table raw 0 [.number 2])
-  check s!"the guarded function at 2: {returned}" (returned == describe (.returned [.number inverse]))
-  let rejected := describe (Vocabulary.runData Vocabulary.table raw 0 [.number 0])
-  check s!"the guarded function at 0: {rejected}" (rejected == describe (.stopped .reject))
-  -- Without the guard the restricted row is applied outside its domain: `undefined`.
-  let inside := describe (Vocabulary.runData Vocabulary.table unguardedRaw 0 [.number 2])
-  check s!"the unguarded function at 2: {inside}" (inside == describe (.returned [.number inverse]))
-  let outside := describe (Vocabulary.runData Vocabulary.table unguardedRaw 0 [.number 0])
-  check s!"the unguarded function at 0: {outside}" (outside == describe (.stopped .undefined))
-  -- The protocol: the programs of the two roles against each other.
-  let typed ← match elaborateWritten raw with
-    | .ok typed => pure typed
-    | .error refusal => throw (IO.userError s!"refused: {repr refusal}")
-  let relayed ← IO.ofExcept (Runs.joint typed [.number 2] [] [0, 1])
-  check s!"the protocol at 2: {relayed.grouped.describe}"
-    (relayed.agrees && relayed.grouped.same (.returned [.number inverse]))
-  let stopped ← IO.ofExcept (Runs.joint typed [.number 0] [] [0, 1])
-  check s!"the protocol at 0: {stopped.grouped.describe}"
-    (stopped.grouped.describe == "stopped PIR.Stop.reject")
-  -- The vocabulary admits both packages: every row is its own and the model implements it.
-  check "the package is not admitted" (Vocabulary.missing Vocabulary.table raw).isEmpty
-  check "the unguarded package is not admitted" (Vocabulary.missing Vocabulary.table unguardedRaw).isEmpty
-  -- A name of the vocabulary with another signature.
-  let isNonzero := row "field.is_nonzero" [.nominal 0] [.bool] .pure
-  let nonzero := row "field.nonzero" [.nominal 0] [.nominal 1] (.restricted (some 0))
-  check "other inputs"
-    (reports (tableOf types [row "field.add" [.nominal 0] [.nominal 0] .pure]) "field.add" "inputs")
-  check "other outputs"
-    (reports (tableOf types [row "field.is_nonzero" [.nominal 0] [.nominal 0] .pure])
-      "field.is_nonzero" "outputs")
-  check "another kind"
-    (reports (tableOf types [row "field.add" [.nominal 0, .nominal 0] [.nominal 0] (.restricted none)])
-      "field.add" "kind")
-  check "a pure row as a law"
-    (reports (tableOf types [row "field.add" [.nominal 0, .nominal 0] [.nominal 0] .sampling])
-      "field.add" "kind")
-  check "a restricted row without its domain row"
-    (reports (tableOf types [isNonzero, row "field.nonzero" [.nominal 0] [.nominal 1] (.restricted none)])
-      "field.nonzero" "kind")
-  check "a restricted row as a pure row"
-    (reports (tableOf types [isNonzero, row "field.nonzero" [.nominal 0] [.nominal 1] .pure])
-      "field.nonzero" "kind")
-  check "a domain row of another name"
-    (reports
-      (tableOf types [row "field.from_nonzero" [.nominal 1] [.nominal 0] .pure,
-        row "field.nonzero" [.nominal 0] [.nominal 1] (.restricted (some 0))])
-      "field.nonzero" "kind")
-  -- The domain row at another field: `field.is_nonzero` of `bls12-381.fr`, the type row 2.
-  let scalarTypes := types ++ [⟨Name.ofString "bls12-381.fr", []⟩]
-  let scalarIsNonzero : Operation :=
-    ⟨⟨Name.ofString "field.is_nonzero", [.type (.nominal 2)]⟩, ⟨[.nominal 2], [.bool], .pure⟩⟩
-  check "the domain row at the same static arguments is admitted"
-    (Vocabulary.missing Vocabulary.table (tableOf scalarTypes [isNonzero, nonzero, scalarIsNonzero])).isEmpty
-  check "a domain row at other static arguments"
-    (reports
-      (tableOf scalarTypes [isNonzero, scalarIsNonzero,
-        row "field.nonzero" [.nominal 0] [.nominal 1] (.restricted (some 1))])
-      "field.nonzero" "kind")
-  -- A name of the vocabulary at static arguments at which it has no row: the units are not a
-  -- field.
-  check "static arguments without a row"
-    (reports
-      (tableOf types [⟨⟨Name.ofString "field.add", [.type (.nominal 1)]⟩,
-        ⟨[.nominal 1, .nominal 1], [.nominal 1], .pure⟩⟩])
-      "field.add" "is not a row of the vocabulary")
-  -- The core admits a table with another signature: only the vocabulary compares it.
-  check "the core admits another signature"
-    (elaborate (tableOf types [row "field.add" [.nominal 0] [.nominal 0] .pure])).isOk
-
-end Admission
+end Zkc.Core.AdmissionTests

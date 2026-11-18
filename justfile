@@ -6,27 +6,18 @@ set positional-arguments
 default:
     @just --list --unsorted
 
-# Build the compiler package, then the formal package.
+# Build the compiler package: the core and its tests, whose checks run when they are built.
 build:
     cd lean/compiler && lake build
-    cd lean/formal && lake build
 
-# Build and test both packages and audit them; with arguments, run the frontend's test driver with them.
-test *args:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if (( $# )); then
-        cd lean/compiler
-        exec lake test -- "$@"
-    fi
-    (cd lean/compiler && lake build && lake test)
-    (cd lean/formal && lake build && lake test)
+# Build and test the compiler package and audit it.
+test:
+    cd lean/compiler && lake build && lake test
     just audit
 
-# Audit both packages: the kernel's replay of the core, the formal library and their tests, no `sorry`, no axiom beyond Lean's three, the import rules.
+# Audit the compiler package: the kernel's replay of the core, the vocabulary and their tests, no `sorry`, no axiom beyond `propext` and `Quot.sound`, the import rules.
 audit:
     cd lean/compiler && lake exe zkc-audit
-    cd lean/formal && lake exe zkc-formal-audit
 
 # Run the checks that need no build: the public tree, the documents and the generated Unicode tables.
 check:

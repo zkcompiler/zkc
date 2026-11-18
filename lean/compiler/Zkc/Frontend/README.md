@@ -1,5 +1,11 @@
 # Source language frontend
 
+This guide describes the frontend at [the previous Lean compiler at `10ed903fc`](https://github.com/zkcompiler/zkc/tree/10ed903fc22d3f20b22ff2d1bbf607a740ef0718).
+Use that revision for the commands below. The current default build covers the Core and its
+vocabulary while the frontend is being ported. See [status](../../../../docs/status.md).
+
+## Previous frontend
+
 The lexer, the parser and the canonical printer of the zkc source language, written from the
 reference of the language (`language/LANGUAGE.md` of the repository: §3 for the lexical
 structure, §5 for the grammar, Appendix A for the rule identifiers), and its checker, which types the

@@ -1,10 +1,22 @@
 # Status
 
-What this repository implements. The [reference of the source language](../language/README.md)
-defines more than is implemented: the language is designed in layers, and the inner layer is
-frozen as the baseline of the implementation.
+## Active Core build
 
-| Area | Supported |
+The compiler admits named functions in definition order. On valid inputs satisfying the
+function's declared requirements, admission proves its summary and the recorded loop bounds.
+For a typed protocol supplied directly, the projection theorem relates each role's process
+to its part of the joint program. Admission currently refuses protocol definitions.
+See the [Core guide](../lean/compiler/Zkc/Core/README.md) and the
+[active build targets](development.md).
+
+## Earlier source and execution pipeline
+
+Use [the previous Lean compiler at `10ed903fc`](https://github.com/zkcompiler/zkc/tree/10ed903fc22d3f20b22ff2d1bbf607a740ef0718) for the working `.zkc` frontend,
+`zkc-check`, scheme construction and formal examples. The table records coverage at that revision.
+The current default targets build the redesigned Core, vocabulary, their tests and audit.
+The retained frontend and historical formal suites still need to be ported.
+
+| Area | Coverage at `10ed903fc` |
 |---|---|
 | Source language | `.zkc` source of the frozen layer, and the scheme declarations that derive a proof by Fiat–Shamir with the canonical layout. A root that uses a form of a later layer waits, with the form it waits for |
 | Admission | elaboration of a package of the core language, its types, the check of facts (an admitted program never stops `undefined`) and the check of copies |

@@ -1,258 +1,584 @@
 # Core
 
-The core language of zkc and its tool. `Zkc.Core` holds the library: types, value
-references by position with a random-access mirror, regions that bind results in
-order, processes, `elaborate` as an ordinary function with its round trip, the tool's
-steps (Fiat–Shamir and serialize threading with their whole-program theorem, expansion,
-specialization, projection),
-per-definition links checked by the kernel, a concrete executor, the meanings and
-their structural theorems, the check of facts with the theorems that a function, a
-protocol for any side and the program of a role that pass it never stop `undefined`,
-the closure of an entry of a package with the proof identity of a scheme over it,
-and the `zkc.core/0` JSON text of a package, read and printed. `Zkc.Core.Vocabulary`
-states the vocabulary of the source language as data: its types with their sorts and
-members, its modules, the default representative of each sort, and its operation rows,
-each with the static arguments it takes, its kind with its domain row and its type at
-given static arguments. `Zkc.Core.VocabularyModel` states
-what each row computes on data, driven by the vocabulary's entry for its type (a prime
-field by its order, the quartic extension of KoalaBear by its reduction, the group G1
-of BLS12-381 by the curve arithmetic of the executor; `Zkc.Core.VocabularyElements`),
-and runs a function of an admitted package on data; a row whose type has no arithmetic
-here (G2, Gt, the pairing, the hashes other than SHA-256, `field.root` of a field whose
-generator the catalogue does not give) does not run, with a message that names it.
+The core of the zkc compiler: one type of typed terms over three dialects (a function, a
+protocol of all its roles, the program of one role), and beside it the same terms in steps (an
+exit, or one instruction followed by the rest) with translations both ways that keep the
+meaning, their meanings as processes, the projection of a protocol to the programs of its roles
+with the theorem that every role program is a projection of its protocol, the elaboration of a
+program of functions by names with its
+erased form and the round trip in both directions, what elaboration decides about a body,
+places in a term and replacement, the evidence that a statement about what a program does is
+made with (claims in a scope, being assured, facts at a place, the relation "same meaning",
+summaries of definitions, and what is known of the subject of an instruction, a contract or a
+witness, of which the rule of a call is the instance at a call), the analysis of a term for any
+dialect (one walk that gives its value form, checks its facts, and follows the analysis of another
+term), of a body under a summary of its definition, with its soundness, the summary of a function
+in its header, over no written operation, whose requirements the analysis decides at a call and
+whose guarantees it learns there, the judgments about a function (that it satisfies its summary,
+the same meaning on the inputs that satisfy its requirements) with the two decisions that produce
+them, a transformation of a function as a step from an assured function that follows its analysis
+with the target and never admits the source again, the data of an admitted program and of a
+deployed scheme, the run of a role under the handlers of its deployment, and the types of the
+functions that are still to be built with the statements that they must satisfy. It is the library
+`ZkcCore` of the package `zkc_compiler` (`lean/compiler`), in the namespace `Zkc.Core`; it
+imports only `Init` and `Std`. Each file is a Lean module whose definitions are exposed
+(`@[expose] public section`), so that a proof in another module unfolds them. The root module,
+`Zkc/Core.lean`, imports every module of the core. The standard vocabulary, its keys and its
+table, is the library `ZkcVocabulary` beside the core ([guide](../Vocabulary/README.md)); it
+imports the core, and the core does not import it.
 
-Admission (`Zkc.Core.Admission`) is the one entry that says a raw package is a program.
-`admit` elaborates the package, checks the facts of every body on its normal form
-(`Zkc.Core.Normal`, `NormalLocal`, `NormalProtocol`: nested regions flattened, opened and
-shared, each proved to keep the meaning of the body), checks the maxima of loops, checks
-copies (`Zkc.Core.Copies`), and checks what the producer states beside the package
-(`Admission.Claims`): the keys of its sites, which functions can stop, and the vocabulary
-that its rows and the data of its literals are of. An `Admitted` holds the package, what was
-stated and the proofs that the checks passed. Its theorems are the statements about a
-program that passed: a function, a protocol for any side and the program of a role never
-stop `undefined` (`Admitted.never_undefined`, `protocols_never_undefined`,
-`role_never_undefined`), in every model that satisfies the domain laws and so in the model
-of the vocabulary (`vocabulary_laws`); and a protocol of a package admitted as written, for
-a side that supports the requirements that the check of copies found and on arguments that
-hold the agreements of its header, never stops `incomplete`, whatever the replies of its
-effects, and returns values that hold the agreements of its outputs
-(`Admitted.protocols_cohere`; `protocols_cohere_together` for the side of every role).
-The check of copies gives every copy of a value a class and the roles that must hold the
-same value; `Zkc.Core.CopiesClasses` proves that what it returns is well formed without a
-run, and `Zkc.Core.CopiesSound` proves the statement for every instruction of a protocol
-body. `Zkc.Tests.Core.CopiesPremises` has a program that the check refuses and that stops
-`incomplete`, and a run for each premise that fails without it.
+## Layers
 
-A scheme is constructed on an admitted package (`Zkc.Core.Construction`):
-`constructAdmitted` applies the Fiat–Shamir step and the serialize step and admits what each
-returns, with the sites in the order of the body and without the check of copies, which is
-a check of the program as written: a step threads the transcript states of the two roles
-without declaring them copies of one value, and after serialization the prover and the
-verifier do not interact. So the statement about `incomplete` is not made of a constructed
-program. A construction starts from a package admitted as written and records it, and it
-records that what was stated beside the source, other than the keys of its sites, is what
-each step's result was admitted under (`Construction.claims`), so the vocabulary of the rows
-of a constructed package is read from the construction (`Construction.rows_stated`).
+The directories are layers: a module imports modules of its own directory and of the
+directories above it in this table, never of a directory below. A module of proofs, one whose
+definitions if any are used only in statements and proofs, is imported only by modules of proofs
+and by the root, with two exceptions, each a module that makes data with its proof:
+`Transform/Assured.lean` imports `StepSound`, whose theorems the assured functions that it makes
+carry, and `Admission/Admit.lean` imports `Programs`, whose theorem the admitted programs that it
+makes carry. Across the directories, the rule of layers separates the modules for any dialect
+from those about one dialect or about the vocabulary: a module for any dialect imports, directly
+or through other modules, no module about one dialect or about the vocabulary. The modules for any
+dialect are those of `Process/`; of `Program/`, all but the vocabulary, located types, records,
+shapes, the operations of the three dialects by names and the program by names of them, the
+dialects, the typed program, projection, the rules of the function dialect and the elaboration and
+erasure of functions and programs (`Vocabulary`, `Located`, `Record`, `Shape`, `NamedProgram`,
+`Dialects`, `Typed`, `Project`, `LocalRules`, `ElaborateLocal`, `EraseProgram`); of `Meaning/`,
+the fold, requirements, the validity of values (`ValidValues`), places and the term in steps; of
+`Evidence/`, all but the rule of a call (`Call`); all of `Value/`; and of `Facts/`, all but what
+it is for a program to respect an annotation (`Facts`) and the instance of the function dialect
+(`Local`, `LocalLaws`). The audit lists them (`coreGeneric`, `Tools/Audit.lean`), beside the
+modules about one dialect or about the vocabulary that every other such module imports, directly
+or not (`coreConcrete`); a module in both lists is a finding.
 
-`compile` is the one way from a raw package to role programs: admission of the package as a
-program as written, the construction when a scheme is declared, and projection.
-`compile_checked` says that a package that compiles was admitted and that its role programs
-are those of the admitted package or of a construction on it; `Zkc.Tests.Core.Compile` has a
-package for each gate that elaborates, that the gate refuses, and from which nothing is
-compiled. The tool's two checked commands are these functions: `core-tool admit` is `admit`
-and `core-tool compile` is `compile`, with `--vocabulary` to state that the rows and the
-literal data are the vocabulary's. The commands under `core-tool step` apply one definition
-to a package that elaborates; they admit nothing, and print the fixtures that the kernel
-compares with its own evaluation.
+| Directory | Holds |
+|---|---|
+| `Process/` | processes (well-founded trees of effects), the one property on every path (`Process.Every`) and its rules (iteration among them, with an invariant asked of every step or only of the steps below a count), handlers, their composition, and the retry of an attempt; the base relation, two processes that mean the same along every path of permitted replies, an equivalence and a congruence for what a process is built with, which a handler whose replies are permitted keeps, retry included, and a value that a process can return on some path of permitted replies with its rules (`Same`) |
+| `Program/` | keys, labels, occurrences, sites, places, stops and names, a name being a number that a definition binds at one place (`Identity`); the position of an item in a list (`Member`, by which a call names a definition among the headers) and lists of values of types (`HList`), which are about no vocabulary (`Lists`); types, the vocabulary, whose keys say everything that tells a nominal type, a row or a law from another, with the law that the domain row of a restricted row decides it, which types have no value, and its models (`Vocabulary`); contexts of names, a finite map from names to types behind a small interface, the names of a binding, variables (a name with the proof that the context has it at its type) and environments of names, with their lemmas, among them what an environment with one more name bound gives at that name and at another, the structural rule on contexts (a context within another) and environments that agree at some names (`Context`); lemmas about lists and `Except` that the proofs use (`Library`); terms, whose bindings carry the names that they bind, their addresses, whether their case analyses without an arm give nothing, and that every name of a definition is bound at one place (`Term.BoundOnce`) (`Term`); items placed by the low bits of a natural, the keyed collection of the decisions of distinct addresses and of single assignment and of what the check of facts knows (`BitTree`); the decisions of distinct addresses and of single assignment, with what failed and the place of a name bound a second time, each proved to decide its proposition (`Conditions`); linear use, defined by its decision, which says which value, by its name, is not used as it must be and where (`Linear`); located types and role maps (`Located`); the record of a run (`Record`); the kinds of events and the shape of a protocol (`Shape`); the three dialects, the header of a function with its summary, over no written operation, and headers of which no function's summary has a requirement (`Headers.Unconditional`) (`Dialects`); projection, the translation of a protocol's term to a role's (`Project`); a typed program, its definitions with the names of their inputs and what elaboration decided about each body (of a function, that the positions that the summary of its header names are in range), one definition elaborated against the headers before it and a program extended by it, and the lookup of a definition, as a typed reference, and of a protocol, by its key, with the definitions that a definition reaches (`Ref.closure`) (`Typed`); the program by names, for any operations and any performers, with the decision of equality of its instructions and regions, by which stored programs are compared whole (`Syntax`); refusals: the rules of the core, what a rule found and the place where it found it, as data, for any types and written operations (`Refusal`); the operations of the three dialects by names, the program by names of them that a frontend gives, a function with its summary over no written operation, and a refusal of such a program (`ProgramRefusal`) (`NamedProgram`); the elaboration of a region over the rules of a dialect, each refusal made at its place, with the equality of types that elaboration and following share (`TypeEquality`) (`Elaborate`); erasure, the program by names of a typed term, and its round trip in both directions over lawful and canonical rules (`Erase`); the written form of each operation of a function and its resolution, with both halves of the law of written forms, and the rules of the local dialect (`LocalRules`); the elaboration of a function, which refuses by the rule `summary`, at the definition, a summary of its header that names a position beyond its inputs, and for a guarantee beyond its inputs and results, its erased form and their round trip in both directions (`ElaborateLocal`); the erased form of a typed program (`EraseProgram`); what an operation with a domain asks of an application, as data, and the values that it names, the items of a list at positions (`atPositions`), by which an operand names the operands of a written operation, the ranges of naturals with what it is for a natural to be in one, and the summary of a definition, a list of requirements on its inputs and a list of guarantees on its inputs followed by its results (`Summary`), the summary with neither (`Summary.empty`), the summary of a function, a summary over no written operation (`Summary Empty`), which names inputs and results by their positions only by construction and which an analysis reads as a summary over the written operations of its dialect (`Summary.lift`), and the decision that the positions that such a summary names are in range (`Summary.misplaced`, `Summary.InRange`) (`Requirement`); a term in a wider context, with the same erased form, a term with one place left open and the term that fills it, a term split after its first instructions, and the names that a term reads (`Place`); the term in steps, beside the term (`Stepped.Term`: an exit, or one instruction, `Stepped.Instr`, which carries no continuation, followed by the rest), the translations each way, which are inverse (`Term.toStepped_toTerm`, `Stepped.Term.toTerm_toStepped`), a prefix, a run of instructions with no exit (`Prefix`), filled with a term and appended, and a term split after its first steps (`Stepped`) |
+| `Meaning/` | events and what a role holds (`Events`); the fold of a term over the semantics of a dialect, which binds the names of each binding to its values, a value with its type and the values of a list with their types (`Semantics.Dyn`, `Semantics.dyns`) with their lemmas, the payload of a variant that satisfies a predicate (`Pick.All`), and a loop, which holds what it collects latest first and reverses it once where it becomes one value (`Fold`); what a requirement says of values: how a value reads (`Reading`), the values that the operands of a requirement name, and that it holds (`Requirement.Holds`), an order, a bound, a number or a difference saying that its values read as naturals, the language in which an operation states its domain and a definition its summary, what it is for a definition to satisfy a summary (`Summary.Holds`), and that a requirement or a summary over no written operation, read with no relation of written operations (`Empty.elim`), holds exactly when, read over the written operations of a dialect (`Summary.lift`), it holds with any relation (`Requirement.holds_lift`, `Summary.holds_lift`) (`Requirement`); the semantics of a function, of a protocol and of a role program (`Local`, `Protocol`, `Role`), with the meaning of every operation that the core owns (`Local`); the validity of values for any dialect: values valid with their types are those valid in the form `HList.All` (`Semantics.dyns_valid_iff`, the one conversion between the form of the statements about any dialect and that of the statements about functions), the values of the variables in scope, and what a loop collects (`CollectedOK`, `collected_valid`) (`ValidValues`); what it is for the functions of a table to keep validity and never stop `undefined`, how a requirement reads a value of a function (`localReading`), the relation of its written operations (`LocalReturns`), that the requirements of a header's summary hold of inputs (`FnHeader.Required`), that every function of a table satisfies the summary of its header (`FnTable.SatisfiesSummaries`), each summary read with no written operation, and so the same against any callees (`Summary.holds_tables`), the callees that a statement about a function is made against (`Callees`), that functions that satisfy summaries of which none has a requirement never stop `undefined` on valid inputs (`FnTable.safe_of_unconditional`), that every local operation keeps validity, that a type with a valid value has a value, and what a valid value of a function is (`ValidDyn`) (`Validity`); that a term of a function returns valid values on valid values in scope against callees that keep validity, and means the same against two tables of callees that agree on valid inputs (`Tables`); the meanings of a whole program (`Program`); that a function whose header says that it cannot stop stops only `undefined` (`Stops`); places with their meaning: a term in a wider context means the same, what it is for a run to reach a place and a fact at a place, replacement, and that a term's meaning depends only on the names that it reads (`Place`); the meaning of the term in steps, of what an instruction runs and of arms, used through one equation per constructor, which the translations keep (`Term.denote_toStepped`, `Stepped.Term.denote_toTerm`, and of arms `Stepped.Arms.denote_toArms`), an instruction translated back in front of a term meaning its process, then the term (`Stepped.Instr.denote_toTerm`), and the meaning of a prefix, in continuation-passing form and as a process of the environment that it ends in (`Prefix.denote`, `Prefix.run`, `Prefix.denote_fill_run`) (`Stepped`) |
+| `Projection/` | the relation of a role's process to a protocol's and its lemmas (`Proj`), the proof for one term (`Sound`), and the theorem for every definition of a program (`Theorem`) |
+| `Evidence/` | what every statement about what a program does is made with, for any dialect and interpretation except the rule of a call, which is for functions, with nothing of an analysis: the starts of a term that a statement is about (`Entry`), claims on every authorized start and permitted reply (`Claim`), claims under a handler, whose returns and stops carry the observer's state (`Claim.Under`), and what it is for a term to be assured in a scope: never stopping undefined and returning valid values (`Assured`) (`Claim`); facts at a place (`Fact`), the relation "same meaning" in a scope (`Equivalent`), which composes and along which claims and being assured move (`Equivalent.claim`, `Equivalent.trans`, `Assured.transfer`), replacement under a fact (`replace_with_fact`), and laws with a premise applied where the premise is a fact (`ConditionalLaw`) (`Relation`); that the summary with no requirement and no guarantee is being assured: a definition satisfies it (`Summary.Holds`, `Meaning/Requirement.lean`) exactly when it is assured as a function of its inputs (`Summary.holds_empty`) (`Summary`); the subject of an instruction, what it runs before its continuation, a process as a function of the path and the environment (`Subject`): of an application, the operation on its operands (`Subject.op`), of a block, its body under the block's frame (`Subject.block`), the meaning of each being its subject then its continuation (`Term.op_subject`, `Term.block_subject`), and what is known of a subject in two strengths, a contract (`Subject.Satisfies`) and a witness, that it returns exactly what a function of the environment gives (`Subject.Yields`), with one rule for the continuation each (`Subject.Satisfies.then`, `Subject.Yields.then`), on terms (`Term.op_satisfies`, `Term.op_yields`, `Term.block_yields`), a witness as a contract (`Subject.Yields.satisfies`), a law lifted through witnesses (`Subject.Yields.same`, and on terms `Term.equivalent_of_yields`), and what is known of a block's body known of the block along "same meaning" of the body under the block's frame (`Subject.block_transfers`, `Subject.block_yields_transfers`) (`Subject`); for the function dialect, the contract and the law of a function at its entry in a table (`Contract`, `Law`), each knowledge of the subject of every call of it (`Contract.satisfies`, `Law.yields`), the rule of a call as the rule of an instruction at a call (`Contract.call`, `Law.call`), and a summary of a function that holds of its entry as its contract (`localSummary_contract`), so knowledge of every call of it (`localSummary_satisfies`) (`Call`); for the term in steps, the subject of every instruction (`Stepped.Instr.subject`), a step being its subject then the rest, with the two rules for the rest (`Stepped.Term.step_satisfies`, `Stepped.Term.step_yields`), and a property on every path of a step (`Stepped.Term.every_step`), of each kind of instruction in terms of its condition and its regions, a loop by an invariant over its iterations (`Stepped.Instr.every_loop`), and of a prefix filled with a term (`Prefix.every_fill`) (`Stepped`). It imports nothing of `Value/` or `Facts/` |
+| `Value/` | the value form of a term, for any dialect: the table of applications by written form and operand identifiers, placed by a number computed from the written operation's number and those identifiers and by each result's identifier, the state that carries it (the next identifier, and the refusals and the bounds of loops that the analysis finds), and the identifiers of the names in scope (`Table`); valuations of identifiers, what the table says of a valuation, a well-formed table, a state and a valuation that agree, and the growth of the state as identifiers are made and applications shared, which keeps every name in scope with an identifier below the next (`Valuation`); the skeleton of a term, what it keeps in order (effects, guards, every form of control) on identifiers of the table, what the value form reads of the operations of a dialect (`ValueRules`), and what a dialect must decide for following a skeleton, which the rules of its elaboration give, lawful when they are (`Rules.skel`, `Rules.skel_lawful`) (`Skeleton`); the leaves of a skeleton, apart from the table, below a number and made in order, as the table grows (`Leaves`); the laws that tie the values of a dialect, with their types (`Semantics.Dyn`, `Meaning/Fold.lean`), to a semantics (`ValueRules.Binding`), the reading of an identifier from the leaves through the table, the processes that run a skeleton, and that two of them mean the same (`Runs`); names that agree with a table, the count of a loop on identifiers, and what a shared application reads, with the operands of an operation that commutes in the table's order (`Agrees`). An application of an operation that a dialect says commutes is placed in the table with its two operands in one order, the smaller identifier first, whichever way they were written (`ValueRules.order`) |
+| `Facts/` | the count of every loop that a run reaches (`Term.EveryLoop`) and the annotation of an admitted program, which is the bounds of its loops by their places, with what it is for a loop to be bounded by it (`Annotation.Bounded`) (`Loops`); what it is for a program to respect an annotation, in its functions on the inputs that satisfy their requirements and in its role programs (`Facts`); what the analysis is told about the operations of a dialect, the one description of them (`FactRules`): how every operation is written, which operations are shared (values, whose equal applications are one) and so which are kept in order, which written operations commute, what a written operation requires and what it guarantees of its operands followed by its results, for every operation, shared or not, the ranges of its results and how its result reads, which types have no value, and a number for each written operation by which the table places its applications, with the part that the value form reads, the written forms of the shared operations (`FactRules.values`) (`OpFacts`); what the analysis knows beside the table of `Value/`, each part placed by an identifier, and how an identifier reads by the operation that gave it, with the rules that decide a requirement, which read a sum with its operands in either order and know one identifier at most itself only when a range of it is known, and learn from a truth value, the range below `r` of a sum of `x` and `t`, in either order, where a loop made the order `t < r - x` for its index, the check of the requirements of an application, what is learned from a requirement that holds (`learn`: an order, a bound or a number, of which the requirement says that its values read as naturals), requirements that hold learned in order, their operands resolved as the check resolves them (`learnRequirements`), and the check of the guarantees of a summary where a definition returns, of which one that names an application is never known (`checkGuarantees`) (`State`); the arithmetic of ranges, with its lemmas: two ranges met and joined, the ranges of a sum, a difference, a product, a quotient, a remainder and a power (a power's ends computed only when they are small enough), an operation on the list of the ranges of its operands, and the range of a natural after iterations that each add a term (`Range`); the analysis, one walk over a term of any dialect, which keeps the identifier of each name in scope, decides the requirements of every operation, shared or kept in order, from what is known where it is applied, shares each value in the table, learns from guards, choices, loops, the ranges of operations and what an operation, shared or kept in order, guarantees of its operands followed by its results once they have their identifiers (`valueStep`, `effectStep`), records the bound of each counted loop and gives the skeleton of the term, or, given the analysis of another term, follows its skeleton and records each place where the term is not the skeleton's next entry (`Analysis.walk`, `Analysis.analyse`, `Analysis.follow`), each of the last two of a body under a summary of its definition, whose requirements are learned over the inputs' identifiers at the start (`Analysis.startUnder`) and whose guarantees are decided where the body returns, each that is not known refused at the definition's exit by the rule `guarantee` (`Analysis.exitUnder`), in which a region is dead only where what is written says that it never runs, with the range of a carried natural after a loop; and the check of facts of a body under a summary, the refusals of the analysis or the bounds that it recorded (`checkFacts`) (`Walk`); what the local dialect tells it, against the headers of the callees: one table, from the name of an operation that the core owns to the parts of its contract (what it requires, the ranges of its results, how its first result reads, whether the table places its operands in one order) (`ownedContract`), which `localOpFacts` reads, what a call requires and guarantees, those of the summary of the header with the callee's key (`summaryOf`), read over the written operations of a function (`Summary.lift`), and which operations of a function are shared and which commute (`localFactRules`); what following decides for a function is what the rules of its elaboration give (`(localRules fns).skel`) (`Local`); what what is known and the identifiers of the values that the requirements name say of a valuation of identifiers, one step of the walk, and the laws of `OpFacts` as propositions, against a reading of values and what a requirement says of them (`Meaning/Requirement.lean`) (`Valuation`); that the rules of what is known are true, among them that what is learned from a requirement that holds holds (`learn_holds`) and that the guarantees that the exit of a definition decides hold (`checkGuarantees_sound`) (`Learning`); the laws that a dialect proves of its rules and its semantics, among them that a shared operation whose requirements hold returns, that an operation kept in order whose requirements hold never stops `undefined`, and that what an operation guarantees holds of its operands followed by its results where its requirements hold, for a shared operation of the relation of written operations (`OpFacts.Lawful`) and for one kept in order of what it returns (the law `effect`) (`FactRules.Lawful`, with the requirements of an operation holding of its operands, `FactRules.Required`, `Laws`); what the walk does to its state, to the places that differ and to the skeleton, whatever the run, on which the runs of the walk and its soundness both rest, and that the check of facts gives bounds at the places of its definition (`Growth`); that a term runs the skeleton of its walk (`WalkRuns`); the soundness of the walk where no skeleton is followed (`Soundness`) and while one is followed (`SoundnessFollowing`); the theorems of the analysis of a body under a summary, among them that a term that follows a safe term, however that is known, is safe and means the same, and that a body that the analysis under a summary refuses nowhere satisfies the summary (`analyse_holds`) (`Theorems`); the laws of the function dialect, among them that a call whose requirements hold on valid operands never stops `undefined` and returns valid values that satisfy its callee's guarantees (`localCall_holds`), and that no operation but a call guarantees anything yet, the theorems of the analysis instantiated once for functions against a model, a table and `Callees`, under the summary of a function, which the analysis reads lifted (that a body that the check of facts accepts satisfies the summary, `checkFacts_holds`, the soundness of the check of facts, and of following a body that is safe), that an operation that the core owns whose requirements hold of valid operands never stops `undefined` (`ownedOp_defined`), so that its subject yields its result, the function of the operands that agrees with the operation wherever it returns (`ownedOp_yields`), and that the subject of a row of the vocabulary that is not restricted yields what the model gives, from every start (`row_yields`) (`LocalLaws`); the count of every loop that a run of a term in steps reaches (`Stepped.Term.EveryLoop`), the loops of a step being those of its instruction and those of the rest at every result that the instruction can return, which the translations keep (`Term.everyLoop_toStepped`, `Stepped.Term.everyLoop_toTerm`, and of arms `Stepped.Arms.everyLoop_toArms`), an instruction translated back in front of a term reaching those of the instruction and those of the term at every result that the instruction can return (`Stepped.Instr.everyLoop_toTerm`) (`SteppedLoops`) |
+| `Transform/` | functions, the judgments about them, and transformations of functions, on the analysis of `Facts/`: a function elaborated against the headers before it (`TypedFn`, `typeFn`), its meaning on inputs against callees, what it is for it to be safe (to satisfy its header's summary), to have its loops bounded, to be assured with bounds, and for two of them to mean the same, as propositions against every `Callees`, on the inputs that satisfy the requirements of its header's summary, the check of facts of a function and whether a second follows the analysis of a first, each under its header's summary, as decisions, and why a step is refused (`StepRefusal`) (`Step`); the two producers of assurance, the check of facts (`TypedFn.check_assured`) and following a function that is safe by any route (`TypedFn.follows_assured`), "the same meaning" symmetric and transitive, and that a function is safe exactly when its body is assured in the sense of `Evidence/` on the inputs that satisfy its requirements and returns what satisfies its guarantees (`StepSound`); an assured function, made only with its assurance, by admission (`admitFn`, the one path by which admission's check of a definition and transformations admit a function) or by a step from an assured function (`AssuredFn.step`), which never admits its source again, and the theorems of a step (`Assured`); two untrusted transformations of a stored function, which drop the operations whose results are not used and share repeated operations, accepted only through the step (`Passes`). The operations of a function that commute, each placed in the table with its two operands in one order, are the sum and the product of naturals and the equality of naturals and of truth values (`ownedContract`, `Facts/Local.lean`); the conjunction and the disjunction of truth values, whose meaning is symmetric too, keep the order written, since the check of facts learns their operands in that order |
+| `Admission/` | the elaboration of one definition against the headers before it, a function's summary copied into its header, of a program of functions, and its round trip in both directions (`Elaboration`); the association of a program and its resolution in it, with the arguments of an instance of a generic declaration that it records, and an admitted program, which carries that its program is assured with its annotation (`Typed.Assured`) (`Admission`); the check of one definition against the headers before it, the freshness of its key and the admission of the function (`admitFn`), and the acceptance of a typed program by the check of facts as a proposition (`Check`); the soundness of the check of facts for the functions of a program, by which a typed program without protocols that it accepts is assured, whether the functions of a second program over the same headers follow those of a first, one by one, with no refusal and no place that differs (`Defs.functionsFollow`), and that a program whose functions follow those of an accepted program, over headers of which no summary has a requirement, means what the other means and is safe and keeps validity, with no acceptance asked of it (`Programs`); admission as the check of each definition in order, then the resolution of the association, which gives the admitted program with its assurance (`Admit`); the statements of `Statements.lean` about functions, each a theorem whose type is the statement: those about what `admit`, `check` and `elaborate` return for every record of functions whose functions are `admit`, `check` and `elaborateFunctions`, the round trip from a typed program for those without protocols, and those about an admitted program for every admitted program (`Theorems`) |
+| `World/` | the description of a layer (a handler of a role), whose code reads its inputs by position, in the one context of the core that binds inputs to the names `0, 1, 2, …` (`Ctx.positional`), and its meaning as a handler; the network of the roles, and the runs of a protocol and of one role alone |
+| `Scheme/` | the declaration of a scheme, who proves and who verifies, a deployed scheme, whose entry is the protocol that its declaration names, found in its program, and the run of a role under its handlers, and what deployment decides about scopes and keys |
+| `Run/` | how a run of the executor ends, the executor, and the prover's and the verifier's runs |
+| `Format/` | formats of values and the codecs of a model |
 
-The canonical layout is one format per type. A format (`Zkc.Core.Format`) states the
-values it writes, a writer, a reader of a prefix and its width when it is fixed, with
-two laws: the reader on what the writer wrote for a value of the domain, followed by
-any bytes, gives the value and those bytes; and the reader gives a value only on bytes
-that the writer writes for it, a value of the domain, followed by the bytes it leaves.
-The laws are proved once per combinator (a pair, a tuple, a repetition of a fixed
-count, a repetition after its count, a refinement, a view) and for the formats of
-numbers (`Zkc.Core.FormatNumbers`): a number below a bound in the fewest bytes that
-hold every such number, and a natural of variable length in its shortest form, every
-other form refused. `Zkc.Core.CanonicalLayout` builds the format of a closed type of
-the vocabulary (`formatOf`): `index<n>` in the least `k` bytes with `n ≤ 256^k`, `bool`
-as `index<2>`, `nat` as the variable-length natural, a collection without a size after
-its length, a tuple and a sized collection part by part, a type with one value in no
-bytes, `nonzero<F>` as `F` without zero, an element of a prime field in the field's
-width, an element of an extension by its coefficients, and a point of G1 in the 48
-bytes of the compressed form. A type is written exactly when it has a format, the
-rows of the layout and the absorbing row of the suite are the writer and the reader
-of that format, and admission of such a row is the existence of the format. In the
-model of a package the row that puts a value appends the bytes of its format, and the
-row that takes one, on those bytes followed by anything, gives the flag `true`, the
-value and what follows (`model_put`, `model_take`, with `model_open`, `model_close`,
-`model_read` and `model_exhausted` for the rows of the entry); a typed value is read
-back from its datum (`Concrete.ofDatum_toDatum`). The laws
-of a type (`formatOf_lawful`) take a hypothesis only for a type with a point of G1 in
-it: `PointCompression`, that the bytes of a point of the group are read back as the
-point, which needs the arithmetic of the base field of the curve. The published
-vectors of the encoding are its executable check. Records and variants have no
-format: the vocabulary has no closed type for them, and no row writes one.
+`Functions.lean` and `Statements.lean` come after every directory: they may import any of them.
 
-A reader of a format reads as many elements as the bytes ask for. A run reads under a
-limit on the number of elements of collections that one reading of a value builds
-(`defaultLimit`, `2^20`, unless the caller gives one): the reader under a limit agrees
-with the reader whenever it answers (`formatOf_agrees`), and a run that reaches the
-limit ends with the limit, which is neither a return nor a stop
-(`Zkc.Core.DecodingLimit`). This holds for a function (`Vocabulary.run`, `Run.limit`)
-and where a verifier reads a proof: the executor runs the programs of roles with their
-pure rows under the limit (`Zkc.Core.DecodingLimitRoles`, `Execute.limitedRoleEntry`;
-`Vocabulary.runRoles` and `Vocabulary.runEntry` of `Zkc.Core.VocabularyExecute`), and a
-role that reaches the limit ends with `Execute.Outcome.limit`. What a run runs is the
-meaning under the model, cut where a reading reaches the limit: for functions
-(`limitedFunctions_within`) and for the programs of roles (`limitedRoles_within`),
-which perform the effects of the meaning with their replies.
+## What is proved, what is defined, what is still to be built
 
-The mark of the limit in a process is a wait for a value of a type with no value, at a
-site that the executor reserves: a definition number above the identity of every
-definition of the program it runs (`reservedDefinition`,
-`identity_lt_reservedDefinition`), which it gives to the rows and by which it
-recognises the mark (`limitOf?`). A program that itself waits for a value of a type
-with no value waits at a site of its own and is reported as waiting for a message that
-is never sent. That no effect of a program is at the reserved site is read off
-`RolePrograms.table`, in which every effect of a role program is at a site of the
-identity of one of its definitions; it is checked on a program whose receiver waits
-for `index<0>`, and it is not a theorem.
+Proved, with no axiom beyond `propext` and `Quot.sound` (the audit checks every declaration):
 
-An input of a run is a value of its type (`validInput`, by structural recursion): a
-number below the bound of an index, an element below the order of its field, a point
-of G1 that is of the group and not only on the curve.
+- the projection theorem (`Zkc.Core.projection`, `Projection/Theorem.lean`): the program of
+  every role of every protocol of a typed program, run on what the role holds of one input, is
+  a projection of the protocol's process; where the protocol returns, the role returns what it
+  holds of the results;
+- the rules of proof on every path (`Process.every_bind`, `every_mono`, `every_iterate`,
+  `every_iterate_below`), and the rules of an instruction (`Evidence/Subject.lean`): every
+  instruction that binds results is its subject, then its continuation (`Term.op_subject`,
+  `Term.block_subject`), and what is known of a subject, of an application of an operation, a
+  call or a block alike, has one rule for the continuation: a subject that satisfies a contract,
+  followed by a continuation correct on every result that the contract promises, is correct
+  (`Subject.Satisfies.then`, `Term.op_satisfies`), and a subject that yields a function, followed
+  by a continuation, is the continuation on what the function gives (`Subject.Yields.then`,
+  `Term.op_yields`, `Term.block_yields`); a witness is a contract with no stop
+  (`Subject.Yields.satisfies`); two subjects that yield functions which agree on the authorized
+  starts are the same process there, so two instructions with them and the same continuation
+  mean the same (`Subject.Yields.same`, `Term.equivalent_of_yields`); and what is known of a
+  block's body is known of the block, along "same meaning" of the body under the block's frame
+  (`Subject.block_transfers`, `Subject.block_yields_transfers`). The rule of a call
+  (`Contract.call`, `Law.call`, `Evidence/Call.lean`), a contract or a law of a function, a
+  property of its entry in a table, installed at an actual call with the operands and the
+  continuation taken from the term, is their instance: a contract and a law of a function are
+  knowledge of the subject of every call of it (`Contract.satisfies`, `Law.yields`);
+- that the process with the record of a run is, without the record, the process of the term
+  (`Term.observe_fst`), and the lemmas on `Proj`, on what a role holds and on literals;
+- the round trip in both directions: for rules whose laws hold, the erased form of a term whose
+  case analyses without an arm give nothing elaborates in its context to the term
+  (`elabBody_erase`, `Program/Erase.lean`), and elaboration gives only such terms
+  (`elabBody_armed`, `Program/Elaborate.lean`); for rules whose written forms are canonical, a
+  term that elaboration gives erases to what was elaborated (`eraseBody_elab`); the local rules
+  are lawful over headers with distinct keys and canonical, and the written form of a local
+  operation names it (`localRules_lawful`, `localRules_canonical`, `LocalOp.print_injective`,
+  `Program/LocalRules.lean`); the erased body of every typed function elaborates as its input
+  names, its body and its conditions, and a function that elaboration gives erases to the region
+  that was elaborated (`elabFn_erase`, `eraseFn_elab`, `Program/ElaborateLocal.lean`); the erased
+  form of every typed program of functions elaborates as the program, and a program that
+  elaboration gives erases to the program by names that was elaborated
+  (`elaborateFunctions_erase`, `erase_elab`, `Admission/Elaboration.lean`);
+- that every local operation keeps validity: on valid operands, the results that it gives are
+  valid (`localOp_valid`, with `localOp_row_valid`, `localOp_owned_valid`,
+  `localOp_literal_valid`, `localOp_call_valid` and `ownedOp_valid` for the operations that the
+  core owns, `Meaning/Validity.lean`);
+- the decisions of distinct addresses and of single assignment: the first repeated address, or
+  none exactly when the addresses are distinct (`Term.repeatedAddress_eq_none`), and the first
+  name bound a second time, or none exactly when every name of a definition is bound at one
+  place (`Term.rebound_eq_none`, `Program/Conditions.lean`); elaboration refuses a name bound a
+  second time by the rule `assignment`, at the instruction that binds it again. Linear use is
+  defined by its decision, by name (`Term.UsedOnce` is `Term.misuse … = none`,
+  `Program/Linear.lean`), so it has no separate statement to prove;
+- the laws of the base relation (`Process.SameWhen`, `Process/Same.lean`): an equivalence, a
+  congruence for `bind`, `map`, `mapHalt`, `recover` and bounded iteration, which carries a
+  property on every path, and which a handler whose replies are permitted keeps, retry included
+  (`Handler.run_same`); between processes without effects it is equality
+  (`Process.SameWhen.eq_of_noSig`); and the rules of a value that a process can return
+  (`Process.CanReturn`);
+- places (`Program/Place.lean`, `Meaning/Place.lean`): a term in a wider context, by the one
+  structural rule on contexts, erases to the same program (`eraseBody_reindex`) and means the
+  same on environments that agree (`Term.denote_reindex`); a term is its first instructions
+  filled with what follows them (`Term.fill_splitAt`); replacement: two terms that mean the same
+  wherever a run reaches a place give wholes that mean the same (`Hole.fill_same`); and the
+  meaning of a term depends on its environment only at the names that it reads
+  (`Term.denote_reads`);
+- the term in steps (`Program/Stepped.lean`, `Meaning/Stepped.lean`, `Evidence/Stepped.lean`,
+  `Facts/SteppedLoops.lean`), beside the term that every other module uses: the translations each
+  way are inverse (`Term.toStepped_toTerm`, `Stepped.Term.toTerm_toStepped`) and keep the meaning
+  (`Term.denote_toStepped`, `Stepped.Term.denote_toTerm`, of arms too), and an instruction
+  translated back in front of a term means its process, then the term
+  (`Stepped.Instr.denote_toTerm`); the meaning has one equation per
+  constructor (`Stepped.Term.denote_ret`, `Stepped.Term.denote_step`, `Stepped.Instr.denote_op` to
+  `Stepped.Instr.denote_attempt`, `Stepped.Arms.denote_nil`, `Stepped.Arms.denote_cons`), by which
+  every proof outside its file uses it; a prefix followed by a term is the prefix's process, then
+  the term (`Prefix.denote_fill_run`), and a term is its first steps filled with what follows them
+  (`Stepped.Term.fill_splitAt`); a step is its subject, what its instruction runs, then the rest,
+  so that what is known of the subject of any kind of instruction has the two rules for the rest
+  (`Stepped.Term.step_satisfies`, `Stepped.Term.step_yields`); a property on every path of a step
+  (`Stepped.Term.every_step`), of each kind of instruction in terms of its condition and its regions
+  (a loop by an invariant over its iterations, `Stepped.Instr.every_loop`), and of a prefix filled
+  with a term (`Prefix.every_fill`); and the count of every loop that a run reaches, which the
+  translations keep (`Term.everyLoop_toStepped`, `Stepped.Term.everyLoop_toTerm`,
+  `Stepped.Instr.everyLoop_toTerm`);
+- the analysis, for any dialect (`Value/`, `Facts/`): an identifier read through the table has
+  one value (`Reads.functional`), and two processes that run one skeleton mean the same
+  (`Skel.Runs.same`). One walk analyses a term and follows the analysis of another
+  (`Analysis.walk`). A body is analysed under a summary of its definition: what the summary
+  requires of the inputs is learned at the start, and what it guarantees of the inputs followed by
+  the results is decided where the body returns, each guarantee that is not known refused at the
+  definition's exit. For rules that are lawful for a semantics (`FactRules.Lawful`), a body with
+  distinct addresses that the analysis under a summary refuses nowhere, on valid inputs of which
+  every requirement of the summary holds and permitted replies, respects the bound that the
+  analysis recorded for each of its loops, never stops `undefined`, returns valid values of which,
+  with the inputs, every guarantee of the summary holds, and its process runs the skeleton of the
+  analysis over its table (`Analysis.analyse_sound`, `Facts/Theorems.lean`); so it satisfies the
+  summary as a function of its inputs (`Analysis.analyse_holds`, `Summary.Holds`); a body that
+  follows the analysis of a body that is safe on the given inputs, however that is known, with no
+  refusal and no place that differs is safe in the same way and means the same as it
+  (`Analysis.follow_assured`), which reads neither the first body's addresses nor whether its
+  analysis refuses anything; a body that follows an accepted body is its case
+  (`Analysis.follow_sound`). With the summary with no requirement and no guarantee each is the
+  statement about a body analysed alone. Nothing is assumed of the
+  safety of the second; its addresses are distinct, which elaboration decides; and that it is
+  safe does not need the first to be safe (`Analysis.follow_safe`), only that the two mean the
+  same does. The requirements of every operation are decided where it is applied, whether it is
+  shared or kept in order, so an operation kept in order that is safe only under its requirements,
+  an effect that stops `undefined` outside its domain, is covered: the law `effect` asks it to be
+  safe only where its requirements hold (`FactRules.Required`), and its application is refused
+  where they are not known (`Analysis.Facts.requirements_sound`, `Facts/Soundness.lean`). What the
+  written form of an operation guarantees of its operands followed by its results is learned once
+  its results have their identifiers, the operands of each guarantee resolved as those of a
+  requirement are: it holds there by the law `ops` of a shared operation (`OpFacts.Lawful`) and by
+  the law `effect` of one kept in order (`Analysis.Facts.value_sound`,
+  `Analysis.Facts.effectStep_fills`); a requirement that is an order, a bound, a number or a
+  difference says that the values that it names read as naturals, so what is learned from one
+  that holds holds whatever was known of them (`FactCheck.learn_holds`), and the rules that decide
+  it establish that they read as naturals (`FactCheck.decideRequirement_sound`). Beneath them: what
+  the walk
+  adds to its state, how it grows it, and the skeleton that it builds (`Analysis.Facts.walk_adds`,
+  `Analysis.Facts.walk_grows`, `Analysis.Facts.walk_skeleton`, `Facts/Growth.lean`),
+  that a body runs the skeleton that the walk builds or follows
+  (`Analysis.ValueSide.walk_runs_built`, `Analysis.ValueSide.walk_runs_followed`), and the
+  soundness of the walk construct by construct (`Analysis.Facts.walk_sound_fresh`,
+  `Analysis.Facts.walk_sound_follow`). Following decides what the value form shows: sharing,
+  values that nothing uses, the order of values, and one law, the order of the two operands of an
+  operation that commutes, sound by the law `commutative` of `ValueRules.Binding`: `x + y` and
+  `y + x` are found the same, and so is a fact on `i + 1` of `1 + i`; associativity, and a law of
+  a row of the vocabulary, which would be the model's, are not known. It keeps all control;
+- the laws of the function dialect and the check of facts of a function (`Facts/LocalLaws.lean`):
+  against callees with distinct keys, which satisfy their summaries, keep validity, and stop only
+  `undefined` where their headers say that they cannot stop (`Callees`), the rules of the function dialect are lawful for the
+  semantics of a function, for any permitted replies (`localFactRules_lawful`): every operation has
+  the requirements of its printed form, a call those of the summary of its callee's header, which
+  applies no written operation and so names no value beyond its operands; a call whose requirements hold on valid operands never stops
+  `undefined` and returns valid values that, with its operands, satisfy the callee's guarantees
+  (`localCall_holds`), which is the law `defined` and the law `ops` of a call that is a value and
+  the law `effect` of one kept in order; no operation but a call guarantees anything yet
+  (`localOpFacts_ensures`); every operation is shared except a call of a function that can stop;
+  the local operations that are
+  values satisfy the laws of the value
+  form (`localFactRules_binding`), among them that the four operations that the core owns that
+  commute give the same result on their operands exchanged, for all values; what the
+  analysis knows of the written operations is true;
+  the requirements of every local operation are enough for it (`localOp_defined`) and name values
+  that exist (`localRequires_runs`), so that an application of an operation that the core owns
+  whose requirements hold of valid operands yields its result (`ownedOp_yields`), and so does an
+  application of a row of the vocabulary that is not restricted, from every start
+  (`row_yields`); following, which compares operations by their written forms
+  (`Rules.skel`), is lawful over headers with distinct keys, as the rules of elaboration are
+  (`Rules.skel_lawful`, `localRules_lawful`). The theorems of the analysis are instantiated for
+  functions once, stated with `HList.All` and the summary read with no written operation as the
+  statements about functions are, under the summary of a function, which the analysis reads lifted
+  (`Summary.lift`): a body with distinct addresses that
+  `checkFacts (localFactRules V fns) (localRules fns).skel` accepts under the summary satisfies it
+  against such callees (`checkFacts_holds`), and on valid inputs that satisfy its requirements every
+  loop as often as a count runs at most the bound given for its place, the process never stops
+  `undefined` and returns valid values that satisfy its guarantees (`checkFacts_sound`); and a body
+  that follows the analysis of a body that is safe on the given inputs is safe in the same way and
+  returns what that body returns (`localFollow_assured`). For a typed program each of whose
+  functions the check accepts under its header's summary (`Defs.Accepted`), every function
+  satisfies its summary and keeps validity, and the functions' part of `Respects` holds
+  (`Defs.FunctionsRespect`; `functions_sound`, `Admission/Programs.lean`), so a typed program
+  without protocols that the check accepts is assured with its bounds (`Typed.Assured`,
+  `typed_functions_sound`; `Respects.of_functions`, `Facts/Facts.lean`); there the callees of a
+  function, the functions before it, stop only `undefined` where their headers say that they
+  cannot stop with no check of facts (`Defs.fnTable_stops_undefined`, `Meaning/Stops.lean`), keep
+  validity with no check of facts (`Term.denote_valid`), and satisfy their summaries against the
+  whole table as against the functions before them, since a summary of a function applies no
+  written operation (`Summary.holds_tables`); read over the written operations of a dialect, it
+  holds whatever the relation of written operations it is read with (`Summary.holds_lift`);
+- the evidence layer (`Evidence/`), for any dialect: a claim moves along the relation "same
+  meaning" in a scope, stops included (`Equivalent.claim`), which composes (`Equivalent.trans`),
+  so that a term that means the same as an assured term is assured (`Assured.transfer`); two
+  terms that mean the same where a fact holds give wholes that mean the same, at any place where
+  the fact holds (`replace_with_fact`, from `Hole.fill_same`), and so does a law with a premise
+  where the premise is a fact (`ConditionalLaw.apply`); the summary with no requirement and no
+  guarantee holds of a definition exactly when, on valid inputs, it never stops undefined and
+  returns valid values (`Summary.holds_empty`); and for the function dialect, a summary holds of
+  a function's entry in a table exactly when the entry has the contract (`Contract`) whose
+  precondition is valid inputs that satisfy the requirements, whose postcondition is valid
+  results that satisfy the guarantees, and whose stops are not `undefined`
+  (`localSummary_contract`, `Evidence/Call.lean`), so it is knowledge of every call of the
+  function (`localSummary_satisfies`);
+- the judgments about a function and transformations as steps from an assured function
+  (`Transform/StepSound.lean`, `Transform/Assured.lean`, `Meaning/Tables.lean`,
+  `Admission/Programs.lean`): each is said on the valid inputs that satisfy the requirements of
+  the function's header's summary. A function that the check of facts accepts under its header's
+  summary is assured: safe, satisfying its summary (`checkFacts_holds`, from
+  `Analysis.analyse_holds`), and with its loops bounded by what the check gives, against
+  `Callees` (`TypedFn.check_assured`); a function that follows the analysis of a function that is
+  safe, by whatever route, with no refusal and no place that differs is assured with the bounds
+  recorded while it follows, and the two mean the same on every such input
+  (`TypedFn.follows_assured`, from `localFollow_assured`): the second is not analysed by
+  itself, and the refusals of the first's own analysis are not read. A function is safe exactly
+  when its body is assured, in the sense of `Evidence/`, in the scope of the empty path and its
+  inputs bound to valid values that satisfy its requirements, and on each such input every return
+  satisfies its guarantees (`TypedFn.safe_iff_assured`); "the same meaning" of functions is
+  symmetric and transitive (`TypedFn.SameAs.symm`, `TypedFn.SameAs.trans`). An assured function
+  (`AssuredFn`) is made only with its assurance: by admission (`admitFn`), which the check of a
+  definition of a program uses too, or by a step from an assured function (`AssuredFn.step`),
+  which never admits its source again. A step relates
+  functions with the same meaning (`AssuredFn.step_same`); two steps compose with no condition
+  on the middle function (`AssuredFn.step_then`); two steps from one function give functions
+  with the same meaning (`AssuredFn.step_both`); and the stored form of what admission and a step
+  return is what they were given (`admitFn_erases`, `AssuredFn.step_erases`). On valid values in scope, a term of a function returns valid values
+  against callees that keep validity (`Term.denote_valid`), and means the same against two tables
+  of callees that agree on valid inputs when one keeps validity (`Term.denote_tables`); so a
+  program whose functions follow those of another over the same headers, of which no summary has a
+  requirement and only the other is accepted by the check of facts, gives every function the
+  meaning on valid inputs of the function of the other with its header, the callers of a replaced function included, and its
+  functions are safe and keep validity (`Defs.functionsFollow_sound`); the protocols of the two
+  programs are not compared, and nothing is said of them. This is the family of relations "the
+  same meaning", stated for functions as equality of what they return; the other families
+  (guards compared by segment, representations, reductions) are not built;
+- the statements of `Statements.lean` about functions (`Admission/Theorems.lean`): each theorem
+  has the statement as its type: for every record of functions whose `admit`, `check` and
+  `elaborate`, those that the statement reads, are the definitions `admit`, `check` and
+  `elaborateFunctions`, and for every admitted program. A program that elaboration gives erases
+  to the program by names that was elaborated (`eraseOfElaborated`), and the erased form of a
+  typed program elaborates as the program, for the typed programs without protocols
+  (`roundTrip`). What `admit` returns is the elaboration of what was given, with the association
+  resolved in it (`admitsWhatWasGiven`); `check`, one definition at a time from no headers, gives
+  the headers of the admitted program (`checkAgrees`). An admitted program carries that it is
+  assured with its annotation (`Admitted.assured`), which `admit` gives it from the theorem of the
+  check of facts for a program, that every function satisfies its summary; so of every admitted
+  program, however it was made, a function never stops `undefined` on valid inputs that satisfy
+  its requirements (`functionsSafe`), returns valid values on every valid input
+  (`functionsKeepValidity`), the program respects its annotation (`annotationHolds`), and a
+  function whose header says that it cannot stop does not stop on such inputs
+  (`headersSayWhoStops`), since such a function stops only `undefined`
+  (`Defs.fnTable_stops_undefined`, `Meaning/Stops.lean`); a function that follows the analysis
+  of a safe function is assured and means the same (`functionsSame`, which is
+  `TypedFn.follows_assured`); a step of transformation from an assured function relates functions
+  with the same meaning (`transformSound`, which is `AssuredFn.step_same`), and, over headers of
+  which no summary has a requirement, every function of a program whose functions follow those of
+  a program that the check of facts accepts means what the function of the other with its header
+  means, and the second's functions are safe and keep
+  validity (`replacedFunctionsSame`, which is `Defs.functionsFollow_sound`).
 
-The endpoint statements (`program_together`, `program_endpoints_return`) are about
-relations on processes, for an arbitrary model and an arbitrary sampler: `ReturnsAlone`
-for one process and `ReturnTogether` for two, in which either process may take the next
-step. A draw is a broadcast in order: the board keeps every coin of a site in the order
-announced, each of the two processes counts the coins it has heard at each site, and a
-hearing takes the coin at the hearer's count. The endpoint lemma holds for two sides that
-each hold at most one role of the protocol, over functions that perform no effect
-(`QuietTable`); that each part has heard every coin of the sites at which it hears is an
-invariant that the proof derives from the fact that a site is one operation
-(`Protocols.entry_listened`). A sampler gives a coin at every type that has a value, and
-every model has one (`Sampler.constant`).
+Defined: everything else, from the terms and their meanings to deployment, the network and
+the runs.
 
-The executor (`Zkc.Core.Execute`) is total: one process is run by recursion on the
-process (`runAlone`), and any number of processes against each other one effect at a
-time (`run`, `runAll`), which ends because every effect continues one process
-(`oneContinues_wellFounded`); no fuel is given. Its coins are a parameter
-(`Execute.Coins`, the `k`-th coin of a site at a type): `Vocabulary.seededCoins` is the
-source of a seed, in which a coin is the value of the law of its type made of numbers of the
-seed, the site and `k`; a caller with its own mapping of coins gives its own, read through
-`Vocabulary.validCoins` so that a coin is validated at its type where it enters a run; and a
-source gives a sampler (`Coins.sampler`). What a value of a law is has one definition,
-`Vocabulary.lawValue`: from a closed type and a stream of numbers to a value, or why the type
-has no law. It keeps every public coin announced at the draw's site and gives a
-receive at a site without a message in transit the first coin of that site that its
-process has not heard, so every receiver of a draw hears every coin; a process that drew
-goes to the end of the order of the run, so that the others hear its coin before it
-draws again. The inputs of a run are validated values (`Vocabulary.Checked`, made only
-by validation): an input is validated once and run as often as a caller likes
-(`Vocabulary.run`, `runRole`, `runRoles`; `runData`, `runEntryRole` and `runEntry`
-validate and run).
+Still to be built:
 
-What is proved of its runs (`Zkc.Core.ExecuteRuns`, `Zkc.Core.VocabularyExecute`), for
-the sampler of the source of coins: a run of one process that returns is a return alone
-(`runAlone_returned`, `ReturnsAlone`), and one that stops is a stop alone
-(`runAlone_stopped`, `Execute.StopsAlone`); a run of two processes in which both return
-is a return together, without a condition on the run (`run_together`, `ReturnTogether`:
-the executor reads coins from the relation's board); a process
-cut at the limit returns or stops only as the whole one does (`ReturnsAlone.of_within`,
-`Execute.StopsAlone.of_within`, `ReturnTogether.of_within`). From a run to the meaning,
-with the model of the vocabulary: `runRole` on a role that returned or stopped gives
-that the role's program of the meaning, without a limit, returns or stops alone
-(`runRole_returned`, `runRole_stopped`), and `runRoles` on two roles that returned gives
-that their two programs return together (`runRoles_together`). The
-kernel computes a run of the verifier of a serialized program in the checks, so the
-statement has a closed instance.
+- the functions of the record `Functions` (`Functions.lean`), with their types. For a program
+  of functions, `elaborate`, `admit` and `check` are built as the definitions
+  `elaborateFunctions`, `admit` and `check` (`Admission/Elaboration.lean`,
+  `Admission/Admit.lean`, `Admission/Check.lean`); the record gets them when protocols are elaborated, which needs the
+  rules of the protocol dialect and the walk of role programs by the check of facts (until
+  then `admit` and `check` refuse a protocol). `eraseRole`, `format`, `deploy`, `identity`,
+  `execute` and `schedule` are still to be built;
+- the theorems that `Statements.lean` states and does not prove, each with what it preserves
+  (execution and state, a view, validity or progress): those about functions are proved of
+  the definitions above for a program of functions (`Admission/Theorems.lean`); `rolesSafe`,
+  `realized`, `anyOrder`, `replayed`, `recordsAreValid`, `schedulerRuns`, those of deployment
+  from `deployKeeps` to `identityReads`, `executorRuns` and `formats` are not, and neither is
+  `roundTrip` for a program with protocols. The current `schedulerRuns` statement also needs
+  revision. A partial source can leave a role waiting for an external draw in a quiescent
+  network. Its reporting rule for `blocked` recognizes only a missing message, while its
+  progress rule requires a report other than `limit` in this state.
+- for transformations, only the family "the same meaning" is built, for functions, as a step
+  from an assured function (`AssuredFn.step`). Not built: a transformation as a record of its
+  contract, its relation and its evidence; the other families of relations (guards compared by
+  segment, representations, reductions); facts carried from one program to another by a
+  correspondence of their places; the comparison of two programs whose functions have
+  requirements (`Defs.functionsFollow_sound` asks that no summary has one: its general form needs
+  that the requirements hold at every call that a run reaches); the statements about role
+  programs and deployment for programs whose functions have requirements (`rolesSafe` and
+  `deployedSafe` ask that none has one), since role programs are not analysed against the
+  summaries of the functions that they call; deciding, where a definition returns, a guarantee that names an application of a
+  written operation (it is refused there: the analysis does not know that the application has a
+  value); a guard whose condition is
+  already known true dropped or added on either side (every guard of the second term must be the
+  skeleton's next entry); a loop or a choice that only computes and that nothing uses dropped,
+  and two loops fused (every form of control stays in the skeleton); the comparison of the
+  protocols of two programs;
+- the index of a definition (bindings, uses, captures of a region, summaries, each query with
+  its lemma) and the facts that the analysis knows at a place, as one thing that a
+  transformation and a proof can ask: of the index only `Term.reads` is built, and the analysis
+  keeps what it knows to itself;
+- single assignment is decided for every admitted function and no theorem uses it yet: the
+  value form reads names through a scoped context of identifiers. It is, for now, a contract of
+  the stored form and of the untrusted transformations.
 
-What is not proved: nothing is stated of three or more processes, of a role that fails or waits, or of the converse, that the relation's
-returns are found under the executor's schedule; and the grouped meaning is related to
-the role programs by the endpoint lemma, not by a statement about the executor.
+`Process/`, `Program/`, `Meaning/` and `Projection/`, and the data of `Admission/`, are what
+the projection theorem and the meanings stand on; `Evidence/`, `Value/` and the analysis of
+`Facts/` are built for any dialect, with the instance of the function dialect in
+`Facts/Local.lean` and `Facts/LocalLaws.lean`; `Transform/` is built for functions. `World/`,
+`Scheme/`, `Run/` and `Format/` are defined and type-checked, and no implementation has
+exercised them yet: the code that first builds one of these parts changes its definitions here
+first.
 
-What each role of a run did is read beside the executor (`Zkc.Core.Observed`): an event is
-what a role sent, received or heard, drew or sampled, with its site and its value, read from
-the mail, the board and the coins as the executor's step reads them. A role has an event
-exactly when it moves (`event?_isSome`), and a run to its end with its events ends as the
-executor's run does (`finishObserved_fst`, `observeAlone_fst`); no definition of the executor
-changes.
+## Tests
 
-The threading steps (Fiat–Shamir, serialize) have a theorem over whole programs, for a
-side that holds exactly one of the two transcript roles (the prover and the verifier as
-separate sides; `OneTranscriptRole`). From `stepProtocols … = .ok …`: the image of the
-declared entry is the entry interpreted by the handler of the step (`threadHandler` on
-`stepMarks`, the record of the operations that the step rewrote, by site), between what
-the rule's entry does before and after the body (`stepProtocols_entry`, with
-`fiatShamirEntry_sound` and `serializeEntry_sound`); an entry that the step copies has its
-meaning (`stepProtocols_plain_entry`); every image of an applied protocol that threads is
-the protocol under every handler that follows its marks, and every copy has its
-protocol's meaning (`rewriteProtocols_threads`). That the handler fits the body of every
-definition (`Fits`) and the statement about callees (`CalleesThread`) are derived
-(`region_fits`, from the fact that the sites of a well-formed definition are pairwise
-different), not assumed. For a side that holds both transcript roles there is no handler:
-an exchange between two roles of one side performs no effect, so no handler of effects
-can absorb its value. What holds there is a refinement, for a rule whose two roles keep
-coupled states (`RuleCouples`; for Fiat–Shamir, equal transcripts, over a suite whose rows
-and functions return, `Suite.Returns`): the image of the entry returns on every run on
-which the entry does, for inputs in which the prover's and the verifier's copies of the
-statement are equal (`fiatShamir_together`, with `EveryRun`, which is `GroupedComplete`
-taken apart along sequencing). Nothing is stated for a side that holds neither.
-A `repeat` that collects and whose region is rewritten is threaded like any other loop
-(`repeat_threads`). A step refuses no program of well-formed definitions internally: it
-returns whenever the construction item accepts and the declaration has the rows
-(`stepProtocols_returns`, `construct_returns`); when the construction item accepts and
-when the rows are present are not characterised by a theorem.
+The tests of the core are the library `ZkcCoreTests` (`Zkc/Tests/Core/`), whose checks the
+kernel runs when they are built:
 
-Completeness of the scheme that `construct` derives is a theorem (`construct_complete`;
-`serializeProtocols_complete` for the serialize step alone on an authored construction):
-for every sampler the constructed prover's program returns a proof on which the
-constructed verifier's program returns outputs that the interactive condition holds of.
-Its premises, besides the equations that say which programs were constructed: the
-interactive entry is complete for every sampler, for the side of the prover and the
-verifier together (`GroupedComplete`); the prover's and the verifier's copies of the
-statement are equal in the inputs (`StatementCopiesEqual`); the suite's rows and
-functions return (`Suite.Returns`, automatic for a suite of rows); the layout reads back
-what it writes (`Layout.Lawful`: one law per row, in the prefix form); and every value
-the interactive prover sends is one the layout writes (`EverySend`). Nothing is assumed
-about a handler or about two programs run against each other: the proof goes through the
-grouped process (the Fiat–Shamir refinement above, then `serialize_entry_replays`: the
-prover's side writes the messages in the order in which the verifier's side takes them),
-not through `ReturnTogether`. In the model of the vocabulary the laws of the canonical
-layout are derived (`Vocabulary.construct_complete`, `canonicalLaws`), with the named
-hypothesis `PointCompression` only when a message type contains a point of G1. What a
-protocol still has to show there: its interactive completeness, in the strong form for
-every sampler of the model's carrier, and that its messages are written, which for a
-multiple of a point needs that the group is closed under multiples
-(`GroupClosedUnderMultiples`, a named hypothesis; the arithmetic rows of a prime field
-give written values). The statement says nothing for an entry that exchanges with a
-third role or reads an oracle: its grouped process does not return alone. The model of the vocabulary's rows satisfies the domain laws of the
-table of a package that the core elaborates and whose rows are the vocabulary's
-(`Vocabulary.model_domainLaws`), so the never-`undefined` theorems apply to the model that
-is run; `Vocabulary.missing` compares a package's rows with the vocabulary by name, static
-arguments, kind with its domain row, inputs and outputs. Admission checks the rows of a package
-that states the vocabulary beside it one by one: a row under a name of the vocabulary must be
-the vocabulary's row at its static arguments (`Vocabulary.misstated`), and a row under another
-name is a row of an extension (`Vocabulary.extensions`), which admission does not refuse and
-the model of the vocabulary does not run. A package without a row of an extension has the
-vocabulary's rows (`Admitted.rows_matched`).
+- `Shapes.lean`: protocols of different shapes written as typed programs by names, with what
+  elaboration decides about each, and meanings that compute; a deployed scheme whose admitted
+  program, a protocol, which admission refuses, is built by hand with the proof that it is
+  assured, every loop respecting an annotation that bounds none; it gives the other tests `var`, the
+  notation for a variable of a typed term written by hand, whose proof that the context has the
+  name is decided by evaluating the context;
+- `Controls.lean`: controls at the edges of the definitions (the world, the scheduler, handlers
+  and the retry of an attempt, distinct keys, codecs, linear use, who proves, forks, the start
+  of a layer, laws and contracts of functions at their calls, the lookup of a definition), and
+  the theorems that are the reasons for the definitions' shape;
+- `Consumers.lean`: each consumer's side, written against the core;
+- `Operations.lean`: for each written name of an operation that the core owns, a function that
+  elaborates, whose erased form elaborates back and is the function by names; written forms
+  with other types, numbers or item types refused;
+  the operations that would copy or drop a part refused at a linear type, and so is giving a
+  sequence of linear items a size; each meaning at a value, and each domain at a value outside
+  it;
+- `Elaboration.lean`: for each rule of elaboration that a program of functions can break, except
+  `row` (over the standard vocabulary, `Tests/Vocabulary/Core.lean`), `association`
+  (`Admission.lean`) and `summary` (`Summaries.lean`), and each condition of a body, a program by names that is accepted and one
+  that is refused, compared with the whole refusal (rule, place and what the rule found); where
+  a refusal is at each construct (a name not in scope, the number of results, a refusal inside
+  or after a region, the first missing name); the literals of each type; linear use at each
+  construct, each refusal naming the value, and each kind of type that is linear, with a
+  vocabulary whose nominal type is linear; single assignment at each place that binds a name (a
+  result bound twice in one body, two results of one instruction, an input of the definition
+  bound again by a result and two inputs with one name, an input of a region with the name of a
+  value around it, sibling regions of a choice and sibling arms of a case analysis, the blocks
+  of a stepped loop, a name bound again as the results of a choice, of a case analysis and of a
+  loop, and of a choice inside a block, whose place has the block), each refused by the rule
+  `assignment` with its place and the name, and one
+  name in two definitions accepted; the case analysis without an arm that the erased form
+  cannot tell apart; and the round trip of each accepted program in both directions;
+- `Facts.lean`: the check of facts on functions written by names, typed (`typeFn`) and checked
+  (`TypedFn.check`): the conformance cases of the
+  reference that a function can express, by their identifiers, accepted or refused as the case
+  says with the whole refusal, except one that the table accepts since it places the operands of
+  a sum in one order, named for what it shows (`facts-commutativity-recovered`: a fact on
+  `i + 1` holds of `1 + i`, as it does of a new name bound to `1 + i`); for each operation with a domain and for a restricted row, an
+  application accepted and one refused; sharing and the scope of facts in sibling regions, in
+  loops, after a choice, and of a new name where a program would bind a name again (which
+  elaboration refuses by the rule `assignment`); a loop over a range whose end is a
+  run-time value; a power too large to compute, and the limit; what the check does not conclude
+  (a range from a comparison with a value whose range is not one number, an order with an
+  offset, the range of a sum from its first value), each refused with the whole refusal; which
+  code does not run: the body of a loop of the written count zero, an arm whose payload has no
+  value, a function with an input that has none, and not the arm that a loop's index never
+  takes (`N-TY9e`) nor the code after a guard that contradicts what is known; what each
+  condition teaches (`and`, `or`, `==`, `!=`, an order, a sum, a difference, the shapes of a
+  choice), and that the operands of a conjunction are learned in the order written: `e && t`
+  accepted and `t && e` refused, where `e` gives a number that `t` needs, and that an equality
+  learned false teaches the same in either order of its operands; what case analyses, choices,
+  blocks, payloads and carried sums give of a natural;
+  the ranges of each arithmetic operation and conversion; code that does not run after an
+  operation or a loop whose results have no value; the place of a refusal and of a bound inside
+  a block, and the order of the bounds; and which types have no value;
+- `Following.lean`: whether a function follows the analysis of another, on pairs of functions
+  written by names with one header, typed (`typeFn`), the second following the analysis of the
+  first (`TypedFn.follows`), with whether the second differs nowhere (`decided`) and the whole
+  verdict, no place that differs and no refusal (`safelyFollows`): a repeated computation shared, computations reordered between
+  guards or moved around them with the guards in their order, a computation moved out of a loop,
+  other names for the values, a call of a function that cannot stop shared, `x + y` against
+  `y + x`, `x == y` against `y == x` of naturals and of truth values, and a product and a sum with
+  their operands exchanged in a loop after a guard, each accepted; `x - y` against `y - x`,
+  `(x + y) + z` against `x + (y + z)` (following does not know associativity), a row of the
+  vocabulary with its operands exchanged, `e && t` against `t && e` (a conjunction keeps the order
+  written), guards in the other order, one of two guards dropped, a call of a function that can stop moved
+  across a guard, two loops against one (following does not fuse loops), and another key on a
+  guard, each refused; each instruction kept in order, accepted: a choice, a case analysis, a
+  block, a loop as often as a value says and a call of a function that can stop, each with other
+  names, a value moved out of and into a region of a choice, and a value moved across a call of a
+  function that can stop; pairs that differ in one thing, each refused by the comparison of that
+  thing: a guard's condition or reason, a choice's condition, the subject of a case analysis, a
+  loop's initial values or count, a block's number or key, and the operand, the callee or the key
+  of a call of a function that can stop; the theorem for functions applied to two pairs accepted
+  whole, `x + y` and `y + x` the second; and, on the walk of the analysis over a toy dialect, an
+  attempt followed by the same attempt with other names, accepted, and by one with another key,
+  which differs at the attempt, and the two controls on the definitions of the value form: two
+  terms that follow one skeleton whose leaf is not made above the values in scope, with no place
+  that differs, and do not mean the same (why following asks for `Skel.Fresh`), and an attempt
+  whose end cannot return followed by what stops `undefined`, whose term runs the skeleton that
+  the walk builds (why what follows an attempt runs only from an end that can return);
+- `Transform.lean`: transformations of functions as steps from an assured function: a function
+  with unused and repeated operations, in its body and in a loop, admitted (`admitFn`), a step to
+  what `removeUnused` gives and a step from the result to what `shareRepeated` gives of it, each
+  stored result compared whole, each step accepted, and the chain composed by
+  `AssuredFn.step_then`, its middle function never admitted again; the two passes on a function
+  with a choice, a case analysis and a block, with unused and repeated operations inside and
+  around them, each result compared whole and each step accepted, the second from the result of
+  the first; one admitted function whose loop runs as often as a value with an upper end, and one
+  step from it, with the bounds of both, `checkFacts_sound`, the safety and the bounds that an
+  assured function carries, `TypedFn.safe_iff_assured`, `admitFn_erases`, `AssuredFn.step_erases`
+  and `AssuredFn.step_both` applied to them; a target refused by elaboration; three targets that
+  read a value with a domain before what justifies it (an inverse moved above the guard that it
+  is not zero, read before a choice in whose region it was justified, read before a loop in whose
+  body a guard justified it), which follow their source with no place that differs and which the
+  analysis refuses while it follows, so that the step refuses each with the target's refusal, and
+  the control that, in the field of two elements written there, the first of these targets stops
+  `undefined` on the input zero where the source stops at its guard; a target refused while it
+  follows that also differs, refused with both; a target that differs from its source (two guards
+  exchanged), refused with the place where it differs; a source that the check of facts refuses,
+  which `admitFn` refuses with its whole refusal, so that no step can be asked of it; a target
+  that computes another result, refused where it returns; a target with the operands of a sum
+  exchanged, accepted; three functions as the passes treat them, each with its whole verdict: two
+  linear values that `shareRepeated` shares, which the step refuses by the rule `linear`, `a + b`
+  then `b + a`, which `shareRepeated` leaves as they are and whose sharing written by hand is
+  accepted, and an unused restricted subtraction after the guard that justifies it, which
+  `removeUnused` drops, accepted; a program of two functions whose callee is replaced by what
+  `removeUnused` gives, which follows the first, with `Defs.functionsFollow_sound` applied, from
+  the first program's acceptance and that no summary of its headers has a requirement, to the
+  caller and to the safety and validity of the second program's functions; and a callee replaced by one that computes another result, which
+  does not follow and whose meaning on a concrete input is another;
+- `Domain.lean`: the domain of an operation kept in order, what an operation kept in order
+  guarantees, and a body under a summary, on a dialect written there with a natural and a positive
+  natural and four operations, each kept in order: the decrement, from either type to a natural,
+  which stops `undefined` on zero and otherwise asks the world one question and returns its operand
+  less one, and whose written form requires its operand to be at least one; the half of a natural,
+  which asks one question and returns the half of its operand, and whose written form guarantees
+  that its result is at most its operand; the opaque half, which computes the same and guarantees
+  nothing; and the subtraction, which stops `undefined` when its second operand is larger than the
+  first and whose written form requires it to be at most the first: its rules lawful for its
+  semantics, with every law and for every permitted reply (`domainRules_lawful`); the decrement
+  applied to a positive input accepted by the check of facts, with `Analysis.analyse_sound` applied
+  to give that it never stops `undefined`; applied to a natural input, refused at the operation
+  with the requirement that is not justified and what was known of the operand; the control that
+  on the input zero the term on naturals is the stop `undefined`, and on a positive input the
+  question followed by the return; the term on positive naturals with other names, which follows
+  the first and is accepted; the decrement applied to a natural input under the summary that
+  requires the input to be at least one, accepted, with `Summary.Holds` for it from
+  `Analysis.analyse_holds`, and the control that the input zero is excluded by the summary's
+  requirement; a body that returns its input under a summary that guarantees the result to be at
+  least one, accepted when the summary also requires the input to be at least one and refused at
+  the definition's exit by the rule `guarantee` when it does not; and the subtraction of the half of
+  the input from the input, accepted, since what the half guarantees is learned where it returns,
+  and with the opaque half refused at the subtraction, each with the whole verdict;
+- `Summaries.lean`: summaries of functions, on functions written by names over the vocabulary
+  with a field of `Facts.lean`, each with its whole verdict: a function that divides by its second
+  input, admitted under the summary that requires that input to be at least one and refused at the
+  division under the empty summary; a caller that guards that its divisor is at least one and calls
+  it, admitted, and one that calls it on inputs of which nothing is known, refused at the call with
+  the callee's requirement, and the same call of the function with the empty summary admitted; a
+  decrement after a guard whose summary guarantees that its result is at most its input, admitted,
+  and refused at its exit by the rule `guarantee` under a guarantee that its body does not
+  establish; a caller that subtracts the decrement's result from its input, admitted, the
+  guarantee learned where the call returns, and refused at the subtraction when the guarantee is
+  removed from the callee's summary; `Summary.Holds` for the dividing function in every model,
+  from what admission carries and from `checkFacts_holds`, and the control in the field of two
+  elements of `Transform.lean`: on the divisor zero, which the summary's requirement excludes, the
+  function's process is the stop `undefined`, and on the divisor one it returns the quotient; a step
+  from the dividing function admitted with an unused product to what `removeUnused` gives,
+  accepted, with `AssuredFn.step_same` applied; summaries that elaboration refuses by the rule
+  `summary` at the definition (a requirement on the result's position, a guarantee on a position
+  beyond the inputs and the result), and one whose guarantee names the result, elaborated (a
+  requirement on an application of a written operation cannot be written: a summary is over no
+  written operation); and the round trip of a program of a function with a summary and its caller
+  in both directions, the summary in the header that elaboration gives;
+- `Subjects.lean`: what is known of a computation, said of the subject of the instruction that
+  runs it, on the vocabulary with a field of `Facts.lean`: one function, the sum of two products
+  `a * b + c * d` of naturals, presented three ways in a caller of four inputs, as typed terms
+  written with `var`: a callee whose body computes it, called by the caller (its body is the callee
+  by names, which the check of facts accepts); a block in the caller whose body is the same
+  instructions; and the instructions in line. For each, a witness, in every model, that the subject
+  yields the function: the call by the law of the callee (`Law.yields`), the block by its body, and
+  the last instruction in line, the sum, on the starts that the two products before it give, each
+  body known from the operations that the core owns (`ownedOp_yields`) and the rule of an
+  instruction (`Term.op_yields`). One law of the function, proved once as mathematics, that
+  exchanging the two products gives the same number, and from it, for each presentation, by the
+  same lemma (`Term.equivalent_of_yields`), that the caller means the same as the caller with the
+  two products exchanged (the call's operands, the operands that the block's body reads, the last
+  instruction's operands). The controls: the call of the sum of two products and the call of a
+  callee that returns the first product only both satisfy "the result is at least zero", and the
+  second yields no witness of the sum of two products (a contract is not a witness); and a callee
+  that stops at a guard on some valid input, whose call satisfies the contract that it returns the
+  sum of two products with that stop allowed, and does not yield it;
+- `Stepped.lean`: the term in steps, on the bodies of `Subjects.lean` and on the body of `N-TY9e`
+  of `Facts.lean`, a choice inside a loop: each body of `Subjects.lean` in steps and back is the
+  body, by the kernel's evaluation, and erases to what it erases to, and so does the body that
+  `N-TY9e` elaborates (a term has no decision of equality, so an elaborated body is compared by
+  its erased form); for the sum of two products, in every model, against any callees and for all
+  naturals, the process in steps is the return of `a * b + c * d`, from the equation of an exit,
+  the rule of a step whose subject yields a function and the law of the operations alone, with no
+  meaning unfolded; and the body as its first two instructions, a prefix, filled with its last,
+  with `Prefix.denote_fill_run`; and a loop in steps, as often as two, whose body adds the second
+  input to the carried value: in every model and against any callees, every loop that a run of it
+  reaches runs at most twice, by the rule of a step (`Stepped.Term.everyLoop_step`), and so does
+  the loop as a term (`Stepped.Term.everyLoop_toTerm`), with the control that it does not run at
+  most once;
+- `Place.lean`: places inside a term, on a dialect of truth values written there (it has guards
+  and attempts): replacement (`Hole.fill_same`) of a value that nothing uses in the body of a
+  loop inside an attempt, and there of the carried value by the input, which differ only on
+  environments of the body that no run reaches; a replacement after a guard that differs only
+  where the guard stops, accepted, and the control, one that differs where the guard holds, for
+  which the premise of replacement fails and the wholes do not mean the same; a term that means
+  the same in two environments that agree on what it reads (`Term.denote_reads`), and gives
+  different results in two that differ there; a term split after two of its instructions and
+  after more than it has, each filled back (`Term.fill_splitAt`); and a term in a wider context,
+  with its meaning (`Term.denote_reindex`), and the control of an environment that does not
+  agree, on which the meaning differs, and with its erased form (`eraseBody_reindex`);
+- `Admission.lean`: `admit` and `check` on programs of functions: a program of two functions
+  admitted with its whole annotation; admission stopped at the first refused definition, with
+  every refusal of it and nothing of a later one, for a refusal of the check of facts and for
+  one of elaboration; `check`, one definition at a time, giving the headers of the admitted
+  program; an association whose key names a definition, resolved in the admitted program, and
+  one whose key is no definition, refused by the rule `association`; a protocol refused. The headers
+are compared whole, by the kernel.
 
-`Zkc.Core.VocabularyArithmetic` states, for the rows of the arithmetic of a field, of a group
-and of a sized collection of elements, the value that the model of a package gives at typed
-values, as the operation of the element type on their data, at any package whose row has the
-name and the static arguments of the vocabulary's row. A statement about a model of the
-mathematics is related to the model that runs through these (`lean/formal`).
-
-The core is a library of the package `zkc_compiler` (`lean/compiler`), which has no Lake
-dependency; the frontend (`Zkc.Frontend`, in the same package) emits its packages and reads its
-vocabulary, and the formal package (`lean/formal`) states and proves properties over its
-meaning. A module of the core imports only modules of the core and of Lean's prelude and
-standard library (`Init`, `Std`); `lake exe zkc-audit` checks this, the axioms, `@[extern]` and
-`@[implemented_by]` of its declarations, and that the kernel accepts them when they are
-replayed on an environment that takes only Lean's libraries as built.
-
-Run `lake build` from `lean/compiler`. It builds the library, the tool and the checks;
-the kernel comparisons, the printed links and their statements are checked by the
-build.
+In `lean/compiler`, `lake build` builds the core, the vocabulary, their tests and the audit;
+`lake test` builds the tests of the core (the library is the test driver), which need those of
+the vocabulary; and `lake exe zkc-audit` audits the core, the vocabulary and their tests: no
+axiom beyond `propext` and `Quot.sound` in any declaration, the replay of every declaration
+through the kernel, and four rules on imports (a module of the core imports only the core,
+`Init` and `Std`; no module of the core imports a module of the tests or of the tools; the root
+imports every module of the core; and the rule of layers: no module for any dialect, as the
+audit lists them (`coreGeneric`, `Tools/Audit.lean`), imports, directly or through other modules,
+a module about one dialect or about the vocabulary (`coreConcrete`), and no module is in both
+lists). The audit does not check the
+order of the directories or the rule on modules of proofs.

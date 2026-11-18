@@ -1,10 +1,10 @@
 name = "zkc_compiler"
 version = "0.0.0"
-defaultTargets = ["ZkcCore", "ZkcCoreTools", "ZkcCoreTests", "ZkcFrontend", "ZkcFrontendTools",
-  "ZkcFrontendTests", "ZkcAudit", "core-tool", "zkc-syntax", "zkc-check", "zkc-frontend-tests",
+defaultTargets = ["ZkcCore", "ZkcVocabulary", "ZkcCoreTests", "ZkcVocabularyTests", "ZkcAudit",
   "zkc-audit"]
-# a hyphenated name is written in guillemets for Lake to resolve it
-testDriver = "«zkc-frontend-tests»"
+# the tests are checks that run when their libraries are built: building the tests of the core,
+# which need the tests of the vocabulary, is the test
+testDriver = "ZkcCoreTests"
 
 [leanOptions]
 autoImplicit = false
@@ -17,15 +17,22 @@ globs = ["Zkc.Core", "Zkc.Core.+"]
 requiresModuleSystem = true
 
 [[lean_lib]]
-name = "ZkcCoreTools"
-roots = ["Zkc.Tools.Core"]
-globs = ["Zkc.Tools.Core.+"]
-allowNonModules = true
+name = "ZkcVocabulary"
+roots = ["Zkc.Vocabulary"]
+globs = ["Zkc.Vocabulary", "Zkc.Vocabulary.+"]
+requiresModuleSystem = true
 
 [[lean_lib]]
 name = "ZkcCoreTests"
 roots = ["Zkc.Tests.Core"]
 globs = ["Zkc.Tests.Core.+"]
+allowNonModules = true
+needs = ["ZkcVocabularyTests"]
+
+[[lean_lib]]
+name = "ZkcVocabularyTests"
+roots = ["Zkc.Tests.Vocabulary"]
+globs = ["Zkc.Tests.Vocabulary.+"]
 allowNonModules = true
 
 [[lean_lib]]
@@ -46,18 +53,13 @@ roots = ["Zkc.Tests.Frontend"]
 globs = ["Zkc.Tests.Frontend", "Zkc.Tests.Frontend.+"]
 allowNonModules = true
 
-# The audit of the libraries: only its checking function is in the library. The controls under
-# `Zkc.Tools.Audit.Controls` are in no glob, and are built because the audit's executables import
-# them.
+# The audit and its pinned-compiler helper recognizer. Controls are in no glob and are built
+# because both audit executables import them; they are not part of an audited project library.
 [[lean_lib]]
 name = "ZkcAudit"
 roots = ["Zkc.Tools.Audit"]
-globs = ["Zkc.Tools.Audit"]
+globs = ["Zkc.Tools.Audit", "Zkc.Tools.Audit.CompilerHelpers"]
 allowNonModules = true
-
-[[lean_exe]]
-name = "core-tool"
-root = "Zkc.Tools.Core.Main"
 
 [[lean_exe]]
 name = "zkc-syntax"
@@ -78,4 +80,4 @@ allowNonModules = true
 name = "zkc-audit"
 root = "Zkc.Tools.Audit.Main"
 allowNonModules = true
-needs = ["ZkcCore", "ZkcFrontend", "ZkcCoreTests"]
+needs = ["ZkcCore", "ZkcVocabulary", "ZkcCoreTests", "ZkcVocabularyTests"]

@@ -1,4 +1,4 @@
-import Lean
+import Zkc.Tools.Audit.CompilerHelpers
 
 /-!
 # The audit of the libraries
@@ -9,15 +9,17 @@ imported by its root module. A library of tests has no module that imports all o
 it is imported by the modules of its files that are built. For every constant declared in a
 module of a library:
 
-- the axioms it depends on are among `propext`, `Classical.choice` and `Quot.sound`; in
+- the axioms it depends on are among `propext` and `Quot.sound`; in
   particular no proof uses `sorryAx`. The constants that the audited ones use are visited once
   for the whole run (`dependencies`), and a forbidden axiom is traced back to every audited
   constant that reaches it;
-- it carries no `@[extern]` and no `@[implemented_by]`. The executable code that Lean itself
-  makes for a `partial` definition is not a finding; the number of `partial` definitions of each
-  library (the recursive ones, a `where` helper of one included: Lean compiles a `partial`
-  definition that does not recur as an ordinary one) is reported, so that a new one is a
-  visible difference;
+- it carries no `@[extern]` or arbitrary `@[implemented_by]`. Lean's recursive implementations
+  retain their existing exception. Constructor-index native implementations are recognized by
+  their complete logical and native bodies (`CompilerHelpers`), not their names alone. The
+  numbers of recursive implementations and recognized constructor indices are reported for each
+  library, separately from `partial` definitions (the recursive ones, including `where` helpers).
+  Their execution relies on the pinned compiler/runtime; kernel replay checks the logical
+  definitions, not the native code;
 - the kernel accepts it (`replay`). Reading a constant from a built file says nothing of
   whether the kernel checked it: a theorem elaborated under `set_option debug.skipKernelTC` is
   stored with whatever proof the elaborator built. So the declarations of the libraries are
@@ -28,9 +30,8 @@ module of a library:
   alone, and a tool that a library of tests imports is replayed with it. The kernel does
   not check unsafe declarations, and the replay skips them and the code of `partial`
   definitions, as Lean's own replay does. A library can be left out of the replay, with the
-  reason (`Library.withoutReplay`): the frontend is, since it is the unproved part of the
-  compiler and no theorem of the project rests on it; a replayed module that imports a module
-  of a library left out is a finding.
+  reason (`Library.withoutReplay`), as the controls below are; a replayed module that imports a
+  module of a library left out is a finding.
 
 The rules on imports hold for a library proper and are read from the headers of the modules: a
 module of the library imports only modules of the library itself and of the prefixes that the
@@ -40,10 +41,19 @@ module that its root module imports, directly or not. Every `.lean` file under t
 a library of tests is a module of the environment that the audit loads, so that no file of the
 tests is left unbuilt and unaudited.
 
-`run` audits the libraries, then the controls (`controls`): modules under
-`Zkc.Tools.Audit.Controls` that the audit must refuse, each audited alone and by one rule. The
-exit code is 0 only when the libraries pass and every control is refused by its rule; every
-finding is one line that names the constant or the module and the rule.
+The rule of layers holds for a library that lists its modules for any dialect (`generic`) and
+its modules about one dialect or about the vocabulary (`concrete`): a module for any dialect
+imports no module about one dialect or about the vocabulary, directly or through other modules.
+A violation is found with the shortest path of imports from the module to one such module; a
+module that the lists name and the audit's environment does not have is a finding too, and so is
+a module that both lists name. The core
+gives the two lists of the audit (`coreGeneric`, `coreConcrete`).
+
+`run` audits the libraries, accepts the generated-helper fixture, then checks the negative
+controls (`controls`): modules under `Zkc.Tools.Audit.Controls` that the audit must refuse,
+each audited alone and by one rule. The exit code is 0 only when the libraries and generated
+fixture pass and every negative control is refused by its rule; every finding is one line that
+names the constant or the module and the rule.
 -/
 
 set_option autoImplicit false
@@ -76,6 +86,11 @@ structure Library where
   /-- Why the declarations of the library are not replayed through the kernel, when they are
   not. A replayed module that imports a module of the library is then a finding. -/
   withoutReplay : Option String := none
+  /-- The modules for any dialect, which the rule of layers holds of. -/
+  generic : Array Name := #[]
+  /-- The modules about one dialect or about the vocabulary, which no module for any dialect
+  imports, directly or not. -/
+  concrete : Array Name := #[]
 
 /-- Whether a module is of a library. -/
 def Library.contains (library : Library) (module : Name) : Bool :=
@@ -88,6 +103,53 @@ def testsAndTools : Array Name := #[`Zkc.Tests, `Zkc.Tools]
 standard library. -/
 def coreImports : Array Name := #[`Init, `Std]
 
+/-- The prefixes outside the vocabulary that a module of the vocabulary may import: those of the
+core, and the core. -/
+def vocabularyImports : Array Name := coreImports.push `Zkc.Core
+
+/-- The modules of the core for any dialect: every declaration of each is for any dialect and
+any semantics, and none imports, directly or not, a module of `coreConcrete`. They are the
+processes, the program for any dialect (names, contexts, terms and the term in steps, the program
+by names for any operations, refusals, elaboration, erasure and places), the meanings for any
+dialect (the fold, the term in steps, requirements, places and the validity of values), the
+evidence layer, the value form, and the analysis with its soundness (the count of every loop that
+a run reaches, of the term and of the term in steps, included). Every module of the core whose
+declarations are for any dialect is listed: none is left out. -/
+def coreGeneric : Array Name := #[
+  `Zkc.Core.Process.Process, `Zkc.Core.Process.Handler, `Zkc.Core.Process.Same,
+  `Zkc.Core.Program.Identity, `Zkc.Core.Program.Lists, `Zkc.Core.Program.Context,
+  `Zkc.Core.Program.Term, `Zkc.Core.Program.Stepped, `Zkc.Core.Program.BitTree,
+  `Zkc.Core.Program.Library, `Zkc.Core.Program.Requirement, `Zkc.Core.Program.Conditions,
+  `Zkc.Core.Program.Linear, `Zkc.Core.Program.Syntax, `Zkc.Core.Program.Refusal,
+  `Zkc.Core.Program.Elaborate, `Zkc.Core.Program.Erase, `Zkc.Core.Program.Place,
+  `Zkc.Core.Meaning.Fold, `Zkc.Core.Meaning.Stepped, `Zkc.Core.Meaning.Requirement,
+  `Zkc.Core.Meaning.Place, `Zkc.Core.Meaning.ValidValues,
+  `Zkc.Core.Evidence.Claim, `Zkc.Core.Evidence.Relation, `Zkc.Core.Evidence.Summary,
+  `Zkc.Core.Evidence.Subject, `Zkc.Core.Evidence.Stepped,
+  `Zkc.Core.Value.Table, `Zkc.Core.Value.Valuation, `Zkc.Core.Value.Skeleton,
+  `Zkc.Core.Value.Leaves, `Zkc.Core.Value.Runs, `Zkc.Core.Value.Agrees,
+  `Zkc.Core.Facts.Loops, `Zkc.Core.Facts.SteppedLoops, `Zkc.Core.Facts.OpFacts,
+  `Zkc.Core.Facts.Range, `Zkc.Core.Facts.State, `Zkc.Core.Facts.Valuation,
+  `Zkc.Core.Facts.Walk, `Zkc.Core.Facts.Learning, `Zkc.Core.Facts.Laws, `Zkc.Core.Facts.Growth,
+  `Zkc.Core.Facts.WalkRuns, `Zkc.Core.Facts.Soundness, `Zkc.Core.Facts.SoundnessFollowing,
+  `Zkc.Core.Facts.Theorems]
+
+/-- The modules of the core about one dialect or about the vocabulary from which the others
+follow: the vocabulary, the types and records over it, the operations of the three dialects by
+names and the program by names of them, the dialects, the rules of the function dialect and
+projection, the events and the semantics of the three dialects, what the function dialect tells
+the analysis, and the declaration of a scheme, which deploys a protocol. Every other module of
+the core about one dialect or about the vocabulary imports one of them, directly or not, so that
+the rule of layers reaches it. -/
+def coreConcrete : Array Name := #[
+  `Zkc.Core.Program.Vocabulary, `Zkc.Core.Program.Located, `Zkc.Core.Program.Record,
+  `Zkc.Core.Program.Shape, `Zkc.Core.Program.NamedProgram, `Zkc.Core.Program.Dialects,
+  `Zkc.Core.Program.LocalRules, `Zkc.Core.Program.Project,
+  `Zkc.Core.Meaning.Events, `Zkc.Core.Meaning.Local, `Zkc.Core.Meaning.Protocol,
+  `Zkc.Core.Meaning.Role,
+  `Zkc.Core.Facts.Local,
+  `Zkc.Core.Scheme.Declaration]
+
 /-- The first components of the modules of Lean's own libraries: the only modules that the replay
 through the kernel takes as built. -/
 def leanLibraries : Array Name := #[`Init, `Std, `Lean, `Lake]
@@ -97,7 +159,7 @@ def isOfLean (module : Name) : Bool :=
   leanLibraries.contains module.getRoot
 
 /-- The axioms that a constant of a library may depend on. -/
-def allowedAxioms : Array Name := #[``propext, ``Classical.choice, ``Quot.sound]
+def allowedAxioms : Array Name := #[``propext, ``Quot.sound]
 
 /-- The kinds of finding. -/
 inductive Rule where
@@ -110,19 +172,22 @@ inductive Rule where
   | fileNotImported
   | fileNotLoaded
   | moduleMissing
+  | layers
   deriving BEq, Inhabited
 
 /-- What a rule requires, as a phrase. -/
 def Rule.describe : Rule → String
-  | .axiom_ => "no axiom beyond propext, Classical.choice and Quot.sound"
+  | .axiom_ => "no axiom beyond propext and Quot.sound"
   | .extern => "no `@[extern]`"
-  | .implementedBy => "no `@[implemented_by]`"
+  | .implementedBy => "no unrecognized `@[implemented_by]`"
   | .kernel => "the kernel accepts every declaration when it is replayed"
   | .importOfTestsOrTools => "no import of a module of the tests or of the tools"
   | .importOutside => "imports only of the library and of the prefixes that it allows"
   | .fileNotImported => "every file of a library is imported by its root"
   | .fileNotLoaded => "every file of a library of tests is in the audit's environment"
   | .moduleMissing => "a library has a file"
+  | .layers =>
+    "a module for any dialect imports, directly or not, no module about one dialect or about the vocabulary"
 
 /-- One finding: the constant or the module it is about, its rule, and the line it prints. -/
 structure Finding where
@@ -134,11 +199,14 @@ structure Finding where
 /-- What an audit found, and what it did for each library. -/
 structure Report where
   findings : Array Finding := #[]
-  /-- For each library, as lines: its `partial` definitions, and what was replayed through the
-  kernel and what was taken as built. -/
+  /-- For each library: its partial definitions, native implementation categories, what was
+  replayed through the kernel and what was taken as built. -/
   lines : Array String := #[]
   /-- The constants declared in the audited modules, and the constants that they reach. -/
   declarations : Nat := 0
+  /-- Structurally recognized constructor-index native replacements, counted separately from
+  recursive implementations. These rely on the pinned compiler/runtime for execution. -/
+  constructorIndices : Nat := 0
   reached : Nat := 0
   /-- The axioms that the audited constants reach. -/
   axioms : Array Name := #[]
@@ -176,6 +244,35 @@ def importClosure (env : Environment) (roots : Array Name) : NameSet := Id.run d
         found := found.insert imported.module
         stack := stack.push imported.module
   return found
+
+/-- A shortest path of imports from a module to one of some modules, the module first and the one
+that it reaches last, when it imports one of them, directly or not. -/
+def importPath (env : Environment) (start : Name) (targets : Array Name) :
+    Option (Array Name) := Id.run do
+  let indices : Std.HashMap Name Nat := env.header.moduleNames.zipIdx.foldl
+    (fun indices (module, index) => indices.insert module index) {}
+  -- each module reached, with the module that imports it on a shortest path
+  let mut reachedFrom : Std.HashMap Name Name := {}
+  let mut queue := #[start]
+  let mut position := 0
+  while position < queue.size do
+    let module := queue[position]!
+    position := position + 1
+    let some index := indices[module]? | continue
+    for imported in env.header.moduleData[index]!.imports do
+      let target := imported.module
+      if target == start || reachedFrom.contains target then continue
+      reachedFrom := reachedFrom.insert target module
+      if targets.contains target then
+        let mut path := #[target]
+        let mut current := target
+        while current != start do
+          let some importer := reachedFrom[current]? | break
+          path := path.push importer
+          current := importer
+        return some path.reverse
+      queue := queue.push target
+  return none
 
 /-- The constants that a constant uses directly: what `#print axioms` reads of it. -/
 def usedConstants (info : ConstantInfo) : Array Name :=
@@ -329,6 +426,8 @@ def audit (env : Environment) (libraries : Array Library) (arts : NameMap Import
   let mut constants : Array Name := #[]
   for library in libraries do
     let mut partials := 0
+    let mut recursiveImplementations := 0
+    let mut constructorIndices := 0
     for (index, _) in modulesOf env library do
       let data := env.header.moduleData[index]!
       for info in data.constants do
@@ -339,11 +438,18 @@ def audit (env : Environment) (libraries : Array Library) (arts : NameMap Import
         if isExtern env name then
           report := report.add name .extern s!"{name}: carries `@[extern]`"
         if let some implementation := Compiler.getImplementedBy? env name then
-          -- the executable code of a `partial` definition is Lean's own
-          unless implementation == Compiler.mkUnsafeRecName name do
+          -- Preserve Lean's recursive implementation policy, and recognize the new generated
+          -- constructor indices by both bodies rather than by their names alone.
+          if implementation == Compiler.mkUnsafeRecName name then
+            recursiveImplementations := recursiveImplementations + 1
+          else if ← isConstructorIndexImplementation env name implementation then
+            constructorIndices := constructorIndices + 1
+          else
             report := report.add name .implementedBy
               s!"{name}: carries `@[implemented_by {implementation}]`"
-    report := { report with lines := report.lines.push s!"{library.name}: {partials} partial definitions" }
+    report := { report with
+      constructorIndices := report.constructorIndices + constructorIndices
+      lines := report.lines.push s!"{library.name}: {partials} partial definitions; {recursiveImplementations} recursive native implementations; {constructorIndices} recognized constructor-index native implementations" }
     if let some reason := library.withoutReplay then
       report := { report with lines := report.lines.push s!"{library.name}: not replayed through the kernel: {reason}" }
   -- the kernel
@@ -358,8 +464,8 @@ def audit (env : Environment) (libraries : Array Library) (arts : NameMap Import
     for name in (reaching users axiom_).toArray.qsort (·.toString < ·.toString) do
       unless audited.contains name do continue
       let line := if name == axiom_ then
-          s!"{name}: is an axiom other than propext, Classical.choice and Quot.sound"
-        else s!"{name}: depends on the axiom {axiom_}, which is not propext, Classical.choice or Quot.sound"
+          s!"{name}: is an axiom other than propext and Quot.sound"
+        else s!"{name}: depends on the axiom {axiom_}, which is not propext or Quot.sound"
       report := report.add name .axiom_ line
   -- the imports of a library proper
   for library in libraries do
@@ -375,6 +481,23 @@ def audit (env : Environment) (libraries : Array Library) (arts : NameMap Import
           unless allowed.any (·.isPrefixOf target) do
             report := report.add module .importOutside
               s!"{module}: imports {target}, which is not of {library.root} or of {", ".intercalate (allowed.toList.map toString)}"
+  -- the layers: no module for any dialect imports, directly or not, a module about one dialect or
+  -- about the vocabulary; every module of the lists is in the environment, and in one list only
+  for library in libraries do
+    for (kind, listed) in #[("for any dialect", library.generic),
+        ("about one dialect or about the vocabulary", library.concrete)] do
+      for module in listed do
+        unless moduleNames.contains module do
+          report := report.add module .layers
+            s!"{module}: the rule of layers lists it as a module {kind}, and the audit's environment does not have it"
+    for module in library.generic do
+      if library.concrete.contains module then
+        report := report.add module .layers
+          s!"{module}: the rule of layers lists it both as a module for any dialect and as a module about one dialect or about the vocabulary"
+        continue
+      let some path := importPath env module library.concrete | continue
+      report := report.add module .layers
+        s!"{module}: a module for any dialect, imports {path.back!}, a module about one dialect or about the vocabulary, by {" → ".intercalate (path.toList.map toString)}"
   -- the files of each library: imported by the root of a library proper, in the environment for
   -- a library of tests
   for library in libraries do
@@ -440,6 +563,31 @@ def controls (directory : System.FilePath) : Array Control := #[
                  imports := some coreImports, withoutReplay := anotherRule }
     rule := .implementedBy
     isRefusal := fun finding => finding.subject == `Zkc.Tools.Audit.Controls.slowSucc },
+  { description := "a private `@[extern]` definition"
+    library := { name := "private extern", root := `Zkc.Tools.Audit.Controls.Extern
+                 imports := some coreImports, withoutReplay := anotherRule }
+    rule := .extern
+    isRefusal := fun finding => finding.subject matches .str _ "privateExternalAdd" },
+  { description := "a private `@[implemented_by]` definition"
+    library := { name := "private implemented by", root := `Zkc.Tools.Audit.Controls.ImplementedBy
+                 imports := some coreImports, withoutReplay := anotherRule }
+    rule := .implementedBy
+    isRefusal := fun finding => finding.subject matches .str _ "privateSlowSucc" },
+  { description := "a counterfeit constructor index: WrongLogic"
+    library := { name := "counterfeit constructor index", root := `Zkc.Tools.Audit.Controls.ConstructorIndex
+                 imports := some coreImports, withoutReplay := anotherRule }
+    rule := .implementedBy
+    isRefusal := fun finding => finding.subject == `Zkc.Tools.Audit.Controls.WrongLogic.ctorIdx },
+  { description := "a counterfeit constructor index: WrongNative"
+    library := { name := "counterfeit constructor index", root := `Zkc.Tools.Audit.Controls.ConstructorIndex
+                 imports := some coreImports, withoutReplay := anotherRule }
+    rule := .implementedBy
+    isRefusal := fun finding => finding.subject == `Zkc.Tools.Audit.Controls.WrongNative.ctorIdx },
+  { description := "a counterfeit constructor index: WrongTarget"
+    library := { name := "counterfeit constructor index", root := `Zkc.Tools.Audit.Controls.ConstructorIndex
+                 imports := some coreImports, withoutReplay := anotherRule }
+    rule := .implementedBy
+    isRefusal := fun finding => finding.subject == `Zkc.Tools.Audit.Controls.WrongTarget.ctorIdx },
   { description := "a theorem of `False` that the kernel never checked"
     library := { name := "unchecked", root := `Zkc.Tools.Audit.Controls.Unchecked }
     rule := .kernel
@@ -475,7 +623,15 @@ def controls (directory : System.FilePath) : Array Control := #[
     library := { name := "absent", root := `Zkc.Tools.Audit.Controls.Absent
                  directory, withoutReplay := anotherRule }
     rule := .moduleMissing
-    isRefusal := fun finding => finding.subject == `Zkc.Tools.Audit.Controls.Absent }]
+    isRefusal := fun finding => finding.subject == `Zkc.Tools.Audit.Controls.Absent },
+  { description := "a module for any dialect that imports the vocabulary through another module"
+    library := { name := "layers", root := `Zkc.Tools.Audit.Controls.Layers
+                 generic := #[`Zkc.Tools.Audit.Controls.Layers]
+                 concrete := #[`Zkc.Core.Program.Vocabulary], withoutReplay := anotherRule }
+    rule := .layers
+    -- the path of imports goes through the module that the control imports
+    isRefusal := fun finding => finding.subject == `Zkc.Tools.Audit.Controls.Layers &&
+      (finding.line.splitOn "Zkc.Core.Program.Located").length > 1 }]
 
 /-- The built files of the modules under `Zkc` in the entries of a search path, by module. Lean
 finds a module by the first entry that has a directory of the module's first component, and
@@ -522,8 +678,8 @@ def packageDirectory : IO System.FilePath := do
 /-- Audits libraries whose files are in the package of the running executable, and the
 controls, whose files are in the compiler's package (`compilerDirectory`, from the directory of
 the running executable's package); prints the findings, what was done for each library, the
-counts and the controls. The exit code is 0 only when the libraries pass and the audit refuses
-every control by its rule. -/
+counts and the controls. The exit code is 0 only when the libraries and generated-helper
+fixture pass and the audit refuses every negative control by its rule. -/
 def run (libraries : System.FilePath → Array Library)
     (compilerDirectory : System.FilePath → System.FilePath := id) : IO UInt32 := do
   initSearchPath (← findSysroot)
@@ -546,7 +702,14 @@ def run (libraries : System.FilePath → Array Library)
     let module := control.library.root
     if arts.contains module && !controlModules.any (·.module == module) then
       controlModules := controlModules.push { module }
+  controlModules := controlModules.push { module := `Zkc.Tools.Audit.Controls.Generated }
   let controlEnv ← importModules controlModules {} (loadExts := false) (level := .private) (arts := arts)
+  let generated ← audit controlEnv #[{
+    name := "generated helpers", root := `Zkc.Tools.Audit.Controls.Generated,
+    imports := some coreImports }] arts
+  let generatedAccepted := generated.findings.isEmpty && generated.constructorIndices == 8
+  IO.println s!"control, generated helpers (public, private, empty, indexed, mutual, nested, polymorphic): {if generatedAccepted then "accepted" else "NOT accepted"}; {generated.constructorIndices} recognized constructor indices"
+  for finding in generated.findings do IO.println finding.line
   let mut refused := 0
   for control in controls do
     -- each control is audited alone, so that only its own findings refuse it
@@ -554,6 +717,6 @@ def run (libraries : System.FilePath → Array Library)
     if found then refused := refused + 1
     IO.println s!"control, {control.description}: {if found then "refused" else "NOT refused"} by the rule: {control.rule.describe}"
   IO.println s!"audit: {report.findings.size} findings in {libraries.size} libraries; {refused} of the {controls.size} controls are refused"
-  return if report.findings.isEmpty && refused == controls.size then 0 else 1
+  return if report.findings.isEmpty && generatedAccepted && refused == controls.size then 0 else 1
 
 end Zkc.Tools.Audit
