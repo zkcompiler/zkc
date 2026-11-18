@@ -1,8 +1,19 @@
 # Status
 
-What this repository implements. The [reference of the source language](../language/README.md)
-defines more than is implemented: the language is designed in layers, and the inner layer is
-frozen as the baseline of the implementation.
+## Active Core build
+
+The compiler admits named functions in definition order. On valid inputs satisfying the
+function's declared requirements, admission proves its summary and the recorded loop bounds.
+For a typed protocol supplied directly, the projection theorem relates each role's process
+to its part of the joint program. Admission currently refuses protocol definitions.
+See the [Core guide](../lean/compiler/Zkc/Core/README.md) and the
+[active build targets](development.md).
+
+## Earlier source and execution pipeline
+
+The following table describes the retained sources and fixtures from before the Core port.
+The active targets build the redesigned Core, vocabulary and their tests. The frontend and
+formal suites in the table still need to be ported.
 
 | Area | Supported |
 |---|---|

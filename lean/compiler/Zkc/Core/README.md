@@ -324,7 +324,10 @@ Still to be built:
   the definitions above for a program of functions (`Admission/Theorems.lean`); `rolesSafe`,
   `realized`, `anyOrder`, `replayed`, `recordsAreValid`, `schedulerRuns`, those of deployment
   from `deployKeeps` to `identityReads`, `executorRuns` and `formats` are not, and neither is
-  `roundTrip` for a program with protocols;
+  `roundTrip` for a program with protocols. The current `schedulerRuns` statement also needs
+  revision. A partial source can leave a role waiting for an external draw in a quiescent
+  network. Its reporting rule for `blocked` recognizes only a missing message, while its
+  progress rule requires a report other than `limit` in this state.
 - for transformations, only the family "the same meaning" is built, for functions, as a step
   from an assured function (`AssuredFn.step`). Not built: a transformation as a record of its
   contract, its relation and its evidence; the other families of relations (guards compared by
