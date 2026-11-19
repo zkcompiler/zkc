@@ -27,10 +27,15 @@ test-interactive:
 test-formal:
     cd lean/formal && lake build && lake test
 
-# Export the written knowledge claim and kernel-check the returning fork and source mutations.
-test-written-knowledge:
-    cd lean/compiler && lake build zkc-knowledge Zkc.Tools.Audit
+# Parse and format the reference corpus and check source contracts and generated view types.
+test-frontend:
+    cd lean/compiler && lake build Zkc.Tests.Frontend.Reference Zkc.Frontend.Driver.SourcePhases
+    cd lean/compiler && lake env lean --run Zkc/Tests/Frontend/SourceConformance.lean
     cd lean/compiler && lake env lean --run Zkc/Tests/Frontend/ProtocolViews.lean
+
+# Export the written knowledge claim and kernel-check the returning fork and source mutations.
+test-written-knowledge: test-frontend
+    cd lean/compiler && lake build zkc-knowledge Zkc.Tools.Audit
     cd lean/formal && lake build Zkc.Formal.Written.GroupReplay Zkc.Formal.Written.FiniteModel Zkc.Tools.Formal.Policy
     cd lean/formal && lake env python3 checks/written_knowledge.py
 

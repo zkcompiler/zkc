@@ -81,7 +81,7 @@ By file:
 | File | Tests | accept | refuse | not run |
 |---|---|---|---|---|
 | `layer-a-functions-specification.txt` | 15 | 3 | 12 | 0 |
-| `layer-a-interaction.txt` | 46 | 15 | 31 | 0 |
+| `layer-a-interaction.txt` | 46 | 16 | 30 | 0 |
 | `layer-a-lexical-grammar.txt` | 26 | 12 | 14 | 0 |
 | `layer-a-names-static.txt` | 88 | 30 | 58 | 0 |
 | `layer-a-types-facts.txt` | 149 | 67 | 82 | 0 |
@@ -89,7 +89,7 @@ By file:
 | `layer-c.txt` | 62 | 17 | 45 | 0 |
 | `layer-d.txt` | 35 | 11 | 23 | 1 |
 | `layer-e.txt` | 6 | 2 | 4 | 0 |
-| total | 504 | 169 | 334 | 1 |
+| total | 504 | 170 | 333 | 1 |
 
 By prefix and layer:
 

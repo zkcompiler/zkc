@@ -297,6 +297,10 @@ def schemeProtocol (declaration : DeclarationId) (file : FileId) (node : Syntax.
   match ← evalWrittenPath env path with
   | .declarations steps scopes =>
     let some (id, _) := steps.back? | throw .abandoned
+    for (_, written) in steps do
+      for arg in written.getD #[] do
+        if let .spec span name _ := arg then
+          refuse "SC1" span s!"the scheme cannot close the specification-only argument `{name}`; supply it in the goal"
     let values ← bindArguments env steps scopes path.span
     let text := exprText (.path path.span path)
     let inst ← instantiate id values { description := s!"scheme {node.name.text} = {text}", span := path.span }

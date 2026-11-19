@@ -19,13 +19,16 @@ as the baseline of the implementation: its rules, the library and the programs t
 it, and its tests change only by a clarification. The later layers are carried from the
 earlier design of the language and are not frozen; each of their sections says so.
 
-The frontend of the compiler (`Zkc.Frontend` in `lean/compiler`) is written from the reference,
-and its test suite reads this directory with the library and the worked programs: `lake test` in
-`lean/compiler` parses and prints every file of `libraries/` and `examples/`, runs every
-conformance test of both suites against its expected outcome, and compiles and runs the worked
-programs as far as the implemented layers go. A root that uses a form of a later layer waits,
-with the form it waits for. The [frontend guide](../lean/compiler/Zkc/Frontend/README.md)
-describes the test driver and its options.
+Run `just test-frontend` from the repository root to check parsing and canonical printing
+of the libraries, examples and reference cases. The same command checks the diagnostics from
+assembly and name resolution against the reference and exercises the typed protocol views.
+Many negative cases need later phases to reach their expected refusal. The independent
+suite and the historical full frontend driver are described in the
+[frontend guide](../lean/compiler/Zkc/Frontend/README.md).
+
+`lake test` in `lean/compiler` selects the Core and vocabulary tests.
+`just test-written-knowledge` also exercises the two supported source-to-theorem paths.
+See the [development guide](../docs/development.md) for their scope.
 
 The independent suite keeps the expectations with which it was written. Where a later
 clarification of the reference changed an outcome, the frontend's harness lists the case and

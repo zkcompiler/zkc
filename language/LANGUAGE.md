@@ -2612,7 +2612,8 @@ head may carry a `where` over static terms (SP4), which is a condition of every 
 application has as many arguments on each side as the definition. The short application `R(a…)`,
 without `;` and the witnesses, says that some witness exists; it stands only at the top of
 `reduces`, `proves`, `through` and `knowledge`, where the statement generator introduces the
-quantifier. A clause that takes a relation takes any `bool` specification expression.
+quantifier. The logical operands of `reduces`, `proves` and `through` may be Boolean specification expressions.
+Each branch of `knowledge` applies a named relation to its statement arguments (SX6).
 **Messages:** "`<R>` takes 2 statement arguments and 1 witness argument"; "`<f>` is not a
 relation; its arguments are separated by `,`".
 
@@ -2761,6 +2762,7 @@ the entry governs. A clause enters the statement of a goal as a hypothesis or as
 |---|---|---|---|
 | `completeness` | every role | every `requires`; the left side of `reduces` or `proves` written in full, `R(a…; w…)`, of the inputs | every role returns; every `ensures`; the `to` side of `reduces` |
 | `soundness` | the deciding role | the `requires` that are available (below) | when the deciding role returns, `R(a…)` holds for some witness, or, for `reduces`, the reduced statement is false, except with probability at most the charges |
+| `special_soundness` | the verifier | two accepting written runs with a shared prefix and distinct challenges at the selected draw | the named extractor returns a witness satisfying the selected knowledge relation (SX6, GL3) |
 | `knowledge_soundness` | the deciding role | the same | the theorem of the formal library applied to what the clause states: for a tree function the implication of special soundness, for one run the obligation with the charges as its bound (SX6) |
 | `zero_knowledge` | every role but the simulated one; a role that the scheme declares `offline` and whose coins are a `trapdoor` is on the honest side | the `requires` that are available; the left side of `proves` in full | the statement of the simulator (SX6) |
 | `honest_verifier_zero_knowledge` | every role | the same | the same, with the coins of the simulated role honest |

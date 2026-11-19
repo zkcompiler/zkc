@@ -225,15 +225,75 @@ def withNames {α : Type} (names : Array String) (action : ResolveM α) : Resolv
   popSuite
   return result
 
+/-- An extractor or simulator names executable code. A member left open by a static
+parameter can only be classified when that parameter is instantiated. -/
+def resolveAlgorithm (env : Env) (path : Path) : ResolveM Lowered.Expr := do
+  let (target, some reference) ← resolvePath env path .plain | return .error path.span
+  let program := (← get).program
+  let executable : Bool := match target with
+    | .declaration id | .member id => (program.declarations[id]?).any fun decl =>
+      match decl.node with
+      | .«def» f => !(f.modifier matches some (.spec _))
+      | .member (.defMember _ modifier ..) => !(modifier matches some (.spec _))
+      | .memberDef f => !f.spec
+      | _ => false
+    | .«open» => true
+    | _ => false
+  unless executable do
+    refuseAt env.owner "SX6" path.span "the function after `by` must be an executable def"
+  return .reference reference
+
 def resolveExtractor (env : Env) : Extractor → ResolveM (Array Lowered.Expr)
-  | .path path => do return #[← pathTerm env path]
+  | .path path => do return #[← resolveAlgorithm env path]
   | .external _ _ => return #[]
+
+/-- A proposition may be a Boolean expression or a relation application. Each extracted
+knowledge branch names the relation for which its algorithm supplies a witness. -/
+inductive ClauseOperand where
+  | proposition
+  | knowledge (requireWitness : Bool)
+
+def checkClauseCall (env : Env) (span : Span) (use : ClauseOperand)
+    (callee : Lowered.Reference) (arguments : Array Lowered.Argument)
+    (witnesses : Option (Array Lowered.Argument)) : ResolveM Unit := do
+  let knowledge := use matches .knowledge _
+  if knowledge && witnesses.isSome then
+    return ← refuseAt env.owner "SX6" span "apply the knowledge relation to its statement arguments only"
+  let .reference _ segments := callee
+  if segments.back? matches some (.segment (.member _ none) _ _) then return
+  let program := (← get).program
+  let relation : Option Relation := do
+    let .segment (.declaration id) _ _ ← segments.back? | none
+    let .relation r := (← program.declarations[id]?).node | none
+    return r
+  let some r := relation | do
+    if knowledge then refuseAt env.owner "SX6" span "the knowledge clause must apply a relation"
+    else if witnesses.isSome then refuseAt env.owner "SX3" span "only a relation takes witness arguments"
+    return
+  let witnessCount := (r.witness.getD #[]).size
+  unless arguments.size == r.statement.size && witnesses.all (·.size == witnessCount) do
+    refuseAt env.owner "SX3" span
+      s!"the relation `{r.name.text}` takes {r.statement.size} statement arguments and {witnessCount} witness arguments"
+  if (use matches .knowledge true) && witnessCount == 0 then
+    refuseAt env.owner "SX6" span "an extracted alternative needs a relation with a witness"
+
+def resolveOperand (env : Env) (expr : Expr) (use : ClauseOperand) : ResolveM Lowered.Expr := do
+  let term ← resolveExpr env expr
+  match term with
+  | .error _ => pure ()
+  | .call _ callee args witnesses => checkClauseCall env expr.span use callee args witnesses
+  | _ =>
+    if use matches .knowledge _ then
+      refuseAt env.owner "SX6" expr.span "the knowledge clause must apply a relation"
+  return term
 
 /-- Resolve SX6 against the placements of this clause's own inputs and results. Local
 binders introduced by expressions and specification-only ports impose no role constraint. -/
 def checkDecidingRole (env : Env) (head : Option ProtocolHead) (span : Span)
     (role : Option Name) (terms : Array Lowered.Expr) : ResolveM Unit := do
   let some head := head | return
+  -- Role eligibility assumes well-formed operands, in particular a valid witness split.
+  if (← get).refusals.contains env.owner then return
   let locals := (← get).locals
   let mut placements : Std.HashMap LocalId Placement := {}
   let insert (table : Std.HashMap LocalId Placement) (name : Name) (p : Placement) :=
@@ -277,31 +337,39 @@ def checkDecidingRole (env : Env) (head : Option ProtocolHead) (span : Span)
     refuseAt env.owner "SX6" span "name an eligible deciding role that sees every statement operand and holds no witness operand"
 
 def resolveClause (env : Env) (head : Option ProtocolHead) (results : Array String)
-    (loops : Std.HashMap String (Array String)) : Clause → ResolveM (Array Lowered.Expr)
+    (loops : Std.HashMap String (Array String)) (clause : Clause) : ResolveM (Array Lowered.Expr) :=
+  match clause with
   | .requires _ _ condition | .charge _ _ condition => do
     return #[← resolveExpr env condition]
   | .proves span role _ condition => do
-    let terms := #[← resolveExpr env condition]
+    let terms := #[← resolveOperand env condition .proposition]
     checkDecidingRole env head span role terms
     return terms
   | .ensures _ _ condition => do return #[← withNames results (resolveExpr env condition)]
   | .invariant _ _ condition loop | .through _ condition loop =>
-    -- a loop that is not one of the protocol is refused with the clause (SX6)
     match loops[loop.text]? with
-    | some names => do return #[← withNames names (resolveExpr env condition)]
-    | none => pure #[]
+    | some names => withNames names do
+      if clause matches .through .. then return #[← resolveOperand env condition .proposition]
+      return #[← resolveExpr env condition]
+    | none => do
+      refuseAt env.owner "SX6" loop.span s!"no loop is indexed by `{loop.text}` in the contract target"
+      return #[]
   | .reduces span role _ source target => do
-    let source ← resolveExpr env source
+    let source ← resolveOperand env source .proposition
     withNames results do
-      let terms := #[source, ← resolveExpr env target]
+      let terms := #[source, ← resolveOperand env target .proposition]
       checkDecidingRole env head span role terms
       return terms
   | .knowledge _ _ relation extractor alternative => do
-    let mut names := #[← resolveExpr env relation]
+    let mut names := #[← resolveOperand env relation (.knowledge false)]
     names := names ++ (← resolveExtractor env extractor)
     if let some alternative := alternative then
-      names := names.push (← resolveExpr env alternative.relation)
-      if let some path := alternative.extractor then names := names.push (← pathTerm env path)
+      let sourceExtractor := extractor matches .path _
+      names := names.push (← resolveOperand env alternative.relation (.knowledge sourceExtractor))
+      if let some path := alternative.extractor then
+        names := names.push (← resolveAlgorithm env path)
+      else if sourceExtractor then
+        refuseAt env.owner "SX6" alternative.relation.span "name the extractor for this alternative with `by`"
     return names
   | .zeroKnowledge _ _ simulator _ => resolveExtractor env simulator
 
@@ -326,7 +394,11 @@ def resolveContract (id : DeclarationId) (declaration : Declaration) (node : Con
         | some (.several _ results) => results.map (·.name.text)
         | none => #[],
         protocol.body)
-    | .«def» function => (function.params.map (·.name), #[], #[])
+    | .«def» function =>
+      let statements := match function.binding with
+        | .body (.statements _ body _) => body
+        | _ => #[]
+      (function.params.map (·.name), #[], statements)
     | .relation relation =>
       (relation.statement.map (·.name) ++ (relation.witness.getD #[]).map (·.name), #[], #[])
     | _ => (#[], #[], #[])

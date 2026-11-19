@@ -1,7 +1,8 @@
 # Source language frontend
 
 This guide describes the frontend at [the previous Lean compiler at `10ed903fc`](https://github.com/zkcompiler/zkc/tree/10ed903fc22d3f20b22ff2d1bbf607a740ef0718).
-Use that revision for the historical commands below. On the current checkout, run
+Use that revision for the historical commands below. On the current checkout, `just test-frontend` exercises the current syntax, name-resolution and generated-view checks.
+`just test-written-knowledge` checks the source-issued group proofs. Run
 `just test-interactive` from the repository root for the source paths used by the Sumcheck
 and GKR certificates. See [status](../../../../docs/status.md).
 
