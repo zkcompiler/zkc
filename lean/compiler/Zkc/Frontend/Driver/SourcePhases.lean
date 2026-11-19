@@ -2,6 +2,7 @@ module
 
 public import Zkc.Frontend.Names.Module
 public import Zkc.Frontend.Semantics.Instances
+public import Zkc.Frontend.Driver.Bodies
 
 @[expose] public section
 
@@ -68,7 +69,7 @@ namespace Phase
 /-- Runs a phase from a state. The traces of the phase are moved into its report. -/
 def runIn (phase : Phase) (context : Compile.Context) (state : Compile.State) :
     PhaseReport × Compile.State :=
-  let (outcome, after) := phase.run.run context { state with traces := #[] }
+  let (outcome, after) := phase.run.run (Typing.withProtocolBodies context) { state with traces := #[] }
   let interrupted := match outcome with
     | .ok _ => none
     | .error interrupt => some (describeInterrupt interrupt)

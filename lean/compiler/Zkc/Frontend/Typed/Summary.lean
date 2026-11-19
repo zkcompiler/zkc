@@ -96,6 +96,14 @@ structure SiteEntry where
   instruction : Option Nat := none
   deriving Inhabited
 
+/-- Selector for this event in a generated source record (§8). -/
+def SiteEntry.fieldName (site : SiteEntry) : String := site.name.getD s!"site{site.event}"
+
+/-- The instructions that realize a written event part, in emission order. A uniform loop
+has one entry; a stepped loop has one per statically emitted iteration path. -/
+def SiteEntry.realizations (sites : Array SiteEntry) (event : Nat) (part : String) : Array SiteEntry :=
+  sites.filter fun entry => entry.event == event && entry.part == part
+
 /-- A specification argument of an application: the core site of the application, the port, the
 expression and its type. It is typed and not emitted: no deployed code computes it (SX4). -/
 structure SpecificationArgument where
@@ -132,6 +140,9 @@ structure ProtocolCode where
   sites : Array SiteEntry
   /-- The flows of the body, in the order of the sites. -/
   flows : Array FlowEntry := #[]
+  /-- First draw below a choice, loop or application. Such a closed protocol has no
+  fixed-depth Runs type, even when a loop emits only one Core instruction (§8). -/
+  nestedDraw : Option Syntax.Span := none
   /-- The specification arguments of its applications. -/
   specificationArguments : Array SpecificationArgument := #[]
   /-- In the opaque elaboration of a protocol generic over a module parameter (SP12): the

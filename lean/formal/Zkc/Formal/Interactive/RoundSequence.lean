@@ -52,6 +52,40 @@ inductive Sequence (hs : Headers V) (events : Events t) : {Γ : Ctx (LTy V)} →
       {rest : Term (protocolDialect V hs) (Γ.extend ns) outs} (next : Sequence hs events round.residual binders.claim rest n) :
       Sequence hs events state running (.block key index inside ns rest) (n+1)
 
+/-- An instance of the common typed round body at one physical block. Its state and
+residual types, operation references, captures and keys may vary with the iteration.
+`checked.same` identifies the actual verifier projection with the common body. -/
+structure IndexedRound (hs : Headers V) (events : Events t) where
+  context : Ctx (LTy V)
+  outputs : List (LTy V)
+  state : V.Ty
+  running : Var context (shared t)
+  actual : Term (protocolDialect V hs) context outputs
+  checked : Located state events running actual
+  block : Key
+  iteration : Nat
+
+/-- Read all typed instances in execution order without copying the bodies or re-running
+the correspondence check. Their enclosing sequence is indexed by the admitted term. -/
+def Sequence.instances {events : Events t} {Γ outs state running}
+    {term : Term (protocolDialect V hs) Γ outs} {count : Nat} :
+    Sequence hs events state running term count → List (IndexedRound hs events)
+  | .done _ => []
+  | .more round block iteration _ _ rest =>
+    ⟨_, _, _, _, _, round, block, iteration⟩ :: rest.instances
+
+theorem Sequence.length_instances {events : Events t} {Γ outs state running}
+    {term : Term (protocolDialect V hs) Γ outs} {n : Nat} (rounds : Sequence hs events state running term n) :
+    rounds.instances.length = n := by
+  induction rounds with
+  | done => rfl
+  | more _ _ _ _ _ _ ih => exact congrArg Nat.succ ih
+
+def Sequence.instanceAt {events : Events t} {Γ outs state running}
+    {term : Term (protocolDialect V hs) Γ outs} {n : Nat} (rounds : Sequence hs events state running term n)
+    (i : Fin n) : IndexedRound hs events :=
+  rounds.instances[i.val]'(rounds.length_instances.symm ▸ i.isLt)
+
 def readSequence (distinct : (hs.fns.map (·.key)).Nodup) (events : Events t) :
     (n : Nat) → {Γ : Ctx (LTy V)} → {outs : List (LTy V)} → (state : V.Ty) → (running : Var Γ (shared t)) →
     (actual : Term (protocolDialect V hs) Γ outs) → Option (Sequence hs events state running actual n)

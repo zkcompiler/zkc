@@ -1,9 +1,7 @@
 name = "zkc_formal"
 version = "0.0.0"
-defaultTargets = ["ZkcFormal", "ZkcFormalTools", "ZkcFormalTests", "zkc-formal-receipts",
-  "zkc-formal-audit"]
-# a hyphenated name is written in guillemets for Lake to resolve it
-testDriver = "«zkc-formal-receipts»"
+defaultTargets = ["ZkcFormal", "ZkcFormalTests", "ZkcFormalTools"]
+testDriver = "«zkc-formal-audit»"
 
 [leanOptions]
 autoImplicit = false
@@ -12,6 +10,17 @@ warningAsError = true
 [[require]]
 name = "zkc_compiler"
 path = "../compiler"
+
+[[require]]
+name = "mathlib"
+scope = "leanprover-community"
+git = "https://github.com/leanprover-community/mathlib4"
+rev = "fc4f59e577feb1a4956671bc04ac18aaaf8cd842"
+
+[[require]]
+name = "VCVio"
+git = "https://github.com/Verified-zkEVM/VCVio.git"
+rev = "f1e63c780de398fb62206dd5890f27e1ad64e0e6"
 
 [[lean_lib]]
 name = "ZkcFormal"
@@ -29,11 +38,6 @@ allowNonModules = true
 name = "ZkcFormalTests"
 roots = ["Zkc.Tests.Formal"]
 globs = ["Zkc.Tests.Formal", "Zkc.Tests.Formal.+"]
-allowNonModules = true
-
-[[lean_exe]]
-name = "zkc-formal-receipts"
-root = "Zkc.Tests.Formal.Main"
 allowNonModules = true
 
 [[lean_exe]]

@@ -1,0 +1,73 @@
+module
+
+public import Baseline
+public import SameLog
+public import ReversedNumerator
+public import Zkc.Formal.Written.PrimeFive
+
+@[expose] public section
+set_option maxRecDepth 4000
+set_option maxHeartbeats 1000000
+
+namespace OddFork
+open Zkc.Core Zkc.Formal.Written ArithmeticModel
+
+open scoped PrimeFive
+
+abbrev Scalar := ZMod 5
+abbrev M := PrimeFive.model
+abbrev ops := operations Scalar Scalar
+abbrev rows := groupRows Scalar Scalar
+abbrev fieldRows := functionRows Scalar Scalar
+
+def schnorr : Baseline.Statement Scalar := ⟨1,2⟩
+def sameLog : SameLog.Statement Scalar := ⟨1,3,2,1⟩
+def commitment : SameLog.Commitment Scalar := (0,0,())
+def left : Branch Scalar := ⟨1,2⟩
+def right : Branch Scalar := ⟨0,0⟩
+
+theorem schnorr_returns :
+    Baseline.accepts M schnorr [] (0 : Scalar) left ∧
+    Baseline.accepts M schnorr [] (0 : Scalar) right ∧ left.challenge ≠ right.challenge := by
+  exact ⟨(Baseline.verifier_equation M ops rows ..).2 (by decide +kernel),
+    (Baseline.verifier_equation M ops rows ..).2 (by decide +kernel), by decide +kernel⟩
+
+theorem sameLog_returns :
+    SameLog.accepts M sameLog [] commitment left ∧ SameLog.accepts M sameLog [] commitment right := by
+  exact ⟨(SameLog.verifier_equation M ops rows ..).2 (by decide +kernel),
+    (SameLog.verifier_equation M ops rows ..).2 (by decide +kernel)⟩
+
+theorem compiled_witnesses :
+    Baseline.coreExtractor M schnorr (0 : Scalar) left right = some (2 : Scalar) ∧
+    Baseline.coreRelation M schnorr (2 : Scalar) = some true ∧
+    SameLog.coreExtractor M sameLog commitment left right = some (2 : Scalar) ∧
+    SameLog.coreRelation M sameLog (2 : Scalar) = some true := by
+  have schnorrScalar : Baseline.extractor ops schnorr (0 : Scalar) left right = some (2 : Scalar) := by
+    decide +kernel
+  have sameScalar : SameLog.extractor ops sameLog commitment left right = some (2 : Scalar) := by
+    decide +kernel
+  exact ⟨(Baseline.extractor_agrees M ops rows fieldRows schnorr (0 : Scalar) left right).trans schnorrScalar,
+    (Baseline.relation_agrees M ops rows fieldRows schnorr (2 : Scalar)).trans (by decide +kernel),
+    (SameLog.extractor_agrees M ops rows fieldRows sameLog commitment left right).trans sameScalar,
+    (SameLog.relation_agrees M ops rows fieldRows sameLog (2 : Scalar)).trans (by decide +kernel)⟩
+
+/-- Reversing only the numerator in the source changes the returned scalar to 3.
+The original relation rejects that witness on the same two accepting branches. -/
+theorem reversed_numerator :
+    ReversedNumerator.coreExtractor M ⟨(1 : Scalar),(2 : Scalar)⟩ (0 : Scalar) left right =
+        some (3 : Scalar) ∧ Baseline.coreRelation M schnorr (3 : Scalar) = some false := by
+  refine ⟨?_, (Baseline.relation_agrees M ops rows fieldRows schnorr (3 : Scalar)).trans (by decide +kernel)⟩
+  apply @of_decide_eq_true _ ((inferInstance : DecidableEq (Option Scalar)) _ _)
+  decide +kernel
+
+theorem zero_refinement :
+    M.apply (fr .nonzero) _ rfl (.cons (0 : Scalar) .nil) = none ∧
+      ∀ v : M.Val nzTy, fieldRows.unpack v ≠ (0 : Scalar) := by
+  exact ⟨by rfl, unpack_ne_zero Scalar Scalar⟩
+
+#print axioms OddFork.schnorr_returns
+#print axioms OddFork.sameLog_returns
+#print axioms OddFork.compiled_witnesses
+#print axioms OddFork.reversed_numerator
+#print axioms OddFork.zero_refinement
+end OddFork

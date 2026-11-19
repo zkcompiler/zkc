@@ -58,11 +58,6 @@ inductive Interrupt where
 
 namespace Compile
 
-structure Context where
-  options : Options := {}
-  vocabulary : Vocabulary
-  deriving Inhabited
-
 /-- What is being computed: a request, or a part of a computation that a chain names on its own
 (the opaque typing of a definition, the check of a type of the vocabulary against a sort). -/
 inductive StackEntry where
@@ -86,6 +81,15 @@ structure State where
   evaluations of static terms are under way (TY2). -/
   staticSteps : Nat := 0
   staticDepth : Nat := 0
+  deriving Inhabited
+
+structure Context where
+  options : Options := {}
+  vocabulary : Vocabulary
+  /-- A generated source type can depend on the checked body of another instance. The driver
+  supplies the same memoized body request used by ordinary protocol applications. -/
+  protocolBody : InstanceId → Span → ExceptT Interrupt (StateM State) Unit :=
+    fun _ _ => throw (.waiting "the protocol body of a generated view")
   deriving Inhabited
 
 end Compile

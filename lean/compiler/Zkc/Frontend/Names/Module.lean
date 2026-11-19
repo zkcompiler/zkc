@@ -280,6 +280,11 @@ mutual
 
   partial def event : Lowered.Event → ProjectM Unit
     | .send payload _ _ => expr payload
+    | .oracleSend payload _ _ kind => do expr payload; expr kind
+    | .query handle _ positions _ => do expr handle; expr positions
+    | .openClaims claims => claims.forM fun
+      | .pending _ claim => expr claim
+      | .opening _ handle pos value => do expr handle; expr pos; expr value
     | .draw law _ _ | .sample law => typeTerm law
     | .attempt => pure ()
     | .apply callee arguments _ => do

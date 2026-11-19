@@ -85,9 +85,7 @@ def signature? (store : ResultStore) (id : InstanceId) : Option Typed.Signature 
 /-- The content of an instance whose signature is done: a type, a static name, a module, or the
 types of a head. -/
 def content? (store : ResultStore) (id : InstanceId) : Option InstanceContent :=
-  match store.signature? id with
-  | some (.data content) => some content
-  | _ => none
+  (store.signature? id).bind Typed.Signature.content?
 
 /-- The instance of a key, when it was asked for. -/
 def instance? (store : ResultStore) (key : InstanceKey) : Option InstanceId :=

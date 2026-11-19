@@ -1,5 +1,6 @@
 module
 
+public import Zkc.Formal.WorldObservation
 public import Zkc.Formal.Interactive.Application
 public import Zkc.Formal.Interactive.Multilinear
 public import Zkc.Formal.Interactive.PairReadback

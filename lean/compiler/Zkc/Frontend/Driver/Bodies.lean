@@ -94,6 +94,11 @@ mutual
     | _ => return .waiting s!"a call of {Names.kindWord found.kind}"
 end
 
+/-- Supply static evaluation with the ordinary body query, including while checking
+signatures requested by that query. Re-entering a body goes through the usual cycle check. -/
+partial def withProtocolBodies (context : Compile.Context) : Compile.Context :=
+  {context with protocolBody := fun inst place => typeBody inst place (withProtocolBodies context)}
+
 /-- The checks of FN5 that need no body: a kernel stands on a deployed `def` with a body. -/
 def checkKernels : CompileM Unit := do
   let program ← program
@@ -125,7 +130,7 @@ def typeBodies : CompileM Unit := do
   while index < (← get).table.entries.size do
     let state ← get
     let entry := state.table.entries[index]!
-    if let some found := state.program.declarations[entry.key.declaration]? then
+    if let (none, some found) := (entry.key.view, state.program.declarations[entry.key.declaration]?) then
       if found.kind == .function || found.kind == .functionDefinition || found.kind == .relation
           || found.kind == .law || found.kind == .lawMember || found.kind == .protocol then
         let place := (found.name.map (·.span)).getD default

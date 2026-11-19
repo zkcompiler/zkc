@@ -46,7 +46,7 @@ theorem pairs_sound (rounds : Sequence hs events state running term count)
   apply rounds.sound M _ _ K Cube.claims _ path _ _ env s table wrong
   · exact Mass.mul_nonneg Mass.natCast_nonneg (Mass.le_of_lt (Mass.inv_pos.mpr (Mass.natCast_pos.mpr positive)))
   · exact rounds.boundsOfMembers _ checked M _ _ _ points positive 1
-      (fun _ laws => PairLaws.interpret rows laws M math points distinct) equalLaw K fresh path
+      (fun _ laws => (PairLaws.interpret rows laws M math points distinct).reindex Fin.val) equalLaw K fresh path
 
 #print axioms pairs_sound
 end Zkc.Formal.Interactive.Sumcheck.ReductionRound

@@ -11,7 +11,7 @@ use zkc::curves::bls12_381::{G1}
 use zkc::layout::{canonical}
 use zkc::suites::{Merlin3Bls12381}
 use zkc::security::{
-    completeness, knowledge_soundness, honest_verifier_zero_knowledge, zero_knowledge,
+    completeness, special_soundness, knowledge_soundness, honest_verifier_zero_knowledge, zero_knowledge,
     unforgeability, random_oracle
 }
 
@@ -19,6 +19,7 @@ scheme Proof = Schnorr<G1>:
     construction derived(Merlin3Bls12381)
 
 goal complete = completeness(Proof, stage = written) <= 0
+goal fork = special_soundness(Proof, stage = written)
 goal special = knowledge_soundness(Proof, stage = written)
 goal view = honest_verifier_zero_knowledge(Proof, stage = written, clause = honest) <= 0
 goal knowledge = knowledge_soundness(Proof, model = random_oracle, statement = fixed)

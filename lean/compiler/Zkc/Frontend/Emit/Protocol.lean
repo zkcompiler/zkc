@@ -50,7 +50,7 @@ def checkedProtocol (definition : Typed.Definition) (body : Typed.ProtocolBody) 
   unless definition.specificationOnly || definition.body.hasError do
     if let .error (span, message) := Linear.checkProtocol body then
       logError "LN2" span (.ofText message)
-  return { definition, roles, occurrences := Passes.occurrences body }
+  return { definition, roles, events := Passes.occurrences body }
 
 /-- The statement of a body that computes a node: the binding, level of a pattern, update or
 guard around it, with the roles that compute it. -/
@@ -150,28 +150,39 @@ def protocolSummary (description : String) (head : Lowered.ProtocolHead) (checke
     for holder in holders do outputs := outputs.push (result.value.type, holder)
   let mut sites := #[]
   let mut flows := #[]
+  let mut nestedDraw := none
   let mut specificationArguments : Array SpecificationArgument := #[]
-  for occurrence in checked.occurrences do
-    let some (.stmt (.event _ _ what)) := body.find? occurrence.node | throw (.defect "event missing from numbered tree")
-    let #[(_, instruction)] := origin.nodes.zipIdx.filter (·.1 == occurrence.node)
+  -- A source operation such as broadcast can have several parts at the same instruction.
+  -- Preserve ambiguous node origins so the uniqueness check below still rejects them.
+  let mut byNode : Std.HashMap Typed.NodeId (Option Nat) := {}
+  for (node, instruction) in origin.nodes.zipIdx do
+    byNode := byNode.insert node (if byNode.contains node then none else some instruction)
+  for occurrence in checked.events do
+    let .event node id what iteration nested true := occurrence | continue
+    let some (some instruction) := byNode[node]?
       | throw (.defect "expected one emitted instruction for the source event")
-    let event := head.events[occurrence.event]?
+    let event := head.events[id]?
     let site (part : String) : SiteEntry :=
-      { event := occurrence.event, part, name := event.bind (·.name)
-        place := (event.map (·.span)).getD default, iteration := occurrence.iteration, instruction }
+      { event := id, part, name := event.bind (·.name)
+        place := (event.map (·.span)).getD default, iteration := iteration, instruction }
     let n := sites.size
     match what with
     | .send _ payload _ receivers =>
-      let some sender := checked.roles.senders[occurrence.node]? | throw (.defect "unplaced send")
+      let some sender := checked.roles.senders[node]? | throw (.defect "unplaced send")
       for receiver in receivers do
         let part := if receivers.size ≤ 1 then "value" else s!"to {body.roster[receiver]!}"
         flows := flows.push (.exchange sender receiver payload.type sites.size)
         sites := sites.push (site part)
     | .draw _ law owner receivers =>
+      if nested && nestedDraw.isNone then nestedDraw := some (site "value").place
       let row ← internRow (← vocabularyRow law.request) (site "value").place
       sites := sites.push (site "value")
       flows := flows.push (.draw owner receivers row n)
     | .apply _ callee _ _ roleMap _ =>
+      if nestedDraw.isNone then
+        if let some (.protocol inner) := (← getResults).body? callee then
+          if inner.nestedDraw.isSome || inner.flows.any (fun | .draw .. => true | _ => false) then
+            nestedDraw := some (site "value").place
       sites := sites.push (site "value")
       flows := flows.push (.apply callee roleMap)
       if let some attached := origin.specification.find? (·.instruction.number == instruction) then
@@ -180,7 +191,7 @@ def protocolSummary (description : String) (head : Lowered.ProtocolHead) (checke
             {site := n, port, text := ← textAt expr.span, type := ← renderTypeM expr.type, place := expr.span}
     | .sample .. | .attempt .. => sites := sites.push (site "value")
   return { name := description, roles := body.roster, inputs, inputPorts, outputs, agreements
-           sites, flows, specificationArguments, resolved
+           sites, flows, nestedDraw, specificationArguments, resolved
            waiting, specificationOnly := head.specification }
 
 /-- The body of a protocol that a body applies, asked for from the place of the application: a

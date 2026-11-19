@@ -3095,7 +3095,7 @@
     {
       "id": "events-conflicting-site-name",
       "phase": "semantic",
-      "expected": "refuse",
+      "expected": "accept",
       "rules": [
         "EV3"
       ],
@@ -3103,15 +3103,41 @@
       "sources": {
         "main.zkc": "cases/events-conflicting-site-name/main.zkc"
       },
-      "binders": [],
+      "binders": [
+        {
+          "binder": "P.x",
+          "type": "bool",
+          "holders": [
+            "A",
+            "B"
+          ],
+          "computed_by": [
+            "A"
+          ],
+          "facts": {}
+        }
+      ],
       "instances": [],
-      "sites": [],
+      "sites": [
+        {
+          "number": 0,
+          "name": "other",
+          "kind": "draw",
+          "roles": [
+            "A",
+            "B"
+          ],
+          "parts": [
+            "value"
+          ]
+        }
+      ],
       "controls": [],
       "stops": [],
       "execution": [],
-      "notes": [],
-      "diagnostic": "the site of `x <- …` is named `x`; `#[site(other)]` names it otherwise",
-      "refusal_anchor": "#[site(other)]"
+      "notes": [
+        "The event binds x locally and exposes other in the run view."
+      ]
     },
     {
       "id": "sampling-empty-array",

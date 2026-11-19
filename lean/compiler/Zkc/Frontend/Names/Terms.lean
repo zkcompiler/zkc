@@ -88,9 +88,10 @@ def localOrReference (span : Span) (reference : Lowered.Reference) (name : Optio
   | _ => return .reference reference
 
 /-- Numbers an event in the order of the text. -/
-def numberEvent (span : Span) (name : Option String) (parts : Array String) : ResolveM EventId := do
+def numberEvent (span : Span) (name : Option String) (parts : Array String)
+    (audience : EventAudience := .unresolved) : ResolveM EventId := do
   let state ← get
-  set { state with events := state.events.push { span, name, parts } }
+  set { state with events := state.events.push { span, name, parts, audience } }
   return state.events.size
 
 /-- The shape of a pattern, with its binders made in the order of the text. -/
@@ -554,20 +555,26 @@ mutual
       let value ← resolveExpr env value
       return #[.update span (← resolveName env name .plain) value]
     | .eventStmt (.bound span site pattern type holders event) => do
-      let number ← numberEvent span (siteName site (some pattern)) (eventParts event)
+      let eventName := siteName site (some pattern)
       let what ← resolveEvent env event
       let type ← type.mapM (resolveType env)
       let roles ← holders.mapM holdersOf
+      let audience : EventAudience := match what with
+        | .ok (.send _ _ to) => .transfer to none
+        | .ok (.draw _ owner to) => .transfer to (some owner)
+        | .ok (.sample _) | .ok .attempt => .privateCoins roles
+        | _ => .unresolved
+      let number ← numberEvent span eventName (eventParts event) audience
       match what with
       | .error names =>
         match pattern with
-        | .name name => discard <| bindLocal env name (site := true)
+        | .name name => discard <| bindLocal env name (site := eventName)
         | _ => discard <| bindPattern env pattern
         let names := names ++ (type.map (#[Lowered.Expr.type ·])).getD #[]
-        return #[.waiting span (waitReason event) names]
+        return #[.waiting span "an application of a protocol that is not resolved" names]
       | .ok what =>
         match pattern with
-        | .name name => return #[.event span number (some (← bindLocal env name (site := true))) type roles what]
+        | .name name => return #[.event span number (some (← bindLocal env name (site := eventName))) type roles what]
         | .wildcard wildcard =>
           return #[.event span number (some (← madeBinder wildcard .discarded)) type roles what]
         | _ =>
@@ -580,14 +587,14 @@ mutual
       match ← resolveApplication env application with
       | .ok what => return #[.event span number none none none what]
       | .error names => return #[.waiting span "an application of a protocol that is not resolved" names]
-    | .«open» span _ claims => do
-      let mut names := #[]
-      for claim in claims do
-        names := names.push (← resolveExpr env claim.handle)
-        if let some opening := claim.opening then
-          names := names.push (← resolveExpr env opening.position)
-          names := names.push (← resolveExpr env opening.value)
-      return #[.waiting span "an `open` (layer D)" names]
+    | .«open» span site claims => do
+      let number ← numberEvent span (siteName site none) #["opening"]
+      let claims ← claims.mapM fun claim => do
+        let handle ← resolveExpr env claim.handle
+        match claim.opening with
+        | none => return Lowered.OracleClaim.pending claim.span handle
+        | some o => return .opening claim.span handle (← resolveExpr env o.position) (← resolveExpr env o.value)
+      return #[.event span number none none none (.openClaims claims)]
     | .guard span holders condition reason => do
       let condition ← resolveExpr env condition
       let roles ← holders.mapM holdersOf
@@ -626,17 +633,17 @@ mutual
   partial def resolveEvent (env : Env) : Event → ResolveM (Except (Array Lowered.Expr) Lowered.Event)
     | .send _ payload sender receivers oracle => do
       let payload ← resolveExpr env payload
-      if let some kind := oracle then
-        return .error #[payload, ← resolveExprAt env .plain kind]
       let sender ← sender.mapM roleOf
-      return .ok (.send payload sender (← receivers.mapM roleOf))
+      let receivers ← receivers.mapM roleOf
+      if let some kind := oracle then
+        return .ok (.oracleSend payload sender receivers (← resolveExprAt env .plain kind))
+      return .ok (.send payload sender receivers)
     | .draw _ type sender receivers => do
       let law ← resolveType env type
       return .ok (.draw law (← roleOf sender) (← receivers.mapM roleOf))
     | .sample _ type => do return .ok (.sample (← resolveType env type))
-    | .query _ handle _ positions _ => do
-      let handle ← resolveExpr env handle
-      return .error #[handle, ← resolveExpr env positions]
+    | .query _ handle opener positions deferred => do
+      return .ok (.query (← resolveExpr env handle) (← opener.mapM roleOf) (← resolveExpr env positions) deferred)
     | .attempt _ => return .ok .attempt
     | .application application => resolveApplication env application
 
@@ -651,12 +658,6 @@ mutual
     | some callee => return .ok (.apply callee arguments roleMap)
     | none => return .error (arguments.map fun
         | .positional _ value | .named _ _ value | .spec _ _ value => value)
-
-  /-- Why an event statement waits. -/
-  partial def waitReason : Event → String
-    | .send .. => "an oracle send (layer D)"
-    | .query .. => "a `query` (layer D)"
-    | _ => "an application of a protocol that is not resolved"
 
   partial def resolveBody (env : Env) : Body → ResolveM Lowered.Expr
     | .expression _ value | .suiteExpression _ value => resolveExpr env value

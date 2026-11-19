@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Frontend.Emit.Definitions
+public import Zkc.Core.Evidence.ProtocolReadback
 
 @[expose] public section
 set_option autoImplicit false
@@ -89,6 +90,29 @@ def emitReachable (root : InstanceId) : EmitM RootEmission := do
     definitions := definitions.push definition
     origins := origins.push ⟨key,nodes,specification,dynamicLoops⟩
   return ⟨found.bindings,⟨definitions.toList⟩,origins⟩
+
+/-- Physical block paths from one typed definition. The source records static iteration
+numbers and an instruction key. Two candidates at that coordinate make resolution fail. -/
+structure SiteAddresses where
+  paths : Std.HashMap (List Nat × Nat) (Option (List (Core.Key × Nat))) := {}
+
+def SiteAddresses.ofAddresses (addresses : List (List (Core.Key × Nat) × Core.Key)) : SiteAddresses := Id.run do
+  let mut found : SiteAddresses := {}
+  for (blocks, key) in addresses do
+    let coordinate := (blocks.map Prod.snd, key.number)
+    found := ⟨found.paths.insert coordinate (if found.paths.contains coordinate then none else some blocks)⟩
+  return found
+
+def SiteAddresses.forProtocol {V : Core.Vocabulary} (p : Core.Typed V) (key : Core.Key) : Option SiteAddresses := do
+  let ⟨_, member⟩ ← p.findProtocol key
+  let entry := p.defs.protocolEntry p.distinct member
+  return ofAddresses (entry.body.addresses [])
+
+def SiteAddresses.resolve (index : SiteAddresses) (entry : Typing.SiteEntry) :
+    Option (List (Core.Key × Nat) × Core.Key) := do
+  let key ← entry.instruction
+  let blocks ← (index.paths[(entry.iteration.toList, key)]?).join
+  return (blocks, ⟨key⟩)
 
 end Zkc.Frontend.Emit
 

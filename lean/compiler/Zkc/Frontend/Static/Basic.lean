@@ -75,7 +75,7 @@ namespace Zkc.Frontend.QueryTable
 def content? (table : QueryTable InstanceKey Typed.Signature) (id : InstanceId) :
     Option InstanceContent :=
   match table.entries[id]? with
-  | some { state := .done (.data content), .. } => some content
+  | some { state := .done signature, .. } => signature.content?
   | _ => none
 
 end Zkc.Frontend.QueryTable
@@ -220,6 +220,7 @@ mutual
         (specNames.zip entry.key.specification).toList.map fun (parameter, value) =>
           s!"spec {parameter} = {value}"
       let base := if parts.isEmpty then name else s!"{name}<{", ".intercalate parts}>"
+      let base := entry.key.view.elim base fun view => base ++ "::" ++ view.member
       match entry.key.owner with
       | some owner => s!"{base} at {renderInstance state owner}"
       | none => base

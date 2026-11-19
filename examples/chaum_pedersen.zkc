@@ -7,7 +7,7 @@ use zkc::curves::bls12_381::{Fr, G1}
 use zkc::hash::{Keccak256}
 use zkc::suites::{HashChain}
 use zkc::security::{
-    completeness, knowledge_soundness, honest_verifier_zero_knowledge, random_oracle
+    completeness, special_soundness, knowledge_soundness, honest_verifier_zero_knowledge, random_oracle
 }
 
 section <G: PrimeOrderGroup>:
@@ -57,5 +57,6 @@ scheme SameLogProof = ChaumPedersen<G1>:
     construction derived(HashChain<Keccak256, Fr>)
 
 goal complete = completeness(SameLogProof)
+goal fork = special_soundness(SameLogProof, stage = written)
 goal extractable = knowledge_soundness(SameLogProof, model = random_oracle(queries = 2^64))
 goal simulatable = honest_verifier_zero_knowledge(SameLogProof, stage = written)

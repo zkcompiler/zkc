@@ -89,7 +89,7 @@ theorem checkTable_sound [Lean.Grind.Field F] (v : Verifier (S := S) H F (F × F
   simp only [checkTable, Experiment.expect_bind]
   apply Mass.le_trans (K.expect_mono _ _ _ _ ?_) bound
   intro (rs, value) _ _
-  by_cases h : Cube.evaluate n table rs = some value <;> simp [Experiment.expect, h]
+  by_cases h : Cube.evaluate n table rs = some value <;> simp [h]
 
 end Verifier
 end Zkc.Formal.Interactive.Sumcheck

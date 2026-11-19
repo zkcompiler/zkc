@@ -95,7 +95,7 @@ module t
 protocol X roles(P, V)(a: nat @P):
     #[site(x)]
     x <- send a to V
-=== T-E3 | refuse EV3 | `#[site(y)]` on a binder named x
+=== T-E3 | accept | `#[site(y)]` exposes site y for a local binder named x
 module t
 protocol X roles(P, V)(a: nat @P):
     #[site(y)]

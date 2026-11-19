@@ -51,7 +51,7 @@ def expectedTypingRefusals : Array (String × String × Nat) := #[
   -- protocol bodies
   ("T-X1", "SX2", 4), ("T-X2", "SX4", 5), ("M-SUM3", "SX4", 82), ("T-P7", "EV1", 4),
   ("T-H1", "HO1", 3), ("T-H3", "HO2", 3), ("T-H4", "EV5", 3), ("T-H5", "GU2", 3),
-  ("T-H7", "CT2", 3), ("T-E1", "EV3", 5), ("T-E1b", "EV3", 4), ("T-E3", "EV3", 3),
+  ("T-H7", "CT2", 3), ("T-E1", "EV3", 5), ("T-E1b", "EV3", 4),
   ("T-E7", "RM1", 5), ("T-E9", "HO5", 3), ("S-A1", "GU2", 8), ("S-A1b", "GU2", 8),
   ("I-5c", "CT2", 6), ("R-EV1b", "EV1", 7), ("R-EV1c", "EV1", 5), ("M-SCH1", "GU2", 15),
   ("M-SCH4", "HO5", 11), ("M-SCH6", "NL6", 15), ("T-H10", "TY4", 5), ("I-3", "TY15", 3),

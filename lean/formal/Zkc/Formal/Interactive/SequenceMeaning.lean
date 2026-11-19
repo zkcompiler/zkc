@@ -94,7 +94,7 @@ theorem soundFrom (rounds : Sequence hs events state claim term count) (path : L
     let draw := scalar M env' binders.draw
     have tail := ih env' after (q.restrict n x draw) (later values after reached) (of_decide_eq_false bad)
     apply Mass.le_trans _ tail
-    simp only [Experiment.probability, Process.map_eq_bind, Experiment.expect_bind, Experiment.expect]
+    simp only [Experiment.probability, Process.map_eq_bind, Experiment.expect_bind, Experiment.expect_done]
     apply K.expect_mono
     intro output _ _
     obtain ⟨last,rs,v⟩ := output

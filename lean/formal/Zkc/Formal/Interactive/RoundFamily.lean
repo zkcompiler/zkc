@@ -33,14 +33,28 @@ def checkMembers (law : MemberLaw hs t)
 
 end Sequence
 
-structure RoundInterpretation (M : Model V) [DecidableEq (M.Val t)] (fns : FnTable M hs.fns) (q : Claims (M.Val t))
-    (points : List (M.Val t)) (degree : Nat) {msg state residual : V.Ty} (ops : Members hs t msg state residual) where
+/-- An interpretation uses the collision law only at the depths selected by its index. -/
+structure RoundInterpretationOn (M : Model V) [DecidableEq (M.Val t)] (fns : FnTable M hs.fns) (q : Claims (M.Val t))
+    (points : List (M.Val t)) (degree : Nat) {msg state residual : V.Ty} (ops : Members hs t msg state residual)
+    {ι : Type} (depth : ι → Nat) where
   boundary : M.Val msg → M.Val t
   evaluate : M.Val msg → M.Val t → M.Val t
   ends : ∀ m, localOp M fns ops.boundary (.cons m .nil) = .done (.cons (boundary m) .nil)
   atPoint : ∀ m r, localOp M fns ops.evaluate (.cons m (.cons r .nil)) = .done (.cons (evaluate m r) .nil)
-  roots : ∀ n (x : q.State (n+1)) m, boundary m ≠ q.value (n+1) x →
-    points.countP (fun r => decide (evaluate m r = q.value n (q.restrict n x r))) ≤ degree
+  roots : ∀ i (x : q.State (depth i + 1)) m, boundary m ≠ q.value (depth i + 1) x →
+    points.countP (fun r => decide (evaluate m r = q.value (depth i) (q.restrict (depth i) x r))) ≤ degree
+
+/-- A uniform interpretation supplies the same laws at every natural depth. -/
+abbrev RoundInterpretation (M : Model V) [DecidableEq (M.Val t)] (fns : FnTable M hs.fns) (q : Claims (M.Val t))
+    (points : List (M.Val t)) (degree : Nat) {msg state residual : V.Ty} (ops : Members hs t msg state residual) :=
+  RoundInterpretationOn M fns q points degree ops (id : Nat → Nat)
+
+def RoundInterpretationOn.reindex {M : Model V} [DecidableEq (M.Val t)] {fns : FnTable M hs.fns}
+    {q : Claims (M.Val t)} {points : List (M.Val t)} {degree : Nat} {msg state residual : V.Ty}
+    {ops : Members hs t msg state residual} {ι κ : Type} {depth : ι → Nat}
+    (law : RoundInterpretationOn M fns q points degree ops depth) (select : κ → ι) :
+    RoundInterpretationOn M fns q points degree ops (fun i => depth (select i)) :=
+  { law with roots := fun i => law.roots (select i) }
 
 namespace Sequence
 variable {events : Events t} {Γ : Ctx (LTy V)} {state : V.Ty} {claim : Var Γ (shared t)}
@@ -76,7 +90,7 @@ theorem boundsFromMembers (rounds : Sequence hs events state claim term count) (
     (fns : FnTable M hs.fns) (roles : RTable M hs.protocols) (q : Claims (M.Val t))
     (points : List (M.Val t)) (positive : 0 < points.length) (degree : Nat)
     (interpret : ∀ {msg st residual} (ops : Members hs t msg st residual), law ops →
-      RoundInterpretation M fns q points degree ops)
+      RoundInterpretationOn M fns q points degree ops (Fin.val (n := count)))
     (equalLaw : ScalarEquality.Law t events.equal events.equalType M) {σ : Type} (K : Experiment (RSig M) σ)
     (path : List Frame) (env : Env (RV M 1) Γ) (s : σ) (x : q.State count)
     (fresh : rounds.FreshFrom M fns roles K points positive path env s) :
@@ -86,7 +100,8 @@ theorem boundsFromMembers (rounds : Sequence hs events state claim term count) (
   | @more _ _ _ _ _ n inside round key index ns binders rest next ih =>
     obtain ⟨head,tail⟩ := verified
     obtain ⟨here,later⟩ := fresh
-    refine ⟨?_,fun values after reached => ih tail _ after _ (later values after reached)⟩
+    refine ⟨?_, fun values after reached => ih tail
+      (fun ops law => (interpret ops law).reindex (Fin.castLE (Nat.le_succ n))) _ after _ (later values after reached)⟩
     intro wrong
     let ops := interpret round.members head
     apply round.charge ns binders M fns roles equalLaw ops.boundary ops.evaluate ops.ends ops.atPoint K s points positive
@@ -94,14 +109,14 @@ theorem boundsFromMembers (rounds : Sequence hs events state claim term count) (
     · intro m after received passed
       exact here m after received ((ops.ends m).trans (by rw [passed]))
     · intro m passed
-      exact ops.roots n x m (passed ▸ wrong)
+      exact ops.roots (Fin.last n) x m (passed ▸ wrong)
 
 theorem boundsOfMembers (rounds : Sequence hs events state claim term count) (law : MemberLaw hs t)
     (verified : rounds.AllMembers law) (M : Model V) [DecidableEq (M.Val t)]
     (fns : FnTable M hs.fns) (roles : RTable M hs.protocols) (q : Claims (M.Val t))
     (points : List (M.Val t)) (positive : 0 < points.length) (degree : Nat)
     (interpret : ∀ {msg st residual} (ops : Members hs t msg st residual), law ops →
-      RoundInterpretation M fns q points degree ops)
+      RoundInterpretationOn M fns q points degree ops (Fin.val (n := count)))
     (equalLaw : ScalarEquality.Law t events.equal events.equalType M) {σ : Type} (K : Experiment (RSig M) σ)
     (fresh : ∀ path key s, Fresh K points positive (challenge M events path key) s) (path : List Frame) :
     rounds.RoundBounds M fns roles K q (roundCost degree points) path := by

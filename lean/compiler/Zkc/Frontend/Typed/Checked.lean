@@ -38,15 +38,14 @@ structure Roles where
   senders : Std.HashMap NodeId Nat := {}
   deriving Inhabited
 
-/-- An occurrence of an event of a protocol body: the statement, the number of the event in the
-text (EV3), and the iteration of each loop in sequence around it, outermost first. With a part
-of the event (`value`, or `to R` for each receiver of a send to several) it is the key of a
-site: what the reference says identifies it. -/
-structure Occurrence where
-  node : NodeId
-  event : EventId
-  iteration : Array Nat := #[]
-  deriving Inhabited, BEq
+/-- Source-ordered events for emission and generated views. An empty loop has no Core
+instruction, but its sites still contribute empty collections to the source schema. -/
+inductive CheckedEvent where
+  | event (node : NodeId) (id : EventId) (what : Event) (iteration : Array Nat)
+      (nested : Bool) (realized : Bool)
+  /-- The zero-iteration body could not be typed apart. Its source sites are unresolved. -/
+  | untypedLoop (span : Span)
+  deriving Inhabited
 
 /-- A typed body after the passes. -/
 structure Checked where
@@ -54,7 +53,7 @@ structure Checked where
   definition : Definition
   roles : Roles := {}
   /-- The occurrences of its events, in the order of the tree. -/
-  occurrences : Array Occurrence := #[]
+  events : Array CheckedEvent := #[]
   deriving Inhabited
 
 end Zkc.Frontend.Typed

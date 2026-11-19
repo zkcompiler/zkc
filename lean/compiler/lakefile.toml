@@ -81,3 +81,8 @@ name = "zkc-audit"
 root = "Zkc.Tools.Audit.Main"
 allowNonModules = true
 needs = ["ZkcCore", "ZkcVocabulary", "ZkcCoreTests", "ZkcVocabularyTests"]
+
+[[lean_exe]]
+name = "zkc-knowledge"
+root = "Zkc.Tools.WrittenKnowledge"
+allowNonModules = true

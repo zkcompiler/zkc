@@ -19,7 +19,20 @@ test:
 test-interactive:
     cd lean/formal && lake build Zkc.Formal.Interactive Zkc.Tests.Formal.Interactive Zkc.Tests.Formal.Reuse.Controls Zkc.Tests.Formal.SourceHonestSumcheck
     cd lean/formal && lake lean checks/SourceProtocols.lean
+    cd lean/formal && lake lean checks/OracleNames.lean
+    cd lean/formal && lake lean checks/WorldObservation.lean
     cd lean/formal && lake env lean --run checks/AuditInteractive.lean
+
+# Build the public formal package and audit its dependencies and proof controls.
+test-formal:
+    cd lean/formal && lake build && lake test
+
+# Export the written knowledge claim and kernel-check the returning fork and source mutations.
+test-written-knowledge:
+    cd lean/compiler && lake build zkc-knowledge Zkc.Tools.Audit
+    cd lean/compiler && lake env lean --run Zkc/Tests/Frontend/ProtocolViews.lean
+    cd lean/formal && lake build Zkc.Formal.Written.GroupReplay Zkc.Formal.Written.FiniteModel Zkc.Tools.Formal.Policy
+    cd lean/formal && lake env python3 checks/written_knowledge.py
 
 # Audit the compiler package: the kernel's replay of the core, the vocabulary and their tests, no `sorry`, no axiom beyond `propext` and `Quot.sound`, the import rules.
 audit:

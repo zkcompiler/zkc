@@ -49,7 +49,7 @@ theorem verifierRound_le {S : Sig} {σ H F M : Type} [DecidableEq F]
     have drawBound := fresh m t reached passed (fun r => decide (evaluate m r = truth r))
     rw [FiniteLaw.uniform_event] at drawBound
     have cardBound := Mass.mul_le_mul_of_nonneg_right (Mass.natCast_le_natCast.mpr (roots m passed)) sign
-    simp only [Process.map_eq_bind, Experiment.expect_bind, Experiment.expect]
+    simp only [Process.map_eq_bind, Experiment.expect_bind, Experiment.expect_done]
     exact Mass.le_trans drawBound cardBound
   next => exact nonneg
 

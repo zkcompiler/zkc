@@ -59,8 +59,7 @@ def admitRoot (entry : SourceInput) (loader : Array String → IO (Option Source
     | throw (IO.userError "Core refused the emitted program")
   return ⟨id,s,emission,evidence⟩
 
-def sourceEvents (b : Emit.Bindings) : Zkc.Formal.Interactive.Sumcheck.ReductionRound.Events (sourceRows b).scalarTy :=
-  ⟨.inl (.field .equal .bls12381Fr .all),rfl,.uniform (.nominal (.field .bls12381Fr)),⟨_,rfl,rfl,rfl⟩⟩
+abbrev sourceEvents := Zkc.Formal.Written.SumcheckRows.sourceEvents
 
 private def gateMembers (b : Emit.Bindings) {hs : Headers b.vocabulary} (defs : Defs b.vocabulary hs)
     (unique : (hs.fns.map (·.key)).Nodup) {Γ : Ctx (LTy b.vocabulary)} {outs : List (LTy b.vocabulary)}
@@ -79,13 +78,7 @@ private def gateMembers (b : Emit.Bindings) {hs : Headers b.vocabulary} (defs : 
       (Zkc.Formal.Interactive.Sumcheck.Gate.check rows _ bound defs unique)).isSome
   else false
 
-def vectorRows (b : Emit.Bindings) (n : Nat) : Zkc.Formal.Interactive.Sumcheck.TableRestriction.Rows (sourceRows b).scalarTy n where
-  add := .inl (.seq .add (.atom (.field .bls12381Fr)) (some (2^n)))
-  sub := .inl (.seq .sub (.atom (.field .bls12381Fr)) (some (2^n)))
-  scale := .inl (.seq .scale (.atom (.field .bls12381Fr)) (some (2^n)))
-  addType := rfl
-  subType := rfl
-  scaleType := rfl
+abbrev vectorRows := Zkc.Formal.Written.SumcheckRows.vectorRows
 
 private def certifiedSumcheck (checked : CheckedRoot) (n : Nat := 10) : Option (Bool × Bool) := do
   let e := checked.emission
@@ -110,6 +103,16 @@ private def checkedRounds (checked : CheckedRoot) (callee : Key) (count : Nat) :
     ⟨2, (rfl : (Ctx.empty.extend (Zkc.Formal.Interactive.Sumcheck.ReductionRound.names
       (state := cert.state) (point := cert.point) (t := rows.scalarTy))).find? 2 = _)⟩
   let some rounds := sequence count cert.state running cert.first.atNames.body | none
+  let some (.protocol code) := checked.state.results.body? callee.number | none
+  let addresses ← Emit.SiteAddresses.forProtocol checked.evidence.admitted.program callee
+  let typedRounds := rounds.instances
+  for (name, operation) in [("round", 1), ("challenge", 5)] do
+    let source ← code.sites.find? (fun s => s.name == some name)
+    let sites := Typing.SiteEntry.realizations code.sites source.event source.part
+    let actual := (sites.extract 0 count).map addresses.resolve
+    let expected := typedRounds.map fun r =>
+      some ([(r.block, r.iteration)], r.checked.sites operation)
+    guard (actual.toList == expected)
   guard (!(sequence (count+1) cert.state running cert.first.atNames.body).isSome)
   let test := Zkc.Formal.Interactive.Sumcheck.ReductionRound.checkPairSequence rows cert.first.entry.definitions
     (List.nodup_append.mp cert.first.entry.distinct).1
@@ -178,6 +181,24 @@ private def checkStaleClaim (checked : CheckedRoot) (callee : Key) : IO Unit := 
     throw (IO.userError "the sequence certificate failed to distinguish using the initial claim in the second round")
   IO.println "Stale second claim admitted, first round certified, complete sequence refused"
 
+/-- An event of a stepped reduction keeps one source identity and all of its physical sites.
+Use the actual admitted Sumcheck and GKR callee; no fixed instruction numbering is assumed. -/
+private def checkRoundSites {V : Zkc.Core.Vocabulary} (program : Zkc.Core.Typed V) (state : Compile.State) (callee : Key) (n : Nat) : IO Unit := do
+  let some (.protocol code) := state.results.body? callee.number | throw (IO.userError "missing reduction")
+  let some addresses := Emit.SiteAddresses.forProtocol program callee | throw (IO.userError "missing admitted callee")
+  for name in ["round", "challenge"] do
+    let some first := code.sites.find? (fun s => s.name == some name) | throw (IO.userError s!"missing {name}")
+    let sites := Typing.SiteEntry.realizations code.sites first.event first.part
+    let places := sites.filterMap addresses.resolve
+    let keys := places.map (·.2)
+    unless places.map (fun p => (p.1.map Prod.snd).toArray) == sites.map (·.iteration) do
+      throw (IO.userError s!"{name} disagrees with its admitted block path")
+    unless sites.map (·.iteration) == (Array.range n).map (fun i => #[i]) &&
+        keys.size == n && keys.toList.eraseDups.length == n do
+      throw (IO.userError s!"{name} lost a stepped realization or reused its instruction key")
+    unless (Typing.SiteEntry.realizations code.sites first.event "nonexistent").isEmpty do
+      throw (IO.userError "lookup ignored the event part")
+
 private def checkExample (root : System.FilePath) (gkr : Bool) (variant : Variant)
     (fixedLayer : Bool := false) : IO Unit := do
   let file := if gkr then "examples/gkr_example.zkc" else "examples/sumcheck_example.zkc"
@@ -189,6 +210,16 @@ private def checkExample (root : System.FilePath) (gkr : Bool) (variant : Varian
   let some (.protocol _ _ _ _ region) := emission.named.definitions.find? (·.key == origin.definition)
     | throw (IO.userError "missing executable root")
   let [(site, callee, [0,1], 3)] := applications region | throw (IO.userError "unexpected Reduce application ABI")
+  if variant == .original then checkRoundSites program s callee (if gkr then 4 else 10)
+  if gkr && variant == .original then
+    let some (.protocol outer) := s.results.body? id | throw (IO.userError "missing GKR body")
+    let some addresses := Emit.SiteAddresses.forProtocol program ⟨id⟩ | throw (IO.userError "missing admitted GKR")
+    for name in ["q","t"] do
+      let some event := outer.sites.find? (fun x => x.name == some name) | throw (IO.userError s!"missing {name}")
+      let #[site] := Typing.SiteEntry.realizations outer.sites event.event event.part
+        | throw (IO.userError s!"expected a single static site for {name}")
+      unless site.iteration.isEmpty && (addresses.resolve site).any (·.1.isEmpty) do
+        throw (IO.userError s!"ordinary GKR loop acquired a stepped address")
   let [_, _] := program.headers.protocols | throw (IO.userError "unexpected reachable protocol table")
   let [_] := Member.withKey (·.key) callee program.headers.protocols | throw (IO.userError "callee absent in admitted table")
   unless instanceName s callee.number == "Reduce" do throw (IO.userError "unexpected callee")
@@ -345,6 +376,11 @@ private def checkOneRound (root : System.FilePath) : IO Unit := do
   IO.println "Complete one-round source verifier certified"
 
 def checkAll (root : System.FilePath) : IO Unit := do
+  let site : Typing.SiteEntry := ⟨0, "value", none, default, #[1], some 7⟩
+  let entries : List (List (Key × Nat) × Key) := [([(⟨2⟩,0)],⟨7⟩), ([(⟨3⟩,1)],⟨7⟩)]
+  unless (Emit.SiteAddresses.ofAddresses entries).resolve site == some ([(⟨3⟩,1)],⟨7⟩) &&
+      ((Emit.SiteAddresses.ofAddresses (([(⟨4⟩,1)],⟨7⟩) :: entries)).resolve site).isNone do
+    throw (IO.userError "ambiguous or shared instruction address handled incorrectly")
   for variant in [Variant.original, .rename, .affine, .reversed] do checkExample root false variant
   checkExample root true .original
   checkExample root true .original true

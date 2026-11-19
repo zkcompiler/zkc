@@ -75,9 +75,9 @@ theorem Certified.soundFrom (cert : Certified rows vectors p rootKey red eval n 
   unfold Experiment.probability
   rw [Experiment.expect_bind,Experiment.expect_mapR]
   rw [relation]
-  simp only [Process.map_eq_bind,Experiment.expect_bind,Experiment.expect]
+  simp only [Process.map_eq_bind,Experiment.expect_bind,Experiment.expect_done]
   have bounds := cert.linked.rounds.boundsFromMembers _ cert.roundLaws M _ _ Cube.claims points positive 1
-    (fun _ law => PairLaws.interpret rows law M math points distinct) equality (K.renamePeers peerMap.to) inner env s x fresh
+    (fun _ law => (PairLaws.interpret rows law M math points distinct).reindex Fin.val) equality (K.renamePeers peerMap.to) inner env s x fresh
   have bounded := cert.linked.rounds.soundFrom M _ _ (K.renamePeers peerMap.to) Cube.claims (roundCost 1 points) inner
     (Mass.mul_nonneg Mass.natCast_nonneg (Mass.le_of_lt (Mass.inv_pos.mpr (Mass.natCast_pos.mpr positive)))) env s x bounds wrong
   apply Mass.le_trans _ bounded
@@ -90,8 +90,8 @@ theorem Certified.soundFrom (cert : Certified rows vectors p rootKey red eval n 
   change K.expect _ (onReturn events cert.evaluate M cert.entry.definitions path (Cube.flatten n x) claim (leaveAll M peerMap 1 (PointReturn.values M rows.scalarTy (table rows.scalarTy 0) (0+n) rs v))) after ≤ _
   rw [guard]
   by_cases equal : v = answer
-  · simp [equal,Experiment.expect,good]
-  · simp [equal,Ne.symm equal,Experiment.expect,good]
+  · simp [equal,good]
+  · simp [equal,Ne.symm equal,good]
 
 /-- Public boundary for a Core-valid flat table and a false claim about its sum. -/
 theorem Certified.soundValid (cert : Certified rows vectors p rootKey red eval n events) (M : Model V)

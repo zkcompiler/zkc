@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Core.Process.Process
+public import Zkc.Formal.ProcessJudgment
 public import Zkc.Formal.Interactive.FiniteLaw
 
 @[expose] public section
@@ -16,12 +16,23 @@ structure Experiment (S : Sig) (σ : Type) where
 namespace Experiment
 variable {S : Sig} {σ H A B : Type} (K : Experiment S σ)
 
+/-- Interpret one effect using the reply law at the state where it occurs. -/
+def expectation : ProcessJudgment S (σ → Mass) where
+  node op next s := (K.answer op s).expect fun reply => next reply.1 reply.2
+
 /-- Unconditional expected payoff of the returned value and final state.
 Verifier stops, service aborts and missing replies contribute zero. -/
-def expect (post : A → σ → Mass) : Process S H A → σ → Mass
-  | .done a, s => post a s
-  | .halt _, _ => 0
-  | .call op next, s => (K.answer op s).expect fun reply => expect post (next reply.1) reply.2
+def expect (post : A → σ → Mass) (p : Process S H A) : σ → Mass :=
+  p.interpret K.expectation post (fun _ _ => 0)
+
+@[simp] theorem expect_done (post : A → σ → Mass) (a : A) (s : σ) :
+    K.expect (H := H) post (.done a) s = post a s := rfl
+
+@[simp] theorem expect_halt (post : A → σ → Mass) (h : H) (s : σ) :
+    K.expect post (.halt h) s = 0 := rfl
+
+theorem expect_call (post : A → σ → Mass) (op : S.Op) (next : S.Reply op → Process S H A) (s : σ) :
+    K.expect post (.call op next) s = (K.answer op s).expect (fun reply => K.expect post (next reply.1) reply.2) := rfl
 
 /-- A return reachable by a sequence of replies of positive weight. -/
 inductive Reaches : Process S H A → σ → A → σ → Prop where
@@ -30,12 +41,29 @@ inductive Reaches : Process S H A → σ → A → σ → Prop where
       (reply : (K.answer op s).Supports (r,t)) (tail : Reaches (next r) t a u) :
       Reaches (.call op next) s a u
 
+theorem Reaches.of_bind {S : Sig} {σ H A B : Type} {K : Experiment S σ}
+    {p : Process S H A} {next : A → Process S H B} {s u : σ} {b : B}
+    (found : K.Reaches (p.bind next) s b u) : ∃ a t, K.Reaches p s a t ∧ K.Reaches (next a) t b u := by
+  induction p generalizing s with
+  | done a => exact ⟨a,s,.done ..,found⟩
+  | halt why => cases found
+  | call op k ih =>
+    cases found with
+    | call reply tail =>
+      obtain ⟨a,t,first,later⟩ := ih _ tail
+      exact ⟨a,t,.call reply first,later⟩
+
+theorem Reaches.of_map {S : Sig} {σ H A B : Type} {K : Experiment S σ}
+    {p : Process S H A} {f : A → B} {s u : σ} {b : B} (found : K.Reaches (p.map f) s b u) :
+    ∃ a, K.Reaches p s a u ∧ f a = b := by
+  rw [Process.map_eq_bind] at found
+  obtain ⟨a,t,first,last⟩ := found.of_bind
+  cases last
+  exact ⟨a,first,rfl⟩
+
 theorem expect_bind (p : Process S H A) (next : A → Process S H B) (post : B → σ → Mass) (s : σ) :
     K.expect post (p.bind next) s = K.expect (fun a t => K.expect post (next a) t) p s := by
-  induction p generalizing s with
-  | done | halt => rfl
-  | call op k ih =>
-    exact congrArg (K.answer op s).expect (funext fun reply => ih reply.1 reply.2)
+  exact congrFun (p.interpret_bind K.expectation post (fun _ _ => 0) next) s
 
 theorem expect_mono (p : Process S H A) (s : σ) (f g : A → σ → Mass)
     (le : ∀ a t, K.Reaches p s a t → f a t ≤ g a t) : K.expect f p s ≤ K.expect g p s := by
@@ -53,7 +81,7 @@ theorem expect_add (p : Process S H A) (s : σ) (f g : A → σ → Mass) :
   | done => rfl
   | halt => exact (Mass.add_zero 0).symm
   | call op k ih =>
-    simp only [expect]
+    simp only [expect_call]
     rw [← FiniteLaw.expect_add]
     exact congrArg (K.answer op s).expect (funext fun reply => ih reply.1 reply.2)
 
@@ -63,7 +91,7 @@ theorem expect_scale (p : Process S H A) (s : σ) (f : A → σ → Mass) (c : M
   | done => rfl
   | halt => exact (Mass.zero_mul c).symm
   | call op k ih =>
-    simp only [expect]
+    simp only [expect_call]
     rw [← FiniteLaw.expect_scale]
     exact congrArg (K.answer op s).expect (funext fun reply => ih reply.1 reply.2)
 

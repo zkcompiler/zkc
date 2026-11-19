@@ -169,7 +169,7 @@ inductive ImportState where
 event, and its binder. -/
 structure Local where
   span : Span
-  site : Bool
+  site : Option String
   binder : LocalId
   deriving Inhabited
 
@@ -286,23 +286,22 @@ def madeBinder (span : Span) (origin : BinderOrigin) : ResolveM Binder := do
   newBinder s!"%{(← get).binders.size}" span origin
 
 /-- Puts a binder in scope in the innermost suite under its name. -/
-def enterLocal (name : Name) (binder : LocalId) (site : Bool) (static : Bool) : ResolveM Unit :=
+def enterLocal (name : Name) (binder : LocalId) (site : Option String) (static : Bool) : ResolveM Unit :=
   modify fun state => { state with
     locals := state.locals.insert name.text { span := name.span, site, binder }
     suites := state.suites.modify (state.suites.size - 1) (·.push name.text)
     statics := if static then state.statics.insert binder else state.statics }
 
 /-- Binds a local name in the innermost suite (NL2): a name already in scope, or the name of a
-static parameter in scope, is not bound again. `site` says that the name is the one-name binder
-of an event, which names its site: two events of one definition that share a name are refused
-by the rule of sites (EV3), which covers events in sibling suites too, and not here. A binder is
+static parameter in scope, is not bound again. Two event binders with the same site spelling
+already receive EV3. Distinct site names leave the ordinary binder check in force. A binder is
 made whether or not the name is bound. -/
-def bindLocal (env : Env) (name : Name) (site : Bool := false) (mutable : Bool := false)
+def bindLocal (env : Env) (name : Name) (site : Option String := none) (mutable : Bool := false)
     (static : Bool := false) : ResolveM Binder := do
   let binder ← newBinder name.text name.span (mutable := mutable)
   let state ← get
   if let some earlier := state.locals[name.text]? then
-    unless site && earlier.site do
+    unless site.isSome && site == earlier.site do
       refuseAt env.owner "NL2" name.span
         s!"`{name.text}` is already bound at line {earlier.span.startLine}; a local name is bound once"
   else if env.parameters.contains name.text then
@@ -314,7 +313,7 @@ def bindLocal (env : Env) (name : Name) (site : Bool := false) (mutable : Bool :
 /-- Binds a local name without the checks of NL2: a name a clause reads from the protocol. -/
 def addLocal (name : String) (span : Span) : ResolveM Binder := do
   let binder ← newBinder name span
-  enterLocal { span, text := name } binder.id false false
+  enterLocal { span, text := name } binder.id none false
   return binder
 
 /-! ## Roles -/

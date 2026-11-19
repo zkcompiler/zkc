@@ -291,7 +291,7 @@ def schemeWaits (env : Env) (node : Syntax.Scheme) : CompileM (Option String) :=
 /-- The protocol instance that a scheme names: a root of the package; and the scheme, with the
 suite of its `construction` line (`schemeSuite`) and the first line that waits (`schemeWaits`).
 The construction reads the rest (`Zkc.Frontend.Semantics.Scheme`). -/
-def schemeProtocol (file : FileId) (node : Syntax.Scheme) : CompileM Unit := do
+def schemeProtocol (declaration : DeclarationId) (file : FileId) (node : Syntax.Scheme) : CompileM Unit := do
   let env : Env := { file }
   let path := node.protocol
   match ← evalWrittenPath env path with
@@ -304,7 +304,7 @@ def schemeProtocol (file : FileId) (node : Syntax.Scheme) : CompileM Unit := do
     let suite ← schemeSuite env node
     let waits ← schemeWaits env node
     let scheme : SchemeEntry :=
-      { name := node.name.text, span := node.span, protocol := inst, lines := node.lines, suite, waits }
+      { declaration, name := node.name.text, span := node.span, protocol := inst, lines := node.lines, suite, waits }
     modifyResults fun results => { results with schemes := results.schemes.push scheme }
   | _ => pure ()
 
@@ -727,7 +727,7 @@ def checkProgram (instantiations : Array (FileId × Expr)) : CompileM Unit := do
   for id in [0:program.declarations.size] do
     let declaration := program.declarations[id]!
     if let .scheme node := declaration.node then
-      if own declaration then endItem (schemeProtocol declaration.file node)
+      if own declaration then endItem (schemeProtocol id declaration.file node)
 
 /-- The default instances of the public declarations that no root reaches (SP7). A root reaches
 a declaration through signatures and through bodies, so this runs after the bodies of what the
