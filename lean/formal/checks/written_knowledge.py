@@ -72,7 +72,7 @@ def source_consumer(name, fixture):
 
 
 def check(work):
-    names = ["Baseline", "Factored", "FactoredCompanion", "ReversedGap", "CalledSameLog", "Renamed", "Zero", "OtherRelation", "OtherVerifier", "Simulator", "Swapped",
+    names = ["Baseline", "SharedReplay", "Factored", "FactoredCompanion", "ReversedGap", "CalledSameLog", "Renamed", "Zero", "OtherRelation", "OtherVerifier", "Simulator", "Swapped",
              "SameLog", "RolesReversed", "Reordered", "MissingGuard", "ScalarGuard", "NativeOnly", "ProjectedGuards", "RunLength", "Context", "Named", "NamedArguments", "ReversedNumerator", "PrivateControl"]
     formal = ROOT / "lean/formal"
     (work / "lean-toolchain").write_text((formal / "lean-toolchain").read_text())
@@ -128,6 +128,17 @@ def gap_of<F: Field>(left: F, right: F) -> F:
     generate(factored, goal="fork", failure="WK-PROOF")
     (work / "FactoredCompanion.lean").write_text(Path(__file__).with_name("FactoredCompanion.lean.in").read_text())
     module("ReversedGap", replace_once(factored, "    x - y", "    y - x"))
+
+    # Each verifier instruction uses the preceding SSA result twice. Compile the
+    # actual returning-fork theorem through a chain long enough to expose inlining.
+    previous = "base"
+    doubled = []
+    for index in range(12):
+        result = f"doubled_{index}"
+        doubled.append(f"    {result} @V = {previous} + {previous}")
+        previous = result
+    guard = "    guard @V base * response == commitment + point * challenge"
+    module("SharedReplay", replace_once(original, guard, "\n".join([*doubled, guard])), proof=True)
 
     # A prover-only choice and a sampled loop are present in the admitted source.
     # Neither changes the verifier's run or its deciding role for the selected fork.
@@ -318,7 +329,7 @@ example : Named.selectedScheme = "Proof" ∧ Named.selectedGoal = some "chosen" 
         "public theorem exported : False := extra\nend AuditVendor\n")
     (work / "AuditLocal.lean").write_text("module\npublic import AuditVendor\n"
         "public theorem AuditLocal.fromExternal : False := AuditVendor.exported\n")
-    run(["lake", "-q", "build", "+AuditLocal", "+Checks", "+OddFork"], cwd=work)
+    run(["lake", "-q", "build", "+AuditLocal", "+Checks", "+OddFork", "+SharedReplay"], cwd=work)
     print(run(["lake", "-q", "lean", AUDIT], cwd=work), end="", flush=True)
     print("Checked admitted group certificates, the helper companion, permitted forks and source counterexamples.", flush=True)
 
