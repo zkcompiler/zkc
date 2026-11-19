@@ -72,7 +72,7 @@ def source_consumer(name, fixture):
 
 
 def check(work):
-    names = ["Baseline", "Renamed", "Zero", "OtherRelation", "OtherVerifier", "Simulator", "Swapped",
+    names = ["Baseline", "Factored", "FactoredCompanion", "ReversedGap", "CalledSameLog", "Renamed", "Zero", "OtherRelation", "OtherVerifier", "Simulator", "Swapped",
              "SameLog", "RolesReversed", "Reordered", "MissingGuard", "ScalarGuard", "NativeOnly", "ProjectedGuards", "RunLength", "Context", "Named", "NamedArguments", "ReversedNumerator", "PrivateControl"]
     formal = ROOT / "lean/formal"
     (work / "lean-toolchain").write_text((formal / "lean-toolchain").read_text())
@@ -113,6 +113,21 @@ def check(work):
     for name in ["DLog", "response_difference", "commitment", "challenge", "response"]:
         if f'("{name}",' not in base:
             raise RuntimeError(f"missing source provenance for {name}")
+
+    helpers = """def subtract_scalars<F: Field>(x: F, y: F) -> F:
+    x - y
+
+def gap_of<F: Field>(left: F, right: F) -> F:
+    subtract_scalars<F>(left, right)
+
+"""
+    factored = replace_once(original, "pub def response_difference", helpers + "pub def response_difference")
+    factored = replace_once(factored, "runs[0].challenge - runs[1].challenge",
+                            "gap_of<G::Scalar>(runs[0].challenge, runs[1].challenge)")
+    (work / "Factored.lean").write_text(generate(factored, proof=False, namespace="Factored", goal="fork"))
+    generate(factored, goal="fork", failure="WK-PROOF")
+    (work / "FactoredCompanion.lean").write_text(Path(__file__).with_name("FactoredCompanion.lean.in").read_text())
+    module("ReversedGap", replace_once(factored, "    x - y", "    y - x"))
 
     # A prover-only choice and a sampled loop are present in the admitted source.
     # Neither changes the verifier's run or its deciding role for the selected fork.
@@ -179,6 +194,33 @@ spec for Schnorr:""")
 
     same_log = CHAUM_PEDERSEN.read_text()
     same_log_module = module("SameLog", same_log, proof=True, same_log=True)
+    called = replace_once(same_log, "section <G: PrimeOrderGroup>:", """enum Flag:
+    Active(bool)
+    Inactive
+
+def same_boolean(value: bool) -> bool:
+    mut result = false
+    flag = Flag::Active(value)
+    match flag:
+        case Flag::Active(b):
+            for _ in 0..2:
+                result := b
+        case Flag::Inactive:
+            result := false
+    return result
+
+section <G: PrimeOrderGroup>:""")
+    called = replace_once(called, "    relation SameLog", """    def scaled(base: G, x: G::Scalar) -> G:
+        base * x
+
+    def same_point(left: G, right: G) -> bool:
+        same_boolean(left == right)
+
+    relation SameLog""")
+    called = replace_once(called, "u == g * x and v == h * x",
+                          "same_point(u, scaled(g, x)) and same_point(v, scaled(h, x))")
+    called = replace_once(called, "guard @V g * z == a", "guard @V scaled(g, z) == a")
+    module("CalledSameLog", called, same_log=True)
     roles_reversed = replace_once(same_log, "roles(P, V)", "roles(V, P)")
     roles_reversed = replace_once(roles_reversed, "    construction derived", "    prover P\n    construction derived")
     module("RolesReversed", roles_reversed, proof=True, same_log=True)
@@ -255,7 +297,7 @@ module secondary:
 
     controls.write_text("\n".join(["module", "", *imports, "", CONTROL.read_text(),
                                    *(source_consumer(name, fixture) for name, fixture in
-                                     [("Baseline", "Baseline"), ("SameLog", "SameLog"), ("Context", "Baseline"),
+                                     [("Baseline", "Baseline"), ("Factored", "Baseline"), ("SameLog", "SameLog"), ("Context", "Baseline"),
                                       ("Named", "Baseline"), ("NamedArguments", "Baseline"), ("RolesReversed", "RolesReversed")]),
                                    """
 open Zkc.Formal.Written.FiniteModel in
@@ -278,7 +320,7 @@ example : Named.selectedScheme = "Proof" ∧ Named.selectedGoal = some "chosen" 
         "public theorem AuditLocal.fromExternal : False := AuditVendor.exported\n")
     run(["lake", "-q", "build", "+AuditLocal", "+Checks", "+OddFork"], cwd=work)
     print(run(["lake", "-q", "lean", AUDIT], cwd=work), end="", flush=True)
-    print("Checked both admitted certificates, permitted forks, and four source counterexamples.", flush=True)
+    print("Checked admitted group certificates, the helper companion, permitted forks and source counterexamples.", flush=True)
 
     failed = work / "Rejected.lean"
     for name, issued in [("Baseline", base), ("SameLog", same_log_module)]:

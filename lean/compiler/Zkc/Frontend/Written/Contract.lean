@@ -71,7 +71,7 @@ def checkedClause (label : String) (s : Compile.State) (id : DeclarationId) (arg
     | .defect why | .waiting why | .noCoreForm why => s!"{at_.file}:{at_.render}: WK-FUNCTION: {why}"
   let package := emitted.package ⟨[],[],[],[],[]⟩
   let .ok evidence := package.checkEvidence | refuse at_ "WK-FUNCTION" "admission refused the selected function"
-  return (← functionDeclarations label package evidence, s)
+  return (← functionDeclarations label ⟨inst⟩ package evidence, s)
 
 structure WrittenParties where
   interactive : Bool

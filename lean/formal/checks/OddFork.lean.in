@@ -2,6 +2,9 @@ module
 
 public import Baseline
 public import SameLog
+public import FactoredCompanion
+public import ReversedGap
+public import CalledSameLog
 public import ReversedNumerator
 public import Zkc.Formal.Written.PrimeFive
 
@@ -58,6 +61,30 @@ theorem reversed_numerator :
         some (3 : Scalar) ∧ Baseline.coreRelation M schnorr (3 : Scalar) = some false := by
   refine ⟨?_, (Baseline.relation_agrees M ops rows fieldRows schnorr (3 : Scalar)).trans (by decide +kernel)⟩
   apply @of_decide_eq_true _ ((inferInstance : DecidableEq (Option Scalar)) _ _)
+  decide +kernel
+
+/-- The same typed call edges appear in both extractors. Changing only the innermost
+subtraction changes the witness on this returning fork. -/
+theorem helper_operands :
+    Factored.coreExtractor M schnorr (0 : Scalar) left right = some (2 : Scalar) ∧
+    ReversedGap.coreExtractor M schnorr (0 : Scalar) left right = some (3 : Scalar) := by
+  have same := (Factored.extractor_agrees M ops rows fieldRows schnorr (0 : Scalar) left right).trans
+    (Baseline.extractor_agrees M ops rows fieldRows schnorr (0 : Scalar) left right).symm
+  refine ⟨same.trans compiled_witnesses.1, ?_⟩
+  apply @of_decide_eq_true _ ((inferInstance : DecidableEq (Option Scalar)) _ _)
+  decide +kernel
+
+-- Each root carries only its reachable definitions. Both conjuncts share the same callees.
+example : CalledSameLog.stored.definitions.length = 2 ∧
+    CalledSameLog.storedRelation.definitions.length = 4 ∧
+    CalledSameLog.storedExtractor.definitions.length = 1 ∧
+    Factored.storedExtractor.definitions.length = 3 := by decide
+
+/-- Calls in the projected verifier and relation evaluate with their own tables. -/
+theorem sameLog_helpers :
+    CalledSameLog.replayCheck M sameLog [] commitment left = some () ∧
+    CalledSameLog.coreRelation M sameLog (2 : Scalar) = some true ∧
+    CalledSameLog.coreRelation M sameLog (3 : Scalar) = some false := by
   decide +kernel
 
 theorem zero_refinement :

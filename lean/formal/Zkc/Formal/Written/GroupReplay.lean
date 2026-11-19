@@ -28,16 +28,16 @@ private def typeTerm (t : Standard.Ty) : Except String String :=
 private def valueStep (role : Nat) (who : List Role) (types : List Standard.Ty) (values : List String) (proof := "rfl") :
     Except String String := do
   let mid ← types.mapM fun t => do return s!"⟨{← typeTerm t}, {numbers who}⟩"
-  return s!"refine afterValue (D := roleDialect V ⟨[],[]⟩ {role}) (sem := sem) (mid := [{", ".intercalate mid}]) {consList values} (by {proof}) ?_"
+  return s!"refine afterValue (D := roleDialect V _ {role}) (sem := sem) (mid := [{", ".intercalate mid}]) {consList values} (by {proof}) ?_"
 
 private def replyStep (role : Nat) (who : List Role) (ty op reply : String) :=
-  s!"refine afterReply (D := roleDialect V ⟨[],[]⟩ {role}) (sem := sem) (mid := [⟨{ty}, {numbers who}⟩]) (show ROp M from {op}) {reply} (fun x => .cons x .nil) (by rfl) ?_"
+  s!"refine afterReply (D := roleDialect V _ {role}) (sem := sem) (mid := [⟨{ty}, {numbers who}⟩]) (show ROp M from {op}) {reply} (fun x => .cons x .nil) (by rfl) ?_"
 
 /-- Read only the admitted program's erasure. Every hinted value, including every tuple
 projection, is checked by conversion against the corresponding projected typed instruction. -/
 private def plan (program : NamedProgram Standard) (role : Role) (replies : List String)
     (localName : Nat → String) : Except String ReplayPlan := do
-  let [.protocol _ _ ports [] (.mk inputs steps [])] := program.definitions | throw "expected a closed straight-line verifier"
+  let some (.protocol _ _ ports [] (.mk inputs steps [])) := program.definitions.getLast? | throw "expected a closed straight-line verifier"
   let publicInputs := (inputs.zip ports).filter (fun (_, p) => p.holders.contains role)
   let mut env := publicInputs.zipIdx.map fun ((n,_),i) => (n, component "s" i (i+1 == publicInputs.length))
   let mut plan : ReplayPlan := {}

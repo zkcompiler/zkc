@@ -19,14 +19,16 @@ def checkCertificates : IO Unit := do
     throw (IO.userError "axiom traversal missed a private upstream dependency")
   let env ← importModules #[{module := `Checks}, {module := `OddFork}] {} (loadExts := false)
     (level := .private) (arts := artifacts)
-  let libraries := roots.map fun root => ({name := root.toString, root} : Library)
+  let libraries := (roots.push `FactoredCompanion).map fun root => ({name := root.toString, root} : Library)
   let (finding, lines) ← replay env libraries artifacts Zkc.Tools.Formal.policy.packages
   for line in lines do IO.println line
   if let some failure := finding then
     throw (IO.userError failure.line)
   let issuances := roots.flatMap fun root =>
     #[`certified_source_admitted, `certified_core_admitted, `admitted_exists, `RelationAdmitted, `ExtractorAdmitted].map (root ++ ·)
-  let theorems := issuances ++ #[`Named.certified_source_admitted, `Context.certified_source_admitted,
+  let theorems := issuances ++ #[`Factored.certified_source_admitted, `Factored.challenge_gap,
+    `Factored.admitted_exists, `Factored.RelationAdmitted, `Factored.ExtractorAdmitted,
+    `OddFork.helper_operands, `OddFork.sameLog_helpers, `Named.certified_source_admitted, `Context.certified_source_admitted,
     `Reordered.certified_core_admitted, `RolesReversed.certified_source_admitted,
     `ScalarGuard.certified_core_admitted,
     `WrittenControls.missing_compiled_guard, `WrittenControls.compiled_wrong_extractor,
