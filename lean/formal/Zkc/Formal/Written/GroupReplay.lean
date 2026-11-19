@@ -11,6 +11,7 @@ namespace Zkc.Formal.Written
 open Zkc.Core Lean Elab Tactic Meta
 
 private inductive ReplayStep where
+  | value (name term : String)
   | instruction (script : String)
   | guard (script : String)
 
@@ -34,7 +35,8 @@ private def replyStep (role : Nat) (who : List Role) (ty op reply : String) :=
 
 /-- Read only the admitted program's erasure. Every hinted value, including every tuple
 projection, is checked by conversion against the corresponding projected typed instruction. -/
-private def plan (program : NamedProgram Standard) (role : Role) (replies : List String) : Except String ReplayPlan := do
+private def plan (program : NamedProgram Standard) (role : Role) (replies : List String)
+    (localName : Nat → String) : Except String ReplayPlan := do
   let [.protocol _ _ ports [] (.mk inputs steps [])] := program.definitions | throw "expected a closed straight-line verifier"
   let publicInputs := (inputs.zip ports).filter (fun (_, p) => p.holders.contains role)
   let mut env := publicInputs.zipIdx.map fun ((n,_),i) => (n, component "s" i (i+1 == publicInputs.length))
@@ -82,8 +84,18 @@ private def plan (program : NamedProgram Standard) (role : Role) (replies : List
           pure ([t], ["()"])
         | _ => throw "uninterpreted local computation"
       unless types.length == outs.length && values.length == outs.length do throw "unexpected result arity"
-      plan := {plan with steps := plan.steps.push (.instruction (← valueStep role who types values proof))}
-      env := outs.zip values ++ env
+      -- Keep the admitted SSA sharing in the proof term. A row using an operand twice
+      -- should refer to the same let-bound value at both argument positions.
+      let mut uses := #[]
+      for value in values do
+        if who.contains role then
+          let name := localName plan.steps.size
+          plan := {plan with steps := plan.steps.push (.value name value)}
+          uses := uses.push name
+        else
+          uses := uses.push value
+      plan := {plan with steps := plan.steps.push (.instruction (← valueStep role who types uses.toList proof))}
+      env := outs.zip uses.toList ++ env
     | .op k [out] (.event (.flow .message prover [peer]) t) _ =>
       unless role == peer do throw "unexpected message recipient"
       let x :: rest := remaining | throw "missing trace reply"
@@ -125,7 +137,11 @@ private unsafe def readPlan (stored : Syntax) (role : Nat) (replies : Array (TSy
   let rendered ← replies.toList.mapM fun x => do
     let some source := x.raw.reprint | throwErrorAt x "expected a printable reply term"
     return "(" ++ source ++ ")"
-  ofExcept (plan program role rendered)
+  let locals ← getLCtx
+  let spelling := " ".intercalate (rendered ++ (locals.decls.toList.filterMap id).map (·.userName.toString))
+  let mut prefix_ := "_zkcReplayValue"
+  while spelling.contains prefix_ do prefix_ := prefix_ ++ "_"
+  ofExcept (plan program role rendered (fun i => s!"{prefix_}{i}"))
 
 private def runStep (step : String) : TacticM Unit := do
   evalTactic (← ofExcept (Parser.runParserCategory (← getEnv) `tactic step))
@@ -134,6 +150,8 @@ syntax (name := writtenGuards) "written_guards " term:max num " replies " "[" te
 @[tactic writtenGuards] unsafe def guardsTac : Tactic := fun stx => withMainContext do
   let result ← readPlan stx[1] stx[2].isNatLit?.get! (stx[5].getSepArgs.map (⟨·⟩))
   let prop := result.guards.foldr (fun test tail => s!"{test} = true ∧ {tail}") "True"
+  for step in result.steps do
+    if let .value name term := step then runStep s!"let {name} := {term}"
   runStep s!"exact ({prop})"
 
 syntax (name := writtenSteps) "written_steps " term:max num " replies " "[" term,* "]" : tactic
@@ -141,6 +159,7 @@ syntax (name := writtenSteps) "written_steps " term:max num " replies " "[" term
   let result ← readPlan stx[1] stx[2].isNatLit?.get! (stx[5].getSepArgs.map (⟨·⟩))
   for step in result.steps do
     match step with
+    | .value name term => runStep s!"let {name} := {term}"
     | .instruction script =>
       runStep "expose_cursor"
       runStep script
