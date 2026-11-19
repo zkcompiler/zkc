@@ -7,14 +7,18 @@ import subprocess
 
 ALL = ("test", "test-interactive", "test-written-knowledge", "test-formal")
 CHARGE_CHECKS = {"WrittenCharge.lean", "ChargeConsumers.lean", "OccurrenceDepth.lean",
-                 "FixedTableSampling.lean", "AuditCharge.lean", "ReplayCharge.lean"}
+                 "FixedTableSampling.lean", "AuditCharge.lean", "ReplayCharge.lean",
+                 "ProofArguments.lean", "SumcheckGoal.lean", "SourceRoundLaws.lean", "ReductionLayout.lean"}
 INTERACTIVE_CHECKS = {"AuditInteractive.lean", "OracleNames.lean", "WorldObservation.lean",
-                      "SourceProtocols.lean"}
+                      "SourceProtocols.lean", "ConstructedSchnorr.lean", "constructed_merlin.py"}
 
 
 def select(paths):
     recipes = set()
     for path in map(PurePosixPath, paths):
+        if path.as_posix() in {"language/LANGUAGE.md", "language/CORE-LIBRARY.md"}:
+            recipes.add("test-frontend")
+            continue
         if path.suffix == ".md" or path.parts[0] == "docs":
             continue
         if path.as_posix() in {"lean/formal/Zkc/Tools/Formal/DrawCharge.lean",
@@ -34,7 +38,9 @@ def select(paths):
         # Compiler, formal libraries, source assemblies, manifests and harnesses
         # cross suite boundaries. Include new and unclassified inputs by default.
         return ALL
-    return tuple(recipe for recipe in (*ALL, "test-written-charge") if recipe in recipes)
+    if "test-written-knowledge" in recipes:
+        recipes.discard("test-frontend")
+    return tuple(recipe for recipe in (*ALL, "test-written-charge", "test-frontend") if recipe in recipes)
 
 
 def select_diff(base, head):

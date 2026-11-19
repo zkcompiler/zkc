@@ -28,6 +28,11 @@ class FormalSelection(unittest.TestCase):
         self.assertEqual(select([issuer]), ("test-written-charge",))
         self.assertEqual(select([issuer, "lean/compiler/Zkc/Frontend/Written/Root.lean"]), all_suites)
 
+    def test_machine_read_language_reference(self):
+        for path in ("language/LANGUAGE.md", "language/CORE-LIBRARY.md"):
+            self.assertEqual(select([path]), ("test-frontend",))
+            self.assertEqual(select([path, "lean/formal/checks/OddFork.lean.in"]), ("test-written-knowledge",))
+
     def test_documentation(self):
         self.assertEqual(select(["docs/development.md", "docs/figures/verifier.svg", "README.md", "lean/formal/README.md"]), ())
 

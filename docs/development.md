@@ -145,7 +145,7 @@ not fetch external links.
 ## CI
 
 Every pull request to `main` and push to `main` runs the three checks in `just check` and
-the suite-selection tests. Required CI also depends on the selected Lean recipes succeeding.
+the suite-selection tests. Changes to machine-read language and property tables also run frontend conformance. Required CI also depends on the selected Lean recipes succeeding.
 The selector compares the PR base with the tested merge commit, or the push's before and
 after trees, including both paths of a rename. A change confined to Markdown and the documentation directory finishes here.
 
