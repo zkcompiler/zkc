@@ -181,20 +181,21 @@ those rules with a service request, fixed handle identity and an explicit openin
 a test with two tables and a failed opening before extending the declaration of support.
 [Core shapes](../lean/compiler/Zkc/Core/Program/Shape.lean) · [Source oracle boundary](../lean/compiler/Zkc/Frontend/Elab/Events.lean)
 
-**Schemes.** Name resolution of a scheme or a successful construction-line check does not run
-a deployment. Rebuild stage execution around the admitted header, Core's selection of online
-roles and its statement and witness, reusing the authored suite, layout and key information.
-The written group certificates check the declared endpoints through Core's online-role
-selection and expose equalities for statement and witness types. The first deployment
-test should run one transcript handler and check its challenge at its real address. Theorems
-about Fiat–Shamir require a stated adversary, query budget and reduction. The legacy scheme
-modules and descriptive examples are inputs to that redesign. Role selection still needs source elaboration for offline and ideal roles in larger schemes. [Scheme role definitions](../lean/compiler/Zkc/Core/Scheme/Roles.lean)
+**Schemes.** The constructed Schnorr verifier selects the authored suite, admitted header,
+role and sites, installs the Core handler stack and checks the Merlin query on the actual
+verifier execution. The experiment takes a deployment identity and byte encoders.
+Offline and ideal roles in larger schemes, a querying adversary, and a Fiat–Shamir
+security reduction still need separate semantics and proofs.
+[Constructed verifier](../lean/compiler/Zkc/Frontend/Constructed/Schnorr.lean) · [Execution controls](../lean/formal/checks/ConstructedSchnorr.lean)
 
 ## Delivery and evidence
 
-The contract representation and sender-local length checks are in production. Next exercise
-the closed contract interface on a repeated draw, followed by a fixed-table opening. A deployed transcript handler and its
-Fiat–Shamir security reduction each need their own acceptance evidence.
+The contract representation, sender-local length checks, repeated Sumcheck draw charges,
+written ideal-table example and single constructed Schnorr execution each have a source
+regression. The named soundness goal checks the actual root and its requested ceiling.
+The table result assumes an ideal opening service and independent sampling. Generalizing
+these checks to other services and adversarial games remains open.
+[Current evidence and assumptions](status.md)
 
 1. The resolved contract and goal now feed the written consumer. SX5 checks ownership and
    uniqueness during ordinary resolution. The compiler and both references share a checked
