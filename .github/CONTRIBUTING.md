@@ -47,9 +47,8 @@ to `main` directly. Branch names are short and topical — `feat/…`, `fix/…`
    [development guide](../docs/development.md) describes. Every change runs
    `just check`. A change to the Lean packages, the language reference, the
    libraries or the examples also runs `just test`, or the part of it that
-   the change affects, locally. CI runs only `just check`; it does not build
-   or test the Lean packages. State what you ran and its result in the pull
-   request.
+   the change affects, locally. Required CI also runs the Lean suites selected for the changed
+   paths. State what you ran and its result in the pull request.
 2. Open the pull request and write its title and body as described below.
    The [pull request template](PULL_REQUEST_TEMPLATE.md) gives the sections.
 3. Respond to review on the branch. What review confirms is fixed in the

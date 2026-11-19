@@ -1,6 +1,4 @@
 import Zkc.Tools.Formal.DrawCharge
-import Zkc.Tools.Formal.Policy
-import Zkc.Tools.Audit.Controls.Axiom
 import Zkc.Tests.Formal.Reuse.Automatic
 
 open Zkc.Core Zkc.Frontend Zkc.Tools.Formal Zkc.Tests.Formal
@@ -171,22 +169,3 @@ example : prEvent (observed yes <$> run (service (slots false)) agree none) = (1
   norm_num
 
 end RepeatedCoin
-
-open Lean Zkc.Tools.Audit in
-#eval show IO Unit from do
-  initSearchPath (← findSysroot)
-  let artifacts ← zkcArtifacts (← searchPathRef.get)
-  let env ← importModules #[{module := `Zkc.Tools.Formal.DrawCharge}, {module := `Zkc.Tools.Audit.Controls.Axiom}]
-    {} (level := .private) (loadExts := false) (arts := artifacts)
-  let authorized (names : Array Lean.Name) := do
-    for name in names do
-      unless (env.find? name).any (· matches .thmInfo _) do throw (IO.userError s!"missing theorem {name}")
-    let (axioms,_,_) := dependencies env names
-    IO.println s!"{names}: axioms {axioms}"
-    return axioms.all Zkc.Tools.Formal.policy.axioms.contains
-  unless ← authorized #[`Zkc.Tools.Formal.ChargedSumcheck.primeBound, `Zkc.Tools.Formal.ChargedLayer.bound] do
-    throw (IO.userError "published charge theorem exceeds the formal axiom policy")
-  let some control := env.constants.toList.findSome? (fun (n,info) =>
-    if (privateToUserName n) == `Zkc.Tools.Audit.Controls.fromAxiom && info matches .thmInfo _ then some n else none)
-    | throw (IO.userError "missing extra-axiom control")
-  if ← authorized #[control] then throw (IO.userError "failed to reject an extra axiom")

@@ -21,5 +21,5 @@ Read `AGENTS.local.md` if present.
 ## Validation
 
 - Use [the development guide](docs/development.md) for the layout and the commands: `just build`, `just test`, `just audit` and `just check`.
-- `just check` needs no build and is what CI runs. `just test` is expensive; choose the validation scope to suit the change.
+- `just check` needs no build and runs in CI for every change. `just test` is expensive; choose the validation scope to suit the change.
 - For Lean development, start with focused checks and incremental builds. Reuse valid results and avoid redundant checks; run expensive integration checks after changes stabilize, and repeat validation when relevant changes, failures, or unresolved concerns justify it.

@@ -43,8 +43,8 @@ Run every command from the root of the repository.
 | `just test-interactive` | build the interactive formal modules, check emitted source entries and mutations, and audit the interactive library and its mathematical controls |
 | `just test-frontend` | parse and format the source corpus, compare assembly and name diagnostics with the reference, and check typed generated views |
 | `just test-written-knowledge` | compile both Schnorr and Chaum–Pedersen written clauses, check admission and extraction, consume the public theorems, replay their project imports, and test permitted forks, source mutations and diagnostics |
-| `just test-written-charge` | issue and audit the two source-bound probability endpoints, check depth-specific member laws and exercise independent fixed-table sampling |
-| `just test-formal` | build the default formal package, replay its project modules and check their transitive axioms |
+| `just test-written-charge` | compile both source examples, consume their numerical probability bounds, replay the charge issuer and check depth-specific member laws and fixed-table sampling |
+| `just test-formal` | build and audit the formal library, tests and charge issuer together, then run the charge examples and type consumers |
 | `just audit` | `lake exe zkc-audit` in `lean/compiler`: core, vocabulary and their tests |
 | `just check` | the checks that need no build: `bash .github/scripts/public-tree-guard.sh`, `python3 scripts/check_docs.py --all`, and `python3 lean/compiler/scripts/generate_unicode_tables.py --check` |
 
@@ -124,6 +124,16 @@ and fails if any expected result changes. Private declarations are loaded from
 `.olean.private`; the controls also check private native attributes. The
 [compiler guide](../lean/compiler/README.md#build-test-and-audit) describes the entry points.
 
+The formal audit adds `Zkc.Tools.Formal.DrawCharge` as a replay root. Both
+`lake test` in the formal package and `just test-written-charge` check the issuer and its
+project import closure through the kernel. The formal policy takes Lean and the pinned
+Mathlib and VCVio import closures as built, checks for project modules in the upstream
+closure before replay, and follows proof dependencies through those libraries for axioms.
+It permits `propext`, `Quot.sound` and `Classical.choice`. The focused audit loads controls
+separately and requires the private extra axiom and the imported unchecked proof to be refused
+by their respective rules. A control also attempts to preload the unchecked module through
+the prebuilt set and requires the replay boundary to reject it. See the [formal package guide](../lean/formal/README.md).
+
 ### The documents
 
 `python3 scripts/check_docs.py --all` checks the Markdown of the repository: every local link
@@ -134,9 +144,23 @@ not fetch external links.
 
 ## CI
 
-CI runs on every pull request to `main` and every push to `main`. It runs only the checks that
-need no build: the public tree guard, the document checker and the check of the generated
-Unicode tables, the commands of `just check`.
-It does not build or test the Lean packages. The author of a change verifies the Lean packages
-locally with `just test`, or with the part of it that the change affects, and states the result
-in the pull request, as the [contribution guide](../.github/CONTRIBUTING.md) describes.
+Every pull request to `main` and push to `main` runs the three checks in `just check` and
+the suite-selection tests. Required CI also depends on the selected Lean recipes succeeding.
+The selector compares the PR base with the tested merge commit, or the push's before and
+after trees, including both paths of a rename. A change confined to Markdown and the documentation directory finishes here.
+
+Changes to the charge issuer or its harness run `just test-written-charge`. Changes confined
+to the interactive or written-knowledge harness run their corresponding recipes. Changes to
+shared compiler or formal modules, source assemblies, package pins, recipes and CI itself run
+`just test`, `just test-interactive`, `just test-written-knowledge` and `just test-formal`
+in sequence. The last includes the charge checks. Unclassified inputs select all four suites.
+
+Before restoring dependencies or provisioning tools, the formal step verifies the runner
+account and cgroup, the CI workspace and scratch paths, the private Nix store and daemon
+configuration, and 80 GiB of free disk. The service limits the combined jobs to four CPUs,
+32 GiB RAM and zero swap. Pinned Nixpkgs provides elan and just. The Actions cache holds the
+selected Lean toolchain and external Lake packages, keyed on the OS, architecture, toolchain
+files, Lake configurations, manifests and whether the job uses the quantitative library.
+Project modules build in the checked-out workspace. On a cold quantitative run, Lake lists the
+proof roots' transitive imports so the job can request their missing Mathlib artifacts.
+The job has a three-hour limit including provisioning and cold builds.
