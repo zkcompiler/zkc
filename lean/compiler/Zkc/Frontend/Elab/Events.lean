@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Frontend.Elab.Terms
+public import Zkc.Frontend.Static.Specification
 
 @[expose] public section
 
@@ -110,7 +111,7 @@ def elabApplication (span : Span) (event : EventId) (binder : Option Lowered.Bin
   let calleeText ← textOf calleeSpan
   let .declaration steps scopes ← calleeOf callee
     | refuseHere "EV1" span s!"`{calleeText}` is no protocol: an event stands on its own `<-` line"
-  let some (id, lastArgs) := steps.back? | throw .abandoned
+  let some (id, _) := steps.back? | throw .abandoned
   let found ← liftM (declaration id : CompileM Declaration)
   unless found.kind == .protocol do
     if found.kind == .function then
@@ -118,42 +119,51 @@ def elabApplication (span : Span) (event : EventId) (binder : Option Lowered.Bin
     refuseHere "EV1" span s!"`{calleeText}` is {Names.kindWord found.kind}: only a protocol is applied"
   let .protocol head _ _ := (← loweredOf id).content | throw .abandoned
   -- the specification ports take a specification argument each (SX4, RM3)
-  let specificationPorts := head.ports.filter (·.specification)
-  for port in specificationPorts do
-    unless arguments.any (fun | .spec _ given _ => given.text == port.binder.name | _ => false) do
-      refuseHere "SX4" span
-        s!"`{calleeText}` has the specification port `{port.binder.name}`; write `spec {port.binder.name} = …`"
+  let specificationNames := (head.ports.filter (·.specification)).map (·.binder.name)
+  let mut namedSpec := #[]
   for argument in arguments do
-    if let .spec argumentSpan given _ := argument then
-      unless specificationPorts.any (·.binder.name == given.text) do
+    match argument with
+    | .spec argumentSpan given value =>
+      unless specificationNames.contains given.text do
         refuseHere "RM3" argumentSpan s!"`{calleeText}` has no specification port `{given.text}`"
+      namedSpec := namedSpec.push (.named argumentSpan given value)
+    | .named argumentSpan .. | .positional argumentSpan .. =>
+      unless namedSpec.isEmpty do
+        refuseHere "RM3" argumentSpan "value arguments precede specification arguments"
+  let specValues ← match Lowered.pairValueArguments calleeText specificationNames namedSpec span with
+    | .ok values => pure values
+    | .error (where_, message) => refuseHere "SX4" where_ message
   -- every specification-only parameter of the callee is given by a specification argument, and a
   -- deployed static argument reads none (SP11); a parameter of a scope that the caller shares
   -- with the callee is the caller's own
   let state ← getThe Compile.State
   let context ← getContext
   let caller := state.program.declarations[state.table.entries[context.instance]!.key.declaration]!
-  for (reference, parameter) in specificationParameters state.program found do
-    if caller.scopes.contains reference.scope then continue
-    unless (lastArgs.getD #[]).any (fun | .spec _ name _ => name == parameter.name.text | _ => false) do
-      refuseHere "SP11" span
-        s!"`{calleeText}` has the specification-only parameter `{parameter.name.text}`; give it after the other static arguments: `spec {parameter.name.text} = …`"
+  let supplied := steps.flatMap fun (_, args) => (args.getD #[]).filterMap fun
+    | .spec at_ name term => some (at_, name, term)
+    | _ => none
+  let env ← staticEnv
+  let proofArguments ← liftM (specificationClosure env found supplied caller.scopes span : CompileM _)
   deployedStaticArguments steps
   -- the role map, by name (RM1)
   let roster := context.roster.getD #[]
+  let mut explicitRoles : Std.HashMap String Nat := {}
+  for (name, role) in written do
+    unless head.roster.contains name.text do
+      refuseHere "RM1" name.span s!"`{calleeText}` has no role {name.text}"
+    if explicitRoles.contains name.text then
+      refuseHere "RM1" name.span s!"the role map of `{calleeText}` binds {name.text} twice"
+    explicitRoles := explicitRoles.insert name.text role
   let mut roleMap : Array Nat := #[]
   for name in head.roster do
-    match written.find? (·.1.text == name) with
-    | some (_, role) => roleMap := roleMap.push role
+    match explicitRoles[name]? with
+    | some role => roleMap := roleMap.push role
     | none =>
       match roster.findIdx? (· == name) with
       | some index => roleMap := roleMap.push index
       | none =>
         refuseHere "RM1" span
           s!"role {name} of `{calleeText}` has no namesake in `{context.name}`: write `@({name} = …)`"
-  for (name, _) in written do
-    unless head.roster.contains name.text do
-      refuseHere "RM1" name.span s!"`{calleeText}` has no role {name.text}"
   for index in [0:roleMap.size] do
     if (roleMap.extract 0 index).contains roleMap[index]! then
       refuseHere "RM1" span s!"the role map of `{calleeText}` gives {← roleName roleMap[index]!} two roles"
@@ -162,12 +172,13 @@ def elabApplication (span : Span) (event : EventId) (binder : Option Lowered.Bin
   let ports := head.ports.filter (!·.specification)
   let deployed := arguments.filter fun | .spec .. => false | _ => true
   let paired ← pairArguments calleeText (ports.map (·.binder.name)) deployed none span
-  let env ← staticEnv
   let assigned ← liftM (assignArguments env steps scopes span : CompileM _)
   let (values, states) ← inferArguments id assigned found.file
     (ports.map fun port => (port.binder.name, port.type)) none paired none span
   let description ← liftM (describeInstance id values : CompileM String)
   let inst ← liftM (instantiate id values { description, span } : CompileM InstanceId)
+  if let some closure := proofArguments then
+    liftM (closure.checkApplication inst span)
   let signature ← protocolSignature inst
   let portTypes := (signature.ports.filter (!·.specification)).map (·.type)
   let typed ← finishArguments paired states portTypes
@@ -181,19 +192,14 @@ def elabApplication (span : Span) (event : EventId) (binder : Option Lowered.Bin
   -- the specification arguments: typed against their ports at the callee's instance, in a
   -- specification, where the names of every role stand (SX4)
   let mut specification : Array (String × Typed.Expr) := #[]
-  for port in signature.ports do
-    unless port.specification do continue
-    let some (.spec _ _ value) := arguments.find? fun
-        | .spec _ given _ => given.text == port.name
-        | _ => false
-      | throw .abandoned
+  for port in signature.ports.filter (·.specification), value in specValues do
     let typedValue ← withContext (fun context => { context with specification := true })
       (elabAt value port.type)
     specification := specification.push (port.name, typedValue)
   -- one binder per result (RM3)
   let results := signature.results
   let apply (binders : Array (Option Typed.Binder)) : Typed.Stmt :=
-    .event span event (.apply binders inst operands specification roleMap order)
+    .event span event (.apply binders inst operands specification roleMap order proofArguments)
   match binder with
   | none =>
     if let some first := results[0]? then

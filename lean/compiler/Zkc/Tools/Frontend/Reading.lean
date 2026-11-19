@@ -590,7 +590,7 @@ mutual
         liftM (record sampler .sampled key value : JointM Unit)
         bindAt role binder value
     | .attempt .. => throw "an `attempt`"
-    | .apply results callee arguments _ roleMap order => do
+    | .apply results callee arguments _ roleMap order .. => do
       let context ← read
       let some definition := context.results.trees.result? callee | throw "a callee whose tree was not kept"
       let some checked := context.results.checked? callee | throw "a callee that the passes did not read"

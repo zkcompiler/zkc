@@ -65,7 +65,7 @@ mutual
     | .event _ _ what =>
       match what with
       | .send _ payload _ _ => payload.find? id
-      | .apply _ _ arguments specification _ _ =>
+      | .apply _ _ arguments specification .. =>
         (arguments.findSome? (Expr.find? id)).orElse fun _ =>
           specification.findSome? fun (_, value) => value.find? id
       | .draw .. | .sample .. | .attempt .. => none
@@ -110,7 +110,7 @@ mutual
     | .event _ _ what =>
       match what with
       | .send _ payload _ _ => payload.firstError?
-      | .apply _ _ arguments specification _ _ =>
+      | .apply _ _ arguments specification .. =>
         (arguments.findSome? Expr.firstError?).orElse fun _ =>
           specification.findSome? fun (_, value) => value.firstError?
       | .draw .. | .sample .. | .attempt .. => none

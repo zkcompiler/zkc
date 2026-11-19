@@ -142,7 +142,7 @@ theorem checkAgrees (c : Functions V) (admits : c.admit = admit) (checks : c.che
 /-- The actual projected role process runs safely at every invocation path, against
 permitted peer replies, under any accepted function contracts. -/
 theorem rolesSafe (c : Functions V) (implements : c.admit = admit) : Statements.rolesSafe c := by
-  intro named assoc a accepted _ M hdr callee r path args valid
+  intro named assoc a accepted M hdr callee r path args valid
   rw [implements] at accepted
   have checked := admitFrom_accepted .empty [] named.definitions a.program a.annotation.bounds rfl (admit_ok accepted).1
   have roles := (BodyAnalysis.RoleContracts.checkedTables M a.program.defs

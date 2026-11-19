@@ -17,6 +17,7 @@ test:
 
 # Check source verifier certificates and replay the interactive formal library through the kernel.
 test-interactive:
+    cd lean/compiler && lake build Zkc.Tools.Audit
     cd lean/formal && lake build Zkc.Formal.Interactive Zkc.Tests.Formal.Interactive Zkc.Tests.Formal.Reuse.Controls Zkc.Tests.Formal.SourceHonestSumcheck
     cd lean/formal && lake lean checks/SourceProtocols.lean
     cd lean/formal && lake lean checks/OracleNames.lean
@@ -24,15 +25,20 @@ test-interactive:
     cd lean/formal && lake env lean --run checks/AuditInteractive.lean
 
 # Compile source draw charges, check their VCVio bounds, and exercise source and address mutations.
-test-written-charge:
+test-written-charge: _charge-checks
+    cd lean/formal && lake lean checks/ReplayCharge.lean
+
+_charge-checks:
+    cd lean/formal && lake lean checks/AuditCharge.lean
     cd lean/formal && lake lean checks/WrittenCharge.lean
     cd lean/formal && lake lean checks/OccurrenceDepth.lean
+    cd lean/formal && lake lean checks/ProofArguments.lean
     cd lean/formal && lake lean checks/FixedTableSampling.lean
 
 # Build the public formal package and audit its dependencies and proof controls.
 test-formal:
     cd lean/formal && lake build && lake test
-    just test-written-charge
+    just _charge-checks
 
 # Parse and format the reference corpus and check source contracts and generated view types.
 test-frontend:

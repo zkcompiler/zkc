@@ -719,23 +719,23 @@ mutual
               s!"{failure}, which `{parameter.name.text}` of `{name}` requires"
 
   /-- Whether a constraint holds at an instance; the text of the failure when it does not
-  (SP4). A specification conjunct is no part of the admission and is not evaluated (SP11). -/
-  partial def checkConstraint (env : Env) (constraint : Lowered.Constraint) (owner : String) :
-      CompileM (Option String) := do
+  (SP4). Check specification conjuncts only when closing proof arguments (SP11). -/
+  partial def checkConstraint (env : Env) (constraint : Lowered.Constraint) (owner : String)
+      (specification : Bool := false) : CompileM (Option String) := do
     let state ← get
     let constraintText ← sourceText env (constraintSpan constraint)
     let failed (here : String) : String :=
       s!"`{owner}` requires `{constraintText}`, which is `{here}` here and does not hold"
     match constraint with
     | .bound _ subject sorts =>
-      if ← mentionsSpecParameter subject then return none
+      if (← mentionsSpecParameter subject) != specification then return none
       let value ← evalAny env subject
       for sort in sorts do
         if let some _ ← meetsSort env value sort then
           return some (failed s!"{renderValue state value}: {← sourceText env (sortSpan sort)}")
       return none
     | .compare span operator left right =>
-      if (← mentionsSpecParameter left) || (← mentionsSpecParameter right) then return none
+      if ((← mentionsSpecParameter left) || (← mentionsSpecParameter right)) != specification then return none
       let a ← evalAny env left
       let b ← evalAny env right
       let holds : Option Bool := match a, b with
@@ -758,7 +758,7 @@ mutual
   /-- The `where` constraints of the scopes of an instance, outermost first (SP4). At a default
   instance a constraint that does not hold skips the instance (SP7). -/
   partial def checkWheres (env : Env) (found : Declaration) (owner : String) (isDefault : Bool)
-      (skip : Lowered.Constraint → CompileM Bool) : CompileM Unit := do
+      (skip : Lowered.Constraint → CompileM Bool) (specification : Bool := false) : CompileM Unit := do
     let modules ← getModules
     let program ← program
     for scope in found.scopes do
@@ -768,7 +768,7 @@ mutual
         if ← skip constraint then continue
         -- a constraint that cannot be evaluated here (it reads a member that a later layer
         -- gives) is not taken to hold: the instance waits for it (SP4)
-        let outcome ← try checkConstraint scopeEnv constraint owner
+        let outcome ← try checkConstraint scopeEnv constraint owner specification
           catch failure => match failure with
             | .waiting reason => throw (.waiting s!"a constraint of its `where`: {reason}")
             | other => throw other

@@ -58,7 +58,7 @@ private def checkSchemeArguments (repository : Repository) : TestM Unit := do
 
 /-- Exercise the ordinary source pipeline and require admission of the named root,
 or the precise refusal at body typing. A waiting body cannot satisfy a positive case. -/
-private def checkFactProgram (repository : Repository) (name root source : String)
+private def checkProtocol (repository : Repository) (name root source : String)
     (refusal : Option String := none) : TestM Unit := do
   let input : SourceInput := ⟨name, Syntax.parseString name source⟩
   let assembly ← assemble #[input] (loadModule repository)
@@ -85,8 +85,8 @@ private def checkCertifiedFacts (repository : Repository) : TestM Unit := do
       ("facts-no-commutativity-recovery", "xs[1 + i]", "xs[2 + i]", "TY7")] do
     let path := repository.conformance / "independent" / "cases" / id / "main.zkc"
     let source ← IO.FS.readFile path
-    checkFactProgram repository id "f" source
-    checkFactProgram repository (id ++ "-changed") "f" (source.replace before after_) (some rule)
+    checkProtocol repository id "f" source
+    checkProtocol repository (id ++ "-changed") "f" (source.replace before after_) (some rule)
 
 /-- The same guard is useful only at its evaluating role. Include a lower bound
 and a relation to an unknown index, which carry more information than an exact size. -/
@@ -96,11 +96,11 @@ private def checkSendFacts (repository : Repository) : TestM Unit := do
       ("V-F2", some "TY4")] do
     let some block := cases.find? (·.id == id) | failure s!"missing {id}"; continue
     let #[source] := block.files | failure s!"expected one source in {id}"; continue
-    checkFactProgram repository id "X" source rule
+    checkProtocol repository id "X" source rule
   for (id, rule) in [("wire-fact-does-not-cross", none), ("wire-fact-missing-receiver-guard", some "TY7"),
       ("wire-explicit-refinement", none)] do
     let source ← IO.FS.readFile (repository.conformance / "independent" / "cases" / id / "main.zkc")
-    checkFactProgram repository id "P" source rule
+    checkProtocol repository id "P" source rule
   let source (steps : List String) := String.intercalate "\n" <|
     ["module t", "protocol X roles(P,V,W)(xs:[nat] @P, ys:[nat] @P, k:nat @P):"] ++
     steps.map ("    " ++ ·)
@@ -129,7 +129,7 @@ private def checkSendFacts (repository : Repository) : TestM Unit := do
         some "TY7"),
       ("receiver-only", [send, "guard @V length(m) == 8", "z @P = m[7]"], some "TY7")
       ] do
-    checkFactProgram repository name "X" (source steps) rule
+    checkProtocol repository name "X" (source steps) rule
 
 /-- Read the two SX7 tables as rendered. A missing, extra or reordered property, a
 different audience, or a drift in stage or construction is observable here. -/
@@ -153,6 +153,18 @@ def main : IO Unit := do
     checkProperties repository
     checkCertifiedFacts repository
     checkSendFacts repository
+    for (call, rule) in [
+        ("Child(a, spec bound = a, spec bound = a)", some "SX4"),
+        ("Child(a, spec bound = a; spec bound = a)", some "SX3"),
+        ("Child(spec bound = a, a)", some "RM3"),
+        ("Child(spec bound = a, a = a)", some "RM3"),
+        ("Child(a, spec bound = a) @(P = P, P = V, V = V, V = P)", some "RM1"),
+        ("Child(a, spec bound = a) @(P = V, P = P, V = P, V = V)", some "RM1"),
+        ("Child(a, spec bound = a)", none)] do
+      checkProtocol repository call "Caller" ("\n".intercalate [
+        "module t", "protocol Child roles(P, V)(spec bound: bool, a: bool @P):",
+        "    m <- send a to V", "protocol Caller roles(P, V)(a: bool @P):",
+        "    " ++ call, ""]) rule
     corpusSuite repository
     conformanceSuite repository
     checkNames repository

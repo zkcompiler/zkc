@@ -6,6 +6,24 @@ Use that revision for the historical commands below. On the current checkout, `j
 `just test-interactive` from the repository root for the source paths used by the Sumcheck
 and GKR certificates. See [status](../../../../docs/status.md).
 
+## Proof arguments at a written goal
+
+A scheme selects a deployed protocol instance. A named goal binds that instance's
+specification-only naturals in declaration order. Each application retains its own resolved
+proof arguments and lexical static environment beside the emitted instruction. Following
+that instruction evaluates the arguments in the caller's environment and checks the
+callee's specification conjuncts. Shared parameters are inherited by scope and parameter
+index. The Core application continues to reference the same deployed callee.
+
+From `lean/formal`, run `lake lean checks/ProofArguments.lean` for the two goals from the
+language conformance program. For one admitted `Count<8>`, `spec e = 4` closes the draw
+charge to `3/8` and `spec e = 1` closes it to `3/4`. The same lookup follows an application
+instruction from a caller. Each key in the path must identify one application in the current
+caller. The interface has no iteration coordinate for an argument that needs the index of a
+uniform loop. These values describe the authored charge. Certifying a false-acceptance
+probability also requires a theorem for the admitted verifier.
+[Source charge lookup](Written/Charge.lean) · [Goal selection](Written/Selection.lean)
+
 ## Previous frontend
 
 The lexer, the parser and the canonical printer of the zkc source language, written from the
@@ -725,3 +743,5 @@ Each reading is followed by the alternative it rules out.
   a composite with an opaque component is refused; a collected name after no iteration has the
   type the body gives or is `[]`; names in specifications must resolve; an `if` expression is
   an expression of its roles; `1^n` determines no `n`; whether a body can stop is read on its text.
+
+

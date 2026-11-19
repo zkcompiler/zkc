@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Frontend.Typed.Basic
+public import Zkc.Frontend.Static.Environment
 
 @[expose] public section
 
@@ -172,6 +173,7 @@ mutual
     evaluates the arguments it computes in that order (HO4). -/
     | apply (results : Array (Option Binder)) (callee : InstanceId) (arguments : Array Expr)
         (specification : Array (String × Expr)) (roleMap : Array Nat) (order : Array Nat)
+        (proofArguments : Option Static.SpecificationClosure := none)
 end
 
 instance : Inhabited Expr := ⟨.error default #[]⟩
@@ -228,7 +230,7 @@ mutual
     | .event _ _ what =>
       match what with
       | .send _ payload _ _ => payload.hasError
-      | .apply _ _ arguments specification _ _ =>
+      | .apply _ _ arguments specification .. =>
         arguments.any Expr.hasError || specification.any (·.2.hasError)
       | .draw .. | .sample .. | .attempt .. => false
 end

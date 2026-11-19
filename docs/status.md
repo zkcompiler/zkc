@@ -5,7 +5,7 @@
 The compiler admits named functions and protocols in definition order. On valid inputs satisfying
 a function's declared requirements, admission proves its summary and recorded bounds. Protocol
 admission checks each role's projected body. The public role-safety theorem excludes an
-undefined stop for valid inputs and permitted replies under unconditional function headers.
+undefined stop for valid inputs and permitted replies, including calls with checked preconditions.
 See the [Core guide](../lean/compiler/Zkc/Core/README.md) and the
 [active build targets](development.md).
 
@@ -34,7 +34,7 @@ exercise the certificates.
 
 The source-issued Schnorr and Chaum–Pedersen knowledge theorem covers the admitted verifier, extractor and relation. The extractor takes a sized sequence of nominal run records for the selected closed protocol. Source-level checks cover the owning contract, explicit roles and available statement fields. Both protocols use the same exact returning-trace characterization, row interpretation laws and group-action proof. An independent companion can prove the Core target directly. Finite-model controls falsify it after deleting a verifier guard or changing a selected function. Oracle names and opening operands survive resolution; full source oracle elaboration is pending. Run `just test-written-knowledge` and `just test-interactive`. See the [proof and model boundaries](written-knowledge.md).
 
-Resolved goals and contracts retain declaration identity and named statement arguments. Ordinary resolution enforces unique contract ownership. The compiler checks its property catalog against the language and library references. The emitted returning-record equality compares ordered keys and nominal types. A named `special_soundness` goal at `written` selects a scheme and its knowledge clause. Extra scheme context remains in the public statement. The independent consumers supply their own role inputs, function arguments and observed addresses. The formal arithmetic model constructs the group interfaces from a Mathlib field action. A separate process interpretation uses VCVio for challenge probabilities. Run `just test-formal` to build and audit the public package.
+Resolved goals and contracts retain declaration identity and named statement arguments. Ordinary resolution enforces unique contract ownership. The compiler checks its property catalog against the language and library references. A per-use environment closes specification-only numerals independently of the deployed callee. Two uses of `Count<8>` share an admitted verifier and close the declared charge to `3/8` and `3/4` respectively. The emitted returning-record equality compares ordered keys and nominal types. A named `special_soundness` goal at `written` selects a scheme and its knowledge clause. Extra scheme context remains in the public statement. The independent consumers supply their own role inputs, function arguments and observed addresses. The formal arithmetic model constructs the group interfaces from a Mathlib field action. A separate process interpretation uses VCVio for challenge probabilities. Run `just test-formal` to build and audit the public package.
 
 ## Source conformance
 

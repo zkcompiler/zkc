@@ -223,7 +223,7 @@ mutual
         line depth s!"{← optionalBinder bound} <- sample {← callee (.row law)} at {← roleText role} [event {number}]"
       | .attempt bound role =>
         line depth s!"{← optionalBinder bound} <- attempt at {← roleText role} [event {number}]"
-      | .apply results applied arguments specification roleMap _ =>
+      | .apply results applied arguments specification roleMap .. =>
         let specification ← specification.mapM fun (port, value) => do
           return s!"spec {port} = {← expr value}"
         line depth s!"({joined (← results.mapM optionalBinder)}) <- apply {(← read).renderer.instance applied}({joined ((← arguments.mapM expr) ++ specification)}) @({joined (← roleMap.mapM roleText)}) [event {number}]"

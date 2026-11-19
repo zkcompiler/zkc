@@ -3,6 +3,7 @@ module
 public import Zkc.Frontend.Written.Diagnostic
 public import Zkc.Frontend.Syntax.Spans
 public import Zkc.Frontend.Driver.Bodies
+public import Zkc.Frontend.Static.Rational
 
 @[expose] public section
 set_option autoImplicit false
@@ -12,6 +13,29 @@ open Syntax
 
 /-- Ordinary protocol bodies resolve generated-member dependencies regardless of query order. -/
 def sourceContext : Compile.Context := Typing.withProtocolBodies {vocabulary}
+
+/-- Run an ordinary frontend request, preserving its nominal instance table for its consumers. -/
+def evaluate {α : Type} (s : Compile.State) (at_ : Span) (attempt : CompileM α) :
+    ExportM (α × Compile.State) := do
+  let (result, after) := attempt.run sourceContext s
+  if let some d := (after.log.entries.extract s.log.entries.size after.log.entries.size).find?
+      (fun d => d.isError || d.isIncomplete) then
+    refuse at_ "WK-TYPE" (d.render after.env.renderer)
+  match result with
+  | .ok a => pure (a, after)
+  | .error (.waiting why) | .error (.defect why) => refuse at_ "WK-TYPE" why
+  | .error _ => refuse at_ "WK-TYPE" "could not elaborate the selected source declaration"
+
+/-- An executable instance with the proof-only values at one use, in parameter order. -/
+structure ProofSubject where
+  protocol : InstanceId
+  specification : Array Nat
+  deriving DecidableEq, Repr
+
+inductive GoalKind where
+  | fork
+  | soundness
+  deriving BEq
 
 /-- CLI selectors are exclusive. A scheme selects a written clause; a goal asks for every
 requirement of the named source property at its selected stage. -/
@@ -25,6 +49,8 @@ structure Selection where
   schemePath : String
   goal : Option Lowered.Goal := none
   goalPath : Option String := none
+  specification : Array Nat := #[]
+  ceiling : Option Rat := none
 
 def closedDeclaration (ref : Lowered.Reference) : ExportM DeclarationId := do
   if ref.hasStaticArguments then
@@ -50,7 +76,8 @@ def goalScheme (s : Compile.State) (goal : Lowered.Goal) :
     | refuse goal.scheme.span "WK-GOAL" "the named scheme has no closed instance"
   return (scheme, after)
 
-def selectedGoal (state : Compile.State) (goal : Lowered.Goal) (path : String) :
+def selectedGoal (state : Compile.State) (goal : Lowered.Goal) (path : String)
+    (file : FileId) (kind : GoalKind) :
     ExportM (Selection × Compile.State) := do
   let (scheme, s) ← goalScheme state goal
   let .reference ref := goal.property | refuse goal.property.span "WK-GOAL" "unresolved formal property"
@@ -59,12 +86,27 @@ def selectedGoal (state : Compile.State) (goal : Lowered.Goal) (path : String) :
   if ref.hasStaticArguments then refuse ref.span "WK-GOAL" "this property takes no static arguments"
   let some entry := vocabularyEntry? library property | refuse goal.property.span "WK-GOAL" "unknown property"
   let .property description := entry.kind | refuse goal.property.span "WK-GOAL" "a security model cannot select a property"
+  let some key := s.results.key? scheme.protocol | refuse goal.span "WK-GOAL" "missing protocol"
+  let some protocol := s.program.declarations[key.declaration]? | refuse goal.span "WK-GOAL" "missing declaration"
+  let supplied := goal.args.filterMap fun
+    | .spec span name expr => some (span, name.text, expr)
+    | _ => none
+  let (specification, _) ← evaluate s goal.span do
+    let some closure ← Static.specificationClosure {file} protocol supplied #[] goal.span | return #[]
+    closure.close scheme.protocol {} goal.span
   let mut stage := none
   let mut label := none
+  let mut fixed := false
   for argument in goal.args do
-    let .named span key value := argument | refuse goal.span "WK-GOAL" "unsupported specification argument"
+    let .named span key value := argument | continue
+    if kind == .soundness && key.text == "statement" then
+      let .path _ (.reference (.reference _ #[.segment (.word "fixed") none none])) none := value
+        | refuse span "GL3" "the written theorem requires a fixed statement"
+      if fixed then refuse span "GL2" "duplicate statement selection"
+      fixed := true
+      continue
     unless key.text == "stage" || key.text == "clause" do
-      refuse span "WK-GOAL" s!"{property}: no written fork theorem covers goal argument {key.text}"
+      refuse span "WK-GOAL" s!"{property}: no written theorem covers goal argument {key.text}"
     let .path _ (.reference (.reference _ #[.segment step none none])) none := value
       | refuse span "WK-GOAL" s!"expected one name for {key.text}"
     let name ← match key.text, step with
@@ -79,10 +121,24 @@ def selectedGoal (state : Compile.State) (goal : Lowered.Goal) (path : String) :
   let requested := stage.getD scheme.lastStage
   unless requested == "written" do
     refuse goal.span "WK-GOAL" s!"{goal.name.text} requires stage {requested}; only written executions are available"
-  unless description.stages.contains requested && description.binding == some .writtenFork do
-    refuse goal.property.span "WK-GOAL" s!"no complete theorem for {library}::{property} at {requested}; a two-run knowledge clause supplies special soundness"
-  if goal.ceiling.isSome then refuse goal.span "WK-GOAL" "the written fork property has no quantitative ceiling"
-  return (⟨scheme, label, Static.qualifiedName s.program scheme.declaration, some goal, some path⟩, s)
+  let ceiling ← match kind with
+    | .fork => do
+      unless description.stages.contains requested && description.binding == some .writtenFork do
+        refuse goal.property.span "WK-GOAL" s!"no complete theorem for {library}::{property} at {requested}; a two-run knowledge clause supplies special soundness"
+      if goal.ceiling.isSome then refuse goal.span "WK-GOAL" "the written fork property has no quantitative ceiling"
+      pure none
+    | .soundness => do
+      unless library == "zkc::security" && property == "soundness" && description.stages.contains requested do
+        refuse goal.property.span "GL3" "expected the written soundness property"
+      if !fixed && scheme.lines.any (fun line => line matches .construction _ (.derived ..)) then
+        refuse goal.span "GL3" "the written theorem requires a fixed statement"
+      if label.isSome then refuse goal.span "GL3" "soundness selection requires one deciding clause"
+      goal.ceiling.mapM fun expr => do
+        let (value, _) ← evaluate s expr.span (Static.evalRational {file} expr)
+        if value < 0 then refuse expr.span "GL4" "a goal ceiling must be nonnegative"
+        return value
+  return (⟨scheme, label, Static.qualifiedName s.program scheme.declaration,
+    some goal, some path, specification, ceiling⟩, s)
 
 /-- A bare name must be unique among input declarations. A qualified name selects the
 canonical path, or a path relative to an input file module. -/
@@ -101,17 +157,44 @@ def selectDeclaration (s : Compile.State) (kind : DeclarationKind) (name rule : 
   | #[] => throw s!"{rule}: no matching declaration named {name} in the input modules"
   | many => throw s!"{rule}: ambiguous {name}; select one of {", ".intercalate (many.toList.map Prod.snd)}"
 
+def selectNamedGoal (s : Compile.State) (name : String) (kind : GoalKind) :
+    ExportM (Selection × Compile.State) := do
+  let (id, path) ← selectDeclaration s .goal name "WK-GOAL"
+  let some decl := s.program.declarations[id]? | throw "WK-GOAL: missing goal"
+  let some {content := .goal goal, ..} := s.env.modules.lowered? id
+    | throw "WK-GOAL: missing resolved goal"
+  selectedGoal s goal path decl.file kind
+
 def select (s : Compile.State) : Request → ExportM (Selection × Compile.State)
   | .scheme name label => do
     let (id, path) ← selectDeclaration s .scheme name "WK-ROOT"
     let some scheme := s.results.schemes.find? (·.declaration == id)
       | throw s!"WK-ROOT: no closed scheme for {path}"
-    return (⟨scheme, label, path, none, none⟩, s)
-  | .goal name => do
-    let (id, path) ← selectDeclaration s .goal name "WK-GOAL"
-    let some {content := .goal goal, ..} := s.env.modules.lowered? id
-      | throw "WK-GOAL: missing resolved goal"
-    selectedGoal s goal path
+    return (⟨scheme, label, path, none, none, #[], none⟩, s)
+  | .goal name => selectNamedGoal s name .fork
+
+structure WrittenParties where
+  interactive : Bool
+  declaredProver : Option Nat
+  place : Span
+
+/-- Written goals use the scheme's online roles and public statement (SC2–SC4).
+Construction and layout directives take effect after this stage. -/
+def writtenParties (scheme : SchemeEntry) (roles : Array String) : ExportM WrittenParties := do
+  let mut interactive := false
+  let mut prover := none
+  let mut place := scheme.span
+  for line in scheme.lines do
+    match line with
+    | .offline sp .. | .ideal sp .. => refuse sp "WK-VIEW" "the written goal requires two online roles"
+    | .construction _ (.interactive _) => interactive := true
+    | .prover sp role =>
+      if prover.isSome then refuse sp "SC3" "duplicate prover designation"
+      let some id := roles.findIdx? (· == role.text) | refuse sp "SC3" s!"unknown prover {role.text}"
+      prover := some id
+      place := sp
+    | _ => pure ()
+  return ⟨interactive, prover, place⟩
 
 structure ClauseSource where
   where_ : Span

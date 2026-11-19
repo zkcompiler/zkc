@@ -43,8 +43,8 @@ Run every command from the root of the repository.
 | `just test-interactive` | build the interactive formal modules, check emitted source entries and mutations, and audit the interactive library and its mathematical controls |
 | `just test-frontend` | parse and format the source corpus, compare assembly and name diagnostics with the reference, and check typed generated views |
 | `just test-written-knowledge` | compile both Schnorr and Chaum–Pedersen written clauses, check admission and extraction, consume the public theorems, replay their project imports, and test permitted forks, source mutations and diagnostics |
-| `just test-written-charge` | issue and audit the two source-bound probability endpoints, check depth-specific member laws and exercise independent fixed-table sampling |
-| `just test-formal` | build the default formal package, replay its project modules and check their transitive axioms |
+| `just test-written-charge` | issue and audit the two source-bound probability endpoints, check depth-specific member laws, close the proof arguments of each use, exercise independent fixed-table sampling and replay the charge issuer |
+| `just test-formal` | build and audit the formal library, its tests and the charge issuer together, then run the charge checks |
 | `just audit` | `lake exe zkc-audit` in `lean/compiler`: core, vocabulary and their tests |
 | `just check` | the checks that need no build: `bash .github/scripts/public-tree-guard.sh`, `python3 scripts/check_docs.py --all`, and `python3 lean/compiler/scripts/generate_unicode_tables.py --check` |
 
@@ -123,6 +123,16 @@ The audit accepts a positive fixture of generated helpers, refuses all 16 negati
 and fails if any expected result changes. Private declarations are loaded from
 `.olean.private`; the controls also check private native attributes. The
 [compiler guide](../lean/compiler/README.md#build-test-and-audit) describes the entry points.
+
+The formal audit adds `Zkc.Tools.Formal.DrawCharge` as a replay root. Both
+`lake test` in the formal package and `just test-written-charge` check the issuer and its
+project import closure through the kernel. The formal policy takes Lean and the pinned
+Mathlib and VCVio import closures as built, checks for project modules in the upstream
+closure before replay, and follows proof dependencies through those libraries for axioms.
+It permits `propext`, `Quot.sound` and `Classical.choice`. The focused audit loads controls
+separately and requires the private extra axiom and the imported unchecked proof to be refused
+by their respective rules. A control also attempts to preload the unchecked module through
+the prebuilt set and requires the replay boundary to reject it. See the [formal package guide](../lean/formal/README.md).
 
 ### The documents
 

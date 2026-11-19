@@ -192,9 +192,11 @@ modules and descriptive examples are inputs to that redesign. Role selection sti
 
 ## Delivery and evidence
 
-The contract representation and sender-local length checks are in production. Next exercise
-the closed contract interface on a repeated draw, followed by a fixed-table opening. A deployed transcript handler and its
+The contract representation, sender-local length checks and repeated Sumcheck draw charges
+each have a source regression. A named soundness goal selects its scheme and closes the proof
+arguments of each use. A fixed-table opening, a deployed transcript handler and its
 Fiat–Shamir security reduction each need their own acceptance evidence.
+[Current evidence and assumptions](status.md)
 
 1. The resolved contract and goal now feed the written consumer. SX5 checks ownership and
    uniqueness during ordinary resolution. The compiler and both references share a checked

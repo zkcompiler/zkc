@@ -2623,7 +2623,7 @@ Each branch of `knowledge` applies a named relation to its statement arguments (
 relation; its arguments are separated by `,`".
 
 **SX4. Specification ports.** `spec p: T` is a port that no role holds. It is in scope only in
-specification expressions. Every application binds every `spec` port of its callee (RM3).
+specification expressions. Every application binds each `spec` port of its callee exactly once (RM3).
 **Message:** "`<C>` has the specification port `<p>`; write `spec <p> = …`".
 
 **SX5. Contracts.** `spec for P:` stands once, in the module that defines `P`. Contracts are
