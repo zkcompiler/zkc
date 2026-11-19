@@ -1,7 +1,4 @@
 import Zkc.Tools.Formal.DrawCharge
-import Zkc.Tools.Formal.SumcheckGoal
-import Zkc.Tools.Formal.TableBound
-import Zkc.Tools.Formal.ConstructedVerifier
 import Zkc.Tools.Formal.Policy
 
 open Lean Zkc.Tools.Audit

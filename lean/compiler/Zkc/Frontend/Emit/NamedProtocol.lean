@@ -258,11 +258,6 @@ mutual
       let value ← computeAt [sender] (emitExpr payload)
       let result ← protocolOp mark.id (.event (.flow .message sender receivers.toList) (← ty payload.type)) [value]
       if let some name := binder then bind name.id (.value result)
-    | .table op registration binder operand owner peers => do
-      let arg ← computeAt [owner] (emitExpr operand)
-      let result ← protocolOp mark.id
-        (.event (.given (.request (op.key registration)) owner peers.toList) (← ty binder.type)) [arg]
-      bind binder.id (.value result)
     | .draw binder law owner receivers => emitCoin mark.id binder law owner receivers.toList
     | .sample binder law owner => emitCoin mark.id binder law owner []
     | .attempt .. => throw (EmitFailure.waiting "an `attempt` (a later layer)")

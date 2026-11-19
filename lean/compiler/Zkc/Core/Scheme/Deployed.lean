@@ -57,7 +57,7 @@ def ModuleRef.definitions (m : ModuleRef) : List Key := m.members.map (·.2)
 commitments, those that recover values, and the one that derives the samples. -/
 def Declaration.definitions (declaration : Declaration) : List Key :=
   (match declaration.construction with
-    | .interactive | .catalogue _ => []
+    | .interactive => []
     | .derived suite => suite.definitions) ++
   (match declaration.layout with
     | none => []

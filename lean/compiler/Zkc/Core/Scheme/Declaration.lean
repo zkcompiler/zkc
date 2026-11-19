@@ -33,8 +33,6 @@ with a suite. -/
 inductive Construction where
   | interactive
   | derived (suite : ModuleRef)
-  /-- A primitive suite selected by its catalogue identity. Its members have no source bodies. -/
-  | catalogue (suite : String)
 
 /-- The layout of a proof: its module, the sites whose values the proof carries, and the
 sites whose values are recovered, each by a member of the module. -/

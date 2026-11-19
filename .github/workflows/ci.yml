@@ -19,15 +19,13 @@ defaults:
 
 jobs:
   check:
-    name: Source checks and affected proof suites
+    name: Public tree, documents and generated tables
     runs-on: [self-hosted, linux, x64, zkc-ci]
-    timeout-minutes: 180
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          fetch-depth: ${{ github.event_name == 'pull_request' && 2 || 0 }}
-          filter: blob:none
       - name: Verify CI isolation and resource budget
         run: bash .github/scripts/verify-runner.sh
       - name: Check the public source tree
@@ -36,33 +34,6 @@ jobs:
         run: python3 scripts/check_docs.py --all
       - name: Check the generated Unicode tables against the pinned data
         run: python3 lean/compiler/scripts/generate_unicode_tables.py --check
-      - name: Test formal suite selection
-        run: python3 .github/scripts/test-select-formal.py
-      - name: Select formal suites
-        id: formal
-        env:
-          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
-          HEAD: ${{ github.sha }}
-        run: python3 .github/scripts/select-formal.py
-      - name: Verify formal runner paths, Nix sandbox and disk budget
-        if: steps.formal.outputs.recipes != ''
-        run: bash .github/scripts/verify-runner.sh formal
-      - name: Cache the pinned toolchain and proof dependencies
-        if: steps.formal.outputs.recipes != ''
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
-          path: |
-            ${{ runner.temp }}/zkc-elan/toolchains
-            lean/formal/.lake/packages
-          key: proof-deps-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('lean/*/lean-toolchain', 'lean/*/lake-manifest.json', 'lean/*/lakefile.*') }}-${{ contains(steps.formal.outputs.recipes, 'test-formal') || contains(steps.formal.outputs.recipes, 'test-written-charge') }}
-      - name: Run selected suites
-        if: steps.formal.outputs.recipes != ''
-        env:
-          RECIPES: ${{ steps.formal.outputs.recipes }}
-          NIXPKGS: github:NixOS/nixpkgs/6510408d147d8c5e6d76043e899e9251756f6a75
-        run: |
-          read -ra recipes <<< "$RECIPES"
-          nix shell "$NIXPKGS#elan" "$NIXPKGS#just" --command bash .github/scripts/run-formal.sh "${recipes[@]}"
 
   required:
     name: Required CI

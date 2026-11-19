@@ -26,20 +26,6 @@ namespace Zkc.Frontend.Typed
 
 open Syntax
 
-/-- Operations of the written primitive table service. Each request carries one typed
-operand. The send's source event selects the registration to which a query refers. -/
-inductive TableOperation where
-  | register | rows | opening
-  deriving BEq, Repr
-
-def TableOperation.part : TableOperation → String
-  | .register => "value"
-  | .rows => "rows"
-  | .opening => "opening"
-
-def TableOperation.key (op : TableOperation) (registration : Nat) : Core.Key :=
-  ⟨3 * registration + (match op with | .register => 0 | .rows => 1 | .opening => 2)⟩
-
 /-- The number of a node in its definition: its place in the order of the tree, depth first.
 The numbering pass gives it; until then it is `0`. -/
 abbrev NodeId := Nat

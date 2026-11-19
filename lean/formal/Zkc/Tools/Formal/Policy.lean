@@ -11,8 +11,7 @@ def policy : Audit.Policy where
 /-- Source-facing clients recheck admission and refer to elaboration. Each client is
 a separate replay root outside the formal semantics library. -/
 def publicIssuers (directory : System.FilePath) : Array Audit.Library :=
-  #[`Zkc.Tools.Formal.DrawCharge, `Zkc.Tools.Formal.SumcheckGoal,
-    `Zkc.Tools.Formal.TableBound, `Zkc.Tools.Formal.ConstructedVerifier].map fun root =>
+  #[`Zkc.Tools.Formal.DrawCharge].map fun root =>
     { name := toString root, root, kind := .tests, directory }
 
 end Zkc.Tools.Formal

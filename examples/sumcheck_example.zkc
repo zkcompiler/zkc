@@ -12,4 +12,3 @@ scheme Proof = Sumcheck<10>:
 goal complete = completeness(Proof) <= 0
 goal sound = soundness(Proof, model = random_oracle(queries = 2^100)) <= 2^-128
 goal ideal_sound = soundness(Proof, model = random_oracle(queries = 2^100), stage = constructed)
-goal written_sound = soundness(Proof, statement = fixed, stage = written) <= 10 / Fr::Order

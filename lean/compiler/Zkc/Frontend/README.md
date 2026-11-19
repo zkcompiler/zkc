@@ -6,48 +6,6 @@ Use that revision for the historical commands below. On the current checkout, `j
 `just test-interactive` from the repository root for the source paths used by the Sumcheck
 and GKR certificates. See [status](../../../../docs/status.md).
 
-## Constructed Schnorr verifier on the current Core
-
-`Constructed.selectScheme assembly "Proof"` selects the scheme in
-`examples/schnorr_example.zkc`. Its type records the assembly and the named scheme request. Its entry
-carries the equation that this lookup returned the selected scheme, the emitted and
-admitted `Schnorr<G1>` instance, and the source role designation.
-The supported profile has one deployed definition, two shared G1 ports, one prover scalar,
-a private nonce, a commitment, one public Fr draw, a response and a verifier guard.
-The checker reads event keys from the admitted entry and event numbers from the compiler's
-source map. In this example the three Core keys are 2, 3 and 6 and the transcript site
-numbers are 1, 2 and 3. The singleton closure places the entry at definition position zero.
-
-`Verifier.run` reads the verifier's own public inputs. It frames the catalogue domain,
-the supplied proof identity, the base and the public point, then passes that state to
-`Deployed.run`. Two typed receive clauses forward the original message and absorb its
-encoded value. The draw clause supplies the current framed transcript and challenge label
-to the service and returns its decoded scalar to the admitted verifier. The role's ordinary
-guard decides acceptance. A successful run also returns the transcript after the response.
-`Verifier.handler_correspondence` checks the installed stack against the declaration,
-including the clause sites, operation keys, operands, return positions and state transitions.
-The three request equations in `Execution.lean` establish the precise appended bytes and
-the scalar and state returned by a squeeze for every supplied model and reply.
-[Source selection and correspondence](Constructed/Schnorr.lean) · [Execution](Constructed/Execution.lean)
-
-This profile requires the resolved catalogue row `suite.merlin3.bls12-381.fr64be/0` and uses its byte schedule documented below.
-Labels use eight little-endian bytes per word. The model supplies lawful fixed-width
-formats for compressed G1 (48 bytes) and little-endian Fr (32 bytes). The service returns
-64 bytes. The verifier reads them big-endian, reduces modulo the BLS12-381 scalar order
-and applies the model's interpretation of that residue. Canonical BLS semantics for those
-formats and that interpretation are deployment assumptions. The identity provider must
-supply the canonical 32-byte digest for the selected deployment. The general Core identity
-encoder is an open interface. [Proof identity format](../../../../docs/spec/core/package.md#identities)
-
-`selectGoalExecution assembly "derived_view"` retains the complete lowered goal and
-requires an explicit `stage = constructed`. Its verifier is indexed by this assembly and
-goal name. The successful lookup fixes both the lowered goal and the admitted scheme root.
-A written or omitted stage fails this selector. The authored `Proof` scheme defaults to
-the serialized stage when the stage is omitted.
-It supplies the execution subject for a future property proof. Prover construction,
-serialization and the programmed simulator are outside this verifier profile.
-[Constructed experiment and regression command](../../../formal/README.md#constructed-schnorr-verifier)
-
 ## Proof arguments at a written goal
 
 A scheme selects a deployed protocol instance. A named goal binds that instance's
@@ -345,8 +303,8 @@ the driver with an error. It checks:
   `Zkc.Tests.Frontend.TypingReference`, or its roots are admitted by the core or typed only; a
   refusal by a rule that is neither the one a test expects nor its stated alternative is a
   contradiction, listed, and a failure unless the table of known contradictions (empty) gives its
-  reason; a test whose roots wait for a form that is not elaborated yet (`attempt`, deferred or derived oracle
-  events in layer D, a law that is a tuple or a collection, a generated member, a row at a module
+  reason; a test whose roots wait for a form that is not elaborated yet (`attempt`, the oracle
+  events, layer D, a law that is a tuple or a collection, a generated member, a row at a module
   argument) waits, with the reasons of its roots; the table of the waits that this check leaves
   is empty; a test of acceptance that no root reaches is listed apart; every module of
   `libraries/`, every worked program and the generated program type, except `zkc::layout`, whose
@@ -787,8 +745,3 @@ Each reading is followed by the alternative it rules out.
   an expression of its roles; `1^n` determines no `n`; whether a body can stop is read on its text.
 
 
-### Written primitive table requests
-
-In a two-role protocol, a local `send ... as oracle<table<T, n>>` binds a handle to the registration, data holder and reader. An immediate `query` on that handle accepts a fixed-length batch of `index<n>` positions held by both roles. The front end checks the resolved table module’s data, row and position types and its indexing definition of `answer`. It evaluates the positions once. The registration request receives the actual data, the opener’s request receives the handle and positions, and the reader checks an opening over the handle, positions and rows. A failed opening rejects before the written continuation.
-
-The emitted Core uses ordinary typed requests. Its service supplies the ideal table semantics. The send has source site part `value`. The query has parts `rows` and `opening`. A generated source `Run` schema gives the send field its registered data type. Relating an extractor on that schema to a commitment’s observations requires further evidence. Scheme construction waits for a commitment interpretation when a protocol or its callee uses these requests. [Source rules](../../../../language/LANGUAGE.md) · [Formal service and certificate](../../../formal/README.md#written-spot-check)

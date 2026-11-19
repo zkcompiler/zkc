@@ -270,7 +270,6 @@ def constructScheme (vocabulary : Vocabulary) (state : Compile.State) (scheme : 
     | some (.exhausted exhaustion) => throw (.exhausted exhaustion)
     | _ => throw (.defect "the protocol of the scheme has no code")
   if let some reason := code.waiting then throw (.waiting reason)
-  if code.usesIdealTable then throw (.waiting "a commitment interpretation for written table requests")
   let protocol := renderInstance state scheme.protocol
   -- the suite's rows and its challenge field
   unless (Zkc.Core.Vocabulary.table.row? s!"{suite}.start" []).isSome do

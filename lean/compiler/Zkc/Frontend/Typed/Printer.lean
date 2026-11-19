@@ -212,8 +212,6 @@ mutual
       suite (depth + 1) body
     | .event _ number what => do
       match what with
-      | .table op registration bound operand owner peers =>
-        line depth s!"{← binder bound} <- table.{repr op} {← expr operand} at {← roleText owner} to {joined (← peers.mapM roleText)} [send {registration}, event {number}]"
       | .send bound payload sender receivers =>
         let sender ← match sender with
           | some role => pure s!" from {← roleText role}"

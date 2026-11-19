@@ -6,40 +6,6 @@ Run `just test-written-knowledge` for the source-issued Schnorr and Chaum–Pede
 
 For a selected admitted protocol and inputs, `admitted_replacement_reads` fixes world-read authority from the honest role projections before substituting a strategy. It covers the principal, owner or listeners, operation kind, occurrence, owner input signature and result type. A substitute owner can supply different values of the same input types. A service contract must separately establish any required payload predicate. The source control maps a private child coin to the caller's second role and rejects an attempt by the first role to listen. [Authority and reachability](Zkc/Formal/WorldObservation.lean) · [Source control](checks/WorldObservation.lean)
 
-## Constructed Schnorr verifier
-
-From `lean/formal`, run the source and service regression with the project toolchain
-and Python 3.
-
-```sh
-lake lean checks/ConstructedSchnorr.lean
-```
-
-`ConstructedVerifier.acceptance` defines the probability that the selected constructed
-verifier returns. Its parameters include the Core model, nominal encodings, residue
-interpretation, identity provider, verifier inputs, initial cache, prover message policy
-and distribution of a fresh 64-byte reply. A missing identity fails setup. A missing message
-or a Core stop gives a nonaccepting outcome. VCVio's list cache keys replies by the entire
-ordered transcript and squeeze label and retains the first binding. The prover policy
-chooses the commitment and response and decides which query information its state retains.
-The only online oracle query in this experiment is the verifier's squeeze. A security game
-with an adversary's own query budget, oracle programming or extraction needs further
-semantics and proofs. [Experiment](Zkc/Tools/Formal/ConstructedVerifier.lean)
-
-The regression compiles the authored `Proof` scheme and its `derived_view` goal. It runs
-the admitted guard in the executable characteristic-two model. Its two point encodings are
-the compressed infinity and generator, and its scalar encodings are zero and one. One run
-calls the repository's reference Merlin implementation on the actual emitted frames and
-checks all 64 reply bytes against an independently generated schedule vector. Additional
-controls change the suite binding, initial transcript, typed receive handler, identity and
-public input. A second assembly assigns the same local IDs to the goal, scheme and protocol,
-names the scheme `Other`, and reverses the admitted guard. Both named scheme and goal selections run on the same
-transcript and give opposite acceptance probabilities. The consumer checks the public
-`acceptance` equation on deterministic `ProbComp` runs. The accepting miss and cached
-accepting reply have probability one. A declared rejection and a missing response have
-probability zero. Emptying the cache with the same rejecting miss law changes one to zero. The authored zero-knowledge goal still needs its simulator and proof.
-[Regression](checks/ConstructedSchnorr.lean) · [Merlin adapter](checks/constructed_merlin.py)
-
 ## Package and model
 
 Run `lake build` and `lake test` from this directory to build the public formal library and its controls, then replay and audit them. The compiler package has its own dependency graph. This package pins Mathlib and VCVio in its Lake configuration and manifest. Local proof replay uses the built Lean and pinned library modules, traverses proof dependencies for axioms, and accepts `propext`, `Quot.sound`, and `Classical.choice`. The compiler audit uses its original two-axiom policy.
@@ -47,12 +13,6 @@ Run `lake build` and `lake test` from this directory to build the public formal 
 The arithmetic interpretation supplies a field, an additive commutative group and its scalar action. Its nonzero scalar carrier includes a proof that the decoded value is nonzero. Its total model of the vocabulary assigns defaults to other rows. A consumer relies only on the row equations it proves for its operations. The characteristic-five example exercises the literals and operations used by the fork. A nonzero source literal divisible by five cannot preserve both its scalar residue and nonzero validity in this model. The refined literal has a valid fallback value in that case. A faithful interpretation of all source literals requires a compatible characteristic. The formal process comparison transfers predicates on supported executions across two interpretations when the operations match and every allowed concrete reply has a corresponding abstract reply.
 
 For a repeated written charge, compile an assembly with `Written.admitSource` and pass its result to `chargeSumcheck` with the round count and source draw name. The resulting certificate exposes `primeBound` on the admitted root under the BLS12-381 scalar field interpretation. The service can update strategy state after every fresh uniform reply. The GKR component uses the same source lookup, address check and probability bridge at its selected layer call, with a certificate for the executed gate members and explicit model and polynomial hypotheses. Direct named draws accept closed rational arithmetic over literals and static size terms, including powers with an integer exponent. Applications and attempts need their own occurrence selection. Run `just test-written-charge` for examples and mutation controls. [Source client](Zkc/Tools/Formal/DrawCharge.lean) · [Source checks](checks/WrittenCharge.lean)
-
-### Written spot check
-
-`TableVerifier.certify` takes the admitted `Checked` protocol from `examples/spot_check.zkc`. It resolves the source sites for the registration, draw, row request and opening. It compares the complete admitted body with a typed verifier whose operands include the registered handle, the sampled indices, the returned rows and the public polynomial and domain. The joint ideal service freezes the actual 1,024-row registration payload. Its projected reader service accepts an adversarial table at that same event. The opener may choose a response after seeing the actual ordered indices. [Certificate](Zkc/Tools/Formal/TableCertificate.lean) · [Joint service](Zkc/Formal/Written/TableSession.lean)
-
-`Certificate.acceptance` characterizes return of role 1 on an individual tape. The opening must validate and every sampled row must equal the value computed by the verifier. The model supplies local equations for its admitted coset lookup and polynomial evaluator, scalar conversion and equality. `Certificate.sound` samples 40 independent uniform indices with replacement using VCVio. If at most 768 registered rows match those public values, the probability of return is bounded by the authored `sites.positions` ceiling, exactly `(3/4)^40`. This theorem covers the written ideal oracle. Merkle binding, commitment extraction, Fiat–Shamir security and the constructed scheme’s knowledge goal require separate realizations. The executable control uses distinguishable numeric handles and a small row interpretation. [Acceptance and bound](Zkc/Tools/Formal/TableBound.lean) · [Source and mutation controls](checks/FixedTableSampling.lean)
 
 ### Source round proofs
 
@@ -63,23 +23,5 @@ The [two-round Sumcheck example](../../examples/shifted_sumcheck.zkc) carries th
 For GKR, `chargeLayer` checks the homogeneous gate primitive. `chargeGateFamily` takes the expected primitive as a function of remaining depth. Each occurrence checks the actual row and signature in the selected callee. Its layer bound takes the primitive interpretation and honest quadratic equations at the depths that execute. Run `lake lean checks/SourceRoundLaws.lean` from this package for the two-round Sumcheck, exchanged source callees, expression and guard mutations, and four depth-specialized GKR primitives. [Source regression](checks/SourceRoundLaws.lean)
 
 The independent consumers compile the original ten-round Sumcheck and four-coordinate GKR fixtures. They check verifier role 1 with the source field's uniform challenge. A false cube sum bounds the probability of a root return by `10 × (1 / Fr.order)`. Under the supplied gate evaluation, equality and quadratic laws, a false layer claim bounds the probability that the returned scalar agrees with the summand on the newly returned coordinates by `4 × (2 / Fr.order)`. The tests check the exact written fees and reject substituted propositions, events and same-typed subjects. The package audit and the focused charge gate replay the four source-facing issuers and their project imports. [Independent consumers](checks/ChargeConsumers.lean) · [Kernel replay](checks/ReplayCharge.lean) · [Audit controls](checks/AuditCharge.lean)
-
-### Named written Sumcheck soundness
-
-`issueSumcheckGoal assembly "written_sound"` retains the successful admission of that assembly
-and goal alongside the certificate on the admitted root.
-In the Sumcheck example the request selects the written stage and a fixed statement in the
-plain model. The selector reads the table dimension, deciding role, relation operands,
-applied reduction and draw from source. For ten rounds its accumulated charge is
-`10 / Fr::Order`. An explicit ceiling must cover that charge by exact rational comparison.
-A request without a ceiling reports the accumulated charge. Constructed-stage and
-random-oracle requests require a different theorem. [Written goal](../../examples/sumcheck_example.zkc)
-
-`CertifiedSumcheckGoal.falseAcceptance` bounds the probability that the admitted verifier
-returns on a public table and a claim different from its cube sum. The experiment uses the
-BLS12-381 scalar field and fresh uniform challenges. The other replies and the strategy
-state can depend on previous challenges. Run `lake lean checks/SumcheckGoal.lean` here for
-the source requests, refusals and an independent consumer that supplies the verifier's input
-ports and return event. [Issuer and theorem](Zkc/Tools/Formal/SumcheckGoal.lean) · [Consumer](checks/SumcheckGoal.lean)
 
 The [historical package](../historical-formal/README.md) preserves the arithmetic construction, concrete curve premises, cross-model proofs and receipt checks for the earlier Core API.

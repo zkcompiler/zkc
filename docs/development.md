@@ -144,23 +144,9 @@ not fetch external links.
 
 ## CI
 
-Every pull request to `main` and push to `main` runs the three checks in `just check` and
-the suite-selection tests. Changes to machine-read language and property tables also run frontend conformance. Required CI also depends on the selected Lean recipes succeeding.
-The selector compares the PR base with the tested merge commit, or the push's before and
-after trees, including both paths of a rename. A change confined to Markdown and the documentation directory finishes here.
-
-Changes to the charge issuer or its harness run `just test-written-charge`. Changes confined
-to the interactive or written-knowledge harness run their corresponding recipes. Changes to
-shared compiler or formal modules, source assemblies, package pins, recipes and CI itself run
-`just test`, `just test-interactive`, `just test-written-knowledge` and `just test-formal`
-in sequence. The last includes the charge checks. Unclassified inputs select all four suites.
-
-Before restoring dependencies or provisioning tools, the formal step verifies the runner
-account and cgroup, the CI workspace and scratch paths, the private Nix store and daemon
-configuration, and 80 GiB of free disk. The service limits the combined jobs to four CPUs,
-32 GiB RAM and zero swap. Pinned Nixpkgs provides elan and just. The Actions cache holds the
-selected Lean toolchain and external Lake packages, keyed on the OS, architecture, toolchain
-files, Lake configurations, manifests and whether the job uses the quantitative library.
-Project modules build in the checked-out workspace. On a cold quantitative run, Lake lists the
-proof roots' transitive imports so the job can request their missing Mathlib artifacts.
-The job has a three-hour limit including provisioning and cold builds.
+CI runs on every pull request to `main` and every push to `main`. It runs only the checks that
+need no build: the public tree guard, the document checker and the check of the generated
+Unicode tables, the commands of `just check`.
+It does not build or test the Lean packages. The author of a change verifies the Lean packages
+locally with `just test`, or with the part of it that the change affects, and states the result
+in the pull request, as the [contribution guide](../.github/CONTRIBUTING.md) describes.

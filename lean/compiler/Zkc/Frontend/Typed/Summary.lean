@@ -140,8 +140,6 @@ structure ProtocolCode where
   sites : Array SiteEntry
   /-- The flows of the body, in the order of the sites. -/
   flows : Array FlowEntry := #[]
-  /-- An ideal table request in this protocol or one of its applications. -/
-  usesIdealTable : Bool := false
   /-- First draw below a choice, loop or application. Such a closed protocol has no
   fixed-depth Runs type, even when a loop emits only one Core instruction (§8). -/
   nestedDraw : Option Syntax.Span := none

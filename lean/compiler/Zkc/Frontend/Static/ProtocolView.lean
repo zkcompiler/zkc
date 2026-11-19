@@ -50,11 +50,10 @@ def eventFields (view : ProtocolView) (role : Option Nat) (sources : Array Sourc
           throw (.waiting s!"generated {view.member} field {site.name.getD "(unnamed)"} at {site.span.render}: empty loop")
       continue
     let some source := sources[id]? | throw (.defect "missing source event of a view")
-    if let .table .opening .. := event then continue
     let name := source.name.getD s!"site{id}"
     let pending (shape : String) := Interrupt.waiting s!"generated {view.member} field {name} at {source.span.render}: {shape}"
     let audience : EventAudience := match event with
-      | .table _ _ _ _ _ to | .send _ _ _ to => .transfer to none
+      | .send _ _ _ to => .transfer to none
       | .draw _ _ owner to => .transfer to (some owner)
       | .sample _ _ owner | .attempt _ owner => .privateCoins (some (.single owner))
       | .apply .. => .unresolved
@@ -63,10 +62,6 @@ def eventFields (view : ProtocolView) (role : Option Nat) (sources : Array Sourc
       unless role.all participants.contains do continue
     if nested then throw (pending "choice or loop")
     let type ← match event with
-      | .table .register _ _ data .. =>
-        if view != .run then throw (pending "oracle handle in a role view")
-        pure data.type
-      | .table _ _ binder .. => pure binder.type
       | .send _ value .. => pure value.type
       | .draw _ law .. | .sample _ law .. => drawType law
       | .attempt .. => throw (pending "coins of an attempt")

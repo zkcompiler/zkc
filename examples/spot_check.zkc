@@ -1,4 +1,4 @@
-// Layer D, carried and not frozen. The extractor reads one run. To change:
+// Layer D, carried and not frozen. To change: `committed` becomes a `def`; it reads one run, so
 // the clause claims the charges as its bound; `e` becomes `spec e: nat`, given by the goals; a
 // ceiling at `committed` or later needs the budget of the commitment's model; the goals rest on
 // the extractability of the commitment.
@@ -32,7 +32,7 @@ section <F: TwoAdicField, k: nat, d: nat, q: nat, e: nat> where (k <= F::TwoAdic
         guard @V ∀ j ∈ 0..q, rows[j] == evaluate(p, domain[positions[j]])
 
     // The witness is the table that the run committed: an extractor that reads one run.
-    def committed(p: [F; d], domain: Coset<F, k>, runs: SpotCheck::Runs<1>) -> [F; 2^k]:
+    spec def committed(p: [F; d], domain: Coset<F, k>, runs: SpotCheck::Runs<1>) -> [F; 2^k]:
         runs[0].codeword
 
     spec for SpotCheck:

@@ -162,8 +162,6 @@ mutual
     finds the sender (EV5). The receivers are in the order written. -/
     | send (binder : Option Binder) (payload : Expr) (sender : Option Nat)
         (receivers : Array Nat)
-    | table (op : TableOperation) (registration : EventId) (binder : Binder) (operand : Expr)
-        (owner : Nat) (peers : Array Nat)
     /-- `law` is the sampling row of the law at its type (TY15). -/
     | draw (binder : Option Binder) (law : RowRef) (sender : Nat) (receivers : Array Nat)
     | sample (binder : Option Binder) (law : RowRef) (role : Nat)
@@ -231,7 +229,7 @@ mutual
     | .scope _ body => body.any Stmt.hasError
     | .event _ _ what =>
       match what with
-      | .table _ _ _ payload _ _ | .send _ payload _ _ => payload.hasError
+      | .send _ payload _ _ => payload.hasError
       | .apply _ _ arguments specification .. =>
         arguments.any Expr.hasError || specification.any (·.2.hasError)
       | .draw .. | .sample .. | .attempt .. => false
