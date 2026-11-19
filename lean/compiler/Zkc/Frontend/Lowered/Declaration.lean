@@ -110,6 +110,14 @@ structure ProtocolHead where
   specification : Bool := false
   deriving Inhabited
 
+/-- Contract operands use owner-local binders and resolved paths. A deciding role is
+its index in the owning protocol's roster. Failed resolutions retain error terms. -/
+abbrev Contract := Syntax.ContractForm Expr Expr Nat
+abbrev Clause := Syntax.ClauseForm Expr Expr Nat
+
+abbrev GoalValue := Syntax.GoalValueForm Expr (Array Argument × Option (Array Argument))
+abbrev Goal := Syntax.GoalForm Expr GoalValue Expr
+
 /-- What a declaration is, lowered. A kind that lowering does not rewrite yet keeps its syntax in
 the record of its file and its resolved names here. -/
 inductive Content where
@@ -124,8 +132,10 @@ inductive Content where
   /-- `def f(x, …)` in an implementing module: the parameters take the types of the member of
   the interface that it defines. -/
   | memberDefinition (parameters : Array Binder) (body : FunctionBody)
+  | contract (value : Contract)
+  | goal (value : Goal)
   /-- A kind that is not lowered yet (a module, an interface, a member that declares no
-  definition, a contract, a scheme, a goal, an oracle function): its names, resolved, as terms. -/
+  definition, a scheme, an oracle function): its names, resolved, as terms. -/
   | unlowered (names : Array Expr)
   deriving Inhabited
 

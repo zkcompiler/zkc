@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Frontend.Semantics.Static
+public import Zkc.Vocabulary.Security
 
 @[expose] public section
 
@@ -54,17 +55,11 @@ def representative? (vocabulary : Vocabulary) (sort : String) : Option String :=
 
 end Vocabulary
 
-/-- The executable subjects exposed to the formal library for source-issued properties.
-A missing binding leaves the property open at the selected stage. -/
-inductive PropertySubject where
-  | writtenFork
-  deriving Inhabited, BEq, Repr
-
 /-- What an entry of the vocabulary that a goal names is (GL1). -/
 inductive EntryKind where
-  | property (subject : Option PropertySubject)
+  | property (description : Security.Property)
   | model
-  deriving Inhabited, BEq, Repr
+  deriving Inhabited, Repr
 
 /-- An entry of the vocabulary named through a module that has no source file: a property or a
 model of `zkc::security` (GL1). -/
@@ -78,10 +73,7 @@ structure VocabularyEntry where
 §2.9). -/
 def vocabularyEntries : Array VocabularyEntry :=
   let security := "zkc::security"
-  #[⟨security, "completeness", .property none⟩, ⟨security, "soundness", .property none⟩,
-    ⟨security, "special_soundness", .property (some .writtenFork)⟩, ⟨security, "knowledge_soundness", .property none⟩, ⟨security, "zero_knowledge", .property none⟩,
-    ⟨security, "honest_verifier_zero_knowledge", .property none⟩,
-    ⟨security, "unforgeability", .property none⟩,
+  (Security.properties.map fun p => ⟨security, p.name, .property p⟩) ++ #[
     ⟨security, "random_oracle", .model⟩, ⟨security, "generic_group", .model⟩,
     ⟨security, "algebraic_group", .model⟩, ⟨security, "johnson", .model⟩]
 

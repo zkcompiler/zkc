@@ -73,7 +73,13 @@ def checkedClause (label : String) (s : Compile.State) (id : DeclarationId) (arg
   let .ok evidence := package.checkEvidence | refuse at_ "WK-FUNCTION" "admission refused the selected function"
   return (← functionDeclarations label package evidence, s)
 
+structure WrittenParties where
+  interactive : Bool
+  declaredProver : Option Nat
+  place : Span
+
 structure WrittenClause where
+  parties : WrittenParties
   view : View
   publicNames : Array String
   contextFields : Array (String × String)
@@ -91,15 +97,21 @@ structure WrittenClause where
 
 /-- The written fork uses the scheme's online roles and public statement (SC2–SC4).
 Construction and layout directives take effect after this stage. -/
-def checkSchemeView (scheme : SchemeEntry) (code : Typing.ProtocolCode) (view : View) : ExportM Unit := do
+def writtenParties (scheme : SchemeEntry) (roles : Array String) : ExportM WrittenParties := do
   let mut interactive := false
+  let mut prover := none
+  let mut place := scheme.span
   for line in scheme.lines do
     match line with
     | .offline sp .. | .ideal sp .. => refuse sp "WK-VIEW" "the written fork requires two online roles"
     | .construction _ (.interactive _) => interactive := true
+    | .prover sp role =>
+      if prover.isSome then refuse sp "SC3" "duplicate prover designation"
+      let some id := roles.findIdx? (· == role.text) | refuse sp "SC3" s!"unknown prover {role.text}"
+      prover := some id
+      place := sp
     | _ => pure ()
-  if let .error d := scheme.checkProver (code.roles.getD view.prover "") interactive then
-    refuse d.span d.rule d.message
+  return ⟨interactive, prover, place⟩
 
 def declarations (s : Compile.State) (selection : Selection) : ExportM WrittenClause := do
   let scheme := selection.scheme
@@ -109,17 +121,17 @@ def declarations (s : Compile.State) (selection : Selection) : ExportM WrittenCl
   let some (.protocol code) := s.results.body? scheme.protocol | refuse scheme.span "WK-ROOT" "missing typed protocol"
   if code.specificationOnly then refuse proto.span "WK-ROOT" "the selected protocol must be executable"
   let (view, s) ← portView s scheme.protocol code scheme.span
-  checkSchemeView scheme code view
-  let item ← clause s key.declaration root.file selection.clause scheme.span
-  let relId ← declarationRef s item.file item.rel
-  let extId ← declarationRef s item.file item.extractor
+  let parties ← writtenParties scheme code.roles
+  let item ← clause s key.declaration selection.clause scheme.span
+  let relId ← closedDeclaration item.rel
+  let extId ← closedDeclaration item.extractor
   let some rd := s.program.declarations[relId]? | refuse item.rel.span "WK-REF" "missing relation"
   let some ed := s.program.declarations[extId]? | refuse item.extractor.span "WK-REF" "missing extractor"
   let .relation r := rd.node | refuse item.rel.span "WK-REF" "expected a relation"
   let .def e := ed.node | refuse item.extractor.span "WK-REF" "expected a function"
   if let some (.spec sp) := e.modifier then refuse sp "WK-TYPE" "the extractor must be executable"
   for (id, sp) in [(extId, e.span), (relId, r.span)] do
-    for spec in (← contractOf s id sp).clauses do
+    for spec in (← contractOf s id sp) do
       if let .requires sp .. := spec then refuse sp "WK-CLAUSE" "unsupported precondition on a selected declaration"
   let .body rb := r.binding | refuse r.span "WK-BODY" "relation must have a source body"
   let .body eb := e.binding | refuse e.span "WK-BODY" "extractor must have a source body"
@@ -152,11 +164,19 @@ def declarations (s : Compile.State) (selection : Selection) : ExportM WrittenCl
       let rendered ← ty (b := {}) (standard.mapNominal Sum.inl)
       contextFields := contextFields.push (name.text, rendered)
   unless !publicNames.isEmpty &&
-      e.params.size == r.statement.size + 1 && item.operands.size == r.statement.size do
+      e.params.size == r.statement.size + 1 do
     refuse item.where_ "WK-PORT" "statement, relation and extractor arities must agree"
   let some #[w] := r.witness | refuse r.span "WK-TYPE" "expected one relation witness"
   let some runs := e.params.back? | refuse e.span "WK-VIEW" "missing extractor run view"
-  let operands := item.operands
+  if item.arguments.any (fun | .spec .. => true | _ => false) then
+    refuse item.where_ "WK-PORT" "expected public statement arguments"
+  let values ← match Lowered.pairValueArguments r.name.text (r.statement.map (·.name.text))
+      item.arguments item.where_ with
+    | .ok values => pure values
+    | .error (span, message) => refuse span "FN6" message
+  let operands ← values.mapM fun
+    | .local _ port => pure port
+    | e => refuse e.span "WK-PORT" "expected a public port operand"
   unless operands.all (· < publicNames.size) do
     refuse item.where_ "WK-PORT" "the relation needs a port outside the public statement"
   let bind (params : Array Param) : Locals := (params.zip operands).toList.map fun (p, v) =>
@@ -176,6 +196,6 @@ def declarations (s : Compile.State) (selection : Selection) : ExportM WrittenCl
     let relation ← algorithm view ((w.name.text, ⟨.scalar,"witness"⟩) :: bind r.statement) .boolean rb
     let extraction ← algorithm view ((runs.name.text, ⟨.runs,""⟩) :: bind e.params.pop) .scalar eb
     return (relation, extraction)
-  return ⟨view,publicNames,contextFields,selection,item,proto.span,r.name.text,r.span,e.name.text,e.span,calculations,rt,et,operands.toList⟩
+  return ⟨parties,view,publicNames,contextFields,selection,item,proto.span,r.name.text,r.span,e.name.text,e.span,calculations,rt,et,operands.toList⟩
 
 end Zkc.Frontend.Written

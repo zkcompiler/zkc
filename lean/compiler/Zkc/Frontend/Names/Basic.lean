@@ -174,6 +174,7 @@ structure Local where
   deriving Inhabited
 
 structure State where
+  contractOwners : Std.HashSet DeclarationId := {}
   program : Program
   unreadable : Std.HashSet String
   /-- The first refusal of each owner in source order. -/

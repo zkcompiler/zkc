@@ -243,9 +243,9 @@ def resolveAlgorithm (env : Env) (path : Path) : ResolveM Lowered.Expr := do
     refuseAt env.owner "SX6" path.span "the function after `by` must be an executable def"
   return .reference reference
 
-def resolveExtractor (env : Env) : Extractor → ResolveM (Array Lowered.Expr)
-  | .path path => do return #[← resolveAlgorithm env path]
-  | .external _ _ => return #[]
+def resolveExtractor (env : Env) : Extractor → ResolveM (AlgorithmRef Lowered.Expr)
+  | .path path => do return .path (← resolveAlgorithm env path)
+  | .external span name => return .external span name
 
 /-- A proposition may be a Boolean expression or a relation application. Each extracted
 knowledge branch names the relation for which its algorithm supplies a witness. -/
@@ -259,11 +259,10 @@ def checkClauseCall (env : Env) (span : Span) (use : ClauseOperand)
   let knowledge := use matches .knowledge _
   if knowledge && witnesses.isSome then
     return ← refuseAt env.owner "SX6" span "apply the knowledge relation to its statement arguments only"
-  let .reference _ segments := callee
-  if segments.back? matches some (.segment (.member _ none) _ _) then return
+  if callee.lastStep? matches some (.member _ none) then return
   let program := (← get).program
   let relation : Option Relation := do
-    let .segment (.declaration id) _ _ ← segments.back? | none
+    let id ← callee.declaration?
     let .relation r := (← program.declarations[id]?).node | none
     return r
   let some r := relation | do
@@ -272,8 +271,14 @@ def checkClauseCall (env : Env) (span : Span) (use : ClauseOperand)
     return
   let witnessCount := (r.witness.getD #[]).size
   unless arguments.size == r.statement.size && witnesses.all (·.size == witnessCount) do
-    refuseAt env.owner "SX3" span
+    return ← refuseAt env.owner "SX3" span
       s!"the relation `{r.name.text}` takes {r.statement.size} statement arguments and {witnessCount} witness arguments"
+  let checkNames (params : Array Param) (args : Array Lowered.Argument) := do
+    if args.any (fun | .named .. | .spec .. => true | _ => false) then
+      if let .error (at_, message) := Lowered.pairValueArguments r.name.text (params.map (·.name.text)) args span then
+        refuseAt env.owner "FN6" at_ message
+  checkNames r.statement arguments
+  for ws in witnesses do checkNames (r.witness.getD #[]) ws
   if (use matches .knowledge true) && witnessCount == 0 then
     refuseAt env.owner "SX6" span "an extracted alternative needs a relation with a witness"
 
@@ -289,11 +294,11 @@ def resolveOperand (env : Env) (expr : Expr) (use : ClauseOperand) : ResolveM Lo
 
 /-- Resolve SX6 against the placements of this clause's own inputs and results. Local
 binders introduced by expressions and specification-only ports impose no role constraint. -/
-def checkDecidingRole (env : Env) (head : Option ProtocolHead) (span : Span)
-    (role : Option Name) (terms : Array Lowered.Expr) : ResolveM Unit := do
-  let some head := head | return
+def resolveDecidingRole (env : Env) (head : Option ProtocolHead) (span : Span)
+    (role : Option Name) (terms : Array Lowered.Expr) : ResolveM (Option Nat) := do
+  let some head := head | return none
   -- Role eligibility assumes well-formed operands, in particular a valid witness split.
-  if (← get).refusals.contains env.owner then return
+  if (← get).refusals.contains env.owner then return none
   let locals := (← get).locals
   let mut placements : Std.HashMap LocalId Placement := {}
   let insert (table : Std.HashMap LocalId Placement) (name : Name) (p : Placement) :=
@@ -333,48 +338,53 @@ def checkDecidingRole (env : Env) (head : Option ProtocolHead) (span : Span)
         let visible := reader || (!(use.2 && p.readers.isSome) && contains r.text p.holders)
         visible == wanted
     statement.all (holds · true) && witness.all (holds · false)
-  unless (role.elim (eligible.size == 1) fun chosen => eligible.any (·.text == chosen.text)) do
+  let chosen : Option Name := match role with
+    | some name => eligible.find? (fun r : Name => r.text == name.text)
+    | none => if eligible.size == 1 then eligible[0]? else none
+  let some chosen := chosen | do
     refuseAt env.owner "SX6" span "name an eligible deciding role that sees every statement operand and holds no witness operand"
+    return none
+  return head.roles.findIdx? (fun r : Name => r.text == chosen.text)
 
 def resolveClause (env : Env) (head : Option ProtocolHead) (results : Array String)
-    (loops : Std.HashMap String (Array String)) (clause : Clause) : ResolveM (Array Lowered.Expr) :=
-  match clause with
-  | .requires _ _ condition | .charge _ _ condition => do
-    return #[← resolveExpr env condition]
-  | .proves span role _ condition => do
-    let terms := #[← resolveOperand env condition .proposition]
-    checkDecidingRole env head span role terms
-    return terms
-  | .ensures _ _ condition => do return #[← withNames results (resolveExpr env condition)]
-  | .invariant _ _ condition loop | .through _ condition loop =>
-    match loops[loop.text]? with
-    | some names => withNames names do
-      if clause matches .through .. then return #[← resolveOperand env condition .proposition]
-      return #[← resolveExpr env condition]
-    | none => do
+    (loops : Std.HashMap String (Array String)) (clause : Clause) : ResolveM Lowered.Clause := do
+  let atLoop (loop : Name) (condition : Expr) (action : ResolveM Lowered.Expr) := do
+    let some names := loops[loop.text]? | do
       refuseAt env.owner "SX6" loop.span s!"no loop is indexed by `{loop.text}` in the contract target"
-      return #[]
-  | .reduces span role _ source target => do
+      return Lowered.Expr.error condition.span
+    withNames names action
+  match clause with
+  | .requires sp label e => return .requires sp label (← resolveExpr env e)
+  | .charge sp site bound => return .charge sp site (← resolveExpr env bound)
+  | .ensures sp label e => return .ensures sp label (← withNames results (resolveExpr env e))
+  | .invariant sp label e loop =>
+    return .invariant sp label (← atLoop loop e (resolveExpr env e)) loop
+  | .through sp e loop =>
+    return .through sp (← atLoop loop e (resolveOperand env e .proposition)) loop
+  | .proves sp role label e =>
+    let e ← resolveOperand env e .proposition
+    return .proves sp (← resolveDecidingRole env head sp role #[e]) label e
+  | .reduces sp role label source target =>
     let source ← resolveOperand env source .proposition
     withNames results do
-      let terms := #[source, ← resolveOperand env target .proposition]
-      checkDecidingRole env head span role terms
-      return terms
-  | .knowledge _ _ relation extractor alternative => do
-    let mut names := #[← resolveOperand env relation (.knowledge false)]
-    names := names ++ (← resolveExtractor env extractor)
-    if let some alternative := alternative then
-      let sourceExtractor := extractor matches .path _
-      names := names.push (← resolveOperand env alternative.relation (.knowledge sourceExtractor))
-      if let some path := alternative.extractor then
-        names := names.push (← resolveAlgorithm env path)
-      else if sourceExtractor then
-        refuseAt env.owner "SX6" alternative.relation.span "name the extractor for this alternative with `by`"
-    return names
-  | .zeroKnowledge _ _ simulator _ => resolveExtractor env simulator
+      let target ← resolveOperand env target .proposition
+      return .reduces sp (← resolveDecidingRole env head sp role #[source, target]) label source target
+  | .knowledge sp label relation extractor alternative =>
+    let relation ← resolveOperand env relation (.knowledge false)
+    let algorithm ← resolveExtractor env extractor
+    let alternative ← alternative.mapM fun branch => do
+      let needsWitness := extractor matches .path _
+      let term ← resolveOperand env branch.relation (.knowledge needsWitness)
+      let path ← branch.extractor.mapM (resolveAlgorithm env)
+      if needsWitness && path.isNone then
+        refuseAt env.owner "SX6" branch.relation.span "name the extractor for this alternative with `by`"
+      return ⟨branch.span, term, path⟩
+    return .knowledge sp label relation algorithm alternative
+  | .zeroKnowledge sp label simulator abilities =>
+    return .zeroKnowledge sp label (← resolveExtractor env simulator) abilities
 
 def resolveContract (id : DeclarationId) (declaration : Declaration) (node : Contract) :
-    ResolveM (Array Lowered.Expr) := do
+    ResolveM Lowered.Contract := do
   let program := (← get).program
   let outer ← makeEnv (.declaration id) declaration.file declaration.namespace declaration.scopes
   startLocals
@@ -382,8 +392,14 @@ def resolveContract (id : DeclarationId) (declaration : Declaration) (node : Con
   let targetName : Lowered.Expr := match reference with
     | some reference => .reference reference
     | none => .error node.target.span
-  let .declaration protocolId := target | return #[targetName]
-  let some callee := program.declarations[protocolId]? | return #[targetName]
+  let .declaration protocolId := target | return ⟨node.span, targetName, #[]⟩
+  let some callee := program.declarations[protocolId]? | return ⟨node.span, targetName, #[]⟩
+  if callee.file != declaration.file || callee.namespace != declaration.namespace then
+    refuseAt outer.owner "SX5" node.target.span "the contract must be in the module that defines its target"
+  else if (← get).contractOwners.contains protocolId then
+    refuseAt outer.owner "SX5" node.target.span "a declaration has more than one contract"
+  else
+    modify fun s => { s with contractOwners := s.contractOwners.insert protocolId }
   let (ports, results, body) : Array Name × Array String × Array Stmt := match callee.node with
     | .protocol protocol =>
       (protocol.head.ports.map (fun
@@ -406,10 +422,8 @@ def resolveContract (id : DeclarationId) (declaration : Declaration) (node : Con
   startLocals
   for port in ports do discard <| addLocal port.text port.span
   let loops := (loopScopes body (ports.map (·.text)) {}).2
-  let mut names := #[targetName]
   let head := match callee.node with | .protocol protocol => some protocol.head | _ => none
-  for clause in node.clauses do names := names ++ (← resolveClause env head results loops clause)
-  return names
+  return ⟨node.span, targetName, ← node.clauses.mapM (resolveClause env head results loops)⟩
 
 /-! ## Schemes and goals -/
 
@@ -441,37 +455,26 @@ def wordArguments : Array String := #["stage", "statement", "decisions"]
 /-- A value of an argument of a goal. A single name is a label after `clause`, a role after
 `corrupted`, a word after `stage`, `statement` and `decisions` and wherever it is a word of GL2;
 otherwise a path. -/
-partial def resolveGoalValue (env : Env) (argument : String) : GoalValue → ResolveM (Array Lowered.Expr)
-  | .tuple _ items => do
-    let mut names := #[]
-    for item in items do names := names ++ (← resolveGoalValue env argument item)
-    return names
-  | .path _ path args => do
-    let mut names := #[]
-    match path.plainName? with
-    | some name =>
-      if argument == "clause" then names := names.push (.reference (oneStep path.span (.label name.text)))
-      else if argument == "corrupted" then
-        names := names.push (.reference (oneStep path.span (.role name.text)))
-      else if wordArguments.contains argument || goalWords.contains name.text then
-        names := names.push (.reference (oneStep path.span (.word name.text)))
-      else names := names.push (← pathTerm env path)
-    | none => names := names.push (← pathTerm env path)
-    if let some args := args then
-      let (arguments, witnesses) ← resolveCallArgs env .value args
-      for argument in arguments ++ witnesses.getD #[] do
-        match argument with
-        | .positional _ value | .named _ _ value | .spec _ _ value => names := names.push value
-    return names
+partial def resolveGoalValue (env : Env) (argument : String) : GoalValue → ResolveM Lowered.GoalValue
+  | .tuple sp items => do return .tuple sp (← items.mapM (resolveGoalValue env argument))
+  | .path sp path args => do
+    let ref ← match path.plainName? with
+      | some name =>
+        if argument == "clause" then pure (.reference (oneStep path.span (.label name.text)))
+        else if argument == "corrupted" then pure (.reference (oneStep path.span (.role name.text)))
+        else if wordArguments.contains argument || goalWords.contains name.text then
+          pure (.reference (oneStep path.span (.word name.text)))
+        else pathTerm env path
+      | none => pathTerm env path
+    return .path sp ref (← args.mapM (resolveCallArgs env .value))
 
-def resolveGoal (env : Env) (node : Goal) : ResolveM (Array Lowered.Expr) := do
-  let mut names := #[← pathTerm env node.property, ← pathTerm env node.scheme]
-  for argument in node.args do
-    match argument with
-    | .named _ name value => names := names ++ (← resolveGoalValue env name.text value)
-    | .spec _ _ size => names := names.push (← resolveExprAt env .plain size)
-  if let some ceiling := node.ceiling then names := names.push (← resolveExpr env ceiling)
-  return names
+def resolveGoal (env : Env) (node : Goal) : ResolveM Lowered.Goal := do
+  let property ← pathTerm env node.property
+  let scheme ← pathTerm env node.scheme
+  let args ← node.args.mapM fun
+    | .named sp name value => return GoalArgForm.named sp name (← resolveGoalValue env name.text value)
+    | .spec sp name size => return .spec sp name (← resolveExprAt env .plain size)
+  return ⟨node.span, node.pub, node.name, property, scheme, args, ← node.ceiling.mapM (resolveExpr env)⟩
 
 /-! ## Declarations -/
 
@@ -590,9 +593,9 @@ def declarationContent (id : DeclarationId) (declaration : Declaration) :
       return (.function head (.external external.span external.name.content), bounds, constraints)
   | .staticName node => return (.staticName (← resolveExprAt standard .plain node.size), #[], #[])
   | .law node => resolveLaw standard node
-  | .contract node => return (.unlowered (← resolveContract id declaration node), #[], #[])
+  | .contract node => return (.contract (← resolveContract id declaration node), #[], #[])
   | .scheme node => return (.unlowered (← resolveScheme standard node), #[], #[])
-  | .goal node => return (.unlowered (← resolveGoal standard node), #[], #[])
+  | .goal node => return (.goal (← resolveGoal standard node), #[], #[])
   | .moduleMember node => return (.unlowered #[← pathTerm standard node.path], #[], #[])
   | .memberDef node =>
     let scopes := match ← memberScope declaration node.name.text with

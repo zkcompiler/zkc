@@ -27,15 +27,14 @@ own a coin that an online role hears. Each has at most one role, and not the sam
 prover is the role of `E`, or, when `E` is empty, the online role not in `D`; the verifier is
 the other. When both are empty, the prover is the declaration's. A prover that the declaration
 writes must be the one computed. -/
-def proverAndVerifier {V : Vocabulary} (hdr : ProtocolHeader V) (declaration : Declaration) :
-    Option (Role × Role) :=
-  match (List.range declaration.kinds.length).filter
-      (fun i => declaration.kinds[i]? == some .online) with
+def onlineParties {V : Vocabulary} (hdr : ProtocolHeader V) (kinds : List RoleKind)
+    (interactive : Bool) (prover : Option Role) : Option (Role × Role) :=
+  match (List.range kinds.length).filter (fun i => kinds[i]? == some .online) with
   | [a, b] =>
       let online := fun x : Role => x == a || x == b
       let other := fun x : Role => if x = a then b else a
-      if declaration.interactive then
-        declaration.prover.bind fun p => if online p then some (p, other p) else none
+      if interactive then
+        prover.bind fun p => if online p then some (p, other p) else none
       else
       let events := hdr.shape.events [] id
       let givers := [a, b].filter fun x => events.any fun e =>
@@ -51,12 +50,17 @@ def proverAndVerifier {V : Vocabulary} (hdr : ProtocolHeader V) (declaration : D
         | [e], [] => some e
         | [], [d] => some (other d)
         | [e], [d] => if e = d then none else some e
-        | [], [] => declaration.prover.bind fun p => if online p then some p else none
+        | [], [] => prover.bind fun p => if online p then some p else none
         | _, _ => none
       match computed with
-      | some p => if declaration.prover.all (· == p) then some (p, other p) else none
+      | some p => if prover.all (· == p) then some (p, other p) else none
       | none => none
   | _ => none
+
+/-- Select the online endpoints of a deployed declaration. -/
+def proverAndVerifier {V : Vocabulary} (hdr : ProtocolHeader V) (declaration : Declaration) :
+    Option (Role × Role) :=
+  onlineParties hdr declaration.kinds declaration.interactive declaration.prover
 
 /-- The statement: the types of the inputs that both hold, in order. -/
 def statementOf {V : Vocabulary} (hdr : ProtocolHeader V) (prover verifier : Role) :

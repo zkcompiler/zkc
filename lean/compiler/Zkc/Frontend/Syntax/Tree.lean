@@ -721,10 +721,12 @@ structure Label where
   deriving Inhabited
 
 /-- `Extractor ::= Path | "external" "(" String ")"` -/
-inductive Extractor where
-  | path (path : Path)
+inductive AlgorithmRef (ref : Type) where
+  | path (path : ref)
   | external (span : Span) (name : StringLiteral)
   deriving Inhabited
+
+abbrev Extractor := AlgorithmRef Path
 
 /-- `Ability ::= "coins" | "programming" | "trapdoor"` -/
 inductive Ability where
@@ -740,42 +742,48 @@ structure SiteRef where
   deriving Inhabited
 
 /-- `"or" Expr [ "by" Path ]` at the end of a `knowledge` clause. -/
-structure KnowledgeAlternative where
+structure KnowledgeBranch (term ref : Type) where
   span : Span
-  relation : Expr
-  extractor : Option Path
+  relation : term
+  extractor : Option ref
   deriving Inhabited
+
+abbrev KnowledgeAlternative := KnowledgeBranch Expr Path
 
 /-- `Clause` (§5.12) -/
-inductive Clause where
+inductive ClauseForm (term ref roleId : Type) where
   /-- `"requires" [ Label ] Expr NEWLINE` -/
-  | requires (span : Span) (label : Option Label) (condition : Expr)
+  | requires (span : Span) (label : Option Label) (condition : term)
   /-- `"ensures" [ Label ] Expr NEWLINE` -/
-  | ensures (span : Span) (label : Option Label) (condition : Expr)
+  | ensures (span : Span) (label : Option Label) (condition : term)
   /-- `"invariant" [ Label ] Expr "at" Name NEWLINE` -/
-  | invariant (span : Span) (label : Option Label) (condition : Expr) (loop : Name)
+  | invariant (span : Span) (label : Option Label) (condition : term) (loop : Name)
   /-- `"reduces" [ "@" Role ] [ Label ] Expr "to" Expr NEWLINE` -/
-  | reduces (span : Span) (role : Option Name) (label : Option Label) (source target : Expr)
+  | reduces (span : Span) (role : Option roleId) (label : Option Label) (source target : term)
   /-- `"proves" [ "@" Role ] [ Label ] Expr NEWLINE` -/
-  | proves (span : Span) (role : Option Name) (label : Option Label) (relation : Expr)
+  | proves (span : Span) (role : Option roleId) (label : Option Label) (relation : term)
   /-- `"through" Expr "at" Name NEWLINE` -/
-  | through (span : Span) (relation : Expr) (loop : Name)
+  | through (span : Span) (relation : term) (loop : Name)
   /-- `"knowledge" [ Label ] Expr "by" Extractor [ "or" Expr [ "by" Path ] ] NEWLINE` -/
-  | knowledge (span : Span) (label : Option Label) (relation : Expr) (extractor : Extractor)
-      (alternative : Option KnowledgeAlternative)
+  | knowledge (span : Span) (label : Option Label) (relation : term) (extractor : AlgorithmRef ref)
+      (alternative : Option (KnowledgeBranch term ref))
   /-- `"zero_knowledge" [ Label ] "by" Extractor [ "using" Ability { "," Ability } ] NEWLINE` -/
-  | zeroKnowledge (span : Span) (label : Option Label) (simulator : Extractor)
+  | zeroKnowledge (span : Span) (label : Option Label) (simulator : AlgorithmRef ref)
       (abilities : Array Ability)
   /-- `"charge" SiteRef "<=" Expr NEWLINE` -/
-  | charge (span : Span) (site : SiteRef) (bound : Expr)
+  | charge (span : Span) (site : SiteRef) (bound : term)
   deriving Inhabited
 
+abbrev Clause := ClauseForm Expr Path Name
+
 /-- `Contract ::= "spec" "for" Path ":" Suite(Clause)` -/
-structure Contract where
+structure ContractForm (term ref roleId : Type) where
   span : Span
-  target : Path
-  clauses : Array Clause
+  target : ref
+  clauses : Array (ClauseForm term ref roleId)
   deriving Inhabited
+
+abbrev Contract := ContractForm Expr Path Name
 
 /-- `"derived" "(" Path ")" | "interactive" | "authored"` after `construction`. -/
 inductive Construction where
@@ -843,28 +851,34 @@ structure Scheme where
   deriving Inhabited
 
 /-- `GoalValue ::= Path [ CallArgs ] | "(" GoalValue "," GoalValue { "," GoalValue } ")"` -/
-inductive GoalValue where
-  | path (span : Span) (path : Path) (args : Option CallArgs)
-  | tuple (span : Span) (items : Array GoalValue)
+inductive GoalValueForm (ref args : Type) where
+  | path (span : Span) (path : ref) (arguments : Option args)
+  | tuple (span : Span) (items : Array (GoalValueForm ref args))
 
-instance : Inhabited GoalValue := ⟨.tuple default #[]⟩
+instance {ref args : Type} : Inhabited (GoalValueForm ref args) := ⟨.tuple default #[]⟩
+
+abbrev GoalValue := GoalValueForm Path CallArgs
 
 /-- `GoalArg ::= Name "=" GoalValue | "spec" Name "=" Size` -/
-inductive GoalArg where
-  | named (span : Span) (name : Name) (value : GoalValue)
-  | spec (span : Span) (name : Name) (size : Expr)
+inductive GoalArgForm (value term : Type) where
+  | named (span : Span) (name : Name) (argument : value)
+  | spec (span : Span) (name : Name) (size : term)
   deriving Inhabited
 
+abbrev GoalArg := GoalArgForm GoalValue Expr
+
 /-- `Goal ::= [ "pub" ] "goal" Name "=" Path "(" Path { "," GoalArg } ")" [ "<=" Expr ] NEWLINE` -/
-structure Goal where
+structure GoalForm (ref value term : Type) where
   span : Span
   pub : Bool
   name : Name
-  property : Path
-  scheme : Path
-  args : Array GoalArg
-  ceiling : Option Expr
+  property : ref
+  scheme : ref
+  args : Array (GoalArgForm value term)
+  ceiling : Option term
   deriving Inhabited
+
+abbrev Goal := GoalForm Path GoalValue Expr
 
 /-- `StaticName ::= [ "pub" ] "nat" Name "=" Size NEWLINE` -/
 structure StaticName where

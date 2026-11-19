@@ -1,6 +1,6 @@
 # Source language and frontend boundaries
 
-The next shared interface should be a **typed contract for a closed source instance**. A
+The shared interface starts with a **resolved contract and goal** and ends with a **typed subject for a closed scheme instance**. A
 property consumer should receive the exact operands, algorithm, audience, stage and events
 selected by the author. Each selection that affects the theorem needs a check against the
 admitted program. This extends the [security proof design](proof-architecture.md) and keeps
@@ -31,10 +31,13 @@ import the issued target and prove protocol-specific algebra there.
 A source site denotes a place in the author's program. Its executions can have several
 addresses. A charge or layout clause referring to one loop draw needs a policy for *all* its
 realizations. The language already specifies sequential emission for stepped reductions.
-Keep the declaration, event and part as the source identity and record the enclosing
-application and iteration for each Core realization. Replacing an entire stepped reduction
-with a single global event key would make distinct openings or charges indistinguishable.
-The verifier of this mapping should reject a missing realization and an ambiguous match.
+A static loop needs one source site per command and a distinct address per execution. Use a
+shared loop key and command key across compatible numbered blocks. The round belongs in the
+block frame of the address. A call contributes its application frame. A consumer can then charge
+all rounds of one draw, or open exactly the second one. Keep the origin map for diagnostics and
+check that each selected address exists uniquely. A key with its frames erased cannot identify
+an opening. A representation that merges fields across rounds also needs a type agreement check
+after specialization.
 [Source elaboration, §7.5](../language/LANGUAGE.md) · [Current address lookup](../lean/compiler/Zkc/Frontend/Emit/Root.lean)
 
 ## Frontend review
@@ -44,7 +47,7 @@ The verifier of this mapping should reject a missing realization and an ambiguou
 | Parser and printer | Parsing the 504 reference programs distinguishes grammar errors from later refusals. The corpus also exercises canonical printing, tree equality and comment retention. It cannot establish the static or security rules of a program that parses. |
 | Scope and declarations | Whether a resolved declaration is a relation or an executable algorithm, its statement/witness split and the existence of a named loop can be checked before a goal is selected. Performing these checks in ordinary elaboration also catches malformed siblings of a selected clause. An unresolved module member needs an instance. |
 | Closed instance | A relation and its extractor must agree on instantiated operand types, result tuple, role and run shape. Cost closure and simulator permissions have their own conditions. General checking of those requirements is incomplete. A successful name check gives a later phase work to do. |
-| Written exporter | The current code reconstructs clause terms from byte offsets in a flat list, re-reads the syntax for paths, and accepts a restricted set of positional public ports. Whitespace changes move offsets, and synthesized terms can lack a unique location. The design should carry resolved clause fields directly. The present joins work for the two supported examples. |
+| Written exporter | The resolver retains clause and goal structure, with declaration identities, binder numbers, branch boundaries and source locations. The property selects these fields directly. The ordinary FN6 binder supplies statement operands in parameter order, including named public ports. The written group consumer checks its narrower signature, view and theorem requirements at the chosen instance. |
 | Views and emission | The schema derived from a closed protocol already carries typed fields and their port or event origins. The written exporter also checks the particular ports and events of a group fork. Reuse the schema when building the subject and retain an independent check that each selected observation is obtained from the admitted role execution. |
 
 [Name resolution](../lean/compiler/Zkc/Frontend/Names/Declarations.lean) · [View derivation](../lean/compiler/Zkc/Frontend/Static/ProtocolView.lean) · [Current selection](../lean/compiler/Zkc/Frontend/Written/Selection.lean) · [Current fork binding](../lean/compiler/Zkc/Frontend/Written/Contract.lean)
@@ -68,7 +71,12 @@ goal discharge are outside this measurement.
 Of the 170 positive programs, 167 had no error through body typing and three were refused.
 Of the 333 negative programs, 189 produced a listed rule, four produced a different rule
 and 140 produced no error at this prefix. One further reference case is marked skipped.
-These counts use the diagnostic log, without treating a pending body as a finished one.
+The entire 504-row diagnostic inventory matched the earlier baseline on replay. On the
+separate 134-entry independent corpus all 69 positive cases had no error through this
+prefix. Of 53 negative cases, 50 produced a listed rule, two produced another rule and one
+produced no error. Three cases request parsing alone and nine have an underdetermined
+expectation. The three corrected fact cases below also underwent Core admission, a stronger
+test than counting frontend diagnostics.
 
 | Reference cases | Diagnosis and decision |
 |---|---|
@@ -86,8 +94,12 @@ expressions. Another can extend the Core observation law at the sender to cover 
 length and transport the corresponding domain fact. We favor the latter if its proof works
 at the existing role projection and all three controls hold. It also serves direct Core
 clients and avoids a second per-role environment in emission. Check whether the domain can
-recover both the observed length and its bound before enabling the rule. This is the first
-joint correctness experiment and can run alongside structured contract elaboration.
+recover both the observed length and its bound before enabling the rule. The current proof of the role rule already establishes equality of the underlying held value.
+Its generic interface transmits only the numeric and Boolean readings, and the abstract
+domain only copies observations with that interface. The next correctness package must
+transport the sequence measurement through both boundaries and recheck all three
+role controls. Retain a diagnostic origin from a refused Core place to its source binder and
+occurrence. That origin identifies where to report a refusal; it cannot authorize a fact.
 [Send emission](../lean/compiler/Zkc/Frontend/Emit/NamedProtocol.lean) · [Role observation rules](../lean/compiler/Zkc/Core/Facts/Contracts/Roles.lean) · [Soundness requirement](../lean/compiler/Zkc/Core/Facts/Domains/Rules.lean)
 
 ## Joint design
@@ -100,16 +112,22 @@ joint correctness experiment and can run alongside structured contract elaborati
 | Core admission and projection | Independently check types, available inputs, event order and party projections of emitted code, including packages supplied directly to Core. | A well-named source field points to an event hidden from the selected party. |
 | Formal library and companion | Define the property over this admitted subject, derive structural verification conditions from operations, and discharge the remaining mathematical or model hypotheses. | The byte-for-byte right program returns the wrong witness, or the stated theorem assumes a different sampling law. |
 
-A practical migration has two representations at different times. The resolver should return
-a clause with an identity local to its owner, relation reference, ordered argument terms,
-optional algorithm reference, source label and locations. Instance elaboration should attach
-the closed types and the selected program instances, with an origin for each view field.
-The exporter can then emit both the Core term and the bindings used in the proposition.
-A Lean client should independently check those bindings against the admitted entry points.
-Storing a second copy of the execution semantics in the frontend would make this last check
-circular. Conversely, putting source lookup into Core would make admission depend on imports,
-scopes and the state of a source file. The distinction follows the same rationale as Lean's
-separation between elaboration and checking. [Lean elaboration and compilation](https://lean-lang.org/doc/reference/latest/Elaboration-and-Compilation/)
+The parser and resolver share the constructors for clauses and goals. Their payloads change
+with the phase. The parser keeps paths and role names for printing. The resolver keeps the
+callee's declaration or an unresolved term, operand binders, deciding-role index, labels,
+external names and simulator permissions. A tuple goal argument remains a tuple. A called
+goal value retains its arguments and witness split. The source-map projection visits those
+same fields. Two identical clauses in different modules can select different functions even
+after that projection is erased. Static specialization remains explicit on each reference
+segment until it is consumed or refused.
+
+At a closed instance the existing group consumer checks the selected functions' signatures
+and run view, emits three roots and binds their admissions in Lean. A generated equality
+compares the **entire ordered returning record** of its admitted header with the expected
+keys and nominal field types. An independent client supplies its own field keys, statement,
+arguments and observations. A fourth recorded field would break the equality. Proving that
+arbitrary views preserve observations of every execution is a separate obligation, especially
+for nested loops, private choices and stopped prefixes.
 
 For property extension, the useful precedent in MLIR is an operation interface that lets a
 generic pass request specific capabilities from each operation. Here the analogue is a typed
@@ -117,13 +135,74 @@ request from a property for a view, role execution or address correspondence, wi
 answer wherever it contributes to a theorem. An interface method alone cannot establish a
 security hypothesis. [MLIR interfaces](https://mlir.llvm.org/docs/Interfaces/)
 
+## What other languages change in this design
+
+| Evidence | Decision for zkc |
+|---|---|
+| Rust lowers syntax within an owner. It can discard parentheses and assign identities to generated nodes while keeping origins for diagnostics. | Store a clause with its declaration, retain the local binder and ordered reference segments. A byte position can move and is shared by several generated nodes. Neither a byte nor a declaration number from another compilation is a portable certificate identifier. [Rust HIR](https://rustc-dev-guide.rust-lang.org/hir.html) · [AST lowering](https://rustc-dev-guide.rust-lang.org/hir/lowering.html) |
+| Lean elaboration produces a term and separate information for editors. Kernel checking has its own input. | Resolve a goal in its source module. Issue the actual Lean proposition against admitted Core terms. Let a companion import it. Embedded Lean inside a clause would need a second scope, substitutions for protocol instances, and a policy for what Lean may observe. [Lean reference](https://lean-lang.org/doc/reference/latest/Elaboration-and-Compilation/) |
+| Bend 2 has an implementation with checking and inference and a Lean development with explicit typing, evaluation and book assumptions. A Bend 3 evaluator port uses a single transition machine. A separate author report describes a conversion bug where comparing shared terms mutated a value. | Keep a fact, a role's access and a binder's identity distinct. Sharing a comparison result cannot change which operand an event denotes. The portable lesson from the evaluator is to compare alternative implementations on the same programs. Its packing and allocation decisions do not justify a new zkc runtime. The public port is evidence about an evaluator, with no dependency on a stable Bend 3 language specification. [Bend 2 implementation](https://github.com/bendlang/bend/blob/0e2f38f759cc830849e489307f3d256a7d148288/bend2/bend.ts) · [Typing and evaluation](https://github.com/bendlang/bend/blob/0e2f38f759cc830849e489307f3d256a7d148288/bend2/bendtt.lean) · [Bend 3 port](https://github.com/bendlang/bend/commit/487aec6fe5b35d2dc2c4a286385b62fd31a01f4a) · [Conversion correction](https://github.com/bendlang/bend/commit/88a7dfdae961888e90e3f8b8340815485260fb89) |
+| Zippel's Chaum–Pedersen names public and witness inputs, two commitments, a challenge, a response and two verifier equations. Its knowledge analysis can fail to discover an extractor. | The concurrent projects share a research question about deriving assurance from an authored protocol. In zkc the author can name executable extraction code and the theorem checks it against the admitted verifier and relation. An algebraic analyzer could propose that code or prove residual equations. Its result would face the same independent binding checks. [Zippel example](https://github.com/eniac/zippel/blob/c968be19ad0bf08db70be0a9e844337473e55f49/examples/cp/cp.zippel) · [Zippel paper](https://www.cis.upenn.edu/~sga001/papers/zippel-sp27.pdf) |
+| Owl puts information flow and refinement in the protocol language. Choreographic programming relates a global interaction to local endpoints through a projection theorem. | Express roles, observations and wire events in source and preserve their scope in the typed body. Require a correspondence to the admitted party projection. A successful global execution by itself cannot establish what a corrupt peer may see. [Owl Book](https://gancher.dev/owl-docs) · [Formal theory of choreographic programming](https://doi.org/10.1007/s10817-023-09665-3) |
+
+## Decisions from the independent review
+
+**Properties.** The shared Lean vocabulary owns the name, audience, clause requirement,
+stages, constructions and available theorem binding. The references are checked against it.
+GL3 relates the contract's deciding role to the scheme verifier. The honest-verifier experiment
+makes every participating role honest. The descriptions of available hypotheses live in SX7.
+A richer game needs its own quantified experiment, supported models, permissions and closed
+algorithm signature. A catalog entry for unforgeability or the name of an external algorithm
+does not supply the scheme, adversary, model or proof. Keep the formal package independent of
+source lookup and keep Mathlib and VCVio outside the compiler dependency graph.
+An external name can already have a checked source association. The Sumcheck extension and
+GKR summand checks inspect the selected external name and its operands. Supplying the
+semantics of the named algorithm for a particular game is a further obligation.
+[Shared declarations](../lean/compiler/Zkc/Vocabulary/Security.lean) · [Formal fork](../lean/formal/Zkc/Formal/Written/Extraction.lean)
+
+**Facts.** Section 7.1 already assigns fact acceptance to Core admission, and TY4 describes
+a mutable name as its current value. Three independent expectations contradicted admission.
+The guarded mutable natural, the post-loop guarded sequence and the commuted natural index
+all produced admitted functions. Assigning eight before the first return, assigning an empty
+sequence after the length guard, and changing the index to `2 + i` each produced a refusal.
+Treat the specified rules as guarantees. A stronger certified bound is usable at the same
+role and control point. The sender-local length example remains a missing guarantee.
+[Fact rules](../language/LANGUAGE.md) · [Independent corpus](../language/conformance/independent/expectations.json)
+
+**Views and services.** Comparing six source roots with Core gives three straight-line
+agreements in field count, order and the shape of the types (Schnorr, Chaum–Pedersen and
+the OR proof). Sumcheck, inner product and GKR expose a different boundary. Core has nested
+records while frontend view derivation waits on applications or control flow. For a shared
+loop, group by the same source site and index its occurrences through frames. Check nominal
+types at every round before transposing records into a collection per field. Empty loops,
+heterogeneous specializations and two calls to the same callee need distinct controls.
+`Run`, `Received` and `Coins` describe a returning run. A failed attempt may already have
+sent a commitment. A game exposing it must name a prefix including the stop and preceding
+observations. The language's OR4, OR5, OR7, OR9, OR10 and §7.6 are marked superseded. Redesign
+those rules with a service request, fixed handle identity and an explicit opening flow. Require
+a test with two tables and a failed opening before extending the declaration of support.
+[Core shapes](../lean/compiler/Zkc/Core/Program/Shape.lean) · [Source oracle boundary](../lean/compiler/Zkc/Frontend/Elab/Events.lean)
+
+**Schemes.** Name resolution of a scheme or a successful construction-line check does not run
+a deployment. Rebuild stage execution around the admitted header, Core's selection of online
+roles and its statement and witness, reusing the authored suite, layout and key information.
+The written group certificates check the declared endpoints through Core's online-role
+selection and expose equalities for statement and witness types. The first deployment
+test should run one transcript handler and check its challenge at its real address. Theorems
+about Fiat–Shamir require a stated adversary, query budget and reduction. The legacy scheme
+modules and descriptive examples are inputs to that redesign. Role selection still needs source elaboration for offline and ideal roles in larger schemes. [Scheme role definitions](../lean/compiler/Zkc/Core/Scheme/Roles.lean)
+
 ## Delivery and evidence
 
-1. Replace flat contract terms and byte-offset joins with structured clauses in the ordinary
-   resolver. Migrate the existing written exporter as the first reader. Exercise imported
-   aliases, reordered operands, two clauses with identical text under separate owners, and
-   a malformed unselected clause. The generated target must still identify the same admitted
-   verifier, relation and extractor.
+The contract representation below is in production. The next cross-layer correctness case
+is sender-local length under TY14. Then exercise the closed contract interface on a
+repeated draw, followed by a fixed-table opening. A deployed transcript handler and its
+Fiat–Shamir security reduction each need their own acceptance evidence.
+
+1. The resolved contract and goal now feed the written consumer. SX5 checks ownership and
+   uniqueness during ordinary resolution. The compiler and both references share a checked
+   property catalog. A stage may be legal in the language while its property still awaits a
+   formal source binding. Test new entries with a supported and an unsupported selection.
 2. Elaborate these clauses at the closed scheme instance. Move general signature, cost and
    visibility checks to their owners. Let the property library specify the supported subject
    shape and keep profile-specific restrictions visible at selection. Check an executable

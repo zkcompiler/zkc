@@ -73,7 +73,7 @@ def source_consumer(name, fixture):
 
 def check(work):
     names = ["Baseline", "Renamed", "Zero", "OtherRelation", "OtherVerifier", "Simulator", "Swapped",
-             "SameLog", "RolesReversed", "Reordered", "MissingGuard", "ScalarGuard", "NativeOnly", "ProjectedGuards", "RunLength", "Context", "Named", "ReversedNumerator", "PrivateControl"]
+             "SameLog", "RolesReversed", "Reordered", "MissingGuard", "ScalarGuard", "NativeOnly", "ProjectedGuards", "RunLength", "Context", "Named", "NamedArguments", "ReversedNumerator", "PrivateControl"]
     formal = ROOT / "lean/formal"
     (work / "lean-toolchain").write_text((formal / "lean-toolchain").read_text())
     (work / "lakefile.toml").write_text(
@@ -148,6 +148,11 @@ spec for Probe:
     module("Renamed", renamed)
 
     clause = "knowledge DLog(base, point) by response_difference"
+    named_args = replace_once(original, clause, "knowledge DLog(point = point, base = base) by response_difference")
+    module("NamedArguments", named_args, proof=True)
+    for args in ("base = base, base = point", "point = point, missing = base"):
+        generate(replace_once(original, clause, f"knowledge DLog({args}) by response_difference"), failure="FN6")
+    generate(replace_once(original, clause, clause + '\n    knowledge DLog(base = base, base = point) by external("other")'), failure="FN6")
     swapped = replace_once(original, clause, "knowledge DLog(point, base) by response_difference")
     swapped = replace_once(swapped, "    guard gap != 0", "    guard point == base * 0\n    guard gap != 0")
     module("Swapped", swapped)
@@ -251,7 +256,7 @@ module secondary:
     controls.write_text("\n".join(["module", "", *imports, "", CONTROL.read_text(),
                                    *(source_consumer(name, fixture) for name, fixture in
                                      [("Baseline", "Baseline"), ("SameLog", "SameLog"), ("Context", "Baseline"),
-                                      ("Named", "Baseline"), ("RolesReversed", "RolesReversed")]),
+                                      ("Named", "Baseline"), ("NamedArguments", "Baseline"), ("RolesReversed", "RolesReversed")]),
                                    """
 open Zkc.Formal.Written.FiniteModel in
 example (s : Context.PublicStatement model) :
@@ -337,7 +342,7 @@ example : Named.selectedScheme = "Proof" ∧ Named.selectedGoal = some "chosen" 
         (replace_once(same_log, "    construction derived", "    offline P\n    construction derived"), "WK-VIEW"),
         (replace_once(same_log, "construction derived(HashChain<Keccak256, Fr>)", "construction interactive"), "SC3"),
         (replace_once(same_log, "        proves SameLog", "        proves @P SameLog"), "SX6"),
-        (replace_once(same_log, "        knowledge SameLog", "    spec for ChaumPedersen:\n        knowledge SameLog"), "WK-CLAUSE"),
+        (replace_once(same_log, "        knowledge SameLog", "    spec for ChaumPedersen:\n        knowledge SameLog"), "SX5"),
         (replace_once(same_log, "runs[0].c", "runs[0].1"), "TY7"),
         (replace_once(same_log, "runs[0].c", "runs[0][1]"), "NL6"),
         (replace_once(same_log, "runs[0].c", "runs.0.c"), "TY7"),
@@ -347,7 +352,7 @@ example : Named.selectedScheme = "Proof" ∧ Named.selectedGoal = some "chosen" 
         reject_in_both(source, diagnostic, same_log=True)
     reject_in_both(original, "WK-NAMESPACE", namespace="Broken.name")
     entry.write_text(ENTRY.read_text() + "\nspec for Schnorr:\n    requires false\n")
-    reject_in_both(original, "WK-CLAUSE")
+    reject_in_both(original, "SX5")
     library_scheme = replace_once(original, "module schnorr\n", "module schnorr\nuse zkc::curves::bls12_381::{G1}\n")
     library_scheme += "\nscheme Proof = Schnorr<G1>:\n    construction interactive\n    prover P\n"
     entry.write_text(ENTRY.read_text())

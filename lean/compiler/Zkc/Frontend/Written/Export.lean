@@ -1,5 +1,7 @@
 module
 
+public import Zkc.Core.Scheme.Roles
+
 public import Zkc.Frontend.Written.Contract
 public import Zkc.Frontend.Emit.Root
 public import Zkc.Frontend.Driver.SourcePhases
@@ -67,6 +69,10 @@ def target (c : WrittenClause) (historyType : String) : String := Id.run do
     (eventBindings.map fun (name, site) =>
       s!"def {name} : String × Nat × Key := ({reprStr site.fieldName}, {site.event}, ⟨{site.instruction.get!}⟩)") ++
     sourceStatement c ++ calculations ++ [
+    s!"theorem source_parties : onlineParties header [.online, .online] {c.parties.interactive} ({reprStr c.parties.declaredProver}) = some ({p}, {v}) := by decide",
+    s!"theorem source_statement_types : statementOf header {p} {v} = List.replicate {c.publicNames.size} pointTy := by rfl",
+    s!"theorem source_witness_types : witnessOf header {p} {v} = [scalarTy] := by rfl",
+    s!"theorem source_run_fields : header.shape.fields = forkFields historyTy scalarTy scalarTy {keys} := by rfl",
     "variable (M : Model V)",
     "def relationArguments (s : Statement (M.Val pointTy)) (w : M.Val scalarTy) : HList M.Val RelationHeader.ins :=",
     s!"  {inputs "w"}",
@@ -93,13 +99,13 @@ def target (c : WrittenClause) (historyType : String) : String := Id.run do
     s!"  replay (observed M path a b) (roleMeaning M installed Member.head {v} path (inputValues M s))",
     "theorem replay_returns (s : Statement (M.Val pointTy)) (path : List Frame) (a : M.Val historyTy) (b : Branch (M.Val scalarTy)) :",
     "    accepts M s path a b ↔ replayCheck M s path a b = some () := replay_iff ..",
-    "def coreObligation (path : List Frame) : Prop := SpecialSoundness (fun s => accepts M s path)",
+    s!"def coreObligation (path : List Frame) : Prop := {Security.Binding.writtenFork.statement} (fun s => accepts M s path)",
     "  (fun s w => coreRelation M s w = some true) (fun s a l r w => coreExtractor M s a l r = some w)",
     "def admittedPropertyOn {S : Type} (portsOf : S → Statement (M.Val pointTy))",
     "    (protocol relation extractor : Admitted V) (path : List Frame) : Prop :=",
     "  ∃ root : Member protocol.program.headers.protocols header, ∃ rel : Member relation.program.headers.fns RelationHeader,",
     "  ∃ ext : Member extractor.program.headers.fns ExtractorHeader,",
-    "    SpecialSoundness (fun s => acceptsOf M protocol.program root (portsOf s) path)",
+    s!"    {Security.Binding.writtenFork.statement} (fun s => acceptsOf M protocol.program root (portsOf s) path)",
     "      (fun s w => coreRelationOf M relation.program rel (portsOf s) w = some true)",
     "      (fun s a l r w => coreExtractorOf M extractor.program ext (portsOf s) a l r = some w)",
     "def compiledObligation := admittedPropertyOn M id",
@@ -122,10 +128,10 @@ def target (c : WrittenClause) (historyType : String) : String := Id.run do
     "    (a : M.Val historyTy) (b : Branch (M.Val scalarTy)) :",
     "    accepts M s path a b ↔ verifierCheck M ops s a b path = some () := replay_returns M s path a b"
     ] ++ (if c.calculations.isOk then [
-    "def obligation (path : List Frame) : Prop := SpecialSoundness (fun s => accepts M s path)",
+    s!"def obligation (path : List Frame) : Prop := {Security.Binding.writtenFork.statement} (fun s => accepts M s path)",
     "  (fun s w => relation ops s w = some true) (fun s a l r w => extractor ops s a l r = some w)",
     "def admittedObligation (a : Admitted V) (path : List Frame) : Prop :=",
-    "  ∃ root : Member a.program.headers.protocols header, SpecialSoundness (fun s => acceptsOf M a.program root s path)",
+    s!"  ∃ root : Member a.program.headers.protocols header, {Security.Binding.writtenFork.statement} (fun s => acceptsOf M a.program root s path)",
     "    (fun s w => relation ops s w = some true) (fun s a l r w => extractor ops s a l r = some w)",
     "theorem of_obligation {a : Admitted V} (h : admit stored ⟨[],[],[],[],[]⟩ = .ok a)",
     "    (path : List Frame) (proved : obligation M ops path) : admittedObligation M ops a path := by",
@@ -143,6 +149,11 @@ def checkPorts (p : SourcePackage) (evidence : p.Admission) (c : WrittenClause) 
   let sp := c.source.where_
   let [.protocol root 2 ports [] (.mk _ steps _)] := p.named.definitions
     | refuse sp "WK-PORT" "expected a two-role protocol with an empty result"
+  let some ⟨header, _⟩ := evidence.admitted.program.findProtocol root
+    | refuse sp "WK-VIEW" "missing admitted protocol header"
+  unless onlineParties header [.online, .online] c.parties.interactive c.parties.declaredProver ==
+      some (v.prover, v.verifier) do
+    refuse c.parties.place "SC3" "the scheme must designate the endpoints of the admitted fork"
   let some addresses := Emit.SiteAddresses.forProtocol evidence.admitted.program root
     | refuse sp "WK-VIEW" "admitted protocol is missing"
   for site in [v.commitment, v.challenge, v.response] do

@@ -28,6 +28,8 @@ Clients can rewrite expectations with `expect_bind`, `expect_done`, `expect_halt
 
 The round interpretation has one representation for both kinds of client. A Sumcheck proof can supply its formula at every natural depth. A GKR proof can supply a polynomial for each of its four depths. Restricting the first proof to the executed indices or passing the remaining indices to a recursive call preserves the same boundary function, evaluation and collision proof. [Sumcheck interpretation](../lean/formal/Zkc/Formal/Interactive/PairSequence.lean) · [Gate interpretation](../lean/formal/Zkc/Formal/Interactive/GateSequence.lean)
 
+The [joint language design](source-elaboration.md) records the implemented contract and goal representation, the shared property vocabulary, the returning-record check, and the research behind the remaining work. Each package below owns its source rule, instance elaboration, Core meaning and independent evidence together.
+
 ## Target design and delivery plan
 
 The deliverable is a theorem that another Lean module can apply to the executions selected by a source declaration. For example, the written Chaum–Pedersen knowledge clause asks whether the *compiled extractor*, on two accepting verifier executions with the same commitments and distinct challenges, returns a scalar satisfying the *compiled relation* for both public bases. Its random-oracle knowledge goal asks a different question about a different program and model. The current group exporter proves the first claim. A new property or protocol should reuse the route from the named declaration to its executions and acquire new mathematics only for the verification conditions that remain. [Example and goals](../examples/chaum_pedersen.zkc) · [Current coverage](status.md)

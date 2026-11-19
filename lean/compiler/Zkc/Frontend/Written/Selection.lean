@@ -23,28 +23,21 @@ structure Selection where
   scheme : SchemeEntry
   clause : Option String
   schemePath : String
-  goal : Option Goal := none
+  goal : Option Lowered.Goal := none
   goalPath : Option String := none
 
-def declarationRef (s : Compile.State) (file : FileId) (path : Path) : ExportM DeclarationId := do
-  let some resolution := s.env.modules.resolution? file path | refuse path.span "WK-REF" "unresolved path"
-  unless resolution.segments.all (·.staticArgs.isNone) do
-    refuse path.span "WK-REF" "explicit or import-fixed static arguments on a clause reference"
-  let some (Step.declaration id) := resolution.segments.back?.map (·.step)
-    | refuse path.span "WK-REF" "expected a declaration"
+def closedDeclaration (ref : Lowered.Reference) : ExportM DeclarationId := do
+  if ref.hasStaticArguments then
+    refuse ref.span "WK-REF" "explicit or import-fixed static arguments on a clause reference"
+  let some id := ref.declaration? | refuse ref.span "WK-REF" "expected a declaration"
   return id
-
-def lastStage (scheme : SchemeEntry) : String :=
-  if scheme.lines.any (fun | .construction _ (.derived ..) | .construction _ (.authored ..) => true | _ => false) then
-    "serialized"
-  else if scheme.lines.any (fun | .commit .. => true | _ => false) then "committed"
-  else "written"
 
 /-- An imported scheme is also a root when an entry goal selects it. Reuse ordinary SC1
 instantiation in the defining file and retain the resulting table for body elaboration. -/
-def goalScheme (s : Compile.State) (file : FileId) (goal : Goal) :
+def goalScheme (s : Compile.State) (goal : Lowered.Goal) :
     ExportM (SchemeEntry × Compile.State) := do
-  let id ← declarationRef s file goal.scheme
+  let .reference ref := goal.scheme | refuse goal.scheme.span "WK-GOAL" "unresolved goal scheme"
+  let id ← closedDeclaration ref
   if let some scheme := s.results.schemes.find? (·.declaration == id) then return (scheme, s)
   let some declaration := s.program.declarations[id]? | refuse goal.scheme.span "WK-GOAL" "missing goal scheme"
   let .scheme node := declaration.node | refuse goal.scheme.span "WK-GOAL" "expected a scheme"
@@ -57,35 +50,36 @@ def goalScheme (s : Compile.State) (file : FileId) (goal : Goal) :
     | refuse goal.scheme.span "WK-GOAL" "the named scheme has no closed instance"
   return (scheme, after)
 
-def selectedGoal (state : Compile.State) (file : FileId) (goal : Goal) (path : String) :
+def selectedGoal (state : Compile.State) (goal : Lowered.Goal) (path : String) :
     ExportM (Selection × Compile.State) := do
-  let (scheme, s) ← goalScheme state file goal
-  let some resolution := s.env.modules.resolution? file goal.property
-    | refuse goal.property.span "WK-GOAL" "unresolved formal property"
-  let some (Step.entry library property) := resolution.segments.back?.map (·.step)
-    | refuse goal.property.span "WK-GOAL" "expected a formal library property"
-  unless resolution.segments.all (·.staticArgs.isNone) do
-    refuse goal.property.span "WK-GOAL" "this property takes no static arguments"
+  let (scheme, s) ← goalScheme state goal
+  let .reference ref := goal.property | refuse goal.property.span "WK-GOAL" "unresolved formal property"
+  let some (.entry library property) := ref.lastStep?
+    | refuse ref.span "WK-GOAL" "expected a formal library property"
+  if ref.hasStaticArguments then refuse ref.span "WK-GOAL" "this property takes no static arguments"
   let some entry := vocabularyEntry? library property | refuse goal.property.span "WK-GOAL" "unknown property"
-  let .property binding := entry.kind | refuse goal.property.span "WK-GOAL" "a security model cannot select a property"
+  let .property description := entry.kind | refuse goal.property.span "WK-GOAL" "a security model cannot select a property"
   let mut stage := none
   let mut label := none
   for argument in goal.args do
     let .named span key value := argument | refuse goal.span "WK-GOAL" "unsupported specification argument"
     unless key.text == "stage" || key.text == "clause" do
       refuse span "WK-GOAL" s!"{property}: no written fork theorem covers goal argument {key.text}"
-    let .path _ path none := value | refuse span "WK-GOAL" s!"expected one name for {key.text}"
-    let some name := path.plainName? | refuse span "WK-GOAL" s!"expected one name for {key.text}"
+    let .path _ (.reference (.reference _ #[.segment step none none])) none := value
+      | refuse span "WK-GOAL" s!"expected one name for {key.text}"
+    let name ← match key.text, step with
+      | "stage", .word word | "clause", .label word => pure word
+      | _, _ => refuse span "WK-GOAL" s!"expected one name for {key.text}"
     if key.text == "stage" then
       if stage.isSome then refuse span "WK-GOAL" "duplicate stage"
-      stage := some name.text
+      stage := some name
     else
       if label.isSome then refuse span "WK-GOAL" "duplicate clause selection"
-      label := some name.text
-  let requested := stage.getD (lastStage scheme)
+      label := some name
+  let requested := stage.getD scheme.lastStage
   unless requested == "written" do
     refuse goal.span "WK-GOAL" s!"{goal.name.text} requires stage {requested}; only written executions are available"
-  unless binding == some .writtenFork do
+  unless description.stages.contains requested && description.binding == some .writtenFork do
     refuse goal.property.span "WK-GOAL" s!"no complete theorem for {library}::{property} at {requested}; a two-run knowledge clause supplies special soundness"
   if goal.ceiling.isSome then refuse goal.span "WK-GOAL" "the written fork property has no quantitative ceiling"
   return (⟨scheme, label, Static.qualifiedName s.program scheme.declaration, some goal, some path⟩, s)
@@ -115,49 +109,35 @@ def select (s : Compile.State) : Request → ExportM (Selection × Compile.State
     return (⟨scheme, label, path, none, none⟩, s)
   | .goal name => do
     let (id, path) ← selectDeclaration s .goal name "WK-GOAL"
-    let d := s.program.declarations[id]!
-    let .goal goal := d.node | throw "WK-GOAL: missing goal declaration"
-    selectedGoal s d.file goal path
+    let some {content := .goal goal, ..} := s.env.modules.lowered? id
+      | throw "WK-GOAL: missing resolved goal"
+    selectedGoal s goal path
 
 structure ClauseSource where
   where_ : Span
-  file : FileId
-  rel : Path
-  operands : Array LocalId
-  extractor : Path
+  rel : Lowered.Reference
+  arguments : Array Lowered.Argument
+  extractor : Lowered.Reference
   label : Option String
   /-- Kind, optional label and location of each other clause in the same contract. -/
   uncovered : List (String × Option String × String)
 
-/-- Link each syntax clause to its ordinary resolved terms. The contract resolver numbers
-its port binders in the owning protocol's declaration order. -/
-structure BoundContract where
-  clauses : Array Clause := #[]
-  terms : Std.HashMap UInt32 Lowered.Expr := {}
-
+/-- Read the resolved clauses attached to the selected declaration. -/
 def contractOf (s : Compile.State) (id : DeclarationId) (at_ : Span) :
-    ExportM BoundContract := do
-  let ids := s.env.modules.indexes.contracts.getD id #[]
-  if ids.isEmpty then return {}
+    ExportM (Array Lowered.Clause) := do
+  let some cid := s.env.modules.indexes.contracts[id]? | return #[]
   let some owner := s.program.declarations[id]? | refuse at_ "WK-REF" "missing contract owner"
-  let some d := s.program.declarations[ids.back!]? | refuse at_ "WK-REF" "missing contract"
-  let .contract c := d.node | refuse at_ "WK-REF" "expected a contract"
-  if ids.size > 1 then refuse c.span "WK-CLAUSE" "a declaration has more than one contract"
-  unless d.file == owner.file && d.namespace == owner.namespace do
-    refuse c.span "WK-CLAUSE" "the contract must be in the module that defines its target"
+  let some d := s.program.declarations[cid]? | refuse at_ "WK-REF" "missing contract"
+  let some {content := .contract c, ..} := s.env.modules.lowered? cid
+    | refuse at_ "WK-REF" "missing resolved contract"
   unless d.scopes.all (fun scope => owner.scopes.contains scope ||
       (s.program.scopes[scope]?).any (fun item => item.parameters.isEmpty && item.whereClause.isNone)) do
     refuse c.span "WK-CLAUSE" "the contract has additional parameter scopes"
-  let _ ← declarationRef s d.file c.target
-  let some lowered := s.env.modules.lowered? ids.back! | refuse c.span "WK-REF" "missing resolved contract"
-  let .unlowered terms := lowered.content | refuse c.span "WK-REF" "missing resolved clause terms"
-  return ⟨c.clauses, terms.foldl (fun table term => table.insert term.span.startByte term) {}⟩
+  let .reference target := c.target | refuse c.span "WK-REF" "unresolved contract target"
+  unless (← closedDeclaration target) == id do refuse c.span "WK-REF" "misindexed contract"
+  return c.clauses
 
-def BoundContract.term (contract : BoundContract) (expr : Expr) : ExportM Lowered.Expr :=
-  let span := (Static.withoutParentheses expr).span
-  (contract.terms[span.startByte]?).elim (refuse span "WK-REF" "missing resolved clause expression") pure
-
-def clauseIdentity : Clause → String × Option Label
+def clauseIdentity : Lowered.Clause → String × Option Label
   | .requires _ l _ => ("requires", l)
   | .ensures _ l _ => ("ensures", l)
   | .invariant _ l .. => ("invariant", l)
@@ -168,13 +148,13 @@ def clauseIdentity : Clause → String × Option Label
   | .zeroKnowledge _ l .. => ("zero_knowledge", l)
   | .charge .. => ("charge", none)
 
-def clause (s : Compile.State) (root : DeclarationId) (file : FileId)
+def clause (s : Compile.State) (root : DeclarationId)
     (selected : Option String) (where_ : Span) : ExportM ClauseSource := do
   let contract ← contractOf s root where_
   let mut labels : Std.HashSet String := {}
   let mut chosen := none
   let mut uncovered := #[]
-  for cl in contract.clauses do
+  for cl in contract do
     let (kind, label) := clauseIdentity cl
     let name := label.map (·.name.text)
     if let some n := name then
@@ -185,18 +165,14 @@ def clause (s : Compile.State) (root : DeclarationId) (file : FileId)
     | _ => pure ()
     if kind == "knowledge" && (selected.isNone || name == selected) then
       if chosen.isSome then refuse cl.span "WK-CLAUSE" "several knowledge clauses; select a label"
-      let .knowledge sp _ expr (.path ext) none := cl
+      let .knowledge sp _ expr (.path (.reference ext)) none := cl
         | refuse cl.span "WK-CLAUSE" "expected one source extractor"
-      let .call _ rel (.callArgs _ _ none) := Static.withoutParentheses expr
+      let .call _ rel args none := expr
         | refuse expr.span "WK-CLAUSE" "expected a relation call on statement arguments"
-      let .call _ _ args none ← contract.term expr | refuse sp "WK-CLAUSE" "expected a resolved relation call"
-      let operands ← args.mapM fun
-        | .positional _ (.local _ port) => pure port
-        | _ => refuse sp "WK-PORT" "expected positional public port operands"
-      chosen := some (sp, rel, operands, ext, name)
+      chosen := some (sp, rel, args, ext, name)
     else uncovered := uncovered.push (kind, name, location cl.span)
-  let some (sp, rel, operands, ext, name) := chosen
+  let some (sp, rel, args, ext, name) := chosen
     | refuse where_ "WK-CLAUSE" s!"missing selected knowledge clause{(selected.map (" " ++ ·)).getD ""}"
-  return ⟨sp, file, rel, operands, ext, name, uncovered.toList⟩
+  return ⟨sp, rel, args, ext, name, uncovered.toList⟩
 
 end Zkc.Frontend.Written

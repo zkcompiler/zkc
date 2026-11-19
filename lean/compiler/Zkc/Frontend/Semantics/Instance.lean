@@ -120,17 +120,11 @@ structure SchemeEntry where
   waits : Option String := none
   deriving Inhabited
 
-/-- A selected two-role claim checks the written prover against its actual message flow.
-An interactive scheme used for a claim needs an explicit designation (SC3). -/
-def SchemeEntry.checkProver (scheme : SchemeEntry) (prover : String) (requireExplicit : Bool) :
-    Except Refusal Unit := do
-  let mut declared := false
-  for line in scheme.lines do
-    if let .prover span role := line then
-      if declared then throw ⟨"SC3", span, "duplicate prover designation", #[]⟩
-      unless role.text == prover do
-        throw ⟨"SC3", span, s!"`prover {role.text}` conflicts with the written fork whose prover is {prover}", #[]⟩
-      declared := true
-  if requireExplicit && !declared then throw ⟨"SC3", scheme.span, "an interactive claim needs its prover", #[]⟩
+/-- The last stage named by the construction and commitment lines (GL2). -/
+def SchemeEntry.lastStage (scheme : SchemeEntry) : String :=
+  if scheme.lines.any (fun | .construction _ (.derived ..) | .construction _ (.authored ..) => true | _ => false) then
+    "serialized"
+  else if scheme.lines.any (fun | .commit .. => true | _ => false) then "committed"
+  else "written"
 
 end Zkc.Frontend
