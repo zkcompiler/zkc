@@ -13,7 +13,10 @@ structure Certified (p : Core.Typed V) (rootKey red eval : Key) (n : Nat) (event
   root : Member p.headers.protocols (header rows.scalarTy n rootKey shape)
   entry : ProtocolEntry p.defs root
   linked : Linked (earlier entry) red (table rows.scalarTy n) rows.scalarTy (table rows.scalarTy 0) 0 n events
-  roundLaws : linked.rounds.AllMembers (fun ops => PairLaws rows linked.entry.definitions ops)
+  shifted : Nat → Bool
+  initial : shifted n = false
+  terminal : shifted 0 = false
+  roundLaws : linked.rounds.AllMembersAt (fun d {_ _ _} ops => PairLaws rows linked.entry.definitions ops (shifted (d+1)) (shifted d))
   evaluate : Member entry.earlier.fns (TableEvaluation.header rows.scalarTy eval n (0+n))
   tableLaw : TableEvaluation.Law vectors eval n (0+n) (fun M => Defs.fnTable M entry.definitions _ evaluate)
   meaning : ∀ M path inputs, roleMeaning M p root 1 path inputs =
@@ -27,12 +30,16 @@ def certify (p : Core.Typed V) (rootKey red eval : Key) (n : Nat) (events : Even
   let ⟨shape,root⟩ ← ProtocolEntry.locatePorts p.headers rootKey 2 [shared (table t n),shared t] []
   let entry := p.defs.protocolEntry p.distinct (show Member _ (header t n rootKey shape) from root)
   let linked ← link (earlier entry) red (table t n) t (table t 0) 0 n events
-  let ⟨members⟩ ← checkPairSequence rows linked.entry.definitions (List.nodup_append.mp linked.entry.distinct).1 roundProof linked.rounds alternatives
-  let ⟨evaluate,tableLaw⟩ ← TableEvaluation.check (V := V) (t := rows.scalarTy) rows.free vectors entry.definitions (List.nodup_append.mp entry.distinct).1 eval n (0+n)
-  let target := witness events linked.ref evaluate rootKey shape
-  let ⟨meaning⟩ ← entry.recognize 1 target (fun run => ∀ M path inputs, run M path inputs = target.meaning entry.definitions 1 M path inputs)
-    (fun _ _ _ => rfl)
-  return ⟨shape,root,entry,linked,members,evaluate,tableLaw,meaning⟩
+  let unique := (List.nodup_append.mp linked.entry.distinct).1
+  let shifted := intermediateOffsets rows linked.entry.definitions unique linked.rounds
+  if ends : shifted n = false ∧ shifted 0 = false then
+    let ⟨members⟩ ← checkEncodedSequence rows linked.entry.definitions unique linked.rounds shifted roundProof alternatives
+    let ⟨evaluate,tableLaw⟩ ← TableEvaluation.check (V := V) (t := rows.scalarTy) rows.free vectors entry.definitions (List.nodup_append.mp entry.distinct).1 eval n (0+n)
+    let target := witness events linked.ref evaluate rootKey shape
+    let ⟨meaning⟩ ← entry.recognize 1 target (fun run => ∀ M path inputs, run M path inputs = target.meaning entry.definitions 1 M path inputs)
+      (fun _ _ _ => rfl)
+    return ⟨shape,root,entry,linked,shifted,ends.1,ends.2,members,evaluate,tableLaw,meaning⟩
+  else none
 
 private theorem evaluate_of_length {F : Type} (q : Claims F) (n : Nat) (x : q.State n) (rs : List F)
     (length : rs.length = n) : ∃ v, q.evaluate n x rs = some v := by
@@ -78,10 +85,14 @@ theorem Certified.soundFrom (cert : Certified rows vectors p rootKey red eval n 
   rw [Experiment.expect_bind,Experiment.expect_mapR]
   rw [relation]
   simp only [Process.map_eq_bind,Experiment.expect_bind,Experiment.expect_done]
-  have bounds := cert.linked.rounds.boundsFromMembers _ cert.roundLaws M _ _ Cube.claims points positive 1
-    (fun _ law => (PairLaws.interpret rows law M math points distinct collisions).reindex Fin.val) equality (K.renamePeers peerMap.to) inner env s x fresh
-  have bounded := cert.linked.rounds.soundFrom M _ _ (K.renamePeers peerMap.to) Cube.claims (roundCost 1 points) inner
-    (Mass.mul_nonneg Mass.natCast_nonneg (Mass.le_of_lt (Mass.inv_pos.mpr (Mass.natCast_pos.mpr positive)))) env s x bounds wrong
+  let q := encodedClaims (F := rows.F M) cert.shifted
+  let laws := cert.linked.rounds.interpretMembersAt _ cert.roundLaws M _ q points 1
+    (fun d {_ _ _} _ law => PairLaws.interpretAt rows cert.shifted d.val law M math points distinct collisions)
+  have bounds := cert.linked.rounds.boundsAtDepth M _ _ q points positive 1 laws equality
+    (K.renamePeers peerMap.to) inner env s x fresh
+  have initialWrong : claim ≠ q.value n x := by simpa [q, encodedClaims, cert.initial, ScalarRows.encode] using wrong
+  have bounded := cert.linked.rounds.soundFrom M _ _ (K.renamePeers peerMap.to) q (roundCost 1 points) inner
+    (Mass.mul_nonneg Mass.natCast_nonneg (Mass.le_of_lt (Mass.inv_pos.mpr (Mass.natCast_pos.mpr positive)))) env s x bounds initialWrong
   apply Mass.le_trans _ bounded
   apply (K.renamePeers peerMap.to).expect_mono
   intro (last,rs,v) after reached
@@ -91,6 +102,7 @@ theorem Certified.soundFrom (cert : Certified rows vectors p rootKey red eval n 
   have guard := guardValue events cert.evaluate M cert.entry.definitions path (Cube.flatten n x) claim rs v answer equality evaluated
   change K.expect _ (onReturn events cert.evaluate M cert.entry.definitions path (Cube.flatten n x) claim (leaveAll M peerMap 1 (PointReturn.values M rows.scalarTy (table rows.scalarTy 0) (0+n) rs v))) after ≤ _
   rw [guard]
+  simp only [q, evaluate_encoded cert.shifted cert.terminal]
   by_cases equal : v = answer
   · simp [equal,good]
   · simp [equal,Ne.symm equal,good]

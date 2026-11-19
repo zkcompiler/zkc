@@ -104,6 +104,21 @@ abbrev Laws.interpret (laws : Laws rows key bound ds ops) (M : Model V) [Lean.Gr
 variable {Γ : Ctx (LTy V)} {events : Events rows.scalarTy} {running : Var Γ (shared rows.scalarTy)}
 variable {outs : List (LTy V)} {term : Term (protocolDialect V hs) Γ outs} {count : Nat}
 
+/-- Instantiate the gate equations once per executed depth, after the deployment
+interpretation and finite challenge alphabet are known. -/
+noncomputable def interpretSequence (rounds : Sequence hs events st running term count)
+    (checked : rounds.AllMembers (fun ops => Laws rows key bound ds ops)) (M : Model V)
+    [Lean.Grind.Field (rows.F M)] [DecidableEq (rows.F M)] (math : rows.Arithmetic M)
+    (model : Evaluation rows key bound M) (q : Claims (rows.F M))
+    (honest : ∀ d : Fin count, q.State (d.val+1) → Quadratic (rows.F M))
+    (sum : ∀ d x, q.value (d.val+1) x = (honest d x).boundary)
+    (restricted : ∀ d x r, q.value d.val (q.restrict d.val x r) = (honest d x).eval r)
+    (points : List (rows.F M)) (distinct : points.Nodup)
+    (collisions : CollisionBound (Quadratic.boundary (F := rows.F M)) Quadratic.eval 2 := Quadratic.collisions) :=
+  rounds.interpretMembersAt _ checked M _ q points 2 (fun d {_ _ _} _ law =>
+    Laws.interpretOn rows law M math model q (fun _ : Unit => d.val)
+      (fun _ => honest d) (fun _ => sum d) (fun _ => restricted d) points distinct collisions)
+
 theorem sound (rounds : Sequence hs events st running term count)
     (checked : rounds.AllMembers (fun ops => Laws rows key bound ds ops)) (M : Model V)
     [Lean.Grind.Field (rows.F M)] [DecidableEq (rows.F M)] (math : rows.Arithmetic M)
@@ -119,8 +134,10 @@ theorem sound (rounds : Sequence hs events st running term count)
       (fun (_,rs,value) _ => decide (q.evaluate count x rs = some value)) ≤ (count : Mass) * roundCost 2 points := by
   apply rounds.sound M _ _ K q _ path _ _ env s x wrong
   · exact Mass.mul_nonneg Mass.natCast_nonneg (Mass.le_of_lt (Mass.inv_pos.mpr (Mass.natCast_pos.mpr positive)))
-  · exact rounds.boundsOfMembers _ checked M _ _ _ points positive 2
-      (fun _ laws => Laws.interpretOn rows laws M math model q Fin.val honest sum restricted points distinct) equalLaw K fresh path
+  · intro env s x
+    exact rounds.boundsAtDepth M _ _ q points positive 2
+      (interpretSequence rows rounds checked M math model q honest sum restricted points distinct)
+      equalLaw K path env s x (rounds.freshFromService M _ _ K points positive fresh path env s)
 
 #print axioms sound
 #print axioms check

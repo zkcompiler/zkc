@@ -8,19 +8,22 @@ namespace Zkc.Formal.Interactive.Sumcheck.ScalarRows
 open Core
 variable {V : Vocabulary} (rows : ScalarRows V)
 
-def BoundaryLaw (k : Key) (run : FunctionMeaning (rows.scalarHeader k [rows.pair])) : Prop :=
+def EncodedBoundaryLaw (k : Key) (shifted : Bool) (run : FunctionMeaning (rows.scalarHeader k [rows.pair])) : Prop :=
   ∀ (M : Model V) [Lean.Grind.Field (rows.F M)], rows.Arithmetic M → ∀ a z : rows.F M,
-    run M (.cons (a,z,()) .nil) = .done (.cons (a+z) .nil)
+    run M (.cons (a,z,()) .nil) = .done (.cons (encode shifted (a+z)) .nil)
 
-def EvaluationLaw (k : Key) (run : FunctionMeaning (rows.scalarHeader k [rows.pair,rows.scalarTy])) : Prop :=
+def EncodedEvaluationLaw (k : Key) (shifted : Bool) (run : FunctionMeaning (rows.scalarHeader k [rows.pair,rows.scalarTy])) : Prop :=
   ∀ (M : Model V) [Lean.Grind.Field (rows.F M)], rows.Arithmetic M → ∀ a z r : rows.F M,
-    run M (.cons (a,z,()) (.cons r .nil)) = .done (.cons (line (a,z) r) .nil)
+    run M (.cons (a,z,()) (.cons r .nil)) = .done (.cons (encode shifted (line (a,z) r)) .nil)
 
-def boundaryReadback (k : Key) : FunctionReadback _ (rows.BoundaryLaw k) where
+abbrev BoundaryLaw (k : Key) := rows.EncodedBoundaryLaw k false
+abbrev EvaluationLaw (k : Key) := rows.EncodedEvaluationLaw k false
+
+def boundaryReadback (k : Key) (shifted : Bool := false) : FunctionReadback _ (rows.EncodedBoundaryLaw k shifted) where
   inputs := Names.counting 0 _
-  body fns := rows.boundaryBody fns k
-  armed _ := rfl
-  holds _ tables M _ math a z := rows.boundary_value M (tables M) k a z math
+  body fns := rows.boundaryBody fns k shifted
+  armed _ := by cases shifted <;> rfl
+  holds _ tables M _ math a z := rows.boundary_value M (tables M) k a z math shifted
 
 def evaluationReadback (k : Key) : FunctionReadback _ (rows.EvaluationLaw k) where
   inputs := Names.counting 0 _
@@ -28,11 +31,13 @@ def evaluationReadback (k : Key) : FunctionReadback _ (rows.EvaluationLaw k) whe
   armed _ := rfl
   holds _ tables M _ math a z r := rows.evaluate_value M (tables M) k a z r math
 
-def affineReadback (k : Key) : FunctionReadback _ (rows.EvaluationLaw k) where
+def encodedAffineReadback (commuted shifted : Bool) (k : Key) : FunctionReadback _ (rows.EncodedEvaluationLaw k shifted) where
   inputs := Names.counting 0 _
-  body fns := rows.affineBody fns k
-  armed _ := rfl
-  holds _ tables M _ math a z r := rows.affine_value M (tables M) k a z r math
+  body fns := rows.affineBody fns k commuted shifted
+  armed _ := by cases shifted <;> rfl
+  holds _ tables M _ math a z r := rows.affine_value M (tables M) k a z r math commuted shifted
+
+abbrev affineReadback := rows.encodedAffineReadback false false
 
 /-- Both certified references belong to this program. The evaluation formula is a
 property of its table entry and can be used by a caller independently of its expression. -/

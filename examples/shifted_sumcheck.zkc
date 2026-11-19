@@ -1,0 +1,7 @@
+module shifted_sumcheck
+
+use shifted_pairs::{Check}
+use zkc::suites::{Merlin3Bls12381}
+
+scheme Proof = Check:
+    construction derived(Merlin3Bls12381)

@@ -37,12 +37,26 @@ theorem readsOne : V.Reads rows.scalarTy [1] := by simp [Vocabulary.Reads, Ty.sc
 
 local macro "inputName " n:term:max : term => `(⟨$n, rfl⟩)
 
-def boundaryBody (fns : List (FnHeader V)) (k : Key) :
+/-- The public partial sum may carry a unit offset between adjacent rounds. -/
+def encode {F : Type} [Lean.Grind.CommRing F] (shifted : Bool) (v : F) : F :=
+  if shifted then v + 1 else v
+
+theorem encode_inj {F : Type} [Lean.Grind.CommRing F] (shifted : Bool) (a b : F) :
+    encode shifted a = encode shifted b ↔ a = b := by
+  cases shifted with
+  | false => rfl
+  | true => exact Lean.Grind.AddCommGroup.add_left_inj _
+
+def boundaryBody (fns : List (FnHeader V)) (k : Key) (shifted : Bool := false) :
     Fn V fns (rows.scalarHeader k [rows.pair]) (Names.counting 0 _) :=
   .op ⟨0⟩ (.owned (.getTuple rows.fields .head rows.freelyProjected)) (.cons (inputName 0) .nil) (.cons 1 .nil) <|
   .op ⟨1⟩ (.owned (.getTuple rows.fields (.tail .head) rows.freelyProjected)) (.cons (inputName 0) .nil) (.cons 2 .nil) <|
   .op ⟨2⟩ (.row rows.add rows.signature rows.addType) (.cons (inputName 1) (.cons (inputName 2) .nil)) (.cons 3 .nil) <|
-  .ret (.cons (inputName 3) .nil)
+  if shifted then
+    .op ⟨3⟩ (.literal rows.scalarTy [1] rows.readsOne) .nil (.cons 4 .nil) <|
+    .op ⟨4⟩ (.row rows.add rows.signature rows.addType) (.cons (inputName 3) (.cons (inputName 4) .nil)) (.cons 5 .nil) <|
+    .ret (.cons (inputName 5) .nil)
+  else .ret (.cons (inputName 3) .nil)
 
 def evaluateBody (fns : List (FnHeader V)) (k : Key) :
     Fn V fns (rows.scalarHeader k [rows.pair, rows.scalarTy]) (Names.counting 0 _) :=
@@ -56,15 +70,20 @@ def evaluateBody (fns : List (FnHeader V)) (k : Key) :
   .ret (.cons (inputName 8) .nil)
 
 /-- The alternate source expression takes the difference of the endpoints first. -/
-def affineBody (fns : List (FnHeader V)) (k : Key) :
+def affineBody (fns : List (FnHeader V)) (k : Key) (commuted shifted : Bool := false) :
     Fn V fns (rows.scalarHeader k [rows.pair,rows.scalarTy]) (Names.counting 0 _) :=
   .op ⟨0⟩ (.owned (.getTuple rows.fields .head rows.freelyProjected)) (.cons (inputName 0) .nil) (.cons 2 .nil) <|
   .op ⟨1⟩ (.owned (.getTuple rows.fields (.tail .head) rows.freelyProjected)) (.cons (inputName 0) .nil) (.cons 3 .nil) <|
   .op ⟨2⟩ (.owned (.getTuple rows.fields .head rows.freelyProjected)) (.cons (inputName 0) .nil) (.cons 4 .nil) <|
   .op ⟨3⟩ (.row rows.sub rows.signature rows.subType) (.cons (inputName 3) (.cons (inputName 4) .nil)) (.cons 5 .nil) <|
-  .op ⟨4⟩ (.row rows.mul rows.signature rows.mulType) (.cons (inputName 1) (.cons (inputName 5) .nil)) (.cons 6 .nil) <|
+  .op ⟨4⟩ (.row rows.mul rows.signature rows.mulType) (if commuted then .cons (inputName 5) (.cons (inputName 1) .nil)
+    else .cons (inputName 1) (.cons (inputName 5) .nil)) (.cons 6 .nil) <|
   .op ⟨5⟩ (.row rows.add rows.signature rows.addType) (.cons (inputName 2) (.cons (inputName 6) .nil)) (.cons 7 .nil) <|
-  .ret (.cons (inputName 7) .nil)
+  if shifted then
+    .op ⟨6⟩ (.literal rows.scalarTy [1] rows.readsOne) .nil (.cons 8 .nil) <|
+    .op ⟨7⟩ (.row rows.add rows.signature rows.addType) (.cons (inputName 7) (.cons (inputName 8) .nil)) (.cons 9 .nil) <|
+    .ret (.cons (inputName 9) .nil)
+  else .ret (.cons (inputName 7) .nil)
 
 variable (M : Model V)
 abbrev F := M.Val rows.scalarTy
@@ -90,12 +109,18 @@ private theorem binary_value {fns} (table : FnTable M fns) (key : V.RowKey)
       .done (.cons (f x y) .nil) := by simp [localOp, law]
 
 theorem boundary_value {fns} (table : FnTable M fns) (k : Key) (a z : rows.F M)
-    (math : rows.Arithmetic M) :
-    (rows.boundaryBody fns k).denote (localSem M _ table) []
-      (Env.positional (.cons (a,z,()) .nil)) = .done (.cons (a + z) .nil) := by
+    (math : rows.Arithmetic M) (shifted : Bool := false) :
+    (rows.boundaryBody fns k shifted).denote (localSem M _ table) []
+      (Env.positional (.cons (a,z,()) .nil)) = .done (.cons (encode shifted (a + z)) .nil) := by
   change (localOp M table (.row rows.add rows.signature rows.addType) (.cons a (.cons z .nil))).bind _ = _
   rw [binary_value rows M table _ _ _ math.add]
-  rfl
+  cases shifted with
+  | false => rfl
+  | true =>
+    change (localOp M table (.row rows.add rows.signature rows.addType)
+      (.cons (a+z) (.cons (Ty.readLiteral M rows.scalarTy [1] rows.readsOne) .nil))).bind _ = _
+    rw [math.one, binary_value rows M table _ _ _ math.add]
+    rfl
 
 theorem evaluate_value {fns} (table : FnTable M fns) (k : Key) (a z r : rows.F M)
     (math : rows.Arithmetic M) :
@@ -116,19 +141,27 @@ theorem evaluate_value {fns} (table : FnTable M fns) (k : Key) (a z r : rows.F M
   rfl
 
 theorem affine_value {fns} (table : FnTable M fns) (k : Key) (a z r : rows.F M)
-    (math : rows.Arithmetic M) :
-    (rows.affineBody fns k).denote (localSem M _ table) []
-      (Env.positional (.cons (a,z,()) (.cons r .nil))) = .done (.cons (line (a,z) r) .nil) := by
+    (math : rows.Arithmetic M) (commuted shifted : Bool := false) :
+    (rows.affineBody fns k commuted shifted).denote (localSem M _ table) []
+      (Env.positional (.cons (a,z,()) (.cons r .nil))) = .done (.cons (encode shifted (line (a,z) r)) .nil) := by
   change (localOp M table (.row rows.sub rows.signature rows.subType)
     (.cons z (.cons a .nil))).bind _ = _
   rw [binary_value rows M table _ _ _ math.sub]
-  change (localOp M table (.row rows.mul rows.signature rows.mulType)
-    (.cons r (.cons (z-a) .nil))).bind _ = _
-  rw [binary_value rows M table _ _ _ math.mul]
-  change (localOp M table (.row rows.add rows.signature rows.addType)
-    (.cons a (.cons (r*(z-a)) .nil))).bind _ = _
-  rw [binary_value rows M table _ _ _ math.add, line_normalForm]
-  rfl
+  cases commuted <;> first
+  | change (localOp M table (.row rows.mul rows.signature rows.mulType) (.cons r (.cons (z-a) .nil))).bind _ = _
+    rw [binary_value rows M table _ _ _ math.mul]
+  | change (localOp M table (.row rows.mul rows.signature rows.mulType) (.cons (z-a) (.cons r .nil))).bind _ = _
+    rw [binary_value rows M table _ _ _ math.mul, Lean.Grind.CommSemiring.mul_comm (z-a) r]
+  all_goals
+    change (localOp M table (.row rows.add rows.signature rows.addType) (.cons a (.cons (r*(z-a)) .nil))).bind _ = _
+    rw [binary_value rows M table _ _ _ math.add, line_normalForm]
+    cases shifted with
+    | false => rfl
+    | true =>
+      change (localOp M table (.row rows.add rows.signature rows.addType)
+        (.cons (a + r*(z-a)) (.cons (Ty.readLiteral M rows.scalarTy [1] rows.readsOne) .nil))).bind _ = _
+      rw [math.one, binary_value rows M table _ _ _ math.add]
+      rfl
 
 #print axioms boundary_value
 #print axioms evaluate_value

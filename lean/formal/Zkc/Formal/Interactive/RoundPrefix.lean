@@ -25,10 +25,20 @@ structure Operations (V : Vocabulary) where
   evaluate : LocalRaw V
 
 def Operations.read (round : List (Instruction (ProtocolRaw V) (List Role))) : Option (Operations V) := do
-  let read (i : Nat) : Option (LocalRaw V) := do
-    let .op _ _ (.compute _ raw) _ ← round[i]? | none
-    return raw
-  return ⟨← read 0,← read 2,← read 6,← read 7⟩
+  let [(sent,sharedMsg)] := round.filterMap (fun
+    | .op _ [out] (.event (.flow .message 0 [1]) _) [arg] => some (arg,out)
+    | _ => none) | none
+  let [challenge] := round.filterMap (fun
+    | .op _ [out] (.event (.given (.coin _) 1 [0]) _) [] => some out
+    | _ => none) | none
+  let computation (roles : List Role) (select : Name → List Name → Bool) := round.filterMap (fun
+    | .op _ [out] (.compute who op) args => if who == roles && select out args then some op else none
+    | _ => none)
+  let [message] := computation [0] (fun out _ => out == sent) | none
+  let [boundary] := computation [1] (fun _ args => args == [sharedMsg]) | none
+  let [bindState] := computation [0] (fun _ args => args.length == 2) | none
+  let [evaluate] := computation [0,1] (fun _ args => args == [sharedMsg,challenge]) | none
+  return ⟨message,boundary,bindState,evaluate⟩
 
 def Operations.members (raw : Operations V) (hs : Headers V) (state t : V.Ty) :
     Option ((msg : V.Ty) × (residual : V.Ty) × Members hs t msg state residual) := do

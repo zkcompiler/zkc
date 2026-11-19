@@ -64,6 +64,26 @@ theorem sumcheck (cert : TableVerifier.Certified rows vectors p root red eval n 
 
 /-- Written degree-two bound at a reached GKR layer call. Its public relation and honest
 quadratic still belong to the layer. The observed event is a correct residual of a false claim. -/
+theorem gateAtDepth {hdr : ProtocolHeader V} {member : Member p.headers.protocols hdr}
+    {site loopKey : Key} {args : List Name} {before layers inside : Nat}
+    (atCall : AtSite p member key site state rows.scalarTy residual k n ev args (loopRoute before loopKey layers inside))
+    (M : Model V) [DecidableEq (rows.F M)] (equality : ScalarEquality.Law rows.scalarTy ev.equal ev.equalType M)
+    (i : Fin layers) (q : Claims (rows.F M))
+    (alphabet : Fin (width+1) → rows.F M)
+    (laws : Sequence.AtDepth M (Defs.fnTable M atCall.linked.entry.definitions) q (List.ofFn alphabet) 2 atCall.linked.rounds)
+    (advance : Occurrence → rows.F M → σ → σ) (other : Slots (RSig M) σ)
+    (charge : DrawCharge) (binding : Matches charge atCall.linked 2 (width+1))
+    (path : List Frame) (s : σ) (hidden : RV M 1 ⟨state,[0]⟩) (point : List (rows.F M)) (claim : rows.F M)
+    (x : q.State n) (wrong : claim ≠ q.value n x) :
+    prEvent (observed (fun vs _ => correctReturn M q x point.length vs) <$> run
+      (service (RoundService.withChallenge M ev alphabet advance other))
+      (roleOp M 1 (Defs.fnTable M atCall.callerEntry.definitions) (Defs.rTable M atCall.callerEntry.definitions)
+        site atCall.linked.application (path ++ [.iteration loopKey i.val]) (publicArgs M hidden point claim)) s) ≤ total charge := by
+  apply probability_le _ _ _ _ (List.ofFn alphabet) (by simp) (by simpa using binding)
+  exact atCall.linked.appliedAtDepth M q 2 _ (by simp) laws equality _ site _ s hidden point claim x wrong
+    (atCall.linked.rounds.freshFromService _ _ _ _ _ _ (RoundService.fresh M ev alphabet advance other) _ _ _)
+
+/-- Homogeneous gate libraries share one primitive interpretation across the executed rounds. -/
 theorem gate {hdr : ProtocolHeader V} {member : Member p.headers.protocols hdr}
     {site loopKey : Key} {args : List Name} {before layers inside : Nat}
     (atCall : AtSite p member key site state rows.scalarTy residual k n ev args (loopRoute before loopKey layers inside))
@@ -84,9 +104,7 @@ theorem gate {hdr : ProtocolHeader V} {member : Member p.headers.protocols hdr}
       (service (RoundService.withChallenge M ev alphabet advance other))
       (roleOp M 1 (Defs.fnTable M atCall.callerEntry.definitions) (Defs.rTable M atCall.callerEntry.definitions)
         site atCall.linked.application (path ++ [.iteration loopKey i.val]) (publicArgs M hidden point claim)) s) ≤ total charge := by
-  apply probability_le _ _ _ _ (List.ofFn alphabet) (by simp) (by simpa using binding)
-  exact atCall.gate_soundFrom rows checked M math model equality i q honest sum restricted _ _ distinct _
-    path s hidden point claim x wrong
-    (atCall.linked.rounds.freshFromService _ _ _ _ _ _ (RoundService.fresh M ev alphabet advance other) _ _ _) collisions
+  apply gateAtDepth atCall M equality i q alphabet _ advance other charge binding path s hidden point claim x wrong
+  exact Gate.interpretSequence rows atCall.linked.rounds checked M math model q honest sum restricted _ distinct collisions
 
 end Zkc.Formal.Written.RoundCharge
