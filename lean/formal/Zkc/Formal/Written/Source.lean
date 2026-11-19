@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Core.Admission.Theorems
+public import Zkc.Core.Scheme.Roles
 public import Zkc.Frontend.Emit.Bindings
 public import Zkc.Formal.Written.Execution
 public import Zkc.Formal.Written.Extraction
@@ -86,6 +87,12 @@ def input (p : InputPort V) (v : (RSig M).Reply (operation M p)) : Input (RSig M
     if h : ofOp M op = some p then isTrue (operation_ofOp M h)
     else isFalse (fun e => h (e.symm ▸ ofOp_operation M p))⟩
 end InputPort
+
+/-- The complete returning record expected by a three-message fork, in source order. -/
+def forkFields {V : Core.Vocabulary} (history challenge response : V.Ty)
+    (commitmentSite challengeSite responseSite : Key) : Fields V :=
+  .cons (.key commitmentSite) (.val history) <|
+    .cons (.key challengeSite) (.val challenge) <| .cons (.key responseSite) (.val response) .nil
 
 def forkInputs (M : Model Standard) (history : Standard.Ty) (path : List Frame) (prover : Role)
     (commitmentSite challengeSite responseSite : Key)

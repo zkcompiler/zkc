@@ -64,7 +64,7 @@ def Member.span : Member → Span
   | .protocolMember value => value.span
   | .lawMember value => value.span
 
-def Clause.span : Clause → Span
+def ClauseForm.span {term ref roleId : Type} : ClauseForm term ref roleId → Span
   | .requires span .. | .ensures span .. | .invariant span .. | .reduces span .. | .proves span ..
   | .through span .. | .knowledge span .. | .zeroKnowledge span .. | .charge span .. => span
 

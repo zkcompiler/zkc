@@ -1,4 +1,5 @@
 import Zkc.Frontend.Driver.SourcePhases
+import Zkc.Frontend.Written.Selection
 
 open Zkc.Frontend
 
@@ -33,7 +34,36 @@ private def compile (text : String) (context : Compile.Context := {vocabulary}) 
 private def describe (state : Compile.State) : String :=
   "\n".intercalate (state.log.entries.map (·.render state.env.renderer)).toList
 
+/-- Identical clause text under two owners selects distinct declarations. Removing
+the diagnostic projection must preserve the index, reference and local binder. -/
+private def checkContractIdentity : IO Unit := do
+  let part := "    relation R(p: bool; w: bool): p == w
+    protocol Share roles(P, V)(p: bool @(P, V), w: bool @P):
+        m <- send w to V
+        c <- draw bool from V to P
+    def pick(p: bool, runs: Share::Runs<2>) -> bool: p
+    spec for Share:
+        knowledge R(p) by pick
+"
+  let s := compile ("module left:\n" ++ part ++ "module right:\n" ++ part)
+  if s.log.hasErrors then throw (IO.userError (describe s))
+  let store : ModuleStore := { s.env.modules with records := s.env.modules.records.map fun (r : ModuleRecord) => {r with resolutions := {}} }
+  let s : Compile.State := { s with env := {s.env with modules := {store with indexes := Instances.indexesOf store}} }
+  let mut count := 0
+  for (d, id) in s.program.declarations.zipIdx do
+    unless d.kind == .protocol && s.program.nameOf id == "Share" do continue
+    let .ok c := Written.clause s id none default | throw (IO.userError "contract depended on its source map")
+    let some r := c.rel.declaration? | throw (IO.userError "missing relation")
+    let some e := c.extractor.declaration? | throw (IO.userError "missing extractor")
+    unless s.program.nameOf r == "R" && s.program.nameOf e == "pick" &&
+        [r, e].all (fun i => s.program.declarations[i]!.namespace == d.namespace) do
+      throw (IO.userError "clause selected a declaration from another owner")
+    let #[.positional _ (.local _ 0)] := c.arguments | throw (IO.userError "wrong statement binder")
+    count := count + 1
+  unless count == 2 do throw (IO.userError "missing contract owner")
+
 def check : IO Unit := do
+  checkContractIdentity
   for source in [functions ++ protocol, protocol ++ functions] do
     let state := compile source
     if state.log.hasErrors then throw (IO.userError (describe state))
@@ -102,6 +132,11 @@ def check : IO Unit := do
     let state := compile (protocol ++ text)
     let rejected := state.log.entries.any (fun d => d.isError && d.rule == "SX6")
     unless rejected == !valid && state.log.hasErrors == !valid do throw (IO.userError (describe state))
+
+  for extra in [contract, "module other:\n    spec for Sharing:\n        requires true\n"] do
+    let state := compile (protocol ++ contract ++ extra)
+    unless state.log.entries.any (fun d => d.isError && d.rule == "SX5") do
+      throw (IO.userError s!"expected ordinary contract ownership refusal: {describe state}")
 
   let reduction := "protocol Deliver roles(P, V)(spec tag: bool, x: bool @(P, V)) -> result: bool @P:
     return x

@@ -574,29 +574,9 @@ def pairArguments (name : String) (parameters : Array String) (arguments : Array
   if let some witnesses := witnesses then
     unless witnesses.isEmpty do
       refuseHere "SX3" place s!"`;` stands only in the arguments of a relation"
-  let mut paired : Array (Option Arg) := parameters.map fun _ => none
-  let mut position := 0
-  for argument in arguments do
-    match argument with
-    | .positional span value =>
-      if position ≥ parameters.size then
-        refuseHere "FN6" span s!"`{name}` takes {parameters.size} arguments"
-      paired := paired.set! position (some (.written value))
-      position := position + 1
-    | .named span argName value =>
-      match parameters.findIdx? (· == argName.text) with
-      | some index =>
-        if paired[index]!.isSome then
-          refuseHere "FN6" span s!"`{name}` is given `{argName.text}` twice"
-        paired := paired.set! index (some (.written value))
-      | none => refuseHere "FN6" span s!"`{name}` has no parameter `{argName.text}`"
-    | .spec .. => pure ()
-  let mut result := #[]
-  for index in [0:parameters.size] do
-    match paired[index]! with
-    | some arg => result := result.push arg
-    | none => refuseHere "FN6" place s!"`{name}` is not given `{parameters[index]!}`"
-  return result
+  match Lowered.pairValueArguments name parameters arguments place with
+  | .ok values => return values.map Arg.written
+  | .error (span, message) => refuseHere "FN6" span message
 
 /-- Pairs the arguments of an application of a relation: the statement before `;`, the witness
 after it, each side as many as the definition has (SX3). -/

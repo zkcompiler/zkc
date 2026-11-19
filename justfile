@@ -29,7 +29,7 @@ test-formal:
 
 # Parse and format the reference corpus and check source contracts and generated view types.
 test-frontend:
-    cd lean/compiler && lake build Zkc.Tests.Frontend.Reference Zkc.Frontend.Driver.SourcePhases
+    cd lean/compiler && lake build Zkc.Tests.Frontend.Reference Zkc.Frontend.Driver.SourcePhases Zkc.Frontend.Written.Selection
     cd lean/compiler && lake env lean --run Zkc/Tests/Frontend/SourceConformance.lean
     cd lean/compiler && lake env lean --run Zkc/Tests/Frontend/ProtocolViews.lean
 

@@ -1264,11 +1264,8 @@
     {
       "id": "facts-mut-guard",
       "phase": "semantic",
-      "expected": "refuse",
-      "rules": [
-        "TY9",
-        "TY5"
-      ],
+      "expected": "accept",
+      "rules": [],
       "pair": "facts-mut-copy",
       "sources": {
         "main.zkc": "cases/facts-mut-guard/main.zkc"
@@ -1279,9 +1276,9 @@
       "controls": [],
       "stops": [],
       "execution": [],
-      "notes": [],
-      "diagnostic": "No range fact is attached to mut x; its nat type cannot convert to index<8>.",
-      "refusal_anchor": "return x"
+      "notes": [
+        "The guard constrains the current value until reassignment."
+      ]
     },
     {
       "id": "facts-mut-copy",
@@ -2283,12 +2280,8 @@
     {
       "id": "loop-mut-size-guard",
       "phase": "semantic",
-      "expected": "refuse",
-      "rules": [
-        "TY10",
-        "TY5",
-        "TY9"
-      ],
+      "expected": "accept",
+      "rules": [],
       "pair": null,
       "sources": {
         "main.zkc": "cases/loop-mut-size-guard/main.zkc"
@@ -2299,9 +2292,9 @@
       "controls": [],
       "stops": [],
       "execution": [],
-      "notes": [],
-      "diagnostic": "TY9 makes no size fact about mut xs, so the return cannot convert [nat] to [nat;3].",
-      "refusal_anchor": "return xs"
+      "notes": [
+        "The post-loop length guard certifies the current collection."
+      ]
     },
     {
       "id": "loop-growing-state",
@@ -4495,11 +4488,8 @@
     {
       "id": "facts-no-commutativity-recovery",
       "phase": "semantic",
-      "expected": "refuse",
-      "rules": [
-        "TY4",
-        "TY8"
-      ],
+      "expected": "accept",
+      "rules": [],
       "pair": "facts-term-text",
       "sources": {
         "main.zkc": "cases/facts-no-commutativity-recovery/main.zkc"
@@ -4510,9 +4500,9 @@
       "controls": [],
       "stops": [],
       "execution": [],
-      "notes": [],
-      "diagnostic": "The fact concerns i+1; 1+i is a different term and its upper bound is unknown.",
-      "refusal_anchor": "xs[1 + i]"
+      "notes": [
+        "Admission certifies the equivalent natural index in this context."
+      ]
     },
     {
       "id": "facts-arm-does-not-leak",

@@ -297,6 +297,30 @@ def functionBody : Lowered.FunctionBody → ProjectM Unit
   | .primitive _ _ arguments => for argument in arguments do staticArgument argument
   | .external .. | .absent => pure ()
 
+def algorithm : Syntax.AlgorithmRef Lowered.Expr → ProjectM Unit
+  | .path e => expr e
+  | .external .. => pure ()
+
+def contractClause : Lowered.Clause → ProjectM Unit
+  | .requires _ _ e | .ensures _ _ e | .invariant _ _ e _ | .through _ e _
+  | .proves _ _ _ e | .charge _ _ e => expr e
+  | .reduces _ _ _ source target => do expr source; expr target
+  | .knowledge _ _ relation extractor alternative => do
+    expr relation
+    algorithm extractor
+    for branch in alternative do
+      expr branch.relation
+      for e in branch.extractor do expr e
+  | .zeroKnowledge _ _ simulator _ => algorithm simulator
+
+partial def goalValue : Lowered.GoalValue → ProjectM Unit
+  | .tuple _ items => items.forM goalValue
+  | .path _ ref args => do
+    expr ref
+    for (arguments, witnesses) in args do
+      arguments.forM argumentOf
+      for ws in witnesses do ws.forM argumentOf
+
 def content : Lowered.Content → ProjectM Unit
   | .function head body => do
     for parameter in head.parameters do typeTerm parameter.type
@@ -313,6 +337,17 @@ def content : Lowered.Content → ProjectM Unit
   | .«variant» alternatives => for (_, types) in alternatives do for type in types do typeTerm type
   | .staticName value => expr value
   | .memberDefinition _ body => functionBody body
+  | .goal g => do
+    expr g.property
+    expr g.scheme
+    for arg in g.args do
+      match arg with
+      | .named _ _ v => goalValue v
+      | .spec _ _ size => expr size
+    for e in g.ceiling do expr e
+  | .contract c => do
+    expr c.target
+    for clause in c.clauses do contractClause clause
   | .unlowered names => for name in names do expr name
 
 def scope (written : Lowered.Scope) : ProjectM Unit := do

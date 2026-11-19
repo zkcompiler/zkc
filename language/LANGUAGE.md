@@ -2758,14 +2758,20 @@ experiment: `<nat>` is not a law"; "a simulator is given the coins (`coins`) or 
 examples below render which clause enters it and how, and where a rendering and the entry differ
 the entry governs. A clause enters the statement of a goal as a hypothesis or as a conclusion:
 
-| Property | Honest side | Hypotheses | Conclusion |
-|---|---|---|---|
-| `completeness` | every role | every `requires`; the left side of `reduces` or `proves` written in full, `R(a…; w…)`, of the inputs | every role returns; every `ensures`; the `to` side of `reduces` |
-| `soundness` | the deciding role | the `requires` that are available (below) | when the deciding role returns, `R(a…)` holds for some witness, or, for `reduces`, the reduced statement is false, except with probability at most the charges |
-| `special_soundness` | the verifier | two accepting written runs with a shared prefix and distinct challenges at the selected draw | the named extractor returns a witness satisfying the selected knowledge relation (SX6, GL3) |
-| `knowledge_soundness` | the deciding role | the same | the theorem of the formal library applied to what the clause states: for a tree function the implication of special soundness, for one run the obligation with the charges as its bound (SX6) |
-| `zero_knowledge` | every role but the simulated one; a role that the scheme declares `offline` and whose coins are a `trapdoor` is on the honest side | the `requires` that are available; the left side of `proves` in full | the statement of the simulator (SX6) |
-| `honest_verifier_zero_knowledge` | every role | the same | the same, with the coins of the simulated role honest |
+The honest side, required clause, stages and constructions for each entry are listed in
+[the security vocabulary](CORE-LIBRARY.md#29-zkcsecurity). GL3 binds a deciding role to the
+scheme verifier when the property requires an honest verifier. For honest-verifier zero
+knowledge, every participating role follows the honest experiment.
+
+| Property | Hypotheses | Conclusion |
+|---|---|---|
+| `completeness` | every `requires`; the left side of `reduces` or `proves` written in full, `R(a…; w…)`, of the inputs | every role returns; every `ensures`; the `to` side of `reduces` |
+| `soundness` | the `requires` that are available (below) | when the deciding role returns, `R(a…)` holds for some witness, or, for `reduces`, the reduced statement is false, except with probability at most the charges |
+| `special_soundness` | two accepting written runs with a shared prefix and distinct challenges at the selected draw | the named extractor returns a witness satisfying the selected knowledge relation (SX6, GL3) |
+| `knowledge_soundness` | the same | the theorem of the formal library applied to what the clause states: for a tree function the implication of special soundness, for one run the obligation with the charges as its bound (SX6) |
+| `zero_knowledge` | the `requires` that are available; the left side of `proves` in full | the statement of the simulator (SX6) |
+| `honest_verifier_zero_knowledge` | the same | the same, with the coins of the simulated role honest |
+| `unforgeability` | the key experiment and model selected by the goal | the experiment of the constructed or serialized scheme; its formal source binding is pending |
 
 *Availability.* A `requires`, an `ensures` or an `invariant` is part of the statement of an
 experiment exactly when every value it names is held by the honest side of that experiment or is
@@ -3201,7 +3207,7 @@ by the path of the applications through which its definition was reached, then b
    never stops `undefined`: no function of it, on any arguments; no protocol of it, for any
    side and whatever the other roles do; and so no role program. The calculus of the core is
    what decides: a program is accepted for its facts exactly when the admission of the core
-   admits it, and TY4, TY8 and TY9 describe that calculus in terms of the source. A term of
+   admits it. TY4, TY8 and TY9 give the source facts the analysis must recover. It may also certify additional bounds for the same role and control point. Reassignment invalidates facts about the previous value. A term of
    the source that is written twice is one value because the admission shares equal
    applications before it checks; the frontend emits every use, and holds no calculus of its
    own.
@@ -3525,6 +3531,10 @@ carried. A field of `Run` for a site in a loop has the type of its
 `collect`; `Runs` is not defined for a draw in a choice, a field of `Run` for an event in a
 choice is an `Option`, and the order of the tree is stated; `S::Witness` carries the data
 and the commitment state of input handles; the field leaf of a layout is over `F: Field`.
+The run, received and coin records below describe a returning execution. A stop can occur
+after a message has already been observed. An experiment that exposes interrupted attempts
+needs a distinct prefix observation including the messages before the stop.
+
 The record of a run is a typed view per stage (§7.10): `P::Run` and `P::Received` are the
 views of the written protocol, and a scheme has views at its later stages, so that a simulated
 view at `committed` contains the digests and the openings; the members that name those later

@@ -775,8 +775,8 @@ meaning is the experiment of the formal library. What GL3 and GL4 read of each:
 | `soundness` | the verifier | `proves` or `reduces` | written, committed, constructed, serialized | derived, interactive, authored |
 | `special_soundness` | the verifier | `knowledge` with a two-run extractor | written | derived, interactive, authored |
 | `knowledge_soundness` | the verifier | `knowledge` | written, committed, constructed, serialized | derived, interactive, authored |
-| `zero_knowledge` | every role but the simulated one; an offline role whose coins a model authorises as a trapdoor is honest | `zero_knowledge` | written, committed, constructed, serialized | derived, interactive, authored |
-| `honest_verifier_zero_knowledge` | the prover and the verifier | `zero_knowledge` | written, committed | derived, interactive, authored |
+| `zero_knowledge` | every role except the simulated one, with authorized offline trapdoor roles honest | `zero_knowledge` | written, committed, constructed, serialized | derived, interactive, authored |
+| `honest_verifier_zero_knowledge` | every role | `zero_knowledge` | written, committed | derived, interactive, authored |
 | `unforgeability` | the verifier | — | constructed, serialized | derived, authored |
 
 | Model | Budget (a ceiling needs it) |

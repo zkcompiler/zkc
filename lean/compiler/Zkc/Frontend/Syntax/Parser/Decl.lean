@@ -553,8 +553,8 @@ def parseClause : ParseM Clause := do
       let label ← parseLabel?
       let condition ← parseExpr
       let span ← spanFrom start
-      pure (if word == "requires" then Clause.requires span label condition
-        else Clause.ensures span label condition)
+      pure (if word == "requires" then ClauseForm.requires span label condition
+        else ClauseForm.ensures span label condition)
     | "invariant" =>
       discard advance
       let label ← parseLabel?

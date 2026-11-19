@@ -11,6 +11,9 @@ private def relationInputs (s : PublicStatement model) (w : Bool) : HList model.
 private def extractorInputs (s : PublicStatement model) (a : SOURCE_HISTORY) (l r : Branch Bool) :
     HList model.Val ExtractorHeader.ins :=
   SOURCE_EXTRACTOR
+example : header.shape.fields = forkFields SOURCE_HISTORY_TY scalarTy scalarTy SOURCE_ADDRESSES :=
+  source_run_fields
+
 example (path : List Frame) :
     ∃ p r e : Admitted V, admit stored ⟨[],[],[],[],[]⟩ = .ok p ∧
       admit storedRelation ⟨[],[],[],[],[]⟩ = .ok r ∧ admit storedExtractor ⟨[],[],[],[],[]⟩ = .ok e ∧

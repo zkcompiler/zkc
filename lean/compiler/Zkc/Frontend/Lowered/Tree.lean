@@ -441,6 +441,51 @@ def Expr.references (expr : Expr) : Array Reference := expr.collect #[]
 /-- The references of a type, in the order of the text. -/
 def TypeTerm.references (type : TypeTerm) : Array Reference := type.collect #[]
 
+/-- Bind value arguments to the callee's declaration order (FN6). Specification
+arguments belong to the separate specification parameter list. -/
+def pairValueArguments (name : String) (parameters : Array String) (arguments : Array Argument)
+    (place : Span) : Except (Span × String) (Array Expr) := do
+  let mut paired : Array (Option Expr) := parameters.map fun _ => none
+  let mut position := 0
+  let mut named := false
+  for argument in arguments do
+    match argument with
+    | .positional span value =>
+      if named then throw (span, "positional arguments must precede named arguments")
+      if position ≥ parameters.size then
+        throw (span, s!"`{name}` takes {parameters.size} arguments")
+      paired := paired.set! position (some value)
+      position := position + 1
+    | .named span argName value =>
+      named := true
+      match parameters.findIdx? (· == argName.text) with
+      | some index =>
+        if paired[index]!.isSome then
+          throw (span, s!"`{name}` is given `{argName.text}` twice")
+        paired := paired.set! index (some value)
+      | none => throw (span, s!"`{name}` has no parameter `{argName.text}`")
+    | .spec .. => pure ()
+  let mut result := #[]
+  for index in [0:parameters.size] do
+    match paired[index]! with
+    | some arg => result := result.push arg
+    | none => throw (place, s!"`{name}` is not given `{parameters[index]!}`")
+  return result
+
+def Reference.span : Reference → Span
+  | .reference sp _ => sp
+
+def Reference.lastStep? : Reference → Option PathStep
+  | .reference _ segments => segments.back?.map fun | .segment step _ _ => step
+
+def Reference.declaration? (ref : Reference) : Option DeclarationId :=
+  match ref.lastStep? with
+  | some (.declaration id) => some id
+  | _ => none
+
+def Reference.hasStaticArguments : Reference → Bool
+  | .reference _ segments => segments.any fun | .segment _ args _ => args.isSome
+
 /-- The parameter that a reference names alone: one step that is a static parameter. -/
 def Reference.parameter? : Reference → Option ParameterRef
   | .reference _ #[.segment (.parameter parameter) _ _] => some parameter
