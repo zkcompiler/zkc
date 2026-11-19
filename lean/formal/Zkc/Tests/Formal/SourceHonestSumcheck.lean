@@ -7,8 +7,7 @@ open Zkc.Formal.Interactive.Sumcheck
 open SourceProtocolRoots (sourceEvents vectorRows)
 open SourcePairMembers (sourceRows)
 
-def sumRow (b : Emit.Bindings) (n : Nat) : HonestPairs.SumRow (sourceRows b) n :=
-  ⟨.inl (.seq .sum (.atom (.field .bls12381Fr)) (some (2^n))),rfl⟩
+abbrev sumRow := Zkc.Formal.Written.SumcheckRows.sumRow
 
 structure CallerKeys where
   site : Key

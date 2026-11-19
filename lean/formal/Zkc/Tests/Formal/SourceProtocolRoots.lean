@@ -59,8 +59,7 @@ def admitRoot (entry : SourceInput) (loader : Array String → IO (Option Source
     | throw (IO.userError "Core refused the emitted program")
   return ⟨id,s,emission,evidence⟩
 
-def sourceEvents (b : Emit.Bindings) : Zkc.Formal.Interactive.Sumcheck.ReductionRound.Events (sourceRows b).scalarTy :=
-  ⟨.inl (.field .equal .bls12381Fr .all),rfl,.uniform (.nominal (.field .bls12381Fr)),⟨_,rfl,rfl,rfl⟩⟩
+abbrev sourceEvents := Zkc.Formal.Written.SumcheckRows.sourceEvents
 
 private def gateMembers (b : Emit.Bindings) {hs : Headers b.vocabulary} (defs : Defs b.vocabulary hs)
     (unique : (hs.fns.map (·.key)).Nodup) {Γ : Ctx (LTy b.vocabulary)} {outs : List (LTy b.vocabulary)}
@@ -79,13 +78,7 @@ private def gateMembers (b : Emit.Bindings) {hs : Headers b.vocabulary} (defs : 
       (Zkc.Formal.Interactive.Sumcheck.Gate.check rows _ bound defs unique)).isSome
   else false
 
-def vectorRows (b : Emit.Bindings) (n : Nat) : Zkc.Formal.Interactive.Sumcheck.TableRestriction.Rows (sourceRows b).scalarTy n where
-  add := .inl (.seq .add (.atom (.field .bls12381Fr)) (some (2^n)))
-  sub := .inl (.seq .sub (.atom (.field .bls12381Fr)) (some (2^n)))
-  scale := .inl (.seq .scale (.atom (.field .bls12381Fr)) (some (2^n)))
-  addType := rfl
-  subType := rfl
-  scaleType := rfl
+abbrev vectorRows := Zkc.Formal.Written.SumcheckRows.vectorRows
 
 private def certifiedSumcheck (checked : CheckedRoot) (n : Nat := 10) : Option (Bool × Bool) := do
   let e := checked.emission

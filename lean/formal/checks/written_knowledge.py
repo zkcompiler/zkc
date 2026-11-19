@@ -1,6 +1,7 @@
 """Check the source exporter, its issued theorem, and independently falsifiable controls."""
 
 import json
+import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -16,8 +17,8 @@ CONSUMER = Path(__file__).with_name("AdmittedConsumer.lean.in")
 AUDIT = Path(__file__).with_name("AuditWritten.lean")
 
 
-def run(command, *, failure=None, cwd=None):
-    result = subprocess.run(command, text=True, capture_output=True, cwd=cwd)
+def run(command, *, failure=None, cwd=None, env=None):
+    result = subprocess.run(command, text=True, capture_output=True, cwd=cwd, env=env)
     output = result.stdout + result.stderr
     if failure is None:
         if result.returncode or "declaration uses `sorry`" in output or "sorryAx" in output:
@@ -77,9 +78,12 @@ def check(work):
     (work / "lean-toolchain").write_text((formal / "lean-toolchain").read_text())
     (work / "lakefile.toml").write_text(
         'name = "written_controls"\n'
+        f'packagesDir = {json.dumps(str(formal / ".lake/packages"))}\n'
         '[[require]]\nname = "zkc_formal"\n' + f'path = {json.dumps(str(formal))}\n'
-        '[[lean_lib]]\nname = "Variants"\n' + f'roots = {json.dumps([*names, "Checks"])}\n'
+        '[[lean_lib]]\nname = "Variants"\n' + f'roots = {json.dumps([*names, "AuditLocal", "AuditVendor", "Checks", "OddFork"])}\n'
     )
+    # Reuse the formal package's resolved and built pins in this generated client.
+    run(["lake", "-q", "update"], cwd=work, env={**os.environ, "MATHLIB_NO_CACHE_ON_UPDATE": "1"})
     entry = work / ENTRY.name
     entry.write_text(ENTRY.read_text())
     original = SOURCE.read_text()
@@ -261,8 +265,14 @@ example : Named.selectedScheme = "Proof" ∧ Named.selectedGoal = some "chosen" 
     Named.selectedStage = "written" ∧ Named.selectedClause = some "second" ∧
     Named.uncoveredClauses.any (fun x => x.1 == "knowledge" && x.2.1 == some "first") := by decide
 """]))
-    run(["lake", "-q", "build", "+Checks"], cwd=work)
-    print(run(["lake", "env", "lean", "--run", AUDIT], cwd=work), end="", flush=True)
+    (work / "OddFork.lean").write_text(Path(__file__).with_name("OddFork.lean.in").read_text())
+    (work / "AuditVendor.lean").write_text("module\npublic import Baseline\n"
+        "namespace AuditVendor\nprivate axiom extra : False\n"
+        "public theorem exported : False := extra\nend AuditVendor\n")
+    (work / "AuditLocal.lean").write_text("module\npublic import AuditVendor\n"
+        "public theorem AuditLocal.fromExternal : False := AuditVendor.exported\n")
+    run(["lake", "-q", "build", "+AuditLocal", "+Checks", "+OddFork"], cwd=work)
+    print(run(["lake", "-q", "lean", AUDIT], cwd=work), end="", flush=True)
     print("Checked both admitted certificates, permitted forks, and four source counterexamples.", flush=True)
 
     failed = work / "Rejected.lean"

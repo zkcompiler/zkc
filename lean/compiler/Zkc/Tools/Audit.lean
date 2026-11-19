@@ -9,7 +9,7 @@ imported by its root module. A library of tests has no module that imports all o
 it is imported by the modules of its files that are built. For every constant declared in a
 module of a library:
 
-- the axioms it depends on are among `propext` and `Quot.sound`; in
+- the axioms it depends on are permitted by the policy of its package; in
   particular no proof uses `sorryAx`. The constants that the audited ones use are visited once
   for the whole run (`dependencies`), and a forbidden axiom is traced back to every audited
   constant that reaches it;
@@ -184,6 +184,12 @@ def isOfLean (module : Name) : Bool :=
 /-- The axioms that a constant of a library may depend on. -/
 def allowedAxioms : Array Name := #[``propext, ``Quot.sound]
 
+/-- A package may import pinned libraries as prebuilt dependencies of kernel replay.
+Their constants still participate in the transitive axiom audit. -/
+structure Policy where
+  axioms : Array Name := allowedAxioms
+  packages : Array Name := #[]
+
 /-- The kinds of finding. -/
 inductive Rule where
   | axiom_
@@ -200,7 +206,7 @@ inductive Rule where
 
 /-- What a rule requires, as a phrase. -/
 def Rule.describe : Rule → String
-  | .axiom_ => "no axiom beyond propext and Quot.sound"
+  | .axiom_ => "no axiom outside the package policy"
   | .extern => "no `@[extern]`"
   | .implementedBy => "no unrecognized `@[implemented_by]`"
   | .kernel => "the kernel accepts every declaration when it is replayed"
@@ -378,7 +384,8 @@ out of the replay is not replayed, and a replayed module that imports one is a f
 which nothing is replayed: the environment of the replay would hold what that module imports.
 Returns the finding of the first module whose declarations the kernel refuses, after which the
 replay stops, and what was replayed and what was taken as built, as lines. -/
-def replay (env : Environment) (libraries : Array Library) (arts : NameMap ImportArtifacts) :
+def replay (env : Environment) (libraries : Array Library) (arts : NameMap ImportArtifacts)
+    (packages : Array Name := #[]) :
     IO (Option Finding × Array String) := do
   let replayed := libraries.filter (·.withoutReplay.isNone)
   if replayed.isEmpty then return (none, #[])
@@ -387,8 +394,17 @@ def replay (env : Environment) (libraries : Array Library) (arts : NameMap Impor
   let moduleNames := env.header.moduleNames
   let closure := importClosure env
     (moduleNames.filter fun module => replayed.any (·.contains module))
+  let packageImports := moduleNames.filter fun m => closure.contains m && packages.contains m.getRoot
+  let upstream := if packageImports.isEmpty then ({} : NameSet) else importClosure env packageImports
+  -- Importing even one pinned module loads its entire dependency graph into the
+  -- starting kernel environment. Reject a back edge before importing that base.
+  if let some localModule := moduleNames.find? (fun m =>
+      upstream.contains m && (m.getRoot == `Zkc || libraries.any (·.contains m))) then
+    return (some { subject := localModule, rule := .kernel,
+                   line := s!"a prebuilt library imports project module {localModule}" }, #[])
+  let built (m : Name) := isOfLean m || upstream.contains m
   let modules := (moduleNames.zipIdx.filter fun (module, _) =>
-      closure.contains module && !isOfLean module && (leftOut module).isNone).map
+      closure.contains module && !built module && (leftOut module).isNone).map
     fun (module, index) => (index, module)
   let mut base : Array Name := #[]
   for (index, module) in modules do
@@ -398,7 +414,7 @@ def replay (env : Environment) (libraries : Array Library) (arts : NameMap Impor
         return (some { subject := module, rule := .kernel
                        line := s!"{module}: imports {target}, of {library.root}, which is not replayed through the kernel, so no declaration is replayed" },
           #["the replay through the kernel did not start"])
-      if isOfLean target && !base.contains target then base := base.push target
+      if built target && !base.contains target then base := base.push target
   let start ← IO.monoMsNow
   let environment ← importModules (base.map fun module => { module }) {} (loadExts := false)
     (level := .private) (arts := arts)
@@ -436,11 +452,12 @@ def replay (env : Environment) (libraries : Array Library) (arts : NameMap Impor
     #[s!"replayed through the kernel, module after module in the order of their imports, in {seconds ((← IO.monoMsNow) - start)}:"] ++
     counts ++
     #[s!"  not replayed: {skipped} unsafe declarations and code of `partial` definitions, which the kernel does not check",
-      s!"  taken as built: Lean's libraries {", ".intercalate (fromLean.toList.map toString)}"])
+      s!"  taken as built: libraries {", ".intercalate (fromLean.toList.map toString)}"])
 
 /-- The audit of libraries in an environment that imports them. `arts` are the built files of
 the modules, for the environments of the replay. -/
-def audit (env : Environment) (libraries : Array Library) (arts : NameMap ImportArtifacts) :
+def audit (env : Environment) (libraries : Array Library) (arts : NameMap ImportArtifacts)
+    (policy : Policy := {}) :
     IO Report := do
   let mut report : Report := {}
   let moduleNames := env.header.moduleNames
@@ -476,19 +493,19 @@ def audit (env : Environment) (libraries : Array Library) (arts : NameMap Import
     if let some reason := library.withoutReplay then
       report := { report with lines := report.lines.push s!"{library.name}: not replayed through the kernel: {reason}" }
   -- the kernel
-  let (finding, lines) ← replay env libraries arts
+  let (finding, lines) ← replay env libraries arts policy.packages
   if let some finding := finding then report := { report with findings := report.findings.push finding }
   report := { report with lines := report.lines ++ lines }
   -- the axioms
   let (axioms, users, reached) := dependencies env constants
   report := { report with declarations := constants.size, reached, axioms }
   for axiom_ in axioms do
-    if allowedAxioms.contains axiom_ then continue
+    if policy.axioms.contains axiom_ then continue
     for name in (reaching users axiom_).toArray.qsort (·.toString < ·.toString) do
       unless audited.contains name do continue
       let line := if name == axiom_ then
-          s!"{name}: is an axiom other than propext and Quot.sound"
-        else s!"{name}: depends on the axiom {axiom_}, which is not propext or Quot.sound"
+          s!"{name}: is outside the package axiom policy"
+        else s!"{name}: depends on the axiom {axiom_}, which is outside the package policy"
       report := report.add name .axiom_ line
   -- the imports of a library proper
   for library in libraries do
@@ -704,7 +721,7 @@ the running executable's package); prints the findings, what was done for each l
 counts and the controls. The exit code is 0 only when the libraries and generated-helper
 fixture pass and the audit refuses every negative control by its rule. -/
 def run (libraries : System.FilePath → Array Library)
-    (compilerDirectory : System.FilePath → System.FilePath := id) : IO UInt32 := do
+    (compilerDirectory : System.FilePath → System.FilePath := id) (policy : Policy := {}) : IO UInt32 := do
   initSearchPath (← findSysroot)
   let arts ← zkcArtifacts (← searchPathRef.get)
   let directory ← packageDirectory
@@ -714,7 +731,7 @@ def run (libraries : System.FilePath → Array Library)
     for module in ← modulesToLoad library arts do
       modules := modules.push { module }
   let env ← importModules modules {} (loadExts := false) (level := .private) (arts := arts)
-  let report ← audit env libraries arts
+  let report ← audit env libraries arts policy
   for finding in report.findings do IO.println finding.line
   for line in report.lines do IO.println line
   IO.println s!"{report.declarations} declarations, which reach {report.reached} constants and the axioms {", ".intercalate (report.axioms.toList.map toString)}"
@@ -736,7 +753,7 @@ def run (libraries : System.FilePath → Array Library)
   let mut refused := 0
   for control in controls do
     -- each control is audited alone, so that only its own findings refuse it
-    let found := control.refusedIn (← audit controlEnv #[control.library] arts)
+    let found := control.refusedIn (← audit controlEnv #[control.library] arts policy)
     if found then refused := refused + 1
     IO.println s!"control, {control.description}: {if found then "refused" else "NOT refused"} by the rule: {control.rule.describe}"
   IO.println s!"audit: {report.findings.size} findings in {libraries.size} libraries; {refused} of the {controls.size} controls are refused"

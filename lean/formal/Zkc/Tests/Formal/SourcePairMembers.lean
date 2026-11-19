@@ -1,5 +1,6 @@
 module
 
+public import Zkc.Formal.Written.SumcheckRows
 public import Zkc.Formal.Interactive.PairReadback
 public import Zkc.Frontend.Emit.Bindings
 public import Zkc.Core.Admission.Theorems
@@ -10,16 +11,7 @@ open Core Frontend.Emit Formal.Interactive.Sumcheck
 abbrev bindings : Bindings := {}
 abbrev V := bindings.vocabulary
 
-def sourceRows (b : Bindings) : ScalarRows b.vocabulary where
-  scalar := .inl (.field .bls12381Fr)
-  free := rfl
-  one := rfl
-  add := .inl (.field .add .bls12381Fr .all)
-  sub := .inl (.field .sub .bls12381Fr .all)
-  mul := .inl (.field .mul .bls12381Fr .all)
-  addType := rfl
-  subType := rfl
-  mulType := rfl
+abbrev sourceRows := Zkc.Formal.Written.SumcheckRows.sourceRows
 
 abbrev rows := sourceRows bindings
 

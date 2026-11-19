@@ -29,7 +29,7 @@ feature choices and upgrade checks. Rebuild artifacts for the exact toolchain; d
 
 The default targets build the core, vocabulary, their tests and the audit. The separate
 interactive suite checks selected source protocols through admission and replays their formal
-proofs. The full frontend CLI and historical formal receipt suite still await migration.
+proofs. The formal package builds its public root and test modules with the pinned Mathlib and VCVio dependencies. The historical receipt suite is preserved with its original Core revision.
 
 ## Commands
 
@@ -42,6 +42,7 @@ Run every command from the root of the repository.
 | `just test` | `lake build` and `lake test` in `lean/compiler`, then `just audit` |
 | `just test-interactive` | build the interactive formal modules, check emitted source entries and mutations, and audit the interactive library and its mathematical controls |
 | `just test-written-knowledge` | compile both Schnorr and Chaum–Pedersen written clauses, check admission and extraction, consume the public theorems, replay their project imports, and test permitted forks, source mutations and diagnostics |
+| `just test-formal` | build the default formal package, replay its project modules and check their transitive axioms |
 | `just audit` | `lake exe zkc-audit` in `lean/compiler`: core, vocabulary and their tests |
 | `just check` | the checks that need no build: `bash .github/scripts/public-tree-guard.sh`, `python3 scripts/check_docs.py --all`, and `python3 lean/compiler/scripts/generate_unicode_tables.py --check` |
 

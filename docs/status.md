@@ -34,12 +34,14 @@ exercise the certificates.
 
 The source-issued Schnorr and Chaum–Pedersen knowledge theorem covers the admitted verifier, extractor and relation. The extractor takes a sized sequence of nominal run records for the selected closed protocol. Source-level checks cover the owning contract, explicit roles and available statement fields. Both protocols use the same exact returning-trace characterization, row interpretation laws and group-action proof. An independent companion can prove the Core target directly. Finite-model controls falsify it after deleting a verifier guard or changing a selected function. Oracle names and opening operands survive resolution; full source oracle elaboration is pending. Run `just test-written-knowledge` and `just test-interactive`. See the [proof and model boundaries](written-knowledge.md).
 
+A named `special_soundness` goal at `written` selects a scheme and its knowledge clause. Extra scheme context remains in the public statement. The independent consumers supply their own role inputs, function arguments and observed addresses. The formal arithmetic model constructs the group interfaces from a Mathlib field action. A separate process interpretation uses VCVio for challenge probabilities. Run `just test-formal` to build and audit the public package.
+
 ## Earlier source and execution pipeline
 
 Use [the previous Lean compiler at `10ed903fc`](https://github.com/zkcompiler/zkc/tree/10ed903fc22d3f20b22ff2d1bbf607a740ef0718) for the working `.zkc` frontend,
 `zkc-check`, scheme construction and formal examples. The table records coverage at that revision.
 The current default targets build the redesigned Core, vocabulary, their tests and audit.
-The full frontend CLI and historical formal receipt suite still await migration.
+The full frontend CLI is still being migrated. The earlier receipt suite is preserved with its original Core API in the [historical package](../lean/historical-formal/README.md).
 
 | Area | Coverage at `10ed903fc` |
 |---|---|
