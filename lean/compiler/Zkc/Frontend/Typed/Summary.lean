@@ -96,6 +96,9 @@ structure SiteEntry where
   instruction : Option Nat := none
   deriving Inhabited
 
+/-- Selector for this event in a generated source record (§8). -/
+def SiteEntry.fieldName (site : SiteEntry) : String := site.name.getD s!"site{site.event}"
+
 /-- The instructions that realize a written event part, in emission order. A uniform loop
 has one entry; a stepped loop has one per statically emitted iteration path. -/
 def SiteEntry.realizations (sites : Array SiteEntry) (event : Nat) (part : String) : Array SiteEntry :=

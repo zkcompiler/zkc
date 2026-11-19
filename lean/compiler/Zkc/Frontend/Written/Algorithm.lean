@@ -25,10 +25,6 @@ partial def historySort (t : ClosedType) (sp : Span) : ExportM ValueSort := do
 def publicProduct (components : List String) : String :=
   String.intercalate " × " components
 
-/-- A public statement uses ordinary Lean products. A Core tuple has a terminal Unit. -/
-def component (base : String) (index : Nat) (last : Bool) : String :=
-  base ++ String.join (List.replicate index ".2") ++ (if last then "" else ".1")
-
 partial def ValueSort.leanType : ValueSort → String
   | .point => "G" | .scalar => "F" | .boolean => "Bool" | .runs => "Unit"
   | .tuple items => "(" ++ publicProduct (items.map ValueSort.leanType ++ ["Unit"]) ++ ")"
@@ -77,9 +73,9 @@ partial def value (view : View) (locals : Locals) (e : Expr) : ExportM Value := 
     let leaf ← match n.value with
       | 0 => pure "left" | 1 => pure "right"
       | _ => refuse n.span "WK-VIEW" "leaf index is outside Runs<2>"
-    if view.commitment.name == some field.text then return ⟨view.history, "commitment"⟩
-    if view.challenge.name == some field.text then return ⟨.scalar, leaf ++ ".challenge"⟩
-    if view.response.name == some field.text then return ⟨.scalar, leaf ++ ".suffix"⟩
+    if view.commitment.fieldName == field.text then return ⟨view.history, "commitment"⟩
+    if view.challenge.fieldName == field.text then return ⟨.scalar, leaf ++ ".challenge"⟩
+    if view.response.fieldName == field.text then return ⟨.scalar, leaf ++ ".suffix"⟩
     refuse field.span "WK-VIEW" s!"field {field.text} is absent from the deciding role's run"
   | .position _ source index =>
     let x ← child source

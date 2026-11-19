@@ -32,7 +32,7 @@ theorem Experiment.reduction_iterate {S : Sig} {σ H A : Type} (K : Experiment S
     K.probability (Process.iterate count step i a) s (claim (i+count)) ≤ charges cost count i := by
   induction count generalizing i a s with
   | zero =>
-    simp only [Process.iterate, probability, expect, Nat.add_zero, wrong, Bool.false_eq_true,
+    simp only [Process.iterate, probability, expect_done, Nat.add_zero, wrong, Bool.false_eq_true,
       ite_false, charges]
     exact Mass.le_refl
   | succ n ih =>

@@ -6,7 +6,7 @@ private def source (path : System.FilePath) : IO SourceInput := do
   return ⟨path.toString, Syntax.parse path.toString (← IO.FS.readBinFile path)⟩
 
 open Zkc.Frontend in
-private def generate (input root : System.FilePath) (scheme : String) (proof : Bool) : IO UInt32 := do
+private def generate (input root : System.FilePath) (scheme scope : String) (proof : Bool) : IO UInt32 := do
   let entry ← source input
   let assembly ← assemble #[entry] fun segments => do
     let relative := "/".intercalate segments.toList ++ ".zkc"
@@ -14,13 +14,17 @@ private def generate (input root : System.FilePath) (scheme : String) (proof : B
       let path := dir / relative
       if ← path.pathExists then return some (← source path)
     return none
-  match Written.exportSource assembly scheme proof with
+  match Written.exportSource assembly scheme proof scope with
   | .ok text => IO.print text; return 0
   | .error reason => IO.eprintln reason; return 1
 
-def main : List String → IO UInt32
-  | [input, root, scheme] => generate input root scheme true
-  | ["--target-only", input, root, scheme] => generate input root scheme false
+private def arguments (proof : Bool) (scope : String) : List String → IO UInt32
+  | ["--namespace", name, input, root, scheme] => generate input root scheme name proof
+  | [input, root, scheme] => generate input root scheme scope proof
   | _ => do
-    IO.eprintln "usage: zkc-knowledge [--target-only] INPUT.zkc PROJECT_ROOT SCHEME"
+    IO.eprintln "usage: zkc-knowledge [--target-only] [--namespace NAME] INPUT.zkc PROJECT_ROOT SCHEME"
     return 2
+
+def main : List String → IO UInt32
+  | "--target-only" :: rest => arguments false "WrittenKnowledge" rest
+  | args => arguments true "WrittenKnowledge" args

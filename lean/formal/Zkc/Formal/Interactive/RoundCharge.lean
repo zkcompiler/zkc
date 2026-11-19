@@ -43,7 +43,7 @@ theorem Located.charge (round : Located state events running actual) (ns : Names
     (fun _ => challenge M events path (round.sites 5)) (.declared .reject ⟨path,round.sites 4⟩)
     boundary evaluate truth claim degree fresh roots
   apply Mass.le_trans _ first
-  simp only [Experiment.probability,Process.map_eq_bind,Experiment.expect_bind,Experiment.expect]
+  simp only [Experiment.probability,Process.map_eq_bind,Experiment.expect_bind,Experiment.expect_done]
   apply K.expect_mono
   intro (r,v) _ _
   obtain ⟨cv,rv⟩ := binders.values M env r v

@@ -1,0 +1,25 @@
+section
+open Zkc.Core Zkc.Formal.Written Zkc.Formal.Written.FiniteModel
+open CERTIFICATE_NAMESPACE
+
+-- This client fixes the public result independently of the generated obligation aliases.
+example (path : List Frame) :
+    ∃ p r e : Admitted V, admit stored ⟨[],[],[],[],[]⟩ = .ok p ∧
+      admit storedRelation ⟨[],[],[],[],[]⟩ = .ok r ∧ admit storedExtractor ⟨[],[],[],[],[]⟩ = .ok e ∧
+      ∃ root : Member p.program.headers.protocols header, ∃ rel : Member r.program.headers.fns RelationHeader,
+      ∃ ext : Member e.program.headers.fns ExtractorHeader,
+      SpecialSoundness
+        (fun s a b => Returns (roleMeaning model p.program root 1 path (inputValues model s))
+          ((observed model path a b).map Input.entry))
+        (fun s w => functionResult (t := .bool) (fnMeaning model r.program rel (relationArguments model s w)) = some true)
+        (fun s a l h w => functionResult (t := scalarTy)
+          (fnMeaning model e.program ext (extractorArguments model s a l h)) = some w) := by
+  have successful {ε α : Type} (x : Except ε α) (ok : x.isOk = true) : ∃ a, x = .ok a := by
+    cases x with
+    | ok a => exact ⟨a, rfl⟩
+    | error => contradiction
+  obtain ⟨p, hp⟩ := admitted_exists
+  obtain ⟨r, hr⟩ := successful _ RelationAdmitted
+  obtain ⟨e, he⟩ := successful _ ExtractorAdmitted
+  exact ⟨p, r, e, hp, hr, he, certified_core_admitted model ops hp hr he rows functionRows laws path⟩
+end

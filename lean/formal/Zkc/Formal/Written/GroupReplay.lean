@@ -3,7 +3,7 @@ module
 public import Zkc.Formal.Written.Tactics
 public import Zkc.Formal.Written.FunctionMeaning
 public meta import Zkc.Formal.Written.Source
-public meta import Zkc.Frontend.Written.Program
+public meta import Zkc.Frontend.Written.LeanTerms
 public meta import Lean.Elab.Eval
 
 public meta section
@@ -19,31 +19,25 @@ private structure ReplayPlan where
   steps : Array ReplayStep := #[]
   guards : Array String := #[]
 
-private def natList (ns : List Nat) := "[" ++ ", ".intercalate (ns.map toString) ++ "]"
-
-private def consList (items : List String) :=
-  items.foldr (fun x tail => s!"(.cons {x} {tail})") ".nil"
+open Zkc.Frontend.Written (numbers consList component)
 
 private def typeTerm (t : Standard.Ty) : Except String String :=
   Zkc.Frontend.Written.ty (b := Zkc.Frontend.Emit.Bindings.mk [] (by decide)) t
 
-private def projection (base : String) (i : Nat) (last := false) :=
-  base ++ String.join (List.replicate i ".2") ++ (if last then "" else ".1")
-
 private def valueStep (role : Nat) (who : List Role) (types : List Standard.Ty) (values : List String) (proof := "rfl") :
     Except String String := do
-  let mid ← types.mapM fun t => do return s!"⟨{← typeTerm t}, {natList who}⟩"
+  let mid ← types.mapM fun t => do return s!"⟨{← typeTerm t}, {numbers who}⟩"
   return s!"refine afterValue (D := roleDialect V ⟨[],[]⟩ {role}) (sem := sem) (mid := [{", ".intercalate mid}]) {consList values} (by {proof}) ?_"
 
 private def replyStep (role : Nat) (who : List Role) (ty op reply : String) :=
-  s!"refine afterReply (D := roleDialect V ⟨[],[]⟩ {role}) (sem := sem) (mid := [⟨{ty}, {natList who}⟩]) (show ROp M from {op}) {reply} (fun x => .cons x .nil) (by rfl) ?_"
+  s!"refine afterReply (D := roleDialect V ⟨[],[]⟩ {role}) (sem := sem) (mid := [⟨{ty}, {numbers who}⟩]) (show ROp M from {op}) {reply} (fun x => .cons x .nil) (by rfl) ?_"
 
 /-- Read only the admitted program's erasure. Every hinted value, including every tuple
 projection, is checked by conversion against the corresponding projected typed instruction. -/
 private def plan (program : NamedProgram Standard) (role : Role) (replies : List String) : Except String ReplayPlan := do
   let [.protocol _ _ ports [] (.mk inputs steps [])] := program.definitions | throw "expected a closed straight-line verifier"
   let publicInputs := (inputs.zip ports).filter (fun (_, p) => p.holders.contains role)
-  let mut env := publicInputs.zipIdx.map fun ((n,_),i) => (n, projection "s" i (i+1 == publicInputs.length))
+  let mut env := publicInputs.zipIdx.map fun ((n,_),i) => (n, component "s" i (i+1 == publicInputs.length))
   let mut plan : ReplayPlan := {}
   let mut remaining := replies
   for instr in steps do
@@ -78,8 +72,8 @@ private def plan (program : NamedProgram Standard) (role : Role) (replies : List
           else
             let xs ← args.mapM lookup
             let values ← match name, ts, indices, xs with
-              | .take, [.tuple items], [], [x] => pure ((List.range items.toList.length).map (projection x ·))
-              | .get, [.tuple _], [i], [x] => pure [projection x i]
+              | .take, [.tuple items], [], [x] => pure ((List.range items.toList.length).map (component x ·))
+              | .get, [.tuple _], [i], [x] => pure [component x i]
               | .make, [.tuple _], [], values => pure [values.foldr (fun x rest => s!"({x}, {rest})") "()"]
               | _, _, _, _ => throw "uninterpreted verifier operation"
             pure (sig.2.1, values)
@@ -102,14 +96,16 @@ private def plan (program : NamedProgram Standard) (role : Role) (replies : List
           let x :: _ := remaining | throw "missing trace reply"
           let kind ← Zkc.Frontend.Written.coin law
           let ty ← typeTerm t
-          pure (replyStep role ((owner :: peers).mergeSort) ty s!".own {kind} {natList peers} {atKey k} [] .nil {ty}" x)
+          pure (replyStep role ((owner :: peers).mergeSort) ty s!".own {kind} {numbers peers} {atKey k} [] .nil {ty}" x)
       plan := {plan with steps := plan.steps.push (.instruction step)}
       if owner == role then
         let x :: rest := remaining | throw "missing trace reply"
         remaining := rest
         env := (out,x) :: env
     | .guard _ who cond .reject =>
-      unless who == [role] do throw "expected a verifier guard"
+      unless who.contains role do
+        plan := {plan with steps := plan.steps.push (.guard "refine projectedGuardElsewhere (by decide) ?_")}
+        continue
       let test ← lookup cond
       let step := s!"refine projectedGuard (sem := sem) (by decide) {test} (by rfl) ?_"
       plan := ⟨plan.steps.push (.guard step), plan.guards.push test⟩

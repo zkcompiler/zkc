@@ -18,10 +18,8 @@ theorem right_returns : Baseline.accepts model statement [] commitment right :=
   (Baseline.verifier_equation model ops rows statement [] commitment right).2 (by decide)
 
 theorem permitted_fork (b : Branch (model.Val scalarTy)) :
-    ∀ e ∈ forkTrace model [] 0 ⟨2⟩ ⟨3⟩ ⟨6⟩ commitment b, Permitted model e.1 e.2 := by
-  intro e mem
-  simp only [forkTrace, List.mem_cons, List.not_mem_nil, or_false] at mem
-  rcases mem with rfl | rfl | rfl
+    ∀ e ∈ (Baseline.observed model [] commitment b).map Input.entry, Permitted model e.1 e.2 := by
+  apply Zkc.Formal.Written.permitted_fork
   · trivial
   · exact ⟨trivial, ⟨[], scalarTy⟩, rfl, rfl, rfl, trivial⟩
   · trivial
@@ -106,20 +104,19 @@ private theorem missing_left : MissingGuard.accepts model bad [] pairCommitment 
 private theorem missing_right : MissingGuard.accepts model bad [] pairCommitment right :=
   (MissingGuard.replay_returns model ..).2 (by decide +kernel)
 
-theorem permitted_counterexample : ∀ leaf ∈ [left, right], ∃ value,
-    (roleMeaning model MissingGuard.installed (Member.head : Member [MissingGuard.header] MissingGuard.header)
-      1 [] (MissingGuard.inputValues model bad)).CanReturn (Permitted model) value := by
+theorem permitted_counterexample : ∀ leaf ∈ [left, right],
+    MissingGuard.accepts model bad [] pairCommitment leaf ∧
+    ∀ e ∈ (MissingGuard.observed model [] pairCommitment leaf).map Input.entry, Permitted model e.1 e.2 := by
   intro leaf mem
-  have allowed : ∀ e ∈ (MissingGuard.observed model [] pairCommitment leaf).map Input.entry,
-      Permitted model e.1 e.2 := by
-    apply Zkc.Formal.Written.permitted_fork
+  constructor
+  · simp only [List.mem_cons, List.not_mem_nil, or_false] at mem
+    rcases mem with rfl | rfl
+    · exact missing_left
+    · exact missing_right
+  · apply Zkc.Formal.Written.permitted_fork
     · exact ⟨trivial, trivial, trivial⟩
     · exact ⟨trivial, ⟨[], scalarTy⟩, rfl, rfl, rfl, trivial⟩
     · trivial
-  simp only [List.mem_cons, List.not_mem_nil, or_false] at mem
-  rcases mem with rfl | rfl
-  · exact missing_left.canReturn (Permitted model) allowed
-  · exact missing_right.canReturn (Permitted model) allowed
 
 theorem missing_guard : ¬ MissingGuard.obligation model ops [] := by
   intro claim

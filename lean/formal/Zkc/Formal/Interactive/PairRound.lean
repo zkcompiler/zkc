@@ -60,7 +60,7 @@ theorem PairLaws.round_bound {hs : Headers V} {ds : Defs V hs} {key state point 
           line honest (reveal M (r := 1) (a := ⟨rows.scalarTy,[0,1]⟩) (by simp) r))) ≤ roundCost 1 points := by
   dsimp only
   rw [verifier cert.members events point M _ _ _ _ equalLaw (laws.boundary M math) (laws.evaluate M math)]
-  simp only [Experiment.probability,Process.map_eq_bind,Experiment.expect_bind,Experiment.expect]
+  simp only [Experiment.probability,Process.map_eq_bind,Experiment.expect_bind,Experiment.expect_done]
   apply verifierRound_le K s points positive _ _ _ _ _ (line honest) claim 1 fresh
   intro m passed
   apply count_unique points distinct

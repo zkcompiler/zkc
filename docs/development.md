@@ -41,12 +41,12 @@ Run every command from the root of the repository.
 | `just build` | `lake build` in `lean/compiler`: all active targets |
 | `just test` | `lake build` and `lake test` in `lean/compiler`, then `just audit` |
 | `just test-interactive` | build the interactive formal modules, check emitted source entries and mutations, and audit the interactive library and its mathematical controls |
-| `just test-written-knowledge` | compile both Schnorr and Chaum–Pedersen written clauses, check admission and extraction, and test permitted forks, source mutations and diagnostics |
+| `just test-written-knowledge` | compile both Schnorr and Chaum–Pedersen written clauses, check admission and extraction, consume the public theorems, replay their project imports, and test permitted forks, source mutations and diagnostics |
 | `just audit` | `lake exe zkc-audit` in `lean/compiler`: core, vocabulary and their tests |
 | `just check` | the checks that need no build: `bash .github/scripts/public-tree-guard.sh`, `python3 scripts/check_docs.py --all`, and `python3 lean/compiler/scripts/generate_unicode_tables.py --check` |
 
 Lake builds incrementally, so `just build` after a change rebuilds only the modules that the
-change affects. Run both `just test` and `just test-interactive` for changes that cross the compiler and interactive proof boundary.
+change affects. Run `just test` and `just test-interactive` for changes that cross the compiler and interactive proof boundary. Include `just test-written-knowledge` when a change affects generated claims, their source types, role projection or shared proof rules.
 
 ### The tests
 

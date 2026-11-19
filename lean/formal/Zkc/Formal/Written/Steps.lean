@@ -58,6 +58,16 @@ theorem projectedGuard {V : Vocabulary} {hs : Headers V} {r : Role} {Γ : Ctx (L
   rw [project.eq_3, dite_eq_left member, Term.denote_guard, condition]
   cases test <;> simp [tail]
 
+/-- Projection erases another role's guard, even when its test reads a private operand. -/
+theorem projectedGuardElsewhere {V : Vocabulary} {hs : Headers V} {r : Role} {Γ : Ctx (LTy V)}
+    {outs : List (LTy V)} {key : Key} {ps : List Role} {t : LTy V} {c : Var Γ t}
+    {ok : (protocolDialect V hs).Condition ps t} {why : Reason}
+    {rest : Term (protocolDialect V hs) Γ outs} {sem : Semantics (roleDialect V hs r)}
+    {path : List Frame} {env : Env sem.Val Γ} {trace} {Q : Prop}
+    (away : r ∉ ps) (tail : Returns ((project r rest).denote sem path env) trace ↔ Q) :
+    Returns ((project r (Term.guard key ps c ok why rest)).denote sem path env) trace ↔ Q := by
+  rwa [project.eq_3, dite_eq_right away]
+
 /-- A terminal decision is the special case with a returning continuation. -/
 theorem afterDecision (test : Bool) (why : sem.H) (values : HList sem.Val mid)
     (step : i.denote sem key path env = (bif test then .done values else .halt why))

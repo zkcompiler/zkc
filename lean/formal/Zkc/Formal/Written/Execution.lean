@@ -2,15 +2,12 @@ module
 
 public import Zkc.Core.Meaning.Program
 public import Zkc.Formal.ProcessJudgment
-public import Std.WP
-public import Std.Tactic
 
 @[expose] public section
 set_option autoImplicit false
-set_option experimental.vcgen true
 
 namespace Zkc.Formal.Written
-open Zkc.Core Std.WP
+open Zkc.Core
 
 /-- A complete execution of the actual Core process, with the operation and typed reply at
 every interaction, through its successful return. Stops have no such derivation. -/

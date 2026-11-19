@@ -1,7 +1,7 @@
 module
 
 public import Zkc.Core.Admission.Theorems
-public import Zkc.Frontend.Emit.Reports
+public import Zkc.Frontend.Emit.Bindings
 public import Zkc.Formal.Written.Execution
 public import Zkc.Formal.Written.Extraction
 

@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Frontend.Emit.Reports
+public import Zkc.Frontend.Written.LeanTerms
 
 @[expose] public section
 set_option autoImplicit false
@@ -8,23 +9,9 @@ set_option autoImplicit false
 namespace Zkc.Frontend.Written
 open Core
 
-abbrev ExportM := Except String
-def unsupported {α : Type} (what : String) : ExportM α := .error ("WK-CORE: unsupported " ++ what)
-
-def list (xs : List String) := "[" ++ ", ".intercalate xs ++ "]"
-def numbers (xs : List Nat) := list (xs.map toString)
 def names (xs : List Nat) (variableRefs := false) := xs.foldr (fun x rest =>
   let head := if variableRefs then s!"⟨{x}, rfl⟩" else toString x
   s!"(.cons {head} {rest})") ".nil"
-
-partial def ty {b : Emit.Bindings} (t : b.vocabulary.Ty) : ExportM String := do
-  match t with
-  | .bool => pure ".bool"
-  | .nominal (.inl k) => pure s!"(.nominal (.inl ({reprStr (show Zkc.Vocabulary.TypeKey from k)})))"
-  | .tuple ts =>
-    let items ← ts.toList.mapM (ty (b := b))
-    return "(.tuple " ++ items.foldr (fun x rest => s!"(.cons {x} {rest})") ".nil" ++ ")"
-  | _ => unsupported "Core value type in the written scalar/group profile"
 
 def localRaw {b : Emit.Bindings} : LocalRaw b.vocabulary → ExportM String
   | .row (.inl key) => pure s!"(.row (.inl ({reprStr (show Zkc.Vocabulary.RowKey from key)})))"
@@ -94,11 +81,6 @@ def located {b : Emit.Bindings} (ts : List (LTy b.vocabulary)) : ExportM String 
   return list (← ts.mapM fun a => do return s!"⟨{← ty (b := b) a.ty}, {numbers a.holders}⟩")
 
 def row (k : Zkc.Vocabulary.RowKey) := s!"(show V.RowKey from .inl ({reprStr k}))"
-
-def coin (k : Zkc.Vocabulary.LawKey) : ExportM String :=
-  match k with
-  | .uniform (.nominal t) => pure s!"(.coin (.uniform (.nominal ({reprStr t}))))"
-  | _ => unsupported "sampling law"
 
 def rawOp {b : Emit.Bindings} : ProtocolRaw b.vocabulary → ExportM String
   | .compute who (.row (.inl k)) => pure s!"(.compute {numbers who} (.row {row k}))"

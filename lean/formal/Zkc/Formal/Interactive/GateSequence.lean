@@ -78,21 +78,27 @@ def check (key : V.RowKey) (bound : V.row key = some (signature rows)) {hs : Hea
 variable {hs : Headers V} {ds : Defs V hs} {msg st residual} {ops : Members hs rows.scalarTy msg st residual}
 variable {key : V.RowKey} {bound : V.row key = some (signature rows)}
 
-def Laws.interpret (laws : Laws rows key bound ds ops) (M : Model V) [Lean.Grind.Field (rows.F M)]
+def Laws.interpretOn (laws : Laws rows key bound ds ops) (M : Model V) [Lean.Grind.Field (rows.F M)]
     [DecidableEq (rows.F M)] (math : rows.Arithmetic M) (model : Evaluation rows key bound M)
-    (q : Claims (rows.F M)) (honest : ∀ n, q.State (n+1) → Quadratic (rows.F M))
-    (sum : ∀ n x, q.value (n+1) x = (honest n x).boundary)
-    (restricted : ∀ n x r, q.value n (q.restrict n x r) = (honest n x).eval r)
+    (q : Claims (rows.F M)) {ι : Type} (depth : ι → Nat) (honest : ∀ i, q.State (depth i + 1) → Quadratic (rows.F M))
+    (sum : ∀ i x, q.value (depth i + 1) x = (honest i x).boundary)
+    (restricted : ∀ i x r, q.value (depth i) (q.restrict (depth i) x r) = (honest i x).eval r)
     (points : List (rows.F M)) (distinct : points.Nodup) :
-    RoundInterpretation M (Defs.fnTable M ds) q points 2 ops where
+    RoundInterpretationOn M (Defs.fnTable M ds) q points 2 ops depth where
   boundary m := (model.polynomial (triple rows M laws.same m)).boundary
   evaluate m := (model.polynomial (triple rows M laws.same m)).eval
   ends m := (laws.ends M math m).trans (by rw [model.ends])
   atPoint := laws.atPoint M model
-  roots n x m wrong := by
-    simp only [restricted]
+  roots i x m wrong := by
+    simp only [restricted i]
     apply Quadratic.collisions _ _ _ _ distinct
-    rwa [← sum]
+    rwa [← sum i]
+
+/-- The uniform instance remains available for claims indexed by all natural depths. -/
+abbrev Laws.interpret (laws : Laws rows key bound ds ops) (M : Model V) [Lean.Grind.Field (rows.F M)]
+    [DecidableEq (rows.F M)] (math : rows.Arithmetic M) (model : Evaluation rows key bound M)
+    (q : Claims (rows.F M)) :=
+  Laws.interpretOn rows laws M math model q (id : Nat → Nat)
 
 variable {Γ : Ctx (LTy V)} {events : Events rows.scalarTy} {running : Var Γ (shared rows.scalarTy)}
 variable {outs : List (LTy V)} {term : Term (protocolDialect V hs) Γ outs} {count : Nat}
@@ -101,9 +107,9 @@ theorem sound (rounds : Sequence hs events st running term count)
     (checked : rounds.AllMembers (fun ops => Laws rows key bound ds ops)) (M : Model V)
     [Lean.Grind.Field (rows.F M)] [DecidableEq (rows.F M)] (math : rows.Arithmetic M)
     (model : Evaluation rows key bound M) (equalLaw : ScalarEquality.Law rows.scalarTy events.equal events.equalType M)
-    (q : Claims (rows.F M)) (honest : ∀ n, q.State (n+1) → Quadratic (rows.F M))
-    (sum : ∀ n x, q.value (n+1) x = (honest n x).boundary)
-    (restricted : ∀ n x r, q.value n (q.restrict n x r) = (honest n x).eval r)
+    (q : Claims (rows.F M)) (honest : ∀ n : Fin count, q.State (n.val+1) → Quadratic (rows.F M))
+    (sum : ∀ n x, q.value (n.val+1) x = (honest n x).boundary)
+    (restricted : ∀ n x r, q.value n.val (q.restrict n.val x r) = (honest n x).eval r)
     {σ : Type} (K : Experiment (RSig M) σ) (points : List (rows.F M)) (distinct : points.Nodup) (positive : 0 < points.length)
     (fresh : ∀ path key s, Fresh K points positive (challenge M events path key) s) (path : List Frame)
     (env : Env (RV M 1) Γ) (s : σ) (x : q.State count)
@@ -113,7 +119,7 @@ theorem sound (rounds : Sequence hs events st running term count)
   apply rounds.sound M _ _ K q _ path _ _ env s x wrong
   · exact Mass.mul_nonneg Mass.natCast_nonneg (Mass.le_of_lt (Mass.inv_pos.mpr (Mass.natCast_pos.mpr positive)))
   · exact rounds.boundsOfMembers _ checked M _ _ _ points positive 2
-      (fun _ laws => Laws.interpret rows laws M math model q honest sum restricted points distinct) equalLaw K fresh path
+      (fun _ laws => Laws.interpretOn rows laws M math model q Fin.val honest sum restricted points distinct) equalLaw K fresh path
 
 #print axioms sound
 #print axioms check

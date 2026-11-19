@@ -35,6 +35,8 @@ structure InstanceKey where
   parameter, and the type members that a `where` in scope equates with a type. Its other type
   members are fresh types. -/
   opaqueFor : Option (ParameterRef × Array String) := none
+  /-- The generated Run record of the closed protocol has its own nominal identity (§8). -/
+  runRecord : Bool := false
   deriving Inhabited, BEq, Hashable
 
 /-- What a member of a module instance is. -/
@@ -101,5 +103,18 @@ structure SchemeEntry where
   /-- A line that is not constructed here, as the reason the scheme waits. -/
   waits : Option String := none
   deriving Inhabited
+
+/-- A selected two-role claim checks the written prover against its actual message flow.
+An interactive scheme used for a claim needs an explicit designation (SC3). -/
+def SchemeEntry.checkProver (scheme : SchemeEntry) (prover : String) (requireExplicit : Bool) :
+    Except Refusal Unit := do
+  let mut declared := false
+  for line in scheme.lines do
+    if let .prover span role := line then
+      if declared then throw ⟨"SC3", span, "duplicate prover designation", #[]⟩
+      unless role.text == prover do
+        throw ⟨"SC3", span, s!"`prover {role.text}` conflicts with the written fork whose prover is {prover}", #[]⟩
+      declared := true
+  if requireExplicit && !declared then throw ⟨"SC3", scheme.span, "an interactive claim needs its prover", #[]⟩
 
 end Zkc.Frontend

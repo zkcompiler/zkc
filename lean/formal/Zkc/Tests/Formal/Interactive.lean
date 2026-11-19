@@ -73,6 +73,33 @@ theorem cube_evaluate_high_low : Cube.evaluate (F := Int) 2 ((1, 3), (5, 9)) [1,
 theorem cube_evaluate_low_high : Cube.evaluate (F := Int) 2 ((1, 3), (5, 9)) [0, 1] = some 3 := by
   decide +kernel
 
+-- Four gate rounds inspect claim depths zero through four.
+private def fourRoundClaims : Claims Rat where
+  State _ := Unit
+  value n _ := if n ≤ 4 then 0 else 1
+  restrict _ _ _ := ()
+
+private def zeroQuadratic : Quadratic Rat := ⟨0, 0, 0⟩
+
+example (d : Fin 4) (r : Rat) :
+    fourRoundClaims.value (d.val+1) () = zeroQuadratic.boundary ∧
+    fourRoundClaims.value d.val (fourRoundClaims.restrict d.val () r) = zeroQuadratic.eval r := by
+  have upper : d.val+1 ≤ 4 := d.isLt
+  have lower : d.val ≤ 4 := Nat.le_of_lt d.isLt
+  simp [fourRoundClaims, upper, lower, zeroQuadratic, Quadratic.boundary, Quadratic.eval] <;> grind
+
+example (honest : ∀ d, fourRoundClaims.State (d+1) → Quadratic Rat)
+    (sum : ∀ d x, fourRoundClaims.value (d+1) x = (honest d x).boundary)
+    (restricted : ∀ d x r, fourRoundClaims.value d (fourRoundClaims.restrict d x r) = (honest d x).eval r) :
+    False := by
+  have left := restricted 4 () 0
+  have right := restricted 4 () 1
+  have next := sum 4 ()
+  change 0 = _ at left right
+  change (1 : Rat) = (honest 4 ()).eval 0 + (honest 4 ()).eval 1 at next
+  rw [← left, ← right] at next
+  exact (by decide +kernel : (1 : Rat) ≠ 0 + 0) next
+
 section
 open ReductionRound
 

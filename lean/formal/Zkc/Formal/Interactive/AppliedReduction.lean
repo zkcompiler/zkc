@@ -90,9 +90,9 @@ theorem AtSite.gate_soundFrom (rows : ScalarRows V) {hdr : ProtocolHeader V} {ro
     (checked : atCall.linked.rounds.AllMembers (fun ops => Gate.Laws rows primitive bound atCall.linked.entry.definitions ops))
     (M : Model V) [Lean.Grind.Field (rows.F M)] [DecidableEq (rows.F M)] (math : rows.Arithmetic M)
     (model : Gate.Evaluation rows primitive bound M) (equalLaw : ScalarEquality.Law rows.scalarTy events.equal events.equalType M)
-    (i : Fin layers) (q : Claims (rows.F M)) (honest : ∀ d, q.State (d+1) → Quadratic (rows.F M))
-    (sum : ∀ d x, q.value (d+1) x = (honest d x).boundary)
-    (restricted : ∀ d x r, q.value d (q.restrict d x r) = (honest d x).eval r)
+    (i : Fin layers) (q : Claims (rows.F M)) (honest : ∀ d : Fin n, q.State (d.val+1) → Quadratic (rows.F M))
+    (sum : ∀ d x, q.value (d.val+1) x = (honest d x).boundary)
+    (restricted : ∀ d x r, q.value d.val (q.restrict d.val x r) = (honest d x).eval r)
     {σ : Type} (K : Experiment (RSig M) σ) (points : List (rows.F M)) (distinct : points.Nodup) (positive : 0 < points.length)
     (path : List Frame) (s : σ) (hidden : RV M 1 ⟨state,[0]⟩) (point : List (rows.F M)) (claim : rows.F M)
     (x : q.State n) (wrong : claim ≠ q.value n x)
@@ -105,7 +105,7 @@ theorem AtSite.gate_soundFrom (rows : ScalarRows V) {hdr : ProtocolHeader V} {ro
   apply atCall.linked.applied_soundFrom M q _ _ K site _ s hidden point claim x wrong _
   · exact Mass.mul_nonneg Mass.natCast_nonneg (Mass.le_of_lt (Mass.inv_pos.mpr (Mass.natCast_pos.mpr positive)))
   · exact atCall.linked.rounds.boundsFromMembers _ checked M _ _ q points positive 2
-      (fun _ law => Gate.Laws.interpret rows law M math model q honest sum restricted points distinct) equalLaw _ _ _ s x fresh
+      (fun _ law => Gate.Laws.interpretOn rows law M math model q Fin.val honest sum restricted points distinct) equalLaw _ _ _ s x fresh
 
 /-- Reuse the degree-two reduction at the selected instruction of a reached layer iteration.
 The public relation and gate model are supplied for that layer. -/
@@ -126,7 +126,8 @@ theorem AtSite.gate_sound (rows : ScalarRows V) {hdr : ProtocolHeader V} {root :
     K.probability (roleOp M 1 (Defs.fnTable M atCall.callerEntry.definitions) (Defs.rTable M atCall.callerEntry.definitions)
       site atCall.linked.application (path ++ [.iteration loopKey i.val]) (publicArgs M hidden point claim)) s
       (fun vs _ => correctReturn M q x point.length vs) ≤ (n : Mass) * roundCost 2 points := by
-  apply atCall.gate_soundFrom rows checked M math model equalLaw i q honest sum restricted K points distinct positive
+  apply atCall.gate_soundFrom rows checked M math model equalLaw i q (fun d => honest d.val)
+    (fun d => sum d.val) (fun d => restricted d.val) K points distinct positive
     path s hidden point claim x wrong
   exact atCall.linked.rounds.freshFromService M _ _ _ points positive fresh _ _ _
 

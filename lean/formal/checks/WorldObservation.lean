@@ -33,6 +33,12 @@ example (argument : Bool) : Observed (remembers M) false
 -- An unlisted role cannot read a private source entry in any reachable scoped network.
 private def privateDraw {V : Vocabulary} (kind : GivenKind V) : Grant V := ⟨kind, 0, [], site, .bool⟩
 
+example (kind : GivenKind V) (listeners : List Role) :
+    (Access.fromGrants (· = privateDraw kind)).operation 0
+      (ROp.own (M := M) kind listeners site [] .nil .bool) ↔ listeners = [] := by
+  change (Grant.mk kind 0 listeners site .bool = Grant.mk kind 0 [] site .bool) ↔ _
+  simp
+
 example (kind : GivenKind V) (source : Source M) {H B : Role → Type}
     {c c' : Net M H B × Pending M} {trace}
     (restricted : NetworkScoped (Access.fromGrants (· = privateDraw kind)) c.1)

@@ -220,6 +220,7 @@ mutual
         (specNames.zip entry.key.specification).toList.map fun (parameter, value) =>
           s!"spec {parameter} = {value}"
       let base := if parts.isEmpty then name else s!"{name}<{", ".intercalate parts}>"
+      let base := if entry.key.runRecord then base ++ "::Run" else base
       match entry.key.owner with
       | some owner => s!"{base} at {renderInstance state owner}"
       | none => base

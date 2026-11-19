@@ -73,7 +73,7 @@ theorem Linked.soundFrom (linked : Linked p key state t residual k n events) (M 
   let env := Env.empty.extend (initialNames state t k) (publicArgs M hidden point claim)
   have charged := linked.rounds.soundFrom M _ _ K q cost path nonneg env s x bounds wrong
   apply Mass.le_trans _ charged
-  simp only [Experiment.probability,Process.map_eq_bind,Experiment.expect_bind,Experiment.expect]
+  simp only [Experiment.probability,Process.map_eq_bind,Experiment.expect_bind,Experiment.expect_done]
   apply K.expect_mono
   intro (last,rs,v) _ _
   simp [correctReturn,PointReturn.values,reveal_hide]

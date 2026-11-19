@@ -139,7 +139,8 @@ mutual
       if (← peekText) == "fn" ∧ (← peekKind 1) == .leftParen then
         fail "GR6"
           "function types and function literals are not part of the language: write a loop, a comprehension or a binder form"
-      return .path (← spanFrom start) (← parsePath)
+      let path ← parsePath
+      return .path path.span path
     | _ => unexpected "a type"
 
   /-- A `<` written apart from the word before it is a comparison (LX5); where static arguments

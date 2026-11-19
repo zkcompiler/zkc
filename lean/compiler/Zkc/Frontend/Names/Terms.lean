@@ -554,20 +554,21 @@ mutual
       let value ← resolveExpr env value
       return #[.update span (← resolveName env name .plain) value]
     | .eventStmt (.bound span site pattern type holders event) => do
-      let number ← numberEvent span (siteName site (some pattern)) (eventParts event)
+      let eventName := siteName site (some pattern)
+      let number ← numberEvent span eventName (eventParts event)
       let what ← resolveEvent env event
       let type ← type.mapM (resolveType env)
       let roles ← holders.mapM holdersOf
       match what with
       | .error names =>
         match pattern with
-        | .name name => discard <| bindLocal env name (site := true)
+        | .name name => discard <| bindLocal env name (site := eventName)
         | _ => discard <| bindPattern env pattern
         let names := names ++ (type.map (#[Lowered.Expr.type ·])).getD #[]
         return #[.waiting span "an application of a protocol that is not resolved" names]
       | .ok what =>
         match pattern with
-        | .name name => return #[.event span number (some (← bindLocal env name (site := true))) type roles what]
+        | .name name => return #[.event span number (some (← bindLocal env name (site := eventName))) type roles what]
         | .wildcard wildcard =>
           return #[.event span number (some (← madeBinder wildcard .discarded)) type roles what]
         | _ =>

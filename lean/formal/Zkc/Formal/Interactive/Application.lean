@@ -48,6 +48,6 @@ theorem Experiment.probability_application {hs : Headers V} {hdr : ProtocolHeade
           (enterAll M ρ r (fitAllRV M fits vs))) s
         (fun out t => post (leaveAll M ρ r out) t) := by
   simp only [roleOp, Experiment.probability, Process.map_eq_bind, Experiment.expect_bind,
-    Experiment.expect_mapR, Experiment.expect]
+    Experiment.expect_mapR, Experiment.expect_done]
 
 end Zkc.Formal.Interactive

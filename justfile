@@ -25,7 +25,7 @@ test-interactive:
 
 # Export the written knowledge claim and kernel-check the returning fork and source mutations.
 test-written-knowledge:
-    cd lean/compiler && lake build zkc-knowledge
+    cd lean/compiler && lake build zkc-knowledge Zkc.Tools.Audit
     cd lean/formal && lake build Zkc.Formal.Written.GroupReplay Zkc.Formal.Written.FiniteModel
     cd lean/formal && lake env python3 checks/written_knowledge.py
 

@@ -66,7 +66,7 @@ theorem reduce_sound (v : Verifier (S := S) H F M) (q : Claims F)
     intro (r, nextClaim) t _ h
     have bad : nextClaim ≠ q.value n (q.restrict n x r) := of_decide_eq_false h
     apply Mass.le_trans _ (ih (q.restrict n x r) (history ++ [r]) nextClaim t bad)
-    simp only [Experiment.probability, Process.map_eq_bind, Experiment.expect_bind, Experiment.expect]
+    simp only [Experiment.probability, Process.map_eq_bind, Experiment.expect_bind, Experiment.expect_done]
     apply K.expect_mono
     intro (rs,value) _ _
     by_cases agrees : q.evaluate n (q.restrict n x r) rs = some value <;> simp [Claims.evaluate, agrees]

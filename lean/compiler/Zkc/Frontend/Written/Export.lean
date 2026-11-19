@@ -10,21 +10,21 @@ set_option autoImplicit false
 namespace Zkc.Frontend.Written
 open Core
 
-def preamble (withProof : Bool) : String :=
+def preamble (withProof : Bool) (scope : String) : String :=
   let library := if withProof then "Zkc.Formal.Written.GroupReplay" else "Zkc.Formal.Written.FunctionMeaning"
-  "module\n\npublic import " ++ library ++ "\n\n@[expose] public section\nopen Zkc.Core Zkc.Formal.Written Std.WP\nset_option experimental.vcgen true\nset_option maxRecDepth 4000\nset_option maxHeartbeats 1800000\nset_option linter.unusedVariables false\nnamespace WrittenKnowledge\n"
+  "module\n\npublic import " ++ library ++ "\n\n@[expose] public section\nopen Zkc.Core Zkc.Formal.Written Std.WP\nset_option experimental.vcgen true\nset_option maxRecDepth 4000\nset_option maxHeartbeats 1800000\nset_option linter.unusedVariables false\nnamespace " ++ scope ++ "\n"
 
 def target (c : WrittenClause) (historyType : String) : String := Id.run do
   let (v,p) := (c.view.verifier,c.view.prover)
   let sites := [c.view.commitment,c.view.challenge,c.view.response]
   let keys := " ".intercalate (sites.map fun site => s!"⟨{site.instruction.get!}⟩")
   let places := [("clause", c.source.where_), (c.relationName, c.relationSpan),
-    (c.extractorName, c.extractorSpan)] ++ (sites.map fun site => (site.name.get!, site.place))
+    (c.extractorName, c.extractorSpan)] ++ (sites.map fun site => (site.fieldName, site.place))
   let provenance := list (places.map fun (name,sp) => s!"({reprStr name}, {reprStr (location sp)})")
   let params := (List.range c.publicCount).map fun i => component "s" i (i + 1 == c.publicCount)
   let clauseInputs := c.operands.map fun index => params[index]!
-  let inputs (last : String) := (clauseInputs ++ [last]).foldr (fun x tail => s!"(.cons {x} {tail})") ".nil"
-  let values := (params ++ ["()"]).foldr (fun val tail => s!"(.cons {val} {tail})") ".nil"
+  let inputs (last : String) := consList (clauseInputs ++ [last])
+  let values := consList (params ++ ["()"])
   let calculations := match c.calculations with
     | .error _ => []
     | .ok (relation, extraction) => [
@@ -40,7 +40,7 @@ def target (c : WrittenClause) (historyType : String) : String := Id.run do
     "def relationArguments (s : Statement (M.Val pointTy)) (w : M.Val scalarTy) : HList M.Val RelationHeader.ins :=",
     s!"  {inputs "w"}",
     "def extractorArguments (s : Statement (M.Val pointTy)) (a : M.Val historyTy) (l r : Branch (M.Val scalarTy)) : HList M.Val ExtractorHeader.ins :=",
-    s!"  {inputs "((a,l.challenge,l.suffix,()),(a,r.challenge,r.suffix,()),())"}",
+    s!"  {inputs "[(a,l.challenge,l.suffix,()),(a,r.challenge,r.suffix,())]"}",
     "def coreRelationOf (p : Typed V) (root : Member p.headers.fns RelationHeader) (s : Statement (M.Val pointTy)) (w : M.Val scalarTy) : Option Bool :=",
     "  functionResult (t := .bool) (fnMeaning M p root (relationArguments M s w))",
     "def coreRelation := coreRelationOf M installedRelation Member.head",
@@ -184,7 +184,11 @@ def certificate (c : WrittenClause) : String := Id.run do
     "    compiledObligation M p r e path := of_core_obligation M hp hr he path (certified_core M ops rows field laws path)",
     "#print axioms certified_core_admitted", ""]
 
-def exportSource (assembly : Assembly) (schemeName : String) (withProof : Bool) : ExportM String := do
+def exportSource (assembly : Assembly) (schemeName : String) (withProof : Bool) (moduleNamespace : String := "WrittenKnowledge") : ExportM String := do
+  unless !moduleNamespace.isEmpty && moduleNamespace.toList.all (fun c => c.isAlphanum || c == '_') &&
+      moduleNamespace.toList.head!.isAlpha do
+    throw "WK-NAMESPACE: expected one identifier starting with a letter"
+  let scope := if moduleNamespace == "WrittenKnowledge" then moduleNamespace else "«" ++ moduleNamespace ++ "»"
   let mut state : Compile.State := {}
   for phase in Driver.sourcePhases assembly do
     let (report, s) := phase.runIn {vocabulary} state
@@ -192,8 +196,10 @@ def exportSource (assembly : Assembly) (schemeName : String) (withProof : Bool) 
     if let some diag := s.log.entries.find? (fun d => d.isError || d.isIncomplete) then
       throw s!"{diag.span.file}:{diag.render s.env.renderer}"
     if let some skipped := report.interrupted then throw s!"WK-FRONTEND: {skipped}"
-  let #[scheme] := state.results.schemes.filter (·.name == schemeName)
-    | throw s!"WK-ROOT: expected exactly one scheme named {schemeName}"
+  let entries := assembly.program.files.filter (fun file => !file.fromLibrary)
+  let #[scheme] := state.results.schemes.filter (fun scheme =>
+      scheme.name == schemeName && entries.any (fun file => file.name == scheme.span.file))
+    | throw s!"WK-ROOT: expected exactly one scheme named {schemeName} in the input modules"
   let (result, s) := (Typing.typeBody scheme.protocol scheme.span).run {vocabulary} state
   if let some diag := s.log.entries.find? (fun d => d.isError || d.isIncomplete) then
     throw s!"{diag.span.file}:{diag.render s.env.renderer}"
@@ -207,6 +213,6 @@ def exportSource (assembly : Assembly) (schemeName : String) (withProof : Bool) 
   if withProof then
     if let .error why := c.calculations then refuse c.source.where_ "WK-PROOF" why
   let proof := if withProof then certificate c else ""
-  return "\n".intercalate [preamble withProof, rendered, target c historyType, proof, "end WrittenKnowledge", ""]
+  return "\n".intercalate [preamble withProof scope, rendered, target c historyType, proof, "end " ++ scope, ""]
 
 end Zkc.Frontend.Written

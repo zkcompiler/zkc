@@ -106,7 +106,7 @@ theorem listener_entry {kind : GivenKind V} {owner r : Role} {listeners : List R
 /-- The role's operation for a world read is an owner request or a reply-only notification.
 A deployment supplies the authority table for each operation and actual principal. -/
 structure Access (V : Vocabulary) where
-  owns : Role → GivenKind V → Occurrence → V.Ty → Prop
+  owns : Role → GivenKind V → List Role → Occurrence → V.Ty → Prop
   hears : Role → GivenKind V → Role → Occurrence → V.Ty → Prop
 
 /-- A grant assigns the read to its declared owner and its explicitly named listeners.
@@ -119,23 +119,22 @@ structure Grant (V : Vocabulary) where
   type : V.Ty
 
 def Access.fromGrants (declared : Grant V → Prop) : Access V where
-  owns r kind at_ ty := ∃ listeners, declared ⟨kind, r, listeners, at_, ty⟩
+  owns r kind listeners at_ ty := declared ⟨kind, r, listeners, at_, ty⟩
   hears r kind owner at_ ty := ∃ listeners, declared ⟨kind, owner, listeners, at_, ty⟩ ∧ r ∈ listeners
 
 def Access.operation (a : Access V) (r : Role) : ROp M → Prop
-  | .own kind _ at_ _ _ ty => a.owns r kind at_ ty
+  | .own kind listeners at_ _ _ ty => a.owns r kind listeners at_ ty
   | .hear kind owner at_ ty => a.hears r kind owner at_ ty
   | _ => True
 
 def Access.record (a : Access V) : Happened M → Prop
-  | .owned r kind at_ ty _ => a.owns r kind at_ ty
+  | .owned r kind at_ ty _ => ∃ listeners, a.owns r kind listeners at_ ty
   | .heard r kind owner at_ ty _ => a.hears r kind owner at_ ty
   | _ => True
 
 /-- Every continuation of a replacement strategy respects the role's source-read authority. -/
-def Scoped {H B : Type} (access : Access V) (r : Role) : Process (RSig M) H B → Prop
-  | .done _ | .halt _ => True
-  | .call op k => access.operation r op ∧ ∀ v, Scoped access r (k v)
+def Scoped {H B : Type} (access : Access V) (r : Role) (p : Process (RSig M) H B) : Prop :=
+  p.interpret ⟨fun op next => access.operation r op ∧ ∀ v, next v⟩ (fun _ => True) (fun _ => True)
 
 variable {H B : Role → Type} {source : Source M}
 abbrev NetworkScoped (access : Access V) (net : Net M H B) := ∀ r, Scoped access r (net r)
@@ -157,7 +156,10 @@ theorem step_scoped {access : Access V} {c c' : Net M H B × Pending M} {h}
     (all : NetworkScoped access c.1) (step : Step M source c h c') :
     access.record h ∧ NetworkScoped access c'.1 := by
   cases step with
-  | give atCall _ | get atCall _ | own atCall _ | hear atCall _ | begin atCall | settle atCall =>
+  | own atCall _ =>
+    have ok := scoped_call all atCall
+    exact ⟨⟨_, ok.1⟩, set_scoped all (ok.2 _)⟩
+  | give atCall _ | get atCall _ | hear atCall _ | begin atCall | settle atCall =>
     have ok := scoped_call all atCall
     exact ⟨ok.1, set_scoped all (ok.2 _)⟩
 
