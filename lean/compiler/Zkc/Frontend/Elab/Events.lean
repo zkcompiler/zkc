@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Frontend.Elab.Terms
+public import Zkc.Frontend.Static.Specification
 
 @[expose] public section
 
@@ -110,7 +111,7 @@ def elabApplication (span : Span) (event : EventId) (binder : Option Lowered.Bin
   let calleeText ← textOf calleeSpan
   let .declaration steps scopes ← calleeOf callee
     | refuseHere "EV1" span s!"`{calleeText}` is no protocol: an event stands on its own `<-` line"
-  let some (id, lastArgs) := steps.back? | throw .abandoned
+  let some (id, _) := steps.back? | throw .abandoned
   let found ← liftM (declaration id : CompileM Declaration)
   unless found.kind == .protocol do
     if found.kind == .function then
@@ -138,11 +139,11 @@ def elabApplication (span : Span) (event : EventId) (binder : Option Lowered.Bin
   let state ← getThe Compile.State
   let context ← getContext
   let caller := state.program.declarations[state.table.entries[context.instance]!.key.declaration]!
-  for (reference, parameter) in specificationParameters state.program found do
-    if caller.scopes.contains reference.scope then continue
-    unless (lastArgs.getD #[]).any (fun | .spec _ name _ => name == parameter.name.text | _ => false) do
-      refuseHere "SP11" span
-        s!"`{calleeText}` has the specification-only parameter `{parameter.name.text}`; give it after the other static arguments: `spec {parameter.name.text} = …`"
+  let supplied := steps.flatMap fun (_, args) => (args.getD #[]).filterMap fun
+    | .spec at_ name term => some (at_, name, term)
+    | _ => none
+  let env ← staticEnv
+  let proofArguments ← liftM (specificationClosure env found supplied caller.scopes span : CompileM _)
   deployedStaticArguments steps
   -- the role map, by name (RM1)
   let roster := context.roster.getD #[]
@@ -171,12 +172,13 @@ def elabApplication (span : Span) (event : EventId) (binder : Option Lowered.Bin
   let ports := head.ports.filter (!·.specification)
   let deployed := arguments.filter fun | .spec .. => false | _ => true
   let paired ← pairArguments calleeText (ports.map (·.binder.name)) deployed none span
-  let env ← staticEnv
   let assigned ← liftM (assignArguments env steps scopes span : CompileM _)
   let (values, states) ← inferArguments id assigned found.file
     (ports.map fun port => (port.binder.name, port.type)) none paired none span
   let description ← liftM (describeInstance id values : CompileM String)
   let inst ← liftM (instantiate id values { description, span } : CompileM InstanceId)
+  if let some closure := proofArguments then
+    liftM (closure.checkApplication inst span)
   let signature ← protocolSignature inst
   let portTypes := (signature.ports.filter (!·.specification)).map (·.type)
   let typed ← finishArguments paired states portTypes
@@ -197,7 +199,7 @@ def elabApplication (span : Span) (event : EventId) (binder : Option Lowered.Bin
   -- one binder per result (RM3)
   let results := signature.results
   let apply (binders : Array (Option Typed.Binder)) : Typed.Stmt :=
-    .event span event (.apply binders inst operands specification roleMap order)
+    .event span event (.apply binders inst operands specification roleMap order proofArguments)
   match binder with
   | none =>
     if let some first := results[0]? then

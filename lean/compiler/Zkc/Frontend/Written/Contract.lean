@@ -9,18 +9,6 @@ set_option autoImplicit false
 namespace Zkc.Frontend.Written
 open Syntax
 
-/-- Run an ordinary frontend request, preserving its nominal instance table for its consumers. -/
-def evaluate {α : Type} (s : Compile.State) (at_ : Span) (attempt : CompileM α) :
-    ExportM (α × Compile.State) := do
-  let (result, after) := attempt.run sourceContext s
-  if let some d := (after.log.entries.extract s.log.entries.size after.log.entries.size).find?
-      (fun d => d.isError || d.isIncomplete) then
-    refuse at_ "WK-TYPE" (d.render after.env.renderer)
-  match result with
-  | .ok a => pure (a, after)
-  | .error (.waiting why) | .error (.defect why) => refuse at_ "WK-TYPE" why
-  | .error _ => refuse at_ "WK-TYPE" "could not elaborate the selected source declaration"
-
 /-- Match ordered ordinary fields of the selected closed instance by source occurrence,
 selector and type, including each role-filtered projection. -/
 def checkFields (s : Compile.State) (protocol : InstanceId) (kind : ProtocolView) (place : Span)
@@ -73,11 +61,6 @@ def checkedClause (label : String) (s : Compile.State) (id : DeclarationId) (arg
   let .ok evidence := package.checkEvidence | refuse at_ "WK-FUNCTION" "admission refused the selected function"
   return (← functionDeclarations label ⟨inst⟩ package evidence, s)
 
-structure WrittenParties where
-  interactive : Bool
-  declaredProver : Option Nat
-  place : Span
-
 structure WrittenClause where
   parties : WrittenParties
   view : View
@@ -94,24 +77,6 @@ structure WrittenClause where
   storedRelation : String
   storedExtractor : String
   operands : List Nat
-
-/-- The written fork uses the scheme's online roles and public statement (SC2–SC4).
-Construction and layout directives take effect after this stage. -/
-def writtenParties (scheme : SchemeEntry) (roles : Array String) : ExportM WrittenParties := do
-  let mut interactive := false
-  let mut prover := none
-  let mut place := scheme.span
-  for line in scheme.lines do
-    match line with
-    | .offline sp .. | .ideal sp .. => refuse sp "WK-VIEW" "the written fork requires two online roles"
-    | .construction _ (.interactive _) => interactive := true
-    | .prover sp role =>
-      if prover.isSome then refuse sp "SC3" "duplicate prover designation"
-      let some id := roles.findIdx? (· == role.text) | refuse sp "SC3" s!"unknown prover {role.text}"
-      prover := some id
-      place := sp
-    | _ => pure ()
-  return ⟨interactive, prover, place⟩
 
 def declarations (s : Compile.State) (selection : Selection) : ExportM WrittenClause := do
   let scheme := selection.scheme

@@ -196,7 +196,7 @@ mutual
         if let some binder := binder then bind binder
       | .draw binder .. | .sample binder .. | .attempt binder .. =>
         if let some binder := binder then bind binder
-      | .apply results _ arguments _ _ order => do
+      | .apply results _ arguments _ _ order .. => do
         -- the arguments are used in the order written
         for position in order do
           if let some argument := arguments[position]? then expr argument

@@ -178,7 +178,7 @@ def protocolSummary (description : String) (head : Lowered.ProtocolHead) (checke
       let row ← internRow (← vocabularyRow law.request) (site "value").place
       sites := sites.push (site "value")
       flows := flows.push (.draw owner receivers row n)
-    | .apply _ callee _ _ roleMap _ =>
+    | .apply _ callee _ _ roleMap .. =>
       if nestedDraw.isNone then
         if let some (.protocol inner) := (← getResults).body? callee then
           if inner.nestedDraw.isSome || inner.flows.any (fun | .draw .. => true | _ => false) then

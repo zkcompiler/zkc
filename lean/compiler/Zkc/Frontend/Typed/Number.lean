@@ -115,10 +115,10 @@ mutual
       let what ← match what with
         | .send binder payload sender receivers => do
           pure (Event.send binder (← expr payload) sender receivers)
-        | .apply results callee arguments specification roleMap order => do
+        | .apply results callee arguments specification roleMap order proofArguments => do
           let arguments ← arguments.mapM expr
           let specification ← specification.mapM fun (port, value) => do return (port, ← expr value)
-          pure (Event.apply results callee arguments specification roleMap order)
+          pure (Event.apply results callee arguments specification roleMap order proofArguments)
         | other => pure other
       return .event found number what
     | .error found binders => do return .error (← mark found) binders

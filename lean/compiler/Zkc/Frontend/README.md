@@ -44,6 +44,24 @@ It supplies the execution subject for a future property proof. Prover constructi
 serialization and the programmed simulator are outside this verifier profile.
 [Constructed experiment and regression command](../../../formal/README.md#constructed-schnorr-verifier)
 
+## Proof arguments at a written goal
+
+A scheme selects a deployed protocol instance. A named goal binds that instance's
+specification-only naturals in declaration order. Each application retains its own resolved
+proof arguments and lexical static environment beside the emitted instruction. Following
+that instruction evaluates the arguments in the caller's environment and checks the
+callee's specification conjuncts. Shared parameters are inherited by scope and parameter
+index. The Core application continues to reference the same deployed callee.
+
+From `lean/formal`, run `lake lean checks/ProofArguments.lean` for the two goals from the
+language conformance program. For one admitted `Count<8>`, `spec e = 4` closes the draw
+charge to `3/8` and `spec e = 1` closes it to `3/4`. The same lookup follows an application
+instruction from a caller. Each key in the path must identify one application in the current
+caller. The interface has no iteration coordinate for an argument that needs the index of a
+uniform loop. These values describe the authored charge. Certifying a false-acceptance
+probability also requires a theorem for the admitted verifier.
+[Source charge lookup](Written/Charge.lean) · [Goal selection](Written/Selection.lean)
+
 ## Previous frontend
 
 The lexer, the parser and the canonical printer of the zkc source language, written from the

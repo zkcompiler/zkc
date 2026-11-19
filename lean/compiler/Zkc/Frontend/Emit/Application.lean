@@ -42,7 +42,7 @@ def RootEmission.localApplicationAt? (e : RootEmission) (state : Compile.State)
   let [origin] := e.origins.toList.filter (·.definition == caller) | none
   let [attached] := origin.specification.toList.filter (·.instruction == site) | none
   let node ← origin.nodes[site.number]?
-  let .stmt (.event _ _ (.apply _ target _ specification roleMap _)) ← body.find? node | none
+  let .stmt (.event _ _ (.apply _ target _ specification roleMap ..)) ← body.find? node | none
   guard (target == callee.number && roleMap.toList == roles)
   let application ← LocalApplication.read port specification
   guard (LocalApplication.read port attached.arguments == some application)

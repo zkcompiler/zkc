@@ -236,14 +236,14 @@ def eventRoles (what : Event) : PlaceM RoleSet := do
       | none => return receiving
   | .draw _ _ owner receivers => return (RoleSet.ofArray receivers).insert owner
   | .sample _ _ role | .attempt _ role => return RoleSet.single role
-  | .apply _ _ _ _ roleMap _ => return RoleSet.ofArray roleMap
+  | .apply _ _ _ _ roleMap .. => return RoleSet.ofArray roleMap
 
 /-- The holders of a name bound by an event. -/
 def bindEvent (what : Event) (roles : RoleSet) : PlaceM Unit := do
   match what with
   | .send binder .. | .draw binder .. | .sample binder .. | .attempt binder .. =>
     if let some binder := binder then hold binder roles
-  | .apply results callee _ _ roleMap _ =>
+  | .apply results callee _ _ roleMap .. =>
     let signature := (← read).signatureOf callee
     for index in [0:results.size] do
       let some binder := results[index]! | continue
@@ -459,7 +459,7 @@ mutual
         modify fun state => { state with roles := { state.roles with
           senders := state.roles.senders.insert mark.id role } }
         setComputing payload.info.id (RoleSet.single role)
-    | .apply _ callee arguments _ roleMap _ => do
+    | .apply _ callee arguments _ roleMap .. => do
       let some signature := (← read).signatureOf callee | return
       let ports := signature.ports.filter (!·.specification)
       for (port, argument) in ports.zip arguments do

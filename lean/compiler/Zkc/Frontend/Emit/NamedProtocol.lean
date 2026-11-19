@@ -261,7 +261,7 @@ mutual
     | .draw binder law owner receivers => emitCoin mark.id binder law owner receivers.toList
     | .sample binder law owner => emitCoin mark.id binder law owner []
     | .attempt .. => throw (EmitFailure.waiting "an `attempt` (a later layer)")
-    | .apply results callee arguments specification roleMap order => do
+    | .apply results callee arguments specification roleMap order proofArguments => do
       -- each argument at the mapped holders of its port, in the order written
       let mut operands : Array ValueName := arguments.map fun _ => 0
       for position in order do
@@ -270,8 +270,8 @@ mutual
         operands := operands.set! position value
       let (site, given) ← emitStepAt mark.id
         (fun key rs => .op key rs (.apply ⟨callee⟩ roleMap.toList) operands.toList) results.size
-      unless specification.isEmpty do
-        modify fun state => { state with specification := state.specification.push ⟨site, specification⟩ }
+      modify fun state => { state with
+        specification := state.specification.push ⟨site, callee, specification, proofArguments⟩ }
       for (binder, name) in results.toList.zip given do
         if let some binder := binder then bind binder.id (.value name)
 

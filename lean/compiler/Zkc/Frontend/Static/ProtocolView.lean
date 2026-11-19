@@ -58,7 +58,7 @@ def eventFields (view : ProtocolView) (role : Option Nat) (sources : Array Sourc
       | .sample _ _ owner | .attempt _ owner => .privateCoins (some (.single owner))
       | .apply .. => .unresolved
     unless mayHaveField view role audience do continue
-    if let .apply _ _ _ _ participants _ := event then
+    if let .apply _ _ _ _ participants .. := event then
       unless role.all participants.contains do continue
     if nested then throw (pending "choice or loop")
     let type ← match event with

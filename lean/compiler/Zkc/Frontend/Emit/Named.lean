@@ -64,7 +64,9 @@ structure Context (b : Bindings) where
 the expressions retain their binding in the numbered source tree. -/
 structure ApplicationArguments where
   instruction : Core.Key
+  callee : InstanceId
   arguments : Array (String × Typed.Expr)
+  proofArguments : Option Static.SpecificationClosure
 
 structure State (b : Bindings) where
   next : ValueName := 0

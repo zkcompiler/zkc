@@ -45,7 +45,7 @@ mutual
     | .event _ _ what =>
       match what with
       | .send _ payload _ _ => calledInExpr found payload
-      | .apply _ _ arguments _ _ _ => arguments.foldl calledInExpr found
+      | .apply _ _ arguments .. => arguments.foldl calledInExpr found
       | .draw .. | .sample .. | .attempt .. => found
     | .error .. => found
 end

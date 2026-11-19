@@ -79,12 +79,15 @@ def tableSumRelation? (c : Written.AdmittedRoot) : Option SourceTableSum := do
   let .protocol head .. := decl.content | none
   let #[values, claim] := head.ports | none
   let clauses ← (Written.contractOf s key.declaration default).toOption
-  let #[.proves _ (some 1) _ (.call _ ref #[.positional _ (.local _ xs), .positional _ (.local _ v)] none)] :=
+  let #[.proves _ (some 1) _ (.call span ref supplied none)] :=
     clauses.filter (fun cl => cl matches .proves ..) | none
-  guard (xs == values.binder.id && v == claim.binder.id)
   let id ← (Written.closedDeclaration ref).toOption
   let owner ← s.program.declarations[id]?
-  let .relation _ := owner.node | none
+  let .relation rel := owner.node | none
+  guard (!supplied.any (fun arg => arg matches .spec ..))
+  let #[.local _ xs, .local _ v] ← (Lowered.pairValueArguments rel.name.text
+    (rel.statement.map (·.name.text)) supplied span).toOption | none
+  guard (xs == values.binder.id && v == claim.binder.id)
   let preconditions ← (Written.contractOf s id ref.span).toOption
   guard (!preconditions.any (fun clause => clause matches .requires ..))
   let checked ← s.results.checked? c.id

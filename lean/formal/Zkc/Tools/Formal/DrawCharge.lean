@@ -16,15 +16,15 @@ variable {V : Zkc.Core.Vocabulary} {p : Zkc.Core.Typed V} {owner : Key}
 /-- Retain the successful source read and the independently checked operand of the bound.
 The source lookup and semantic readback use the same definition in the admitted program. -/
 structure IssuedCharge (s : Compile.State) (name : String)
-    (linked : Linked p owner state t residual prefixSize rounds events) (degree order : Nat) where
+    (linked : Linked p owner state t residual prefixSize rounds events) (degree order : Nat) (specification : Array Nat := #[]) where
   charge : DrawCharge
-  written : drawCharge s p owner name = .ok charge
+  written : drawCharge s p owner name specification = .ok charge
   binding : Matches charge linked degree order
 
 def issueCharge (s : Compile.State) (name : String)
-    (linked : Linked p owner state t residual prefixSize rounds events) (degree order : Nat) :
-    Except String (IssuedCharge s name linked degree order) :=
-  match written : drawCharge s p owner name with
+    (linked : Linked p owner state t residual prefixSize rounds events) (degree order : Nat)
+    (specification : Array Nat := #[]) : Except String (IssuedCharge s name linked degree order specification) :=
+  match written : drawCharge s p owner name specification with
   | .error why => .error why
   | .ok charge =>
     if binding : Matches charge linked degree order then .ok ⟨charge,written,binding⟩
@@ -32,34 +32,50 @@ def issueCharge (s : Compile.State) (name : String)
 
 open Zkc.Formal.Interactive.Sumcheck Zkc.Formal.Written.SumcheckRows
 
-structure ChargedSumcheck (c : AdmittedRoot) (n : Nat) (name : String) where
+structure ChargedSumcheck (c : AdmittedRoot) (n : Nat) (name : String) (specification : Array Nat := #[]) where
   sourceRelation : SourceTableSum
   selectedRelation : tableSumRelation? c = some sourceRelation
   extension : hasSourceExtension c = true
   keys : CallerKeys
+  callKeys : sumcheckCallKeys c.emission ⟨c.id⟩ = some keys
+  child : ProofSubject
+  applied : (ProofSubject.mk c.id specification).child c keys.site = .ok child
+  target : child.protocol = keys.reduction.number
   verifier : TableVerifier.Certified (sourceRows c.emission.bindings) (vectorRows c.emission.bindings)
     c.evidence.admitted.program ⟨c.id⟩ keys.reduction keys.evaluator n (sourceEvents c.emission.bindings)
-  issued : IssuedCharge c.state name verifier.linked 1 Zkc.Vocabulary.Field.bls12381Fr.order
+  issued : IssuedCharge c.state name verifier.linked 1 Zkc.Vocabulary.Field.bls12381Fr.order child.specification
 
-abbrev ChargedSumcheck.relation {c n name} (cert : ChargedSumcheck c n name) :=
+abbrev ChargedSumcheck.relation {c n name specification} (cert : ChargedSumcheck c n name specification) :=
   cert.sourceRelation.declaration
 
-theorem ChargedSumcheck.selected {c n name} (cert : ChargedSumcheck c n name) :
+theorem ChargedSumcheck.selected {c n name specification} (cert : ChargedSumcheck c n name specification) :
     tableSumClaim? c = some cert.relation := by simp [tableSumClaim?, cert.selectedRelation]
 
-def chargeSumcheck (c : AdmittedRoot) (n : Nat) (name : String) : Except String (ChargedSumcheck c n name) := do
-  let some keys := sumcheckCallKeys c.emission ⟨c.id⟩ | throw "missing Sumcheck caller"
-  let b := c.emission.bindings
-  let rows := sourceRows b
-  let some cert := TableVerifier.certify rows (vectorRows b) c.evidence.admitted.program ⟨c.id⟩
-    keys.reduction keys.evaluator n (sourceEvents b) rows.evaluationReadback [rows.affineReadback, rows.encodedAffineReadback true false]
-    | throw "uncertified Sumcheck verifier"
-  match selected : tableSumRelation? c with
-  | none => throw "expected the verifier's written sum relation on its public table and claim"
-  | some relation =>
-    if extension : hasSourceExtension c = true then
-      return ⟨relation,selected,extension,keys,cert,← issueCharge c.state name cert.linked 1 Zkc.Vocabulary.Field.bls12381Fr.order⟩
-    else throw "the selected reduction requires the extension of the verifier's public table"
+def chargeSumcheck (c : AdmittedRoot) (n : Nat) (name : String) (specification : Array Nat := #[]) :
+    Except String (ChargedSumcheck c n name specification) := do
+  let ⟨keys, hkeys⟩ ← show Except String {k // sumcheckCallKeys c.emission ⟨c.id⟩ = some k} from
+    match sumcheckCallKeys c.emission ⟨c.id⟩ with
+    | none => throw "missing Sumcheck caller"
+    | some k => pure ⟨k,rfl⟩
+  let parent := ProofSubject.mk c.id specification
+  let ⟨child, applied⟩ ← show Except String {child // parent.child c keys.site = .ok child} from
+    match parent.child c keys.site with
+    | .error why => throw why
+    | .ok child => pure ⟨child,rfl⟩
+  if target : child.protocol = keys.reduction.number then
+    let b := c.emission.bindings
+    let rows := sourceRows b
+    let some cert := TableVerifier.certify rows (vectorRows b) c.evidence.admitted.program ⟨c.id⟩
+      keys.reduction keys.evaluator n (sourceEvents b) rows.evaluationReadback [rows.affineReadback, rows.encodedAffineReadback true false]
+      | throw "uncertified Sumcheck verifier"
+    match selected : tableSumRelation? c with
+    | none => throw "expected the verifier's written sum relation on its public table and claim"
+    | some relation =>
+      if extension : hasSourceExtension c = true then
+        return ⟨relation,selected,extension,keys,hkeys,child,applied,target,cert,
+            ← issueCharge c.state name cert.linked 1 Zkc.Vocabulary.Field.bls12381Fr.order child.specification⟩
+      else throw "the selected reduction requires the extension of the verifier's public table"
+  else throw "the proof arguments belong to a different callee"
 
 section Layer
 variable {c : AdmittedRoot} {hdr : ProtocolHeader c.emission.bindings.vocabulary}
@@ -192,7 +208,7 @@ private def standardReadback {b : Emit.Bindings} {p : Zkc.Core.Typed b.vocabular
   exact ⟨cert,⟨binding⟩⟩
 
 def ChargedSumcheck.standardVerifier {c : AdmittedRoot} {n : Nat} {name : String}
-    (checked : ChargedSumcheck c n name) (plain : c.emission.bindings.rows = []) :=
+    {specification : Array Nat} (checked : ChargedSumcheck c n name specification) (plain : c.emission.bindings.rows = []) :=
   standardReadback checked.verifier checked.issued.binding (emptyBindings _ plain)
 
 abbrev Scalar := ZMod Zkc.Vocabulary.Field.bls12381Fr.order
@@ -201,7 +217,7 @@ abbrev scalarModel := ArithmeticModel.model Scalar Scalar
 /-- The external probability of accepting a false claim at the root that owns this
 certificate, using the source field and an answering service for its uniform challenge. -/
 theorem ChargedSumcheck.primeBound {c : AdmittedRoot} {n : Nat} {name : String}
-    (checked : ChargedSumcheck c n name) (plain : c.emission.bindings.rows = [])
+    {specification : Array Nat} (checked : ChargedSumcheck c n name specification) (plain : c.emission.bindings.rows = [])
     {σ : Type} (advance : Occurrence → Scalar → σ → σ) (other : Slots (RSig scalarModel) σ)
     (path : List Zkc.Core.Frame) (s : σ) (x : Cube Scalar n) (claim : Scalar) (wrong : claim ≠ Cube.sum n x) :
     let cert := (checked.standardVerifier plain).1
@@ -216,7 +232,7 @@ theorem ChargedSumcheck.primeBound {c : AdmittedRoot} {n : Nat} {name : String}
 
 /-- A failed equality in the recognized source body gives the false public sum
 required by the admitted verifier theorem, in either source operand order. -/
-theorem ChargedSumcheck.falseSum {c n name} (checked : ChargedSumcheck c n name)
+theorem ChargedSumcheck.falseSum {c n name specification} (checked : ChargedSumcheck c n name specification)
     {F : Type} [Lean.Grind.Field F] (x : Cube F n) (claim : F)
     (failed : tableMeaning checked.sourceRelation.table checked.sourceRelation.target
       checked.sourceRelation.body (Cube.flatten n x) claim ≠ some True) : claim ≠ Cube.sum n x := by
@@ -226,7 +242,7 @@ theorem ChargedSumcheck.falseSum {c n name} (checked : ChargedSumcheck c n name)
 
 /-- The source-facing probability bound uses the operand order read from the written relation. -/
 theorem ChargedSumcheck.primeBoundOfRelation {c : AdmittedRoot} {n : Nat} {name : String}
-    (checked : ChargedSumcheck c n name) (plain : c.emission.bindings.rows = [])
+    {specification : Array Nat} (checked : ChargedSumcheck c n name specification) (plain : c.emission.bindings.rows = [])
     {σ : Type} (advance : Occurrence → Scalar → σ → σ) (other : Slots (RSig scalarModel) σ)
     (path : List Zkc.Core.Frame) (s : σ) (x : Cube Scalar n) (claim : Scalar)
     (failed : tableMeaning checked.sourceRelation.table checked.sourceRelation.target

@@ -55,4 +55,22 @@ For GKR, `chargeLayer` checks the homogeneous gate primitive. `chargeGateFamily`
 
 The independent consumers compile the original ten-round Sumcheck and four-coordinate GKR fixtures. They check verifier role 1 with the source field's uniform challenge. A false cube sum bounds the probability of a root return by `10 × (1 / Fr.order)`. Under the supplied gate evaluation, equality and quadratic laws, a false layer claim bounds the probability that the returned scalar agrees with the summand on the newly returned coordinates by `4 × (2 / Fr.order)`. The tests check the exact written fees and reject substituted propositions, events and same-typed subjects. The focused charge audit replays the issuance module and its project imports. [Independent consumers](checks/ChargeConsumers.lean) · [Kernel replay](checks/ReplayCharge.lean) · [Audit controls](checks/AuditCharge.lean)
 
+### Named written Sumcheck soundness
+
+`issueSumcheckGoal assembly "written_sound"` retains the successful admission of that assembly
+and goal alongside the certificate on the admitted root.
+In the Sumcheck example the request selects the written stage and a fixed statement in the
+plain model. The selector reads the table dimension, deciding role, relation operands,
+applied reduction and draw from source. For ten rounds its accumulated charge is
+`10 / Fr::Order`. An explicit ceiling must cover that charge by exact rational comparison.
+A request without a ceiling reports the accumulated charge. Constructed-stage and
+random-oracle requests require a different theorem. [Written goal](../../examples/sumcheck_example.zkc)
+
+`CertifiedSumcheckGoal.falseAcceptance` bounds the probability that the admitted verifier
+returns on a public table and a claim different from its cube sum. The experiment uses the
+BLS12-381 scalar field and fresh uniform challenges. The other replies and the strategy
+state can depend on previous challenges. Run `lake lean checks/SumcheckGoal.lean` here for
+the source requests, refusals and an independent consumer that supplies the verifier's input
+ports and return event. [Issuer and theorem](Zkc/Tools/Formal/SumcheckGoal.lean) · [Consumer](checks/SumcheckGoal.lean)
+
 The [historical package](../historical-formal/README.md) preserves the arithmetic construction, concrete curve premises, cross-model proofs and receipt checks for the earlier Core API.

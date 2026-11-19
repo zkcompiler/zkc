@@ -235,7 +235,7 @@ mutual
         if let some binder := binder then bind binder
       | .draw binder .. | .sample binder .. | .attempt binder .. =>
         if let some binder := binder then bind binder
-      | .apply results _ arguments specification _ _ => do
+      | .apply results _ arguments specification .. => do
         arguments.forM expr
         specification.forM fun (_, value) => expr value
         for binder in results do
