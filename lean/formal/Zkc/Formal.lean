@@ -6,3 +6,4 @@ public import Zkc.Formal.Written.FiniteModel
 public import Zkc.Formal.ModelComparison
 public import Zkc.Formal.Written.ReductionModel
 public import Zkc.Formal.Written.UniformChallenge
+public import Zkc.Formal.Written.PrimeFieldCharge

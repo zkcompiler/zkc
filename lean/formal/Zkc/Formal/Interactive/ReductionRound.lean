@@ -50,8 +50,12 @@ def finish (point : V.Ty) (sites : Nat → Key := Key.mk) : Term (protocolDialec
   .op (sites 10) (.narrow [0,1] (fun _ h => h)) (.cons (varAt 9) .nil) (.cons 12 .nil) <|
   .ret (.cons (varAt 11) (.cons (varAt 12) (.cons (varAt 10) .nil)))
 
+/-- The draw in the common round layout. The argument maps instruction positions to the
+keys recovered from this particular admitted block. -/
+abbrev challengeSite (sites : Nat → Key) : Key := sites 5
+
 def drawThenFinish (point : V.Ty) (sites : Nat → Key := Key.mk) : Term (protocolDialect V hs) (beforeDraw state point t msg) (outputs residual t) :=
-  .op (sites 5) (.given (.coin events.law) 1 [0] [] t events.coinType (by simp) (by decide)) .nil (.cons 7 .nil) <|
+  .op (challengeSite sites) (.given (.coin events.law) 1 [0] [] t events.coinType (by simp) (by decide)) .nil (.cons 7 .nil) <|
   finish ops point sites
 
 def body (point : V.Ty) (sites : Nat → Key := Key.mk) :
@@ -109,7 +113,7 @@ private theorem draw_value (point : V.Ty) (M : Model V) (fns : FnTable M hs.fns)
     (law : ∀ a x, localOp M fns ops.evaluate (.cons a (.cons x .nil)) = .done (.cons (evaluate a x) .nil))
     (sites : Nat → Key := Key.mk) :
     (project 1 (drawThenFinish ops events point sites)).denote (roleSem M 1 fns protocols) path env =
-    ((challenge M events path (sites 5)).map fun r => (r,evaluate m r)).map (returned M residual) := by
+    ((challenge M events path (challengeSite sites)).map fun r => (r,evaluate m r)).map (returned M residual) := by
   change Process.call (S := RSig M) (H := Stop) (.own (.coin events.law) [0] ⟨path,sites 5⟩ [] .nil t) _ = Process.call _ _
   apply call_ext
   intro r
@@ -130,7 +134,7 @@ theorem verifier (point : V.Ty) (M : Model V) [DecidableEq (M.Val t)]
     (path : List Frame) (hidden : RV M 1 ⟨state,[0]⟩) (initialPoint : M.Val point) (claim : M.Val t) (sites : Nat → Key := Key.mk) :
     (project 1 (body ops events point sites)).denote (roleSem M 1 fns protocols) path
       (Env.empty.extend names (.cons hidden (.cons (hide M 1 ⟨point,[0,1]⟩ initialPoint) (.cons (hide M 1 ⟨t,[0,1]⟩ claim) .nil)))) =
-    (verifierRound (receive M msg path (sites 1)) (fun _ => challenge M events path (sites 5)) (.declared .reject ⟨path,sites 4⟩)
+    (verifierRound (receive M msg path (sites 1)) (fun _ => challenge M events path (challengeSite sites)) (.declared .reject ⟨path,sites 4⟩)
       boundary evaluate claim).map (returned M residual) := by
   change Process.call (S := RSig M) (H := Stop) (.get .message 0 ⟨path,sites 1⟩ msg) _ = Process.call _ _
   apply call_ext
@@ -145,7 +149,7 @@ theorem verifier (point : V.Ty) (M : Model V) [DecidableEq (M.Val t)]
   rw [eqValue]
   change (bif decide (claim = boundary m) then Process.done HList.nil else
     .halt (Stop.declared .reject ⟨path,sites 4⟩)).bind _ =
-    (if boundary m = claim then (challenge M events path (sites 5)).map (fun r => (r,evaluate m r))
+    (if boundary m = claim then (challenge M events path (challengeSite sites)).map (fun r => (r,evaluate m r))
      else .halt (.declared .reject ⟨path,sites 4⟩)).map _
   by_cases h : boundary m = claim
   · conv => rhs; rw [ite_eq_left h]

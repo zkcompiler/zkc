@@ -72,7 +72,7 @@ def FreshFrom (M : Model V) (fns : FnTable M hs.fns) (roles : RTable M hs.protoc
     let atBlock := path ++ [Frame.iteration key index]
     (∀ m after, K.Reaches (receive M round.msg atBlock (round.sites 1)) s m after →
       localOp M fns round.members.boundary (.cons m .nil) = .done (.cons (scalar M env claim) .nil) →
-      Fresh K points positive (challenge M events atBlock (round.sites 5)) after) ∧
+      Fresh K points positive (challenge M events atBlock (challengeSite round.sites)) after) ∧
     ∀ vs after, K.Reaches ((project 1 inside).denote (roleSem M 1 fns roles) atBlock env) s vs after →
       next.FreshFrom M fns roles K points positive path (env.extend ns vs) after
 

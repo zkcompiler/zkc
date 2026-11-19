@@ -29,7 +29,7 @@ theorem Located.charge (round : Located state events running actual) (ns : Names
     {σ : Type} (K : Experiment (RSig M) σ) (s : σ) (points : List (M.Val t)) (positive : 0 < points.length)
     (path : List Frame) (env : Env (RV M 1) Γ) (truth : M.Val t → M.Val t) (degree : Nat)
     (fresh : ∀ m s', K.Reaches (receive M round.msg path (round.sites 1)) s m s' →
-      boundary m = Sequence.scalar M env running → Fresh K points positive (challenge M events path (round.sites 5)) s')
+      boundary m = Sequence.scalar M env running → Fresh K points positive (challenge M events path (challengeSite round.sites)) s')
     (roots : ∀ m, boundary m = Sequence.scalar M env running →
       points.countP (fun r => decide (evaluate m r = truth r)) ≤ degree) :
     K.probability ((project 1 actual).denote (roleSem M 1 fns roles) path env) s
@@ -40,7 +40,7 @@ theorem Located.charge (round : Located state events running actual) (ns : Names
   have atClaim : env.get running = hide M 1 _ claim := by rfl
   rw [transport_outputs round.types actual,round.process M fns roles path env claim atClaim boundary evaluate equalLaw ends atPoint]
   have first := verifierRound_le K s points positive (receive M round.msg path (round.sites 1))
-    (fun _ => challenge M events path (round.sites 5)) (.declared .reject ⟨path,round.sites 4⟩)
+    (fun _ => challenge M events path (challengeSite round.sites)) (.declared .reject ⟨path,round.sites 4⟩)
     boundary evaluate truth claim degree fresh roots
   apply Mass.le_trans _ first
   simp only [Experiment.probability,Process.map_eq_bind,Experiment.expect_bind,Experiment.expect_done]
