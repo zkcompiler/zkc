@@ -23,9 +23,14 @@ test-interactive:
     cd lean/formal && lake lean checks/WorldObservation.lean
     cd lean/formal && lake env lean --run checks/AuditInteractive.lean
 
+# Compile source draw charges, check their VCVio bounds, and exercise source and address mutations.
+test-written-charge:
+    cd lean/formal && lake lean checks/WrittenCharge.lean
+
 # Build the public formal package and audit its dependencies and proof controls.
 test-formal:
     cd lean/formal && lake build && lake test
+    just test-written-charge
 
 # Parse and format the reference corpus and check source contracts and generated view types.
 test-frontend:

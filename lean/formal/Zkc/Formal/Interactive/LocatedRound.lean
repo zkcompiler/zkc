@@ -51,7 +51,7 @@ theorem Located.process {Γ : Ctx (LTy V)} {mid : List (LTy V)} {events : Events
     (ends : ∀ m, localOp M fns round.members.boundary (.cons m .nil) = .done (.cons (boundary m) .nil))
     (atPoint : ∀ m r, localOp M fns round.members.evaluate (.cons m (.cons r .nil)) = .done (.cons (evaluate m r) .nil)) :
     (project 1 (round.types ▸ actual)).denote (roleSem M 1 fns roles) path env =
-      (verifierRound (receive M round.msg path (round.sites 1)) (fun _ => challenge M events path (round.sites 5))
+      (verifierRound (receive M round.msg path (round.sites 1)) (fun _ => challenge M events path (challengeSite round.sites))
         (.declared .reject ⟨path,round.sites 4⟩) boundary evaluate claim).map (returned M round.residual) := by
   let hidden := nothing M (r := 1) (a := ⟨state,[0]⟩) (by simp)
   let args := HList.cons hidden (.cons (hide M 1 ⟨emptyPoint t,[0,1]⟩ [])

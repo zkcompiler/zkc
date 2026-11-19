@@ -4,7 +4,7 @@ public import Zkc.Core.Scheme.Roles
 
 public import Zkc.Frontend.Written.Contract
 public import Zkc.Frontend.Emit.Root
-public import Zkc.Frontend.Driver.SourcePhases
+public import Zkc.Frontend.Written.Root
 
 @[expose] public section
 set_option autoImplicit false
@@ -246,23 +246,11 @@ def exportSelected (assembly : Assembly) (request : Request) (withProof : Bool) 
       moduleNamespace.toList.head!.isAlpha do
     throw "WK-NAMESPACE: expected one identifier starting with a letter"
   let scope := if moduleNamespace == "WrittenKnowledge" then moduleNamespace else "«" ++ moduleNamespace ++ "»"
-  let mut state : Compile.State := {}
-  for phase in Driver.sourcePhases assembly do
-    let (report, s) := phase.runIn sourceContext state
-    state := s
-    if let some diag := s.log.entries.find? (fun d => d.isError || d.isIncomplete) then
-      throw s!"{diag.span.file}:{diag.render s.env.renderer}"
-    if let some skipped := report.interrupted then throw s!"WK-FRONTEND: {skipped}"
-  let (selection, resolved) ← select state request
+  let (selection, resolved) ← select (← sourceState assembly) request
   let scheme := selection.scheme
-  let (result, s) := (Typing.typeBody scheme.protocol scheme.span).run sourceContext resolved
-  if let some diag := s.log.entries.find? (fun d => d.isError || d.isIncomplete) then
-    throw s!"{diag.span.file}:{diag.render s.env.renderer}"
-  let .ok _ := result | refuse scheme.span "WK-ROOT" "protocol did not typecheck"
+  let ⟨_,s,emission,evidence⟩ ← admitInstance resolved scheme.protocol scheme.span
   let c ← declarations s selection
-  let .ok emission := Typing.emitRoot s scheme.protocol | refuse scheme.span "WK-CORE" "protocol did not emit"
   let pkg := emission.package ⟨[],[],[],[],[]⟩
-  let .ok evidence := pkg.checkEvidence | refuse scheme.span "WK-CORE" "admission refused the emitted program"
   let historyType ← checkPorts pkg evidence c
   let rendered ← program pkg evidence
   if withProof then

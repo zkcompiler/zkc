@@ -1,5 +1,5 @@
 import Zkc.Tests.Formal.SourcePairReadback
-import Zkc.Frontend.Driver.Bodies
+import Zkc.Frontend.Written.Root
 import Zkc.Frontend.Emit.Application
 import Zkc.Formal.Interactive.EmptySumcheck
 import Zkc.Formal.Interactive.PairSequence
@@ -37,27 +37,10 @@ private partial def applications {V : Zkc.Core.Vocabulary} (region : Region (Pro
 private def instanceName (s : Compile.State) (id : InstanceId) : String :=
   (s.table.entries[id]?.map fun e => s.program.nameOf e.key.declaration).getD ""
 
-structure CheckedRoot where
-  id : InstanceId
-  state : Compile.State
-  emission : Emit.RootEmission
-  evidence : (emission.package ⟨[],[],[],[],[]⟩).Admission
+abbrev CheckedRoot := Written.AdmittedRoot
 
 def admitRoot (entry : SourceInput) (loader : Array String → IO (Option SourceInput)) : IO CheckedRoot := do
-  let assembly ← assemble #[entry] loader
-  let mut state : Compile.State := {}
-  for phase in Driver.sourcePhases assembly do
-    let (report, next) := phase.runIn { vocabulary } state
-    if let some why := report.interrupted then throw (IO.userError s!"{phase.name} {why}")
-    state := next
-  let #[id] := state.roots | throw (IO.userError "expected exactly one source root")
-  let (result, s) := (Typing.typeBody id default).run { vocabulary } state
-  let .ok _ := result | throw (IO.userError "root body checking interrupted")
-  unless !s.log.hasErrors && !s.log.hasIncomplete do throw (IO.userError "source diagnostics")
-  let .ok emission := Typing.emitRoot s id | throw (IO.userError "source root emission failed")
-  let .ok evidence := (emission.package ⟨[],[],[],[],[]⟩).checkEvidence
-    | throw (IO.userError "Core refused the emitted program")
-  return ⟨id,s,emission,evidence⟩
+  IO.ofExcept (Written.admitSource (← assemble #[entry] loader))
 
 abbrev sourceEvents := Zkc.Formal.Written.SumcheckRows.sourceEvents
 
