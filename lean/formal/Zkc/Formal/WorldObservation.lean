@@ -139,6 +139,41 @@ def Scoped {H B : Type} (access : Access V) (r : Role) (p : Process (RSig M) H B
 variable {H B : Role → Type} {source : Source M}
 abbrev NetworkScoped (access : Access V) (net : Net M H B) := ∀ r, Scoped access r (net r)
 
+/-- An operation offered on some continuation of the reference role, over all possible
+replies. Source-read authority is fixed from the honest projections before substitution. -/
+def Offers {X Y : Type} (p : Process (RSig M) X Y) (op : ROp M) : Prop :=
+  p.interpret ⟨fun actual next => actual = op ∨ ∃ reply, next reply⟩
+    (fun _ => False) (fun _ => False)
+
+theorem scoped_iff_offers {X Y : Type} (access : Access V) (r : Role)
+    (p : Process (RSig M) X Y) :
+    Scoped access r p ↔ ∀ op, Offers p op → access.operation r op := by
+  induction p with
+  | done | halt => exact ⟨fun _ _ h => False.elim h, fun _ => trivial⟩
+  | call op next ih =>
+    constructor
+    · rintro ⟨head, tails⟩ q (eq | ⟨v, offered⟩)
+      · exact eq ▸ head
+      · exact (ih v).mp (tails v) q offered
+    · intro accepts
+      exact ⟨accepts op (.inl rfl), fun v => (ih v).mpr fun q h => accepts q (.inr ⟨v,h⟩)⟩
+
+/-- The read authority of the projected processes on the selected inputs. A replacement
+owner may choose a new request payload. The principal, listeners, kind, occurrence and
+reply type still have to be offered by the corresponding reference role. -/
+def Access.ofProjections (net : Net M H B) : Access V where
+  owns r kind listeners at_ ty := ∃ ins args, Offers (net r) (.own kind listeners at_ ins args ty)
+  hears r kind owner at_ ty := Offers (net r) (.hear kind owner at_ ty)
+
+theorem projections_scoped (net : Net M H B) : NetworkScoped (Access.ofProjections net) net := by
+  intro r
+  apply (scoped_iff_offers ..).mpr
+  intro op offered
+  cases op with
+  | own => exact ⟨_, _, offered⟩
+  | hear => exact offered
+  | give | get | begin | settle => trivial
+
 private theorem set_scoped {access : Access V} {net : Net M H B} {r : Role} {q}
     (all : NetworkScoped access net) (hq : Scoped access r q) :
     NetworkScoped access (net.set M r q) := by
@@ -172,5 +207,13 @@ theorem reach_scoped {access : Access V} {c c' : Net M H B × Pending M} {trace}
     obtain ⟨head, next⟩ := step_scoped all step
     obtain ⟨tail, last⟩ := ih next
     exact ⟨fun h mem => (List.mem_cons.mp mem).elim (fun eq => eq ▸ head) (tail h), last⟩
+
+/-- Starting from any reference network, replace a single role by a strategy respecting
+that role's reference permissions. Every reached read obeys the original permissions. -/
+theorem replacement_reads {net : Net M H B} {role : Role} {strategy} {pending last trace}
+    (allowed : Scoped (Access.ofProjections net) role strategy)
+    (run : Reach M source (net.set M role strategy, pending) trace last) :
+    ∀ h ∈ trace, (Access.ofProjections net).record h :=
+  (reach_scoped (set_scoped (projections_scoped net) allowed) run).1
 
 end Zkc.Formal.World

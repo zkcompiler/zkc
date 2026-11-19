@@ -4,6 +4,8 @@ Run `just test-interactive` from the repository root to check the emitted Sumche
 
 Run `just test-written-knowledge` for the source-issued Schnorr and Chaum–Pedersen theorem over the admitted verifier, extractor and relation, the permitted forks, the mutation counterexamples and kernel replay of both generated modules and their project import closures. The interactive audit also covers the common process judgments and world observations. The [written knowledge guide](../../docs/written-knowledge.md) describes the generic Lean property, the generated target and the model assumptions.
 
+For a selected protocol and inputs, `Access.ofProjections` derives each role's world-read authority from the operations its honest projection can offer across all replies. `replacement_reads` uses that fixed authority when a role runs a different strategy. It covers the principal, owner or listener, operation kind, occurrence and result type. An owner can supply a different payload, whose validity a service checks. The source control maps the private coin of a child protocol to the caller's second role and rejects an attempt by the first role to listen. [Authority and reachability](Zkc/Formal/WorldObservation.lean) · [Source control](checks/WorldObservation.lean)
+
 ## Package and model
 
 Run `lake build` and `lake test` from this directory to build the public formal library and its controls, then replay and audit them. The compiler package has its own dependency graph. This package pins Mathlib and VCVio in its Lake configuration and manifest. Local proof replay uses the built Lean and pinned library modules, traverses proof dependencies for axioms, and accepts `propext`, `Quot.sound`, and `Classical.choice`. The compiler audit uses its original two-axiom policy.

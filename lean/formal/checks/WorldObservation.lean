@@ -1,6 +1,12 @@
 module
 
 import Zkc.Formal.WorldObservation
+import Zkc.Formal.Written.FiniteModel
+import Zkc.Core.Evidence.ProtocolReadback
+meta import Zkc.Formal.Written.FiniteModel
+meta import Zkc.Core.Evidence.ProtocolReadback
+meta import Zkc.Frontend.Written.Root
+meta import Zkc.Frontend.Syntax.Parser
 
 open Zkc.Core Zkc.Formal.World
 
@@ -48,5 +54,49 @@ example (kind : GivenKind V) (source : Source M) {H B : Role → Type}
   obtain ⟨listeners, same, hears⟩ := (reach_scoped restricted run).1 _ mem
   cases same
   exact List.not_mem_nil hears
+
+end
+
+section
+open Zkc.Frontend Zkc.Formal.Written
+
+private def checkPrivateProjection (p : Typed Standard) (root : Key) : Except String Unit := do
+  let some ⟨shape, member⟩ := ProtocolEntry.locatePorts p.headers root 2 [] []
+    | throw "missing two-role root"
+  let M := FiniteModel.model
+  let net := fun r => roleMeaning M p member r [] .nil
+  let .call (.own kind [] at_ _ _ τ) _ := net 1 | throw "remapped owner must request the private coin"
+  unless at_.site.through.length == 1 do throw "private coin must belong to the child application"
+  let [⟨site, .given _ 1 [], _⟩] := shape.events [] id | throw "unexpected declared listeners"
+  unless site == at_.site do throw "projected owner has a different site"
+  -- Every honest continuation is authorized, independently of any candidate replacement.
+  have _ := projections_scoped net
+  match quiet : net 0 with
+  | .done _ =>
+    have denied : ¬ (Access.ofProjections net).hears 0 kind 1 at_ τ := by
+      change ¬ Offers (net 0) _
+      rw [quiet]
+      exact id
+    let impostor : Zkc.Core.Program M (HList (RV M 0) []) :=
+      .call (.hear kind 1 at_ τ) (fun _ => .done .nil)
+    have _ : ¬ Scoped (Access.ofProjections net) 0 impostor :=
+      fun authorized => denied authorized.1
+    return ()
+  | _ => throw "the other role must finish without a source read"
+
+#eval show IO Unit from do
+  let text := "\n".intercalate ["module access", "protocol Child roles(A, B)():",
+    "    coin @A <- sample bool", "protocol Outer roles(P, V)():",
+    "    Child() @(A = V, B = P)", "scheme Private = Outer:", "    prover P",
+    "    construction interactive", ""]
+  let input : SourceInput := ⟨"access.zkc", Syntax.parseString "access.zkc" text⟩
+  let state ← IO.ofExcept (Written.sourceState (← assemble #[input] fun _ => pure none))
+  let some selected := state.results.schemes.find? (·.name == "Private") | throw (IO.userError "missing scheme")
+  let root ← IO.ofExcept (Written.admitInstance state selected.protocol default)
+  let run {b : Emit.Bindings} (p : Typed b.vocabulary) : Except String Unit := do
+    match b, p with
+    | ⟨[], _⟩, program => checkPrivateProjection program ⟨root.id⟩
+    | _, _ => throw "unexpected external primitives"
+  IO.ofExcept (run root.evidence.admitted.program)
 
 end
