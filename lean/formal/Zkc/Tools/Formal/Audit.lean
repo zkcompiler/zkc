@@ -23,13 +23,16 @@ def libraries (directory : System.FilePath) : Array Library := #[
   { name := "tests of the formal library", root := `Zkc.Tests.Formal, kind := .tests, directory }] ++
   Zkc.Tools.Formal.publicIssuers directory
 
--- Check the configuration used by the package executable, independently of the
--- focused audit recipe. Omitting a public client would silently narrow replay.
-example : [`Zkc.Tools.Formal.DrawCharge, `Zkc.Tools.Formal.SumcheckGoal,
-    `Zkc.Tools.Formal.TableBound, `Zkc.Tools.Formal.ConstructedVerifier].all
-    (fun root => (libraries ".").any (fun lib => lib.root == root && lib.withoutReplay.isNone)) = true := by
-  decide
+/-- Verify the configuration actually handed to the package audit. Source clients
+are required even when the local build cache contains all of their dependencies. -/
+def checkIssuers (configured : Array Library) : IO Unit := do
+  for root in [`Zkc.Tools.Formal.DrawCharge, `Zkc.Tools.Formal.SumcheckGoal,
+      `Zkc.Tools.Formal.TableBound, `Zkc.Tools.Formal.ConstructedVerifier] do
+    unless configured.any (fun lib => lib.root == root && lib.withoutReplay.isNone) do
+      throw (IO.userError s!"missing public kernel replay root {root}")
 
-/-- The compiler's package, which holds the files of the controls: the package that this one
-requires, at `../compiler`. -/
-def main : IO UInt32 := run libraries (fun directory => directory / ".." / "compiler") Zkc.Tools.Formal.policy
+/-- The package's controls are in its sibling compiler package. -/
+def main : IO UInt32 := do
+  let configured := libraries (← packageDirectory)
+  checkIssuers configured
+  run (fun _ => configured) (fun directory => directory / ".." / "compiler") Zkc.Tools.Formal.policy
