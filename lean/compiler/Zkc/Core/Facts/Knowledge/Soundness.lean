@@ -22,15 +22,15 @@ def lawful {T Raw Val : Type} {types : KnowledgeTypes T} {ops : KnowledgeOperati
   answers := answers_sound
   leaves slots h reads := leaves_sound typing observations.functional slots _ h reads
   transfer slots peer h := transfer_sound observations slots h peer
-  observe slots peer h src dst num truth := by
+  observe slots peer h src dst same := by
     have ranged := addRange_sound observations.functional slots h dst (fun r found => by
-      rw [← num]
+      rw [← same.number]
       exact rangeFor_sound observations.functional slots peer h src found)
     simp only [observe]
     split
     · rename_i b found
       exact assume_sound observations.functional slots peer ranged dst
-        (truth ▸ decideTruth_sound observations slots peer h src found)
+        (same.truth ▸ decideTruth_sound observations slots peer h src found)
     · exact ranged
   assume slots peer h read val := learnTruth_sound observations slots peer _ h read val
   truth slots peer h read found := decideTruth_sound observations slots peer h read found

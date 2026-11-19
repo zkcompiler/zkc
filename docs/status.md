@@ -40,7 +40,9 @@ Resolved goals and contracts retain declaration identity and named statement arg
 
 `just test-frontend` exercises parsing and formatting across the reference corpus, compares
 assembly and name resolution with the expected rules, and checks generated views at closed
-protocol instances. Resolution checks the statement/witness split of a top-level relation in
+protocol instances. It also checks that guarded indexing survives a send at its sender,
+requires local evidence at the receiver, and reports the role missing a bound at a shared
+binding. Positive cases emit a root and pass Core admission. Resolution checks the statement/witness split of a top-level relation in
 `proves`, `reduces` and `through`, the form of knowledge branches, named algorithms and loop references.
 Typing the full contract at each instance remains open. The
 [language and frontend review](source-elaboration.md) describes the proposed boundary.

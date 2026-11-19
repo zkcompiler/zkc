@@ -27,7 +27,7 @@ structure Rules (D : Dialect) (Raw : Type) where
   /-- Whether equal applications of the operation are one value: no reply, no event, no stop
   other than `undefined`. An operation that is not shared is kept in order. -/
   shared : ∀ {ins res : List D.Ty}, D.Op ins res → Bool
-  /-- Which operand has the same numeric and Boolean readings as result port zero. -/
+  /-- An operand whose readings and measurement subject agree with result port zero on every return. -/
   observedOperand : ∀ {ins res : List D.Ty}, D.Op ins res → Option Nat := fun _ => none
   /-- Whether the table places the two operands of a written operation in one order. -/
   commutes : Raw → Bool
@@ -106,7 +106,7 @@ structure Rules.Lawful (rules : Rules D Raw) (sem : Semantics D)
     ∀ {key path} {args : HList sem.Val ins} {results : HList sem.Val res},
     (sem.op key o path args).CanReturn permitted results →
     ∀ {x y}, (sem.dyns args)[i]? = some x → (sem.dyns results)[0]? = some y →
-      R.nat x = R.nat y ∧ R.bool x = R.bool y
+      R.Agrees x y
   /-- A written form gives one list of results. -/
   functional : ∀ raw operands results results', Run raw operands results →
     Run raw operands results' → results = results'

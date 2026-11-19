@@ -32,7 +32,6 @@ private theorem numberIndex_sound {asks : Asks} {k : BufferedFacts} {L : Loop T}
     | inr id =>
       obtain ⟨x, countRead, value⟩ : ∃ x, Reads Run R.bool table ρ id x ∧ R.nat x = some N := by
         simpa [Loop.Counts, count] using counts
-      obtain ⟨more, evidence, ext, xAt⟩ := grounded.extendRead functional slots countRead
       have fits : (((rangeFor asks k id).map Range.below).getD ⟨0, none⟩).Has i := by
         cases bound : rangeFor asks k id with
         | none => exact ⟨Nat.zero_le _, fun _ eq => nomatch eq⟩
@@ -41,12 +40,11 @@ private theorem numberIndex_sound {asks : Asks} {k : BufferedFacts} {L : Loop T}
           rw [value] at num
           cases num
           exact fit.below below
-      have atIndex : FactCheck.NatAt R more L.index.key i := ⟨v, ext _ _ found, iv⟩
-      have atCount : FactCheck.NatAt R more id.key N := ⟨x, xAt, value⟩
       simp only [numberIndex, on, count, ↓reduceIte]
-      refine ⟨more, evidence, ?_⟩
-      rw [BufferedFacts.view_addOrder, BufferedFacts.view_addRange]
-      exact ((facts.le ext).addRange atIndex fits).addOrder atIndex atCount below
+      refine rememberComparison_sound functional slots external ?_ read countRead iv value ?_
+      · exact ⟨a, grounded, by simpa using facts.addRange ⟨v, found, iv⟩ fits⟩
+      · intro state index bound assignment current atIndex atCount
+        simpa using current.addOrder (strict := true) (byLoop := true) atIndex atCount below
 
 include functional slots in
 theorem enter_sound {types : KnowledgeTypes T} (law : types.Lawful R Typed)

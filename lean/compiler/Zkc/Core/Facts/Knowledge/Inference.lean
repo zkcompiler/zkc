@@ -57,11 +57,14 @@ def assume (asks : Asks) (k : BufferedFacts) (id : Ident) (b : Bool) : BufferedF
   if k.hasTruth id.key (!b) || asks.truth id == some (!b) then k.kill else k.addTruth id.key b
 
 /-- Intersect the local range with the most precise numeric answer available from peers. -/
-def rangeFor (asks : Asks) (k : BufferedFacts) (id : Ident) : Option Range :=
+def directRange (asks : Asks) (k : BufferedFacts) (id : Ident) : Option Range :=
   let peer := match asks.exact id with
     | some n => some (Range.point n)
     | none => (asks.upper id).map fun hi => ⟨0, some hi⟩
   Range.meet (k.rangeOf id.key) peer
+
+def rangeFor (asks : Asks) (k : BufferedFacts) (id : Ident) : Option Range :=
+  Range.meet (directRange asks k id) ((asks.numberSource id).bind (directRange asks k))
 
 /-- A hull requires a range from every reachable exit. -/
 def hullAt {α : Type} (get : α → Option Range) : List α → Option Range
@@ -141,6 +144,15 @@ def transfer {Raw : Type} (ops : KnowledgeOperations Raw) (asks : Asks) (table :
       else learned
     | _ => learned
 
+/-- Keep the comparison on its written operands and on their numeric representatives.
+The latter key survives a placement change or a repeated measurement. -/
+def rememberComparison (asks : Asks) (k : BufferedFacts) (x y : Ident)
+    (remember : BufferedFacts → Ident → Ident → BufferedFacts) : BufferedFacts :=
+  let learned := remember k x y
+  let a := asks.numberAt x
+  let b := asks.numberAt y
+  if a == x && b == y then learned else remember learned a b
+
 /-- Learn the relation of a numbered loop index to its count at a reachable iteration. -/
 def numberIndex {T : Type} (asks : Asks) (k : BufferedFacts) (loop : Loop T) : BufferedFacts :=
   if loop.numbered then
@@ -148,7 +160,8 @@ def numberIndex {T : Type} (asks : Asks) (k : BufferedFacts) (loop : Loop T) : B
     | .inl n => k.addRange loop.index.key (Range.point n).below
     | .inr count =>
       let bound := ((rangeFor asks k count).map Range.below).getD ⟨0, none⟩
-      (k.addRange loop.index.key bound).addOrder loop.index.key count.key true (byLoop := true)
+      rememberComparison asks (k.addRange loop.index.key bound) loop.index count fun state i n =>
+        state.addOrder i.key n.key true (byLoop := true)
   else k
 
 def enter {T : Type} (types : KnowledgeTypes T) (asks : Asks) (k : BufferedFacts) (loop : Loop T) : BufferedFacts :=
@@ -238,10 +251,12 @@ def learnTruth {Raw : Type} (ops : KnowledgeOperations Raw) (asks : Asks) (table
       match resultForm ops table id with
       | some (.less, [x,y]) =>
         refineComparedSources ops table
-          (if b then learned.pushLess x.key y.key else learned.pushLe y.key x.key) x y
+          (rememberComparison asks learned x y fun k a c =>
+            if b then k.pushLess a.key c.key else k.pushLe c.key a.key) x y
       | some (.equal, [x,y]) =>
         refineComparedSources ops table
-          (if b then learned.pushEqual x.key y.key else learned.pushDifferent x.key y.key) x y
+          (rememberComparison asks learned x y fun k a c =>
+            if b then k.pushEqual a.key c.key else k.pushDifferent a.key c.key) x y
       | some (.negation, [x]) => learnTruth ops asks table fuel learned x (!b)
       | some (.conjunction, [x,y]) =>
         if b then learnTruth ops asks table fuel (learnTruth ops asks table fuel learned x true) y true
@@ -265,17 +280,25 @@ def zeroAddend {Raw : Type} (ops : KnowledgeOperations Raw) (table : Table Raw) 
     (operand result : Ident) : Bool :=
   (addedTerm ops table operand result).any (fun t => (asks.orElse (answers k)).exact t == some 0)
 
+def sameNumber (asks : Asks) (k : BufferedFacts) (x y : Ident) : Bool :=
+  asks.numberAt x == asks.numberAt y ||
+    ((asks.orElse (answers k)).exact x).any fun n => (asks.orElse (answers k)).exact y == some n
+
 /-- Compare numeric operands of a comparison whose execution witnesses that both are numbers. -/
-def ordered {Raw : Type} (ops : KnowledgeOperations Raw) (table : Table Raw) (asks : Asks) (k : BufferedFacts) (left right : Ident) (strict : Bool) : Bool :=
+def orderedAt {Raw : Type} (ops : KnowledgeOperations Raw) (table : Table Raw) (asks : Asks) (k : BufferedFacts) (left right : Ident) (strict : Bool) : Bool :=
   (!strict && left == right) || k.hasOrder left.key right.key strict ||
     FactCheck.rangesOrder (rangeFor asks k left) (rangeFor asks k right) strict ||
     separates asks k strict (addedTerm ops table left right) ||
     separates asks k strict (subtractedTerm ops table left right) ||
-    (offsetLimit ops table k left (· == right)).isSome ||
+    (offsetLimit ops table k left (sameNumber asks k · right)).isSome ||
     (!strict && zeroAddend ops table asks k right left)
 
-def sameNumber (asks : Asks) (k : BufferedFacts) (x y : Ident) : Bool :=
-  x == y || ((asks.orElse (answers k)).exact x).any fun n => (asks.orElse (answers k)).exact y == some n
+def ordered {Raw : Type} (ops : KnowledgeOperations Raw) (table : Table Raw)
+    (asks : Asks) (k : BufferedFacts) (left right : Ident) (strict : Bool) : Bool :=
+  orderedAt ops table asks k left right strict || Id.run do
+    let a := asks.numberAt left
+    let b := asks.numberAt right
+    return (a != left || b != right) && orderedAt ops table asks k a b strict
 
 /-- Two sums may share an operand while their remaining operands have the same known value
 without sharing a table slot. This is used by slice-length contracts. -/

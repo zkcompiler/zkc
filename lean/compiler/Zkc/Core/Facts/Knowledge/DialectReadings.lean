@@ -31,6 +31,7 @@ def heldValue (M : Model V) (r : Role) (v : (a : LTy V) × RV M r a) :
   if held : r ∈ v.1.holders then some ⟨v.1.ty, reveal M held v.2⟩ else none
 
 def roleReading (M : Model V) (r : Role) : Reading ((a : LTy V) × RV M r a) where
+  SameSubject x y := heldValue M r x = heldValue M r y
   nat v := (heldValue M r v).bind (localReading M).nat
   bool v := (heldValue M r v).bind (localReading M).bool
 

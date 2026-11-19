@@ -31,6 +31,14 @@ namespace Zkc.Core
 structure Reading (Val : Type) where
   nat : Val → Option Nat
   bool : Val → Option Bool
+  /-- Equality of the subjects available for further observations at this interpretation. -/
+  SameSubject : Val → Val → Prop := Eq
+
+/-- An operation preserves both scalar readings and the subject of derived measurements. -/
+structure Reading.Agrees {Val : Type} (R : Reading Val) (x y : Val) : Prop where
+  number : R.nat x = R.nat y
+  truth : R.bool x = R.bool y
+  subject : R.SameSubject x y
 
 section
 variable {Val : Type} {Raw : Type}

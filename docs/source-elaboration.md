@@ -68,10 +68,10 @@ can have no diagnostic at this prefix while an instance is waiting or a scheme o
 has yet to be checked. The independent corpus, default-instance pass, construction and
 goal discharge are outside this measurement.
 
-Of the 170 positive programs, 167 had no error through body typing and three were refused.
-Of the 333 negative programs, 189 produced a listed rule, four produced a different rule
+Of the 170 positive programs, 168 had no error through body typing and two were refused.
+Of the 333 negative programs, 191 produced a listed rule, two produced a different rule
 and 140 produced no error at this prefix. One further reference case is marked skipped.
-The entire 504-row diagnostic inventory matched the earlier baseline on replay. On the
+Compared with the previous 504-row inventory, only the three role cases below changed. On the
 separate 134-entry independent corpus all 69 positive cases had no error through this
 prefix. Of 53 negative cases, 50 produced a listed rule, two produced another rule and one
 produced no error. Three cases request parsing alone and nine have an underdetermined
@@ -80,27 +80,26 @@ test than counting frontend diagnostics.
 
 | Reference cases | Diagnosis and decision |
 |---|---|
-| `N-TY14e`, `I-4d`, `V-F2` | In the positive case P guards that its array has length eight, sends it to V as `m`, and indexes `m[7]` at P. TY14 requires this to succeed. The emitted send binds its result at both holders. The role analysis can certify equality of the sender's natural and Boolean readings across a give, but that law does not cover a sequence-length observation. The checker rejects the positive case with TY7. In the two negative cases it reports TY7 where the corpus expects the role-specific TY4. |
+| `N-TY14e`, `I-4d`, `V-F2` | P can now index the sent array after checking its length. The latter two programs produce TY4 at the shared binding, identifying V as the role with the bound and P as the role missing it. |
 | `N-SC1a` | The scheme tried to close a specification-only natural. Static argument binding now identifies an ordinary named argument for that parameter as SP11. SC1 checks an explicit `spec` argument at the scheme. Omitting the argument leaves it for the goal. This belongs at instantiation, before computing a deployment identity. |
 | `N-SC5a`, `V-C2` | An earlier group-operation typing diagnostic in a dependency masks the expected suite-key or goal diagnostic. Reproduce the point-by-nonzero-scalar operation in isolation and reconcile the vocabulary and its coercions before changing SC5 or GL4. |
 | `N-E1`, `N-E2` | Both carried algebra examples fail to resolve multiplication on `Bound`. One expects an accepted program and the other additionally expects evaluation to falsify a law. Resolve home-module operator lookup first, then test the two law outcomes separately. |
 
-For the role cases, preserve TY14. First distinguish the sender and receiver with a pair
-of source tests. P may index after its own guard and send. V must establish the bound
-before indexing. A third test should let V guard and ensure that P cannot use that guard.
-Compare two implementations. One can emit the original payload when reading a send binding
-at the sender, which requires a role-indexed binding across aliases, guards and shared
-expressions. Another can extend the Core observation law at the sender to cover sequence
-length and transport the corresponding domain fact. We favor the latter if its proof works
-at the existing role projection and all three controls hold. It also serves direct Core
-clients and avoids a second per-role environment in emission. Check whether the domain can
-recover both the observed length and its bound before enabling the rule. The current proof of the role rule already establishes equality of the underlying held value.
-Its generic interface transmits only the numeric and Boolean readings, and the abstract
-domain only copies observations with that interface. The next correctness package must
-transport the sequence measurement through both boundaries and recheck all three
-role controls. Retain a diagnostic origin from a refused Core place to its source binder and
-occurrence. That origin identifies where to report a refusal; it cannot authorize a fact.
-[Send emission](../lean/compiler/Zkc/Frontend/Emit/NamedProtocol.lean) · [Role observation rules](../lean/compiler/Zkc/Core/Facts/Contracts/Roles.lean) · [Soundness requirement](../lean/compiler/Zkc/Core/Facts/Domains/Rules.lean)
+A send keeps the wire type and all holders in the typed source and the emitted instruction.
+Core analyzes each role's projection. For a sender, every successful `give` returns its
+payload, and a holder-preserving `keep` exposes the same local value. A receiver's `get`
+introduces a fresh value. The projection rule proves equality of the underlying held
+subjects whenever it authorizes reuse. Sequence length is a function of that subject.
+
+The measurement domain records the first length of each such subject. The numeric domain
+uses this identifier both for explicit guards and for the implicit comparison between a loop
+index and its upper endpoint. The sender can iterate up to the length of the sent array
+and index its original array in that loop. This preserves a point such as
+`length(xs) == 8`, a lower or upper bound, and a relation such as `k < length(xs)` even
+when `k` is unknown. Numeric equality alone does not identify two arrays. Each role starts
+with its own state, and facts learned in a single branch stay scoped to that branch.
+The frontend checks the projected obligations and reports the failing source operation.
+[Role projection laws](../lean/compiler/Zkc/Core/Facts/Contracts/RoleLaws.lean) · [Measurement domain](../lean/compiler/Zkc/Core/Facts/Domains/MeasurementLaws.lean)
 
 ## Joint design
 
@@ -166,7 +165,7 @@ The guarded mutable natural, the post-loop guarded sequence and the commuted nat
 all produced admitted functions. Assigning eight before the first return, assigning an empty
 sequence after the length guard, and changing the index to `2 + i` each produced a refusal.
 Treat the specified rules as guarantees. A stronger certified bound is usable at the same
-role and control point. The sender-local length example remains a missing guarantee.
+role and control point. The sender-local length guarantee is checked through projection and source admission.
 [Fact rules](../language/LANGUAGE.md) · [Independent corpus](../language/conformance/independent/expectations.json)
 
 **Views and services.** Comparing six source roots with Core gives three straight-line
@@ -194,9 +193,8 @@ modules and descriptive examples are inputs to that redesign. Role selection sti
 
 ## Delivery and evidence
 
-The contract representation below is in production. The next cross-layer correctness case
-is sender-local length under TY14. Then exercise the closed contract interface on a
-repeated draw, followed by a fixed-table opening. A deployed transcript handler and its
+The contract representation and sender-local length checks are in production. Next exercise
+the closed contract interface on a repeated draw, followed by a fixed-table opening. A deployed transcript handler and its
 Fiat–Shamir security reduction each need their own acceptance evidence.
 
 1. The resolved contract and goal now feed the written consumer. SX5 checks ownership and

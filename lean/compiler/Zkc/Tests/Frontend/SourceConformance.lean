@@ -56,6 +56,26 @@ private def checkSchemeArguments (repository : Repository) : TestM Unit := do
     let rules := (state.log.entries.filter (·.isError)).map (·.rule)
     expectTrue (rules.toList == expected) s!"N-SC1a with {args}: expected {expected}, got {rules}"
 
+/-- Exercise the ordinary source pipeline and require admission of the named root,
+or the precise refusal at body typing. A waiting body cannot satisfy a positive case. -/
+private def checkFactProgram (repository : Repository) (name root source : String)
+    (refusal : Option String := none) : TestM Unit := do
+  let input : SourceInput := ⟨name, Syntax.parseString name source⟩
+  let assembly ← assemble #[input] (loadModule repository)
+  let context := Typing.withProtocolBodies {vocabulary}
+  let mut s : Compile.State := {}
+  for phase in Driver.sourcePhases assembly do s := (phase.runIn context s).2
+  s := (Typing.typeProgram.run context s).2
+  let errors := s.log.entries.filter (·.isError)
+  if let some rule := refusal then
+    expectTrue (errors.map (·.rule) == #[rule]) s!"{name}: expected {rule}, got {errors.map (·.rule)}"
+    return
+  expectTrue errors.isEmpty s!"{name}: unexpected {errors.map (·.rule)}"
+  let some (id, _) := s.results.roots.find? (fun (id, _) => Static.renderInstance s id == root)
+    | failure s!"{name}: missing {root}"; return
+  let .ok emission := Typing.emitRoot s id | failure s!"{name}: emission failed"; return
+  expectTrue (emission.package ⟨[],[],[],[],[]⟩).checkEvidence.isOk s!"{name}: admission failed"
+
 /-- These independent programs use facts about the current value. Change that
 value or the required bound and the same pipeline must refuse the use. -/
 private def checkCertifiedFacts (repository : Repository) : TestM Unit := do
@@ -65,19 +85,51 @@ private def checkCertifiedFacts (repository : Repository) : TestM Unit := do
       ("facts-no-commutativity-recovery", "xs[1 + i]", "xs[2 + i]", "TY7")] do
     let path := repository.conformance / "independent" / "cases" / id / "main.zkc"
     let source ← IO.FS.readFile path
-    for (program, valid) in [(source, true), (source.replace before after_, false)] do
-      let input : SourceInput := ⟨path.toString, Syntax.parseString path.toString program⟩
-      let assembly ← assemble #[input] (loadModule repository)
-      let context := Typing.withProtocolBodies {vocabulary}
-      let mut s : Compile.State := {}
-      for phase in Driver.sourcePhases assembly do s := (phase.runIn context s).2
-      s := (Typing.typeProgram.run context s).2
-      if valid then
-        let #[(root, _)] := s.results.roots | failure s!"{id}: expected one function root"; continue
-        let .ok emission := Typing.emitRoot s root | failure s!"{id}: emission failed"; continue
-        expectTrue (emission.package ⟨[],[],[],[],[]⟩).checkEvidence.isOk s!"{id}: admission failed"
-      else
-        expectTrue (s.log.entries.any fun d => d.isError && d.rule == rule) s!"{id}: expected {rule}"
+    checkFactProgram repository id "f" source
+    checkFactProgram repository (id ++ "-changed") "f" (source.replace before after_) (some rule)
+
+/-- The same guard is useful only at its evaluating role. Include a lower bound
+and a relation to an unknown index, which carry more information than an exact size. -/
+private def checkSendFacts (repository : Repository) : TestM Unit := do
+  let cases := readBlocks (← IO.FS.readFile (repository.conformance / "layer-a-types-facts.txt"))
+  for (id, rule) in [("N-TY14e", none), ("V-H1", some "TY7"), ("I-4d", some "TY4"),
+      ("V-F2", some "TY4")] do
+    let some block := cases.find? (·.id == id) | failure s!"missing {id}"; continue
+    let #[source] := block.files | failure s!"expected one source in {id}"; continue
+    checkFactProgram repository id "X" source rule
+  for (id, rule) in [("wire-fact-does-not-cross", none), ("wire-fact-missing-receiver-guard", some "TY7"),
+      ("wire-explicit-refinement", none)] do
+    let source ← IO.FS.readFile (repository.conformance / "independent" / "cases" / id / "main.zkc")
+    checkFactProgram repository id "P" source rule
+  let source (steps : List String) := String.intercalate "\n" <|
+    ["module t", "protocol X roles(P,V,W)(xs:[nat] @P, ys:[nat] @P, k:nat @P):"] ++
+    steps.map ("    " ++ ·)
+  let send := "m <- send xs to V"
+  let guarded := ["guard @P k < length(xs)", send]
+  let loop := [send, "n @P = length(m)", "for i in 0..n:"]
+  let bounded := ["guard @P length(xs) <= 8"] ++ loop
+  let offset := ["guard @P length(xs) <= 8", send, "n @P = length(m)", "guard @P k <= n", "for i in k..n:"]
+  for (name, steps, rule) in [
+      ("index", guarded ++ ["z @P = m[k]"], none),
+      ("second-send", guarded ++ ["n <- send m from P to V", "z @P = n[k]"], none),
+      ("lower-bound", ["guard @P 7 < length(xs)", send, "z @P = m[3]"], none),
+      ("different-subject", ["guard @P k < length(xs)", "m <- send ys to V", "z @P = m[k]"], some "TY7"),
+      ("stronger-index", guarded ++ ["z @P = m[k + 1]"], some "TY7"),
+      ("bounded-loop", bounded ++ ["    z @P = xs[i]"], none),
+      ("other-loop-subject", bounded ++ ["    z @P = ys[i]"], some "TY7"),
+      ("offset-loop", offset ++ ["    z @P = xs[i]"], none),
+      ("offset-past-end", offset ++ ["    z @P = xs[i + 1]"], some "TY7"),
+      ("unbounded-loop", loop ++ ["    guard @P i < n else refused"], some "CT4"),
+      ("forward-after-guard", [send, "guard @V 3 < length(m)", "n <- send m from V to W", "z @V = n[3]"], none),
+      ("forward-without-guard", ["guard @P 3 < length(xs)", send, "n <- send m from V to W", "z @V = n[3]"],
+        some "TY7"),
+      ("multicast-peer", ["m <- send xs to V, W", "guard @V 3 < length(m)", "z @W = m[3]"], some "TY7"),
+      ("arm-local", ["if k < length(xs):", "    guard @P true", send, "z @P = m[k]"], some "TY7"),
+      ("independent-receives", [send, "guard @V length(m) == 8", "n <- send xs to V", "z @V = n[7]"],
+        some "TY7"),
+      ("receiver-only", [send, "guard @V length(m) == 8", "z @P = m[7]"], some "TY7")
+      ] do
+    checkFactProgram repository name "X" (source steps) rule
 
 /-- Read the two SX7 tables as rendered. A missing, extra or reordered property, a
 different audience, or a drift in stage or construction is observable here. -/
@@ -100,6 +152,7 @@ def main : IO Unit := do
   let tally ← runSuite "Source conformance" do
     checkProperties repository
     checkCertifiedFacts repository
+    checkSendFacts repository
     corpusSuite repository
     conformanceSuite repository
     checkNames repository

@@ -20,10 +20,26 @@ theorem cachedRange {k : BufferedFacts} {id : Ident} {v : Val} {r : Range} (h : 
   obtain rfl := Reads.functionalOn functional slots read (grounded _ _ found)
   exact ⟨n, val, fit⟩
 
+private theorem meetReads {value : Option Nat} {a b : Option Range} {r : Range}
+    (ha : ∀ {q}, a = some q → ∃ n, value = some n ∧ q.Has n)
+    (hb : ∀ {q}, b = some q → ∃ n, value = some n ∧ q.Has n)
+    (found : Range.meet a b = some r) : ∃ n, value = some n ∧ r.Has n := by
+  cases a with
+  | none => exact hb found
+  | some ra =>
+    obtain ⟨n,read,fits⟩ := ha rfl
+    cases b with
+    | none => cases found; exact ⟨n,read,fits⟩
+    | some rb =>
+      obtain ⟨m,read',fits'⟩ := hb rfl
+      obtain rfl := Option.some.inj (read.symm.trans read')
+      cases found
+      exact ⟨n,read,fits.inter fits'⟩
+
 include functional slots in
-theorem rangeFor_sound {asks : Asks} {k : BufferedFacts} {id : Ident} {v : Val} {r : Range}
+theorem directRange_sound {asks : Asks} {k : BufferedFacts} {id : Ident} {v : Val} {r : Range}
     (external : asks.Sound Run R table ρ) (h : Means Run R k table ρ)
-    (read : Reads Run R.bool table ρ id v) (known : rangeFor asks k id = some r) :
+    (read : Reads Run R.bool table ρ id v) (known : directRange asks k id = some r) :
     ∃ n, R.nat v = some n ∧ r.Has n := by
   let peer : Option Range := match asks.exact id with
     | some n => some (Range.point n)
@@ -44,22 +60,21 @@ theorem rangeFor_sound {asks : Asks} {k : BufferedFacts} {id : Ident} {v : Val} 
         obtain rfl := Reads.functionalOn functional slots read other
         obtain rfl : (⟨0, some hi⟩ : Range) = r := by simpa [peer, eq, upper] using report
         exact ⟨n, val, Nat.zero_le _, fun bound same => Option.some.inj same ▸ le⟩
-  change Range.meet (k.rangeOf id.key) peer = some r at known
-  cases localR : k.rangeOf id.key with
-  | none =>
-    cases hp : peer <;> simp_all only [Range.meet, Option.some.injEq, reduceCtorEq]
-  | some a =>
-    obtain ⟨n, val, fits⟩ := cachedRange functional slots h read localR
-    cases hp : peer with
-    | none =>
-      obtain rfl : a = r := by simpa [Range.meet, localR, hp] using known
-      exact ⟨n, val, fits⟩
-    | some b =>
-      obtain ⟨m, val', fits'⟩ := peerSound hp
-      rw [val] at val'
-      cases val'
-      obtain rfl : a.inter b = r := by simpa [Range.meet, localR, hp] using known
-      exact ⟨n, val, fits.inter fits'⟩
+  exact meetReads (cachedRange functional slots h read) peerSound known
+
+include functional slots in
+theorem rangeFor_sound {asks : Asks} {k : BufferedFacts} {id : Ident} {v : Val} {r : Range}
+    (external : asks.Sound Run R table ρ) (h : Means Run R k table ρ)
+    (read : Reads Run R.bool table ρ id v) (known : rangeFor asks k id = some r) :
+    ∃ n, R.nat v = some n ∧ r.Has n := by
+  apply meetReads (directRange_sound functional slots external h read) _ known
+  intro q found
+  obtain ⟨a,alias,reported⟩ := Option.bind_eq_some_iff.mp found
+  obtain ⟨x,y,rx,ry,same⟩ := external.numberSource _ _ alias
+  cases Reads.functionalOn functional slots read rx
+  obtain ⟨n,num,fits⟩ := directRange_sound functional slots external h ry reported
+  exact ⟨n,same.trans num,fits⟩
+
 
 /-- For any selected exit, a successful hull contains the range that exit supplied. -/
 theorem hullAt_has {α : Type} (get : α → Option Range) {chosen : α} :

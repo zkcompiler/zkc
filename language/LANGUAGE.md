@@ -1977,6 +1977,11 @@ the receivers to have the narrower type binds the value at that type before the 
 (`ys: [F; 8] = xs`, a conversion by the sender's fact, then `m <- send ys to V`): the type is
 then written at the operand of the send, and with it the stop of a receiver that decodes at it.
 
+For example, after `guard @P k < length(xs)` and `m <- send xs to V`, the sender can
+read `m[k]` at P. The index can be an input whose value is unknown when compiling.
+At V the length is that of its received `m`. A guard at V applies to that received
+value. Receiving a second message gives V a new value to check.
+
 *State of the next two paragraphs: layer C, carried. The laws of the module `zkc::layout` in
 source differ from the ones stated here.*
 
@@ -3502,7 +3507,7 @@ steps of a scheme, oracles) cannot reconstruct the following, so the frontend re
 | Kept | For |
 |---|---|
 | for every instance: the generic declaration, its static arguments and the members selected | a law or a theorem is installed at the actual specialization, not at a matching name (item 2 of §7.1, SP12) |
-| the identity of each value, and the evidence that each holder has for it. A value of the core has one holder; the evidence is no record of its own: it is the guards, the conditions, the counts and the types of the emitted program, from which the check of facts recomputes what each holder knows (§7.1 item 4) | a copy or a send does not carry the facts of another role (TY4, TY14) |
+| the identity of each value, and the evidence that each holder has for it. A protocol value in Core has a set of holders. Each holder's projection derives its evidence from the guards, conditions, counts and types of the emitted program (§7.1 item 4) | a copy or a send does not carry the facts of another role (TY4, TY14) |
 | for every event: its application path, its static site and its occurrence (the iteration, the attempt). The table of sites (§7.5) holds, for each site of the core, the site of the source, the part and the iteration of each loop in sequence around it | a site alone does not tell repeated or nested executions apart (EV3, EV4) |
 | for every `spec` argument of an application: the site of the application, the port and the expression, with the table of sites | the argument is typed and is not in the emitted package; its binding in the contract of the caller is layer B's to complete (SX4, §7.7) |
 | for every relation: which of its parameters are statement parameters and which are witness parameters | the package holds a relation as a specification-only function to `i1` (§7.2), and the clauses read the split (SX3, SX6) |

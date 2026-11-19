@@ -26,15 +26,33 @@ structure Asks where
   exact : Ident → Option Nat
   /-- A number that it is at most. -/
   upper : Ident → Option Nat
+  /-- Another live identifier with the same numeric reading. -/
+  numberSource : Ident → Option Ident := fun _ => none
+
+def Asks.numberAt (asks : Asks) (id : Ident) := (asks.numberSource id).getD id
+
+/-- A dynamic count may use a bound established on an earlier reading. -/
+def Asks.upperAt (asks : Asks) (id : Ident) : Option Nat :=
+  (asks.upper id).orElse fun _ => (asks.numberSource id).bind asks.upper
+
+theorem Asks.upperAt_source {asks : Asks} {id n} (found : asks.upperAt id = some n) :
+    asks.upper id = some n ∨ ∃ other, asks.numberSource id = some other ∧ asks.upper other = some n := by
+  cases direct : asks.upper id with
+  | some cap => exact .inl (by simpa [Asks.upperAt, direct] using found)
+  | none =>
+    apply Or.inr
+    apply Option.bind_eq_some_iff.mp
+    simpa [Asks.upperAt, direct] using found
 
 /-- Nobody to ask. -/
-def Asks.nobody : Asks := ⟨fun _ => none, fun _ => none, fun _ => none⟩
+def Asks.nobody : Asks := {truth := fun _ => none, exact := fun _ => none, upper := fun _ => none}
 
 /-- The first's answer, or the second's. -/
 def Asks.orElse (first second : Asks) : Asks where
   truth id := (first.truth id).orElse fun _ => second.truth id
   exact id := (first.exact id).orElse fun _ => second.exact id
   upper id := (first.upper id).orElse fun _ => second.upper id
+  numberSource id := (first.numberSource id).orElse fun _ => second.numberSource id
 
 section
 variable {Raw Val : Type} (Run : Raw → List Val → List Val → Prop) (R : Reading Val)
@@ -46,6 +64,9 @@ structure Asks.Sound (table : Table Raw) (ρ : Leaves Val) (asks : Asks) : Prop 
   exact : ∀ id n, asks.exact id = some n → ∃ v, Reads Run R.bool table ρ id v ∧ R.nat v = some n
   upper : ∀ id n, asks.upper id = some n →
     ∃ v k, Reads Run R.bool table ρ id v ∧ R.nat v = some k ∧ k ≤ n
+  numberSource : ∀ id other, asks.numberSource id = some other →
+    ∃ v w, Reads Run R.bool table ρ id v ∧ Reads Run R.bool table ρ other w ∧ R.nat v = R.nat w
+
 
 end
 
@@ -101,7 +122,7 @@ structure Domain (T Raw : Type) where
   leaves : State → List (Ident × T) → State
   /-- An entry whose values read. -/
   transfer : Asks → Table Raw → State → Entry Raw → State
-  /-- Copy numeric and Boolean observations between two identifiers that both read. -/
+  /-- Observe a result whose subject and scalar readings agree with an operand. -/
   observe : Asks → Table Raw → State → Ident → Ident → State
   /-- An identifier that reads the given truth. -/
   assume : Asks → Table Raw → State → Ident → Bool → State
@@ -140,7 +161,7 @@ structure Domain.Lawful {T Raw Val : Type} (D : Domain T Raw)
     Means (D.transfer asks table s e) table ρ
   observe : ∀ {asks s table ρ source result x y}, Table.WF table → asks.Sound Run R table ρ →
     Means s table ρ → Reads Run R.bool table ρ source x → Reads Run R.bool table ρ result y →
-    R.nat x = R.nat y → R.bool x = R.bool y → Means (D.observe asks table s source result) table ρ
+    R.Agrees x y → Means (D.observe asks table s source result) table ρ
   assume : ∀ {asks s table ρ id v b}, Table.WF table → asks.Sound Run R table ρ → Means s table ρ →
     Reads Run R.bool table ρ id v → R.bool v = some b → Means (D.assume asks table s id b) table ρ
   truth : ∀ {asks s table ρ id v b}, Table.WF table → asks.Sound Run R table ρ → Means s table ρ →

@@ -21,6 +21,7 @@ theorem Asks.Sound.orElse {q r : Asks} {table : Table Raw} {ρ : Leaves Val}
   truth id b found := (answer_orElse found).elim (hq.truth id b) (hr.truth id b)
   exact id n found := (answer_orElse found).elim (hq.exact id n) (hr.exact id n)
   upper id n found := (answer_orElse found).elim (hq.upper id n) (hr.upper id n)
+  numberSource id other found := (answer_orElse found).elim (hq.numberSource id other) (hr.numberSource id other)
 
 /-- The combined state means that both components hold on the same table and leaf assignment. -/
 def Domain.Lawful.prod {A B : Domain T Raw} (a : A.Lawful Run R Typed) (b : B.Lawful Run R Typed) :
@@ -35,9 +36,9 @@ def Domain.Lawful.prod {A B : Domain T Raw} (a : A.Lawful Run R Typed) (b : B.La
   transfer slots external holds member reads := by
     have left := a.transfer slots (external.orElse (b.answers holds.2)) holds.1 member reads
     exact ⟨left, b.transfer slots (external.orElse (a.answers left)) holds.2 member reads⟩
-  observe slots external holds src dst num truth := by
-    have left := a.observe slots (external.orElse (b.answers holds.2)) holds.1 src dst num truth
-    exact ⟨left, b.observe slots (external.orElse (a.answers left)) holds.2 src dst num truth⟩
+  observe slots external holds src dst same := by
+    have left := a.observe slots (external.orElse (b.answers holds.2)) holds.1 src dst same
+    exact ⟨left, b.observe slots (external.orElse (a.answers left)) holds.2 src dst same⟩
   assume slots external holds read known := by
     have left := a.assume slots (external.orElse (b.answers holds.2)) holds.1 read known
     exact ⟨left, b.assume slots (external.orElse (a.answers left)) holds.2 read known⟩
