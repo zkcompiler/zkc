@@ -2,6 +2,7 @@ module
 
 public import Zkc.Formal.Written.ReductionModel
 public import Zkc.Formal.Written.RoundCharge
+public import Zkc.Formal.Written.PolynomialBounds
 public import Mathlib.Algebra.Field.ZMod
 import Mathlib.Tactic.Primality
 
@@ -55,6 +56,6 @@ theorem primeSumcheck {width n : Nat} [Fact (Nat.Prime (width+1))]
   let math := ArithmeticModel.reductionArithmetic F F
   exact sumcheck cert (ArithmeticModel.model F F) ((math 1).scalar (by decide))
     (math n).vector (math n).equal _ (List.nodup_ofFn.mpr (ZMod.finEquiv _).injective) advance other
-    charge binding path s x claim wrong
+    charge binding path s x claim wrong (PolynomialBounds.pairs (F := F))
 
 end Zkc.Formal.Written.RoundCharge

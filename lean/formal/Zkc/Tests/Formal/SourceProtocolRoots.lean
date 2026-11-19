@@ -1,4 +1,5 @@
 import Zkc.Tests.Formal.SourcePairReadback
+import Zkc.Tools.Formal.SumcheckCaller
 import Zkc.Frontend.Written.Root
 import Zkc.Frontend.Emit.Application
 import Zkc.Formal.Interactive.EmptySumcheck
@@ -39,27 +40,21 @@ private def instanceName (s : Compile.State) (id : InstanceId) : String :=
 
 abbrev CheckedRoot := Written.AdmittedRoot
 
+/-- A Core readback control can intentionally change the emission being tested. Only
+the normal compiler result carries source provenance and can enter a written issuer. -/
+structure ReadbackFixture where
+  id : InstanceId
+  state : Compile.State
+  emission : Emit.RootEmission
+  evidence : (emission.package ⟨[],[],[],[],[]⟩).Admission
+
+instance : Coe CheckedRoot ReadbackFixture where
+  coe c := ⟨c.id,c.state,c.emission,c.evidence⟩
+
 def admitRoot (entry : SourceInput) (loader : Array String → IO (Option SourceInput)) : IO CheckedRoot := do
   IO.ofExcept (Written.admitSource (← assemble #[entry] loader))
 
 abbrev sourceEvents := Zkc.Formal.Written.SumcheckRows.sourceEvents
-
-private def gateMembers (b : Emit.Bindings) {hs : Headers b.vocabulary} (defs : Defs b.vocabulary hs)
-    (unique : (hs.fns.map (·.key)).Nodup) {Γ : Ctx (LTy b.vocabulary)} {outs : List (LTy b.vocabulary)}
-    {state : b.vocabulary.Ty} {running : Var Γ (Zkc.Formal.Interactive.Sumcheck.ReductionRound.shared (sourceRows b).scalarTy)}
-    {term : Term (protocolDialect b.vocabulary hs) Γ outs} {count : Nat}
-    (rounds : Zkc.Formal.Interactive.Sumcheck.ReductionRound.Sequence hs (sourceEvents b) state running term count) : Bool :=
-  let rows := sourceRows b
-  let name := Emit.primitiveName ⟨"circuit.gate_evaluate", #[.type (StandardNames.fieldType .bls12381Fr)]⟩
-  if signature : b.signature name =
-      some ⟨[Zkc.Formal.Interactive.Sumcheck.Gate.message rows,rows.scalarTy],[rows.scalarTy]⟩ then
-    have bound : b.vocabulary.row (.inr name) = some (Zkc.Formal.Interactive.Sumcheck.Gate.signature rows) := by
-      change ((b.signature name).map _).map _ = _
-      rw [signature]
-      rfl
-    (rounds.checkMembers (fun op => Zkc.Formal.Interactive.Sumcheck.Gate.Laws rows (.inr name) bound defs op)
-      (Zkc.Formal.Interactive.Sumcheck.Gate.check rows _ bound defs unique)).isSome
-  else false
 
 abbrev vectorRows := Zkc.Formal.Written.SumcheckRows.vectorRows
 
@@ -75,7 +70,7 @@ private def certifiedSumcheck (checked : CheckedRoot) (n : Nat := 10) : Option (
     checked.evidence.admitted.program ⟨checked.id⟩ red ⟨eval⟩ n (sourceEvents e.bindings)
   return ((certify rows.evaluationReadback).isSome,(certify rows.affineReadback).isSome)
 
-private def checkedRounds (checked : CheckedRoot) (callee : Key) (count : Nat) : Option (Bool × Bool × Bool) := do
+private def checkedRounds (checked : ReadbackFixture) (callee : Key) (count : Nat) : Option (Bool × Bool × Bool) := do
   let rows := sourceRows checked.emission.bindings
   let events := sourceEvents checked.emission.bindings
   let cert ← Zkc.Formal.Interactive.Sumcheck.ReductionRound.locate checked.evidence.admitted.program callee events
@@ -99,8 +94,8 @@ private def checkedRounds (checked : CheckedRoot) (callee : Key) (count : Nat) :
   guard (!(sequence (count+1) cert.state running cert.first.atNames.body).isSome)
   let test := Zkc.Formal.Interactive.Sumcheck.ReductionRound.checkPairSequence rows cert.first.entry.definitions
     (List.nodup_append.mp cert.first.entry.distinct).1
-  let gate := gateMembers checked.emission.bindings cert.first.entry.definitions (List.nodup_append.mp cert.first.entry.distinct).1 rounds
-  return ((test rows.evaluationReadback rounds).isSome,(test rows.affineReadback rounds).isSome,gate)
+  let gate := Zkc.Formal.Written.SumcheckRows.checkGateMembers Zkc.Tools.Formal.gateRow cert.first.entry.definitions (List.nodup_append.mp cert.first.entry.distinct).1 rounds
+  return ((test rows.evaluationReadback rounds).isSome,(test rows.affineReadback rounds).isSome,gate.isSome)
 
 private def appliedGate (checked : CheckedRoot) (callee site : Key) (actualArgs : List Name) (loopKey : Key) : Bool := Id.run do
   let program := checked.evidence.admitted.program
@@ -112,10 +107,10 @@ private def appliedGate (checked : CheckedRoot) (callee site : Key) (actualArgs 
   let events := sourceEvents checked.emission.bindings
   let some located := Zkc.Formal.Interactive.Sumcheck.ReductionRound.atSite program root callee site state.ty rows.scalarTy residual.ty 0 4
     events actualArgs (Zkc.Formal.Interactive.Sumcheck.ReductionRound.loopRoute 4 loopKey 4 7) | return false
-  return gateMembers checked.emission.bindings located.linked.entry.definitions
-    (List.nodup_append.mp located.linked.entry.distinct).1 located.linked.rounds
+  return (Zkc.Formal.Written.SumcheckRows.checkGateMembers Zkc.Tools.Formal.gateRow located.linked.entry.definitions
+    (List.nodup_append.mp located.linked.entry.distinct).1 located.linked.rounds).isSome
 
-private def completeReduction (checked : CheckedRoot) (callee : Key) (count : Nat) : Bool := Id.run do
+private def completeReduction (checked : ReadbackFixture) (callee : Key) (count : Nat) : Bool := Id.run do
   let program := checked.evidence.admitted.program
   let [⟨hdr,_⟩] := Member.withKey ProtocolHeader.key callee program.headers.protocols | return false
   let [state,_,_] := hdr.ins | return false
@@ -138,7 +133,7 @@ private def checkReturnOrder (checked : CheckedRoot) (callee : Key) : IO Unit :=
   let changed := { e with named := ⟨e.named.definitions.map (swapDraws callee 10)⟩ }
   let .ok evidence := (changed.package ⟨[],[],[],[],[]⟩).checkEvidence
     | throw (IO.userError "Core refused the return-order control")
-  let control := { checked with emission := changed, evidence := evidence }
+  let control : ReadbackFixture := ⟨checked.id,checked.state,changed,evidence⟩
   unless checkedRounds control callee 10 == some (true,false,false) && !completeReduction control callee 10 do
     throw (IO.userError "return-order control did not isolate the reduction exit")
   IO.println "Swapped returned coordinates admitted, all ten rounds certified, returned-point certificate refused"
@@ -159,7 +154,7 @@ private def checkStaleClaim (checked : CheckedRoot) (callee : Key) : IO Unit := 
   let changed := { e with named := ⟨e.named.definitions.map (staleSecondClaim callee)⟩ }
   let .ok evidence := (changed.package ⟨[],[],[],[],[]⟩).checkEvidence
     | throw (IO.userError "Core refused the stale-claim control")
-  let control := { checked with emission := changed, evidence := evidence }
+  let control : ReadbackFixture := ⟨checked.id,checked.state,changed,evidence⟩
   unless checkedRounds control callee 1 == some (true,false,false) && (checkedRounds control callee 10).isNone do
     throw (IO.userError "the sequence certificate failed to distinguish using the initial claim in the second round")
   IO.println "Stale second claim admitted, first round certified, complete sequence refused"
@@ -186,7 +181,8 @@ private def checkExample (root : System.FilePath) (gkr : Bool) (variant : Varian
     (fixedLayer : Bool := false) : IO Unit := do
   let file := if gkr then "examples/gkr_example.zkc" else "examples/sumcheck_example.zkc"
   let entry ← SourcePairReadback.source variant (root / file)
-  let ⟨id,s,emission,evidence⟩ ← admitRoot entry (load root variant fixedLayer)
+  let checked ← admitRoot entry (load root variant fixedLayer)
+  let ⟨id,s,emission,_,evidence⟩ := checked
   let program := evidence.admitted.program
   let some origin := emission.origins.find? (·.definition.number == id)
     | throw (IO.userError "root location missing")
@@ -209,23 +205,23 @@ private def checkExample (root : System.FilePath) (gkr : Bool) (variant : Varian
   let #[attached] := origin.specification | throw (IO.userError "expected one specification attachment")
   let #[("p", .apply _ (.instance target) _)] := attached.arguments
     | throw (IO.userError "expected a resolved specification function")
-  let some (linear,affine,gate) := checkedRounds ⟨id,s,emission,evidence⟩ callee (if gkr then 4 else 10) | throw (IO.userError "missing emitted round block")
+  let some (linear,affine,gate) := checkedRounds checked callee (if gkr then 4 else 10) | throw (IO.userError "missing emitted round block")
   unless gate == gkr && linear == (!gkr && (variant == .original || variant == .rename)) && affine == (!gkr && variant == .affine) do
     throw (IO.userError "round collision certificate disagrees with the applied instance")
-  unless completeReduction ⟨id,s,emission,evidence⟩ callee (if gkr then 4 else 10) do
+  unless completeReduction checked callee (if gkr then 4 else 10) do
     throw (IO.userError "the returned point or claim disagrees with the source round trace")
   IO.println s!"Verified full reduction at callee {callee.number} with {if gkr then 4 else 10} ordered coordinates"
   if !gkr then
-    unless certifiedSumcheck ⟨id,s,emission,evidence⟩ == some (linear,affine) do
+    unless certifiedSumcheck checked == some (linear,affine) do
       throw (IO.userError "full source verifier theorem disagrees with the round instance")
     IO.println s!"Full ten-variable source verifier soundness, original proof {linear}, affine proof {affine}"
   if !gkr && variant == .original then
-    checkStaleClaim ⟨id,s,emission,evidence⟩ callee
-    checkReturnOrder ⟨id,s,emission,evidence⟩ callee
+    checkStaleClaim checked callee
+    checkReturnOrder checked callee
   IO.println s!"Verified {if gkr then 4 else 10} consecutive rounds, original Pairs laws {linear}, affine Pairs laws {affine}"
   if gkr then
     IO.println "Verified gate boundary and project evaluation row in all four source rounds"
-    let source := { id, state := s, emission, evidence : CheckedRoot }
+    let source := checked
     unless appliedGate source callee site [15,16,9] ⟨28⟩ && !appliedGate source callee site [15,16,8] ⟨28⟩ &&
         !appliedGate source callee site [15,16,9] ⟨27⟩ do throw (IO.userError "incorrect typed layer call site")
     IO.println "Gate theorem linked at layer loop 28, application 11; incorrect operand and enclosing loop refused"

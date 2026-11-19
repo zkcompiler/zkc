@@ -18,10 +18,10 @@ private def shifted {V : Core.Vocabulary} (red : Key) (offset : Nat) : Definitio
   | other => other
 
 private def modifyCore (c : CheckedRoot) (edit : Definition c.emission.bindings.vocabulary → Definition c.emission.bindings.vocabulary) :
-    IO CheckedRoot := do
+    IO ReadbackFixture := do
   let e := { c.emission with named := ⟨c.emission.named.definitions.map edit⟩ }
   let .ok evidence := (e.package ⟨[],[],[],[],[]⟩).checkEvidence | throw (IO.userError "Core refused control")
-  return { c with emission := e, evidence }
+  return ⟨c.id,c.state,e,evidence⟩
 
 /-- Alternate installation order. Each timed call obtains its subject from an IO reference. -/
 private def compare (label : String) (automatic manual : Unit → Bool) (expectedA expectedM : Bool) (samples : Nat) : IO Unit := do
@@ -38,7 +38,7 @@ private def compare (label : String) (automatic manual : Unit → Bool) (expecte
       if i > 0 then IO.println s!"REUSE,{label},{method},{i},{observed},{stop-start}"
   IO.println s!"VERDICT,{label},{expectedA},{expectedM}"
 
-private def sumCase (label : String) (c : CheckedRoot) (affine expected : Bool) (samples : Nat)
+private def sumCase (label : String) (c : ReadbackFixture) (affine expected : Bool) (samples : Nat)
     (expectedManual : Bool := expected) (offset : Nat := 0) : IO Unit :=
   compare label (fun _ => (Automatic.sumcheck c ⟨7⟩ ⟨94⟩ affine).isSome)
     (fun _ => (Manual.sumcheck c affine offset).isSome) expected expectedManual samples

@@ -21,9 +21,9 @@ this source path with trusted elaboration and lowering.
 
 | Entry checked | Result and assumptions |
 |---|---|
-| Sumcheck verifier | A false sum is accepted with probability at most `n/S` for `n` rounds and a challenge set of size `S`, under the arithmetic and reached-challenge laws. The written-charge client also derives the VCVio bound over an answering uniform service from the source quotient and all emitted draw addresses at 0, 1 and 10 rounds. |
+| Sumcheck verifier | A false sum is accepted with probability at most `n/S` for `n` rounds and a challenge set of size `S`, under the arithmetic and reached-challenge laws. The written-charge client also derives the VCVio bound over an answering uniform service from the closed rational ceiling and all emitted draw addresses at 0, 1 and 10 rounds. It checks the deciding role, public operands, sum relation and source table extension. Each executed member may use the verified barycentric or affine interpolation. |
 | Honest joint Sumcheck | A valid table of length `2ⁿ` with its true sum returns successfully for every reply under the table and arithmetic laws. Full reply mass at reached calls gives return probability one. |
-| GKR layer verifier | At the four-round `Reduce<Gate>` call, a false incoming claim yields a correct residual with probability at most `8/S`, under the gate, reached-challenge and polynomial laws for those four rounds. The written-charge check resolves the four calls to the degree-two challenge in the selected reduction. Whole-circuit soundness also needs the wiring, line reduction, layer composition and terminal evaluation. |
+| GKR layer verifier | At the four-round `Reduce<Gate>` call, a false incoming claim yields a correct residual with probability at most `8/S`, under the gate, reached-challenge and polynomial laws for those four rounds. The issued component binds the source summand, admitted call, gate primitive and four degree-two challenges. Its VCVio bound assumes an interpretation of that summand and the gate and restriction laws. Whole-circuit soundness also needs the wiring, line reduction, layer composition and terminal evaluation. |
 
 Run `just test-interactive` for the source checks, their mutation controls and the
 kernel audit. The [formal package guide](../lean/formal/README.md) gives the

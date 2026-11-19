@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Frontend.Written.ChargeData
+public import Zkc.Formal.Written.Ceiling
 public import Zkc.Formal.Written.RoundService
 public import Zkc.Formal.Interactive.SourceSumcheck
 
@@ -21,14 +21,13 @@ theorem. Multiplicity counts distinct dynamic block positions in execution order
 def Matches (charge : DrawCharge) (linked : Linked p key state t residual k n events)
     (degree order : Nat) : Prop :=
   charge.owner = key ∧ charge.draws = locations linked ∧ charge.draws.Nodup ∧ 0 < charge.denominator ∧
-    degree * charge.denominator ≤ charge.numerator * order
+    (0 < n → degree * charge.denominator ≤ charge.numerator * order)
 
 instance (charge : DrawCharge) (linked : Linked p key state t residual k n events)
     (degree order : Nat) : Decidable (Matches charge linked degree order) :=
   inferInstanceAs (Decidable (_ ∧ _))
 
-noncomputable def total (charge : DrawCharge) : ℝ≥0∞ :=
-  charge.draws.length * ((charge.numerator : ℝ≥0∞) / charge.denominator)
+export Zkc.Formal.Written (total)
 
 /-- Transport the family theorem and its exact finite experiment to the external service.
 Only the caller chooses the event. Both interpreters observe the same reply and next state. -/
@@ -40,15 +39,8 @@ theorem probability_le {S : Sig} {σ H A F : Type} {charge : DrawCharge}
     (bounded : (finite service).probability proc s event ≤ (n : Mass) * roundCost degree points) :
     prEvent (observed event <$> run (FiniteService.service service) proc s) ≤ total charge := by
   obtain ⟨_,draws,_,denPositive,covers⟩ := matches_
-  have within : roundCost degree points ≤ (charge.numerator : Mass) / (charge.denominator : Mass) := by
-    rw [roundCost, Mass.natCast_div _ _ positive, Mass.natCast_div _ _ denPositive]
-    exact Mass.ofFraction_le.mpr covers
-  rw [finite_slots_probability]
-  apply (embed_le.mpr (Mass.le_trans bounded (Mass.mul_le_mul_of_nonneg_left within Mass.natCast_nonneg))).trans_eq
-  rw [embed_mul, Mass.natCast_div _ _ denPositive, embed_fraction]
-  have count : embed (n : Mass) = (n : ℝ≥0∞) := (embed_fraction (.ofNat n)).trans (by simp [Mass.Fraction.ofNat])
-  have nonzero : (charge.denominator : ℝ≥0) ≠ 0 := by exact_mod_cast denPositive.ne'
-  simp [total, draws, locations, linked.rounds.length_instances, count, ENNReal.coe_div nonzero]
+  exact writtenCeiling service proc s event charge n degree points.length positive
+    (by simp [draws, locations, linked.rounds.length_instances]) denPositive covers bounded
 
 variable {rows : ScalarRows V} {vectors : (d : Nat) → TableRestriction.Rows rows.scalarTy d}
     {root red eval : Key} {ev : Events rows.scalarTy} {width : Nat} {σ : Type}
@@ -61,14 +53,14 @@ theorem sumcheck (cert : TableVerifier.Certified rows vectors p root red eval n 
     (alphabet : Fin (width+1) → rows.F M) (distinct : (List.ofFn alphabet).Nodup)
     (advance : Occurrence → rows.F M → σ → σ) (other : Slots (RSig M) σ)
     (charge : DrawCharge) (binding : Matches charge cert.linked 1 (width+1))
-    (path : List Frame) (s : σ) (x : Cube (rows.F M) n) (claim : rows.F M) (wrong : claim ≠ Cube.sum n x) :
+    (path : List Frame) (s : σ) (x : Cube (rows.F M) n) (claim : rows.F M) (wrong : claim ≠ Cube.sum n x)
+    (collisions : CollisionBound (fun a : rows.F M × rows.F M => a.1 + a.2) line 1 := lineCollisions) :
     prEvent (observed (fun _ _ => true) <$> run
       (service (RoundService.withChallenge M ev alphabet advance other))
       (roleMeaning M p cert.root 1 path (TableVerifier.args M (Cube.flatten n x) claim)) s) ≤ total charge := by
   apply probability_le _ _ _ _ (List.ofFn alphabet) (by simp) (by simpa using binding)
-  apply cert.soundFrom rows vectors M math vectorMath equality _ _ distinct _ path s x claim wrong
-  apply cert.linked.rounds.freshFromService
-  exact RoundService.fresh M ev alphabet advance other
+  exact cert.soundFrom rows vectors M math vectorMath equality _ _ distinct _ path s x claim wrong
+    (cert.linked.rounds.freshFromService _ _ _ _ _ _ (RoundService.fresh M ev alphabet advance other) _ _ _) collisions
 
 /-- Written degree-two bound at a reached GKR layer call. Its public relation and honest
 quadratic still belong to the layer. The observed event is a correct residual of a false claim. -/
@@ -86,15 +78,15 @@ theorem gate {hdr : ProtocolHeader V} {member : Member p.headers.protocols hdr}
     (advance : Occurrence → rows.F M → σ → σ) (other : Slots (RSig M) σ)
     (charge : DrawCharge) (binding : Matches charge atCall.linked 2 (width+1))
     (path : List Frame) (s : σ) (hidden : RV M 1 ⟨state,[0]⟩) (point : List (rows.F M)) (claim : rows.F M)
-    (x : q.State n) (wrong : claim ≠ q.value n x) :
+    (x : q.State n) (wrong : claim ≠ q.value n x)
+    (collisions : CollisionBound (Quadratic.boundary (F := rows.F M)) Quadratic.eval 2 := Quadratic.collisions) :
     prEvent (observed (fun vs _ => correctReturn M q x point.length vs) <$> run
       (service (RoundService.withChallenge M ev alphabet advance other))
       (roleOp M 1 (Defs.fnTable M atCall.callerEntry.definitions) (Defs.rTable M atCall.callerEntry.definitions)
         site atCall.linked.application (path ++ [.iteration loopKey i.val]) (publicArgs M hidden point claim)) s) ≤ total charge := by
   apply probability_le _ _ _ _ (List.ofFn alphabet) (by simp) (by simpa using binding)
-  apply atCall.gate_soundFrom rows checked M math model equality i q honest sum restricted _ _ distinct _
+  exact atCall.gate_soundFrom rows checked M math model equality i q honest sum restricted _ _ distinct _
     path s hidden point claim x wrong
-  apply atCall.linked.rounds.freshFromService
-  exact RoundService.fresh M ev alphabet advance other
+    (atCall.linked.rounds.freshFromService _ _ _ _ _ _ (RoundService.fresh M ev alphabet advance other) _ _ _) collisions
 
 end Zkc.Formal.Written.RoundCharge

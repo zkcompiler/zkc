@@ -20,6 +20,7 @@ structure AdmittedRoot where
   id : InstanceId
   state : Compile.State
   emission : Emit.RootEmission
+  emitted : Typing.emitRoot state id = .ok emission
   evidence : (emission.package ⟨[],[],[],[],[]⟩).Admission
 
 def admitInstance (state : Compile.State) (id : InstanceId) (place : Syntax.Span) : ExportM AdmittedRoot := do
@@ -27,10 +28,12 @@ def admitInstance (state : Compile.State) (id : InstanceId) (place : Syntax.Span
   if let some diag := s.log.entries.find? (fun d => d.isError || d.isIncomplete) then
     throw s!"{diag.span.file}:{diag.render s.env.renderer}"
   let .ok _ := result | refuse place "WK-ROOT" "protocol did not typecheck"
-  let .ok emission := Typing.emitRoot s id | refuse place "WK-CORE" "protocol did not emit"
-  let .ok evidence := (emission.package ⟨[],[],[],[],[]⟩).checkEvidence
-    | refuse place "WK-CORE" "admission refused the emitted program"
-  return ⟨id,s,emission,evidence⟩
+  match emitted : Typing.emitRoot s id with
+  | .error _ => refuse place "WK-CORE" "protocol did not emit"
+  | .ok emission =>
+    let .ok evidence := (emission.package ⟨[],[],[],[],[]⟩).checkEvidence
+      | refuse place "WK-CORE" "admission refused the emitted program"
+    return ⟨id,s,emission,emitted,evidence⟩
 
 /-- Compile an assembly with one protocol root and retain the source state that produced
 the admitted term for subsequent clause lookup. -/

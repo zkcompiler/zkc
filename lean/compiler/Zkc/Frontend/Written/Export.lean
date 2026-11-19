@@ -248,7 +248,7 @@ def exportSelected (assembly : Assembly) (request : Request) (withProof : Bool) 
   let scope := if moduleNamespace == "WrittenKnowledge" then moduleNamespace else "«" ++ moduleNamespace ++ "»"
   let (selection, resolved) ← select (← sourceState assembly) request
   let scheme := selection.scheme
-  let ⟨_,s,emission,evidence⟩ ← admitInstance resolved scheme.protocol scheme.span
+  let ⟨_,s,emission,_,evidence⟩ ← admitInstance resolved scheme.protocol scheme.span
   let c ← declarations s selection
   let pkg := emission.package ⟨[],[],[],[],[]⟩
   let historyType ← checkPorts pkg evidence c

@@ -11,7 +11,8 @@ variable {V : Vocabulary} (rows : ScalarRows V) {hs : Headers V} {ds : Defs V hs
 variable {msg state residual : V.Ty} {ops : Members hs rows.scalarTy msg state residual}
 
 def PairLaws.interpret (laws : PairLaws rows ds ops) (M : Model V) [Lean.Grind.Field (rows.F M)]
-    [DecidableEq (rows.F M)] (math : rows.Arithmetic M) (points : List (rows.F M)) (distinct : points.Nodup) :
+    [DecidableEq (rows.F M)] (math : rows.Arithmetic M) (points : List (rows.F M)) (distinct : points.Nodup)
+    (collisions : CollisionBound (fun a : rows.F M × rows.F M => a.1 + a.2) line 1 := lineCollisions) :
     RoundInterpretation M (Defs.fnTable M ds) Cube.claims points 1 ops where
   boundary m := (endpoints rows M laws.aligned m).1 + (endpoints rows M laws.aligned m).2
   evaluate m := line (endpoints rows M laws.aligned m)
@@ -19,19 +20,18 @@ def PairLaws.interpret (laws : PairLaws rows ds ops) (M : Model V) [Lean.Grind.F
   atPoint := laws.evaluate M math
   roots := by
     intro n table m wrong
-    apply count_unique points distinct
-    intro r s hr hS
-    apply line_unique_collision _ (Cube.sum n table.1,Cube.sum n table.2) r s wrong
-    · exact (of_decide_eq_true hr).trans (Cube.sum_interpolate r n table.1 table.2)
-    · exact (of_decide_eq_true hS).trans (Cube.sum_interpolate s n table.1 table.2)
+    change points.countP (fun r => decide (line (endpoints rows M laws.aligned m) r = Cube.sum n (Cube.interpolate r n table.1 table.2))) ≤ 1
+    simpa only [Cube.sum_interpolate] using
+      collisions (endpoints rows M laws.aligned m) (Cube.sum n table.1, Cube.sum n table.2) wrong points distinct
 
 variable {Γ : Ctx (LTy V)} {events : Events rows.scalarTy} {running : Var Γ (shared rows.scalarTy)}
 variable {outs : List (LTy V)} {term : Term (protocolDialect V hs) Γ outs} {count : Nat}
 
 def checkPairSequence (defs : Defs V hs) (unique : (hs.fns.map (·.key)).Nodup)
     (evaluation : ∀ k, FunctionReadback _ (rows.EvaluationLaw k))
-    (rounds : Sequence hs events state running term count) :=
-  rounds.checkMembers (fun op => PairLaws rows defs op) fun op => certifyPairs rows defs unique op evaluation
+    (rounds : Sequence hs events state running term count)
+    (alternatives : List (∀ k, FunctionReadback _ (rows.EvaluationLaw k)) := []) :=
+  rounds.checkMembers (fun op => PairLaws rows defs op) fun op => certifyPairs rows defs unique op evaluation alternatives
 
 theorem pairs_sound (rounds : Sequence hs events state running term count)
     (checked : rounds.AllMembers (fun ops => PairLaws rows ds ops))

@@ -98,14 +98,15 @@ theorem AtSite.gate_soundFrom (rows : ScalarRows V) {hdr : ProtocolHeader V} {ro
     (x : q.State n) (wrong : claim ≠ q.value n x)
     (fresh : atCall.linked.rounds.FreshFrom M (Defs.fnTable M atCall.linked.entry.definitions)
       (Defs.rTable M atCall.linked.entry.definitions) (K.renamePeers peerMap.to) points positive
-      ((path ++ [.iteration loopKey i.val]) ++ [.application site]) (initialEnv M hidden k point claim) s) :
+      ((path ++ [.iteration loopKey i.val]) ++ [.application site]) (initialEnv M hidden k point claim) s)
+    (collisions : CollisionBound (Quadratic.boundary (F := rows.F M)) Quadratic.eval 2 := Quadratic.collisions) :
     K.probability (roleOp M 1 (Defs.fnTable M atCall.callerEntry.definitions) (Defs.rTable M atCall.callerEntry.definitions)
       site atCall.linked.application (path ++ [.iteration loopKey i.val]) (publicArgs M hidden point claim)) s
       (fun vs _ => correctReturn M q x point.length vs) ≤ (n : Mass) * roundCost 2 points := by
   apply atCall.linked.applied_soundFrom M q _ _ K site _ s hidden point claim x wrong _
   · exact Mass.mul_nonneg Mass.natCast_nonneg (Mass.le_of_lt (Mass.inv_pos.mpr (Mass.natCast_pos.mpr positive)))
   · exact atCall.linked.rounds.boundsFromMembers _ checked M _ _ q points positive 2
-      (fun _ law => Gate.Laws.interpretOn rows law M math model q Fin.val honest sum restricted points distinct) equalLaw _ _ _ s x fresh
+      (fun _ law => Gate.Laws.interpretOn rows law M math model q Fin.val honest sum restricted points distinct collisions) equalLaw _ _ _ s x fresh
 
 /-- Reuse the degree-two reduction at the selected instruction of a reached layer iteration.
 The public relation and gate model are supplied for that layer. -/

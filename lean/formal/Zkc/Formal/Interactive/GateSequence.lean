@@ -83,7 +83,8 @@ def Laws.interpretOn (laws : Laws rows key bound ds ops) (M : Model V) [Lean.Gri
     (q : Claims (rows.F M)) {ι : Type} (depth : ι → Nat) (honest : ∀ i, q.State (depth i + 1) → Quadratic (rows.F M))
     (sum : ∀ i x, q.value (depth i + 1) x = (honest i x).boundary)
     (restricted : ∀ i x r, q.value (depth i) (q.restrict (depth i) x r) = (honest i x).eval r)
-    (points : List (rows.F M)) (distinct : points.Nodup) :
+    (points : List (rows.F M)) (distinct : points.Nodup)
+    (collisions : CollisionBound (Quadratic.boundary (F := rows.F M)) Quadratic.eval 2 := Quadratic.collisions) :
     RoundInterpretationOn M (Defs.fnTable M ds) q points 2 ops depth where
   boundary m := (model.polynomial (triple rows M laws.same m)).boundary
   evaluate m := (model.polynomial (triple rows M laws.same m)).eval
@@ -91,7 +92,7 @@ def Laws.interpretOn (laws : Laws rows key bound ds ops) (M : Model V) [Lean.Gri
   atPoint := laws.atPoint M model
   roots i x m wrong := by
     simp only [restricted i]
-    apply Quadratic.collisions _ _ _ _ distinct
+    apply collisions _ _ _ _ distinct
     rwa [← sum i]
 
 /-- The uniform instance remains available for claims indexed by all natural depths. -/
