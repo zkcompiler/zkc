@@ -6,6 +6,36 @@ Run `just test-written-knowledge` for the source-issued Schnorr and Chaum–Pede
 
 For a selected admitted protocol and inputs, `admitted_replacement_reads` fixes world-read authority from the honest role projections before substituting a strategy. It covers the principal, owner or listeners, operation kind, occurrence, owner input signature and result type. A substitute owner can supply different values of the same input types. A service contract must separately establish any required payload predicate. The source control maps a private child coin to the caller's second role and rejects an attempt by the first role to listen. [Authority and reachability](Zkc/Formal/WorldObservation.lean) · [Source control](checks/WorldObservation.lean)
 
+## Constructed Schnorr verifier
+
+From `lean/formal`, run the source and service regression with the project toolchain
+and Python 3.
+
+```sh
+lake lean checks/ConstructedSchnorr.lean
+```
+
+`ConstructedVerifier.acceptance` defines the probability that the selected constructed
+verifier returns. Its parameters include the Core model, nominal encodings, residue
+interpretation, identity provider, verifier inputs, initial cache, prover message policy
+and distribution of a fresh 64-byte reply. A missing identity fails setup. A missing message
+or a Core stop gives a nonaccepting outcome. VCVio's list cache keys replies by the entire
+ordered transcript and squeeze label and retains the first binding. The prover policy
+chooses the commitment and response and decides which query information its state retains.
+The only online oracle query in this experiment is the verifier's squeeze. A security game
+with an adversary's own query budget, oracle programming or extraction needs further
+semantics and proofs. [Experiment](Zkc/Tools/Formal/ConstructedVerifier.lean)
+
+The regression compiles the authored `Proof` scheme and its `derived_view` goal. It runs
+the admitted guard in the executable characteristic-two model. Its two point encodings are
+the compressed infinity and generator, and its scalar encodings are zero and one. One run
+calls the repository's reference Merlin implementation on the actual emitted frames and
+checks all 64 reply bytes against an independently generated schedule vector. Additional
+controls change the source guard, suite binding, initial transcript, typed receive handler,
+identity, public input, response and cache. The checked event is a verifier return under
+the supplied service. The authored zero-knowledge goal still needs its simulator and proof.
+[Regression](checks/ConstructedSchnorr.lean) · [Merlin adapter](checks/constructed_merlin.py)
+
 ## Package and model
 
 Run `lake build` and `lake test` from this directory to build the public formal library and its controls, then replay and audit them. The compiler package has its own dependency graph. This package pins Mathlib and VCVio in its Lake configuration and manifest. Local proof replay uses the built Lean and pinned library modules, traverses proof dependencies for axioms, and accepts `propext`, `Quot.sound`, and `Classical.choice`. The compiler audit uses its original two-axiom policy.

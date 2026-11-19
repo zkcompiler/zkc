@@ -6,6 +6,44 @@ Use that revision for the historical commands below. On the current checkout, `j
 `just test-interactive` from the repository root for the source paths used by the Sumcheck
 and GKR certificates. See [status](../../../../docs/status.md).
 
+## Constructed Schnorr verifier on the current Core
+
+`Constructed.selectScheme assembly "Proof"` selects the scheme in
+`examples/schnorr_example.zkc`. It retains the source emission and admission of its
+`Schnorr<G1>` instance, resolves the catalogue binding and computes the two online roles.
+The supported profile has one deployed definition, two shared G1 ports, one prover scalar,
+a private nonce, a commitment, one public Fr draw, a response and a verifier guard.
+The checker reads event keys from the admitted entry and event numbers from the compiler's
+source map. In this example the three Core keys are 2, 3 and 6 and the transcript site
+numbers are 1, 2 and 3. The singleton closure places the entry at definition position zero.
+
+`Verifier.run` reads the verifier's own public inputs. It frames the catalogue domain,
+the supplied proof identity, the base and the public point, then passes that state to
+`Deployed.run`. Two typed receive clauses forward the original message and absorb its
+encoded value. The draw clause supplies the current framed transcript and challenge label
+to the service and returns its decoded scalar to the admitted verifier. The role's ordinary
+guard decides acceptance. A successful run also returns the transcript after the response.
+`Verifier.handler_correspondence` checks the installed stack against the declaration,
+including the clause sites, operation keys, operands, return positions and state transitions.
+The three request equations in `Execution.lean` establish the precise appended bytes and
+the scalar and state returned by a squeeze for every supplied model and reply.
+[Source selection and correspondence](Constructed/Schnorr.lean) · [Execution](Constructed/Execution.lean)
+
+This profile uses the byte schedule documented below for the legacy catalogue binding.
+Labels use eight little-endian bytes per word. The model supplies lawful fixed-width
+formats for compressed G1 (48 bytes) and little-endian Fr (32 bytes). The service returns
+64 bytes. The verifier reads them big-endian, reduces modulo the BLS12-381 scalar order
+and applies the model's interpretation of that residue. Canonical BLS semantics for those
+formats and that interpretation are deployment assumptions. The identity provider must
+supply the canonical 32-byte digest for the selected deployment. The general Core identity
+encoder is an open interface. [Proof identity format](../../../../docs/spec/core/package.md#identities)
+
+`selectGoalExecution assembly "derived_view"` retains the complete lowered goal and
+checks that it explicitly selects the constructed stage and names this verifier's scheme.
+It supplies the execution subject for a future property proof. Prover construction,
+serialization and the programmed simulator are outside this verifier profile.
+[Constructed experiment and regression command](../../../formal/README.md#constructed-schnorr-verifier)
+
 ## Previous frontend
 
 The lexer, the parser and the canonical printer of the zkc source language, written from the
