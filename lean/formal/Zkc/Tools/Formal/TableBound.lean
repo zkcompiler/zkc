@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Formal.Written.TableCertificate
+public import Zkc.Tools.Formal.TableCertificate
 public import Zkc.Formal.Written.TableAcceptance
 public import VCVio.OracleComp.ProbComp.IndepProductEvents
 

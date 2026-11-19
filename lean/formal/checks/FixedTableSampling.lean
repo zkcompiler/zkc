@@ -1,4 +1,4 @@
-import Zkc.Formal.Written.TableBound
+import Zkc.Tools.Formal.TableBound
 import Zkc.Tests.Formal.TableRuntime
 import Zkc.Tests.Formal.SourcePairReadback
 

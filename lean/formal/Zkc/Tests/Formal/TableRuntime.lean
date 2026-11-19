@@ -1,7 +1,7 @@
 module
 
 public import Zkc.Formal.Written.TableSession
-public import Zkc.Formal.Written.TableCertificate
+public import Zkc.Tools.Formal.TableCertificate
 public import Zkc.Formal.Written.StandardDefaults
 
 @[expose] public section

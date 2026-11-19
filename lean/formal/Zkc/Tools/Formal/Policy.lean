@@ -8,9 +8,11 @@ def policy : Audit.Policy where
   axioms := Audit.allowedAxioms.push ``Classical.choice
   packages := #[`Mathlib, `VCVio]
 
-/-- An executable proof client imports other tools. Load its source file explicitly and
-audit its declarations with the same replay and axiom policy as the formal library. -/
-def chargeIssuer (directory : System.FilePath) : Audit.Library :=
-  { name := "written charge issuer", root := `Zkc.Tools.Formal.DrawCharge, kind := .tests, directory }
+/-- Source-facing clients recheck admission and refer to elaboration. Each client is
+a separate replay root outside the formal semantics library. -/
+def publicIssuers (directory : System.FilePath) : Array Audit.Library :=
+  #[`Zkc.Tools.Formal.DrawCharge, `Zkc.Tools.Formal.SumcheckGoal,
+    `Zkc.Tools.Formal.TableBound, `Zkc.Tools.Formal.ConstructedVerifier].map fun root =>
+    { name := toString root, root, kind := .tests, directory }
 
 end Zkc.Tools.Formal

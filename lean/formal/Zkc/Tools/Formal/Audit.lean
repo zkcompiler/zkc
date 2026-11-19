@@ -20,8 +20,15 @@ open Zkc.Tools.Audit
 def libraries (directory : System.FilePath) : Array Library := #[
   { name := "formal", root := `Zkc.Formal, imports := some #[`Init, `Std, `Lean, `Zkc.Core,
       `Zkc.Frontend.Emit.Bindings, `Zkc.Frontend.Written.LeanTerms, `Zkc.Frontend.Written.ChargeData, `Mathlib, `VCVio], directory },
-  { name := "tests of the formal library", root := `Zkc.Tests.Formal, kind := .tests, directory },
-  Zkc.Tools.Formal.chargeIssuer directory]
+  { name := "tests of the formal library", root := `Zkc.Tests.Formal, kind := .tests, directory }] ++
+  Zkc.Tools.Formal.publicIssuers directory
+
+-- Check the configuration used by the package executable, independently of the
+-- focused audit recipe. Omitting a public client would silently narrow replay.
+example : [`Zkc.Tools.Formal.DrawCharge, `Zkc.Tools.Formal.SumcheckGoal,
+    `Zkc.Tools.Formal.TableBound, `Zkc.Tools.Formal.ConstructedVerifier].all
+    (fun root => (libraries ".").any (fun lib => lib.root == root && lib.withoutReplay.isNone)) = true := by
+  decide
 
 /-- The compiler's package, which holds the files of the controls: the package that this one
 requires, at `../compiler`. -/
