@@ -121,13 +121,10 @@ def replacedFunctionsSame : Prop :=
           ins.All M.Valid → Defs.fnTable M defs' hdr f ins = Defs.fnTable M defs hdr f ins) ∧
         FnTable.Safe (Defs.fnTable M defs') ∧ FnTable.KeepsValidity (Defs.fnTable M defs')
 
-/-- Validity: an open role program is safe: on valid inputs and every permitted reply it
-never stops `undefined`, whatever its peers do. It is said of a program of which no function's
-summary has a requirement (`Headers.Unconditional`), whose functions are safe on every valid
-input. -/
+/-- An admitted open role on valid inputs never stops `undefined` on permitted replies.
+Admission checks function requirements at each projected call. -/
 def rolesSafe : Prop :=
   ∀ named assoc (a : Admitted V), c.admit named assoc = .ok a →
-    a.program.headers.Unconditional →
     ∀ (M : Model V) (hdr : ProtocolHeader V) (p : Member a.program.headers.protocols hdr)
       (r : Role) (path : List Frame) (ins : HList (RV M r) hdr.ins), ins.All (RV.Valid M r) →
       (roleMeaning M a.program p r path ins).StopsWhen (Permitted M) (· ≠ .undefined)

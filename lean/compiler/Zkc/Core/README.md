@@ -231,8 +231,8 @@ Still to be built:
 
 - `elaborateProgram`, `admit` and `check` implement the entries of `Functions` for mixed programs.
   The open entries are `eraseRole`, `format`, `deploy`, `identity`, `execute` and `schedule`;
-- `rolesSafe` holds for the open projected verifier and every other role on valid inputs and permitted replies under the
-  unconditional-headers premise of the public statement.
+- `rolesSafe` holds for every admitted open role on valid inputs and permitted replies.
+  Its projection establishes the requirements of each function it calls.
   Remaining statements include `realized`, `anyOrder`, `replayed`, `recordsAreValid`,
   `schedulerRuns`, deployment from `deployKeeps` to `identityReads`, `executorRuns` and `formats`.
   A partial external source can leave the network quiescent while a role waits for a draw.
@@ -244,10 +244,9 @@ Still to be built:
   segment, representations, reductions); facts carried from one program to another by a
   correspondence of their places; the comparison of two programs whose functions have
   requirements (`Defs.functionsFollow_sound` asks that no summary has one: its general form needs
-  that the requirements hold at every call that a run reaches); the statements about role
-  programs and deployment for programs whose functions have requirements (`rolesSafe` and
-  `deployedSafe` ask that none has one), since role programs are not analysed against the
-  summaries of the functions that they call; deciding, where a definition returns, a guarantee that names an application of a
+  that the requirements hold at every call that a run reaches); deployment for programs whose
+  functions have requirements (`deployedSafe` still assumes unconditional headers);
+  deciding, where a definition returns, a guarantee that names an application of a
   written operation (it is refused there: the analysis does not know that the application has a
   value); a guard whose condition is
   already known true dropped or added on either side (every guard of the second term must be the

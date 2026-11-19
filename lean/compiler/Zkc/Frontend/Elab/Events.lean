@@ -118,15 +118,16 @@ def elabApplication (span : Span) (event : EventId) (binder : Option Lowered.Bin
     refuseHere "EV1" span s!"`{calleeText}` is {Names.kindWord found.kind}: only a protocol is applied"
   let .protocol head _ _ := (← loweredOf id).content | throw .abandoned
   -- the specification ports take a specification argument each (SX4, RM3)
-  let specificationPorts := head.ports.filter (·.specification)
-  for port in specificationPorts do
-    unless arguments.any (fun | .spec _ given _ => given.text == port.binder.name | _ => false) do
-      refuseHere "SX4" span
-        s!"`{calleeText}` has the specification port `{port.binder.name}`; write `spec {port.binder.name} = …`"
+  let specificationNames := (head.ports.filter (·.specification)).map (·.binder.name)
+  let mut namedSpec := #[]
   for argument in arguments do
-    if let .spec argumentSpan given _ := argument then
-      unless specificationPorts.any (·.binder.name == given.text) do
+    if let .spec argumentSpan given value := argument then
+      unless specificationNames.contains given.text do
         refuseHere "RM3" argumentSpan s!"`{calleeText}` has no specification port `{given.text}`"
+      namedSpec := namedSpec.push (.named argumentSpan given value)
+  let specValues ← match Lowered.pairValueArguments calleeText specificationNames namedSpec span with
+    | .ok values => pure values
+    | .error (where_, message) => refuseHere "SX4" where_ message
   -- every specification-only parameter of the callee is given by a specification argument, and a
   -- deployed static argument reads none (SP11); a parameter of a scope that the caller shares
   -- with the callee is the caller's own
@@ -181,12 +182,7 @@ def elabApplication (span : Span) (event : EventId) (binder : Option Lowered.Bin
   -- the specification arguments: typed against their ports at the callee's instance, in a
   -- specification, where the names of every role stand (SX4)
   let mut specification : Array (String × Typed.Expr) := #[]
-  for port in signature.ports do
-    unless port.specification do continue
-    let some (.spec _ _ value) := arguments.find? fun
-        | .spec _ given _ => given.text == port.name
-        | _ => false
-      | throw .abandoned
+  for port in signature.ports.filter (·.specification), value in specValues do
     let typedValue ← withContext (fun context => { context with specification := true })
       (elabAt value port.type)
     specification := specification.push (port.name, typedValue)

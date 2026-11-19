@@ -395,6 +395,14 @@ protocol C roles(P, V)(spec bound: F, a: F @P):
 protocol T roles(P, V)(a: F @(P, V), b: bool @P):
     C(a, spec bound = b)
 
+=== duplicate-spec-port | refuse SX4 6 | the second binding is refused even when the values coincide
+module t
+type F = primitive("bls12-381.fr")
+protocol C roles(P, V)(spec bound: F, a: F @P):
+    m <- send a to V
+protocol T roles(P, V)(a: F @P):
+    C(a, spec bound = a, spec bound = a)
+
 === spec-argument-port | refuse RM3 6 | a specification argument names a specification port of the callee (RM3)
 module t
 type F = primitive(\"bls12-381.fr\")
