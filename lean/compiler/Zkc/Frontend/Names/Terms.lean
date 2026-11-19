@@ -650,7 +650,8 @@ mutual
   partial def resolveApplication (env : Env) (application : Application) :
       ResolveM (Except (Array Lowered.Expr) Lowered.Event) := do
     let (_, callee) ← resolvePath env application.callee .plain
-    let (arguments, _) ← resolveCallArgs env .value application.args
+    let (arguments, witnesses) ← resolveCallArgs env .value application.args
+    if witnesses.isSome then refuseAt env.owner "SX3" application.span "only a relation takes witness arguments"
     let mut roleMap := #[]
     for entry in (application.roleMap.map (·.entries)).getD #[] do
       roleMap := roleMap.push (entry.callee, ← roleOf entry.caller)

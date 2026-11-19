@@ -23,11 +23,12 @@ private def sum (root : System.FilePath) (rounds : Nat) (edit : Option (String �
 
 #eval show IO Unit from do
   let root := (← IO.currentDir) / "../.."
-  for repeated in ["extension(values), spec p = claim", "claim, spec p = extension(values)"] do
+  for (repeated, rule) in [("extension(values), spec p = claim", "SX4"),
+      ("claim, spec p = extension(values)", "SX4"), ("extension(values); spec p = claim", "SX3")] do
     let refused ← try
       let _ ← sum root 2 (some ("spec p = extension(values)", "spec p = " ++ repeated))
       pure false
-    catch err => pure ((toString err).contains "refuse SX4")
+    catch err => pure ((toString err).contains ("refuse " ++ rule))
     unless refused do throw (IO.userError "a repeated specification port must fail before charge issuance")
   for n in [0,1,10] do
     let c ← sum root n

@@ -153,10 +153,18 @@ def main : IO Unit := do
     checkProperties repository
     checkCertifiedFacts repository
     checkSendFacts repository
-    checkProtocol repository "duplicate specification port" "Caller" ("\n".intercalate [
-      "module t", "protocol Child roles(P, V)(spec bound: bool, a: bool @P):",
-      "    m <- send a to V", "protocol Caller roles(P, V)(a: bool @P):",
-      "    Child(a, spec bound = a, spec bound = a)", ""]) (some "SX4")
+    for (call, rule) in [
+        ("Child(a, spec bound = a, spec bound = a)", some "SX4"),
+        ("Child(a, spec bound = a; spec bound = a)", some "SX3"),
+        ("Child(spec bound = a, a)", some "RM3"),
+        ("Child(spec bound = a, a = a)", some "RM3"),
+        ("Child(a, spec bound = a) @(P = P, P = V, V = V, V = P)", some "RM1"),
+        ("Child(a, spec bound = a) @(P = V, P = P, V = P, V = V)", some "RM1"),
+        ("Child(a, spec bound = a)", none)] do
+      checkProtocol repository call "Caller" ("\n".intercalate [
+        "module t", "protocol Child roles(P, V)(spec bound: bool, a: bool @P):",
+        "    m <- send a to V", "protocol Caller roles(P, V)(a: bool @P):",
+        "    " ++ call, ""]) rule
     corpusSuite repository
     conformanceSuite repository
     checkNames repository

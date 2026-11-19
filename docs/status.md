@@ -5,7 +5,7 @@
 The compiler admits named functions and protocols in definition order. On valid inputs satisfying
 a function's declared requirements, admission proves its summary and recorded bounds. Protocol
 admission checks each role's projected body. The public role-safety theorem excludes an
-undefined stop for valid inputs and permitted replies under unconditional function headers.
+undefined stop for valid inputs and permitted replies, including calls with checked preconditions.
 See the [Core guide](../lean/compiler/Zkc/Core/README.md) and the
 [active build targets](development.md).
 

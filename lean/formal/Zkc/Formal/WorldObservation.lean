@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Core.World.Runs
+public import Zkc.Core.Statements
 public import Zkc.Formal.ProcessJudgment
 
 @[expose] public section
@@ -106,7 +107,7 @@ theorem listener_entry {kind : GivenKind V} {owner r : Role} {listeners : List R
 /-- The role's operation for a world read is an owner request or a reply-only notification.
 A deployment supplies the authority table for each operation and actual principal. -/
 structure Access (V : Vocabulary) where
-  owns : Role → GivenKind V → List Role → Occurrence → V.Ty → Prop
+  owns : Role → GivenKind V → List Role → Occurrence → List V.Ty → V.Ty → Prop
   hears : Role → GivenKind V → Role → Occurrence → V.Ty → Prop
 
 /-- A grant assigns the read to its declared owner and its explicitly named listeners.
@@ -116,19 +117,20 @@ structure Grant (V : Vocabulary) where
   owner : Role
   listeners : List Role
   occurrence : Occurrence
+  inputs : List V.Ty
   type : V.Ty
 
 def Access.fromGrants (declared : Grant V → Prop) : Access V where
-  owns r kind listeners at_ ty := declared ⟨kind, r, listeners, at_, ty⟩
-  hears r kind owner at_ ty := ∃ listeners, declared ⟨kind, owner, listeners, at_, ty⟩ ∧ r ∈ listeners
+  owns r kind listeners at_ ins ty := declared ⟨kind, r, listeners, at_, ins, ty⟩
+  hears r kind owner at_ ty := ∃ listeners ins, declared ⟨kind, owner, listeners, at_, ins, ty⟩ ∧ r ∈ listeners
 
 def Access.operation (a : Access V) (r : Role) : ROp M → Prop
-  | .own kind listeners at_ _ _ ty => a.owns r kind listeners at_ ty
+  | .own kind listeners at_ ins _ ty => a.owns r kind listeners at_ ins ty
   | .hear kind owner at_ ty => a.hears r kind owner at_ ty
   | _ => True
 
 def Access.record (a : Access V) : Happened M → Prop
-  | .owned r kind at_ ty _ => ∃ listeners, a.owns r kind listeners at_ ty
+  | .owned r kind at_ ty _ => ∃ listeners ins, a.owns r kind listeners at_ ins ty
   | .heard r kind owner at_ ty _ => a.hears r kind owner at_ ty
   | _ => True
 
@@ -160,9 +162,9 @@ theorem scoped_iff_offers {X Y : Type} (access : Access V) (r : Role)
 
 /-- The read authority of the projected processes on the selected inputs. A replacement
 owner may choose a new request payload. The principal, listeners, kind, occurrence and
-reply type still have to be offered by the corresponding reference role. -/
+input and reply types still have to be offered by the corresponding reference role. -/
 def Access.ofProjections (net : Net M H B) : Access V where
-  owns r kind listeners at_ ty := ∃ ins args, Offers (net r) (.own kind listeners at_ ins args ty)
+  owns r kind listeners at_ ins ty := ∃ args, Offers (net r) (.own kind listeners at_ ins args ty)
   hears r kind owner at_ ty := Offers (net r) (.hear kind owner at_ ty)
 
 theorem projections_scoped (net : Net M H B) : NetworkScoped (Access.ofProjections net) net := by
@@ -170,7 +172,7 @@ theorem projections_scoped (net : Net M H B) : NetworkScoped (Access.ofProjectio
   apply (scoped_iff_offers ..).mpr
   intro op offered
   cases op with
-  | own => exact ⟨_, _, offered⟩
+  | own => exact ⟨_, offered⟩
   | hear => exact offered
   | give | get | begin | settle => trivial
 
@@ -193,7 +195,7 @@ theorem step_scoped {access : Access V} {c c' : Net M H B × Pending M} {h}
   cases step with
   | own atCall _ =>
     have ok := scoped_call all atCall
-    exact ⟨⟨_, ok.1⟩, set_scoped all (ok.2 _)⟩
+    exact ⟨⟨_, _, ok.1⟩, set_scoped all (ok.2 _)⟩
   | give atCall _ | get atCall _ | hear atCall _ | begin atCall | settle atCall =>
     have ok := scoped_call all atCall
     exact ⟨ok.1, set_scoped all (ok.2 _)⟩
@@ -215,5 +217,17 @@ theorem replacement_reads {net : Net M H B} {role : Role} {strategy} {pending la
     (run : Reach M source (net.set M role strategy, pending) trace last) :
     ∀ h ∈ trace, (Access.ofProjections net).record h :=
   (reach_scoped (set_scoped (projections_scoped net) allowed) run).1
+
+/-- Fix the authority before choosing the replacement, using precisely the selected
+admitted protocol, invocation path and shared inputs. -/
+theorem admitted_replacement_reads (a : Admitted V) {hdr : ProtocolHeader V}
+    (entry : Member a.program.headers.protocols hdr) (path : List Frame)
+    (inputs : HList (LVal M) hdr.ins) (role : Role)
+    (strategy : Program M (HList (RV M role) hdr.outs)) :
+    let start := Statements.projections a.program M entry path inputs
+    let access := Access.ofProjections start.1
+    Scoped access role strategy → ∀ {trace last},
+      Reach M source (start.1.set M role strategy, start.2) trace last → ∀ h ∈ trace, access.record h :=
+  fun allowed {_ _} run => replacement_reads allowed run
 
 end Zkc.Formal.World

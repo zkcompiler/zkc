@@ -121,10 +121,14 @@ def elabApplication (span : Span) (event : EventId) (binder : Option Lowered.Bin
   let specificationNames := (head.ports.filter (·.specification)).map (·.binder.name)
   let mut namedSpec := #[]
   for argument in arguments do
-    if let .spec argumentSpan given value := argument then
+    match argument with
+    | .spec argumentSpan given value =>
       unless specificationNames.contains given.text do
         refuseHere "RM3" argumentSpan s!"`{calleeText}` has no specification port `{given.text}`"
       namedSpec := namedSpec.push (.named argumentSpan given value)
+    | .named argumentSpan .. | .positional argumentSpan .. =>
+      unless namedSpec.isEmpty do
+        refuseHere "RM3" argumentSpan "value arguments precede specification arguments"
   let specValues ← match Lowered.pairValueArguments calleeText specificationNames namedSpec span with
     | .ok values => pure values
     | .error (where_, message) => refuseHere "SX4" where_ message
@@ -142,19 +146,23 @@ def elabApplication (span : Span) (event : EventId) (binder : Option Lowered.Bin
   deployedStaticArguments steps
   -- the role map, by name (RM1)
   let roster := context.roster.getD #[]
+  let mut explicitRoles : Std.HashMap String Nat := {}
+  for (name, role) in written do
+    unless head.roster.contains name.text do
+      refuseHere "RM1" name.span s!"`{calleeText}` has no role {name.text}"
+    if explicitRoles.contains name.text then
+      refuseHere "RM1" name.span s!"the role map of `{calleeText}` binds {name.text} twice"
+    explicitRoles := explicitRoles.insert name.text role
   let mut roleMap : Array Nat := #[]
   for name in head.roster do
-    match written.find? (·.1.text == name) with
-    | some (_, role) => roleMap := roleMap.push role
+    match explicitRoles[name]? with
+    | some role => roleMap := roleMap.push role
     | none =>
       match roster.findIdx? (· == name) with
       | some index => roleMap := roleMap.push index
       | none =>
         refuseHere "RM1" span
           s!"role {name} of `{calleeText}` has no namesake in `{context.name}`: write `@({name} = …)`"
-  for (name, _) in written do
-    unless head.roster.contains name.text do
-      refuseHere "RM1" name.span s!"`{calleeText}` has no role {name.text}"
   for index in [0:roleMap.size] do
     if (roleMap.extract 0 index).contains roleMap[index]! then
       refuseHere "RM1" span s!"the role map of `{calleeText}` gives {← roleName roleMap[index]!} two roles"
