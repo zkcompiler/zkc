@@ -9,7 +9,9 @@ A typed program that is written one definition at a time, with its program by na
 
 What elaboration decides about the body of a definition is one check of the body
 (`Fn.checks`, `Prot.checks`); a body that passes has the conditions of a definition
-(`FnConditions.of_checks`, `ProtocolConditions.of_checks`). The erasure of a program is the
+(`FnConditions.of_checks`, `ProtocolConditions.of_checks`), and two decisions of the protocol
+dialect that are functions and not instances give their propositions (`Fits.of_decision`,
+`GivenKind.Typed.of_decision`). The erasure of a program is the
 erasure of the definitions before its last one, followed by the last one's
 (`Defs.erase_fn`, `Defs.erase_protocol`), so that a program by names is compared with a typed
 program one definition at a time.
@@ -80,6 +82,12 @@ theorem Fits.of_decision {actual expected : List (LTy V)}
     (decided : @decide (Fits actual expected) (decideFits actual expected) = true) :
     Fits actual expected :=
   @of_decide_eq_true _ (decideFits actual expected) decided
+
+/-- What the world gives that is decided to have the types of its kind has them. -/
+theorem GivenKind.Typed.of_decision {kind : GivenKind V} {ins : List V.Ty} {out : V.Ty}
+    (decided : @decide (kind.Typed ins out) (decideGiven kind ins out) = true) :
+    kind.Typed ins out :=
+  @of_decide_eq_true _ (decideGiven kind ins out) decided
 
 /-! ## Erasure, one definition at a time -/
 

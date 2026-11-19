@@ -1,7 +1,7 @@
 module
 
+public import Zkc.Core.Admission.Theorems
 public import Zkc.Core.Program.DefinitionChecks
-public import Zkc.Core.Admission.Admit
 public import Zkc.Frontend.Emit.Reports
 public import Zkc.Frontend.Written.LeanTerms
 
@@ -22,14 +22,17 @@ The traversal follows the constructors of the Core program: every definition, in
 operation has a case, and no case reads a source identifier or the shape of a protocol.
 
 Every computation that the module needs is a decision of the kernel (`by decide +kernel`): that a
-context has a name at a type, that the vocabulary has a row at a signature, who holds a value.
-Each type that a decision reads is written out, so that no decision waits for Lean to infer one.
-Lean's unifier is asked only to compare written values. When the unifier was asked to find each
-variable in its context, the root of the GKR example, whose vocabulary has project primitives,
-took between a quarter of a second and a second for each variable and did not end within twenty
-times Lean's default limit; with the kernel's decisions the same module is checked in seconds.
+context has a name at a type, that the vocabulary has a row at a signature or a law at a type,
+who holds a value, that operands have the types of an operation. Each type that a decision reads
+is written out, so that no decision waits for Lean to infer one. Where a proof is `rfl`, both
+sides are written in the module and differ by a projection of a written value or by a list of a
+variant's alternatives. When the unifier was asked to find each variable in its context, the
+root of the GKR example, whose vocabulary has project primitives, took between a quarter of a
+second and a second for each variable and did not end within twenty times Lean's default limit;
+with the kernel's decisions the same module is checked in seconds.
 
-A module that holds a printed package imports the modules of `packageImports`.
+A module that holds a printed package imports the modules of `packageImports`, which this module
+imports as well: building it builds what a printed package needs.
 -/
 
 namespace Zkc.Frontend.Written
@@ -260,22 +263,21 @@ def protocolOp {hs : Headers b.vocabulary} {ins outs : List (LTy b.vocabulary)}
     (headersName : String) : ProtocolOp b.vocabulary hs ins outs → String
   | .compute who o operands _ _ =>
       s!"(ProtocolOp.compute (V := V) (hs := {headersName}) {numbers who} " ++
-        s!"{localOp (headersName ++ ".fns") o} {located operands} rfl (by decide +kernel))"
+        s!"{localOp (headersName ++ ".fns") o} {located operands} (by decide +kernel) " ++
+        "(by decide +kernel))"
   | .flow (τ := τ) (H := holders) kind giver getters _ _ =>
       s!"(ProtocolOp.flow (V := V) (hs := {headersName}) (τ := {ty τ}) (H := {numbers holders}) " ++
         s!"{flowKind kind} {giver} {numbers getters} (by decide +kernel) (by decide +kernel))"
   | .given kind owner hearers operands τ _ _ _ =>
-      let typed := match kind with
-        | .coin _ => "⟨_, rfl, rfl, rfl⟩"
-        | .request _ => "rfl"
       s!"(ProtocolOp.given (V := V) (hs := {headersName}) {givenKind kind} {owner} {numbers hearers} " ++
-        s!"{located operands} {ty τ} {typed} (by decide +kernel) (by decide +kernel))"
+        s!"{located operands} {ty τ} (GivenKind.Typed.of_decision (by decide +kernel)) " ++
+        "(by decide +kernel) (by decide +kernel))"
   | .narrow (τ := τ) (H := holders) who _ =>
       s!"(ProtocolOp.narrow (V := V) (hs := {headersName}) (τ := {ty τ}) (H := {numbers holders}) " ++
         s!"{numbers who} (by decide +kernel))"
   | .apply (hdr := hdr) callee roles _ _ operands _ =>
       s!"(ProtocolOp.apply (V := V) (hs := {headersName}) (hdr := header{hdr.key.number}) " ++
-        s!"{member callee} {numbers roles} (by decide +kernel) rfl {located operands} " ++
+        s!"{member callee} {numbers roles} (by decide +kernel) (by decide +kernel) {located operands} " ++
         "(Fits.of_decision (by decide +kernel)))"
 
 /-! ## Typed bodies -/
