@@ -30,7 +30,6 @@ partial def ty {b : Emit.Bindings} (t : b.vocabulary.Ty) : ExportM String := do
   | .fin n => pure s!"(.fin {n})"
   | .seq item size => return s!"(.seq {← ty (b := b) item} ({reprStr size}))"
   | .record key linear ts => return s!"(.record ⟨{key.number}⟩ {linear} {← fields ts})"
-  | .variant key ts => return s!"(.variant ⟨{key.number}⟩ {← fields ts})"
   | .bool => pure ".bool"
   | .nominal (.inl k) => pure s!"(.nominal (.inl ({reprStr (show Zkc.Vocabulary.TypeKey from k)})))"
   | .tuple ts => return s!"(.tuple {← fields ts})"

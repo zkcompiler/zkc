@@ -228,7 +228,7 @@ private def checkExample (root : System.FilePath) (gkr : Bool) (variant : Varian
   let some node := origin.nodes[site.number]? | throw (IO.userError "missing source node")
   let some checked := s.results.checked? id | throw (IO.userError "missing checked root")
   let .protocol body := checked.definition.body | throw (IO.userError "expected a protocol")
-  let some (.stmt (.event _ _ (.apply _ sourceCallee _ _ roles ..))) := body.find? node
+  let some (.stmt (.event _ _ (.apply _ sourceCallee _ _ roles _))) := body.find? node
     | throw (IO.userError "application does not map to the source event")
   unless site == attached.instruction && callee.number == sourceCallee && roles == #[0,1] do
     throw (IO.userError "application source and emitted site disagree")

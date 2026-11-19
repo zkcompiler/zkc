@@ -80,10 +80,10 @@ def target (c : WrittenClause) (historyType : String) : String := Id.run do
     s!"  {inputs "[(a,l.challenge,l.suffix,()),(a,r.challenge,r.suffix,())]"}",
     "def coreRelationOf (p : Typed V) (root : Member p.headers.fns RelationHeader) (s : Statement (M.Val pointTy)) (w : M.Val scalarTy) : Option Bool :=",
     "  functionResult (t := .bool) (fnMeaning M p root (relationArguments M s w))",
-    "def coreRelation := coreRelationOf M installedRelation RelationRoot",
+    "def coreRelation := coreRelationOf M installedRelation Member.head",
     "def coreExtractorOf (p : Typed V) (root : Member p.headers.fns ExtractorHeader) (s : Statement (M.Val pointTy)) (a : M.Val historyTy) (l r : Branch (M.Val scalarTy)) : Option (M.Val scalarTy) :=",
     "  functionResult (t := scalarTy) (fnMeaning M p root (extractorArguments M s a l r))",
-    "def coreExtractor := coreExtractorOf M installedExtractor ExtractorRoot",
+    "def coreExtractor := coreExtractorOf M installedExtractor Member.head",
     s!"def inputValues (s : Statement (M.Val pointTy)) : HList (RV M {v}) ports := {values}",
     s!"def observed (path : List Frame) (a : M.Val historyTy) (b : Branch (M.Val scalarTy)) := forkInputs M historyTy path {p} {keys} a b",
     "def acceptsOf (program : Typed V) (root : Member program.headers.protocols header) (s : Statement (M.Val pointTy)) (path : List Frame) (a : M.Val historyTy) (b : Branch (M.Val scalarTy)) : Prop :=",
@@ -92,9 +92,9 @@ def target (c : WrittenClause) (historyType : String) : String := Id.run do
     "theorem accepts_projected (s : Statement (M.Val pointTy)) (path : List Frame)",
     "    (a : M.Val historyTy) (b : Branch (M.Val scalarTy)) :",
     s!"    accepts M s path a b ↔ Returns ((project {v} body).denote",
-    s!"      (roleSem M {v} (hs := protocolDependencies.headers) (Defs.fnTable M protocolDependencies.defs) (Defs.rTable M protocolDependencies.defs))",
+    s!"      (roleSem M {v} (hs := (⟨[],[]⟩ : Headers V)) (Defs.fnTable M .nil) (Defs.rTable M .nil))",
     "      path (Env.empty.extend inputNames (inputValues M s))) ((observed M path a b).map Input.entry) :=",
-    s!"  added_role_returns M protocolDependencies header inputNames body _ _ {v} path (inputValues M s) _",
+    s!"  singleton_role_returns M header inputNames body _ {v} path (inputValues M s) _",
     "def replayCheck (s : Statement (M.Val pointTy)) (path : List Frame) (a : M.Val historyTy) (b : Branch (M.Val scalarTy)) : Option Unit :=",
     s!"  replay (observed M path a b) (roleMeaning M installed Member.head {v} path (inputValues M s))",
     "theorem replay_returns (s : Statement (M.Val pointTy)) (path : List Frame) (a : M.Val historyTy) (b : Branch (M.Val scalarTy)) :",
@@ -119,7 +119,7 @@ def target (c : WrittenClause) (historyType : String) : String := Id.run do
     "    (path : List Frame) (proof : coreObligation M path) : compiledObligation M p r e path := by",
     "  unfold compiledObligation admittedPropertyOn",
     "  rw [readback hp, RelationReadback r hr, ExtractorReadback e he]",
-    "  exact ⟨.head, RelationRoot, ExtractorRoot, proof⟩",
+    "  exact ⟨.head, .head, .head, proof⟩",
     "variable (ops : Operations (M.Val scalarTy) (M.Val pointTy)) [DecidableEq (M.Val scalarTy)] [DecidableEq (M.Val pointTy)]",
     "def verifierCheck (_ops : Operations (M.Val scalarTy) (M.Val pointTy)) (s : Statement (M.Val pointTy))",
     "    (a : M.Val historyTy) (b : Branch (M.Val scalarTy)) (path : List Frame := []) := replayCheck M s path a b",
@@ -147,7 +147,7 @@ and guards are unrestricted here. A truncated trace would make every fork vacuou
 def checkPorts (p : SourcePackage) (evidence : p.Admission) (c : WrittenClause) : ExportM String := do
   let v := c.view
   let sp := c.source.where_
-  let some (.protocol root 2 ports [] (.mk _ steps _)) := p.named.definitions.find? (·.key == ⟨c.selection.scheme.protocol⟩)
+  let [.protocol root 2 ports [] (.mk _ steps _)] := p.named.definitions
     | refuse sp "WK-PORT" "expected a two-role protocol with an empty result"
   let some ⟨header, _⟩ := evidence.admitted.program.findProtocol root
     | refuse sp "WK-VIEW" "missing admitted protocol header"
@@ -201,7 +201,7 @@ def certificate (c : WrittenClause) : String := Id.run do
     "    accepts M s path a b ↔ verifierConditions M s a b := by",
     s!"  source_proof {origin} =>",
     "    refine (accepts_projected M s path a b).trans ?_",
-    s!"    let sem := roleSem M {v} (hs := protocolDependencies.headers) (Defs.fnTable M protocolDependencies.defs) (Defs.rTable M protocolDependencies.defs)",
+    s!"    let sem := roleSem M {v} (hs := (⟨[],[]⟩ : Headers V)) (Defs.fnTable M .nil) (Defs.rTable M .nil)",
     "    dsimp only [observed, forkInputs, List.map, Input.entry, InputPort.input, InputPort.operation, verifierConditions]",
     s!"    written_steps stored {v} replies [a, b.challenge, b.suffix]",
     "omit [DecidableEq (M.Val scalarTy)] in",
@@ -212,12 +212,12 @@ def certificate (c : WrittenClause) : String := Id.run do
     "theorem relation_agrees (rows : GroupRows M ops) (field : FunctionRows M ops)",
     "    (s : Statement (M.Val pointTy)) (w : M.Val scalarTy) : coreRelation M s w = relation ops s w := by",
     s!"  source_proof {clause} =>",
-    "    change functionResult (RelationBody.denote (localSem M _ (Defs.fnTable M RelationDependencies.defs)) [] (Env.empty.extend RelationNames (relationArguments M s w))) = _",
+    "    change functionResult (RelationBody.denote (localSem M [] (Defs.fnTable M .nil)) [] (Env.empty.extend RelationNames (relationArguments M s w))) = _",
     "    check_function relation with rows field",
     "theorem extractor_agrees (rows : GroupRows M ops) (field : FunctionRows M ops) (s : Statement (M.Val pointTy))",
     "    (a : M.Val historyTy) (l r : Branch (M.Val scalarTy)) : coreExtractor M s a l r = extractor ops s a l r := by",
     s!"  source_proof {clause} =>",
-    "    change functionResult (ExtractorBody.denote (localSem M _ (Defs.fnTable M ExtractorDependencies.defs)) [] (Env.empty.extend ExtractorNames (extractorArguments M s a l r))) = _",
+    "    change functionResult (ExtractorBody.denote (localSem M [] (Defs.fnTable M .nil)) [] (Env.empty.extend ExtractorNames (extractorArguments M s a l r))) = _",
     "    check_function extractor with rows field",
     "theorem certified (rows : GroupRows M ops) (laws : ActionLaws ops) (path : List Frame) : obligation M ops path := by",
     s!"  source_proof {clause} =>",

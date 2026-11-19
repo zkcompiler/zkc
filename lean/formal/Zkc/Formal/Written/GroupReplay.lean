@@ -11,7 +11,6 @@ namespace Zkc.Formal.Written
 open Zkc.Core Lean Elab Tactic Meta
 
 private inductive ReplayStep where
-  | value (name term : String)
   | instruction (script : String)
   | guard (script : String)
 
@@ -28,16 +27,15 @@ private def typeTerm (t : Standard.Ty) : Except String String :=
 private def valueStep (role : Nat) (who : List Role) (types : List Standard.Ty) (values : List String) (proof := "rfl") :
     Except String String := do
   let mid ← types.mapM fun t => do return s!"⟨{← typeTerm t}, {numbers who}⟩"
-  return s!"refine afterValue (D := roleDialect V _ {role}) (sem := sem) (mid := [{", ".intercalate mid}]) {consList values} (by {proof}) ?_"
+  return s!"refine afterValue (D := roleDialect V ⟨[],[]⟩ {role}) (sem := sem) (mid := [{", ".intercalate mid}]) {consList values} (by {proof}) ?_"
 
 private def replyStep (role : Nat) (who : List Role) (ty op reply : String) :=
-  s!"refine afterReply (D := roleDialect V _ {role}) (sem := sem) (mid := [⟨{ty}, {numbers who}⟩]) (show ROp M from {op}) {reply} (fun x => .cons x .nil) (by rfl) ?_"
+  s!"refine afterReply (D := roleDialect V ⟨[],[]⟩ {role}) (sem := sem) (mid := [⟨{ty}, {numbers who}⟩]) (show ROp M from {op}) {reply} (fun x => .cons x .nil) (by rfl) ?_"
 
 /-- Read only the admitted program's erasure. Every hinted value, including every tuple
 projection, is checked by conversion against the corresponding projected typed instruction. -/
-private def plan (program : NamedProgram Standard) (role : Role) (replies : List String)
-    (localName : Nat → String) : Except String ReplayPlan := do
-  let some (.protocol _ _ ports [] (.mk inputs steps [])) := program.definitions.getLast? | throw "expected a closed straight-line verifier"
+private def plan (program : NamedProgram Standard) (role : Role) (replies : List String) : Except String ReplayPlan := do
+  let [.protocol _ _ ports [] (.mk inputs steps [])] := program.definitions | throw "expected a closed straight-line verifier"
   let publicInputs := (inputs.zip ports).filter (fun (_, p) => p.holders.contains role)
   let mut env := publicInputs.zipIdx.map fun ((n,_),i) => (n, component "s" i (i+1 == publicInputs.length))
   let mut plan : ReplayPlan := {}
@@ -82,24 +80,10 @@ private def plan (program : NamedProgram Standard) (role : Role) (replies : List
         | .literal t _ =>
           if who.contains role then throw "uninterpreted verifier literal"
           pure ([t], ["()"])
-        | .call key => do
-          if who.contains role then throw "uninterpreted verifier call"
-          let some (.fn _ _ resultTypes ..) := program.definitions.find? (·.key == key)
-            | throw "missing local callee"
-          pure (resultTypes, List.replicate resultTypes.length "()")
+        | _ => throw "uninterpreted local computation"
       unless types.length == outs.length && values.length == outs.length do throw "unexpected result arity"
-      -- Keep the admitted SSA sharing in the proof term. A row using an operand twice
-      -- should refer to the same let-bound value at both argument positions.
-      let mut uses := #[]
-      for value in values do
-        if who.contains role then
-          let name := localName plan.steps.size
-          plan := {plan with steps := plan.steps.push (.value name value)}
-          uses := uses.push name
-        else
-          uses := uses.push value
-      plan := {plan with steps := plan.steps.push (.instruction (← valueStep role who types uses.toList proof))}
-      env := outs.zip uses.toList ++ env
+      plan := {plan with steps := plan.steps.push (.instruction (← valueStep role who types values proof))}
+      env := outs.zip values ++ env
     | .op k [out] (.event (.flow .message prover [peer]) t) _ =>
       unless role == peer do throw "unexpected message recipient"
       let x :: rest := remaining | throw "missing trace reply"
@@ -141,11 +125,7 @@ private unsafe def readPlan (stored : Syntax) (role : Nat) (replies : Array (TSy
   let rendered ← replies.toList.mapM fun x => do
     let some source := x.raw.reprint | throwErrorAt x "expected a printable reply term"
     return "(" ++ source ++ ")"
-  let locals ← getLCtx
-  let spelling := " ".intercalate (rendered ++ (locals.decls.toList.filterMap id).map (·.userName.toString))
-  let mut prefix_ := "_zkcReplayValue"
-  while spelling.contains prefix_ do prefix_ := prefix_ ++ "_"
-  ofExcept (plan program role rendered (fun i => s!"{prefix_}{i}"))
+  ofExcept (plan program role rendered)
 
 private def runStep (step : String) : TacticM Unit := do
   evalTactic (← ofExcept (Parser.runParserCategory (← getEnv) `tactic step))
@@ -154,8 +134,6 @@ syntax (name := writtenGuards) "written_guards " term:max num " replies " "[" te
 @[tactic writtenGuards] unsafe def guardsTac : Tactic := fun stx => withMainContext do
   let result ← readPlan stx[1] stx[2].isNatLit?.get! (stx[5].getSepArgs.map (⟨·⟩))
   let prop := result.guards.foldr (fun test tail => s!"{test} = true ∧ {tail}") "True"
-  for step in result.steps do
-    if let .value name term := step then runStep s!"let {name} := {term}"
   runStep s!"exact ({prop})"
 
 syntax (name := writtenSteps) "written_steps " term:max num " replies " "[" term,* "]" : tactic
@@ -163,7 +141,6 @@ syntax (name := writtenSteps) "written_steps " term:max num " replies " "[" term
   let result ← readPlan stx[1] stx[2].isNatLit?.get! (stx[5].getSepArgs.map (⟨·⟩))
   for step in result.steps do
     match step with
-    | .value name term => runStep s!"let {name} := {term}"
     | .instruction script =>
       runStep "expose_cursor"
       runStep script
@@ -182,7 +159,7 @@ private def simplifyUsing (condition : Expr) (rules : Array Expr) (heads : Array
           return (← instantiateMVars rhs, ← instantiateMVars (mkAppN rule args)) : MetaM _)) | continue
         return .done {expr := result.1, proof? := some result.2}
     return .done {expr := e}
-  let ctx ← Simp.mkContext (config := { zeta := false }) (simpTheorems := #[{}])
+  let ctx ← Simp.mkContext (simpTheorems := #[{}])
   return (← Simp.main condition ctx (methods := {post})).1
 
 /-- Interpret the model values using precisely the equations supplied by a record of row
@@ -195,21 +172,10 @@ private def interpret (condition model laws : Expr) : MetaM Simp.Result := do
     let rule ← forallTelescopeReducing (← inferType fact) fun xs _ => do
       mkLambdaFVars xs (← instantiateMVars (← mkAppM ``firstValue_of_apply #[model, mkAppN fact xs]))
     rules := rules.push rule
-  let body ← withConfig (fun cfg => { cfg with zeta := false }) (whnf condition)
-  let concrete ← simplifyUsing body rules #[``firstValue]
-  -- Expose the decisions at the guard leaves so that decide_eq_true_eq applies.
-  -- Their operands still refer to the same interpreted instruction bindings.
-  let guards ← mapLetTelescope concrete.expr (preserveNondepLet := false) fun _ guards =>
-    Meta.transform guards (pre := fun e => do
-      if let some (_, test, rhs) := e.eq? then
-        if rhs.isConstOf ``Bool.true then
-          if let some decision ← whnfUntil test ``decide then
-            return .done (← mkEq decision rhs)
-        return .done e
-      return .continue)
+  let concrete ← simplifyUsing (← whnf condition) rules #[``firstValue]
   let mut logic : SimpTheorems := {}
   for name in #[``decide_eq_true_eq, ``and_true] do logic ← logic.addConst name
-  let (result, _) ← simp guards (← Simp.mkContext (config := { zeta := false }) (simpTheorems := #[logic]))
+  let (result, _) ← simp concrete.expr (← Simp.mkContext (simpTheorems := #[logic]))
   return ← concrete.mkEqTrans result
 
 elab "interpreted_guards% " condition:term:max " with " model:term:max laws:term:max : term => do

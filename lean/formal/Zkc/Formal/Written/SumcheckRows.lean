@@ -48,30 +48,17 @@ structure GateMembers (name : PrimitiveName) (defs : Defs b.vocabulary hs)
   bound : b.vocabulary.row (.inr name) = some (Gate.signature (sourceRows b))
   members : rounds.AllMembers (fun ops => Gate.Laws (sourceRows b) (.inr name) bound defs ops)
 
-def gateSignature (b : Bindings) (name : PrimitiveName) :
-    Option (PLift (b.vocabulary.row (.inr name) = some (Gate.signature (sourceRows b)))) := do
-  if sig : b.signature name = some ⟨[Gate.message (sourceRows b),(sourceRows b).scalarTy],[(sourceRows b).scalarTy]⟩ then
-    return ⟨by change ((b.signature name).map _).map _ = _; rw [sig]; rfl⟩
-  else none
-
-structure GateMember (name : PrimitiveName) (defs : Defs b.vocabulary hs) {msg st out}
-    (ops : Members hs (sourceRows b).scalarTy msg st out) : Prop where
-  bound : b.vocabulary.row (.inr name) = some (Gate.signature (sourceRows b))
-  law : Gate.Laws (sourceRows b) (.inr name) bound defs ops
-
-def checkGateFamily (name : Nat → PrimitiveName) (defs : Defs b.vocabulary hs) (unique : (hs.fns.map (·.key)).Nodup)
-    (rounds : Sequence hs (sourceEvents b) st running term n) :=
-  rounds.checkMembersAt (fun d {_ _ _} ops => GateMember (name d) defs ops) fun d _ _ {_ _ _} ops => do
-    let ⟨sig⟩ ← gateSignature b (name d)
-    let ⟨law⟩ ← Gate.check (sourceRows b) (.inr (name d)) sig defs unique ops
-    return ⟨sig, law⟩
-
 def checkGateMembers (name : PrimitiveName) (defs : Defs b.vocabulary hs) (unique : (hs.fns.map (·.key)).Nodup)
     (rounds : Sequence hs (sourceEvents b) st running term n) : Option (GateMembers name defs rounds) := do
-  let ⟨bound⟩ ← gateSignature b name
-  let ⟨members⟩ ← rounds.checkMembers _ (Gate.check (sourceRows b) _ bound defs unique)
-  return ⟨bound,members⟩
-
+  let rows := sourceRows b
+  if sig : b.signature name = some ⟨[Gate.message rows,rows.scalarTy],[rows.scalarTy]⟩ then
+    have bound : b.vocabulary.row (.inr name) = some (Gate.signature rows) := by
+      change ((b.signature name).map _).map _ = _
+      rw [sig]
+      rfl
+    let ⟨members⟩ ← rounds.checkMembers _ (Gate.check rows _ bound defs unique)
+    return ⟨bound,members⟩
+  else none
 end
 
 end Zkc.Formal.Written.SumcheckRows

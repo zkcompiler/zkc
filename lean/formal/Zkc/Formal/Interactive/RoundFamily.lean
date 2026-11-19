@@ -13,37 +13,23 @@ abbrev MemberLaw (hs : Headers V) (t : V.Ty) :=
 
 namespace Sequence
 variable {events : Events t} {outs : List (LTy V)}
-/-- Evidence for each actual member at the depth of its continuation. -/
-def AllMembersAt (law : Nat → MemberLaw hs t) {Γ : Ctx (LTy V)} {state : V.Ty}
-    {claim : Var Γ (shared t)} {term : Term (protocolDialect V hs) Γ outs} {count : Nat}
-    (rounds : Sequence hs events state claim term count) : Prop :=
+def AllMembers (law : MemberLaw hs t) {Γ : Ctx (LTy V)} {state : V.Ty} {claim : Var Γ (shared t)}
+    {term : Term (protocolDialect V hs) Γ outs} {count : Nat} (rounds : Sequence hs events state claim term count) : Prop :=
   match rounds with
   | .done _ => True
-  | @more _ _ _ _ _ _ _ _ _ n _ round _ _ _ _ _ next =>
-      law n round.members ∧ next.AllMembersAt law
-
-def checkMembersAt (law : Nat → MemberLaw hs t)
-    (check : ∀ (n : Nat) (_block : Key) (_iteration : Nat) {msg state residual}
-      (ops : Members hs t msg state residual), Option (PLift (law n ops)))
-    {Γ : Ctx (LTy V)} {state : V.Ty} {claim : Var Γ (shared t)}
-    {term : Term (protocolDialect V hs) Γ outs} {count : Nat}
-    (rounds : Sequence hs events state claim term count) : Option (PLift (rounds.AllMembersAt law)) :=
-  match rounds with
-  | .done _ => some ⟨True.intro⟩
-  | @more _ _ _ _ _ _ _ _ _ n _ round key index _ _ _ next => do
-    let ⟨head⟩ ← check n key index round.members
-    let ⟨tail⟩ ← next.checkMembersAt law check
-    return ⟨head,tail⟩
-
-abbrev AllMembers (law : MemberLaw hs t) {Γ : Ctx (LTy V)} {state : V.Ty} {claim : Var Γ (shared t)}
-    {term : Term (protocolDialect V hs) Γ outs} {count : Nat} (rounds : Sequence hs events state claim term count) :=
-  rounds.AllMembersAt (fun _ => law)
+  | .more round _ _ _ _ next => law round.members ∧ next.AllMembers law
 
 def checkMembers (law : MemberLaw hs t)
     (check : ∀ {msg state residual} (ops : Members hs t msg state residual), Option (PLift (law ops)))
     {Γ : Ctx (LTy V)} {state : V.Ty} {claim : Var Γ (shared t)}
-    {term : Term (protocolDialect V hs) Γ outs} {count : Nat} (rounds : Sequence hs events state claim term count) :=
-  rounds.checkMembersAt (fun _ => law) (fun _ _ _ {_ _ _} ops => check ops)
+    {term : Term (protocolDialect V hs) Γ outs} {count : Nat} (rounds : Sequence hs events state claim term count) :
+    Option (PLift (rounds.AllMembers law)) :=
+  match rounds with
+  | .done _ => some ⟨True.intro⟩
+  | .more round _ _ _ _ next => do
+    let ⟨head⟩ ← check round.members
+    let ⟨tail⟩ ← next.checkMembers law check
+    return ⟨head,tail⟩
 
 end Sequence
 
@@ -147,28 +133,17 @@ theorem boundsAtDepth (rounds : Sequence hs events state claim term count) (M : 
     · intro m passed
       exact head.roots () x m (passed ▸ wrong)
 
-/-- Interpret a readback after the deployment model is known. Each member needs a
-collision law only for the actual remaining depth that its readback certified. -/
-noncomputable def interpretMembersAt (rounds : Sequence hs events state claim term count) (law : Nat → MemberLaw hs t)
-    (verified : rounds.AllMembersAt law) (M : Model V) [DecidableEq (M.Val t)]
-    (fns : FnTable M hs.fns) (q : Claims (M.Val t)) (points : List (M.Val t)) (degree : Nat)
-    (interpret : ∀ (d : Fin count) {msg st residual} (ops : Members hs t msg st residual), law d.val ops →
-      RoundInterpretationOn M fns q points degree ops (fun _ : Unit => d.val)) :
-    AtDepth M fns q points degree rounds := by
-  induction rounds with
-  | done => exact PUnit.unit
-  | @more _ _ _ _ _ n inside round key index ns binders rest next ih =>
-    exact ⟨interpret (Fin.last n) round.members verified.1,
-      ih verified.2 (fun d {_ _ _} ops ok => interpret d.castSucc ops ok)⟩
-
 noncomputable def adaptMembers (rounds : Sequence hs events state claim term count) (law : MemberLaw hs t)
     (verified : rounds.AllMembers law) (M : Model V) [DecidableEq (M.Val t)]
     (fns : FnTable M hs.fns) (q : Claims (M.Val t)) (points : List (M.Val t)) (degree : Nat)
     (interpret : ∀ {msg st residual} (ops : Members hs t msg st residual), law ops →
       RoundInterpretationOn M fns q points degree ops (Fin.val (n := count))) :
-    AtDepth M fns q points degree rounds :=
-  rounds.interpretMembersAt (fun _ => law) verified M fns q points degree
-    (fun d {_ _ _} ops ok => (interpret ops ok).reindex (fun _ : Unit => d))
+    AtDepth M fns q points degree rounds := by
+  induction rounds with
+  | done => exact PUnit.unit
+  | @more _ _ _ _ _ n inside round key index ns binders rest next ih =>
+    exact ⟨(interpret round.members verified.1).reindex (fun _ : Unit => Fin.last n),
+      ih verified.2 (fun ops ok => (interpret ops ok).reindex (Fin.castLE (Nat.le_succ n)))⟩
 
 theorem boundsFromMembers (rounds : Sequence hs events state claim term count) (law : MemberLaw hs t)
     (verified : rounds.AllMembers law) (M : Model V) [DecidableEq (M.Val t)]

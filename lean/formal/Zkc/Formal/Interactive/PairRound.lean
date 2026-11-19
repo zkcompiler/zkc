@@ -13,35 +13,29 @@ def endpoints (M : Model V) {msg : V.Ty} (aligned : msg = rows.pair) (m : M.Val 
   (tuple.1,tuple.2.1)
 
 structure PairLaws {hs : Headers V} (defs : Defs V hs) {msg state residual : V.Ty}
-    (ops : Members hs rows.scalarTy msg state residual) (incoming outgoing : Bool := false) where
+    (ops : Members hs rows.scalarTy msg state residual) where
   aligned : msg = rows.pair
   boundary : ∀ (M : Model V) [Lean.Grind.Field (rows.F M)], rows.Arithmetic M → ∀ m,
     localOp M (Defs.fnTable M defs) ops.boundary (.cons m .nil) =
-      .done (.cons (ScalarRows.encode incoming ((endpoints rows M aligned m).1 + (endpoints rows M aligned m).2)) .nil)
+      .done (.cons ((endpoints rows M aligned m).1 + (endpoints rows M aligned m).2) .nil)
   evaluate : ∀ (M : Model V) [Lean.Grind.Field (rows.F M)], rows.Arithmetic M → ∀ m r,
     localOp M (Defs.fnTable M defs) ops.evaluate (.cons m (.cons r .nil)) =
-      .done (.cons (ScalarRows.encode outgoing (line (endpoints rows M aligned m) r)) .nil)
+      .done (.cons (line (endpoints rows M aligned m) r) .nil)
 
-def certifyEncodedPairs {hs : Headers V} (defs : Defs V hs) (unique : (hs.fns.map (·.key)).Nodup)
+def certifyPairs {hs : Headers V} (defs : Defs V hs) (unique : (hs.fns.map (·.key)).Nodup)
     {msg state residual : V.Ty} (ops : Members hs rows.scalarTy msg state residual)
-    (incoming outgoing : Bool) (evaluation : ∀ k, FunctionReadback _ (rows.EncodedEvaluationLaw k outgoing))
-    (alternatives : List (∀ k, FunctionReadback _ (rows.EncodedEvaluationLaw k outgoing)) := []) : Option (PLift (PairLaws rows defs ops incoming outgoing)) := do
+    (evaluation : ∀ k, FunctionReadback _ (rows.EvaluationLaw k))
+    (alternatives : List (∀ k, FunctionReadback _ (rows.EvaluationLaw k)) := []) : Option (PLift (PairLaws rows defs ops)) := do
   if same : msg = rows.pair then
     return ← show Option _ from by
       subst msg
       exact do
         let .call b := ops.boundary.print | none
         let .call e := ops.evaluate.print | none
-        let ⟨boundary⟩ ← (rows.boundaryReadback b incoming).atOperation defs unique ops.boundary
+        let ⟨boundary⟩ ← (rows.boundaryReadback b).atOperation defs unique ops.boundary
         let ⟨evaluate⟩ ← (evaluation :: alternatives).findSome? (fun rule => (rule e).atOperation defs unique ops.evaluate)
         return ⟨⟨rfl,fun M _ math m => boundary M math m.1 m.2.1, fun M _ math m r => evaluate M math m.1 m.2.1 r⟩⟩
   else none
-
-def certifyPairs {hs : Headers V} (defs : Defs V hs) (unique : (hs.fns.map (·.key)).Nodup)
-    {msg state residual : V.Ty} (ops : Members hs rows.scalarTy msg state residual)
-    (evaluation : ∀ k, FunctionReadback _ (rows.EvaluationLaw k))
-    (alternatives : List (∀ k, FunctionReadback _ (rows.EvaluationLaw k)) := []) :=
-  certifyEncodedPairs rows defs unique ops false false evaluation alternatives
 
 /-- Probability of correcting a false partial sum at this occurrence. The certificate
 identifies both member meanings and the original block continuation in the linked caller. -/

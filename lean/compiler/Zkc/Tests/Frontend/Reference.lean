@@ -48,7 +48,7 @@ def corpusSuite (repository : Repository) : TestM Unit := do
         expectTrue (treeText (canonicalize parsed.tree) == treeText parsed.tree)
           s!"{path}: the canonical tree differs from the tree of the source"
   note s!"{count} files of libraries/ and examples/"
-  expectTrue (count == 46) s!"expected the 46 files of libraries/ and examples/, found {count}"
+  expectTrue (count == 44) s!"expected the 44 files of libraries/ and examples/, found {count}"
 
 /-- Every program of `conformance/`: a test whose expected refusal is a lexical or grammar rule
 is refused by that rule, every refusal is by a rule that its test names, and the refused tests

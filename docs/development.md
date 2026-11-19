@@ -43,8 +43,8 @@ Run every command from the root of the repository.
 | `just test-interactive` | build the interactive formal modules, check emitted source entries and mutations, and audit the interactive library and its mathematical controls |
 | `just test-frontend` | parse and format the source corpus, compare assembly and name diagnostics with the reference, and check typed generated views |
 | `just test-written-knowledge` | compile both Schnorr and Chaum–Pedersen written clauses, check admission and extraction, consume the public theorems, replay their project imports, and test permitted forks, source mutations and diagnostics |
-| `just test-written-charge` | compile both source examples, consume their numerical probability bounds, replay the charge issuer and check depth-specific member laws and fixed-table sampling |
-| `just test-formal` | build and audit the formal library, tests and charge issuer together, then run the charge examples and type consumers |
+| `just test-written-charge` | issue and audit the two source-bound probability endpoints, check depth-specific member laws, close the proof arguments of each use, exercise independent fixed-table sampling and replay the charge issuer |
+| `just test-formal` | build and audit the formal library, its tests and the charge issuer together, then run the charge checks |
 | `just audit` | `lake exe zkc-audit` in `lean/compiler`: core, vocabulary and their tests |
 | `just check` | the checks that need no build: `bash .github/scripts/public-tree-guard.sh`, `python3 scripts/check_docs.py --all`, and `python3 lean/compiler/scripts/generate_unicode_tables.py --check` |
 

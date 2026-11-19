@@ -1,12 +1,40 @@
 module
 
-public import Zkc.Formal.Interactive.RoundLayout
+public import Zkc.Formal.Interactive.ReductionRound
 public import Zkc.Core.Evidence.BlockReadback
 
 @[expose] public section
 namespace Zkc.Formal.Interactive.Sumcheck.ReductionRound
 open Core
 variable {V : Vocabulary}
+
+def singleResult (fns : List (FnHeader V)) (raw : LocalRaw V) (ins : List V.Ty) :
+    Option ((t : V.Ty) × LocalOp V fns ins [t]) := do
+  let .ok ⟨[t],op⟩ := LocalOp.read fns raw ins | none
+  return ⟨t,op⟩
+
+def atType (fns : List (FnHeader V)) (raw : LocalRaw V) (ins : List V.Ty) (t : V.Ty) :
+    Option (LocalOp V fns ins [t]) := do
+  let ⟨out,op⟩ ← singleResult fns raw ins
+  if same : out = t then return same ▸ op else none
+
+structure Operations (V : Vocabulary) where
+  message : LocalRaw V
+  boundary : LocalRaw V
+  bindState : LocalRaw V
+  evaluate : LocalRaw V
+
+def Operations.read (round : List (Instruction (ProtocolRaw V) (List Role))) : Option (Operations V) := do
+  let read (i : Nat) : Option (LocalRaw V) := do
+    let .op _ _ (.compute _ raw) _ ← round[i]? | none
+    return raw
+  return ⟨← read 0,← read 2,← read 6,← read 7⟩
+
+def Operations.members (raw : Operations V) (hs : Headers V) (state t : V.Ty) :
+    Option ((msg : V.Ty) × (residual : V.Ty) × Members hs t msg state residual) := do
+  let ⟨msg,sendValue⟩ ← singleResult hs.fns raw.message [state]
+  let ⟨residual,bindState⟩ ← singleResult hs.fns raw.bindState [state,t]
+  return ⟨msg,residual,sendValue,bindState,← atType hs.fns raw.boundary [msg] t,← atType hs.fns raw.evaluate [msg,t] t⟩
 
 abbrev caller (key : Key) (state point t : V.Ty) (outs : List (LTy V)) (shape : Shape V) : ProtocolHeader V :=
   ⟨key,2,inputs state point t,outs,shape⟩
@@ -18,29 +46,20 @@ structure Prefix {hs : Headers V} (ds : Defs V hs) {key state point t outs shape
   message : V.Ty
   residual : V.Ty
   members : Members entry.earlier t message state residual
-  sites : Nat → Key
-  inside : Term (protocolDialect V entry.earlier)
-    (Ctx.empty.extend (names (state := state) (point := point) (t := t))) (outputs residual t)
-  block : FirstBlock atNames.body inside
-  same : RoleSame [(2,2)] (project 1 (body members events point sites)) (project 1 inside)
-
-def firstInside {D : Dialect} {Γ outs} (term : Term D Γ outs) :
-    Option ((mid : List D.Ty) × (inside : Term D Γ mid) × FirstBlock term inside) :=
-  match term with
-  | .block key index inside results rest => some ⟨_,inside,key,index,results,rest,rfl⟩
-  | _ => none
+  block : FirstBlock atNames.body (body members events point)
 
 def recognize {hs : Headers V} (ds : Defs V hs) (distinct : hs.keys.Nodup)
     {key state point t outs shape} (ref : Member hs.protocols (caller key state point t outs shape))
     (events : Events t) : Option (Prefix ds ref events) := do
   let entry := ds.protocolEntry distinct ref
   let atNames ← entry.atInputs names
-  let ⟨mid,inside,block⟩ ← firstInside atNames.body
-  let ⟨msg,residual,members,sites,types,same⟩ ← readCompared (List.nodup_append.mp entry.distinct).1
-    state point events ⟨2,rfl⟩ inside
-  return ← show Option _ from by
-    subst mid
-    exact some ⟨entry,atNames,msg,residual,members,sites,inside,block,same⟩
+  let .mk _ steps _ := eraseProtocol (hdr := caller key state point t outs shape) (hs := entry.earlier) names atNames.body
+  let .block _ _ _ (.mk _ round _) :: _ := steps | none
+  let raw ← Operations.read round
+  let ⟨msg,residual,members⟩ ← raw.members entry.earlier state t
+  let block ← Term.firstBlock (protocolRules entry.earlier) (protocolRules_lawful entry.distinct)
+    (body members events point) rfl atNames.body atNames.armed
+  return ⟨entry,atNames,msg,residual,members,block⟩
 
 structure AtCall (p : Core.Typed V) (key : Key) {t : V.Ty} (events : Events t) where
   state : V.Ty
@@ -83,18 +102,13 @@ theorem Prefix.process {hs : Headers V} {ds : Defs V hs} {key state point t outs
     let inside := path ++ [.iteration cert.block.key cert.block.index]
     let sem := roleSem M 1 (Defs.fnTable M cert.entry.definitions) (Defs.rTable M cert.entry.definitions)
     Defs.rTable M ds _ ref 1 path args =
-      ((verifierRound (receive M cert.message inside (cert.sites 1)) (fun _ => challenge M events inside (challengeSite cert.sites))
-        (.declared .reject ⟨inside,cert.sites 4⟩) boundary evaluate claim).map (returned M cert.residual)).bind
+      ((verifierRound (receive M cert.message inside) (fun _ => challenge M events inside)
+        (.declared .reject ⟨inside,⟨4⟩⟩) boundary evaluate claim).map (returned M cert.residual)).bind
         fun values => (project 1 cert.block.rest).denote sem path ((Env.empty.extend names args).extend cert.block.results values) := by
   dsimp only
   rw [cert.atNames.meaning,block_denote cert.block]
-  have aligned {F : LTy V → Type} {Γ} (env : Env F Γ) : StraightLine.Agrees [(2,2)] env env := by
-    intro a b mem ty ha hb
-    obtain ⟨rfl,rfl⟩ := Prod.mk.inj (List.mem_singleton.mp mem)
-    rfl
-  rw [← cert.same _ ⟨M,_,_,rfl⟩ _ _ _ (aligned _)]
   rw [verifier cert.members events point M (Defs.fnTable M cert.entry.definitions)
-    (Defs.rTable M cert.entry.definitions) boundary evaluate equalLaw boundaryLaw evaluateLaw _ hidden initialPoint claim cert.sites]
+    (Defs.rTable M cert.entry.definitions) boundary evaluate equalLaw boundaryLaw evaluateLaw _ hidden initialPoint claim]
 
 #print axioms Prefix.process
 end Zkc.Formal.Interactive.Sumcheck.ReductionRound

@@ -50,20 +50,6 @@ theorem Linked.applied_soundFrom (linked : Linked p key state t residual k n eve
         cases rest
         exact Mass.le_refl
 
-theorem Linked.appliedAtDepth (linked : Linked p key state t residual k n events) (M : Model V)
-    [DecidableEq (M.Val t)] (q : Claims (M.Val t)) (degree : Nat) (points : List (M.Val t))
-    (positive : 0 < points.length) (laws : Sequence.AtDepth M (Defs.fnTable M linked.entry.definitions) q points degree linked.rounds)
-    (equalLaw : ScalarEquality.Law t events.equal events.equalType M) {σ : Type} (K : Experiment (RSig M) σ)
-    (site : Key) (path : List Frame) (s : σ) (hidden : RV M 1 ⟨state,[0]⟩)
-    (point : List (M.Val t)) (claim : M.Val t) (x : q.State n) (wrong : claim ≠ q.value n x)
-    (fresh : linked.rounds.FreshFrom M (Defs.fnTable M linked.entry.definitions) (Defs.rTable M linked.entry.definitions)
-      (K.renamePeers peerMap.to) points positive (path ++ [.application site]) (initialEnv M hidden k point claim) s) :
-    K.probability (roleOp M 1 (Defs.fnTable M p.defs) (Defs.rTable M p.defs) site linked.application path
-      (publicArgs M hidden point claim)) s (fun vs _ => correctReturn M q x point.length vs) ≤ (n : Mass) * roundCost degree points :=
-  linked.applied_soundFrom M q _ (Mass.mul_nonneg Mass.natCast_nonneg
-    (Mass.le_of_lt (Mass.inv_pos.mpr (Mass.natCast_pos.mpr positive)))) K site path s hidden point claim x wrong
-    (linked.rounds.boundsAtDepth M _ _ q points positive degree laws equalLaw _ _ _ s x fresh)
-
 theorem Linked.applied_sound (linked : Linked p key state t residual k n events) (M : Model V) [DecidableEq (M.Val t)]
     (q : Claims (M.Val t)) (cost : Mass) (nonneg : 0 ≤ cost) {σ : Type} (K : Experiment (RSig M) σ)
     (site : Key) (path : List Frame) (bounds : linked.rounds.RoundBounds M (Defs.fnTable M linked.entry.definitions)
@@ -117,8 +103,10 @@ theorem AtSite.gate_soundFrom (rows : ScalarRows V) {hdr : ProtocolHeader V} {ro
     K.probability (roleOp M 1 (Defs.fnTable M atCall.callerEntry.definitions) (Defs.rTable M atCall.callerEntry.definitions)
       site atCall.linked.application (path ++ [.iteration loopKey i.val]) (publicArgs M hidden point claim)) s
       (fun vs _ => correctReturn M q x point.length vs) ≤ (n : Mass) * roundCost 2 points := by
-  let cert := Gate.interpretSequence rows atCall.linked.rounds checked M math model q honest sum restricted points distinct collisions
-  exact atCall.linked.appliedAtDepth M q 2 points positive cert equalLaw K site _ s hidden point claim x wrong fresh
+  apply atCall.linked.applied_soundFrom M q _ _ K site _ s hidden point claim x wrong _
+  · exact Mass.mul_nonneg Mass.natCast_nonneg (Mass.le_of_lt (Mass.inv_pos.mpr (Mass.natCast_pos.mpr positive)))
+  · exact atCall.linked.rounds.boundsFromMembers _ checked M _ _ q points positive 2
+      (fun _ law => Gate.Laws.interpretOn rows law M math model q Fin.val honest sum restricted points distinct collisions) equalLaw _ _ _ s x fresh
 
 /-- Reuse the degree-two reduction at the selected instruction of a reached layer iteration.
 The public relation and gate model are supplied for that layer. -/

@@ -25,16 +25,6 @@ theorem singleton_role_returns {V : Vocabulary} (M : Model V) (hdr : ProtocolHea
     Returns ((project r body).denote (roleSem M r (Defs.fnTable M .nil) (Defs.rTable M .nil))
       path (Env.empty.extend ns vals)) trace := Iff.rfl
 
-/-- The selected protocol executes its projection with its own preceding call tables. -/
-theorem added_role_returns {V : Vocabulary} (M : Model V) (dependencies : Typed V)
-    (hdr : ProtocolHeader V) (ns : Names hdr.ins) (body : Prot V dependencies.headers hdr ns)
-    (ok : ProtocolConditions hdr body) (fresh : hdr.key ∉ dependencies.headers.keys)
-    (r : Role) (path : List Frame) (vals : HList (RV M r) hdr.ins) (trace) :
-    Returns (roleMeaning M (dependencies.add (.protocol hdr ns body ok fresh)) Member.head r path vals) trace ↔
-    Returns ((project r body).denote
-      (roleSem M r (Defs.fnTable M dependencies.defs) (Defs.rTable M dependencies.defs))
-      path (Env.empty.extend ns vals)) trace := Iff.rfl
-
 macro "protocol_conditions " t:term:max ns:term:max n:num : tactic => `(tactic|
   exact {
     within := @of_decide_eq_true _ (decideWithin (List.range $n) $t) (by decide +kernel)
