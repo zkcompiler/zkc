@@ -31,9 +31,13 @@ the admitted guard in the executable characteristic-two model. Its two point enc
 the compressed infinity and generator, and its scalar encodings are zero and one. One run
 calls the repository's reference Merlin implementation on the actual emitted frames and
 checks all 64 reply bytes against an independently generated schedule vector. Additional
-controls change the source guard, suite binding, initial transcript, typed receive handler,
-identity, public input, response and cache. The checked event is a verifier return under
-the supplied service. The authored zero-knowledge goal still needs its simulator and proof.
+controls change the suite binding, initial transcript, typed receive handler, identity and
+public input. A second assembly assigns the same local IDs to the goal, scheme and protocol,
+names the scheme `Other`, and reverses the admitted guard. Both named scheme and goal selections run on the same
+transcript and give opposite acceptance probabilities. The consumer checks the public
+`acceptance` equation on deterministic `ProbComp` runs. The accepting miss and cached
+accepting reply have probability one. A declared rejection and a missing response have
+probability zero. Emptying the cache with the same rejecting miss law changes one to zero. The authored zero-knowledge goal still needs its simulator and proof.
 [Regression](checks/ConstructedSchnorr.lean) · [Merlin adapter](checks/constructed_merlin.py)
 
 ## Package and model

@@ -8,6 +8,8 @@ public import Zkc.Core.Format.Format
 namespace Zkc.Frontend.Constructed
 open Core
 
+variable {assembly : Assembly} {request : ExecutionRequest}
+
 abbrev Log := List (Nat × List Nat × List Nat × Unit)
 
 def ascii (s : String) := s.toUTF8.data.toList.map UInt8.toNat
@@ -16,7 +18,7 @@ def ascii (s : String) := s.toUTF8.data.toList.map UInt8.toNat
 def label (words : List Nat) : List Nat :=
   words.flatMap fun w => (List.range 8).map fun i => (w / 256^i) % 256
 
-def Verifier.siteLabel (v : Verifier) (event : Nat) :=
+def Verifier.siteLabel (v : Verifier assembly request) (event : Nat) :=
   label [1,0,event,v.prover,v.verifier]
 
 def appendMessage (log : Log) (name data : List Nat) : Log := log ++ [(0,name,data,())]
@@ -65,7 +67,7 @@ def initialLog {M : Model V} (i : Interpretation M) (digest : Vector UInt8 32)
    (0,label [0,0],i.group.write base,()), (0,label [0,1],i.group.write publicPoint,())]
 
 section
-variable {M : Model V} (v : Verifier) (i : Interpretation M)
+variable {M : Model V} (v : Verifier assembly request) (i : Interpretation M)
 
 /-- Interpret only requests issued by the selected layer at its fresh occurrences.
 The payload includes the transcript the deployed program actually threaded. -/

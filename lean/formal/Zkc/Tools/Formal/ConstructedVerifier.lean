@@ -11,6 +11,8 @@ namespace Zkc.Tools.Formal.ConstructedVerifier
 open Core Frontend.Constructed Zkc.Formal.ProbabilisticProcess
 open OracleComp OracleSpec
 
+variable {assembly : Frontend.Assembly} {request : ExecutionRequest}
+
 /-- Message policies may fail or update their state. The observer explicitly decides
 what query information the policy for subsequent messages can use. -/
 structure Policy (M : Model V) (σ : Type) (m : Type → Type) where
@@ -38,7 +40,7 @@ def serve {M : Model V} {σ : Type} {m : Type → Type} [Monad m]
 /-- An experiment on the constructed verifier. Acceptance means its admitted guard
 returned. The complete initial cache, message policies and squeeze law belong to the
 caller. This defines an event probability and imposes no security bound on it. -/
-noncomputable def acceptance {M : Model V} {σ : Type} (v : Verifier) (i : Interpretation M)
+noncomputable def acceptance {M : Model V} {σ : Type} (v : Verifier assembly request) (i : Interpretation M)
     (identity : Identity) (inputs : HList (RV M v.verifier) v.deployment.entry.ins)
     (policy : Policy M σ ProbComp) (draw : Query → ProbComp Units) (initial : Cache × σ) :=
   (v.run i identity inputs).map fun process =>

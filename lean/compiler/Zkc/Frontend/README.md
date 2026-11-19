@@ -9,8 +9,9 @@ and GKR certificates. See [status](../../../../docs/status.md).
 ## Constructed Schnorr verifier on the current Core
 
 `Constructed.selectScheme assembly "Proof"` selects the scheme in
-`examples/schnorr_example.zkc`. It retains the source emission and admission of its
-`Schnorr<G1>` instance, resolves the catalogue binding and computes the two online roles.
+`examples/schnorr_example.zkc`. Its type records the assembly and the named scheme request. Its entry
+carries the equation that this lookup returned the selected scheme, the emitted and
+admitted `Schnorr<G1>` instance, and the source role designation.
 The supported profile has one deployed definition, two shared G1 ports, one prover scalar,
 a private nonce, a commitment, one public Fr draw, a response and a verifier guard.
 The checker reads event keys from the admitted entry and event numbers from the compiler's
@@ -29,7 +30,7 @@ The three request equations in `Execution.lean` establish the precise appended b
 the scalar and state returned by a squeeze for every supplied model and reply.
 [Source selection and correspondence](Constructed/Schnorr.lean) · [Execution](Constructed/Execution.lean)
 
-This profile uses the byte schedule documented below for the legacy catalogue binding.
+This profile requires the resolved catalogue row `suite.merlin3.bls12-381.fr64be/0` and uses its byte schedule documented below.
 Labels use eight little-endian bytes per word. The model supplies lawful fixed-width
 formats for compressed G1 (48 bytes) and little-endian Fr (32 bytes). The service returns
 64 bytes. The verifier reads them big-endian, reduces modulo the BLS12-381 scalar order
@@ -39,7 +40,10 @@ supply the canonical 32-byte digest for the selected deployment. The general Cor
 encoder is an open interface. [Proof identity format](../../../../docs/spec/core/package.md#identities)
 
 `selectGoalExecution assembly "derived_view"` retains the complete lowered goal and
-checks that it explicitly selects the constructed stage and names this verifier's scheme.
+requires an explicit `stage = constructed`. Its verifier is indexed by this assembly and
+goal name. The successful lookup fixes both the lowered goal and the admitted scheme root.
+A written or omitted stage fails this selector. The authored `Proof` scheme defaults to
+the serialized stage when the stage is omitted.
 It supplies the execution subject for a future property proof. Prover construction,
 serialization and the programmed simulator are outside this verifier profile.
 [Constructed experiment and regression command](../../../formal/README.md#constructed-schnorr-verifier)

@@ -13,6 +13,8 @@ open Zkc.Formal.Written.FiniteModel (model)
 
 namespace ConstructedSchnorrCheck
 
+variable {src : Assembly} {request : ExecutionRequest}
+
 /-- Two distinct fixed-width test words. The reader checks the entire prefix. -/
 def twoWords (width : Nat) (word : Bool → List Nat)
     (size : ∀ b, (word b).length = width) (distinct : word false ≠ word true)
@@ -61,7 +63,7 @@ def encoding : Interpretation model where
 
 def digest : Vector UInt8 32 := Vector.replicate 32 42
 
-def ports (v : Verifier) (base publicPoint : Bool) :
+def ports (v : Verifier src request) (base publicPoint : Bool) :
     Except String (HList (RV model v.verifier) v.deployment.entry.ins) := do
   let hdr := v.deployment.entry
   let [a,b,w] := hdr.ins.map LTy.holders | throw "expected three input ports"
@@ -155,7 +157,7 @@ def rejected : Result → Bool
   | .stopped (.declared .reject _) => true
   | _ => false
 
-def process (v : Verifier) (base pk : Bool := true) (d : Vector UInt8 32 := digest) := do
+def process (v : Verifier src request) (base pk : Bool := true) (d : Vector UInt8 32 := digest) := do
   let ins ← ports v base pk
   v.run encoding (fun _ => some d) ins
 
@@ -171,20 +173,20 @@ def dropClause {hs : Headers V} (s : Sites) (p r : Role) : Clause V hs r transcr
   code := .op s.commitment (.get point [] .message p [r] (by simp)) .nil (.cons 1 .nil)
     (.ret (.cons ⟨1,rfl⟩ (.cons ⟨0,rfl⟩ .nil)))
 
-def weakened (v : Verifier) (r : Role) : Layer V v.deployment.admitted.program.headers r v.deployment.entry.ins :=
+def weakened (v : Verifier src request) (r : Role) : Layer V v.deployment.admitted.program.headers r v.deployment.entry.ins :=
   { verifierLayer v.sites v.prover r point scalar uniformScalar _ with
     clauses := [dropClause v.sites v.prover r, challengeClause v.sites v.prover uniformScalar scalar,
       receiveClause v.sites v.prover v.sites.response scalar .absorbScalar] }
 
 /-- Send a scalar payload to the point member, using a well-typed Core request. -/
-def misbound (v : Verifier) (r : Role) : Layer V v.deployment.admitted.program.headers r v.deployment.entry.ins :=
+def misbound (v : Verifier src request) (r : Role) : Layer V v.deployment.admitted.program.headers r v.deployment.entry.ins :=
   { verifierLayer v.sites v.prover r point scalar uniformScalar _ with
     clauses := [receiveClause v.sites v.prover v.sites.commitment point .absorbPoint,
       challengeClause v.sites v.prover uniformScalar scalar,
       receiveClause v.sites v.prover v.sites.response scalar .absorbPoint] }
 
 /-- Run a replacement layer on the very same admitted program and service. -/
-def replaced (v : Verifier) (layer : (r : Role) →
+def replaced (v : Verifier src request) (layer : (r : Role) →
     Layer V v.deployment.admitted.program.headers r v.deployment.entry.ins)
     (takes : (layer v.verifier).takes = [transcript])
     (gives : (layer v.verifier).gives = [transcript]) (start : Constructed.Log) :
@@ -199,6 +201,61 @@ def replaced (v : Verifier) (layer : (r : Role) →
   return (Constructed.interpret (A := HList (RV model v.verifier) d.entry.outs × HList model.Val (Stack.Gives (d.stack v.verifier))) v encoding p).map fun (outs,states) =>
     (outs,(cast (congrArg (HList model.Val) hg) states).single)
 
+-- The issued entry is the entire selection from this request, including its admitted root.
+example {name : String} (execution : GoalExecution src name) (selected : SourceEntry (.goal name))
+    (resolved : resolveEntry src (.goal name) = .ok selected) :
+    execution.verifier.entry.toSourceEntry = selected :=
+  Except.ok.inj (execution.verifier.entry.issued.symm.trans resolved)
+
+example {other : Assembly} {name another : String} (issued : GoalExecution src name)
+    (_foreign : GoalExecution other name) (_differentName : GoalExecution src another)
+    (_scheme : Verifier src (.scheme name)) (_state : Compile.State) (_entry : SchemeEntry) :
+    GoalExecution src name := by
+  fail_if_success have := construct _state _entry
+  fail_if_success have := resolveEntry _state _entry
+  fail_if_success exact ⟨_foreign.verifier⟩
+  fail_if_success exact ⟨_differentName.verifier⟩
+  fail_if_success exact ⟨_scheme⟩
+  exact ⟨issued.verifier⟩
+
+open Zkc.Formal.ProbabilisticProcess
+
+inductive ExpectedOutcome where
+  | returned | rejected | unavailable
+  deriving DecidableEq, Repr
+
+def ExpectedOutcome.matches {A : Type} : ExpectedOutcome → Zkc.Formal.ProbabilisticProcess.Outcome Stop A → Bool
+  | .returned, .returned _ | .rejected, .halted (.declared .reject _)
+  | .unavailable, .unavailable => true
+  | _, _ => false
+
+/-- Check the actual deterministic ProbComp result and return a proof of the public probability. -/
+def exactAcceptance (v : Verifier src request)
+    (inputs : HList (RV model v.verifier) v.deployment.entry.ins)
+    (reply : Option Bool) (fresh : Query → Units) (cache : Cache) (want : ExpectedOutcome) :
+    Except String (PLift (acceptance v encoding (fun _ => some digest) inputs (policy reply)
+      (fun q => pure (fresh q)) (cache, []) = .ok (if want = .returned then 1 else 0))) := do
+  match started : v.run encoding (fun _ => some digest) inputs with
+  | .error why => throw why
+  | .ok p =>
+    match sampled : run (serve (policy reply) (fun q => pure (fresh q))) p (cache, []) with
+    | .queryBind _ _ => throw "expected a deterministic service"
+    | .pure (outcome, state) =>
+      if observed : want.matches outcome then
+        return ⟨by
+          unfold acceptance
+          rw [started]
+          simp only [Except.map]
+          rw [sampled, ← OracleComp.pure_def, map_pure]
+          cases outcome <;> cases want <;> simp_all [ExpectedOutcome.matches]⟩
+      else throw s!"expected {repr want} from the public experiment"
+
+/-- Only a successful proof of the requested probability passes this executable check. -/
+def checkAcceptance (v : Verifier src request) (reply : Option Bool) (fresh : Query → Units)
+    (cache : Cache) (want : ExpectedOutcome) : IO Unit := do
+  let inputs ← need (ports v true true)
+  let _ ← need (exactAcceptance v inputs reply fresh cache want)
+
 def runChecks : IO Unit := do
   let a ← assembly
   let v ← need (selectScheme a "Proof")
@@ -212,6 +269,11 @@ def runChecks : IO Unit := do
     [v.sites.commitment.number,v.sites.challenge.number,v.sites.response.number] == [2,3,6])
   let inputs ← need (ports v true true)
   check "identity is required" (refuses "FS-IDENTITY" (v.run encoding (fun _ => none) inputs))
+  checkAcceptance fromGoal (some true) draw [] .returned
+  checkAcceptance fromGoal (some false) draw [] .rejected
+  checkAcceptance fromGoal none draw [] .unavailable
+  checkAcceptance fromGoal (some true) (fun _ => units 0) [] .rejected
+  checkAcceptance fromGoal (some true) (fun _ => units 0) [(expected, units 1)] .returned
   let p ← need (process fromGoal)
   let (result,cache,seen) := execute draw (policy (some true)) p ([],[])
   check "source verifier, final absorption and cache miss"
@@ -263,11 +325,28 @@ def runChecks : IO Unit := do
   let (out,c,_) := execute draw (policy (some true)) weakenedProgram (cache,[])
   check "dropped commitment changes verifier outcome"
     (rejected out && c.head?.any (fun kv => kv.1 == {expected with history := start}))
-  let changed ← assembly id (fun s => s.replace "base * response == commitment" "base * response != commitment")
-  let alternate ← need (selectScheme changed "Proof")
-  let altered ← need (process alternate)
-  check "changed source guard rejects the same transcript"
-    (rejected (execute draw (policy (some true)) altered ([],[])).1)
+  let changed ← assembly
+    (fun s => (s.replace "scheme Proof =" "scheme Other =").replace "Proof," "Other,")
+    (fun s => s.replace "base * response == commitment" "base * response != commitment")
+  let alternate ← need (selectScheme changed "Other")
+  let alternateGoal ← need (selectGoalExecution changed "derived_view")
+  let opposite := alternateGoal.verifier
+  check "named schemes and goals select Proof and Other"
+    (v.entry.scheme.name == "Proof" && alternate.entry.scheme.name == "Other" &&
+      opposite.entry.scheme.name == "Other" && fromGoal.entry.scheme.name == "Proof")
+  let (goalId, _) ← need (Written.selectDeclaration fromGoal.entry.root.state .goal "derived_view" "FS-GOAL")
+  let (otherGoalId, _) ← need (Written.selectDeclaration opposite.entry.root.state .goal "derived_view" "FS-GOAL")
+  check "local goal, scheme and admitted protocol IDs collide"
+    (goalId == otherGoalId && v.entry.scheme.declaration == alternate.entry.scheme.declaration &&
+      fromGoal.entry.scheme.declaration == opposite.entry.scheme.declaration &&
+      fromGoal.entry.root.id == opposite.entry.root.id)
+  let changedProcess ← need (process opposite)
+  let (changedOutcome, changedCache, changedHistory) := execute draw (policy (some true)) changedProcess ([], [])
+  check "opposite source guard rejects after the identical service exchanges"
+    (rejected changedOutcome && changedCache == cache && changedHistory == seen)
+  checkAcceptance v (some true) draw [] .returned
+  checkAcceptance alternate (some true) draw [] .rejected
+  checkAcceptance opposite (some true) draw [] .rejected
   let reversed ← assembly id (fun s => s.replace "roles(P, V)" "roles(V, P)")
   let swapped ← need (selectScheme reversed "Proof")
   check "SC3 follows the authored roles" (swapped.prover == 1 && swapped.verifier == 0)
@@ -280,10 +359,11 @@ def runChecks : IO Unit := do
   check "role remapping reaches the byte labels and verifier"
     (swappedCache == [(swappedQuery,units 1)] && swappedResult == .accepted swappedLog)
   let alternateSuite ← assembly (fun s => s.replace "Merlin3Bls12381" "Poseidon2KoalaBear") id
-  check "different catalogue suite with the same interface" (refuses "FS-SUITE" (selectScheme alternateSuite "Proof"))
+  check "different catalogue suite with the same interface" (refuses "FS-SUITE" (selectScheme alternateSuite "Proof") &&
+    refuses "FS-SUITE" (selectGoalExecution alternateSuite "derived_view"))
   let other ← assembly (fun s => s.replace "derived(Merlin3Bls12381)" "interactive") id
   check "wrong scheme binding" (refuses "FS-SUITE" (selectScheme other "Proof"))
-  IO.println "Constructed Schnorr source, handler, transcript, cache and verifier controls passed."
+  IO.println "Constructed Schnorr source selection, transcript, handler, cache and exact acceptance checks passed."
 
 end ConstructedSchnorrCheck
 
