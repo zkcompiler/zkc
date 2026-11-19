@@ -1,6 +1,7 @@
 module
 
 public import Baseline
+public import SharedReplay
 public import SameLog
 public import FactoredCompanion
 public import ReversedGap
@@ -34,6 +35,51 @@ theorem schnorr_returns :
     Baseline.accepts M schnorr [] (0 : Scalar) right ∧ left.challenge ≠ right.challenge := by
   exact ⟨(Baseline.verifier_equation M ops rows ..).2 (by decide +kernel),
     (Baseline.verifier_equation M ops rows ..).2 (by decide +kernel), by decide +kernel⟩
+
+/-- Read the additional guard independently of the generated verifier conditions. -/
+theorem shared_equation (model : Model Standard)
+    (group : Operations (model.Val scalarTy) (model.Val pointTy)) [DecidableEq (model.Val pointTy)]
+    (interpretation : GroupRows model group) (s : SharedReplay.Statement (model.Val pointTy))
+    (path : List Frame) (a : model.Val pointTy) (b : Branch (model.Val scalarTy)) :
+    SharedReplay.accepts model s path a b ↔
+      let twice := firstValue (rowValues (outs := [scalarTy]) model (fr .add) rfl
+        (.cons b.challenge (.cons b.challenge .nil)))
+      Nat.iterate (fun x => group.add x x) 13 (group.scale s.1 twice) = s.2 ∧
+        group.scale s.1 b.suffix = group.add a (group.scale s.2 b.challenge) :=
+  SharedReplay.verifier_equation model group interpretation s path a b
+
+-- Count tree occurrences, including repeated references to the same expression node.
+private meta partial def occurrences (test : Lean.Expr → Bool) (e : Lean.Expr) : Nat :=
+  Id.run <| e.foldlM (fun total child => pure (total + occurrences test child)) (test e).toNat
+
+open Lean in
+run_cmd
+  let equation := (← getConstInfo ``SharedReplay.verifier_equation).type.getForallBody
+  unless equation.isAppOfArity ``Iff 2 do throwError "expected a public verifier equivalence"
+  let rhs := equation.getArg! 1
+  let lets := occurrences (·.isLet) rhs
+  let adds := occurrences (·.isConstOf ``Operations.add) rhs
+  let seeds := occurrences (·.isConstOf ``rowValues) rhs
+  unless lets ≥ 13 && adds == 14 && seeds == 1 do
+    throwError "unexpected sharing in the public verifier equation: {lets} lets, {adds} group adds, {seeds} model rows"
+
+private abbrev thirdChallenge : Branch Scalar := ⟨3,1⟩
+
+-- Both branches pass Schnorr's original guard. Comparing the undoubled seed with
+-- the point would reverse both outcomes of the additional guard.
+example : Baseline.accepts M schnorr [] (0 : Scalar) thirdChallenge :=
+  (Baseline.verifier_equation M ops rows ..).2 (by decide +kernel)
+
+example : SharedReplay.accepts M schnorr [] (0 : Scalar) thirdChallenge ∧
+    ¬ SharedReplay.accepts M schnorr [] (0 : Scalar) left := by
+  constructor
+  · exact (shared_equation M ops rows ..).2 (by decide +kernel)
+  · intro h
+    have eq := (shared_equation M ops rows ..).1 h
+    exact (by decide +kernel : (4 : Scalar) ≠ 2) eq.1
+
+example : SharedReplay.replayCheck M schnorr [] (0 : Scalar) thirdChallenge = some () ∧
+    SharedReplay.replayCheck M schnorr [] (0 : Scalar) left = none := by decide +kernel
 
 theorem sameLog_returns :
     SameLog.accepts M sameLog [] commitment left ∧ SameLog.accepts M sameLog [] commitment right := by

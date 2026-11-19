@@ -1,4 +1,5 @@
 import Zkc.Tools.Formal.DrawCharge
+import Zkc.Tools.Formal.Policy
 import Zkc.Tests.Formal.Reuse.Automatic
 
 namespace ChargeConsumers
@@ -154,10 +155,14 @@ end Layer
 open Lean in
 run_cmd
   let env ← getEnv
-  for name in [``ChargedSumcheck.primeBound, ``ChargedLayer.bound] do
+  for name in [``ChargedSumcheck.primeBound, ``ChargedSumcheck.primeBoundOfRelation,
+      ``ChargedLayer.bound, ``ChargedGateFamily.bound] do
     unless (env.find? name).any (· matches .thmInfo _) &&
         env.getModuleIdxFor? name == env.getModuleIdx? `Zkc.Tools.Formal.DrawCharge do
       throwError "expected public theorem {name} in the audited charge issuer"
+    let axioms ← collectAxioms name
+    unless axioms.all Zkc.Tools.Formal.policy.axioms.contains do
+      throwError "{name} exceeds the charge issuer's axiom policy: {axioms}"
 
 #eval show IO Unit from do
   let dir := (← IO.currentDir) / "../.."

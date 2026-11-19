@@ -82,7 +82,11 @@ private def plan (program : NamedProgram Standard) (role : Role) (replies : List
         | .literal t _ =>
           if who.contains role then throw "uninterpreted verifier literal"
           pure ([t], ["()"])
-        | _ => throw "uninterpreted local computation"
+        | .call key => do
+          if who.contains role then throw "uninterpreted verifier call"
+          let some (.fn _ _ resultTypes ..) := program.definitions.find? (·.key == key)
+            | throw "missing local callee"
+          pure (resultTypes, List.replicate resultTypes.length "()")
       unless types.length == outs.length && values.length == outs.length do throw "unexpected result arity"
       -- Keep the admitted SSA sharing in the proof term. A row using an operand twice
       -- should refer to the same let-bound value at both argument positions.
@@ -178,7 +182,7 @@ private def simplifyUsing (condition : Expr) (rules : Array Expr) (heads : Array
           return (← instantiateMVars rhs, ← instantiateMVars (mkAppN rule args)) : MetaM _)) | continue
         return .done {expr := result.1, proof? := some result.2}
     return .done {expr := e}
-  let ctx ← Simp.mkContext (simpTheorems := #[{}])
+  let ctx ← Simp.mkContext (config := { zeta := false }) (simpTheorems := #[{}])
   return (← Simp.main condition ctx (methods := {post})).1
 
 /-- Interpret the model values using precisely the equations supplied by a record of row
@@ -191,10 +195,21 @@ private def interpret (condition model laws : Expr) : MetaM Simp.Result := do
     let rule ← forallTelescopeReducing (← inferType fact) fun xs _ => do
       mkLambdaFVars xs (← instantiateMVars (← mkAppM ``firstValue_of_apply #[model, mkAppN fact xs]))
     rules := rules.push rule
-  let concrete ← simplifyUsing (← whnf condition) rules #[``firstValue]
+  let body ← withConfig (fun cfg => { cfg with zeta := false }) (whnf condition)
+  let concrete ← simplifyUsing body rules #[``firstValue]
+  -- Expose the decisions at the guard leaves so that decide_eq_true_eq applies.
+  -- Their operands still refer to the same interpreted instruction bindings.
+  let guards ← mapLetTelescope concrete.expr (preserveNondepLet := false) fun _ guards =>
+    Meta.transform guards (pre := fun e => do
+      if let some (_, test, rhs) := e.eq? then
+        if rhs.isConstOf ``Bool.true then
+          if let some decision ← whnfUntil test ``decide then
+            return .done (← mkEq decision rhs)
+        return .done e
+      return .continue)
   let mut logic : SimpTheorems := {}
   for name in #[``decide_eq_true_eq, ``and_true] do logic ← logic.addConst name
-  let (result, _) ← simp concrete.expr (← Simp.mkContext (simpTheorems := #[logic]))
+  let (result, _) ← simp guards (← Simp.mkContext (config := { zeta := false }) (simpTheorems := #[logic]))
   return ← concrete.mkEqTrans result
 
 elab "interpreted_guards% " condition:term:max " with " model:term:max laws:term:max : term => do

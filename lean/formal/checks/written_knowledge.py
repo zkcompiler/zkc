@@ -72,7 +72,7 @@ def source_consumer(name, fixture):
 
 
 def check(work):
-    names = ["Baseline", "SharedReplay", "Factored", "FactoredCompanion", "ReversedGap", "CalledSameLog", "Renamed", "Zero", "OtherRelation", "OtherVerifier", "Simulator", "Swapped",
+    names = ["Baseline", "SharedReplay", "PrivateHelper", "Factored", "FactoredCompanion", "ReversedGap", "CalledSameLog", "Renamed", "Zero", "OtherRelation", "OtherVerifier", "Simulator", "Swapped",
              "SameLog", "RolesReversed", "Reordered", "MissingGuard", "ScalarGuard", "NativeOnly", "ProjectedGuards", "RunLength", "Context", "Named", "NamedArguments", "ReversedNumerator", "PrivateControl"]
     formal = ROOT / "lean/formal"
     (work / "lean-toolchain").write_text((formal / "lean-toolchain").read_text())
@@ -129,16 +129,30 @@ def gap_of<F: Field>(left: F, right: F) -> F:
     (work / "FactoredCompanion.lean").write_text(Path(__file__).with_name("FactoredCompanion.lean.in").read_text())
     module("ReversedGap", replace_once(factored, "    x - y", "    y - x"))
 
-    # Each verifier instruction uses the preceding SSA result twice. Compile the
-    # actual returning-fork theorem through a chain long enough to expose inlining.
-    previous = "base"
-    doubled = []
-    for index in range(12):
+    # GroupRows interprets the doublings. Its laws leave the scalar addition in
+    # the seed abstract, so duplicating that seed is visible in the public equation.
+    previous = "seed"
+    doubled = ["    seed @V = base * (challenge + challenge)"]
+    for index in range(13):
         result = f"doubled_{index}"
         doubled.append(f"    {result} @V = {previous} + {previous}")
         previous = result
     guard = "    guard @V base * response == commitment + point * challenge"
-    module("SharedReplay", replace_once(original, guard, "\n".join([*doubled, guard])), proof=True)
+    module("SharedReplay", replace_once(original, guard,
+           "\n".join([*doubled, f"    guard @V {previous} == point", guard])), proof=True)
+
+    helper = replace_once(original, "pub protocol Schnorr", """def scaled<G: PrimeOrderGroup>(p: G, x: G::Scalar) -> G:
+    p * x
+
+pub protocol Schnorr""")
+    private_helper = replace_once(helper, "send base * nonce", "send scaled<G>(base, nonce)")
+    private_proof = module("PrivateHelper", private_helper, proof=True)
+    if "(.compute [0] (.call " not in private_proof:
+        raise RuntimeError("expected a prover-private call in the emitted protocol")
+    visible_helper = replace_once(private_helper, "guard @V base * response", "guard @V scaled<G>(base, response)")
+    visible = work / "VisibleHelper.lean"
+    visible.write_text(generate(visible_helper, namespace="VisibleHelper"))
+    run(["lake", "-q", "lean", visible], failure="uninterpreted verifier call", cwd=work)
 
     # A prover-only choice and a sampled loop are present in the admitted source.
     # Neither changes the verifier's run or its deciding role for the selected fork.
@@ -308,7 +322,7 @@ module secondary:
 
     controls.write_text("\n".join(["module", "", *imports, "", CONTROL.read_text(),
                                    *(source_consumer(name, fixture) for name, fixture in
-                                     [("Baseline", "Baseline"), ("Factored", "Baseline"), ("SameLog", "SameLog"), ("Context", "Baseline"),
+                                     [("Baseline", "Baseline"), ("PrivateHelper", "Baseline"), ("Factored", "Baseline"), ("SameLog", "SameLog"), ("Context", "Baseline"),
                                       ("Named", "Baseline"), ("NamedArguments", "Baseline"), ("RolesReversed", "RolesReversed")]),
                                    """
 open Zkc.Formal.Written.FiniteModel in
