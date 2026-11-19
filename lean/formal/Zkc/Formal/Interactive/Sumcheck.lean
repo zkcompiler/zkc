@@ -102,6 +102,18 @@ theorem count_unique {α : Type} (xs : List α) (distinct : xs.Nodup) (p : α �
       have same := unique x y (hit x (.head _)) (hit y (.tail _ (.head _)))
       exact False.elim ((List.nodup_cons.mp nd).1 (same ▸ List.Mem.head _))
 
+/-- A bound on equal evaluations of messages with different boundary values. -/
+abbrev CollisionBound {F A : Type} [DecidableEq F] (boundary : A → F) (evaluate : A → F → F)
+    (degree : Nat) := ∀ a b, boundary a ≠ boundary b → ∀ points : List F, points.Nodup →
+      points.countP (fun r => decide (evaluate a r = evaluate b r)) ≤ degree
+
+theorem lineCollisions {F : Type} [Field F] [DecidableEq F] :
+    CollisionBound (fun a : F × F => a.1 + a.2) line 1 := by
+  intro a b different points distinct
+  apply count_unique points distinct
+  intro r s hr hs
+  exact line_unique_collision a b r s different (of_decide_eq_true hr) (of_decide_eq_true hs)
+
 theorem pairsRound {S : Sig} {σ H F : Type} [Lean.Grind.Field F] [DecidableEq F]
     (K : Experiment S σ) (s : σ) (points : List F) (distinct : points.Nodup)
     (positive : 0 < points.length) (receive : Process S H (F × F))

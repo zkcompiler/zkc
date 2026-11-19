@@ -24,7 +24,8 @@ structure PairLaws {hs : Headers V} (defs : Defs V hs) {msg state residual : V.T
 
 def certifyPairs {hs : Headers V} (defs : Defs V hs) (unique : (hs.fns.map (·.key)).Nodup)
     {msg state residual : V.Ty} (ops : Members hs rows.scalarTy msg state residual)
-    (evaluation : ∀ k, FunctionReadback _ (rows.EvaluationLaw k)) : Option (PLift (PairLaws rows defs ops)) := do
+    (evaluation : ∀ k, FunctionReadback _ (rows.EvaluationLaw k))
+    (alternatives : List (∀ k, FunctionReadback _ (rows.EvaluationLaw k)) := []) : Option (PLift (PairLaws rows defs ops)) := do
   if same : msg = rows.pair then
     return ← show Option _ from by
       subst msg
@@ -32,7 +33,7 @@ def certifyPairs {hs : Headers V} (defs : Defs V hs) (unique : (hs.fns.map (·.k
         let .call b := ops.boundary.print | none
         let .call e := ops.evaluate.print | none
         let ⟨boundary⟩ ← (rows.boundaryReadback b).atOperation defs unique ops.boundary
-        let ⟨evaluate⟩ ← (evaluation e).atOperation defs unique ops.evaluate
+        let ⟨evaluate⟩ ← (evaluation :: alternatives).findSome? (fun rule => (rule e).atOperation defs unique ops.evaluate)
         return ⟨⟨rfl,fun M _ math m => boundary M math m.1 m.2.1, fun M _ math m r => evaluate M math m.1 m.2.1 r⟩⟩
   else none
 

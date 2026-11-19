@@ -49,7 +49,7 @@ private def reduction {V : Core.Vocabulary} (p : Core.Typed V) (red : Key) (stat
   let ⟨exit⟩ ← PointReturn.checkReduction unique trace (initialPoint state t 0) []
   return ⟨shape,ref,entry,source,trace,exit⟩
 
-def sumcheck (c : SourceProtocolRoots.CheckedRoot) (affine : Bool) (offset : Nat := 0) : Option (SumEndpoint c ⟨7⟩ ⟨94⟩) := do
+def sumcheck (c : SourceProtocolRoots.ReadbackFixture) (affine : Bool) (offset : Nat := 0) : Option (SumEndpoint c ⟨7⟩ ⟨94⟩) := do
   let p := c.evidence.admitted.program
   let b := c.emission.bindings
   let rows := sourceRows b

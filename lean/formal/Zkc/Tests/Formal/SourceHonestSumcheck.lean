@@ -24,15 +24,7 @@ def certificate (e : Emit.RootEmission) (evidence : (e.package ⟨[],[],[],[],[]
     (if variant == .affine then rows.affineReadback else rows.evaluationReadback)
 
 /-- The external extension must receive the actual first input of the Sumcheck caller. -/
-def hasSourceExtension (c : SourceProtocolRoots.CheckedRoot) : Bool := Id.run do
-  let key : Key := ⟨c.id⟩
-  let some keys := callKeys c.emission key | return false
-  let some caller := c.state.results.checked? c.id | return false
-  let .protocol body := caller.definition.body | return false
-  let #[values, _] := body.ports | return false
-  let some claim := c.emission.externalApplicationAt? c.state key keys.site keys.reduction [0,1]
-    "p" "Zkc.Polynomial.extension" | return false
-  return claim.operands == [.binder values.binder.id]
+abbrev hasSourceExtension := Zkc.Tools.Formal.hasSourceExtension
 
 /-- Joint completeness at the admitted entry together with its external source association. -/
 structure AtSource (c : SourceProtocolRoots.CheckedRoot) (n : Nat) where

@@ -29,7 +29,7 @@ where the compiler most needs to track source identities. A separate Lean compan
 import the issued target and prove protocol-specific algebra there.
 
 A source site denotes a place in the author's program. Its executions can have several
-addresses. The written-charge consumer resolves every realization of a direct named draw in its owning definition. A layout can select an individual occurrence. The language already specifies sequential emission for stepped reductions.
+addresses. The written-charge consumer resolves every realization of a direct named draw in its owning definition. The declaration supplies a normalized, nonnegative rational even when a loop has zero trips. Emission and admission are tied to the selected compiler state by a checked equality. A layout can select an individual occurrence. The language already specifies sequential emission for stepped reductions.
 A static loop needs one source site per command and a distinct address per execution. Use a
 shared loop key and command key across compatible numbered blocks. The round belongs in the
 block frame of the address. A call contributes its application frame. A consumer can then charge

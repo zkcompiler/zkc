@@ -85,6 +85,66 @@ theorem freshFromService (rounds : Sequence hs events state claim term count) (M
   | done => trivial
   | more round key index ns binders rest ih => exact ⟨fun _ after _ _ => fresh _ _ after,fun _ _ _ => ih _ _⟩
 
+/-- One interpretation for each executed member, indexed by its remaining depth. -/
+def AtDepth (M : Model V) [DecidableEq (M.Val t)] (fns : FnTable M hs.fns)
+    (q : Claims (M.Val t)) (points : List (M.Val t)) (degree : Nat)
+    {Γ : Ctx (LTy V)} {state : V.Ty} {claim : Var Γ (shared t)}
+    {outs : List (LTy V)} {term : Term (protocolDialect V hs) Γ outs} {count : Nat}
+    (rounds : Sequence hs events state claim term count) : Type :=
+  match rounds with
+  | .done _ => PUnit
+  | @more _ _ _ _ _ _ _ _ _ n _ round _ _ _ _ _ next =>
+      RoundInterpretationOn M fns q points degree round.members (fun _ : Unit => n) ×
+        AtDepth M fns q points degree next
+
+def checkAtDepth (M : Model V) [DecidableEq (M.Val t)] (fns : FnTable M hs.fns)
+    (q : Claims (M.Val t)) (points : List (M.Val t)) (degree : Nat)
+    (supply : ∀ {msg st residual}, (ops : Members hs t msg st residual) →
+      Key → Nat → (n : Nat) → Option (RoundInterpretationOn M fns q points degree ops (fun _ : Unit => n)))
+    {Γ : Ctx (LTy V)} {state : V.Ty} {claim : Var Γ (shared t)} {outs : List (LTy V)}
+    {term : Term (protocolDialect V hs) Γ outs} {count : Nat} (rounds : Sequence hs events state claim term count) :
+    Option (AtDepth M fns q points degree rounds) :=
+  match rounds with
+  | .done _ => some PUnit.unit
+  | @more _ _ _ _ _ _ _ _ _ n _ round key index _ _ _ next => do
+    let head ← supply round.members key index n
+    let tail ← checkAtDepth M fns q points degree supply next
+    return ⟨head, tail⟩
+
+theorem boundsAtDepth (rounds : Sequence hs events state claim term count) (M : Model V)
+    [DecidableEq (M.Val t)] (fns : FnTable M hs.fns) (roles : RTable M hs.protocols) (q : Claims (M.Val t))
+    (points : List (M.Val t)) (positive : 0 < points.length) (degree : Nat)
+    (cert : AtDepth M fns q points degree rounds)
+    (equalLaw : ScalarEquality.Law t events.equal events.equalType M) {σ : Type} (K : Experiment (RSig M) σ)
+    (path : List Frame) (env : Env (RV M 1) Γ) (s : σ) (x : q.State count)
+    (fresh : rounds.FreshFrom M fns roles K points positive path env s) :
+    rounds.BoundsFrom M fns roles K q (roundCost degree points) path env s x := by
+  induction rounds generalizing s with
+  | done => trivial
+  | @more _ _ _ _ _ n inside round key index ns binders rest next ih =>
+    obtain ⟨head,tail⟩ := cert
+    obtain ⟨here,later⟩ := fresh
+    refine ⟨?_,fun values after reached => ih tail _ after _ (later values after reached)⟩
+    intro wrong
+    apply round.charge ns binders M fns roles equalLaw head.boundary head.evaluate head.ends head.atPoint K s points positive
+      (path ++ [Frame.iteration key index]) env (fun r => q.value n (q.restrict n x r)) degree
+    · intro m after received passed
+      exact here m after received ((head.ends m).trans (by rw [passed]))
+    · intro m passed
+      exact head.roots () x m (passed ▸ wrong)
+
+noncomputable def adaptMembers (rounds : Sequence hs events state claim term count) (law : MemberLaw hs t)
+    (verified : rounds.AllMembers law) (M : Model V) [DecidableEq (M.Val t)]
+    (fns : FnTable M hs.fns) (q : Claims (M.Val t)) (points : List (M.Val t)) (degree : Nat)
+    (interpret : ∀ {msg st residual} (ops : Members hs t msg st residual), law ops →
+      RoundInterpretationOn M fns q points degree ops (Fin.val (n := count))) :
+    AtDepth M fns q points degree rounds := by
+  induction rounds with
+  | done => exact PUnit.unit
+  | @more _ _ _ _ _ n inside round key index ns binders rest next ih =>
+    exact ⟨(interpret round.members verified.1).reindex (fun _ : Unit => Fin.last n),
+      ih verified.2 (fun ops ok => (interpret ops ok).reindex (Fin.castLE (Nat.le_succ n)))⟩
+
 theorem boundsFromMembers (rounds : Sequence hs events state claim term count) (law : MemberLaw hs t)
     (verified : rounds.AllMembers law) (M : Model V) [DecidableEq (M.Val t)]
     (fns : FnTable M hs.fns) (roles : RTable M hs.protocols) (q : Claims (M.Val t))
@@ -95,21 +155,8 @@ theorem boundsFromMembers (rounds : Sequence hs events state claim term count) (
     (path : List Frame) (env : Env (RV M 1) Γ) (s : σ) (x : q.State count)
     (fresh : rounds.FreshFrom M fns roles K points positive path env s) :
     rounds.BoundsFrom M fns roles K q (roundCost degree points) path env s x := by
-  induction rounds generalizing s with
-  | done => trivial
-  | @more _ _ _ _ _ n inside round key index ns binders rest next ih =>
-    obtain ⟨head,tail⟩ := verified
-    obtain ⟨here,later⟩ := fresh
-    refine ⟨?_, fun values after reached => ih tail
-      (fun ops law => (interpret ops law).reindex (Fin.castLE (Nat.le_succ n))) _ after _ (later values after reached)⟩
-    intro wrong
-    let ops := interpret round.members head
-    apply round.charge ns binders M fns roles equalLaw ops.boundary ops.evaluate ops.ends ops.atPoint K s points positive
-      (path ++ [Frame.iteration key index]) env (fun r => q.value n (q.restrict n x r)) degree
-    · intro m after received passed
-      exact here m after received ((ops.ends m).trans (by rw [passed]))
-    · intro m passed
-      exact ops.roots (Fin.last n) x m (passed ▸ wrong)
+  exact rounds.boundsAtDepth M fns roles q points positive degree
+    (rounds.adaptMembers law verified M fns q points degree interpret) equalLaw K path env s x fresh
 
 theorem boundsOfMembers (rounds : Sequence hs events state claim term count) (law : MemberLaw hs t)
     (verified : rounds.AllMembers law) (M : Model V) [DecidableEq (M.Val t)]

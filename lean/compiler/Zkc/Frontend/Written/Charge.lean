@@ -2,14 +2,17 @@ module
 
 public import Zkc.Frontend.Written.ChargeData
 public import Zkc.Frontend.Written.Selection
+public import Zkc.Frontend.Static.Rational
 
 @[expose] public section
 namespace Zkc.Frontend.Written
 
-/-- Resolve a direct named draw in the selected closed instance. A zero-trip stepped loop
-still has a declared event. Each nonempty realization must map to one admitted address. -/
-def drawCharge {V : Core.Vocabulary} (s : Compile.State) (program : Core.Typed V)
-    (owner : Core.Key) (name : String) : ExportM DrawCharge := do
+structure DeclaredDraw where
+  event : Nat
+  ceiling : Rat
+
+/-- Resolve the authored clause in its closed instance, before looking up realized addresses. -/
+def declaredDraw (s : Compile.State) (owner : Core.Key) (name : String) : ExportM DeclaredDraw := do
   let some entry := s.table.entries[owner.number]? | throw "missing charge instance"
   let id := entry.key.declaration
   let some decl := s.program.declarations[id]? | throw "missing charge declaration"
@@ -21,19 +24,23 @@ def drawCharge {V : Core.Vocabulary} (s : Compile.State) (program : Core.Typed V
   let #[bound] := (← contractOf s id source.span).filterMap (fun
     | .charge _ site expr => if site.names.map (·.text) == #[name] then some expr else none
     | _ => none) | throw s!"expected one charge on sites.{name}"
-  let .operator _ .divide #[numerator, denominator] := bound
-    | throw "expected a quotient of static naturals"
   let env := Static.instanceEnv s.program decl entry.key.arguments entry.key.specification
-  let (result, after) := (Prod.mk <$> Static.evalSize env numerator <*> Static.evalSize env denominator).run sourceContext s
-  let .ok (num, den) := result | do
+  let (result, after) := (Static.evalRational env bound).run sourceContext s
+  let .ok amount := result | do
     let diagnostics := after.log.entries.extract s.log.entries.size after.log.entries.size
     let messages := diagnostics.toList.map (·.render after.env.renderer)
-    throw s!"{location bound.span}: cannot close the charge quotient: {String.intercalate "; " messages}"
+    throw s!"{location bound.span}: cannot close the rational ceiling: {String.intercalate "; " messages}"
+  if amount.num < 0 then throw "a draw ceiling must be nonnegative"
+  return ⟨event, amount⟩
+
+/-- A zero-trip loop retains its declaration. Every realized draw must have a unique address. -/
+def drawCharge {V : Core.Vocabulary} (s : Compile.State) (program : Core.Typed V)
+    (owner : Core.Key) (name : String) : ExportM DrawCharge := do
+  let ⟨event, amount⟩ ← declaredDraw s owner name
   let some (.protocol code) := s.results.body? owner.number | throw "missing elaborated charge owner"
   let some addresses := Emit.SiteAddresses.forProtocol program owner | throw "missing admitted charge owner"
   let occurrences := Typing.SiteEntry.realizations code.sites event "value"
   let some draws := occurrences.toList.mapM addresses.resolve | throw "ambiguous or missing draw address"
-  -- TY8 defines division by zero in a rational expression to give zero.
-  return if den == 0 then ⟨owner,0,1,draws⟩ else ⟨owner,num,den,draws⟩
+  return ⟨owner,amount.num.toNat,amount.den,draws⟩
 
 end Zkc.Frontend.Written

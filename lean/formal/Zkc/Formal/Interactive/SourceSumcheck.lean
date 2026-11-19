@@ -20,13 +20,14 @@ structure Certified (p : Core.Typed V) (rootKey red eval : Key) (n : Nat) (event
     (witness events linked.ref evaluate rootKey shape).meaning entry.definitions 1 M path inputs
 
 def certify (p : Core.Typed V) (rootKey red eval : Key) (n : Nat) (events : Events rows.scalarTy)
-    (roundProof : ∀ key, FunctionReadback _ (rows.EvaluationLaw key)) :
+    (roundProof : ∀ key, FunctionReadback _ (rows.EvaluationLaw key))
+    (alternatives : List (∀ key, FunctionReadback _ (rows.EvaluationLaw key)) := []) :
     Option (Certified rows vectors p rootKey red eval n events) := do
   let t := rows.scalarTy
   let ⟨shape,root⟩ ← ProtocolEntry.locatePorts p.headers rootKey 2 [shared (table t n),shared t] []
   let entry := p.defs.protocolEntry p.distinct (show Member _ (header t n rootKey shape) from root)
   let linked ← link (earlier entry) red (table t n) t (table t 0) 0 n events
-  let ⟨members⟩ ← checkPairSequence rows linked.entry.definitions (List.nodup_append.mp linked.entry.distinct).1 roundProof linked.rounds
+  let ⟨members⟩ ← checkPairSequence rows linked.entry.definitions (List.nodup_append.mp linked.entry.distinct).1 roundProof linked.rounds alternatives
   let ⟨evaluate,tableLaw⟩ ← TableEvaluation.check (V := V) (t := rows.scalarTy) rows.free vectors entry.definitions (List.nodup_append.mp entry.distinct).1 eval n (0+n)
   let target := witness events linked.ref evaluate rootKey shape
   let ⟨meaning⟩ ← entry.recognize 1 target (fun run => ∀ M path inputs, run M path inputs = target.meaning entry.definitions 1 M path inputs)
@@ -62,7 +63,8 @@ theorem Certified.soundFrom (cert : Certified rows vectors p rootKey red eval n 
     (equality : ScalarEquality.Law rows.scalarTy events.equal events.equalType M)
     {σ : Type} (K : Experiment (RSig M) σ) (points : List (rows.F M)) (distinct : points.Nodup) (positive : 0 < points.length)
     (path : List Frame) (s : σ) (x : Cube (rows.F M) n) (claim : rows.F M) (wrong : claim ≠ Cube.sum n x)
-    (fresh : cert.FreshFrom rows vectors M K points positive path s claim) :
+    (fresh : cert.FreshFrom rows vectors M K points positive path s claim)
+    (collisions : CollisionBound (fun a : rows.F M × rows.F M => a.1 + a.2) line 1 := lineCollisions) :
     K.probability (roleMeaning M p cert.root 1 path (args M (Cube.flatten n x) claim)) s (fun _ _ => true) ≤
       (n : Mass) * roundCost 1 points := by
   let t := rows.scalarTy
@@ -77,7 +79,7 @@ theorem Certified.soundFrom (cert : Certified rows vectors p rootKey red eval n 
   rw [relation]
   simp only [Process.map_eq_bind,Experiment.expect_bind,Experiment.expect_done]
   have bounds := cert.linked.rounds.boundsFromMembers _ cert.roundLaws M _ _ Cube.claims points positive 1
-    (fun _ law => (PairLaws.interpret rows law M math points distinct).reindex Fin.val) equality (K.renamePeers peerMap.to) inner env s x fresh
+    (fun _ law => (PairLaws.interpret rows law M math points distinct collisions).reindex Fin.val) equality (K.renamePeers peerMap.to) inner env s x fresh
   have bounded := cert.linked.rounds.soundFrom M _ _ (K.renamePeers peerMap.to) Cube.claims (roundCost 1 points) inner
     (Mass.mul_nonneg Mass.natCast_nonneg (Mass.le_of_lt (Mass.inv_pos.mpr (Mass.natCast_pos.mpr positive)))) env s x bounds wrong
   apply Mass.le_trans _ bounded

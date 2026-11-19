@@ -33,6 +33,9 @@ def issueCharge (s : Compile.State) (name : String)
 open Zkc.Formal.Interactive.Sumcheck Zkc.Formal.Written.SumcheckRows
 
 structure ChargedSumcheck (c : AdmittedRoot) (n : Nat) (name : String) where
+  relation : DeclarationId
+  selected : tableSumClaim? c = some relation
+  extension : hasSourceExtension c = true
   keys : CallerKeys
   verifier : TableVerifier.Certified (sourceRows c.emission.bindings) (vectorRows c.emission.bindings)
     c.evidence.admitted.program ⟨c.id⟩ keys.reduction keys.evaluator n (sourceEvents c.emission.bindings)
@@ -43,9 +46,14 @@ def chargeSumcheck (c : AdmittedRoot) (n : Nat) (name : String) : Except String 
   let b := c.emission.bindings
   let rows := sourceRows b
   let some cert := TableVerifier.certify rows (vectorRows b) c.evidence.admitted.program ⟨c.id⟩
-    keys.reduction keys.evaluator n (sourceEvents b) rows.evaluationReadback
+    keys.reduction keys.evaluator n (sourceEvents b) rows.evaluationReadback [rows.affineReadback]
     | throw "uncertified Sumcheck verifier"
-  return ⟨keys,cert,← issueCharge c.state name cert.linked 1 Zkc.Vocabulary.Field.bls12381Fr.order⟩
+  match selected : tableSumClaim? c with
+  | none => throw "expected the verifier's written sum relation on its public table and claim"
+  | some relation =>
+    if extension : hasSourceExtension c = true then
+      return ⟨relation,selected,extension,keys,cert,← issueCharge c.state name cert.linked 1 Zkc.Vocabulary.Field.bls12381Fr.order⟩
+    else throw "the selected reduction requires the extension of the verifier's public table"
 
 section Layer
 variable {c : AdmittedRoot} {hdr : ProtocolHeader c.emission.bindings.vocabulary}
@@ -56,6 +64,7 @@ variable {c : AdmittedRoot} {hdr : ProtocolHeader c.emission.bindings.vocabulary
 The caller supplies its expected circuit, inputs, current layer and point as typed operands. -/
 structure ChargedLayer (call : AtSite c.evidence.admitted.program root red site hidden (sourceRows c.emission.bindings).scalarTy
     residual k n (sourceEvents c.emission.bindings) args route) (summand : Emit.LocalApplication) (name : String) where
+  gate : GateMembers gateRow call.linked.entry.definitions call.linked.rounds
   caller : hdr.key = ⟨c.id⟩
   relation : c.emission.externalApplicationAt? c.state hdr.key site red [0,1] "p" "Zkc.Circuit.summand" = some summand
   issued : IssuedCharge c.state name call.linked 2 Zkc.Vocabulary.Field.bls12381Fr.order
@@ -65,9 +74,41 @@ def chargeLayer (call : AtSite c.evidence.admitted.program root red site hidden 
     Except String (ChargedLayer call summand name) := do
   if caller : hdr.key = ⟨c.id⟩ then
     if relation : c.emission.externalApplicationAt? c.state hdr.key site red [0,1] "p" "Zkc.Circuit.summand" = some summand then
-      return ⟨caller,relation,← issueCharge c.state name call.linked 2 Zkc.Vocabulary.Field.bls12381Fr.order⟩
+      let some gate := checkGateMembers gateRow call.linked.entry.definitions
+          (List.nodup_append.mp call.linked.entry.distinct).1 call.linked.rounds | throw "uncertified gate member at the selected call"
+      return ⟨gate,caller,relation,← issueCharge c.state name call.linked 2 Zkc.Vocabulary.Field.bls12381Fr.order⟩
     else throw "the layer call does not select the expected source summand"
   else throw "the layer call does not belong to this source root"
+
+open Zkc.Formal.Written Zkc.Formal.FiniteService Zkc.Formal.ProbabilisticProcess OracleComp
+local notation "rows" => sourceRows c.emission.bindings
+local notation "ev" => sourceEvents c.emission.bindings
+
+/-- The selected layer's primitive, member implementations, source summand and ceiling
+all belong to the same call. The model gives the interpretation of the selected summand. -/
+theorem ChargedLayer.bound {loopKey : Key} {before layers inside width : Nat} {σ : Type}
+    {call : AtSite c.evidence.admitted.program root red site hidden (rows).scalarTy residual k n ev args
+      (loopRoute before loopKey layers inside)} {summand : Emit.LocalApplication} {name : String}
+    (certificate : ChargedLayer call summand name) (M : Model c.emission.bindings.vocabulary)
+    [Field ((rows).F M)] [DecidableEq ((rows).F M)] (math : (rows).Arithmetic M)
+    (model : Gate.Evaluation rows (.inr gateRow) certificate.gate.bound M)
+    (equality : ScalarEquality.Law (rows).scalarTy (ev).equal (ev).equalType M)
+    (i : Fin layers) (interpret : Emit.LocalApplication → Claims ((rows).F M))
+    (honest : ∀ d : Fin n, (interpret summand).State (d.val+1) → Quadratic ((rows).F M))
+    (ends : ∀ d x, (interpret summand).value (d.val+1) x = (honest d x).boundary)
+    (restricted : ∀ d x r, (interpret summand).value d.val ((interpret summand).restrict d.val x r) = (honest d x).eval r)
+    (size : width+1 = Zkc.Vocabulary.Field.bls12381Fr.order)
+    (alphabet : Fin (width+1) → (rows).F M) (distinct : (List.ofFn alphabet).Nodup)
+    (advance : Occurrence → (rows).F M → σ → σ) (other : Slots (RSig M) σ)
+    (path : List Zkc.Core.Frame) (s : σ) (state : RV M 1 ⟨hidden,[0]⟩) (point : List ((rows).F M)) (claim : (rows).F M)
+    (x : (interpret summand).State n) (wrong : claim ≠ (interpret summand).value n x) :
+    prEvent (observed (fun vs _ => correctReturn M (interpret summand) x point.length vs) <$> run
+      (service (RoundService.withChallenge M ev alphabet advance other))
+      (roleOp M 1 (Defs.fnTable M call.callerEntry.definitions) (Defs.rTable M call.callerEntry.definitions)
+        site call.linked.application (path ++ [.iteration loopKey i.val]) (publicArgs M state point claim)) s) ≤
+      total certificate.issued.charge := by
+  exact RoundCharge.gate call certificate.gate.members M math model equality i (interpret summand) honest ends restricted
+    alphabet distinct advance other _ (size.symm ▸ certificate.issued.binding) path s state point claim x wrong PolynomialBounds.gates
 
 end Layer
 
