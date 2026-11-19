@@ -14,7 +14,8 @@ open Core
 
 def preamble (withProof : Bool) (scope : String) : String :=
   let library := if withProof then "Zkc.Formal.Written.GroupReplay" else "Zkc.Formal.Written.FunctionMeaning"
-  "module\n\npublic import " ++ library ++ "\n\n@[expose] public section\nopen Zkc.Core Zkc.Formal.Written Std.WP\nset_option experimental.vcgen true\nset_option maxRecDepth 4000\nset_option maxHeartbeats 1800000\nset_option linter.unusedVariables false\nnamespace " ++ scope ++ "\n"
+  let imports := "\n".intercalate ((library :: packageImports).map ("public import " ++ ·))
+  "module\n\n" ++ imports ++ "\n\n@[expose] public noncomputable section\nopen Zkc.Core Zkc.Formal.Written Std.WP\nset_option experimental.vcgen true\nset_option maxRecDepth 4000\nset_option maxHeartbeats 1800000\nset_option linter.unusedVariables false\nnamespace " ++ scope ++ "\n"
 
 /-- Source identifiers occupy one namespace in the generated record, including context.
 The prefix keeps Lean's constructor and generated projection names available. -/
@@ -183,7 +184,7 @@ def checkPorts (p : SourcePackage) (evidence : p.Admission) (c : WrittenClause) 
   unless [some comm.number, some draw.number, some reply.number] ==
       [v.commitment.instruction, v.challenge.instruction, v.response.instruction] && replyTy == scalar do
     refuse sp "WK-VIEW" "incompatible transcript sites"
-  ty (b := p.bindings) historyTy
+  return ty (b := p.bindings) historyTy
 
 /-- The certificate applies the same library proof to every exported root. The library
 recovers the guard conditions and validates its instruction steps against the projection. -/
@@ -252,7 +253,12 @@ def exportSelected (assembly : Assembly) (request : Request) (withProof : Bool) 
   let c ← declarations s selection
   let pkg := emission.package ⟨[],[],[],[],[]⟩
   let historyType ← checkPorts pkg evidence c
-  let rendered ← program pkg evidence
+  unless pkg.bindings.rows.isEmpty do unsupported "external primitive binding"
+  let printed ← package pkg evidence
+  let [(root, true)] := printed.definitions | unsupported "multi-definition root"
+  let rendered := "\n".intercalate [printed.text,
+    s!"abbrev ports := ports{root.number}", s!"abbrev inputNames := names{root.number}",
+    s!"noncomputable abbrev body := body{root.number}", s!"noncomputable abbrev header := header{root.number}"]
   if withProof then
     if let .error why := c.calculations then refuse c.source.where_ "WK-PROOF" why
   let proof := if withProof then certificate c else ""

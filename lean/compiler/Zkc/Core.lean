@@ -22,6 +22,7 @@ public import Zkc.Core.Program.Located
 public import Zkc.Core.Program.NamedProgram
 public import Zkc.Core.Program.Erase
 public import Zkc.Core.Program.EraseProgram
+public import Zkc.Core.Program.DefinitionChecks
 public import Zkc.Core.Program.Place
 public import Zkc.Core.Program.Refusal
 public import Zkc.Core.Program.Requirement
