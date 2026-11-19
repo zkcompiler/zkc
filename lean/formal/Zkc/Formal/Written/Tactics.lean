@@ -49,7 +49,16 @@ private def projectOne (projected : Expr) : MetaM (Expr × Expr) := do
     let i := ins.getAppArgs
     if ins.isAppOfArity ``Zkc.Core.Instr.op 6 then
       pure (mkAppN (mkConst ``Zkc.Core.project.eq_2) (initial ++ #[t[3]!,t[4]!,i[2]!,i[4]!,t[6]!,i[5]!,t[7]!]))
-    else throwError "unsupported projected instruction"
+    else do
+      let name ← match ins.getAppFn.constName? with
+        | some ``Zkc.Core.Instr.choose => pure ``Zkc.Core.project.eq_4
+        | some ``Zkc.Core.Instr.loop => pure ``Zkc.Core.project.eq_6
+        | _ => throwError "unsupported projected instruction"
+      let eq := mkConst name
+      let (args, _, type) ← forallMetaTelescopeReducing (← inferType eq)
+      let some (_, lhs, _) := type.eq? | throwError "expected a projection equation"
+      unless ← withTransparency .default (isDefEq lhs projected) do throwError "projection equation did not apply"
+      instantiateMVars (mkAppN eq args)
   else throwError "expected a straight-line source term"
   let eq ← whnf (← inferType equation)
   return (← whnf eq.getAppArgs[2]!, equation)

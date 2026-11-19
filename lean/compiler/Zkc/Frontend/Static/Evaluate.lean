@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Frontend.Static.Basic
+public import Zkc.Frontend.Static.ProtocolView
 
 @[expose] public section
 
@@ -45,26 +45,15 @@ open Names (segmentsOf segmentArgs segmentName kindWord)
 inductive Thing where
   | value (value : StaticValue)
   /-- The declarations passed through, each with the static arguments written on its segment;
-  the last is the one the path names. `scopes` holds the values that the path gives scopes of
-  its chain without writing them: a member of a module instance has the instance's values. -/
+  the last names the target. `scopes` holds module member arguments and import-fixed arguments
+  by parameter identity. -/
   | declarations (steps : Array (DeclarationId × Option (Array Lowered.StaticArgument)))
-      (scopes : Std.HashMap ScopeId (Array StaticValue))
+      (scopes : StaticEnvironment)
   /-- A local name: a run-time value. -/
   | runtime (name : String)
   /-- Something that is no static thing: a function, an alternative. -/
   | other (what : String)
   deriving Inhabited
-
-/-- The values of an instance, by the scopes of the declaration's chain. -/
-def valuesByScope (program : Program) (declaration : Declaration) (values : Array StaticValue) :
-    Std.HashMap ScopeId (Array StaticValue) := Id.run do
-  let mut result : Std.HashMap ScopeId (Array StaticValue) := {}
-  let mut index := 0
-  for (reference, _) in deployedParameters program declaration do
-    let value := values[index]?.getD default
-    result := result.insert reference.scope ((result.getD reference.scope #[]).push value)
-    index := index + 1
-  return result
 
 /-- The environment of an instance: its values, and the values of its specification-only
 parameters, which a specification item reads as static naturals (SP11). -/
@@ -228,7 +217,7 @@ mutual
       CompileM Thing := do
     let mut thing : Thing := .declarations #[] {}
     for segment in segments do
-      let .segment step arguments _ := segment
+      let .segment step arguments fixedBy := segment
       match step with
       | .«local» => return ← localThing env place
       | .parameter reference =>
@@ -247,15 +236,71 @@ mutual
       | .declaration id =>
         match thing with
         | .declarations previous scopes =>
-          thing := .declarations (previous.push (id, arguments)) scopes
+          -- A specialization fixed by a use belongs to the import's scopes (SP2).
+          -- A shared parameter at the use site cannot take its positional slot.
+          if let (some importId, some args) := (fixedBy, arguments) then
+            let program ← program
+            let some origin := program.imports[importId]? | throw .abandoned
+            let defining := {env with
+              file := origin.file
+              values := env.values.filter (fun ref _ => origin.scopes.contains ref.scope)}
+            let assigned ← assignArguments defining (previous.push (id, some args)) scopes place
+            thing := .declarations ((previous.map fun (decl, _) => (decl, none)).push (id, none)) assigned
+          else thing := .declarations (previous.push (id, arguments)) scopes
         | _ => throw (.waiting "a declaration reached through a value")
       | .member name _ => thing ← memberOfThing env thing name arguments place
-      | .generated name => throw (.waiting s!"the generated member `{name}`")
+      | .generated name => thing ← generatedMember env thing name arguments place
       | .alternative .. => thing := .other "an alternative"
       | .fixed _ | .sizeOperator => thing := .other "a function"
       | .vocabularyModule _ | .entry .. | .role _ | .word _ | .label _ | .bareAlternative _ =>
         thing := .other "no static thing"
     return thing
+
+  /-- A closed protocol's generated source types (§8). Run-tree multiplicities are
+  checked against draws in the checked program, in source order. -/
+  partial def generatedMember (env : Env) (prefix_ : Thing) (name : String)
+      (args : Option (Array Lowered.StaticArgument)) (place : Span) : CompileM Thing := do
+    let .declarations steps scopes := prefix_ | throw (.waiting s!"the generated member `{name}`")
+    let some (id, _) := steps.back? | throw .abandoned
+    unless (← declaration id).kind == .protocol && ["Run","Runs","Inputs","Coins","Received"].contains name do
+      throw (.waiting s!"the generated member `{name}`")
+    let arguments ← bindArguments env steps scopes place
+    let inst ← instantiate id arguments ⟨"", place⟩
+    let view ← match name with
+      | "Run" =>
+        if args.isSome then refuse "SX9" place "Run takes no static arguments"
+        pure ProtocolView.run
+      | "Runs" => pure ProtocolView.run
+      | _ =>
+        let some #[.term _ none (.reference (.reference _ #[.segment (.role role) none _]))] := args
+          | refuse "SX9" place s!"`{name}` takes one role of this protocol"
+        pure (if name == "Inputs" then .inputs role else if name == "Coins" then .coins role else .received role)
+    if name != "Runs" then return .value (.type (.record (← protocolViewRecord inst view place)))
+    let code ← checkedViewProtocol inst place
+    let results ← getResults
+    if let some blocked := code.nestedDraw then
+      refuse "SX9" place s!"Runs is undefined for a draw in a choice, loop or application (line {blocked.startLine})"
+    let leaf ← protocolViewRecord inst .run place
+    let laws := code.flows.filterMap fun
+      | .draw _ _ law _ => some law
+      | _ => none
+    let counts := args.getD #[]
+    unless counts.size == laws.size do
+      refuse "SX9" place s!"Runs takes one multiplicity for each of {laws.size} draws"
+    let mut product := 1
+    let mut single := none
+    for (argument, law) in counts.zip laws do
+      let .term span none count := argument | refuse "SX9" place "Runs takes positional multiplicities"
+      let k ← evalSize env count
+      let some row := results.rows[law]? | throw (.defect "missing draw law")
+      let #[type] := row.outputs | throw (.defect "expected one draw result")
+      unless k > 0 && (← viewLawCapacity type k) == k do
+        refuse "SX6" span "run multiplicity is outside the draw domain"
+      if let some one := single then
+        unless one == (k == 1) do refuse "SX6" span "run multiplicities must all be one or all exceed one"
+      single := some (k == 1)
+      product ← staticProduct span (pure "the number of leaves in Runs") product k
+    return .value (.type (.seq (.record leaf) (some product)))
 
   /-- A member of what a path stands for so far. -/
   partial def memberOfThing (env : Env) (thing : Thing) (name : String)
@@ -286,7 +331,7 @@ mutual
       | some (.definition id) =>
         let entry := state.table.entries[inst]!
         let owner ← declaration entry.key.declaration
-        return .declarations #[(id, args)] (valuesByScope state.program owner entry.key.arguments)
+        return .declarations #[(id, args)] (instanceEnv state.program owner entry.key.arguments).values
       | some (.row _) => return .other "a function"
       | some (.opaqueType sorts) =>
         -- an application of a type member that is opaque (SP12): a fresh type per arguments
@@ -403,7 +448,7 @@ mutual
   it. -/
   partial def bindArguments (env : Env)
       (steps : Array (DeclarationId × Option (Array Lowered.StaticArgument)))
-      (scopes : Std.HashMap ScopeId (Array StaticValue)) (place : Span) :
+      (scopes : StaticEnvironment) (place : Span) :
       CompileM (Array StaticValue) := do
     let program ← program
     let some (id, _) := steps.back? | throw .abandoned
@@ -423,18 +468,14 @@ mutual
   the ones it leaves to inference (SP6). -/
   partial def assignArguments (env : Env)
       (steps : Array (DeclarationId × Option (Array Lowered.StaticArgument)))
-      (scopes : Std.HashMap ScopeId (Array StaticValue)) (place : Span) :
+      (scopes : StaticEnvironment) (place : Span) :
       CompileM StaticEnvironment := do
     let state ← get
     let program := state.program
     let some (id, _) := steps.back? | throw .abandoned
     let found ← declaration id
     let parameters := deployedParameters program found
-    let mut assigned : Std.HashMap ParameterRef StaticValue := {}
-    for (scope, values) in scopes.toList do
-      let ofScope := parameters.filter (·.1.scope == scope)
-      for ((reference, _), value) in ofScope.zip values do
-        assigned := assigned.insert reference value
+    let mut assigned := scopes
     for (reference, _) in parameters do
       if !assigned.contains reference then
         if let some value := env.values[reference]? then
@@ -1067,7 +1108,7 @@ def evalWrittenSteps (env : Env) (steps : Array ResolvedSegment) (place : Span) 
   evalSegments env segments place
 
 def assignWrittenArguments (env : Env) (steps : Array (DeclarationId × Option StaticArgs))
-    (scopes : Std.HashMap ScopeId (Array StaticValue)) (place : Span) :
+    (scopes : StaticEnvironment) (place : Span) :
     CompileM StaticEnvironment := do
   assignArguments env (← lowerSteps env steps) scopes place
 

@@ -99,6 +99,8 @@ structure ProgramIndexes where
   sortNames : Std.HashMap DeclarationId String := {}
   members : Std.HashMap NamespaceId (Array DeclarationId) := {}
   rowNames : Std.HashMap String String := {}
+  /-- Contracts in source order, indexed by the declaration their target resolves to. -/
+  contracts : Std.HashMap DeclarationId (Array DeclarationId) := {}
   scopeOwners : Std.HashMap ScopeId DeclarationId := {}
   implementers : Std.HashMap DeclarationId (Array DeclarationId) := {}
   deriving Inhabited

@@ -1,0 +1,33 @@
+module
+
+public import Baseline
+public import Zkc.Formal.Written.FiniteModel
+
+@[expose] public section
+open Zkc.Core Zkc.Formal.Written
+
+namespace Reindexed
+export Baseline (V PublicStatement ports header stored storedRelation storedExtractor RelationHeader ExtractorHeader
+  admitted_exists RelationAdmitted ExtractorAdmitted)
+
+-- This is a valid theorem over the same three admitted programs. All endpoints consistently
+-- reinterpret the statement (base, point) as (point, base).
+theorem certified_source_admitted (M : Model V) (ops : Operations (M.Val scalarTy) (M.Val pointTy))
+    [DecidableEq (M.Val scalarTy)] [DecidableEq (M.Val pointTy)]
+    {p r e : Admitted V} (hp : admit stored ⟨[],[],[],[],[]⟩ = .ok p)
+    (hr : admit storedRelation ⟨[],[],[],[],[]⟩ = .ok r)
+    (he : admit storedExtractor ⟨[],[],[],[],[]⟩ = .ok e)
+    (rows : GroupRows M ops) (field : FunctionRows M ops) (laws : ActionLaws ops) (path : List Frame) :
+    ∃ root : Member p.program.headers.protocols header, ∃ rel : Member r.program.headers.fns RelationHeader,
+    ∃ ext : Member e.program.headers.fns ExtractorHeader, SpecialSoundness
+      (fun (s : PublicStatement M) a b =>
+        Returns (roleMeaning M p.program root 1 path (Baseline.inputValues M (Baseline.writtenStatement M s).swap))
+          ((Baseline.observed M path a b).map Input.entry))
+      (fun s w => functionResult (t := .bool)
+        (fnMeaning M r.program rel (Baseline.relationArguments M (Baseline.writtenStatement M s).swap w)) = some true)
+      (fun s a l h w => functionResult (t := scalarTy)
+        (fnMeaning M e.program ext (Baseline.extractorArguments M (Baseline.writtenStatement M s).swap a l h)) = some w) := by
+  obtain ⟨root, rel, ext, fork⟩ := Baseline.certified_core_admitted M ops hp hr he rows field laws path
+  exact ⟨root, rel, ext, fun s => fork (Baseline.writtenStatement M s).swap⟩
+
+end Reindexed

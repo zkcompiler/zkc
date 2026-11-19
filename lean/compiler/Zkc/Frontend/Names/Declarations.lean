@@ -229,19 +229,73 @@ def resolveExtractor (env : Env) : Extractor → ResolveM (Array Lowered.Expr)
   | .path path => do return #[← pathTerm env path]
   | .external _ _ => return #[]
 
-def resolveClause (env : Env) (results : Array String)
+/-- Resolve SX6 against the placements of this clause's own inputs and results. Local
+binders introduced by expressions and specification-only ports impose no role constraint. -/
+def checkDecidingRole (env : Env) (head : Option ProtocolHead) (span : Span)
+    (role : Option Name) (terms : Array Lowered.Expr) : ResolveM Unit := do
+  let some head := head | return
+  let locals := (← get).locals
+  let mut placements : Std.HashMap LocalId Placement := {}
+  let insert (table : Std.HashMap LocalId Placement) (name : Name) (p : Placement) :=
+    (locals[name.text]?).elim table fun binding => table.insert binding.binder p
+  for port in head.ports do
+    if let .port _ name _ placement _ := port then placements := insert placements name placement
+  let results := match head.results with
+    | some (.one result) => #[result]
+    | some (.several _ many) => many
+    | none => #[]
+  for result in results do placements := insert placements result.name result.placement
+  let contains (name : String) : Holders → Bool
+    | .role r => r.text == name
+    | .roles _ rs => rs.any (·.text == name)
+  let program := (← get).program
+  let oracle := program.modules["zkc::oracle"]?
+  let projectsData : Step → Bool
+    | .entry "zkc::oracle" "data" => true
+    | .declaration id => (program.declarations[id]?).any fun d =>
+      program.nameOf id == "data" && (program.namespaces[d.namespace]?).any (fun ns => some ns.owner == oracle)
+    | _ => false
+  let reads (term : Lowered.Expr) := term.mapLocalReads (fun id data => (id, data)) projectsData
+  let mut statement := #[]
+  let mut witness := #[]
+  for term in terms do
+    match term with
+    | .call sp callee args (some ws) =>
+      statement := statement ++ reads (.call sp callee args none)
+      for w in ws do
+        match w with
+        | .positional _ e | .named _ _ e | .spec _ _ e => witness := witness ++ reads e
+    | _ => statement := statement ++ reads term
+  let eligible := head.roles.filter fun r =>
+    let holds (use : LocalId × Bool) (wanted : Bool) :=
+      (placements[use.1]?).all fun p =>
+        let reader := p.readers.any (contains r.text)
+        let visible := reader || (!(use.2 && p.readers.isSome) && contains r.text p.holders)
+        visible == wanted
+    statement.all (holds · true) && witness.all (holds · false)
+  unless (role.elim (eligible.size == 1) fun chosen => eligible.any (·.text == chosen.text)) do
+    refuseAt env.owner "SX6" span "name an eligible deciding role that sees every statement operand and holds no witness operand"
+
+def resolveClause (env : Env) (head : Option ProtocolHead) (results : Array String)
     (loops : Std.HashMap String (Array String)) : Clause → ResolveM (Array Lowered.Expr)
-  | .requires _ _ condition | .proves _ _ _ condition | .charge _ _ condition => do
+  | .requires _ _ condition | .charge _ _ condition => do
     return #[← resolveExpr env condition]
+  | .proves span role _ condition => do
+    let terms := #[← resolveExpr env condition]
+    checkDecidingRole env head span role terms
+    return terms
   | .ensures _ _ condition => do return #[← withNames results (resolveExpr env condition)]
   | .invariant _ _ condition loop | .through _ condition loop =>
     -- a loop that is not one of the protocol is refused with the clause (SX6)
     match loops[loop.text]? with
     | some names => do return #[← withNames names (resolveExpr env condition)]
     | none => pure #[]
-  | .reduces _ _ _ source target => do
+  | .reduces span role _ source target => do
     let source ← resolveExpr env source
-    return #[source, ← withNames results (resolveExpr env target)]
+    withNames results do
+      let terms := #[source, ← resolveExpr env target]
+      checkDecidingRole env head span role terms
+      return terms
   | .knowledge _ _ relation extractor alternative => do
     let mut names := #[← resolveExpr env relation]
     names := names ++ (← resolveExtractor env extractor)
@@ -281,7 +335,8 @@ def resolveContract (id : DeclarationId) (declaration : Declaration) (node : Con
   for port in ports do discard <| addLocal port.text port.span
   let loops := (loopScopes body (ports.map (·.text)) {}).2
   let mut names := #[targetName]
-  for clause in node.clauses do names := names ++ (← resolveClause env results loops clause)
+  let head := match callee.node with | .protocol protocol => some protocol.head | _ => none
+  for clause in node.clauses do names := names ++ (← resolveClause env head results loops clause)
   return names
 
 /-! ## Schemes and goals -/

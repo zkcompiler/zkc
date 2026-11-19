@@ -2,7 +2,6 @@
 
 import json
 from pathlib import Path
-import re
 import subprocess
 import tempfile
 
@@ -28,48 +27,77 @@ def run(command, *, failure=None, cwd=None):
     return output
 
 
-def check_axioms(theorem, report):
-    allowed = {"propext", "Classical.choice", "Quot.sound"}
-    if f"'{theorem}' does not depend on any axioms" in report:
-        return
-    found = re.search(rf"'{re.escape(theorem)}' depends on axioms: \[([^\]]*)\]", report)
-    if not found:
-        raise RuntimeError(f"missing kernel axiom report for {theorem}")
-    used = {name.strip() for name in found[1].split(",") if name.strip()}
-    if used - allowed:
-        raise RuntimeError(f"unexpected axioms for {theorem}: {sorted(used - allowed)}")
-
-
 def replace_once(text, original, replacement):
     if text.count(original) != 1:
         raise ValueError(f"expected exactly one source occurrence of {original!r}")
     return text.replace(original, replacement)
 
 
+def source_consumer(name, fixture):
+    """Independent expectations for the two fixed source files and their three public roots."""
+    if fixture == "Baseline":
+        fields = ["s.src_base", "s.src_point"]
+        history, history_ty = "Bool", "pointTy"
+        addresses = "⟨2⟩ ⟨3⟩ ⟨6⟩"
+    elif fixture in ("SameLog", "RolesReversed"):
+        fields = ["s.src_g", "s.src_h", "s.src_u", "s.src_v"]
+        history = "Bool × Bool × Unit"
+        history_ty = "(.tuple (.cons pointTy (.cons pointTy .nil)))"
+        addresses = "⟨4⟩ ⟨6⟩ ⟨9⟩"
+    else:
+        raise ValueError(f"unknown source fixture {fixture!r}")
+
+    def inputs(last):
+        result = f"(.cons {last} .nil)"
+        for field in reversed(fields):
+            result = f"(.cons {field} {result})"
+        return result
+
+    values = {
+        "CERTIFICATE_NAMESPACE": name,
+        "SOURCE_HISTORY_TY": history_ty,
+        "SOURCE_HISTORY": history,
+        "SOURCE_ADDRESSES": addresses,
+        "SOURCE_PROVER": "1" if fixture == "RolesReversed" else "0",
+        "SOURCE_VERIFIER": "0" if fixture == "RolesReversed" else "1",
+        "SOURCE_INPUTS": inputs("()"),
+        "SOURCE_RELATION": inputs("w"),
+        "SOURCE_EXTRACTOR": inputs("[(a,l.challenge,l.suffix,()),(a,r.challenge,r.suffix,())]"),
+    }
+    consumer = CONSUMER.read_text()
+    for key, value in values.items():
+        consumer = consumer.replace(key, value)
+    return consumer
+
+
 def check(work):
     names = ["Baseline", "Renamed", "Zero", "OtherRelation", "OtherVerifier", "Simulator", "Swapped",
-             "SameLog", "Reordered", "MissingGuard", "ScalarGuard", "NativeOnly", "ProjectedGuards", "RunLength"]
+             "SameLog", "RolesReversed", "Reordered", "MissingGuard", "ScalarGuard", "NativeOnly", "ProjectedGuards", "RunLength", "Context", "Named", "ReversedNumerator", "PrivateControl"]
     formal = ROOT / "lean/formal"
     (work / "lean-toolchain").write_text((formal / "lean-toolchain").read_text())
     (work / "lakefile.toml").write_text(
         'name = "written_controls"\n'
         '[[require]]\nname = "zkc_formal"\n' + f'path = {json.dumps(str(formal))}\n'
-        '[[lean_lib]]\nname = "Variants"\n' + f'roots = {json.dumps(names)}\n'
+        '[[lean_lib]]\nname = "Variants"\n' + f'roots = {json.dumps([*names, "Checks"])}\n'
     )
     entry = work / ENTRY.name
     entry.write_text(ENTRY.read_text())
     original = SOURCE.read_text()
     input_file = work / SOURCE.name
 
-    def generate(source, proof=True, failure=None, *, same_log=False, namespace=None, scheme=None):
+    def generate(source, proof=True, failure=None, *, same_log=False, namespace=None, scheme=None, goal=None, clause=None):
         selected_entry = work / CHAUM_PEDERSEN.name if same_log else entry
         selected_input = selected_entry if same_log else input_file
         selected_input.write_text(source)
         flags = [] if proof else ["--target-only"]
         if namespace:
             flags.extend(["--namespace", namespace])
-        return run([COMPILER, *flags, selected_entry, ROOT, scheme or ("SameLogProof" if same_log else "Proof")],
-                   failure=failure)
+        if goal:
+            flags.extend(["--goal", goal])
+        if clause:
+            flags.extend(["--clause", clause])
+        subject = [] if goal else [scheme or ("SameLogProof" if same_log else "Proof")]
+        return run([COMPILER, *flags, selected_entry, ROOT, *subject], failure=failure)
 
     def module(name, source, proof=False, *, same_log=False):
         generated = generate(source, proof, same_log=same_log, namespace=name)
@@ -81,6 +109,35 @@ def check(work):
     for name in ["DLog", "response_difference", "commitment", "challenge", "response"]:
         if f'("{name}",' not in base:
             raise RuntimeError(f"missing source provenance for {name}")
+
+    # A prover-only choice and a sampled loop are present in the admitted source.
+    # Neither changes the verifier's run or its deciding role for the selected fork.
+    private_control = replace_once(original, "    nonce @P <- sample", """    if scalar == 0:
+        guard @P scalar == scalar
+    for i in 0..2:
+        salt @P <- sample G::Scalar
+    nonce @P <- sample""")
+    private_control = replace_once(private_control, "    proves DLog",
+                                "    proves @P local_check: scalar == scalar\n    proves DLog")
+    module("PrivateControl", private_control, proof=True)
+    generate(replace_once(private_control, "proves @P local_check", "proves @V local_check"), failure="SX6")
+    generate(replace_once(private_control, "proves @P local_check: scalar == scalar",
+                          "proves local_check: base == base"), failure="SX6")
+    generate(replace_once(original, "    nonce @P <- sample", """    for i in 0..2:
+        guard @V base == base
+    nonce @P <- sample"""), proof=False, failure="unsupported verifier control flow")
+
+    # The library declaration remains the data projection through a renamed import.
+    handles = replace_once(original, "module schnorr", """module schnorr
+use zkc::oracle::data as contents
+use zkc::oracle::{Kind}""") + """
+protocol Probe<K: Kind> roles(P, V)(h: Oracle<K> @P -> V):
+    guard @P true
+spec for Probe:
+    proves @V contents(h) == contents(h)
+"""
+    generate(handles, proof=False)
+    generate(replace_once(handles, "proves @V contents", "proves @P contents"), proof=False, failure="SX6")
 
     renamed = replace_once(original, "    response <- send", "    #[site(response)]\n    local_response <- send")
     renamed = replace_once(renamed, "@V base * response ==", "@V base * local_response ==")
@@ -97,6 +154,9 @@ def check(work):
 
 spec for Schnorr:""")
     zero = replace_once(zero, clause, "knowledge DLog(base, point) by zero_result")
+    reversed_numerator = replace_once(original, "runs[0].response - runs[1].response",
+                                      "runs[1].response - runs[0].response")
+    module("ReversedNumerator", reversed_numerator)
     zero_text = module("Zero", zero)
     if '("zero_result",' not in zero_text:
         raise RuntimeError("the clause did not select its replacement extractor")
@@ -110,6 +170,9 @@ spec for Schnorr:""")
 
     same_log = CHAUM_PEDERSEN.read_text()
     same_log_module = module("SameLog", same_log, proof=True, same_log=True)
+    roles_reversed = replace_once(same_log, "roles(P, V)", "roles(V, P)")
+    roles_reversed = replace_once(roles_reversed, "    construction derived", "    prover P\n    construction derived")
+    module("RolesReversed", roles_reversed, proof=True, same_log=True)
     second_guard = "        guard @V h * z == b + v * c\n"
     first_guard = "        guard @V g * z == a + u * c\n"
     reordered = replace_once(same_log, first_guard + second_guard, second_guard + first_guard)
@@ -136,22 +199,69 @@ spec for Schnorr:""")
         raise RuntimeError("native-only target must use the ordinary function meaning")
     generate(native_only, failure="WK-PROOF")
 
+    (work / "Context.lean").write_text(generate(original, namespace="Context", scheme="Signature"))
+    first = "knowledge first: DLog(base, point) by zero_result"
+    second = "knowledge second: ((DLog(base, point))) by response_difference"
+    labelled = replace_once(zero, clause.replace("response_difference", "zero_result"), first + "\n    " + second)
+    goals = "\ngoal chosen = special_soundness(Proof, stage = written, clause = second)\n"
+    entry.write_text(ENTRY.read_text() + goals)
+    (work / "Named.lean").write_text(generate(labelled, namespace="Named", goal="chosen"))
+    selected_first = generate(labelled, proof=False, clause="first")
+    if '("zero_result",' not in selected_first:
+        raise RuntimeError("first label failed to select the distinct extractor")
+    generate(labelled, proof=False, failure="WK-CLAUSE")
+    generate(labelled, proof=False, clause="absent", failure="WK-CLAUSE")
+    for old, new in [("stage = written", "stage = derived"), ("special_soundness(Proof", "knowledge_soundness(Proof")]:
+        entry.write_text(ENTRY.read_text() + goals.replace(old, new))
+        generate(labelled, proof=False, goal="chosen", failure="WK-GOAL")
+    entry.write_text(ENTRY.read_text())
+
+    entry.write_text(ENTRY.read_text() + """
+module secondary:
+    scheme Proof = Schnorr<G1>:
+        construction interactive
+        prover P
+    goal fork = special_soundness(Proof, stage = written)
+""")
+    for selector in ("scheme", "goal"):
+        short = "Proof" if selector == "scheme" else "fork"
+        outer = f"schnorr_example::{short}"
+        inner = f"schnorr_example::secondary::{short}"
+        ambiguous = generate(original, proof=False, failure=f"ambiguous {short}", **{selector: short})
+        if outer not in ambiguous or inner not in ambiguous:
+            raise RuntimeError(f"missing qualified choices for {short}")
+        for query, expected in [(outer, outer), (inner, inner), (f"secondary::{short}", inner)]:
+            rendered = generate(original, proof=False, **{selector: query})
+            field = f'selectedSchemePath : String := "{expected}"' if selector == "scheme" else (
+                f'selectedGoalPath : Option String := (some "{expected}")')
+            if field not in rendered:
+                raise RuntimeError(f"{query} selected the wrong declaration")
+            scheme_path = expected.rsplit("::", 1)[0] + "::Proof"
+            if selector == "goal" and f'selectedSchemePath : String := "{scheme_path}"' not in rendered:
+                raise RuntimeError(f"{query} selected a scheme from another namespace")
+    entry.write_text(ENTRY.read_text())
+
     controls = work / "Checks.lean"
     imports = [f"public import {name}" for name in [*names, "Zkc.Formal.Written.FiniteModel"]]
-    def consumer(name):
-        return replace_once(CONSUMER.read_text(), "CERTIFICATE_NAMESPACE", name)
 
     controls.write_text("\n".join(["module", "", *imports, "", CONTROL.read_text(),
-                                   consumer("Baseline"), consumer("SameLog")]))
-    report = run(["lake", "-q", "lean", controls], cwd=work)
-    for theorem in ["Baseline.certified_core_admitted", "SameLog.certified_core_admitted",
-                    "Reordered.certified_core_admitted", "ScalarGuard.certified_core_admitted",
-                    "WrittenControls.missing_compiled_guard", "WrittenControls.compiled_wrong_extractor",
-                    "WrittenControls.compiled_wrong_relation",
-                    "WrittenControls.missing_guard_admitted", "WrittenControls.permitted_counterexample",
-                    "WrittenControls.wrong_extractor", "WrittenControls.wrong_relation",
-                    "WrittenControls.wrong_verifier"]:
-        check_axioms(theorem, report)
+                                   *(source_consumer(name, fixture) for name, fixture in
+                                     [("Baseline", "Baseline"), ("SameLog", "SameLog"), ("Context", "Baseline"),
+                                      ("Named", "Baseline"), ("RolesReversed", "RolesReversed")]),
+                                   """
+open Zkc.Formal.Written.FiniteModel in
+example (s : Context.PublicStatement model) :
+    model.Val (.seq (.fin 256) none) × model.Val (.seq (.fin 256) none) :=
+  (s.src_message, s.src_domain)
+open Zkc.Formal.Written.FiniteModel in
+example : ¬ (Context.PublicStatement.mk (M := model) true false [256] []).Valid := by
+  intro h
+  exact (Nat.lt_irrefl 256) (h.2.2.1.1 256 (by simp))
+example : Named.selectedScheme = "Proof" ∧ Named.selectedGoal = some "chosen" ∧
+    Named.selectedStage = "written" ∧ Named.selectedClause = some "second" ∧
+    Named.uncoveredClauses.any (fun x => x.1 == "knowledge" && x.2.1 == some "first") := by decide
+"""]))
+    run(["lake", "-q", "build", "+Checks"], cwd=work)
     print(run(["lake", "env", "lean", "--run", AUDIT], cwd=work), end="", flush=True)
     print("Checked both admitted certificates, permitted forks, and four source counterexamples.", flush=True)
 
@@ -160,9 +270,14 @@ spec for Schnorr:""")
         weakened = issued.split("theorem certified_core_admitted {", 1)[0]
         weakened = replace_once(weakened, "public import Zkc.Formal.Written.GroupReplay",
                                 "public import Zkc.Formal.Written.GroupReplay\npublic import Zkc.Formal.Written.FiniteModel")
-        weakened += f"theorem certified_core_admitted : True := trivial\nend «{name}»\n"
-        failed.write_text(weakened + consumer(name))
+        weakened += f"theorem certified_source_admitted : True := trivial\nend «{name}»\n"
+        failed.write_text(weakened + source_consumer(name, name))
         run(["lake", "-q", "lean", failed], failure="Function expected", cwd=work)
+    reindexed = Path(__file__).with_name("ReindexedConsumer.lean.in").read_text()
+    failed.write_text(reindexed)
+    run(["lake", "-q", "lean", failed], cwd=work)
+    failed.write_text(reindexed + source_consumer("Reindexed", "Baseline"))
+    run(["lake", "-q", "lean", failed], failure="mismatch", cwd=work)
     # Keep all three emitted programs fixed and corrupt only the auxiliary calculation.
     # Check the correspondence on its own, before attempting the security theorem.
     prefix = base.split("theorem certified (", 1)[0]
@@ -217,7 +332,6 @@ spec for Schnorr:""")
         (replace_once(projected, "        c <- draw", "        #[site(site1)]\n        c <- draw"), "WK-VIEW"),
     ]:
         reject_in_both(source, diagnostic, same_log=True)
-    reject_in_both(original, "WK-PORT", scheme="Signature")
     reject_in_both(original, "WK-NAMESPACE", namespace="Broken.name")
     entry.write_text(ENTRY.read_text() + "\nspec for Schnorr:\n    requires false\n")
     reject_in_both(original, "WK-CLAUSE")

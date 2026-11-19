@@ -43,7 +43,7 @@ mutual
       let base :=
         if key.arguments.isEmpty then name
         else s!"{name}<{", ".intercalate (key.arguments.toList.map (valueText environment))}>"
-      let base := if key.runRecord then base ++ "::Run" else base
+      let base := key.view.elim base fun view => base ++ "::" ++ view.member
       match key.owner with
       | some owner => s!"{base} at {instanceText environment owner}"
       | none => base

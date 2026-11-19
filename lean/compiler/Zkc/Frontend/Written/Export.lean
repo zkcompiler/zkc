@@ -14,14 +14,42 @@ def preamble (withProof : Bool) (scope : String) : String :=
   let library := if withProof then "Zkc.Formal.Written.GroupReplay" else "Zkc.Formal.Written.FunctionMeaning"
   "module\n\npublic import " ++ library ++ "\n\n@[expose] public section\nopen Zkc.Core Zkc.Formal.Written Std.WP\nset_option experimental.vcgen true\nset_option maxRecDepth 4000\nset_option maxHeartbeats 1800000\nset_option linter.unusedVariables false\nnamespace " ++ scope ++ "\n"
 
+/-- Source identifiers occupy one namespace in the generated record, including context.
+The prefix keeps Lean's constructor and generated projection names available. -/
+def sourceField (name : String) := "«src_" ++ name ++ "»"
+
+def sourceStatement (c : WrittenClause) : List String := Id.run do
+  let fields := (c.publicNames.map (·, "pointTy")) ++ c.contextFields
+  let valid := " ∧ ".intercalate (fields.toList.map fun (n,t) => s!"M.Valid {t} s.{sourceField n}")
+  let projection := String.intercalate ", " (c.publicNames.toList.map fun n => "s." ++ sourceField n)
+  let optional := fun (x : Option String) => (x.map fun n => s!"(some {reprStr n})").getD "none"
+  let uncovered := c.source.uncovered.map fun (kind, label, place) =>
+    s!"({reprStr kind}, {optional label}, {reprStr place})"
+  return [
+    s!"def selectedScheme : String := {reprStr c.selection.scheme.name}",
+    s!"def selectedGoal : Option String := {optional (c.selection.goal.map (·.name.text))}",
+    s!"def selectedSchemePath : String := {reprStr c.selection.schemePath}",
+    s!"def selectedGoalPath : Option String := {optional c.selection.goalPath}",
+    "def selectedStage : String := \"written\"",
+    s!"def selectedClause : Option String := {optional c.source.label}",
+    s!"def uncoveredClauses : List (String × Option String × String) := {list uncovered}",
+    "structure PublicStatement (M : Model V) where"] ++
+    (fields.toList.map fun (n,t) => s!"  {sourceField n} : M.Val {t}") ++ [
+    "def PublicStatement.Valid {M : Model V} (s : PublicStatement M) : Prop :=",
+    s!"  {valid}",
+    "def writtenStatement (M : Model V) (s : PublicStatement M) : Statement (M.Val pointTy) :=",
+    s!"  ({projection})"]
+
 def target (c : WrittenClause) (historyType : String) : String := Id.run do
   let (v,p) := (c.view.verifier,c.view.prover)
   let sites := [c.view.commitment,c.view.challenge,c.view.response]
-  let keys := " ".intercalate (sites.map fun site => s!"⟨{site.instruction.get!}⟩")
-  let places := [("clause", c.source.where_), (c.relationName, c.relationSpan),
+  let eventBindings := ["commitmentSite", "challengeSite", "responseSite"].zip sites
+  let keys := " ".intercalate (eventBindings.map (fun (name,_) => name ++ ".2.2"))
+  let places := [("scheme", c.selection.scheme.span)] ++
+    (c.selection.goal.toList.map fun goal => (goal.name.text, goal.span)) ++ [("clause", c.source.where_), (c.relationName, c.relationSpan),
     (c.extractorName, c.extractorSpan)] ++ (sites.map fun site => (site.fieldName, site.place))
   let provenance := list (places.map fun (name,sp) => s!"({reprStr name}, {reprStr (location sp)})")
-  let params := (List.range c.publicCount).map fun i => component "s" i (i + 1 == c.publicCount)
+  let params := (List.range c.publicNames.size).map fun i => component "s" i (i + 1 == c.publicNames.size)
   let clauseInputs := c.operands.map fun index => params[index]!
   let inputs (last : String) := consList (clauseInputs ++ [last])
   let values := consList (params ++ ["()"])
@@ -33,9 +61,12 @@ def target (c : WrittenClause) (historyType : String) : String := Id.run do
   return "\n".intercalate <| [
     c.storedRelation, c.storedExtractor,
     s!"def sourceLocations : List (String × String) := {provenance}",
-    s!"abbrev Statement (G : Type) := {publicProduct (List.replicate c.publicCount "G")}",
+    s!"abbrev Statement (G : Type) := {publicProduct (List.replicate c.publicNames.size "G")}",
     s!"abbrev Commitment (G : Type) := {c.view.history.leanType}",
-    s!"abbrev historyTy : V.Ty := {historyType}"] ++ calculations ++ [
+    s!"abbrev historyTy : V.Ty := {historyType}"] ++
+    (eventBindings.map fun (name, site) =>
+      s!"def {name} : String × Nat × Key := ({reprStr site.fieldName}, {site.event}, ⟨{site.instruction.get!}⟩)") ++
+    sourceStatement c ++ calculations ++ [
     "variable (M : Model V)",
     "def relationArguments (s : Statement (M.Val pointTy)) (w : M.Val scalarTy) : HList M.Val RelationHeader.ins :=",
     s!"  {inputs "w"}",
@@ -64,15 +95,23 @@ def target (c : WrittenClause) (historyType : String) : String := Id.run do
     "    accepts M s path a b ↔ replayCheck M s path a b = some () := replay_iff ..",
     "def coreObligation (path : List Frame) : Prop := SpecialSoundness (fun s => accepts M s path)",
     "  (fun s w => coreRelation M s w = some true) (fun s a l r w => coreExtractor M s a l r = some w)",
-    "def compiledObligation (protocol relation extractor : Admitted V) (path : List Frame) : Prop :=",
+    "def admittedPropertyOn {S : Type} (portsOf : S → Statement (M.Val pointTy))",
+    "    (protocol relation extractor : Admitted V) (path : List Frame) : Prop :=",
     "  ∃ root : Member protocol.program.headers.protocols header, ∃ rel : Member relation.program.headers.fns RelationHeader,",
-    "  ∃ ext : Member extractor.program.headers.fns ExtractorHeader, SpecialSoundness (fun s => acceptsOf M protocol.program root s path)",
-    "    (fun s w => coreRelationOf M relation.program rel s w = some true)",
-    "    (fun s a l r w => coreExtractorOf M extractor.program ext s a l r = some w)",
+    "  ∃ ext : Member extractor.program.headers.fns ExtractorHeader,",
+    "    SpecialSoundness (fun s => acceptsOf M protocol.program root (portsOf s) path)",
+    "      (fun s w => coreRelationOf M relation.program rel (portsOf s) w = some true)",
+    "      (fun s a l r w => coreExtractorOf M extractor.program ext (portsOf s) a l r = some w)",
+    "def compiledObligation := admittedPropertyOn M id",
+    "def sourceObligation := admittedPropertyOn M (writtenStatement M)",
+    "theorem of_compiled_obligation {p r e : Admitted V} {path : List Frame}",
+    "    (proof : compiledObligation M p r e path) : sourceObligation M p r e path := by",
+    "  obtain ⟨root, rel, ext, fork⟩ := proof",
+    "  exact ⟨root, rel, ext, fun s => fork (writtenStatement M s)⟩",
     "theorem of_core_obligation {p r e : Admitted V} (hp : admit stored ⟨[],[],[],[],[]⟩ = .ok p)",
     "    (hr : admit storedRelation ⟨[],[],[],[],[]⟩ = .ok r) (he : admit storedExtractor ⟨[],[],[],[],[]⟩ = .ok e)",
     "    (path : List Frame) (proof : coreObligation M path) : compiledObligation M p r e path := by",
-    "  unfold compiledObligation",
+    "  unfold compiledObligation admittedPropertyOn",
     "  rw [readback hp, RelationReadback r hr, ExtractorReadback e he]",
     "  exact ⟨.head, .head, .head, proof⟩",
     "variable (ops : Operations (M.Val scalarTy) (M.Val pointTy)) [DecidableEq (M.Val scalarTy)] [DecidableEq (M.Val pointTy)]",
@@ -111,7 +150,7 @@ def checkPorts (p : SourcePackage) (evidence : p.Admission) (c : WrittenClause) 
   let point : p.bindings.vocabulary.Ty := .nominal (.inl (.group .g1))
   let scalar : p.bindings.vocabulary.Ty := .nominal (.inl (.field .bls12381Fr))
   let shared := [v.prover,v.verifier].mergeSort
-  unless ports == List.replicate c.publicCount ⟨point, shared⟩ ++ [⟨scalar, [v.prover]⟩] do
+  unless ports == List.replicate c.publicNames.size ⟨point, shared⟩ ++ [⟨scalar, [v.prover]⟩] do
     refuse sp "WK-PORT" "the admitted ports do not match the written statement and witness"
   let mut events : Array (TranscriptEvent p.bindings.vocabulary.Ty) := #[]
   for step in steps do
@@ -125,6 +164,8 @@ def checkPorts (p : SourcePackage) (evidence : p.Admission) (c : WrittenClause) 
           law == .uniform (.nominal (.field .bls12381Fr)) do refuse sp "WK-VIEW" "unexpected verifier draw"
       events := events.push (.challenge k)
     | .op _ _ (.compute ..) _ | .guard .. => pure ()
+    | .choose _ who .. | .loop _ who .. =>
+      if who.contains v.verifier then refuse sp "WK-VIEW" "unsupported verifier control flow"
     | _ => refuse sp "WK-VIEW" "unsupported verifier interaction"
   let #[.message comm historyTy, .challenge draw, .message reply replyTy] := events
     | refuse sp "WK-VIEW" "expected a message, a public challenge and a response"
@@ -182,29 +223,32 @@ def certificate (c : WrittenClause) : String := Id.run do
     "    (hr : admit storedRelation ⟨[],[],[],[],[]⟩ = .ok r) (he : admit storedExtractor ⟨[],[],[],[],[]⟩ = .ok e)",
     "    (rows : GroupRows M ops) (field : FunctionRows M ops) (laws : ActionLaws ops) (path : List Frame) :",
     "    compiledObligation M p r e path := of_core_obligation M hp hr he path (certified_core M ops rows field laws path)",
-    "#print axioms certified_core_admitted", ""]
+    "#print axioms certified_core_admitted",
+    "theorem certified_source_admitted {p r e : Admitted V} (hp : admit stored ⟨[],[],[],[],[]⟩ = .ok p)",
+    "    (hr : admit storedRelation ⟨[],[],[],[],[]⟩ = .ok r) (he : admit storedExtractor ⟨[],[],[],[],[]⟩ = .ok e)",
+    "    (rows : GroupRows M ops) (field : FunctionRows M ops) (laws : ActionLaws ops) (path : List Frame) :",
+    "    sourceObligation M p r e path := of_compiled_obligation M (certified_core_admitted M ops hp hr he rows field laws path)",
+    "#print axioms certified_source_admitted", ""]
 
-def exportSource (assembly : Assembly) (schemeName : String) (withProof : Bool) (moduleNamespace : String := "WrittenKnowledge") : ExportM String := do
+def exportSelected (assembly : Assembly) (request : Request) (withProof : Bool) (moduleNamespace : String := "WrittenKnowledge") : ExportM String := do
   unless !moduleNamespace.isEmpty && moduleNamespace.toList.all (fun c => c.isAlphanum || c == '_') &&
       moduleNamespace.toList.head!.isAlpha do
     throw "WK-NAMESPACE: expected one identifier starting with a letter"
   let scope := if moduleNamespace == "WrittenKnowledge" then moduleNamespace else "«" ++ moduleNamespace ++ "»"
   let mut state : Compile.State := {}
   for phase in Driver.sourcePhases assembly do
-    let (report, s) := phase.runIn {vocabulary} state
+    let (report, s) := phase.runIn sourceContext state
     state := s
     if let some diag := s.log.entries.find? (fun d => d.isError || d.isIncomplete) then
       throw s!"{diag.span.file}:{diag.render s.env.renderer}"
     if let some skipped := report.interrupted then throw s!"WK-FRONTEND: {skipped}"
-  let entries := assembly.program.files.filter (fun file => !file.fromLibrary)
-  let #[scheme] := state.results.schemes.filter (fun scheme =>
-      scheme.name == schemeName && entries.any (fun file => file.name == scheme.span.file))
-    | throw s!"WK-ROOT: expected exactly one scheme named {schemeName} in the input modules"
-  let (result, s) := (Typing.typeBody scheme.protocol scheme.span).run {vocabulary} state
+  let (selection, resolved) ← select state request
+  let scheme := selection.scheme
+  let (result, s) := (Typing.typeBody scheme.protocol scheme.span).run sourceContext resolved
   if let some diag := s.log.entries.find? (fun d => d.isError || d.isIncomplete) then
     throw s!"{diag.span.file}:{diag.render s.env.renderer}"
   let .ok _ := result | refuse scheme.span "WK-ROOT" "protocol did not typecheck"
-  let c ← declarations s scheme
+  let c ← declarations s selection
   let .ok emission := Typing.emitRoot s scheme.protocol | refuse scheme.span "WK-CORE" "protocol did not emit"
   let pkg := emission.package ⟨[],[],[],[],[]⟩
   let .ok evidence := pkg.checkEvidence | refuse scheme.span "WK-CORE" "admission refused the emitted program"
@@ -214,5 +258,10 @@ def exportSource (assembly : Assembly) (schemeName : String) (withProof : Bool) 
     if let .error why := c.calculations then refuse c.source.where_ "WK-PROOF" why
   let proof := if withProof then certificate c else ""
   return "\n".intercalate [preamble withProof scope, rendered, target c historyType, proof, "end " ++ scope, ""]
+
+/-- Clause-oriented entry point for existing callers. -/
+def exportSource (assembly : Assembly) (schemeName : String) (withProof : Bool)
+    (moduleNamespace : String := "WrittenKnowledge") : ExportM String :=
+  exportSelected assembly (.scheme schemeName) withProof moduleNamespace
 
 end Zkc.Frontend.Written

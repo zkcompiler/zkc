@@ -77,6 +77,9 @@ private def plan (program : NamedProgram Standard) (role : Role) (replies : List
               | .make, [.tuple _], [], values => pure [values.foldr (fun x rest => s!"({x}, {rest})") "()"]
               | _, _, _, _ => throw "uninterpreted verifier operation"
             pure (sig.2.1, values)
+        | .literal t _ =>
+          if who.contains role then throw "uninterpreted verifier literal"
+          pure ([t], ["()"])
         | _ => throw "uninterpreted local computation"
       unless types.length == outs.length && values.length == outs.length do throw "unexpected result arity"
       plan := {plan with steps := plan.steps.push (.instruction (← valueStep role who types values proof))}
@@ -109,6 +112,9 @@ private def plan (program : NamedProgram Standard) (role : Role) (replies : List
       let test ← lookup cond
       let step := s!"refine projectedGuard (sem := sem) (by decide) {test} (by rfl) ?_"
       plan := ⟨plan.steps.push (.guard step), plan.guards.push test⟩
+    | .choose _ who .. | .loop _ who .. =>
+      if who.contains role then throw "expected private control outside the verifier"
+      plan := {plan with steps := plan.steps.push (.instruction "refine afterValue (sem := sem) _ (by rfl) ?_")}
     | _ => throw "uninterpreted verifier instruction"
   unless remaining.isEmpty do throw "unused trace replies"
   return plan

@@ -10,9 +10,6 @@ set_option autoImplicit false
 namespace Zkc.Frontend.Written
 open Syntax
 
-def refuse {α : Type} (span : Span) (code message : String) : ExportM α :=
-  .error s!"{span.file}:{span.render}: {code}: {message}"
-
 inductive ValueSort where | point | scalar | boolean | runs | tuple (items : List ValueSort)
   deriving BEq, Repr, Inhabited
 

@@ -406,7 +406,7 @@ inductive ArgState where
 /-- What a callee path names. -/
 inductive CalleeOf where
   | declaration (steps : Array (DeclarationId × Option (Array Lowered.StaticArgument)))
-      (scopes : Std.HashMap ScopeId (Array StaticValue))
+      (scopes : StaticEnvironment)
   /-- A function member of a module instance defined in source. -/
   | member («module» : InstanceId) (definition : DeclarationId) (name : String)
       (args : Option (Array Lowered.StaticArgument))
@@ -416,7 +416,7 @@ inductive CalleeOf where
   | moduleRow («module» : InstanceId) (row : String) (name : String)
       (args : Option (Array Lowered.StaticArgument))
   | alternative (steps : Array (DeclarationId × Option (Array Lowered.StaticArgument)))
-      (scopes : Std.HashMap ScopeId (Array StaticValue)) («variant» : DeclarationId) (index : Nat)
+      (scopes : StaticEnvironment) («variant» : DeclarationId) (index : Nat)
   | bare (name : String)
   | fixed (function : FixedFunction)
   | sizeOperator
@@ -1741,7 +1741,7 @@ to the end makes the caller wait or not checked; a refused body abandons the cal
   /-- `Enum::Name(e…)`: the static arguments of the enum from its path, the expected type or
   inference over the payload (SP6). -/
   partial def elabAlternative (span : Span) (steps : Array (DeclarationId × Option (Array Lowered.StaticArgument)))
-      (scopes : Std.HashMap ScopeId (Array StaticValue)) («variant» : DeclarationId) (index : Nat)
+      (scopes : StaticEnvironment) («variant» : DeclarationId) (index : Nat)
       (args : Array Arg) (expected : Option ClosedType) : ElabM Typed.Expr := do
     let env ← staticEnv
     let mut assigned ← liftM (assignArguments env (steps.push («variant», none)) scopes span : CompileM _)
@@ -1941,6 +1941,7 @@ to the end makes the caller wait or not checked; a refused body abandons the cal
           match ← liftM (thingValue env thing (some .type) typeSpan (pure text) : CompileM StaticValue) with
           | .type (.record inst) => pure (inst, args.map fun _ => ArgState.deferred)
           | _ => refuseHere "TY13" span s!"`{text}` is no record"
+      | .value (.type (.record inst)) => pure (inst, args.map fun _ => ArgState.deferred)
       | _ => refuseHere "TY13" span s!"`{text}` is no record"
     let declared ← recordFields inst
     let mut targets := #[]

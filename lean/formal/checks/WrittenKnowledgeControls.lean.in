@@ -162,7 +162,7 @@ theorem missing_compiled_guard {p r e : Admitted MissingGuard.V}
     (hr : admit MissingGuard.storedRelation ⟨[],[],[],[],[]⟩ = .ok r)
     (he : admit MissingGuard.storedExtractor ⟨[],[],[],[],[]⟩ = .ok e) :
     ¬ MissingGuard.compiledObligation model p r e [] := by
-  unfold MissingGuard.compiledObligation
+  unfold MissingGuard.compiledObligation MissingGuard.admittedPropertyOn
   rw [MissingGuard.readback hp, MissingGuard.RelationReadback r hr, MissingGuard.ExtractorReadback e he]
   rintro ⟨root, rel, ext, claim⟩
   cases root <;> try solve | cases ‹Member [] _›

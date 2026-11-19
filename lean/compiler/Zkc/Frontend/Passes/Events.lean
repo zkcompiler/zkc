@@ -29,30 +29,33 @@ namespace Events
 mutual
   /-- The occurrences of the events of statements, in the order of the tree, under the
   iterations of the loops in sequence around them. -/
-  partial def occurrencesOf (iteration : Array Nat) (found : Array Occurrence)
-      (statements : Array Stmt) : Array Occurrence :=
-    statements.foldl (occurrencesOfStmt iteration) found
+  partial def occurrencesOf (nested realized : Bool) (iteration : Array Nat) (found : Array CheckedEvent)
+      (statements : Array Stmt) : Array CheckedEvent :=
+    statements.foldl (occurrencesOfStmt nested realized iteration) found
 
-  partial def occurrencesOfStmt (iteration : Array Nat) (found : Array Occurrence) :
-      Stmt → Array Occurrence
-    | .event mark event _ => found.push { node := mark.id, event, iteration }
-    | .if _ _ onTrue onFalse _ => occurrencesOf iteration (occurrencesOf iteration found onTrue) onFalse
+  partial def occurrencesOfStmt (nested realized : Bool) (iteration : Array Nat) (found : Array CheckedEvent) :
+      Stmt → Array CheckedEvent
+    | .event mark event what => found.push (.event mark.id event what iteration nested realized)
+    | .if _ _ onTrue onFalse _ => occurrencesOf true realized iteration (occurrencesOf true realized iteration found onTrue) onFalse
     | .match _ _ _ _ cases _ => cases.foldl (init := found) fun found (.case _ _ _ body) =>
-        occurrencesOf iteration found body
-    | .for _ (.loop _ _ _ body) _ =>
+        occurrencesOf true realized iteration found body
+    | .for mark (.loop _ _ _ body) _ =>
       match body with
-      | .uniform statements _ => occurrencesOf iteration found statements
-      | .empty .. => found
+      | .uniform statements _ => occurrencesOf true realized iteration found statements
+      | .empty statements _ =>
+        if statements.isEmpty then found.push (.untypedLoop mark.span)
+        else occurrencesOf true false iteration found statements
+      | .stepped #[] => found.push (.untypedLoop mark.span)
       | .stepped iterations => iterations.foldl (init := found) fun found (.iteration index statements _) =>
-          occurrencesOf (iteration.push index) found statements
-    | .scope _ body => occurrencesOf iteration found body
+          occurrencesOf true realized (iteration.push index) found statements
+    | .scope _ body => occurrencesOf nested realized iteration found body
     | .bind .. | .unpack .. | .update .. | .guard .. | .error .. => found
 end
 
 end Events
 
 /-- The occurrences of the events of a protocol body. -/
-def occurrences (body : ProtocolBody) : Array Occurrence := Events.occurrencesOf #[] #[] body.statements
+def occurrences (body : ProtocolBody) : Array CheckedEvent := Events.occurrencesOf false true #[] #[] body.statements
 
 abbrev siteName := Syntax.eventSiteName
 

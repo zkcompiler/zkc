@@ -88,9 +88,10 @@ def localOrReference (span : Span) (reference : Lowered.Reference) (name : Optio
   | _ => return .reference reference
 
 /-- Numbers an event in the order of the text. -/
-def numberEvent (span : Span) (name : Option String) (parts : Array String) : ResolveM EventId := do
+def numberEvent (span : Span) (name : Option String) (parts : Array String)
+    (audience : EventAudience := .unresolved) : ResolveM EventId := do
   let state ← get
-  set { state with events := state.events.push { span, name, parts } }
+  set { state with events := state.events.push { span, name, parts, audience } }
   return state.events.size
 
 /-- The shape of a pattern, with its binders made in the order of the text. -/
@@ -555,10 +556,15 @@ mutual
       return #[.update span (← resolveName env name .plain) value]
     | .eventStmt (.bound span site pattern type holders event) => do
       let eventName := siteName site (some pattern)
-      let number ← numberEvent span eventName (eventParts event)
       let what ← resolveEvent env event
       let type ← type.mapM (resolveType env)
       let roles ← holders.mapM holdersOf
+      let audience : EventAudience := match what with
+        | .ok (.send _ _ to) => .transfer to none
+        | .ok (.draw _ owner to) => .transfer to (some owner)
+        | .ok (.sample _) | .ok .attempt => .privateCoins roles
+        | _ => .unresolved
+      let number ← numberEvent span eventName (eventParts event) audience
       match what with
       | .error names =>
         match pattern with

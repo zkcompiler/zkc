@@ -72,13 +72,34 @@ structure ProtocolSignature where
   specification : Bool := false
   deriving Inhabited
 
+/-- A generated field's identity in the closed protocol which owns its record. -/
+inductive ViewOrigin where
+  | port (index : Nat)
+  | event (index : EventId)
+  deriving Inhabited, BEq
+
+/-- A selector's type and identity belong to the same position in a nominal view. -/
+structure ViewField where
+  origin : ViewOrigin
+  name : String
+  type : ClosedType
+  deriving Inhabited, BEq
+
 inductive Signature where
   /-- A type, a static name, a module: the content of the instance. -/
   | data (content : InstanceContent)
+  /-- The ordered source schema captured once for this nominal view. -/
+  | viewRecord (fields : Array ViewField)
   | function (signature : FunctionSignature)
   | protocol (signature : ProtocolSignature)
   /-- A signature with a type of a later layer: what refers to the instance waits. -/
   | waiting (reason : String)
   deriving Inhabited
+
+/-- The closed contents visible to ordinary static evaluation and body typing. -/
+def Signature.content? : Signature → Option InstanceContent
+  | .data content => some content
+  | .viewRecord fields => some (.record false (fields.map fun f => (f.name, f.type)))
+  | _ => none
 
 end Zkc.Frontend.Typed

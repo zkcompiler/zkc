@@ -80,37 +80,38 @@ def functionDeclarations (label : String) (p : SourcePackage) (ev : p.Admission)
 def located {b : Emit.Bindings} (ts : List (LTy b.vocabulary)) : ExportM String := do
   return list (← ts.mapM fun a => do return s!"⟨{← ty (b := b) a.ty}, {numbers a.holders}⟩")
 
-def row (k : Zkc.Vocabulary.RowKey) := s!"(show V.RowKey from .inl ({reprStr k}))"
-
 def rawOp {b : Emit.Bindings} : ProtocolRaw b.vocabulary → ExportM String
-  | .compute who (.row (.inl k)) => pure s!"(.compute {numbers who} (.row {row k}))"
-  | .compute who (.owned name types args) => do
-    return s!"(.compute {numbers who} (.owned ({reprStr name}) {list (← types.mapM (ty (b := b)))} {numbers args}))"
+  | .compute who op => do return s!"(.compute {numbers who} {← localRaw (b := b) op})"
   | .event (.flow .message who peers) t => do return s!"(.event (.flow .message {who} {numbers peers}) {← ty (b := b) t})"
   | .event (.given (.coin k) who peers) t => do return s!"(.event (.given {← coin k} {who} {numbers peers}) {← ty (b := b) t})"
   | _ => unsupported "protocol operation"
 
-def rawStep {b : Emit.Bindings} : Instruction (ProtocolRaw b.vocabulary) (List Role) → ExportM String
-  | .op k ns op args => do return s!".op ⟨{k.number}⟩ {numbers ns} {← rawOp (b := b) op} {numbers args}"
-  | .guard k who v .reject => pure s!".guard ⟨{k.number}⟩ {numbers who} {v} .reject"
-  | _ => unsupported "protocol instruction"
+mutual
+  partial def rawRegion {b : Emit.Bindings} : Region (ProtocolRaw b.vocabulary) (List Role) → ExportM String
+    | .mk ins steps outs => do
+      return s!"(.mk {numbers ins} {list (← steps.mapM (rawStep (b := b)))} {numbers outs})"
+
+  partial def rawStep {b : Emit.Bindings} : Instruction (ProtocolRaw b.vocabulary) (List Role) → ExportM String
+    | .op k ns op args => do return s!".op ⟨{k.number}⟩ {numbers ns} {← rawOp (b := b) op} {numbers args}"
+    | .guard k who v .reject => pure s!".guard ⟨{k.number}⟩ {numbers who} {v} .reject"
+    | .choose k who v ns yes no => do
+      return s!".choose ⟨{k.number}⟩ {numbers who} {v} {numbers ns} {← rawRegion yes} {← rawRegion no}"
+    | .loop k who count init ns body => do
+      let times := match count with | .fixed n => s!"(.fixed {n})" | .count n => s!"(.count {n})"
+      return s!".loop ⟨{k.number}⟩ {numbers who} {times} {numbers init} {numbers ns} {← rawRegion body}"
+    | _ => unsupported "protocol instruction"
+end
 
 def typedOp {b : Emit.Bindings} {hs : Headers b.vocabulary} {ins outs} :
     ProtocolOp b.vocabulary hs ins outs → ExportM String
-  | .compute who (.row key _ _) operands _ _ => do
-    let .inl k := (show Sum Zkc.Vocabulary.RowKey Emit.PrimitiveName from key) | unsupported "external row"
-    return s!"(ProtocolOp.compute (V := V) (hs := ⟨[], []⟩) {numbers who} (.row {row k} _ rfl) {← located (b := b) operands} rfl (by decide))"
-  | .compute who (.owned op) operands _ _ => do
-    let (name, types, args) := op.name
-    let types ← types.mapM (ty (b := b))
-    let owned := s!"(OwnedOp.resolve (V := V) ({reprStr name}) {list types} {numbers args}).get (by decide)"
-    return s!"(ProtocolOp.compute (V := V) (hs := ⟨[], []⟩) {numbers who} (.owned ({owned}).2.2) {← located (b := b) operands} rfl (by decide))"
+  | .compute who op operands _ _ => do
+    return s!"(ProtocolOp.compute (V := V) (hs := ⟨[], []⟩) {numbers who} {← functionOp (b := b) op} {← located (b := b) operands} rfl (by decide))"
   | .flow .message who peers _ _ => pure s!"(ProtocolOp.flow (V := V) (hs := ⟨[], []⟩) .message {who} {numbers peers} (by decide) (by decide))"
   | .given (.coin k) who peers [] t _ _ _ => do
     return s!"(ProtocolOp.given (V := V) (hs := ⟨[], []⟩) {← coin k} {who} {numbers peers} [] {← ty (b := b) t} ⟨_, rfl, rfl, rfl⟩ (by decide) (by decide))"
   | _ => unsupported "typed protocol operation"
 
-def typedBody {b : Emit.Bindings} {hs : Headers b.vocabulary} :
+partial def typedBody {b : Emit.Bindings} {hs : Headers b.vocabulary} :
     {Γ : Ctx (LTy b.vocabulary)} → {outs : List (LTy b.vocabulary)} →
     Term (protocolDialect b.vocabulary hs) Γ outs → ExportM String
   | _, _, .ret vs => pure s!"  .ret {names vs.names true}"
@@ -118,6 +119,13 @@ def typedBody {b : Emit.Bindings} {hs : Headers b.vocabulary} :
     return s!"  .op ⟨{k.number}⟩ {← typedOp (b := b) op} {names args.names true} {names ds.toList} <|\n{← typedBody rest}"
   | _, _, .step k (.guard who v _ .reject) _ rest => do
     return s!"  .guard ⟨{k.number}⟩ {numbers who} ⟨{v.name}, rfl⟩ ⟨rfl, by decide, by decide⟩ .reject <|\n{← typedBody rest}"
+  | _, _, .step k (.choose (mid := mid) who v _ _ yes no) ds rest => do
+    return s!"  .choose (mid := {← located (b := b) mid}) ⟨{k.number}⟩ {numbers who} ⟨{v.name}, rfl⟩ ⟨rfl, by decide, by decide⟩ (by decide) ({← typedBody yes}) ({← typedBody no}) {names ds.toList} <|\n{← typedBody rest}"
+  | _, _, .step k (.loop (carried := carried) (each := each) who times _ init inputs inner) ds rest => do
+    let count := match times with
+      | .fixed n => s!"(.fixed {n})"
+      | .value v _ => s!"(.value ⟨{v.name}, rfl⟩ ⟨rfl, by decide, by decide⟩)"
+    return s!"  .loop (carried := {← located (b := b) carried}) (each := {← located (b := b) each}) ⟨{k.number}⟩ {numbers who} {count} (by decide) {names init.names true} {names inputs.toList} ({← typedBody inner}) {names ds.toList} <|\n{← typedBody rest}"
   | _, _, _ => unsupported "typed protocol instruction"
 
 def renderDefinition {b : Emit.Bindings} : {hs : Headers b.vocabulary} → Defs b.vocabulary hs → ExportM (List Nat × String)

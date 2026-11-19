@@ -140,6 +140,9 @@ structure ProtocolCode where
   sites : Array SiteEntry
   /-- The flows of the body, in the order of the sites. -/
   flows : Array FlowEntry := #[]
+  /-- First draw below a choice, loop or application. Such a closed protocol has no
+  fixed-depth Runs type, even when a loop emits only one Core instruction (§8). -/
+  nestedDraw : Option Syntax.Span := none
   /-- The specification arguments of its applications. -/
   specificationArguments : Array SpecificationArgument := #[]
   /-- In the opaque elaboration of a protocol generic over a module parameter (SP12): the

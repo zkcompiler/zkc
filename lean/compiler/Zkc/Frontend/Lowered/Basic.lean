@@ -181,6 +181,13 @@ parameter, a member, an alternative. The steps are those of resolution, without 
 a local name is a node of its own, which names its binder. -/
 abbrev PathStep := Step
 
+/-- Which projections may need a field even when a zero-iteration body is never typed. -/
+inductive EventAudience where
+  | transfer (recipients : Array Nat) (drawOwner : Option Nat)
+  | privateCoins (owners : Option RoleSet)
+  | unresolved
+  deriving Inhabited
+
 /-- An event of a protocol as its text gives it, for every instance (EV3): its number is its
 place in this list. -/
 structure SourceEvent where
@@ -189,6 +196,7 @@ structure SourceEvent where
   name : Option String
   /-- Its parts, in order: `value`, or `to R` per receiver of a send to several. -/
   parts : Array String
+  audience : EventAudience := .unresolved
   deriving Inhabited
 
 end Zkc.Frontend

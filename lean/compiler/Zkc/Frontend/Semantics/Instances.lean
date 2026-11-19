@@ -37,6 +37,7 @@ def indexesOf (modules : ModuleStore) : ProgramIndexes := Id.run do
   let mut members : Std.HashMap NamespaceId (Array DeclarationId) := {}
   let mut rowNames : Std.HashMap String String := {}
   let mut scopeOwners : Std.HashMap ScopeId DeclarationId := {}
+  let mut contracts : Std.HashMap DeclarationId (Array DeclarationId) := {}
   let mut implementers : Std.HashMap DeclarationId (Array DeclarationId) := {}
   for index in [0:program.declarations.size] do
     let declaration := program.declarations[index]!
@@ -46,6 +47,10 @@ def indexesOf (modules : ModuleStore) : ProgramIndexes := Id.run do
     if let .typeDecl (.type _ _ name _ (.primitive primitive)) := declaration.node then
       unless rowNames.contains primitive.row.content do
         rowNames := rowNames.insert primitive.row.content name.text
+    if let .contract contract := declaration.node then
+      if let some resolved := modules.resolution? declaration.file contract.target then
+        if let some {step := .declaration target, ..} := resolved.segments.back? then
+          contracts := contracts.insert target ((contracts.getD target #[]).push index)
     if let some bound := Names.implementing? declaration then
       for sort in bound.sorts do
         if let .path path := sort then
@@ -53,7 +58,7 @@ def indexesOf (modules : ModuleStore) : ProgramIndexes := Id.run do
             if let some { step := .declaration interface, .. } := resolution.segments.back? then
               implementers := implementers.insert interface
                 ((implementers.getD interface #[]).push index)
-  return { sortNames, members, rowNames, scopeOwners, implementers }
+  return { sortNames, members, rowNames, scopeOwners, contracts, implementers }
 
 /-- A state of the bottom layer with the indexes of its program. -/
 def withIndexes (state : Compile.State) : Compile.State :=

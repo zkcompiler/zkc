@@ -370,60 +370,69 @@ mutual
     | .apply callee arguments _ => arguments.foldl Argument.collect (callee.collect acc)
 end
 
-/-- The local names that a term reads, by their binders, in the order of the text: those in the
-static arguments of its references included. -/
-partial def Expr.locals (expr : Expr) : Array LocalId :=
-  let fromArguments (arguments : Array StaticArgument) : Array LocalId :=
+/-- Visit the resolved local reads of an expression, retaining whether the operand occurs
+inside the vocabulary's oracle data projection. -/
+partial def Expr.mapLocalReads {α : Type} (expr : Expr) (visit : LocalId → Bool → α)
+    (projectsData : PathStep → Bool) (data : Bool := false) : Array α :=
+  let walk := fun (value : Expr) => value.mapLocalReads visit projectsData data
+  let fromArguments (arguments : Array StaticArgument) : Array α :=
     arguments.foldl (init := #[]) fun acc argument =>
       match argument with
-      | .term _ _ term | .spec _ _ term => acc ++ term.locals
+      | .term _ _ term | .spec _ _ term => acc ++ walk term
       | .inferred .. => acc
-  let fromReference : Reference → Array LocalId
+  let fromReference : Reference → Array α
     | .reference _ segments => segments.foldl (init := #[]) fun acc (.segment _ arguments _) =>
         acc ++ fromArguments (arguments.getD #[])
-  let rec fromType : TypeTerm → Array LocalId
-    | .index _ size => size.locals
+  let rec fromType : TypeTerm → Array α
+    | .index _ size => walk size
     | .nonzero _ widened => fromType widened
-    | .sequence _ element size => fromType element ++ ((size.map (·.locals)).getD #[])
+    | .sequence _ element size => fromType element ++ ((size.map walk).getD #[])
     | .tuple _ fields _ => fields.foldl (init := #[]) fun acc field => acc ++ fromType field
     | .reference written => fromReference written
-    | .local _ binder => #[binder]
+    | .local _ binder => #[visit binder data]
     | .bool _ | .nat _ | .rational _ | .error _ => #[]
-  let fromArgument : Argument → Array LocalId
-    | .positional _ value | .named _ _ value | .spec _ _ value => value.locals
+  let fromArgument : Argument → Array α
+    | .positional _ value | .named _ _ value | .spec _ _ value => walk value
   match expr with
-  | .local _ binder => #[binder]
+  | .local _ binder => #[visit binder data]
   | .reference written => fromReference written
   | .call _ callee arguments witnesses =>
+    let .reference _ segments := callee
+    let readsData := segments.back?.any fun (.segment step ..) => projectsData step
     (arguments ++ witnesses.getD #[]).foldl (init := fromReference callee) fun acc argument =>
-      acc ++ fromArgument argument
-  | .operator _ _ operands => operands.foldl (init := #[]) fun acc operand => acc ++ operand.locals
+      match argument with
+      | .positional _ value | .named _ _ value | .spec _ _ value =>
+        acc ++ value.mapLocalReads visit projectsData (data || readsData)
+  | .operator _ _ operands => operands.foldl (init := #[]) fun acc operand => acc ++ walk operand
   | .slice _ target lower upper =>
-    target.locals ++ ((lower.map (·.locals)).getD #[]) ++ ((upper.map (·.locals)).getD #[])
-  | .field _ target _ | .position _ target _ => target.locals
+    walk target ++ ((lower.map walk).getD #[]) ++ ((upper.map walk).getD #[])
+  | .field _ target _ | .position _ target _ => walk target
   | .method _ target _ staticArguments arguments =>
-    arguments.foldl (init := target.locals ++ fromArguments (staticArguments.getD #[])) fun acc argument =>
+    arguments.foldl (init := walk target ++ fromArguments (staticArguments.getD #[])) fun acc argument =>
       acc ++ fromArgument argument
-  | .conditional _ _ a b c => a.locals ++ b.locals ++ c.locals
-  | .tuple _ items _ | .list _ items => items.foldl (init := #[]) fun acc item => acc ++ item.locals
-  | .repetition _ a b | .inner _ a b => a.locals ++ b.locals
+  | .conditional _ _ a b c => walk a ++ walk b ++ walk c
+  | .tuple _ items _ | .list _ items => items.foldl (init := #[]) fun acc item => acc ++ walk item
+  | .repetition _ a b | .inner _ a b => walk a ++ walk b
   | .record _ named fields =>
-    fields.foldl (init := fromReference named) fun acc (.field _ _ value) => acc ++ value.locals
+    fields.foldl (init := fromReference named) fun acc (.field _ _ value) => acc ++ walk value
   | .recordUpdate _ value fields =>
-    fields.foldl (init := value.locals) fun acc (.field _ _ value) => acc ++ value.locals
+    fields.foldl (init := walk value) fun acc (.field _ _ value) => acc ++ walk value
   | .comprehension _ element domain filter =>
     let fromDomain := match domain with
-      | .range _ start stop _ => start.locals ++ stop.locals
-      | .collection _ _ source => source.locals
-    fromDomain ++ element.locals ++ ((filter.map (·.locals)).getD #[])
+      | .range _ start stop _ => walk start ++ walk stop
+      | .collection _ _ source => walk source
+    fromDomain ++ walk element ++ ((filter.map walk).getD #[])
   | .fold _ _ domain body =>
     let fromDomain := match domain with
-      | .range _ start stop _ => start.locals ++ stop.locals
-      | .collection _ _ source => source.locals
-    fromDomain ++ body.locals
-  | .block _ _ result => result.locals
+      | .range _ start stop _ => walk start ++ walk stop
+      | .collection _ _ source => walk source
+    fromDomain ++ walk body
+  | .block _ _ result => walk result
   | .type written => fromType written
   | .number .. | .bytes .. | .bool .. | .error _ => #[]
+
+/-- Local binders read in source order, including static arguments of references. -/
+def Expr.locals (expr : Expr) : Array LocalId := expr.mapLocalReads (fun id _ => id) (fun _ => false)
 
 /-- The references of a term, in the order of the text, those of its static arguments
 included. -/

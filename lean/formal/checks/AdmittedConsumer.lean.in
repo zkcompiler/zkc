@@ -1,19 +1,27 @@
-section
+namespace SourceConsumer_CERTIFICATE_NAMESPACE
 open Zkc.Core Zkc.Formal.Written Zkc.Formal.Written.FiniteModel
 open CERTIFICATE_NAMESPACE
 
--- This client fixes the public result independently of the generated obligation aliases.
+-- These three argument lists and the observed addresses come from the source fixture.
+-- Depending on the issuer's packers here would also accept a consistent slot permutation.
+private def publicInputs (s : PublicStatement model) : HList (RV model SOURCE_VERIFIER) ports :=
+  SOURCE_INPUTS
+private def relationInputs (s : PublicStatement model) (w : Bool) : HList model.Val RelationHeader.ins :=
+  SOURCE_RELATION
+private def extractorInputs (s : PublicStatement model) (a : SOURCE_HISTORY) (l r : Branch Bool) :
+    HList model.Val ExtractorHeader.ins :=
+  SOURCE_EXTRACTOR
 example (path : List Frame) :
     ∃ p r e : Admitted V, admit stored ⟨[],[],[],[],[]⟩ = .ok p ∧
       admit storedRelation ⟨[],[],[],[],[]⟩ = .ok r ∧ admit storedExtractor ⟨[],[],[],[],[]⟩ = .ok e ∧
       ∃ root : Member p.program.headers.protocols header, ∃ rel : Member r.program.headers.fns RelationHeader,
       ∃ ext : Member e.program.headers.fns ExtractorHeader,
       SpecialSoundness
-        (fun s a b => Returns (roleMeaning model p.program root 1 path (inputValues model s))
-          ((observed model path a b).map Input.entry))
-        (fun s w => functionResult (t := .bool) (fnMeaning model r.program rel (relationArguments model s w)) = some true)
+        (fun s a b => Returns (roleMeaning model p.program root SOURCE_VERIFIER path (publicInputs s))
+          ((forkInputs model SOURCE_HISTORY_TY path SOURCE_PROVER SOURCE_ADDRESSES a b).map Input.entry))
+        (fun s w => functionResult (t := .bool) (fnMeaning model r.program rel (relationInputs s w)) = some true)
         (fun s a l h w => functionResult (t := scalarTy)
-          (fnMeaning model e.program ext (extractorArguments model s a l h)) = some w) := by
+          (fnMeaning model e.program ext (extractorInputs s a l h)) = some w) := by
   have successful {ε α : Type} (x : Except ε α) (ok : x.isOk = true) : ∃ a, x = .ok a := by
     cases x with
     | ok a => exact ⟨a, rfl⟩
@@ -21,5 +29,5 @@ example (path : List Frame) :
   obtain ⟨p, hp⟩ := admitted_exists
   obtain ⟨r, hr⟩ := successful _ RelationAdmitted
   obtain ⟨e, he⟩ := successful _ ExtractorAdmitted
-  exact ⟨p, r, e, hp, hr, he, certified_core_admitted model ops hp hr he rows functionRows laws path⟩
-end
+  exact ⟨p, r, e, hp, hr, he, certified_source_admitted model ops hp hr he rows functionRows laws path⟩
+end SourceConsumer_CERTIFICATE_NAMESPACE

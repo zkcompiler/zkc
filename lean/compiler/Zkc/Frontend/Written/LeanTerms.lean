@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Core.Program.Dialects
+public import Zkc.Frontend.Written.Diagnostic
 public import Zkc.Frontend.Emit.Bindings
 
 @[expose] public section
@@ -9,7 +10,6 @@ set_option autoImplicit false
 namespace Zkc.Frontend.Written
 open Core
 
-abbrev ExportM := Except String
 def unsupported {α : Type} (what : String) : ExportM α := .error ("WK-CORE: unsupported " ++ what)
 
 def list (xs : List String) := "[" ++ ", ".intercalate xs ++ "]"
