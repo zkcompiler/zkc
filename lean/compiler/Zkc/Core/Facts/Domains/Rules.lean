@@ -27,7 +27,7 @@ structure Rules (D : Dialect) (Raw : Type) where
   /-- Whether equal applications of the operation are one value: no reply, no event, no stop
   other than `undefined`. An operation that is not shared is kept in order. -/
   shared : ∀ {ins res : List D.Ty}, D.Op ins res → Bool
-  /-- Which operand has the same numeric and Boolean readings as result port zero. -/
+  /-- An operand whose readings and measurement subject agree with result port zero on every return. -/
   observedOperand : ∀ {ins res : List D.Ty}, D.Op ins res → Option Nat := fun _ => none
   /-- Whether the table places the two operands of a written operation in one order. -/
   commutes : Raw → Bool

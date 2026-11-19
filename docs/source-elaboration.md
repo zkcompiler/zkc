@@ -92,7 +92,9 @@ introduces a fresh value. The projection rule proves equality of the underlying 
 subjects whenever it authorizes reuse. Sequence length is a function of that subject.
 
 The measurement domain records the first length of each such subject. The numeric domain
-uses this identifier when it records or checks a guard. This preserves a point such as
+uses this identifier both for explicit guards and for the implicit comparison between a loop
+index and its upper endpoint. The sender can iterate up to the length of the sent array
+and index its original array in that loop. This preserves a point such as
 `length(xs) == 8`, a lower or upper bound, and a relation such as `k < length(xs)` even
 when `k` is unknown. Numeric equality alone does not identify two arrays. Each role starts
 with its own state, and facts learned in a single branch stay scoped to that branch.

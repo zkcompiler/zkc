@@ -144,6 +144,15 @@ def transfer {Raw : Type} (ops : KnowledgeOperations Raw) (asks : Asks) (table :
       else learned
     | _ => learned
 
+/-- Keep the comparison on its written operands and on their numeric representatives.
+The latter key survives a placement change or a repeated measurement. -/
+def rememberComparison (asks : Asks) (k : BufferedFacts) (x y : Ident)
+    (remember : BufferedFacts → Ident → Ident → BufferedFacts) : BufferedFacts :=
+  let learned := remember k x y
+  let a := asks.numberAt x
+  let b := asks.numberAt y
+  if a == x && b == y then learned else remember learned a b
+
 /-- Learn the relation of a numbered loop index to its count at a reachable iteration. -/
 def numberIndex {T : Type} (asks : Asks) (k : BufferedFacts) (loop : Loop T) : BufferedFacts :=
   if loop.numbered then
@@ -151,7 +160,8 @@ def numberIndex {T : Type} (asks : Asks) (k : BufferedFacts) (loop : Loop T) : B
     | .inl n => k.addRange loop.index.key (Range.point n).below
     | .inr count =>
       let bound := ((rangeFor asks k count).map Range.below).getD ⟨0, none⟩
-      (k.addRange loop.index.key bound).addOrder loop.index.key count.key true (byLoop := true)
+      rememberComparison asks (k.addRange loop.index.key bound) loop.index count fun state i n =>
+        state.addOrder i.key n.key true (byLoop := true)
   else k
 
 def enter {T : Type} (types : KnowledgeTypes T) (asks : Asks) (k : BufferedFacts) (loop : Loop T) : BufferedFacts :=
@@ -232,15 +242,6 @@ def learnSelection {Raw : Type} (ops : KnowledgeOperations Raw) (table : Table R
     else k
   | _ => k
 
-/-- Keep the comparison on its written operands and on their numeric representatives.
-The latter key survives a placement change or a repeated measurement. -/
-def rememberComparison (asks : Asks) (k : BufferedFacts) (x y : Ident)
-    (remember : BufferedFacts → Ident → Ident → BufferedFacts) : BufferedFacts :=
-  let learned := remember k x y
-  let a := asks.numberAt x
-  let b := asks.numberAt y
-  if a == x && b == y then learned else remember learned a b
-
 def learnTruth {Raw : Type} (ops : KnowledgeOperations Raw) (asks : Asks) (table : Table Raw) :
     Nat → BufferedFacts → Ident → Bool → BufferedFacts
   | 0, k, id, b => assume asks k id b
@@ -279,13 +280,17 @@ def zeroAddend {Raw : Type} (ops : KnowledgeOperations Raw) (table : Table Raw) 
     (operand result : Ident) : Bool :=
   (addedTerm ops table operand result).any (fun t => (asks.orElse (answers k)).exact t == some 0)
 
+def sameNumber (asks : Asks) (k : BufferedFacts) (x y : Ident) : Bool :=
+  asks.numberAt x == asks.numberAt y ||
+    ((asks.orElse (answers k)).exact x).any fun n => (asks.orElse (answers k)).exact y == some n
+
 /-- Compare numeric operands of a comparison whose execution witnesses that both are numbers. -/
 def orderedAt {Raw : Type} (ops : KnowledgeOperations Raw) (table : Table Raw) (asks : Asks) (k : BufferedFacts) (left right : Ident) (strict : Bool) : Bool :=
   (!strict && left == right) || k.hasOrder left.key right.key strict ||
     FactCheck.rangesOrder (rangeFor asks k left) (rangeFor asks k right) strict ||
     separates asks k strict (addedTerm ops table left right) ||
     separates asks k strict (subtractedTerm ops table left right) ||
-    (offsetLimit ops table k left (· == right)).isSome ||
+    (offsetLimit ops table k left (sameNumber asks k · right)).isSome ||
     (!strict && zeroAddend ops table asks k right left)
 
 def ordered {Raw : Type} (ops : KnowledgeOperations Raw) (table : Table Raw)
@@ -294,9 +299,6 @@ def ordered {Raw : Type} (ops : KnowledgeOperations Raw) (table : Table Raw)
     let a := asks.numberAt left
     let b := asks.numberAt right
     return (a != left || b != right) && orderedAt ops table asks k a b strict
-
-def sameNumber (asks : Asks) (k : BufferedFacts) (x y : Ident) : Bool :=
-  x == y || ((asks.orElse (answers k)).exact x).any fun n => (asks.orElse (answers k)).exact y == some n
 
 /-- Two sums may share an operand while their remaining operands have the same known value
 without sharing a table slot. This is used by slice-length contracts. -/

@@ -78,6 +78,32 @@ theorem withRead (functional : ∀ op xs ys zs, Run op xs ys → Run op xs zs �
   obtain ⟨a, evidence, extendsOld, found⟩ := grounded.extendRead functional slots read
   exact ⟨a, evidence, facts.le extendsOld, found⟩
 
+/-- A numeric fact can be recorded under both the written and representative operands
+when its update is sound for any assignment containing those two numbers. -/
+theorem rememberComparison_sound (functional : ∀ op xs ys zs, Run op xs ys → Run op xs zs → ys = zs)
+    (slots : table.WF) {asks : Asks} (external : asks.Sound Run R table ρ)
+    {k : BufferedFacts} {a b : Ident} {v w : Val} {x y : Nat}
+    (h : Means Run R k table ρ) (ra : Reads Run R.bool table ρ a v) (rb : Reads Run R.bool table ρ b w)
+    (na : R.nat v = some x) (nb : R.nat w = some y) {remember : BufferedFacts → Ident → Ident → BufferedFacts}
+    (keeps : ∀ {state : BufferedFacts} {i j : Ident} {assignment}, state.toKnown.Holds R assignment →
+      NatAt R assignment i.key x → NatAt R assignment j.key y →
+      (remember state i j).toKnown.Holds R assignment) :
+    Means Run R (rememberComparison asks k a b remember) table ρ := by
+  have record {state i j u z} (holds : Means Run R state table ρ)
+      (ri : Reads Run R.bool table ρ i u) (rj : Reads Run R.bool table ρ j z)
+      (ni : R.nat u = some x) (nj : R.nat z = some y) :
+      Means Run R (remember state i j) table ρ := by
+    obtain ⟨old, grounded, facts, leftAt⟩ := withRead functional slots holds ri
+    obtain ⟨more, evidence, ext, rightAt⟩ := grounded.extendRead functional slots rj
+    exact ⟨more, evidence, keeps (facts.le ext) ⟨u, ext _ _ leftAt, ni⟩ ⟨z, rightAt, nj⟩⟩
+  have direct := record h ra rb na nb
+  simp only [rememberComparison]
+  split
+  · exact direct
+  · obtain ⟨_,ri,ni⟩ := external.numberAt_reads functional slots ra
+    obtain ⟨_,rj,nj⟩ := external.numberAt_reads functional slots rb
+    exact record direct ri rj (ni.trans na) (nj.trans nb)
+
 private theorem truth_boolAt {a : Valuation Val} {k : BufferedFacts} (facts : k.toKnown.Holds R a) (id : Ident)
     {b : Bool} (answered : truth k id = some b) : BoolAt R a id.key b := by
   unfold truth at answered

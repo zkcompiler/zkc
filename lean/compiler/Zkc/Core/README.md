@@ -67,6 +67,11 @@ Proved, with no axiom beyond `propext` and `Quot.sound` (the audit checks every 
   every role of every protocol of a typed program, run on what the role holds of one input, is
   a projection of the protocol's process; where the protocol returns, the role returns what it
   holds of the results;
+- a returning send preserves its sender's local payload. A receiving role gets its own
+  typed value. `UnaryMeasurements.lawful` supports a measurement whenever its interpretation
+  respects the preserved subject. A guard and a dynamic loop both register numeric comparisons
+  through `Knowledge.rememberComparison_sound`. This lets the sender index the original
+  array using the loop bound on the sent array, including when the range starts above zero.
 - the rules of proof on every path (`Process.every_bind`, `every_mono`, `every_iterate`,
   `every_iterate_below`), and the rules of an instruction (`Evidence/Subject.lean`): every
   instruction that binds results is its subject, then its continuation (`Term.op_subject`,

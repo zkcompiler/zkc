@@ -102,19 +102,28 @@ private def checkSendFacts (repository : Repository) : TestM Unit := do
     let source ← IO.FS.readFile (repository.conformance / "independent" / "cases" / id / "main.zkc")
     checkFactProgram repository id "P" source rule
   let source (steps : List String) := String.intercalate "\n" <|
-    ["module t", "protocol X roles(P,V)(xs:[nat] @P, ys:[nat] @P, k:nat @P):"] ++
+    ["module t", "protocol X roles(P,V,W)(xs:[nat] @P, ys:[nat] @P, k:nat @P):"] ++
     steps.map ("    " ++ ·)
   let send := "m <- send xs to V"
   let guarded := ["guard @P k < length(xs)", send]
-  let loop := [send, "n @P = length(m)", "for i in 0..n:", "    guard @P i < n else refused"]
+  let loop := [send, "n @P = length(m)", "for i in 0..n:"]
+  let bounded := ["guard @P length(xs) <= 8"] ++ loop
+  let offset := ["guard @P length(xs) <= 8", send, "n @P = length(m)", "guard @P k <= n", "for i in k..n:"]
   for (name, steps, rule) in [
       ("index", guarded ++ ["z @P = m[k]"], none),
       ("second-send", guarded ++ ["n <- send m from P to V", "z @P = n[k]"], none),
       ("lower-bound", ["guard @P 7 < length(xs)", send, "z @P = m[3]"], none),
       ("different-subject", ["guard @P k < length(xs)", "m <- send ys to V", "z @P = m[k]"], some "TY7"),
       ("stronger-index", guarded ++ ["z @P = m[k + 1]"], some "TY7"),
-      ("bounded-loop", ["guard @P length(xs) <= 8"] ++ loop, none),
-      ("unbounded-loop", loop, some "CT4"),
+      ("bounded-loop", bounded ++ ["    z @P = xs[i]"], none),
+      ("other-loop-subject", bounded ++ ["    z @P = ys[i]"], some "TY7"),
+      ("offset-loop", offset ++ ["    z @P = xs[i]"], none),
+      ("offset-past-end", offset ++ ["    z @P = xs[i + 1]"], some "TY7"),
+      ("unbounded-loop", loop ++ ["    guard @P i < n else refused"], some "CT4"),
+      ("forward-after-guard", [send, "guard @V 3 < length(m)", "n <- send m from V to W", "z @V = n[3]"], none),
+      ("forward-without-guard", ["guard @P 3 < length(xs)", send, "n <- send m from V to W", "z @V = n[3]"],
+        some "TY7"),
+      ("multicast-peer", ["m <- send xs to V, W", "guard @V 3 < length(m)", "z @W = m[3]"], some "TY7"),
       ("arm-local", ["if k < length(xs):", "    guard @P true", send, "z @P = m[k]"], some "TY7"),
       ("independent-receives", [send, "guard @V length(m) == 8", "n <- send xs to V", "z @V = n[7]"],
         some "TY7"),

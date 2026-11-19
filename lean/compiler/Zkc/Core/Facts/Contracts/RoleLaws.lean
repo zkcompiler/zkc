@@ -35,8 +35,8 @@ private theorem atIteration_allowed (w : Holders) (i : Nat) :
   by_cases here : r ∈ w <;>
     simp [RoleIndex.atIteration, Expr.UsesOnly, Exprs.UsesOnly, assertable, here, literalAllowed, LTy.index]
 
-/-- At both holder-changing operations, compare only the readings at the two ports.
-For a give, the continuation returns the sent value for every acknowledgment. -/
+/-- A keep at a retained holder and a give at the sender preserve the entire local payload.
+For a give, every allowed acknowledgment returns that payload. -/
 private theorem observedOperand (M : Model V) (fns : FnTable M hs.fns) (roles : RTable M hs.protocols)
     {ins res} (op : RoleOp V hs r ins res) {i} (observed : (rules catalog r).observedOperand op = some i)
     {key path} {args : HList (RV M r) ins} {ys : HList (RV M r) res}

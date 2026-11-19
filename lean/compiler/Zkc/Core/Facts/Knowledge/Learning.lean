@@ -75,16 +75,6 @@ private theorem refineComparedSources_sound {ops : KnowledgeOperations Raw}
     (h : Means Run R k table ρ) : Means Run R (refineComparedSources ops table k left right) table ρ :=
   refineConversionSources_sound laws slots _ (refineConversionSources_sound laws slots _ h first) second
 
-private theorem withNumbers {ops : KnowledgeOperations Raw} (laws : ops.Lawful R Run) (slots : table.WF)
-    {k : BufferedFacts} {left right : Ident} {a b : Val} {x y : Nat}
-    (h : Means Run R k table ρ) (ra : Reads Run R.bool table ρ left a)
-    (rb : Reads Run R.bool table ρ right b) (na : R.nat a = some x) (nb : R.nat b = some y) :
-    ∃ assignment, Grounded Run R table ρ assignment ∧ k.toKnown.Holds R assignment ∧
-      FactCheck.NatAt R assignment left.key x ∧ FactCheck.NatAt R assignment right.key y := by
-  obtain ⟨old, grounded, facts, leftAt⟩ := withRead laws.functional slots h ra
-  obtain ⟨more, evidence, extendsOld, rightAt⟩ := grounded.extendRead laws.functional slots rb
-  exact ⟨more, evidence, facts.le extendsOld, ⟨a, extendsOld _ _ leftAt, na⟩, ⟨b, rightAt, nb⟩⟩
-
 theorem literalTruth_sound {ops : KnowledgeOperations Raw} (laws : ops.Lawful R Run) (slots : table.WF)
     {id : Ident} {v : Val} {b : Bool} (read : Reads Run R.bool table ρ id v)
     (found : literalTruth ops table id = some b) : R.bool v = some b := by
@@ -141,23 +131,6 @@ private theorem learnSelection_sound {ops : KnowledgeOperations Raw} (laws : ops
       · exact h
   · exact h
 
-private theorem rememberComparison_sound {ops : KnowledgeOperations Raw} (laws : ops.Lawful R Run)
-    (slots : table.WF) {asks : Asks} (external : asks.Sound Run R table ρ)
-    {k : BufferedFacts} {a b : Ident} {v w : Val} {x y : Nat}
-    (h : Means Run R k table ρ) (ra : Reads Run R.bool table ρ a v) (rb : Reads Run R.bool table ρ b w)
-    (na : R.nat v = some x) (nb : R.nat w = some y) {remember : BufferedFacts → Ident → Ident → BufferedFacts}
-    (keeps : ∀ {k' i j u z}, Means Run R k' table ρ → Reads Run R.bool table ρ i u →
-      Reads Run R.bool table ρ j z → R.nat u = some x → R.nat z = some y →
-      Means Run R (remember k' i j) table ρ) :
-    Means Run R (rememberComparison asks k a b remember) table ρ := by
-  have direct := keeps h ra rb na nb
-  simp only [rememberComparison]
-  split
-  · exact direct
-  · obtain ⟨_,ri,ni⟩ := external.numberAt_reads laws.functional slots ra
-    obtain ⟨_,rj,nj⟩ := external.numberAt_reads laws.functional slots rb
-    exact keeps direct ri rj (ni.trans na) (nj.trans nb)
-
 theorem learnTruth_sound {ops : KnowledgeOperations Raw} (laws : ops.Lawful R Run)
     (slots : table.WF) {asks : Asks} (external : asks.Sound Run R table ρ) :
     ∀ fuel {k id b v}, Means Run R k table ρ → Reads Run R.bool table ρ id v → R.bool v = some b →
@@ -175,26 +148,24 @@ theorem learnTruth_sound {ops : KnowledgeOperations Raw} (laws : ops.Lawful R Ru
         cases tail with | cons second _ =>
           rw [val] at result
           apply refineComparedSources_sound laws slots first second
-          apply rememberComparison_sound laws slots external learned first second na nc
-          intro state i j u z holds ri rj ni nj
-          obtain ⟨more, evidence, facts, hx, hy⟩ := withNumbers laws slots holds ri rj ni nj
+          apply rememberComparison_sound laws.functional slots external learned first second na nc
+          intro state i j assignment facts hx hy
           cases b
-          · exact ⟨more, evidence, by simpa using facts.pushLe hy hx (by simp at result; omega)⟩
-          · exact ⟨more, evidence, by simpa using facts.pushLess hx hy (by simpa using result.symm)⟩
+          · simpa using facts.pushLe hy hx (by simp at result; omega)
+          · simpa using facts.pushLess hx hy (by simpa using result.symm)
     · next left right eq =>
       obtain ⟨_, reads, a, c, x, y, rfl, na, nc, result⟩ := resultForm_reads laws slots eq read
       cases reads with | cons first tail =>
         cases tail with | cons second _ =>
           rw [val] at result
           apply refineComparedSources_sound laws slots first second
-          apply rememberComparison_sound laws slots external learned first second na nc
-          intro state i j u z holds ri rj ni nj
-          obtain ⟨more, evidence, facts, hx, hy⟩ := withNumbers laws slots holds ri rj ni nj
+          apply rememberComparison_sound laws.functional slots external learned first second na nc
+          intro state i j assignment facts hx hy
           cases b
-          · exact ⟨more, evidence, by simpa using facts.pushDifferent hx hy (by simpa using result.symm)⟩
+          · simpa using facts.pushDifferent hx hy (by simpa using result.symm)
           · have same : x = y := by simpa using result.symm
             subst y
-            exact ⟨more, evidence, by simpa using facts.pushEqual hx hy⟩
+            simpa using facts.pushEqual hx hy
     · next operand eq =>
       obtain ⟨_, reads, a, x, rfl, operandVal, result⟩ := resultForm_reads laws slots eq read
       cases reads with | cons first _ =>

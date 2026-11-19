@@ -95,6 +95,29 @@ private theorem differenceOrder {a b : Ident} {va vb : Val} {x y : Nat} {strict 
   · contradiction
 
 include laws slots external h in
+private theorem sameNumber_sound {a b : Ident} {va vb : Val} {x y : Nat}
+    (ra : Reads Run R.bool table ρ a va) (rb : Reads Run R.bool table ρ b vb)
+    (na : R.nat va = some x) (nb : R.nat vb = some y) (found : sameNumber asks k a b = true) : x = y := by
+  obtain same | points := Bool.or_eq_true_iff.mp found
+  · obtain ⟨_, readA, numA⟩ := external.numberAt_reads laws.functional slots ra
+    obtain ⟨_, readB, numB⟩ := external.numberAt_reads laws.functional slots rb
+    rw [beq_iff_eq.mp same] at readA
+    cases Reads.functionalOn laws.functional slots readA readB
+    exact Option.some.inj (na.symm.trans (numA.symm.trans (numB.trans nb)))
+  · let q := asks.orElse (answers k)
+    have sound : q.Sound Run R table ρ := external.orElse (answers_sound h)
+    change (q.exact a).any _ = true at points
+    cases atA : q.exact a with
+    | none => simp [atA] at points
+    | some n =>
+      have atB : q.exact b = some n := by simpa [atA] using points
+      obtain ⟨_,readA,numA⟩ := sound.exact _ _ atA
+      obtain ⟨_,readB,numB⟩ := sound.exact _ _ atB
+      obtain rfl := Reads.functionalOn laws.functional slots ra readA
+      obtain rfl := Reads.functionalOn laws.functional slots rb readB
+      exact Option.some.inj ((na.symm.trans numA).trans (numB.symm.trans nb))
+
+include laws slots external h in
 private theorem orderedAt_sound {a b : Ident} {va vb : Val} {x y : Nat} {strict : Bool}
     (ra : Reads Run R.bool table ρ a va) (rb : Reads Run R.bool table ρ b vb)
     (na : R.nat va = some x) (nb : R.nat vb = some y) (found : orderedAt ops table asks k a b strict = true) :
@@ -125,13 +148,11 @@ private theorem orderedAt_sound {a b : Ident} {va vb : Val} {x y : Nat} {strict 
   · exact differenceOrder laws slots external h ra rb na nb subtracted
   · obtain ⟨limit, picked⟩ := Option.isSome_iff_exists.mp offset
     obtain ⟨same, n, cap, m, num, rc, nc, lt⟩ := offsetLimit_sound laws slots h ra picked
-    obtain rfl : limit = b := beq_iff_eq.mp same
-    obtain rfl := Reads.functionalOn laws.functional slots rb rc
-    rw [na] at num
-    rw [nb] at nc
-    cases num
-    cases nc
-    cases strict <;> simp_all <;> omega
+    obtain rfl := sameNumber_sound laws slots external h rc rb nc nb same
+    obtain rfl := Option.some.inj (na.symm.trans num)
+    cases strict
+    · exact Nat.le_of_lt lt
+    · exact lt
   · exact Nat.le_of_eq (zeroAddend_sound laws slots external h rb ra nb na zero)
 
 include laws slots external h in
@@ -145,27 +166,6 @@ private theorem ordered_sound {a b : Ident} {va vb : Val} {x y : Nat} {strict : 
     obtain ⟨_,r₂,n₂⟩ := external.numberAt_reads laws.functional slots rb
     exact orderedAt_sound laws slots external h r₁ r₂ (n₁.trans na) (n₂.trans nb)
       (Bool.and_eq_true_iff.mp represented).2
-
-include laws slots external h in
-private theorem sameNumber_sound {a b : Ident} {va vb : Val} {x y : Nat}
-    (ra : Reads Run R.bool table ρ a va) (rb : Reads Run R.bool table ρ b vb)
-    (na : R.nat va = some x) (nb : R.nat vb = some y) (found : sameNumber asks k a b = true) : x = y := by
-  obtain same | points := Bool.or_eq_true_iff.mp found
-  · obtain rfl := beq_iff_eq.mp same
-    obtain rfl := Reads.functionalOn laws.functional slots ra rb
-    exact Option.some.inj (na.symm.trans nb)
-  · let q := asks.orElse (answers k)
-    have sound : q.Sound Run R table ρ := external.orElse (answers_sound h)
-    change (q.exact a).any _ = true at points
-    cases atA : q.exact a with
-    | none => simp [atA] at points
-    | some n =>
-      have atB : q.exact b = some n := by simpa [atA] using points
-      obtain ⟨_,readA,numA⟩ := sound.exact _ _ atA
-      obtain ⟨_,readB,numB⟩ := sound.exact _ _ atB
-      obtain rfl := Reads.functionalOn laws.functional slots ra readA
-      obtain rfl := Reads.functionalOn laws.functional slots rb readB
-      exact Option.some.inj ((na.symm.trans numA).trans (numB.symm.trans nb))
 
 include laws slots external h in
 private theorem matchingSums_sound {a b : Ident} {va vb : Val} {x y : Nat}
