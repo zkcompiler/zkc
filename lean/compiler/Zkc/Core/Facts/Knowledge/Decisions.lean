@@ -95,11 +95,11 @@ private theorem differenceOrder {a b : Ident} {va vb : Val} {x y : Nat} {strict 
   · contradiction
 
 include laws slots external h in
-private theorem ordered_sound {a b : Ident} {va vb : Val} {x y : Nat} {strict : Bool}
+private theorem orderedAt_sound {a b : Ident} {va vb : Val} {x y : Nat} {strict : Bool}
     (ra : Reads Run R.bool table ρ a va) (rb : Reads Run R.bool table ρ b vb)
-    (na : R.nat va = some x) (nb : R.nat vb = some y) (found : ordered ops table asks k a b strict = true) :
+    (na : R.nat va = some x) (nb : R.nat vb = some y) (found : orderedAt ops table asks k a b strict = true) :
     if strict then x < y else x ≤ y := by
-  simp only [ordered, Bool.or_eq_true, Bool.and_eq_true, Bool.not_eq_true', beq_iff_eq] at found
+  simp only [orderedAt, Bool.or_eq_true, Bool.and_eq_true, Bool.not_eq_true', beq_iff_eq] at found
   rcases found with ((((((⟨rfl,rfl⟩ | known) | ranges) | added) | subtracted) | offset) | ⟨rfl,zero⟩)
   · obtain rfl := Reads.functionalOn laws.functional slots ra rb
     rw [na] at nb
@@ -133,6 +133,18 @@ private theorem ordered_sound {a b : Ident} {va vb : Val} {x y : Nat} {strict : 
     cases nc
     cases strict <;> simp_all <;> omega
   · exact Nat.le_of_eq (zeroAddend_sound laws slots external h rb ra nb na zero)
+
+include laws slots external h in
+private theorem ordered_sound {a b : Ident} {va vb : Val} {x y : Nat} {strict : Bool}
+    (ra : Reads Run R.bool table ρ a va) (rb : Reads Run R.bool table ρ b vb)
+    (na : R.nat va = some x) (nb : R.nat vb = some y) (found : ordered ops table asks k a b strict = true) :
+    if strict then x < y else x ≤ y := by
+  rcases Bool.or_eq_true_iff.mp found with direct | represented
+  · exact orderedAt_sound laws slots external h ra rb na nb direct
+  · obtain ⟨_,r₁,n₁⟩ := external.numberAt_reads laws.functional slots ra
+    obtain ⟨_,r₂,n₂⟩ := external.numberAt_reads laws.functional slots rb
+    exact orderedAt_sound laws slots external h r₁ r₂ (n₁.trans na) (n₂.trans nb)
+      (Bool.and_eq_true_iff.mp represented).2
 
 include laws slots external h in
 private theorem sameNumber_sound {a b : Ident} {va vb : Val} {x y : Nat}

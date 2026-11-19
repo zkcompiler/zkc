@@ -92,7 +92,7 @@ private theorem truth_boolAt {a : Valuation Val} {k : BufferedFacts} (facts : k.
 
 theorem answers_sound {k : BufferedFacts} (h : Means Run R k table ρ) : (answers k).Sound Run R table ρ := by
   obtain ⟨a, grounded, facts⟩ := h
-  refine ⟨?_, ?_, ?_⟩
+  refine ⟨?_, ?_, ?_, fun _ _ h => nomatch h⟩
   · intro id b reported
     obtain ⟨v, found, val⟩ := truth_boolAt facts id reported
     exact ⟨v, grounded _ _ found, val⟩

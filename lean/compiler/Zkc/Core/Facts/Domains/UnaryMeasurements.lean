@@ -6,25 +6,34 @@ public import Zkc.Core.Facts.Body.ValueLaws
 @[expose] public section
 namespace Zkc.Core.BodyAnalysis.UnaryMeasurements
 
-/-- A numeric observation of one operand. Different written instructions may measure
-the same operand, even when their result types carry different placement information. -/
+/-- Each role keeps its own subject identities. A measurement of a subject has one
+numeric representative across the holder annotations on its different instructions. -/
 structure State where
-  samples : List (Ident × Ident) := []
-  exacts : List (Ident × Nat) := []
+  subjects : NatMap Ident := .leaf
+  measurements : NatMap Ident := .leaf
+  numbers : NatMap Ident := .leaf
 
-def learn (asks : Asks) (s : State) : State :=
-  let fresh := s.samples.filterMap fun (result, subject) => (asks.exact result).map (subject, ·)
-  { s with exacts := (fresh.filter fun p => !s.exacts.contains p) ++ s.exacts }
+def representative (links : NatMap Ident) (id : Ident) : Ident :=
+  (links.find id.key).getD id
+
+def link (links : NatMap Ident) (id origin : Ident) : NatMap Ident :=
+  if id == origin || (links.find id.key).isSome then links else links.insert id.key origin
+
+def observe (s : State) (source result : Ident) : State :=
+  { s with subjects := link s.subjects result (representative s.subjects source),
+           numbers := link s.numbers result (representative s.numbers source) }
+
+def record (s : State) (result subject : Ident) : State :=
+  let origin := representative s.subjects subject
+  match s.measurements.find origin.key with
+  | none => { s with measurements := s.measurements.insert origin.key result }
+  | some first => { s with numbers := link s.numbers result first }
 
 def transfer {Raw : Type} (measures : Raw → Bool) (s : State) (e : Entry Raw) : State :=
   match e.form with
   | .app op [subject] =>
-    if measures op && e.count > 0 then { s with samples := (.val e.lo, subject) :: s.samples } else s
+    if measures op && e.count > 0 then record s (.val e.lo) subject else s
   | _ => s
-
-def exact (s : State) (id : Ident) : Option Nat := do
-  let subject ← s.samples.lookup id
-  s.exacts.lookup subject
 
 def domain {T Raw : Type} (measures : Raw → Bool) : Domain T Raw where
   State := State
@@ -32,12 +41,12 @@ def domain {T Raw : Type} (measures : Raw → Bool) : Domain T Raw where
   dead _ := false
   leaves s _ := s
   transfer _ _ s e := transfer measures s e
-  observe _ _ s _ _ := s
-  assume asks _ s _ _ := learn asks s
+  observe _ _ := observe
+  assume _ _ s _ _ := s
   truth _ _ _ _ := none
   after _ s _ _ := s
   enter _ _ s _ := s
   afterLoop _ _ _ s _ _ _ _ := s
-  answers s := { truth := fun _ => none, exact := exact s, upper := exact s }
+  answers s := {Asks.nobody with numberSource := fun id => s.numbers.find id.key}
 
 end Zkc.Core.BodyAnalysis.UnaryMeasurements

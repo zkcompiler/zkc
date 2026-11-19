@@ -67,11 +67,11 @@ theorem recordBound_bounds {w : D.Who} (place : Place) (answers : Asks) (count :
     ∃ new, (recordBound place answers count s).bounds = new ++ s.bounds ∧
       ∀ q, q ∈ new → q.1 = place ∧
         ∃ (t : D.Ty) (id : Ident) (ok : D.Count w t), count = .value id ok ∧
-          answers.upper id = some q.2 := by
+          answers.upperAt id = some q.2 := by
   cases count with
   | fixed n => exact ⟨[], rfl, fun _ m => nomatch m⟩
   | value id ok =>
-      cases found : answers.upper id with
+      cases found : answers.upperAt id with
       | none => exact ⟨[], by simp only [recordBound, found]; rfl, fun _ m => nomatch m⟩
       | some bound =>
           refine ⟨[(place, bound)], by simp only [recordBound, found]; rfl, fun q m => ?_⟩
@@ -331,8 +331,8 @@ private theorem resultFacts_sound {ins res} (o : D.Op ins res) {table : Table Ra
     · rename_i source result atSource atResult
       obtain ⟨x, hx, rx⟩ := src.get atSource
       obtain ⟨y, hy, ry⟩ := dst.get atResult
-      obtain ⟨num, truth⟩ := laws.rules.observedOperand o observed ran hx hy
-      exact σ.domain.observe slots (Asks.nobody_sound ..) typed rx ry num truth
+      exact σ.domain.observe slots (Asks.nobody_sound ..) typed rx ry
+        (laws.rules.observedOperand o observed ran hx hy)
     · exact typed
 
 include laws in

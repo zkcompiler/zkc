@@ -43,9 +43,9 @@ private theorem observedOperand (M : Model V) (fns : FnTable M hs.fns) (roles : 
     (ran : (roleOp M r fns roles key op path args).CanReturn (Permitted M) ys)
     {x y} (src : ((roleSem M r fns roles).dyns args)[i]? = some x)
     (dst : ((roleSem M r fns roles).dyns ys)[0]? = some y) :
-    (roleReading M r).nat x = (roleReading M r).nat y ∧
-      (roleReading M r).bool x = (roleReading M r).bool y := by
-  suffices eq : heldValue M r x = heldValue M r y by simp [roleReading, eq]
+    (roleReading M r).Agrees x y := by
+  suffices eq : heldValue M r x = heldValue M r y by
+    exact ⟨by simp [roleReading, eq], by simp [roleReading, eq], eq⟩
   cases op with
   | keep holders same =>
     by_cases here : r ∈ holders

@@ -266,7 +266,7 @@ def clauseTruth (cfg : Config D Raw) (positions : List (Option Ident)) (bound : 
   if value then
     if let some expr := bound then
       let (x, _, known) ← enterExpr cfg positions expr v k
-      guard (((cfg.domain.answers known).upper x).isSome)
+      guard (((cfg.domain.answers known).upperAt x).isSome)
   return value
 
 /-- Assertions decided in order, from the index given: each is entered and its truth asked;
@@ -578,7 +578,7 @@ def learnInvariants (cfg : Config D Raw) (ids : Ctx Ident) (index : Option Ident
 upper bound of the count's identifier. -/
 def recordBound {w : D.Who} (place : Place) (answers : Asks) : Count D w → State Raw → State Raw
   | .value id _, s =>
-      match answers.upper id with
+      match answers.upperAt id with
       | some bound => { s with bounds := (place, bound) :: s.bounds }
       | none => s
   | .fixed _, s => s

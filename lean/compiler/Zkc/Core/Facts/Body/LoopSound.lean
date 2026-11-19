@@ -950,7 +950,8 @@ theorem loopSound : LoopSoundStatement σ := by
       · obtain ⟨-, t, id, ok, isValue, upper⟩ := addedR _ m
         obtain ⟨c, htimes, hid⟩ := countOf_eq_value isValue
         subst hid
-        obtain ⟨v, n, read, nat, below⟩ := (σ.domain.answers decidedMeans).upper _ _ upper
+        obtain ⟨v, n, read, nat, below⟩ := (σ.domain.answers decidedMeans).upperAt
+          (fun raw operands ys zs a b => laws.rules.functional raw operands ys zs a.1 b.1) toDecided.wf.slots upper
         have read' := scopeDecided.idOf_reads c
         have same := Reads.functional (fun raw operands results results' first second =>
           laws.rules.functional raw operands results results' first.1 second.1) toDecided.wf

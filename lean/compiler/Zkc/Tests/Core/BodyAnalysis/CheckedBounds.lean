@@ -24,11 +24,12 @@ example (cfg : Config (localDialect V fns) (LocalRaw V)) :
     clauseTruth (withKnowledge cfg) [some (.leaf 0)] none (Values.empty localPlace)
       (trueAt (.leaf 1)) (.leaf 1) = some true := by rfl'
 
-/-- Success with a static demand witnesses an actual upper answer for its resolved identifier. -/
+/-- Success with a static demand witnesses an numeric upper bound on the resolved identifier or its certified source. -/
 theorem clauseTruth_bound {D : Dialect} {Raw : Type} [DecidableEq Raw] {cfg : Config D Raw}
     {pos expr v k id} (ok : clauseTruth cfg pos (some expr) v k id = some true) :
     ∃ x vs state n, enterExpr cfg pos expr v k = some (x,vs,state) ∧
-      (cfg.domain.answers state).upper x = some n := by
+      ((cfg.domain.answers state).upper x = some n ∨ ∃ other,
+        (cfg.domain.answers state).numberSource x = some other ∧ (cfg.domain.answers state).upper other = some n) := by
   cases truth : cfg.domain.truth Asks.nobody v.table k id with
   | none => simp [clauseTruth, truth] at ok
   | some b =>
@@ -39,9 +40,9 @@ theorem clauseTruth_bound {D : Dialect} {Raw : Type} [DecidableEq Raw] {cfg : Co
       | none => simp [clauseTruth, truth, entered] at ok
       | some found =>
         obtain ⟨x,vs,state⟩ := found
-        cases bound : (cfg.domain.answers state).upper x with
+        cases bound : (cfg.domain.answers state).upperAt x with
         | none => simp [clauseTruth,truth,entered,bound,guard] at ok; cases ok
-        | some n => exact ⟨x,vs,state,n,rfl,bound⟩
+        | some n => exact ⟨x,vs,state,n,rfl,Asks.upperAt_source bound⟩
 
 #print axioms clauseTruth_bound
 end Zkc.Core.BodyAnalysis

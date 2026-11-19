@@ -390,7 +390,7 @@ theorem PositionsRead.cons {σ : Setting D Raw} {table : Table Raw} {ρ : Leaves
 /-- Nobody's answers are sound. -/
 theorem Asks.nobody_sound {Val : Type} (Run : Raw → List Val → List Val → Prop) (R : Reading Val)
     (table : Table Raw) (ρ : Leaves Val) : Asks.nobody.Sound Run R table ρ :=
-  ⟨fun _ _ h => (nomatch h), fun _ _ h => (nomatch h), fun _ _ h => (nomatch h)⟩
+  ⟨fun _ _ h => (nomatch h), fun _ _ h => (nomatch h), fun _ _ h => (nomatch h), fun _ _ h => nomatch h⟩
 
 /-- A state that means something is not dead. -/
 theorem Setting.alive (σ : Setting D Raw) {k : σ.cfg.domain.State} {table : Table Raw}

@@ -106,7 +106,7 @@ structure Rules.Lawful (rules : Rules D Raw) (sem : Semantics D)
     ∀ {key path} {args : HList sem.Val ins} {results : HList sem.Val res},
     (sem.op key o path args).CanReturn permitted results →
     ∀ {x y}, (sem.dyns args)[i]? = some x → (sem.dyns results)[0]? = some y →
-      R.nat x = R.nat y ∧ R.bool x = R.bool y
+      R.Agrees x y
   /-- A written form gives one list of results. -/
   functional : ∀ raw operands results results', Run raw operands results →
     Run raw operands results' → results = results'

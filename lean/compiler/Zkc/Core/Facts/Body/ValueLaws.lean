@@ -646,4 +646,32 @@ end
 #print axioms shareReads
 #print axioms selectReads
 
+section
+variable {Raw Val : Type} {Run : Raw → List Val → List Val → Prop} {R : Reading Val}
+    {table : Table Raw} {ρ : Leaves Val}
+    (functional : ∀ op xs ys zs, Run op xs ys → Run op xs zs → ys = zs) (slots : table.WF)
+
+include functional slots in
+theorem Asks.Sound.numberAt_reads {asks : Asks} (external : asks.Sound Run R table ρ)
+    {id v} (read : Reads Run R.bool table ρ id v) :
+    ∃ w, Reads Run R.bool table ρ (asks.numberAt id) w ∧ R.nat w = R.nat v := by
+  cases found : asks.numberSource id with
+  | none => exact ⟨v, by simpa [Asks.numberAt, found] using read, rfl⟩
+  | some _ =>
+    obtain ⟨x,w,rx,rw',same⟩ := external.numberSource _ _ found
+    cases Reads.functionalOn functional slots read rx
+    exact ⟨w, by simpa [Asks.numberAt, found] using rw', same.symm⟩
+
+include functional slots in
+theorem Asks.Sound.upperAt {asks : Asks} (external : asks.Sound Run R table ρ) {id n}
+    (found : asks.upperAt id = some n) : ∃ v k, Reads Run R.bool table ρ id v ∧ R.nat v = some k ∧ k ≤ n := by
+  rcases Asks.upperAt_source found with direct | ⟨a,alias,bound⟩
+  · exact external.upper _ _ direct
+  · obtain ⟨x,y,rx,ry,same⟩ := external.numberSource _ _ alias
+    obtain ⟨v,k,rv,num,le⟩ := external.upper _ _ bound
+    cases Reads.functionalOn functional slots ry rv
+    exact ⟨x,k,rx,same.trans num,le⟩
+
+end
+
 end Zkc.Core.BodyAnalysis

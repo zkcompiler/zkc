@@ -706,7 +706,7 @@ theorem failsAfterAttempt_safe : (failsAfterAttempt.denote toySem [] Env.empty).
 private def exitAfterAttempt :=
   analyse toyConfig [] ⟨[],[]⟩ .nil failsAfterAttempt
 
-private def toyReading : Reading toySem.Dyn := ⟨fun _ => none, fun v => some v.2⟩
+private def toyReading : Reading toySem.Dyn := { nat := fun _ => none, bool := fun v => some v.2 }
 
 /-- The actual skeleton of this body runs: the body returns, but the settlement requires
 an unavailable reply, so the failing continuation is never reached. -/

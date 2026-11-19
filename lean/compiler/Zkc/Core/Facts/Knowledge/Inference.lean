@@ -57,11 +57,14 @@ def assume (asks : Asks) (k : BufferedFacts) (id : Ident) (b : Bool) : BufferedF
   if k.hasTruth id.key (!b) || asks.truth id == some (!b) then k.kill else k.addTruth id.key b
 
 /-- Intersect the local range with the most precise numeric answer available from peers. -/
-def rangeFor (asks : Asks) (k : BufferedFacts) (id : Ident) : Option Range :=
+def directRange (asks : Asks) (k : BufferedFacts) (id : Ident) : Option Range :=
   let peer := match asks.exact id with
     | some n => some (Range.point n)
     | none => (asks.upper id).map fun hi => ⟨0, some hi⟩
   Range.meet (k.rangeOf id.key) peer
+
+def rangeFor (asks : Asks) (k : BufferedFacts) (id : Ident) : Option Range :=
+  Range.meet (directRange asks k id) ((asks.numberSource id).bind (directRange asks k))
 
 /-- A hull requires a range from every reachable exit. -/
 def hullAt {α : Type} (get : α → Option Range) : List α → Option Range
@@ -229,6 +232,15 @@ def learnSelection {Raw : Type} (ops : KnowledgeOperations Raw) (table : Table R
     else k
   | _ => k
 
+/-- Keep the comparison on its written operands and on their numeric representatives.
+The latter key survives a placement change or a repeated measurement. -/
+def rememberComparison (asks : Asks) (k : BufferedFacts) (x y : Ident)
+    (remember : BufferedFacts → Ident → Ident → BufferedFacts) : BufferedFacts :=
+  let learned := remember k x y
+  let a := asks.numberAt x
+  let b := asks.numberAt y
+  if a == x && b == y then learned else remember learned a b
+
 def learnTruth {Raw : Type} (ops : KnowledgeOperations Raw) (asks : Asks) (table : Table Raw) :
     Nat → BufferedFacts → Ident → Bool → BufferedFacts
   | 0, k, id, b => assume asks k id b
@@ -238,10 +250,12 @@ def learnTruth {Raw : Type} (ops : KnowledgeOperations Raw) (asks : Asks) (table
       match resultForm ops table id with
       | some (.less, [x,y]) =>
         refineComparedSources ops table
-          (if b then learned.pushLess x.key y.key else learned.pushLe y.key x.key) x y
+          (rememberComparison asks learned x y fun k a c =>
+            if b then k.pushLess a.key c.key else k.pushLe c.key a.key) x y
       | some (.equal, [x,y]) =>
         refineComparedSources ops table
-          (if b then learned.pushEqual x.key y.key else learned.pushDifferent x.key y.key) x y
+          (rememberComparison asks learned x y fun k a c =>
+            if b then k.pushEqual a.key c.key else k.pushDifferent a.key c.key) x y
       | some (.negation, [x]) => learnTruth ops asks table fuel learned x (!b)
       | some (.conjunction, [x,y]) =>
         if b then learnTruth ops asks table fuel (learnTruth ops asks table fuel learned x true) y true
@@ -266,13 +280,20 @@ def zeroAddend {Raw : Type} (ops : KnowledgeOperations Raw) (table : Table Raw) 
   (addedTerm ops table operand result).any (fun t => (asks.orElse (answers k)).exact t == some 0)
 
 /-- Compare numeric operands of a comparison whose execution witnesses that both are numbers. -/
-def ordered {Raw : Type} (ops : KnowledgeOperations Raw) (table : Table Raw) (asks : Asks) (k : BufferedFacts) (left right : Ident) (strict : Bool) : Bool :=
+def orderedAt {Raw : Type} (ops : KnowledgeOperations Raw) (table : Table Raw) (asks : Asks) (k : BufferedFacts) (left right : Ident) (strict : Bool) : Bool :=
   (!strict && left == right) || k.hasOrder left.key right.key strict ||
     FactCheck.rangesOrder (rangeFor asks k left) (rangeFor asks k right) strict ||
     separates asks k strict (addedTerm ops table left right) ||
     separates asks k strict (subtractedTerm ops table left right) ||
     (offsetLimit ops table k left (· == right)).isSome ||
     (!strict && zeroAddend ops table asks k right left)
+
+def ordered {Raw : Type} (ops : KnowledgeOperations Raw) (table : Table Raw)
+    (asks : Asks) (k : BufferedFacts) (left right : Ident) (strict : Bool) : Bool :=
+  orderedAt ops table asks k left right strict || Id.run do
+    let a := asks.numberAt left
+    let b := asks.numberAt right
+    return (a != left || b != right) && orderedAt ops table asks k a b strict
 
 def sameNumber (asks : Asks) (k : BufferedFacts) (x y : Ident) : Bool :=
   x == y || ((asks.orElse (answers k)).exact x).any fun n => (asks.orElse (answers k)).exact y == some n

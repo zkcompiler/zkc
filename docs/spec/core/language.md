@@ -356,17 +356,18 @@ A function that passes never stops `undefined`
 
 ### Facts in a protocol body
 
-A value of a protocol body has one holder, and a role computes on the values it
-holds. What is known is therefore kept role by role: each role has its own
-intervals, shapes, orders and known conditions, about values it holds. A fact of one
-role never reaches another. A value that a role receives has what its type gives and
-nothing more, whatever the sender knew of the value it sent; a role that needs a fact
-of a received value states its own `guard`.
+A protocol value has a type and a set of holders. Each role's projection checks the
+intervals, shapes, orders and known conditions on its own local values. At a sending
+role the result of the projected give has the same payload as its operand. Repeated
+lengths of this subject can use the same comparison and count bounds. At a receiving
+role the reply is a separate value with the guarantees of its wire type. The receiver
+can establish further bounds by checking the reply locally.
 
 | Operation | What it gives |
 |---|---|
 | `at(r, ℓ)` | the rules above for the local operation `ℓ`, on what `r` knows: the requirement of `ℓ`, the intervals and shapes of its results, the facts of a `guard`, and the facts at the start of the regions of an `if`, a `loop` and a `match` |
-| `exchange`, `draw`, `sample`, `apply` | results of which no role knows anything |
+| `exchange` | the sender retains its local payload observations, and each receiver starts with the guarantees of its wire type |
+| `draw`, `sample`, `apply` | result types provide the initial guarantees |
 | `choose` on a condition | in the region of `false`, each role of `P` knows the facts of its own copy of the condition taken false; in the region of `true`, taken true |
 | `choose` on an arm number or on a variant | nothing; nothing is known of the payloads |
 | a `nat` result of a `choose` or of a block | its holder knows the smaller `lo` and the larger `hi` of what it knows of that result where the regions return, as for a result of an `if` |
