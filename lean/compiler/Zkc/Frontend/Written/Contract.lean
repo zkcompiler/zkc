@@ -2,6 +2,7 @@ module
 
 public import Zkc.Frontend.Written.Selection
 public import Zkc.Frontend.Written.Algorithm
+public import Zkc.Frontend.Written.Package
 
 @[expose] public section
 set_option autoImplicit false
@@ -44,6 +45,25 @@ def portView (s : Compile.State) (protocol : InstanceId) (code : Typing.Protocol
   let s ← checkFields s protocol (.coins verifier) where_ #[draw]
   return (⟨commitment, challenge, response, p, v, ← historySort pt where_⟩, s)
 
+/-- The package of one function, in a namespace of its own, with the names by which the
+statement of a selected clause refers to it. -/
+def functionPackage (label : String) (p : SourcePackage) (ev : p.Admission) : ExportM String := do
+  let printed ← package p ev
+  let [(k, false)] := printed.definitions | unsupported "function with other definitions"
+  let scope := label ++ "Package"
+  return "\n".intercalate [
+    s!"namespace {scope}", printed.text ++ s!"end {scope}",
+    s!"abbrev stored{label} := {scope}.stored",
+    s!"abbrev {label}Header := {scope}.header{k.number}",
+    s!"abbrev {label}Names := {scope}.names{k.number}",
+    s!"noncomputable abbrev {label}Body := {scope}.body{k.number}",
+    s!"noncomputable abbrev installed{label} := {scope}.installed",
+    s!"theorem {label}Readback (a : Admitted V) (h : admit stored{label} ⟨[],[],[],[],[]⟩ = .ok a) : " ++
+      s!"a.program = installed{label} := {scope}.readback h",
+    s!"theorem {label}Admitted : (admit stored{label} ⟨[],[],[],[],[]⟩).isOk = true := by",
+    s!"  obtain ⟨a, accepted⟩ := {scope}.admitted_exists",
+    s!"  exact (congrArg Except.isOk accepted : _)"]
+
 /-- Use the signature, typed tree and dependency closure of the ordinary function instance.
 The property supplies its required signature and checks the source nominal identity. -/
 def checkedClause (label : String) (s : Compile.State) (id : DeclarationId) (args : Array StaticValue)
@@ -59,7 +79,7 @@ def checkedClause (label : String) (s : Compile.State) (id : DeclarationId) (arg
     | .defect why | .waiting why | .noCoreForm why => s!"{at_.file}:{at_.render}: WK-FUNCTION: {why}"
   let package := emitted.package ⟨[],[],[],[],[]⟩
   let .ok evidence := package.checkEvidence | refuse at_ "WK-FUNCTION" "admission refused the selected function"
-  return (← functionDeclarations label package evidence, s)
+  return (← functionPackage label package evidence, s)
 
 structure WrittenClause where
   parties : WrittenParties
@@ -126,7 +146,7 @@ def declarations (s : Compile.State) (selection : Selection) : ExportM WrittenCl
       let (closed, _) ← evaluate s type.span (Static.evalWrittenType {file := schemeDecl.file} type)
       let some standard := StandardNames.typeOf? closed
         | refuse type.span "WK-PORT" "the public context needs a supported standard value type"
-      let rendered ← ty (b := {}) (standard.mapNominal Sum.inl)
+      let rendered := ty (b := {}) (standard.mapNominal Sum.inl)
       contextFields := contextFields.push (name.text, rendered)
   unless !publicNames.isEmpty &&
       e.params.size == r.statement.size + 1 do

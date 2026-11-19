@@ -1,3 +1,4 @@
+import Zkc.Core.Program.DefinitionChecks
 import Zkc.Formal.Interactive.RoundFamily
 import Zkc.Formal.Written.FiniteModel
 open Zkc.Core Zkc.Formal.Written Zkc.Formal.Written.FiniteModel
@@ -16,17 +17,17 @@ abbrev h5 : FnHeader Standard := ⟨⟨5⟩, [.nat], [.nat], false, none, Summar
 abbrev ns5 : Names h5.ins := .cons 0 (.nil)
 def body5 : Fn Standard [] h5 ns5 :=
   .op ⟨1⟩ (.literal .nat [3] rfl) .nil (.cons 2 .nil) (.ret (.cons ⟨2,rfl⟩ .nil))
-theorem ok5 : FnConditions body5 := by function_conditions body5 ns5
+theorem ok5 : FnConditions body5 := FnConditions.of_checks (by decide +kernel)
 abbrev h6 : FnHeader Standard := ⟨⟨6⟩, [.nat,.nat], [.nat], false, none, Summary.empty⟩
 abbrev ns6 : Names h6.ins := .cons 0 (.cons 1 (.nil))
 def body6 : Fn Standard [h5] h6 ns6 :=
   .op ⟨1⟩ (.literal .nat [0] rfl) .nil (.cons 2 .nil) (.ret (.cons ⟨2,rfl⟩ .nil))
-theorem ok6 : FnConditions body6 := by function_conditions body6 ns6
+theorem ok6 : FnConditions body6 := FnConditions.of_checks (by decide +kernel)
 abbrev h7 : FnHeader Standard := ⟨⟨7⟩, [.nat,.nat], [.nat], false, none, Summary.empty⟩
 abbrev ns7 : Names h7.ins := .cons 0 (.cons 1 (.nil))
 def body7 : Fn Standard [h6,h5] h7 ns7 :=
   .op ⟨1⟩ (.literal .nat [1] rfl) .nil (.cons 2 .nil) (.ret (.cons ⟨2,rfl⟩ .nil))
-theorem ok7 : FnConditions body7 := by function_conditions body7 ns7
+theorem ok7 : FnConditions body7 := FnConditions.of_checks (by decide +kernel)
 abbrev hs : Headers Standard := ⟨[h7,h6,h5],[]⟩
 def installed : Typed Standard :=
   ⟨hs,.fn h7 ns7 body7 ok7 (.fn h6 ns6 body6 ok6 (.fn h5 ns5 body5 ok5 .nil)),by decide⟩

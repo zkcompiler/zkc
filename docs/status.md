@@ -30,6 +30,12 @@ kernel audit. The [formal package guide](../lean/formal/README.md) gives the
 theorem entry points and the [source checks](../lean/formal/checks/SourceProtocols.lean)
 exercise the certificates.
 
+## Printed packages
+
+The frontend prints an admitted package as a Lean module: the program by names, the typed program with every definition stated against the headers of those before it, and the kernel's check, one definition at a time, that the erasure of the typed program is the program by names. The program of any admission of the program by names is then the typed program, and the kernel runs that admission once. The traversal has a case for every definition, instruction and operation of the Core program and reads no source identifier; every computation in the module is a decision of the kernel. The module imports the compiler package only.
+
+`just test-packages` prints every admitted root of seven examples: Schnorr, Chaum–Pedersen, Sumcheck with two rounds and with ten (sixty-five definitions), GKR with its fifteen project primitives, the inner-product argument, a protocol over variants and the fragments. Lean checks each of the fifteen modules, the program that Lean read is compared with the program that the frontend gave to admission, and three controls are refused. No checked example has an attempt, an oracle event, a function with a header summary, a kernel or annotations, or a non-empty association: the traversal prints them, and no check runs those cases.
+
 ## Written three-message knowledge
 
 The source-issued Schnorr and Chaum–Pedersen knowledge theorem covers the admitted verifier, extractor and relation. The extractor takes a sized sequence of nominal run records for the selected closed protocol. Source-level checks cover the owning contract, explicit roles and available statement fields. Both protocols use the same exact returning-trace characterization, row interpretation laws and group-action proof. An independent companion can prove the Core target directly. Finite-model controls falsify it after deleting a verifier guard or changing a selected function. Oracle names and opening operands survive resolution; full source oracle elaboration is pending. Run `just test-written-knowledge` and `just test-interactive`. See the [proof and model boundaries](written-knowledge.md).

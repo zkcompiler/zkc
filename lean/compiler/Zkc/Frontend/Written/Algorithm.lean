@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Frontend.Written.Program
+public import Zkc.Frontend.Written.Package
 public import Zkc.Frontend.Semantics.StandardTypes
 public import Zkc.Frontend.Syntax.Spans
 

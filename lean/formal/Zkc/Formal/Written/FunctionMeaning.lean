@@ -15,19 +15,6 @@ def functionResult {M : Model V} {t : V.Ty} : Local (HList M.Val [t]) → Option
   | .halt _ => none
   | .call op _ => nomatch op
 
-def singletonFunction (hdr : FnHeader V) (ns : Names hdr.ins) (body : Fn V [] hdr ns)
-    (valid : FnConditions body) : Typed V :=
-  ⟨⟨[hdr], []⟩, .fn hdr ns body valid .nil, by simp [Headers.keys]⟩
-
-macro "function_conditions " body:term:max ns:term:max : tactic => `(tactic|
-  exact {
-    distinct := (Term.repeatedAddress_eq_none $body).mp (by decide +kernel)
-    linear := by change Term.misuse (fun a => Ty.isLinear _ a) $ns $body = none; decide +kernel
-    stops := rfl
-    armed := by decide +kernel
-    once := (Term.rebound_eq_none (Names.toList $ns) $body).mp (by decide +kernel)
-    summary := rfl })
-
 variable {M : Model V} {fns : List (FnHeader V)} {Γ : Ctx V.Ty} {out : V.Ty}
 
 theorem function_op {input mid : List V.Ty} {k : Key} {o : LocalOp V fns input mid}
