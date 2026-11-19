@@ -41,6 +41,7 @@ Run every command from the root of the repository.
 | `just build` | `lake build` in `lean/compiler`: all active targets |
 | `just test` | `lake build` and `lake test` in `lean/compiler`, then `just audit` |
 | `just test-interactive` | build the interactive formal modules, check emitted source entries and mutations, and audit the interactive library and its mathematical controls |
+| `just test-frontend` | parse and format the source corpus, compare assembly and name diagnostics with the reference, and check typed generated views |
 | `just test-written-knowledge` | compile both Schnorr and Chaum–Pedersen written clauses, check admission and extraction, consume the public theorems, replay their project imports, and test permitted forks, source mutations and diagnostics |
 | `just test-formal` | build the default formal package, replay its project modules and check their transitive axioms |
 | `just audit` | `lake exe zkc-audit` in `lean/compiler`: core, vocabulary and their tests |

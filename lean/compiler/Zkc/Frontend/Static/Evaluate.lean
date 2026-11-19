@@ -504,6 +504,9 @@ mutual
             let cls ← parameterClass reference
             assigned := assigned.insert reference (← evalTerm env term cls)
           | none =>
+            if (specificationParameters program found).any (fun (ref, p) =>
+                chain.contains ref.scope && p.name.text == argName) then
+              refuse "SP11" argSpan s!"`{argName}` is a specification-only parameter and cannot be supplied as a deployed argument"
             refuse "SP5" argSpan s!"`{stepName}` has no static parameter `{argName}`"
         | .inferred _ none => position := position + 1
         | .inferred _ (some _) | .spec .. => pure ()

@@ -36,6 +36,15 @@ The source-issued Schnorr and Chaum–Pedersen knowledge theorem covers the admi
 
 A named `special_soundness` goal at `written` selects a scheme and its knowledge clause. Extra scheme context remains in the public statement. The independent consumers supply their own role inputs, function arguments and observed addresses. The formal arithmetic model constructs the group interfaces from a Mathlib field action. A separate process interpretation uses VCVio for challenge probabilities. Run `just test-formal` to build and audit the public package.
 
+## Source conformance
+
+`just test-frontend` exercises parsing and formatting across the reference corpus, compares
+assembly and name resolution with the expected rules, and checks generated views at closed
+protocol instances. Resolution checks the statement/witness split of a top-level relation in
+`proves`, `reduces` and `through`, the form of knowledge branches, named algorithms and loop references.
+Typing the full contract at each instance remains open. The
+[language and frontend review](source-elaboration.md) describes the proposed boundary.
+
 ## Earlier source and execution pipeline
 
 Use [the previous Lean compiler at `10ed903fc`](https://github.com/zkcompiler/zkc/tree/10ed903fc22d3f20b22ff2d1bbf607a740ef0718) for the working `.zkc` frontend,

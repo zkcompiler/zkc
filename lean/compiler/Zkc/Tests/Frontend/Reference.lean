@@ -1,4 +1,4 @@
-import Zkc.Tests.Frontend.Harness
+import Zkc.Tests.Frontend.SyntaxHarness
 
 /-!
 # The sources and the conformance tests of the reference
