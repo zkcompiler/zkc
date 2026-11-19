@@ -341,8 +341,8 @@ the driver with an error. It checks:
   `Zkc.Tests.Frontend.TypingReference`, or its roots are admitted by the core or typed only; a
   refusal by a rule that is neither the one a test expects nor its stated alternative is a
   contradiction, listed, and a failure unless the table of known contradictions (empty) gives its
-  reason; a test whose roots wait for a form that is not elaborated yet (`attempt`, the oracle
-  events, layer D, a law that is a tuple or a collection, a generated member, a row at a module
+  reason; a test whose roots wait for a form that is not elaborated yet (`attempt`, deferred or derived oracle
+  events in layer D, a law that is a tuple or a collection, a generated member, a row at a module
   argument) waits, with the reasons of its roots; the table of the waits that this check leaves
   is empty; a test of acceptance that no root reaches is listed apart; every module of
   `libraries/`, every worked program and the generated program type, except `zkc::layout`, whose
@@ -781,3 +781,10 @@ Each reading is followed by the alternative it rules out.
   a composite with an opaque component is refused; a collected name after no iteration has the
   type the body gives or is `[]`; names in specifications must resolve; an `if` expression is
   an expression of its roles; `1^n` determines no `n`; whether a body can stop is read on its text.
+
+
+### Written primitive table requests
+
+In a two-role protocol, a local `send ... as oracle<table<T, n>>` binds a handle to the registration, data holder and reader. An immediate `query` on that handle accepts a fixed-length batch of `index<n>` positions held by both roles. The front end checks the resolved table module’s data, row and position types and its indexing definition of `answer`. It evaluates the positions once. The registration request receives the actual data, the opener’s request receives the handle and positions, and the reader checks an opening over the handle, positions and rows. A failed opening rejects before the written continuation.
+
+The emitted Core uses ordinary typed requests. Its service supplies the ideal table semantics. The send has source site part `value`. The query has parts `rows` and `opening`. A generated source `Run` schema gives the send field its registered data type. Relating an extractor on that schema to a commitment’s observations requires further evidence. Scheme construction waits for a commitment interpretation when a protocol or its callee uses these requests. [Source rules](../../../../language/LANGUAGE.md) · [Formal service and certificate](../../../formal/README.md#written-spot-check)

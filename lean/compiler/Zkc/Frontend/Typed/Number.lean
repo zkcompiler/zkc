@@ -113,6 +113,8 @@ mutual
     | .event found number what => do
       let found ← mark found
       let what ← match what with
+        | .table op registration binder operand owner peers =>
+          pure (Event.table op registration binder (← expr operand) owner peers)
         | .send binder payload sender receivers => do
           pure (Event.send binder (← expr payload) sender receivers)
         | .apply results callee arguments specification roleMap order proofArguments => do

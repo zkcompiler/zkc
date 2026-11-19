@@ -683,7 +683,10 @@ mutual
     | .bytes span data =>
       return .literal (info span (.seq (.index 256) (some data.length))) (.bytes data)
     | .tuple span #[] _ => return .construct (info span ClosedType.unit) .tuple #[]
-    | .local span binder => localPath span binder
+    | .local span binder =>
+      if (← get).tableHandles.contains binder then
+        waitFor "a use of a registered table handle outside its immediate query"
+      localPath span binder
     | .reference reference => elabPath reference expected
     | .type type =>
       let span := Lowered.Expr.span (.type type)

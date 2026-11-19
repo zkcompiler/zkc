@@ -191,6 +191,9 @@ mutual
     | .event _ _ what => do
       -- what an event reads is used; what it binds owes a use
       match what with
+      | .table _ _ result operand _ _ => do
+        expr operand
+        bind result
       | .send binder payload _ _ => do
         expr payload
         if let some binder := binder then bind binder

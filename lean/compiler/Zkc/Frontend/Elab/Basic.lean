@@ -67,6 +67,8 @@ instance : Inhabited Context := ⟨{ env := default, «instance» := 0, name := 
 structure State where
   /-- The local names in scope, by binder. -/
   locals : Std.HashMap LocalId Local := {}
+  /-- Locally registered table handles, with their source event, opener and reader. -/
+  tableHandles : Std.HashMap LocalId (EventId × Nat × Nat) := {}
   /-- The indices of loops over static ranges that are typed as run-time naturals: where one
   stands in a static position, the body is typed per iteration (TY10). -/
   indices : Std.HashSet LocalId := {}

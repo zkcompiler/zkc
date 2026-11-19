@@ -234,13 +234,14 @@ def eventRoles (what : Event) : PlaceM RoleSet := do
       match (held.toArray.filter (!receiving.contains ·))[0]? with
       | some role => return receiving.insert role
       | none => return receiving
-  | .draw _ _ owner receivers => return (RoleSet.ofArray receivers).insert owner
+  | .table _ _ _ _ owner receivers | .draw _ _ owner receivers => return (RoleSet.ofArray receivers).insert owner
   | .sample _ _ role | .attempt _ role => return RoleSet.single role
   | .apply _ _ _ _ roleMap .. => return RoleSet.ofArray roleMap
 
 /-- The holders of a name bound by an event. -/
 def bindEvent (what : Event) (roles : RoleSet) : PlaceM Unit := do
   match what with
+  | .table _ _ binder .. => hold binder roles
   | .send binder .. | .draw binder .. | .sample binder .. | .attempt binder .. =>
     if let some binder := binder then hold binder roles
   | .apply results callee _ _ roleMap .. =>
@@ -466,6 +467,9 @@ mutual
         let mapped := RoleSet.ofArray (port.holders.toArray.map fun role => roleMap[role]?.getD role)
         requireHeld argument mapped "HO1" argument.span
         setComputing argument.info.id mapped
+    | .table op _ _ operand owner peers =>
+      requireHeld operand (if op == .register then .single owner else
+        (RoleSet.ofArray peers).insert owner) "OR4" mark.span
     | .draw _ _ _ receivers => do
       -- a receiver is named once (EV6)
       for index in [0:receivers.size] do

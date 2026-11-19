@@ -150,6 +150,7 @@ def protocolSummary (description : String) (head : Lowered.ProtocolHead) (checke
     for holder in holders do outputs := outputs.push (result.value.type, holder)
   let mut sites := #[]
   let mut flows := #[]
+  let mut usesIdealTable := false
   let mut nestedDraw := none
   let mut specificationArguments : Array SpecificationArgument := #[]
   -- A source operation such as broadcast can have several parts at the same instruction.
@@ -173,16 +174,21 @@ def protocolSummary (description : String) (head : Lowered.ProtocolHead) (checke
         let part := if receivers.size ≤ 1 then "value" else s!"to {body.roster[receiver]!}"
         flows := flows.push (.exchange sender receiver payload.type sites.size)
         sites := sites.push (site part)
+    | .table op _ binder _ owner peers =>
+      usesIdealTable := true
+      sites := sites.push (site op.part)
+      for peer in peers do
+        flows := flows.push (.exchange owner peer binder.type n)
     | .draw _ law owner receivers =>
       if nested && nestedDraw.isNone then nestedDraw := some (site "value").place
       let row ← internRow (← vocabularyRow law.request) (site "value").place
       sites := sites.push (site "value")
       flows := flows.push (.draw owner receivers row n)
     | .apply _ callee _ _ roleMap .. =>
-      if nestedDraw.isNone then
-        if let some (.protocol inner) := (← getResults).body? callee then
-          if inner.nestedDraw.isSome || inner.flows.any (fun | .draw .. => true | _ => false) then
-            nestedDraw := some (site "value").place
+      if let some (.protocol inner) := (← getResults).body? callee then
+        usesIdealTable := usesIdealTable || inner.usesIdealTable
+        if nestedDraw.isNone && (inner.nestedDraw.isSome || inner.flows.any (fun | .draw .. => true | _ => false)) then
+          nestedDraw := some (site "value").place
       sites := sites.push (site "value")
       flows := flows.push (.apply callee roleMap)
       if let some attached := origin.specification.find? (·.instruction.number == instruction) then
@@ -191,7 +197,7 @@ def protocolSummary (description : String) (head : Lowered.ProtocolHead) (checke
             {site := n, port, text := ← textAt expr.span, type := ← renderTypeM expr.type, place := expr.span}
     | .sample .. | .attempt .. => sites := sites.push (site "value")
   return { name := description, roles := body.roster, inputs, inputPorts, outputs, agreements
-           sites, flows, nestedDraw, specificationArguments, resolved
+           sites, flows, usesIdealTable, nestedDraw, specificationArguments, resolved
            waiting, specificationOnly := head.specification }
 
 /-- The body of a protocol that a body applies, asked for from the place of the application: a

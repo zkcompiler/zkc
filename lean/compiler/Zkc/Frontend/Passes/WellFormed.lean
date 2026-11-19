@@ -230,6 +230,9 @@ mutual
     | .event mark _ what => do
       if (← read).function then violate mark.span "an event in local code"
       match what with
+      | .table _ _ result operand _ _ => do
+        expr operand
+        bind result
       | .send binder payload _ _ => do
         expr payload
         if let some binder := binder then bind binder

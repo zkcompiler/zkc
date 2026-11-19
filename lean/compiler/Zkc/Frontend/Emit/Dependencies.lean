@@ -44,7 +44,7 @@ mutual
     | .scope _ body => body.foldl calledInStmt found
     | .event _ _ what =>
       match what with
-      | .send _ payload _ _ => calledInExpr found payload
+      | .table _ _ _ payload _ _ | .send _ payload _ _ => calledInExpr found payload
       | .apply _ _ arguments .. => arguments.foldl calledInExpr found
       | .draw .. | .sample .. | .attempt .. => found
     | .error .. => found

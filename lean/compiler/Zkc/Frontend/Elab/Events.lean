@@ -234,8 +234,69 @@ def elabEvent (span : Span) (event : EventId) (binder : Option Lowered.Binder)
   if (← getContext).roster.isNone then
     refuseHere "FN1" span "an event stands only in a protocol body; a `def` runs inside one role"
   match what with
-  | .oracleSend .. => waitFor "an oracle send (layer D)"
-  | .query .. => waitFor "a `query` (layer D)"
+  | .oracleSend payload sender receivers kind =>
+    let #[reader] := receivers | refuseHere "OR3" span "a primitive table has one reader"
+    let #[_, _] := (← getContext).roster.getD #[] | waitFor "table registration with multiple data holders"
+    let opener := sender.getD (1 - reader)
+    if reader == opener then refuseHere "OR3" span "the opener and reader must be distinct"
+    if type.isSome || roles.isSome then refuseHere "OR3" span "the oracle send determines the handle type and placement"
+    let env ← staticEnv
+    let .module kindId ← liftM (evalTerm env kind .module : CompileM StaticValue)
+      | refuseHere "OR3" span "expected a primitive table kind"
+    let s ← getThe Compile.State
+    let some entry := s.table.entries[kindId]? | throw .abandoned
+    unless qualifiedName s.program entry.key.declaration == "zkc::oracle::table" do
+      waitFor "a kind other than the primitive table"
+    let #[.type row, .natural size] := entry.key.arguments | throw .abandoned
+    let some (.«module» _ members) := s.table.content? kindId | throw .abandoned
+    let member (key : String) := (members.find? (·.1 == key)).map Prod.snd
+    let some (.type dataType) := member "Data" | throw .abandoned
+    let some (.type positionType) := member "Position" | throw .abandoned
+    let some (.type rowType) := member "Row" | throw .abandoned
+    unless dataType == .seq row size && positionType == .index size && rowType == row do
+      waitFor "the primitive table data, position and row types"
+    let some (.definition answer) := member "answer" | waitFor "the primitive table answer definition"
+    let some {content := .memberDefinition #[xs,i] (.body expr), ..} := s.env.modules.lowered? answer
+      | waitFor "the primitive table answer definition"
+    let value := match expr with | .block _ #[] value => value | value => value
+    let .operator _ .index #[.local _ tableId, .local _ indexId] := value
+      | waitFor "a table answer other than indexing the registered data"
+    unless tableId == xs.id && indexId == i.id do waitFor "the primitive table answer operands"
+    let data ← elabAt payload dataType
+    let some name := binder | refuseHere "OR3" span "bind the registered table handle"
+    let handle ← bindLocal name (.nominal "oracle.handle" #[.module kindId])
+    modify fun state => {state with tableHandles := state.tableHandles.insert handle.id (event, opener, reader)}
+    return #[.event span event (.table .register event handle data opener #[reader])]
+  | .query subject fromRole atPositions deferred =>
+    if deferred then waitFor "deferred table openings"
+    if type.isSome || roles.isSome then refuseHere "OR4" span "the query determines its row type and placement"
+    let .local place id := subject | waitFor "a query on a nonlocal table handle"
+    let handle ← localPath place id
+    let .nominal "oracle.handle" #[.module kindId] := handle.type
+      | waitFor "a query on another handle shape"
+    let some (registration, opener, reader) := (← get).tableHandles[id]?
+      | waitFor "a query on a handle supplied outside this registration"
+    if fromRole.any (· != opener) then refuseHere "OR4" span "the named opener does not hold the table"
+    let some entry := (← getThe Compile.State).table.entries[kindId]? | throw .abandoned
+    let #[.type row, .natural size] := entry.key.arguments | throw .abandoned
+    let positions ← elabExpr atPositions none
+    let .seq (.index bound) (some count) := positions.type
+      | if positions.type matches .index _ | .seq (.index _) none then
+          waitFor "an immediate query outside the fixed-size batch form"
+        else refuseHere "OR4" span "expected table positions at the index type of the kind"
+    unless size == bound do refuseHere "OR4" span "the index bound differs from the registered table size"
+    let some name := binder | refuseHere "OR4" span "bind the query result"
+    let rows ← bindLocal name (.seq row count)
+    let ok ← freshBinder "%opening" span .bool .operand
+    let readLocal (b : Typed.Binder) := Typed.Expr.local (info span b.type) b.id
+    let tuple (xs : Array Typed.Expr) := Typed.Expr.construct
+      (info span (.tuple (xs.map (·.type)) (xs.map fun _ => none))) .tuple xs
+    -- Evaluate the query positions once, at both participants.
+    let ps ← freshBinder "%positions" span positions.type .operand
+    return #[.bind span ps positions ⟨some (.ofArray #[opener, reader])⟩,
+      .event span event (.table .rows registration rows (tuple #[handle, readLocal ps]) opener #[reader]),
+      .event span event (.table .opening registration ok (tuple #[handle, readLocal ps, readLocal rows]) reader #[]),
+      .guard span (readLocal ok) .reject ⟨some (.single reader)⟩]
   | .openClaims .. => waitFor "an `open` (layer D)"
   | .send payload sender receivers =>
     if roles.isSome then
