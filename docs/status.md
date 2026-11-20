@@ -30,6 +30,10 @@ kernel audit. The [formal package guide](../lean/formal/README.md) gives the
 theorem entry points and the [source checks](../lean/formal/checks/SourceProtocols.lean)
 exercise the certificates.
 
+## Judgment with fees
+
+A process is judged within a budget when, at every effect, a fee chosen before the reply pays for the replies excluded there and every other permitted reply is judged within what is left. The budget is a nonnegative rational. Under the fees of samplers, a fee pays for a set of replies whose probability under the sampler of the effect is at most the fee. One theorem takes the judgment to VCVio's probability for any signature: a process judged within a budget not to return badly returns badly with probability at most the budget, under every service with a state that answers only permitted replies and draws as the samplers do. A test on one uniform draw of a field of five elements meets the hypotheses with a service that answers, reaches the bound of one fifth, and shows that no budget below one fifth judges the process. The judgment has no admitted program as a subject yet.
+
 ## Printed packages
 
 The frontend prints an admitted package as a Lean module: the program by names, the typed program with every definition stated against the headers of those before it, and the kernel's check, one definition at a time, that the erasure of the typed program is the program by names. The program of any admission of the program by names is then the typed program, and the kernel runs that admission once. The traversal has a case for every definition, instruction and operation of the Core program and reads no source identifier; every computation in the module is a decision of the kernel. The module imports the compiler package only.

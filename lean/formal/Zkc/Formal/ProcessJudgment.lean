@@ -77,32 +77,6 @@ theorem Process.every_iff_interpret (allowed : ∀ op, S.Reply op → Prop) (p :
     change (∀ v, allowed op v → _) ↔ ∀ v, allowed op v → _
     exact ⟨fun h v ok => (ih v).mp (h v ok), fun h v ok => (ih v).mpr (h v ok)⟩
 
-/-- A site policy bounds the exceptional replies at a charge chosen before the reply.
-All permitted, nonexceptional continuations inherit the remaining path budget. The unit
-and the meaning of a charge belong to the policy. -/
-def ProcessJudgment.charged (allowed : ∀ op, S.Reply op → Prop)
-    (small : (op : S.Op) → Nat → (S.Reply op → Prop) → Prop) : ProcessJudgment S (Nat → Prop) where
-  node op next budget := ∃ fee bad, fee ≤ budget ∧ small op fee bad ∧
-    ∀ v, allowed op v → ¬bad v → next v (budget - fee)
-
-theorem ProcessJudgment.charged_mono (allowed : ∀ op, S.Reply op → Prop)
-    (small : (op : S.Op) → Nat → (S.Reply op → Prop) → Prop) : (charged allowed small).Monotone := by
-  rintro op p q implies budget ⟨fee, bad, bound, ok, next⟩
-  exact ⟨fee, bad, bound, ok, fun v valid kept => implies v _ (next v valid kept)⟩
-
-theorem Process.every_of_zero_charge (allowed : ∀ op, S.Reply op → Prop)
-    (small : (op : S.Op) → Nat → (S.Reply op → Prop) → Prop)
-    (zero : ∀ op bad, small op 0 bad → ∀ v, allowed op v → ¬bad v) (p : Process S H A)
-    (done : A → Prop) (halt : H → Prop)
-    (h : p.interpret (.charged allowed small) (fun a _ => done a) (fun e _ => halt e) 0) :
-    p.Every allowed done halt := by
-  induction p with
-  | done | halt => exact h
-  | call op k ih =>
-    obtain ⟨fee, bad, bound, ok, next⟩ := h
-    obtain rfl := Nat.eq_zero_of_le_zero bound
-    exact fun v valid => ih v (next v valid (zero op bad ok v valid))
-
 def ProcessJudgment.possible (allowed : ∀ op, S.Reply op → Prop) : ProcessJudgment S Prop where
   node op next := ∃ v, allowed op v ∧ next v
 
