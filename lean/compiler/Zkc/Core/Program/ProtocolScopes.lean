@@ -65,17 +65,15 @@ mutual
 end
 
 mutual
+  /-- At an operation and at a guard the proposition is by definition that of the rest, and the
+  decision of the rest is returned as it is. Reaching it through `unfold` leaves a cast there,
+  and the kernel's check of that cast grows with the rest of the run, so that evaluating the
+  decision of a run of operations and guards is quadratic in its length. -/
   def decideEnclosed : {Γ : Ctx (LTy V)} → {outs : List (LTy V)} →
       (body : Term (protocolDialect V hs) Γ outs) → Decidable (Enclosed body)
     | _, _, .ret _ => isTrue trivial
-    | _, _, .op _ _ _ _ rest => by
-      unfold Enclosed
-      letI := decideEnclosed rest
-      infer_instance
-    | _, _, .guard _ _ _ _ _ rest => by
-      unfold Enclosed
-      letI := decideEnclosed rest
-      infer_instance
+    | _, _, .op _ _ _ _ rest => decideEnclosed rest
+    | _, _, .guard _ _ _ _ _ rest => decideEnclosed rest
     | _, _, .choose _ ps _ _ _ yes no _ rest => by
       unfold Enclosed
       letI := decideWithin ps yes
