@@ -7,7 +7,6 @@ import Zkc.Tests.Frontend.PrintedPackageSupport
 import Zkc.Core.Admission.Theorems
 import Zkc.Kernel
 import Zkc.Vocabulary.Project
-import Zkc.Formal
 
 /-!
 An admitted protocol judged within the charges that its source declares, and the judgment taken
