@@ -1471,15 +1471,21 @@ to the end makes the caller wait or not checked; a refused body abandons the cal
     if let some reference := (← getContext).resolutions[key]? then
       let some (.«module» inst) := (← getContext).env.values[reference]? | throw .abandoned
       return some (← callModuleMember inst function args expected span)
-    let .«opaque» «module» _ _ sorts := type | return none
+    -- the opaque elaboration records that this typing of the place found no member
+    let noMember : ElabM (Option Typed.Expr) := do
+      if (← getContext).«opaque» then
+        modify fun builder =>
+          { builder with resolved := builder.resolved.push ⟨span, function ++ path, none⟩ }
+      return none
+    let .«opaque» «module» _ _ sorts := type | noMember
     if let some sort := sortOfFunction function then
-      if sorts.contains sort then return none
+      if sorts.contains sort then return ← noMember
     -- `*` on a type of sort `Group` is its scaling by a scalar, a row of the sort (§7.4): it
     -- is no member of the interface either
-    if function == "mul" && sorts.contains "Group" then return none
+    if function == "mul" && sorts.contains "Group" then return ← noMember
     let state ← getThe Compile.State
-    let some (reference, _) := (state.table.entries[«module»]?).bind (·.key.opaqueFor) | return none
-    let some (.«module» interfaces _) := state.table.content? «module» | return none
+    let some (reference, _) := (state.table.entries[«module»]?).bind (·.key.opaqueFor) | noMember
+    let some (.«module» interfaces _) := state.table.content? «module» | noMember
     let program := state.program
     let declared := interfaces.any fun (interface, _) =>
       (((program.declarations[interface]?).bind (·.inner)).bind fun inner =>
@@ -1496,7 +1502,8 @@ to the end makes the caller wait or not checked; a refused body abandons the cal
           s!"`==` is not defined for `{typeText}` in a definition generic over `{parameter.getD "?"}: {interface}`: `{interface}` declares no `equal` for its type member"
       refuseHere "NL6" span
         s!"`{interface}` declares no `{function}`: an operator on its type member `{typeText}` is a member of the interface"
-    modify fun builder => { builder with resolved := builder.resolved.push (key, reference) }
+    modify fun builder =>
+      { builder with resolved := builder.resolved.push ⟨span, function ++ path, some reference⟩ }
     return some (← callModuleMember «module» function args expected span)
 
   /-- A call of the function member `name` of a module instance, in source or bound to a row. -/
@@ -1663,6 +1670,9 @@ to the end makes the caller wait or not checked; a refused body abandons the cal
       let rest ← pairArguments name.text (parameters.extract 1 parameters.size) arguments none span
       if let some typed ← memberOperator? span receiver.type name.text (#[first] ++ rest) expected then
         return typed
+    else if (← getContext).«opaque» then
+      -- a function of the home module: this typing of the place found no member
+      modify fun builder => { builder with resolved := builder.resolved.push ⟨span, name.text, none⟩ }
     let typeText ← renderTypeE receiver.type
     let some (home, homeName) ← homeOf receiver.type
       | refuseHere "NL5" span s!"`{typeText}` has no function `{name.text}` in its home module: it has none"

@@ -60,6 +60,21 @@ structure Row where
 first and the last byte, and the member's name. -/
 abbrev ResolvedPlace := String × UInt32 × UInt32 × String
 
+/-- One typing of a place by the opaque elaboration of a definition generic over a module
+parameter (SP12): the place, the name of the function that an operator, a form or a dot call
+there is, and the parameter whose interface has it as a member, or none where that typing found
+no member (a function of the type's own module, an operation of a sort). A place in a loop
+typed step by step, in a sum typed term by term or in a comprehension typed by element is typed
+once for each. -/
+structure PlaceTyping where
+  span : Syntax.Span
+  function : String
+  parameter : Option ParameterRef
+
+/-- The place of a typing. -/
+def PlaceTyping.place (typing : PlaceTyping) : ResolvedPlace :=
+  (typing.span.file, typing.span.startByte, typing.span.stopByte, typing.function)
+
 /-- What is kept of a function instance. -/
 structure FunctionCode where
   /-- The name a table of names gives it: the instance as source writes it. -/

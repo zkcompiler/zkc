@@ -213,11 +213,11 @@ it. Every refusal of the body is logged. -/
 def elaborateProtocol (inst : InstanceId) (description name : String) (env : Env)
     (head : Lowered.ProtocolHead) (statements : Array Lowered.Stmt)
     (returned : Option Lowered.Expr) (locals : Nat) (typeBody : InstanceId → Span → CompileM Unit)
-    (resolutions : Std.HashMap Typing.ResolvedPlace ParameterRef) :
-    CompileM (Typed.Checked × Typed.ProtocolBody × Array (Typing.ResolvedPlace × ParameterRef)) := do
+    (resolutions : Std.HashMap Typing.ResolvedPlace ParameterRef) («opaque» : Bool := false) :
+    CompileM (Typed.Checked × Typed.ProtocolBody × Array Typing.PlaceTyping) := do
   let context : Elab.Context :=
     { env, «instance» := inst, name := description, typeBody
-      specification := head.specification, resolutions, roster := some head.roster
+      specification := head.specification, resolutions, «opaque», roster := some head.roster
       protocolBody := calleeBody typeBody }
   -- the head at the values of the environment: those of the instance, or the opaque ones
   let signature ← Elab.protocolSignatureIn head env
@@ -291,9 +291,9 @@ def protocolBody (inst : InstanceId) (typeBody : InstanceId → Span → Compile
           span := place }
       withChainFrame frame do
         let opaqueEnv := instanceEnv state.program found opaqueArguments entry.key.specification
-        let (_, _, resolved) ← elaborateProtocol inst description name opaqueEnv head
-          statements returned[0]? lowered.locals typeBody {}
-        pure (resolved.foldl (init := {}) fun map (place, reference) => map.insert place reference)
+        let (_, _, typings) ← elaborateProtocol inst description name opaqueEnv head
+          statements returned[0]? lowered.locals typeBody {} («opaque» := true)
+        placeResolutions name found entry.key.arguments typings
     else pure {}
   let errors := (← get).log.errors
   if let .protocol node := found.node then Passes.checkSiteNames node

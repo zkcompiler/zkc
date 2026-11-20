@@ -181,12 +181,12 @@ members of the parameter's interface (SP12). The code, and those places. -/
 def elaborateBody (inst : InstanceId) (description : String) (env : Env)
     (parameters : Array (Lowered.Binder × ClosedType)) (result : ClosedType) (body : Lowered.Expr)
     (specification : Bool) (locals : Nat) (typeBody : InstanceId → Span → CompileM Unit)
-    (resolutions : Std.HashMap Typing.ResolvedPlace ParameterRef := {}) :
-    CompileM (FunctionCode × Array (Typing.ResolvedPlace × ParameterRef) × Typed.FunctionBody × Nat) := do
+    (resolutions : Std.HashMap Typing.ResolvedPlace ParameterRef := {}) («opaque» : Bool := false) :
+    CompileM (FunctionCode × Array Typing.PlaceTyping × Typed.FunctionBody × Nat) := do
   -- every refusal of the body is reported: a statement that is refused is an error node, and
   -- the statements after it are elaborated
   let context : Elab.Context :=
-    { env, «instance» := inst, name := description, typeBody, specification, resolutions }
+    { env, «instance» := inst, name := description, typeBody, specification, resolutions, «opaque» }
   let errors := (← get).log.errors
   let (tree, state) ← Elab.runElab context locals (Elab.elabFunctionBody parameters result body)
   trace "elab.tree" fun _ => .ofText s!"{description}:\n{(Typed.Body.function tree).print}"
@@ -236,6 +236,53 @@ def opaqueValues (found : Declaration) (values : Array StaticValue) :
     over := over.push s!"`{parameter.name.text}: {boundText}`"
   return (result, over)
 
+/-- What a typing of a place stands for at an instance: the module that its parameter stands
+for, or no member. Two parameters that stand for one module read the same. -/
+inductive PlaceReading where
+  | «module» (inst : InstanceId)
+  | parameter (reference : ParameterRef)
+  | noMember
+  deriving BEq
+
+/-- The resolutions of an opaque elaboration, by place (SP12). The elaboration at the instance
+reads one resolution for a place, whichever typing of the place it is at. So where the opaque
+elaboration typed a place more than once and its typings stand for different things at this
+instance (members of two modules, or a member and no member), every typing but one would be
+read wrongly, and the definition waits: it is a valid definition that this elaboration does not
+handle. `values` are the instance's values, in the order of the deployed parameters. -/
+def placeResolutions (name : String) (found : Declaration) (values : Array StaticValue)
+    (typings : Array Typing.PlaceTyping) :
+    CompileM (Std.HashMap Typing.ResolvedPlace ParameterRef) := do
+  let parameters := deployedParameters (← program) found
+  let index (reference : ParameterRef) := parameters.findIdx? fun (other, _) => other == reference
+  let reading : Option ParameterRef → PlaceReading
+    | none => .noMember
+    | some reference =>
+      match (index reference).bind (values[·]?) with
+      | some (.«module» inst) => .«module» inst
+      | _ => .parameter reference
+  let worded (typing : Typing.PlaceTyping) : String :=
+    match typing.parameter with
+    | none => "as no member of an interface"
+    | some reference =>
+      let parameter := ((index reference).bind (parameters[·]?)).map (·.2.name.text)
+      s!"as the member `{typing.function}` of `{parameter.getD "?"}`"
+  let mut first : Std.HashMap Typing.ResolvedPlace Typing.PlaceTyping := {}
+  let mut resolutions : Std.HashMap Typing.ResolvedPlace ParameterRef := {}
+  for typing in typings do
+    match first[typing.place]? with
+    | none => first := first.insert typing.place typing
+    | some earlier =>
+      unless reading earlier.parameter == reading typing.parameter do
+        waitFor (s!"`{typing.function}` at {typing.span.file}:{typing.span.startLine}:" ++
+          s!"{typing.span.startColumn} is typed more than once in the opaque typing of `{name}`: " ++
+          s!"{worded earlier} and {worded typing}, which are not the same at this instance. " ++
+          "One place of the text keeps one resolution (SP12): write the iterations apart, or " ++
+          "name the module of the member")
+    if let some reference := typing.parameter then
+      resolutions := resolutions.insert typing.place reference
+  return resolutions
+
 /-- The opaque elaboration of a definition generic over a module parameter (SP12): its body at
 the instance's values, each module parameter standing for its module with fresh type members,
 under the chain line that names it. It is emitted too, and its code not kept; it gives the places
@@ -258,9 +305,9 @@ def opaqueResolutions (inst : InstanceId) (description name : String) (found : D
     let resultType ← match result with
       | some type => evalType signatureEnv type
       | none => pure resultDefault
-    let (_, resolved, tree, _) ← elaborateBody inst description bodyEnv (binders.zip parameterTypes)
-      resultType body specification locals typeBody
-    return (resolved.foldl (init := {}) fun map (place, reference) => map.insert place reference, tree)
+    let (_, typings, tree, _) ← elaborateBody inst description bodyEnv (binders.zip parameterTypes)
+      resultType body specification locals typeBody («opaque» := true)
+    return (← placeResolutions name found values typings, tree)
 
 /-- Keeps the typed tree of a body: the request for the tree of the instance is done with it.
 The check of its facts and the emission of a package read it. -/
