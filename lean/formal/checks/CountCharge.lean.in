@@ -200,8 +200,9 @@ theorem judged_within (charge : DrawCharge) (tolerance : ℕ)
       exact walked_within D path xs tolerance charge length far owned site covers)
 
 /-- **The probability.** Against every service that draws the position uniformly and answers
-only what is permitted, the verifier returns with probability at most the total of the
-charge. -/
+only what is permitted, the simulation of the verifier by the service's handler returns with
+probability at most the total of the charge. A service is any handler of the verifier's effects
+with a state (`handlerOf_serviceOf`). -/
 theorem returns_within (charge : DrawCharge) (tolerance : ℕ)
     (owned : charge.owner = rootKey) (site : charge.draws = [([], ⟨0⟩)])
     (covers : ((7 - tolerance : ℕ) : ℚ≥0) / (8 : ℕ) ≤ ceiling charge)
@@ -215,13 +216,13 @@ theorem returns_within (charge : DrawCharge) (tolerance : ℕ)
       Permitted (model D) op reply) (s : σ) :
     ∃ root : Member a.program.headers.protocols rootHeader,
       a.program.findProtocol rootKey = some ⟨rootHeader, root⟩ ∧
-      Pr{let out ← run service
-          (roleMeaning (model D) a.program root verifierRole path (inputs D xs)) s}[
-        ∃ results, out.1 = .returned results] ≤ total charge := by
+      Pr{let out ← (simulateQ (handlerOf service) (embed
+          (roleMeaning (model D) a.program root verifierRole path (inputs D xs)))).run.run s}[
+        ∃ results, out.1 = some (.inl results)] ≤ total charge := by
   obtain ⟨root, found, judged⟩ :=
     judged_within D charge tolerance owned site covers admitted path xs length far
   refine ⟨root, found, ?_⟩
-  rw [← toProbability_budget charge positive]
+  rw [prEvent_simulation_returns, ← toProbability_budget charge positive]
   exact allowed_bounds_return service _ (allowance (model D) charge rootKey path)
     (Permitted (model D)) permitted follows _ (budget charge) s judged
 
@@ -238,9 +239,9 @@ theorem loose_sound {a : Admitted V} (admitted : admit stored association = .ok 
       Permitted (model D) op reply) (s : σ) :
     ∃ root : Member a.program.headers.protocols rootHeader,
       a.program.findProtocol rootKey = some ⟨rootHeader, root⟩ ∧
-      Pr{let out ← run service
-          (roleMeaning (model D) a.program root verifierRole path (inputs D xs)) s}[
-        ∃ results, out.1 = .returned results] ≤ total looseCharge :=
+      Pr{let out ← (simulateQ (handlerOf service) (embed
+          (roleMeaning (model D) a.program root verifierRole path (inputs D xs)))).run.run s}[
+        ∃ results, out.1 = some (.inl results)] ≤ total looseCharge :=
   returns_within D looseCharge looseTolerance (by decide) (by decide) loose_exact.ge (by decide)
     admitted path xs length far service follows permitted s
 
@@ -254,9 +255,9 @@ theorem strict_sound {a : Admitted V} (admitted : admit stored association = .ok
       Permitted (model D) op reply) (s : σ) :
     ∃ root : Member a.program.headers.protocols rootHeader,
       a.program.findProtocol rootKey = some ⟨rootHeader, root⟩ ∧
-      Pr{let out ← run service
-          (roleMeaning (model D) a.program root verifierRole path (inputs D xs)) s}[
-        ∃ results, out.1 = .returned results] ≤ total strictCharge :=
+      Pr{let out ← (simulateQ (handlerOf service) (embed
+          (roleMeaning (model D) a.program root verifierRole path (inputs D xs)))).run.run s}[
+        ∃ results, out.1 = some (.inl results)] ≤ total strictCharge :=
   returns_within D strictCharge strictTolerance (by decide) (by decide) strict_exact.ge (by decide)
     admitted path xs length far service follows permitted s
 
@@ -290,12 +291,13 @@ theorem service_permitted (path : List Frame) (op : ROp (model data)) (s : Unit)
     (fun z drawn => position_permitted path z (lt_of_mem_support_drawPosition 7 z drawn))
     op s reply t reached
 
-/-- The probability that the verifier of a program returns at a table, against the service. -/
+/-- The probability that the simulation of the verifier of a program returns at a table, against
+the service. -/
 abbrev returnsAt (p : Typed V) (root : Member p.headers.protocols rootHeader) (path : List Frame)
     (xs : List Bool) : ℝ≥0∞ :=
-  Pr{let out ← run (service path)
-      (roleMeaning (model data) p root verifierRole path (inputs data xs)) ()}[
-    ∃ results, out.1 = .returned results]
+  Pr{let out ← (simulateQ (handlerOf (service path)) (embed
+      (roleMeaning (model data) p root verifierRole path (inputs data xs)))).run.run ()}[
+    ∃ results, out.1 = some (.inl results)]
 
 /-- The goal `loose` at its table, with nothing left to assume: the service draws as the
 samplers do and answers what is permitted, and the table is outside the relation. -/
@@ -342,7 +344,7 @@ theorem returns_exactly (path : List Frame) (xs : List Bool) (length : xs.length
     Pr{let out ← run (service path) (walked data path xs) ()}[
         ∃ results, out.1 = .returned results] = (xs.count data.zero : ℝ≥0∞) / ((7 : ℕ) + 1) := by
   rw [begins]
-  have drawn := prEvent_run_serveAt (model data) (coin path) (uniformFin 7)
+  have drawn := prEvent_run_serveAt (model data) (coin path) ($ᵗ (Fin (7 + 1)))
     (fun i : Fin 8 => (i : ℕ)) (afterDraw path xs) (outcomeAt path xs) ends
     (fun outcome => ∃ results, outcome = .returned results)
   rw [← prEvent_drawPosition_entry xs 7 length, drawPosition, prEvent_map]
@@ -381,7 +383,8 @@ theorem loose_attained {a : Admitted V} (admitted : admit stored association = .
   at_root admitted (fun p root => returnsAt p root path looseTable = total looseCharge)
     (by
       unfold returnsAt
-      rw [meaning_walked, returns_exactly path looseTable rfl (loose_ends path)]
+      rw [prEvent_simulation_returns, meaning_walked,
+        returns_exactly path looseTable rfl (loose_ends path)]
       have zeros : looseTable.count data.zero = 3 := by decide
       rw [zeros]
       exact count_is_total looseCharge (by decide) 3 (by norm_num [budget, ceiling, looseCharge]))
@@ -395,7 +398,8 @@ theorem strict_attained {a : Admitted V} (admitted : admit stored association = 
   at_root admitted (fun p root => returnsAt p root path strictTable = total strictCharge)
     (by
       unfold returnsAt
-      rw [meaning_walked, returns_exactly path strictTable rfl (strict_ends path)]
+      rw [prEvent_simulation_returns, meaning_walked,
+        returns_exactly path strictTable rfl (strict_ends path)]
       have zeros : strictTable.count data.zero = 6 := by decide
       rw [zeros]
       exact count_is_total strictCharge (by decide) 6

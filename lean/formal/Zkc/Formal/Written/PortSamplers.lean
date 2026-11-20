@@ -2,7 +2,8 @@ module
 
 public import Zkc.Formal.ChargedProbability
 public import Zkc.Formal.Written.Source
-public import VCVio.OracleComp.Constructions.UniformFinMeasure
+public import VCVio.OracleComp.Constructions.SampleableType.Measure
+public import Mathlib.Data.Fintype.Fin
 
 @[expose] public section
 
@@ -18,7 +19,8 @@ answers. The run of a process that begins with the port, against that service, i
 then what follows the reply (`prEvent_run_serveAt`).
 
 The uniform law on `fin n` draws a position: in a model whose positions are naturals, a natural
-below `n`. A set of positions has the probability of its count over `n`.
+below `n`, by VCVio's uniform sampler of `Fin n`. A set of positions has the probability of its
+count over `n`; the count of the positions of a list that hold a value is Mathlib's.
 -/
 
 namespace Zkc.Formal.Written
@@ -112,13 +114,15 @@ theorem prEvent_run_serveAt {ι H A : Type} (base : ProbComp ι)
 end
 
 /-- A position below `n + 1`, drawn uniformly. -/
-noncomputable def drawPosition (n : ℕ) : ProbComp ℕ := (fun i : Fin (n + 1) => (i : ℕ)) <$> uniformFin n
+noncomputable def drawPosition (n : ℕ) : ProbComp ℕ :=
+  (fun i : Fin (n + 1) => (i : ℕ)) <$> ($ᵗ (Fin (n + 1)))
 
 /-- A set of positions has the probability of its count among the `n + 1` positions. -/
 theorem prEvent_drawPosition (n : ℕ) (p : ℕ → Prop) [DecidablePred p] :
     Pr{let v ← drawPosition n}[p v] =
       ((Finset.univ.filter fun i : Fin (n + 1) => p i).card : ℝ≥0∞) / (n + 1) := by
-  rw [drawPosition, prEvent_map, prEvent_uniformFin]
+  rw [drawPosition, prEvent_map, SampleableType.prEvent_uniformSample, Fintype.card_fin,
+    Nat.cast_add, Nat.cast_one]
 
 /-- What a draw of a position gives is a position. -/
 theorem lt_of_mem_support_drawPosition (n v : ℕ) (drawn : v ∈ support (drawPosition n)) :
@@ -136,28 +140,17 @@ variable {α : Type} [DecidableEq α]
 theorem card_positions (xs : List α) (n : ℕ) (length : xs.length = n) (v : α) :
     (Finset.univ.filter fun i : Fin n => xs[(i : ℕ)]? = some v).card = xs.count v := by
   subst length
-  induction xs with
-  | nil => simp
-  | cons x xs ih =>
-    rw [List.count_cons, ← ih, Finset.card_filter, Finset.card_filter]
-    simp only [List.length_cons]
-    rw [Fin.sum_univ_succ, add_comm]
-    simp only [Fin.val_zero, Fin.val_succ, List.getElem?_cons_zero, List.getElem?_cons_succ,
-      Option.some.injEq, beq_iff_eq]
+  have counted := List.count_ofFn (fun i : Fin xs.length => xs[(i : ℕ)]) v
+  rw [List.ofFn_getElem] at counted
+  rw [counted]
+  refine congrArg Finset.card (Finset.filter_congr fun i _ => ?_)
+  rw [List.getElem?_eq_getElem i.isLt, Option.some.injEq]
 
 /-- The entries that are `v` and the entries that are not are all the entries. -/
 theorem count_add_countP_ne (xs : List α) (v : α) :
     xs.count v + xs.countP (· ≠ v) = xs.length := by
-  induction xs with
-  | nil => rfl
-  | cons x xs ih =>
-    by_cases same : x = v
-    · simp only [List.count_cons, List.countP_cons, List.length_cons, same, beq_self_eq_true,
-        ne_eq, not_true_eq_false, decide_false, ite_true, Bool.false_eq_true, ite_false] at ih ⊢
-      omega
-    · simp only [List.count_cons, List.countP_cons, List.length_cons, beq_iff_eq, same, ne_eq,
-        not_false_eq_true, decide_true, ite_true, ite_false] at ih ⊢
-      omega
+  rw [List.length_eq_countP_add_countP (· == v) (l := xs), List.count]
+  congr 2
 
 /-- The entry of a list at a drawn position is `v` with the probability of the count of `v`
 among the entries. -/

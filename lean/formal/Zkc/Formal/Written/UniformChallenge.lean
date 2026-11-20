@@ -2,7 +2,6 @@ module
 
 public import Zkc.Formal.Written.PortSamplers
 public import Zkc.Formal.Written.PrimeFive
-public import VCVio.OracleComp.Constructions.UniformFinMeasure
 
 @[expose] public section
 namespace Zkc.Formal.Written.UniformChallenge
@@ -14,7 +13,9 @@ abbrev M := PrimeFive.model
 def port (peers : List Role) (at_ : Occurrence) : InputPort Standard :=
   .own (.coin challengeLaw) peers at_ scalarTy
 
-abbrev draw : ProbComp (ZMod 5) := uniformFin 4
+/-- The uniform law on the field: VCVio's uniform sampler of its carrier, so that a lemma about
+a uniform element of a ring applies to it as it is. -/
+noncomputable abbrev draw : ProbComp (ZMod 5) := $ᵗ (ZMod 5)
 
 def ask (peers : List Role) (at_ : Occurrence) : Process (RSig M) Unit (ZMod 5) :=
   .call ((port peers at_).operation M) .done
@@ -43,11 +44,9 @@ theorem returns_uniform (peers : List Role) (at_ : Occurrence) :
 theorem probability (peers : List Role) (at_ : Occurrence) (v : ZMod 5) :
     Pr{let out ← run (serveAt M (port peers at_) draw) (ask peers at_) ()}[out.1 = Outcome.returned v] = 1/5 := by
   rw [returns_uniform, prEvent_map]
-  change Fin 5 at v
-  change Pr{let i ← uniformFin 4}[Outcome.returned (H := Unit) i = .returned v] = _
-  rw [prEvent_uniformFin]
-  simp only [Outcome.returned.injEq, Finset.filter_eq', Finset.mem_univ, ite_true,
-    Finset.card_singleton, Nat.cast_one]
-  norm_num
+  refine (prEvent_congr _ _ (fun x : ZMod 5 => x = v) fun x => ?_).trans ?_
+  · exact Outcome.returned.injEq (H := Unit) x v ▸ Iff.rfl
+  · rw [SampleableType.prEvent_uniformSample_eq_singleton, ZMod.card]
+    norm_num
 
 end Zkc.Formal.Written.UniformChallenge

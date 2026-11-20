@@ -143,7 +143,8 @@ def theorems : List String := [
   "Witness.misplaced_judges_nothing", "Witness.foreign_judges_nothing"]
 
 def proofModule (name : String) (s : Subject) (template : String) : String :=
-  imports ["Zkc.Formal.Walk", "Zkc.Formal.Written.PortSamplers", "Zkc.Formal.Written.SiteAllowance",
+  imports ["Zkc.Formal.Walk", "Zkc.Formal.OracleProcess", "Zkc.Formal.Written.PortSamplers",
+    "Zkc.Formal.Written.SiteAllowance",
     "Zkc.Formal.Written.StandardModel", "Zkc.Formal.Written.FiniteModel"] ++
   s!"namespace {name}\n" ++ s.package ++ facts s ++ template ++
   String.join (theorems.map (s!"#print axioms {·}\n")) ++ s!"end {name}\n"
