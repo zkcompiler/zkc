@@ -1,5 +1,6 @@
 import Zkc.Formal.ChargedProbability
 import Zkc.Formal.Written.UniformChallenge
+import Zkc.Formal.Written.SiteAllowance
 
 /-!
 The judgment with fees meets the probability library on one uniform draw of a field of five
@@ -10,10 +11,13 @@ port (`follows`, `permitted`). The process is judged within one fifth (`judged`)
 probability of a bad return is at most one fifth (`bounded`); it is one fifth (`attained`), so
 the bound of the bridge is reached. No budget below one fifth judges the process
 (`not_within_less`).
+
+The last section is about the two parts of one event, for every model: a charge allows the
+owner and a hearer the same, and under the samplers of the owning port a hearer pays nothing.
 -/
 
 open Zkc.Core Zkc.Formal Zkc.Formal.ProbabilisticProcess Zkc.Formal.Written OracleComp
-open Zkc.Formal.Written.UniformChallenge (M port draw ask serveAt serves_at permitted)
+open Zkc.Formal.Written.UniformChallenge (M port draw ask permitted)
 open ProbComp
 open scoped NNRat ENNReal
 
@@ -22,16 +26,7 @@ namespace Zkc.Tests.Formal.ChargedProbability
 variable (peers : List Role) (at_ : Occurrence)
 
 /-- The samplers of the one port: its reply is drawn uniformly. No other effect has one. -/
-noncomputable def samplers : Samplers (RSig M) := fun op =>
-  if h : InputPort.ofOp M op = some (port peers at_) then
-    some (cast (congrArg (fun o => ProbComp ((RSig M).Reply o))
-      (InputPort.operation_ofOp M h).symm) draw)
-  else none
-
-theorem samplers_port :
-    samplers peers at_ ((port peers at_).operation M) = some draw := by
-  simp only [samplers, InputPort.ofOp_operation, ↓reduceDIte]
-  rfl
+noncomputable abbrev samplers : Samplers (RSig M) := portSamplers M (port peers at_) draw
 
 theorem zero_weight : Pr{let v ← draw}[v = (0 : ZMod 5)] = 1 / 5 := by
   change Pr{let i ← uniformFin 4}[i = (0 : Fin 5)] = _
@@ -47,31 +42,17 @@ theorem judged :
     (ask peers at_).interpret (.charged (Permitted M) (paysBy (samplers peers at_)))
       (fun a _ => ¬ a = 0) (fun _ _ => True) (1 / 5) :=
   ⟨1 / 5, fun v : ZMod 5 => v = 0, le_rfl,
-    Or.inr ⟨draw, samplers_port peers at_, (zero_weight).le.trans fifth.ge⟩, fun _ _ kept => kept⟩
+    Or.inr ⟨draw, portSamplers_at M (port peers at_) draw, (zero_weight).le.trans fifth.ge⟩, fun _ _ kept => kept⟩
 
 /-- The service answers only at the port, and what it answers there is permitted. -/
 theorem answers_permitted (op : ROp M) (s : Unit) (reply : (RSig M).Reply op) (t : Unit)
     (reached : (some reply, t) ∈ support (serveAt M (port peers at_) draw op s)) :
-    Permitted M op reply := by
-  by_cases at_port : InputPort.ofOp M op = some (port peers at_)
-  · obtain rfl := InputPort.operation_ofOp M at_port
-    exact permitted peers at_ reply
-  · simp only [serveAt, at_port, ↓reduceDIte, support_pure, Set.mem_singleton_iff,
-      Prod.mk.injEq, reduceCtorEq, false_and] at reached
+    Permitted M op reply :=
+  serveAt_permitted M (port peers at_) draw (fun v _ => permitted peers at_ v) op s reply t reached
 
 /-- The service draws as the samplers do. -/
-theorem follows : (serveAt M (port peers at_) draw).Follows (samplers peers at_) := by
-  intro op sampler has s excluded
-  by_cases at_port : InputPort.ofOp M op = some (port peers at_)
-  · obtain rfl := InputPort.operation_ofOp M at_port
-    rw [samplers_port] at has
-    obtain rfl := Option.some.inj has
-    have served := serves_at M (port peers at_) draw s
-    rw [served]
-    refine (prEvent_map (mx := draw) (f := fun answer => (some answer, s))
-      (p := fun out : Option (ZMod 5) × Unit => ∃ v, out.1 = some v ∧ excluded v)).le.trans ?_
-    exact prEvent_mono _ _ _ fun v ⟨w, same, ex⟩ => Option.some.inj same ▸ ex
-  · simp only [samplers, at_port, ↓reduceDIte, reduceCtorEq] at has
+theorem follows : (serveAt M (port peers at_) draw).Follows (samplers peers at_) :=
+  serveAt_follows M (port peers at_) draw
 
 /-- The probability of a bad return is at most the budget of the judgment. -/
 theorem bounded :
@@ -100,5 +81,43 @@ theorem not_within_less (budget : ℚ≥0) (below : budget < 1 / 5) :
     (answers_permitted peers at_) (follows peers at_) (ask peers at_) budget () within
   rw [attained, ← fifth] at bound
   exact absurd (toProbability_le_iff.mp bound) (not_le.mpr below)
+
+/-! ## The parts of one event
+
+A draw is one event at one address. The role that owns it and a role that hears it have an
+effect at that address each, and a written charge allows both the same. The samplers of the
+owning port have none where the event is heard, so a role that hears pays no fee there and
+excludes no reply. -/
+
+section
+open Zkc.Frontend.Written (DrawCharge)
+variable {V : Vocabulary} (N : Model V) (kind : GivenKind V) (peers : List Role) (owner : Role)
+  (at_ : Occurrence) (ty : V.Ty)
+
+/-- A charge allows the two parts of an event the same. -/
+theorem same_allowance (charge : DrawCharge) (key : Key) (path : List Frame) :
+    allowance N charge key path ((InputPort.own kind peers at_ ty).operation N) =
+      allowance N charge key path (.hear kind owner at_ ty) := rfl
+
+/-- The samplers of the owning port have none where the event is heard. -/
+theorem no_sampler_at_hearer
+    (drawn : ProbComp ((RSig N).Reply ((InputPort.own kind peers at_ ty).operation N))) :
+    portSamplers N (.own kind peers at_ ty) drawn (.hear kind owner at_ ty) = none := by
+  simp [portSamplers, InputPort.ofOp]
+
+/-- Under those samplers a role that hears the event pays nothing and excludes nothing. -/
+theorem hearing_is_free
+    (drawn : ProbComp ((RSig N).Reply ((InputPort.own kind peers at_ ty).operation N)))
+    (allowance : ROp N → ℚ≥0) (fee : ℚ≥0)
+    (excluded : (RSig N).Reply (.hear kind owner at_ ty) → Prop)
+    (paid : paysWithin (portSamplers N (.own kind peers at_ ty) drawn) allowance
+      (.hear kind owner at_ ty) fee excluded) :
+    fee = 0 ∧ ∀ v, ¬ excluded v := by
+  rcases paid.1 with free | ⟨sampler, present, _⟩
+  · exact free
+  · rw [no_sampler_at_hearer N kind peers owner at_ ty drawn] at present
+    cases present
+
+end
 
 end Zkc.Tests.Formal.ChargedProbability

@@ -46,8 +46,6 @@ def subjects : List Subject := [
   ⟨"Variants", "variants_example.zkc", [], 1, 1⟩,
   ⟨"Fragments", "fragments.zkc", [], 7, 5⟩]
 
-def literal (text : String) : String := reprStr text
-
 /-- The association that the packages of this check are printed with: none of a scheme. -/
 def noAssociation : Association := ⟨[], [], [], [], []⟩
 
@@ -79,36 +77,6 @@ def fixtureModule : String :=
   "open Zkc.Tests.Frontend in\n" ++
   "theorem association_read : printedAssociation = PrintedFixtures.association := by decide +kernel\n" ++
   "end Fixture\n"
-
-/-- Lean's output on a module, and whether it ended without an error. -/
-def runLean (path : System.FilePath) : IO (Bool × String) := do
-  let out ← IO.Process.output { cmd := "lean", args := #[path.toString] }
-  return (out.exitCode == 0, out.stdout ++ out.stderr)
-
-def allowedAxioms (name theorem_ output : String) : Bool :=
-  output.contains s!"'{name}.{theorem_}' depends on axioms: [propext, Quot.sound]" ||
-    output.contains s!"'{name}.{theorem_}' depends on axioms: [propext]" ||
-    output.contains s!"'{name}.{theorem_}' does not depend on any axioms"
-
-/-- Lean accepts the module, and each of its theorems rests on the two axioms at most. -/
-def expectAccepted (name : String) (path : System.FilePath) (theorems : List String) : IO Unit := do
-  let (ok, output) ← runLean path
-  unless ok do throw (IO.userError s!"{name}: Lean refused the module\n{output}")
-  if output.contains "sorry" then throw (IO.userError s!"{name}: the module uses sorry")
-  if output.contains "PANIC" then throw (IO.userError s!"{name}: Lean panicked on the module\n{output}")
-  for theorem_ in theorems do
-    unless allowedAxioms name theorem_ output do
-      throw (IO.userError s!"{name}: {theorem_} is missing or rests on another axiom\n{output}")
-
-/-- Lean refuses the module, and its output has each of the texts expected of the control. With
-`only`, the module has exactly one error for each text. -/
-def expectRefused (name : String) (expected : List String) (path : System.FilePath)
-    (only := false) : IO Unit := do
-  let (ok, output) ← runLean path
-  if ok then throw (IO.userError s!"{name}: Lean accepted a control that must be refused")
-  let errors := (output.splitOn "error").length - 1
-  unless expected.all (fun text => output.contains text) && (!only || errors == expected.length) do
-    throw (IO.userError s!"{name}: the control was refused for another reason\n{output}")
 
 /-- The text with the first number that follows `marker` after `start` raised by a thousand. -/
 def raiseFirst (text start marker : String) : Option String := do
