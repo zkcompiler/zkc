@@ -38,6 +38,8 @@ indexes the source-node map of its definition.
 
 namespace Zkc.Frontend.Emit.Named
 
+open Zkc.Vocabulary.Project
+
 open Syntax
 open Static
 open Typing (EmitM EmitFailure toTy)

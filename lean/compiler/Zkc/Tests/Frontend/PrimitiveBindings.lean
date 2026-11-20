@@ -2,7 +2,7 @@ import Zkc.Frontend.Environment.Results
 import Zkc.Frontend.Semantics.Rows
 
 namespace Zkc.Tests.Frontend.PrimitiveBindings
-open Zkc.Frontend Zkc.Frontend.Emit
+open Zkc.Frontend Zkc.Frontend.Emit Zkc.Vocabulary.Project
 
 def fr : ClosedType := StandardNames.fieldType .bls12381Fr
 def scalar : LinkedType := .nominal (.inl (.field .bls12381Fr))

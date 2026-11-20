@@ -40,7 +40,7 @@ inductive Emit.EntryKind where
 /-- The source compiler emits definitions under the project's linked vocabulary. The
 same binding supplies the type of every occurrence of a primitive in the named program. -/
 structure SourcePackage where
-  bindings : Emit.Bindings
+  bindings : Zkc.Vocabulary.Project.Bindings
   named : Core.NamedProgram bindings.vocabulary
   association : Core.Association
 
@@ -97,7 +97,7 @@ structure PackageReport where
 /-- The deployment of a source scheme and the source names of its roles and ports. -/
 structure Constructed where
   name : String
-  bindings : Emit.Bindings
+  bindings : Zkc.Vocabulary.Project.Bindings
   deployment : Core.Deployed bindings.vocabulary
   identity : List Nat
   roles : Array String

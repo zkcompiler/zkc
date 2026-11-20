@@ -22,7 +22,7 @@ private structure ReplayPlan where
 open Zkc.Frontend.Written (numbers consList component)
 
 private def typeTerm (t : Standard.Ty) : Except String String :=
-  pure (Zkc.Frontend.Written.ty (b := Zkc.Frontend.Emit.Bindings.mk [] (by decide)) t)
+  pure (Zkc.Frontend.Written.ty (b := Zkc.Vocabulary.Project.Bindings.mk [] (by decide)) t)
 
 private def valueStep (role : Nat) (who : List Role) (types : List Standard.Ty) (values : List String) (proof := "rfl") :
     Except String String := do

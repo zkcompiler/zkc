@@ -19,6 +19,8 @@ use the same region and operation emitter as functions.
 
 namespace Zkc.Frontend.Emit.Named
 
+open Zkc.Vocabulary.Project
+
 open Syntax Static
 open Typing (EmitM EmitFailure toTy)
 

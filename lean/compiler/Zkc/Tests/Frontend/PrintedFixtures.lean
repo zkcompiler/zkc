@@ -17,9 +17,9 @@ open Zkc.Core Zkc.Frontend
 
 /-- A project type and a project primitive that takes a natural and gives a value of it. The
 static arguments of the primitive have every form of a parameter. -/
-abbrev projectType : Emit.Parameter := .type (.nominal "fixture.type") (.cons (.natural 3) .nil)
+abbrev projectType : Zkc.Vocabulary.Project.Parameter := .type (.nominal "fixture.type") (.cons (.natural 3) .nil)
 
-abbrev projectRow : Emit.PrimitiveName :=
+abbrev projectRow : Zkc.Vocabulary.Project.PrimitiveName :=
   ⟨"fixture.row", .cons (.natural 2) <| .cons (.moduleRef 5) <|
     .cons (.type (.seq (some 4)) (.cons (.type .bool .nil) .nil)) <|
     .cons (.type (.seq none) (.cons (.type .nat .nil) .nil)) <|
@@ -30,7 +30,7 @@ abbrev projectRow : Emit.PrimitiveName :=
 
 /-- Every form of a type over the keys of the standard vocabulary and a project type, with every
 kind of nominal type, every field and every group. -/
-abbrev everyLinkedType : List Emit.LinkedType :=
+abbrev everyLinkedType : List Zkc.Vocabulary.Project.LinkedType :=
   [.bool, .nat, .fin 5, .seq (.nominal (.inl (.field .bls12381Fr))) (some 2),
     .seq (.nominal (.inr projectType)) none,
     .tuple (.cons .nat (.cons (.nominal (.inl (.field .koalaBear4))) .nil)),
@@ -39,11 +39,11 @@ abbrev everyLinkedType : List Emit.LinkedType :=
     .nominal (.inl (.nonzero .koalaBear)), .nominal (.inl (.group .g1)),
     .nominal (.inl (.group .g2)), .nominal (.inl (.group .gt))]
 
-abbrev bindings : Emit.Bindings :=
+abbrev bindings : Zkc.Vocabulary.Project.Bindings :=
   ⟨[(projectRow, ⟨everyLinkedType, [.nominal (.inr projectType)]⟩)], by decide⟩
 
 /-- The rows that the project binds, as the printer of a vocabulary reads them. -/
-def bindingRows : List (Emit.PrimitiveName × Emit.PrimitiveSignature) := bindings.rows
+def bindingRows : List (Zkc.Vocabulary.Project.PrimitiveName × Zkc.Vocabulary.Project.PrimitiveSignature) := bindings.rows
 
 abbrev V : Vocabulary := bindings.vocabulary
 

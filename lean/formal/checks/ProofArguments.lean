@@ -7,7 +7,7 @@ open Zkc.Frontend Zkc.Frontend.Written
 private def assemblyOf (src : String) : Assembly :=
   Id.run <| assemble #[⟨"count.zkc", Syntax.parseString "count.zkc" src⟩] fun _ => pure none
 
-private theorem bindings_eq {a b : Emit.Bindings} (rows : a.rows = b.rows) : a = b := by
+private theorem bindings_eq {a b : Zkc.Vocabulary.Project.Bindings} (rows : a.rows = b.rows) : a = b := by
   cases a
   cases b
   congr
@@ -15,7 +15,7 @@ private theorem bindings_eq {a b : Emit.Bindings} (rows : a.rows = b.rows) : a =
 private def sameProgram (a b : AdmittedRoot) : Bool := Id.run do
   if rows : a.emission.bindings.rows = b.emission.bindings.rows then
     have same := bindings_eq rows
-    let expected := cast (congrArg (fun v : Emit.Bindings => Zkc.Core.Typed v.vocabulary) same.symm)
+    let expected := cast (congrArg (fun v : Zkc.Vocabulary.Project.Bindings => Zkc.Core.Typed v.vocabulary) same.symm)
       b.evidence.admitted.program
     return (Zkc.Core.identifyAdmitted a.evidence.accepted expected).decide
   return false

@@ -2,11 +2,11 @@ module
 
 public import Zkc.Formal.Interactive.GateSequence
 public import Zkc.Formal.Interactive.HonestReduction
-public import Zkc.Frontend.Emit.Bindings
+public import Zkc.Vocabulary.Project
 
 @[expose] public section
 namespace Zkc.Formal.Written.SumcheckRows
-open Core Frontend.Emit Interactive.Sumcheck
+open Core Zkc.Vocabulary.Project Interactive.Sumcheck
 
 /-- Scalar operations, the challenge law and sized table rows at the exact keys selected
 by the source Sumcheck compiler. These keys are shared by recognition and model proofs. -/
@@ -35,7 +35,7 @@ def vectorRows (b : Bindings) (n : Nat) : TableRestriction.Rows (sourceRows b).s
 def sumRow (b : Bindings) (n : Nat) : HonestPairs.SumRow (sourceRows b) n :=
   ⟨.inl (.seq .sum (.atom (.field .bls12381Fr)) (some (2^n))),rfl⟩
 
-open Frontend ReductionRound
+open ReductionRound
 
 section
 variable {b : Bindings} {hs : Headers b.vocabulary} {Γ : Ctx (LTy b.vocabulary)}

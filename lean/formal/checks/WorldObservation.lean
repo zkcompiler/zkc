@@ -102,7 +102,7 @@ private def checkPrivateProjection (a : Admitted Standard) (root : Key) : Except
   let state ← IO.ofExcept (Written.sourceState (← assemble #[input] fun _ => pure none))
   let some selected := state.results.schemes.find? (·.name == "Private") | throw (IO.userError "missing scheme")
   let root ← IO.ofExcept (Written.admitInstance state selected.protocol default)
-  let run {b : Emit.Bindings} (a : Admitted b.vocabulary) : Except String Unit := do
+  let run {b : Zkc.Vocabulary.Project.Bindings} (a : Admitted b.vocabulary) : Except String Unit := do
     match b, a with
     | ⟨[], _⟩, program => checkPrivateProjection program ⟨root.id⟩
     | _, _ => throw "unexpected external primitives"
