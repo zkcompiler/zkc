@@ -223,12 +223,74 @@ elab "compact_return" : tactic => withMainContext do
   let target ← mkEq (← compactValue lhs) rhs
   replaceMainGoal [← goal.replaceTargetDefEq target]
 
+/-- An application of a constructor, by the head normal form when the term is not one. -/
+private def exposed (e : Expr) (constructor : Lean.Name) : MetaM Expr := do
+  if e.isAppOf constructor then return e
+  whnf e
+
+/-- The values of a binding, each under `mark`. `none` for values that are not written out as a
+list. -/
+private partial def markedValues (mark values : Expr) : MetaM (Option Expr) := do
+  let values ← exposed values ``HList.cons
+  if values.isAppOf ``HList.nil then return some values
+  unless values.isAppOf ``HList.cons do return none
+  let parts := values.getAppArgs
+  let some rest ← markedValues mark parts.back! | return none
+  let value := parts[parts.size - 2]!
+  let marked := mkApp2 mark (← inferType value) value
+  return some (mkAppN values.getAppFn ((parts.set! (parts.size - 2) marked).set! (parts.size - 1) rest))
+
+/-- An environment with the values of each of its bindings under `mark`. What is under the
+first binding stays as it is. -/
+private partial def markedEnvironment (mark env : Expr) : MetaM (Option Expr) := do
+  unless env.isAppOf ``Env.extend do return some env
+  let args := env.getAppArgs
+  let some parent ← markedEnvironment mark args[args.size - 4]! | return none
+  let some bound ← markedValues mark args.back! | return none
+  return some (mkAppN env.getAppFn ((args.set! (args.size - 4) parent).set! (args.size - 1) bound))
+
+/-- The operands of a step with each read replaced by the value bound: the kernel's head normal
+form of the read in the marked environment is that value under `mark`. `none` when a read does
+not end at a marked value. -/
+private partial def readMarked (mark original marked : Expr) : MetaM (Option Expr) := do
+  let original ← exposed original ``HList.cons
+  if original.isAppOf ``HList.nil then return some original
+  let marked ← exposed marked ``HList.cons
+  unless original.isAppOf ``HList.cons && marked.isAppOf ``HList.cons do return none
+  let args := original.getAppArgs
+  let markedArgs := marked.getAppArgs
+  let read ← ofExceptKernelException
+    (Lean.Kernel.whnf (← getEnv) (← getLCtx) markedArgs[markedArgs.size - 2]!)
+  unless read.getAppFn == mark && read.getAppNumArgs == 2 do return none
+  let some rest ← readMarked mark args.back! markedArgs.back! | return none
+  return some (mkAppN original.getAppFn
+    ((args.set! (args.size - 2) read.getAppArgs.back!).set! (args.size - 1) rest))
+
+/-- The operands of a step, read by the Core's own lookup from an environment whose bound values
+the kernel does not look into. Each bound value is put under a local function without a
+definition, the kernel reduces each read to its head normal form, which is one of those
+applications, and its argument is the operand. Which binding a name reads, and shadowing, are
+decided by `Env.all` as it is; the values, however large, are not evaluated again at each read.
+`none` for operands that are not such reads, which the general reduction then handles. The
+result is used under a definitional equality that the kernel checks, so a wrong read cannot
+pass. -/
+private def protectedOperands (operands : Expr) : MetaM (Option Expr) := do
+  unless operands.isAppOf ``Env.all do return none
+  withLocalDeclD `bound (← inferType (mkConst ``id [.succ .zero])) fun mark => do
+    let args := operands.getAppArgs
+    let some env ← markedEnvironment mark args[args.size - 3]! | return none
+    let some read ← readMarked mark operands (mkAppN operands.getAppFn (args.set! (args.size - 3) env))
+      | return none
+    if read.containsFVar mark.fvarId! then return none
+    return some read
+
 /-- Compute operand lookup once at each instruction before it enters any later environment. -/
 elab "compact_operands" : tactic => withMainContext do
   let g ← getMainGoal
   let some (_, lhs, rhs) := (← instantiateMVars (← g.getType)).eq? | failure
   unless lhs.isAppOf ``localOp do failure
-  let value ← compactValue lhs.getAppArgs.back!
+  let operands := lhs.getAppArgs.back!
+  let value ← compactValue ((← protectedOperands operands).getD operands)
   replaceMainGoal [← g.replaceTargetDefEq (← mkEq (mkApp lhs.appFn! value) rhs)]
 
 elab "compact_guard " h:ident : tactic => withMainContext do
