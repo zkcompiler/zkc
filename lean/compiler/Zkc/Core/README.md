@@ -222,7 +222,10 @@ Proved, with no axiom beyond `propext` and `Quot.sound` (the audit checks every 
   which no summary has a requirement, every function of a program whose functions follow those of
   a program that the check of facts accepts means what the function of the other with its header
   means, and the second's functions are safe and keep
-  validity (`replacedFunctionsSame`, which is `Defs.functionsFollow_sound`).
+  validity (`replacedFunctionsSame`, which is `Defs.functionsFollow_sound`). An execution of the
+  network is replayed from its record: a step with a given record has one successor under any
+  source (`Step.unique`), so two executions from one configuration with one record end in one
+  configuration (`replayed`, which is `Reach.unique`, `World/Network.lean`).
 
 Defined: everything else, from the terms and their meanings to deployment, the network and
 the runs.
@@ -233,7 +236,7 @@ Still to be built:
   The open entries are `eraseRole`, `format`, `deploy`, `identity`, `execute` and `schedule`;
 - `rolesSafe` holds for every admitted open role on valid inputs and permitted replies.
   Its projection establishes the requirements of each function it calls.
-  Remaining statements include `realized`, `anyOrder`, `replayed`, `recordsAreValid`,
+  Remaining statements include `realized`, `anyOrder`, `recordsAreValid`,
   `schedulerRuns`, deployment from `deployKeeps` to `identityReads`, `executorRuns` and `formats`.
   A partial external source can leave the network quiescent while a role waits for a draw.
   The current scheduler contract then requires a report other than `limit`, but its `blocked`

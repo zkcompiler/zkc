@@ -114,6 +114,44 @@ inductive Reach (source : Source M) {H B : Role → Type} :
   | step {c c' c'' h record} : Step M source c h c' → Reach source c' record c'' →
       Reach source c (h :: record) c''
 
+/-- A step with a given record has one successor, under any source: the record names the role,
+its effect and the value that it took, and the role's process gives what follows. -/
+theorem Step.unique {source source' : Source M} {H B : Role → Type}
+    {c c' c'' : Net M H B × Pending M} {h : Happened M}
+    (left : Step M source c h c') (right : Step M source' c h c'') : c' = c'' := by
+  cases left with
+  | give at₁ _ =>
+    cases right with
+    | give at₂ _ => injection at₁.symm.trans at₂ with _ same; cases same; rfl
+  | get at₁ _ =>
+    cases right with
+    | get at₂ _ => injection at₁.symm.trans at₂ with _ same; cases same; rfl
+  | own at₁ _ =>
+    cases right with
+    | own at₂ _ => injection at₁.symm.trans at₂ with _ same; cases same; rfl
+  | hear at₁ _ =>
+    cases right with
+    | hear at₂ _ => injection at₁.symm.trans at₂ with _ same; cases same; rfl
+  | «begin» at₁ =>
+    cases right with
+    | «begin» at₂ => injection at₁.symm.trans at₂ with _ same; cases same; rfl
+  | settle at₁ =>
+    cases right with
+    | settle at₂ => injection at₁.symm.trans at₂ with _ same; cases same; rfl
+
+/-- An execution is determined by its record, under any two sources: where the first ends, the
+second ends. -/
+theorem Reach.unique {source source' : Source M} {H B : Role → Type}
+    {c c' c'' : Net M H B × Pending M} {record : List (Happened M)}
+    (left : Reach M source c record c') (right : Reach M source' c record c'') : c' = c'' := by
+  induction left generalizing c'' with
+  | refl => cases right; rfl
+  | step first _ ih =>
+    cases right with
+    | step first' rest =>
+      cases Step.unique M first first'
+      exact ih rest
+
 /-- No role can move. -/
 def Quiescent (source : Source M) {H B : Role → Type} (c : Net M H B × Pending M) : Prop :=
   ∀ h c', ¬ Step M source c h c'
