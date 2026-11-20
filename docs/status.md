@@ -58,7 +58,7 @@ protocol instances. It also checks that guarded indexing survives a send at its 
 requires local evidence at the receiver, and reports the role missing a bound at a shared
 binding. Positive cases emit a root and pass Core admission. Resolution checks the statement/witness split of a top-level relation in
 `proves`, `reduces` and `through`, the form of knowledge branches, named algorithms and loop references.
-Typing the full contract at each instance remains open. The
+Where a `proves` clause or the source of a `reduces` clause applies a relation whose head has a `where`, the condition is checked at the instance of the protocol, and again where a goal or an application gives the values of specification-only parameters. A relation without a condition is not instantiated by a clause, so its operand types and its body are not typed there. They cannot be yet for every example: typed as an application, `Sum` of `examples/sumcheck.zkc` is refused (TY5: the sum of a table of field elements is typed as a sum of naturals) and the static arguments of `Outputs` of `examples/gkr.zkc` are not found (SP3). Typing the full contract at each instance remains open. The
 [language and frontend review](source-elaboration.md) describes the proposed boundary.
 
 ## Earlier source and execution pipeline

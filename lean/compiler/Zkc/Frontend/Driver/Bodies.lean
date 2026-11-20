@@ -95,9 +95,13 @@ mutual
 end
 
 /-- Supply static evaluation with the ordinary body query, including while checking
-signatures requested by that query. Re-entering a body goes through the usual cycle check. -/
+signatures requested by that query, and with the typing of what a contract applies where a
+specification is closed. Re-entering a body goes through the usual cycle check. -/
 partial def withProtocolBodies (context : Compile.Context) : Compile.Context :=
-  {context with protocolBody := fun inst place => typeBody inst place (withProtocolBodies context)}
+  {context with
+    protocolBody := fun inst place => typeBody inst place (withProtocolBodies context)
+    contractClauses := fun inst values _ =>
+      (Emit.typeClauses inst values typeBody) (withProtocolBodies context)}
 
 /-- The checks of FN5 that need no body: a kernel stands on a deployed `def` with a body. -/
 def checkKernels : CompileM Unit := do

@@ -34,8 +34,9 @@ def SpecificationClosure.isClosed (closure : SpecificationClosure) : CompileM Bo
     | none => return closure.lexical.values.contains ref
     | some expr => return !(← mentionsSpecParameter expr)
 
-/-- Evaluate in the caller, then check the callee's specification conjuncts at the result.
-The values stay outside the deployed instance table. -/
+/-- Evaluate in the caller, then check the callee's specification conjuncts at the result, and
+what the contract of the callee applies at the same values. The values stay outside the
+deployed instance table. -/
 def SpecificationClosure.close (closure : SpecificationClosure) (callee : InstanceId)
     (parent : StaticEnvironment) (place : Syntax.Span) : CompileM (Array Nat) := do
   let combined := parent.fold (init := closure.lexical.values) fun values ref value =>
@@ -51,6 +52,7 @@ def SpecificationClosure.close (closure : SpecificationClosure) (callee : Instan
   let closed := instanceEnv state.program target entry.key.arguments values
   checkWheres closed target (state.program.nameOf entry.key.declaration) false (fun _ => pure false)
     (specification := true)
+  liftM ((← read).contractClauses callee values place)
   return values
 
 /-- Checking an already closed proof argument can itself instantiate source declarations.

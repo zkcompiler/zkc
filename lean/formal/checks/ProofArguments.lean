@@ -71,6 +71,23 @@ private def refused {α} (attempt : Except String α) (rule : String) : IO Unit 
   refused (selectGoal (limited.replace "spec e = 1>" "spec e = 9>")) "SP4"
   let large ← IO.ofExcept (selectGoal (limited.replace "spec tolerance = 4" "spec tolerance = 9"))
   refused (goalDrawCharge large "loose" [first.instruction] "z") "SP4"
+  -- A condition at the head of the relation is a condition of the clause that applies it, at
+  -- the values of each use: those of the goal, and those of an application on the path.
+  let relationHead := "relation NearZero(xs: [F; n]):"
+  let conditioned (text : String) (bound : Nat) :=
+    text.replace relationHead s!"relation NearZero(xs: [F; n]) where (e <= {bound}):"
+  unless (direct.splitOn relationHead).length == 2 && (wrapped.splitOn relationHead).length == 2 do
+    throw (IO.userError "the fixture does not have the relation head that the controls change")
+  refused (selectGoal (conditioned direct 3)) "SP4"
+  let some reference := (blocks.find? (·.id == "N-GL2d")).bind (·.files[0]?)
+    | throw (IO.userError "missing the reference case of a relation's condition at a goal")
+  refused (selectGoal reference) "SP4"
+  let within ← IO.ofExcept (selectGoal (conditioned direct 4))
+  checkAmount within "loose" [] (3, 8)
+  let conditionedCaller ← IO.ofExcept (selectGoal (conditioned wrapped 3))
+  refused (goalDrawCharge conditionedCaller "loose" [first.instruction] "z") "SP4"
+  checkAmount conditionedCaller "loose" [second.instruction] (3, 4)
+  refused (selectGoal ((conditioned wrapped 3).replace "spec e = 1>" "spec e = 4>")) "SP4"
   let localArg := (wrapped.replace "    first <-" "    offset = 1\n    first <-").replace
     "spec e = tolerance>" "spec e = tolerance + offset>"
   let localCaller ← IO.ofExcept (selectGoal localArg)

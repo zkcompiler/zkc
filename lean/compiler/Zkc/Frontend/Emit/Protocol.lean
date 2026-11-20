@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Frontend.Elab.Protocol
+public import Zkc.Frontend.Elab.Clauses
 public import Zkc.Frontend.Elab.Linear
 public import Zkc.Frontend.Passes.Placement
 public import Zkc.Frontend.Passes.Events
@@ -229,6 +230,40 @@ def elaborateProtocol (inst : InstanceId) (description name : String) (env : Env
   let .protocol body := numbered | throw (.defect "a protocol body that is no protocol body")
   return (← checkedProtocol definition body, body, elaborated.resolved)
 
+/-- What the deciding clauses of the contract of a protocol instance apply, typed at values of
+the instance's specification-only parameters (`Elab.elabClauses`).
+
+The elaboration runs aside, on a copy of the state, and only its diagnostics are kept. The
+instances of relations that it asks for must not enter the program: deployed definitions are
+numbered by their instances, and what a specification says does not change the identity of
+deployed code. -/
+def typeClauses (inst : InstanceId) (specification : Array Nat)
+    (typeBody : InstanceId → Span → CompileM Unit)
+    (resolutions : Std.HashMap Typing.ResolvedPlace ParameterRef := {}) : CompileM Unit := do
+  let state ← get
+  let some entry := state.table.entries[inst]? | throw .abandoned
+  let modules ← getModules
+  let some contract := modules.indexes.contracts[entry.key.declaration]? | return
+  let some clauses := modules.lowered? contract | return
+  let .contract node := clauses.content | return
+  if clauses.refused || (Elab.decidingApplications node.clauses).isEmpty then return
+  let some lowered := modules.lowered? entry.key.declaration | return
+  let .protocol head _ _ := lowered.content | return
+  let found ← declaration entry.key.declaration
+  let description ← describeInstance entry.key.declaration entry.key.arguments specification
+    entry.key.owner
+  let env := instanceEnv state.program found entry.key.arguments specification
+  let context : Elab.Context :=
+    { env, «instance» := inst, name := description, typeBody, specification := true
+      resolutions, roster := some head.roster, protocolBody := calleeBody typeBody }
+  let attempt : CompileM Unit := do
+    let signature ← Elab.protocolSignatureIn head env
+    discard <| Elab.runElab context clauses.locals (Elab.elabClauses signature head node.clauses)
+  let (result, after) := attempt.run (← read) state
+  if let .error failure := result then
+    modify fun s => { s with log := after.log }
+    throw failure
+
 /-- The code of a protocol instance: its lowered body elaborated at the instance, checked by the
 passes and by the core, and what the session keeps of it. `typeBody` asks for the body of a
 callee from the place of a call or of an application. -/
@@ -270,6 +305,8 @@ def protocolBody (inst : InstanceId) (typeBody : InstanceId → Span → Compile
     checked := (results.checked.intern inst requested none).1.setStateOf inst (.done checked)
     trees := (results.trees.intern inst requested none).1.setStateOf inst (.done checked.definition) }
   if (← get).log.errors > errors || checked.definition.body.hasError then throw .abandoned
+  -- what the contract applies, at the values of the instance
+  typeClauses inst entry.key.specification typeBody resolutions
   -- the facts of the body, by the core, each role with its own
   let outcome ← match checkProtocol (← get) inst with
     | .ok outcome => pure outcome

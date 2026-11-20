@@ -131,6 +131,38 @@ private def checkSendFacts (repository : Repository) : TestM Unit := do
       ] do
     checkProtocol repository name "X" (source steps) rule
 
+/-- A clause applies a relation as an expression does: a `where` on the head of the relation is
+a condition of the clause (SP4), at the values of the protocol's instance and at the values of
+the relation's own proof arguments. -/
+private def checkClauseConditions (repository : Repository) : TestM Unit := do
+  let source (relation : String) (clause : String := "proves @V Near(xs)") := "\n".intercalate [
+    "module t", "type F = primitive(\"bls12-381.fr\")",
+    "section <n: nat>:", "    " ++ relation,
+    "    protocol Count roles(P, V)(xs: [F; n] @(P, V)):",
+    "        z <- draw index<n> from V to P", "        guard @V xs[z] == 0",
+    "    spec for Count:", "        " ++ clause,
+    "scheme Checked = Count<8>:", "    prover P", "    construction interactive", ""]
+  let formula := "(∑ i ∈ 0..n, if xs[i] == 0 then 0 else 1) <= 1"
+  let bounded := "(∑ i ∈ 0..n, if xs[i] == 0 then 0 else 1) <= e"
+  for (name, relation, clause, rule) in [
+      ("clause", s!"relation Near(xs: [F; n]): {formula}", "proves @V Near(xs)", none),
+      ("clause-where-holds", s!"relation Near(xs: [F; n]) where (n <= 8): {formula}",
+        "proves @V Near(xs)", none),
+      ("clause-where-fails", s!"relation Near(xs: [F; n]) where (n <= 3): {formula}",
+        "proves @V Near(xs)", some "SP4"),
+      ("clause-proof-argument-holds", s!"relation Near<spec e: nat>(xs: [F; n]) where (e <= 3): {bounded}",
+        "proves @V Near<spec e = 3>(xs)", none),
+      ("clause-proof-argument-fails", s!"relation Near<spec e: nat>(xs: [F; n]) where (e <= 3): {bounded}",
+        "proves @V Near<spec e = 4>(xs)", some "SP4")] do
+    checkProtocol repository name "Count<8>" (source relation clause) rule
+  -- the two reference cases: one is refused where the protocol is typed; the other is typed and
+  -- admitted, and its rule refuses where a goal gives the value
+  let blocks := readBlocks (← IO.FS.readFile (repository.conformance / "layer-b.txt"))
+  for (id, rule) in [("N-SX3c", some "SP4"), ("N-GL2d", none)] do
+    let some block := blocks.find? (·.id == id) | failure s!"missing {id}"; continue
+    let #[text] := block.files | failure s!"expected one source in {id}"; continue
+    checkProtocol repository id "Count<8>" text rule
+
 /-- Read the two SX7 tables as rendered. A missing, extra or reordered property, a
 different audience, or a drift in stage or construction is observable here. -/
 private def checkProperties (repository : Repository) : TestM Unit := do
@@ -153,6 +185,7 @@ def main : IO Unit := do
     checkProperties repository
     checkCertifiedFacts repository
     checkSendFacts repository
+    checkClauseConditions repository
     for (call, rule) in [
         ("Child(a, spec bound = a, spec bound = a)", some "SX4"),
         ("Child(a, spec bound = a; spec bound = a)", some "SX3"),
