@@ -28,6 +28,9 @@ summary has a requirement, every function of a program whose functions follow th
 that the check of facts accepts means what the function of the other with its header means, and
 is safe and keeps validity (`replacedFunctionsSame`, the theorem `Defs.functionsFollow_sound` of
 `Admission/Programs.lean`).
+
+Of the network, an execution is replayed from its record (`replayed`, the theorem `Reach.unique`
+of `World/Network.lean`).
 -/
 
 namespace Zkc.Core
@@ -205,6 +208,11 @@ theorem replacedFunctionsSame : Statements.replacedFunctionsSame (V := V) :=
 gives it: what every admitted program carries. -/
 theorem annotationHolds : Statements.annotationHolds (V := V) :=
   fun a M => (a.assured M).2.2
+
+/-- An execution is replayed from its record: under any two sources, two executions from one
+configuration with one record end in one configuration (`Reach.unique`). -/
+theorem replayed : Statements.replayed (V := V) :=
+  fun M _ _ _ _ _ _ _ _ left right => Reach.unique M left right
 
 end
 
