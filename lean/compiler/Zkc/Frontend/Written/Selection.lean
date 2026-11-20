@@ -58,6 +58,147 @@ def closedDeclaration (ref : Lowered.Reference) : ExportM DeclarationId := do
   let some id := ref.declaration? | refuse ref.span "WK-REF" "expected a declaration"
   return id
 
+/-- Read the resolved clauses attached to the selected declaration. -/
+def contractOf (s : Compile.State) (id : DeclarationId) (at_ : Span) :
+    ExportM (Array Lowered.Clause) := do
+  let some cid := s.env.modules.indexes.contracts[id]? | return #[]
+  let some owner := s.program.declarations[id]? | refuse at_ "WK-REF" "missing contract owner"
+  let some d := s.program.declarations[cid]? | refuse at_ "WK-REF" "missing contract"
+  let some {content := .contract c, ..} := s.env.modules.lowered? cid
+    | refuse at_ "WK-REF" "missing resolved contract"
+  unless d.scopes.all (fun scope => owner.scopes.contains scope ||
+      (s.program.scopes[scope]?).any (fun item => item.parameters.isEmpty && item.whereClause.isNone)) do
+    refuse c.span "WK-CLAUSE" "the contract has additional parameter scopes"
+  let .reference target := c.target | refuse c.span "WK-REF" "unresolved contract target"
+  unless (← closedDeclaration target) == id do refuse c.span "WK-REF" "misindexed contract"
+  return c.clauses
+
+def clauseIdentity : Lowered.Clause → String × Option Label
+  | .requires _ l _ => ("requires", l)
+  | .ensures _ l _ => ("ensures", l)
+  | .invariant _ l .. => ("invariant", l)
+  | .reduces _ _ l .. => ("reduces", l)
+  | .proves _ _ l .. => ("proves", l)
+  | .through .. => ("through", none)
+  | .knowledge _ l .. => ("knowledge", l)
+  | .zeroKnowledge _ l .. => ("zero_knowledge", l)
+  | .charge .. => ("charge", none)
+
+/-- Why no clause of a kind is the one that a goal reads. -/
+inductive ChoiceFailure where
+  /-- Two clauses of the contract have one label. -/
+  | duplicate (second : Span) (label : String)
+  /-- The contract has no clause of the kind. -/
+  | absent
+  /-- The goal names none of several clauses of the kind; `second` is the second of them. -/
+  | several (second : Span) (labels : List String)
+  /-- No clause of the contract has the label that the goal names. -/
+  | unknown (label : String)
+  /-- The label that the goal names is of a clause of another kind. -/
+  | otherKind (clause : Span) (kind label : String)
+
+/-- The clause of a kind that a goal reads (GL3), with its place in the contract: the one that
+the goal names by its label, or the only one of the kind. A label is of one clause of a
+contract. -/
+def chooseClause (contract : Array Lowered.Clause) (eligible : Lowered.Clause → Bool)
+    (selected : Option String) : Except ChoiceFailure (Nat × Lowered.Clause) := do
+  let mut labels : Std.HashSet String := {}
+  for clause in contract do
+    if let some label := (clauseIdentity clause).2 then
+      if labels.contains label.name.text then throw (.duplicate clause.span label.name.text)
+      labels := labels.insert label.name.text
+  let labelOf (clause : Lowered.Clause) := (clauseIdentity clause).2.map (·.name.text)
+  let candidates := (contract.zipIdx.filter fun (clause, _) => eligible clause).map fun (clause, i) => (i, clause)
+  match selected with
+  | some label =>
+    if let some found := candidates.find? (labelOf ·.2 == some label) then return found
+    match contract.find? (labelOf · == some label) with
+    | some other => throw (.otherKind other.span (clauseIdentity other).1 label)
+    | none => throw (.unknown label)
+  | none =>
+    match candidates with
+    | #[found] => return found
+    | #[] => throw .absent
+    | several => throw (.several several[1]!.2.span (several.toList.filterMap (labelOf ·.2)))
+
+/-- The kinds of clause from which a soundness goal forms its claim. -/
+inductive DecidingKind where
+  | proves
+  | reduces
+  deriving BEq, DecidableEq, Repr
+
+/-- The application of a relation in a deciding clause, as the source wrote it: the relation by
+its declaration, and its operands in the order of the relation's parameters, whatever the order
+in which named arguments were written. -/
+structure RelationApplication where
+  relation : DeclarationId
+  /-- The reference as written, with its static and specification arguments. -/
+  reference : Lowered.Reference
+  /-- The operands at the statement parameters. -/
+  statement : Array Lowered.Expr
+  /-- The operands at the witness parameters; none when the clause is written short. -/
+  witness : Array Lowered.Expr
+
+/-- A deciding clause of a contract as the source wrote it. It names declarations and binders
+of the protocol, which mean the same in every state of one compilation; it names no instance,
+whose number is of the state that made it. -/
+structure DecidingClause where
+  span : Span
+  kind : DecidingKind
+  label : Option String
+  /-- The deciding role, by its place in the roster of the protocol. -/
+  role : Option Nat
+  /-- What the clause states: for `reduces`, its source. -/
+  proposition : Lowered.Expr
+  /-- The application of a relation that the proposition is, when it is one. -/
+  application : Option RelationApplication
+  /-- For `reduces`, what the clause reduces to, as written under the results of the protocol:
+  the soundness of a reduction is about it. -/
+  target : Option Lowered.Expr := none
+
+/-- Whether a soundness goal can read the clause. -/
+def decides : Lowered.Clause → Bool
+  | .proves .. | .reduces .. => true
+  | _ => false
+
+/-- The deciding clause of a contract that a soundness goal reads (GL3): the one that the goal
+names, or the only one. -/
+def decidingClause (s : Compile.State) (root : DeclarationId) (selected : Option String)
+    (place : Span) : ExportM DecidingClause := do
+  let name := s.program.nameOf root
+  let clause ← match chooseClause (← contractOf s root place) decides selected with
+    | .ok (_, clause) => pure clause
+    | .error (.duplicate second label) => refuse second "GL3" s!"two clauses of `{name}` are labelled `{label}`"
+    | .error .absent =>
+      refuse place "GL3" s!"`{name}` has no `proves` or `reduces` clause; add one to `spec for {name}`"
+    | .error (.several second labels) =>
+      let named := if labels.isEmpty then "" else s!" ({", ".intercalate labels})"
+      refuse second "GL3" s!"`{name}` has several deciding clauses{named}; the goal names one with `clause = …`"
+    | .error (.unknown label) => refuse place "GL3" s!"`{name}` has no clause labelled `{label}`"
+    | .error (.otherKind at_ kind label) =>
+      refuse at_ "GL3" s!"`{label}` is a `{kind}` clause; soundness reads a `proves` or `reduces` clause"
+  let (kind, role, label, proposition, target) ← match clause with
+    | .proves _ role label relation => pure (DecidingKind.proves, role, label, relation, none)
+    | .reduces _ role label source target => pure (DecidingKind.reduces, role, label, source, some target)
+    | other => refuse other.span "GL3" "expected a `proves` or `reduces` clause"
+  let application ← match proposition with
+    | .call at_ reference arguments witnesses => do
+      let some id := reference.declaration? | pure none
+      let some found := s.program.declarations[id]? | pure none
+      let .relation relation := found.node | pure none
+      let paired (parameters : Array Param) (given : Array Lowered.Argument) :=
+        match Lowered.pairValueArguments relation.name.text (parameters.map (·.name.text)) given at_ with
+        | .ok operands => pure operands
+        | .error (span, message) => refuse span "FN6" message
+      let statement ← paired relation.statement arguments
+      let witness ← match witnesses with
+        | some given => paired (relation.witness.getD #[]) given
+        | none => pure #[]
+      pure (some { relation := id, reference, statement, witness })
+    | _ => pure none
+  return { span := clause.span, kind, label := label.map (·.name.text), role, proposition, application
+           target }
+
 /-- An imported scheme is also a root when an entry goal selects it. Reuse ordinary SC1
 instantiation in the defining file and retain the resulting table for body elaboration. -/
 def goalScheme (s : Compile.State) (goal : Lowered.Goal) :
@@ -132,7 +273,9 @@ def selectedGoal (state : Compile.State) (goal : Lowered.Goal) (path : String)
         refuse goal.property.span "GL3" "expected the written soundness property"
       if !fixed && scheme.lines.any (fun line => line matches .construction _ (.derived ..)) then
         refuse goal.span "GL3" "the written theorem requires a fixed statement"
-      if label.isSome then refuse goal.span "GL3" "soundness selection requires one deciding clause"
+      -- the clause that the goal names is one that soundness reads (GL3); a goal that names
+      -- none is not asked for one here: reading a charge at a site states no claim
+      if label.isSome then discard <| decidingClause s key.declaration label goal.span
       goal.ceiling.mapM fun expr => do
         let (value, _) ← evaluate s expr.span (Static.evalRational {file} expr)
         if value < 0 then refuse expr.span "GL4" "a goal ceiling must be nonnegative"
@@ -205,57 +348,26 @@ structure ClauseSource where
   /-- Kind, optional label and location of each other clause in the same contract. -/
   uncovered : List (String × Option String × String)
 
-/-- Read the resolved clauses attached to the selected declaration. -/
-def contractOf (s : Compile.State) (id : DeclarationId) (at_ : Span) :
-    ExportM (Array Lowered.Clause) := do
-  let some cid := s.env.modules.indexes.contracts[id]? | return #[]
-  let some owner := s.program.declarations[id]? | refuse at_ "WK-REF" "missing contract owner"
-  let some d := s.program.declarations[cid]? | refuse at_ "WK-REF" "missing contract"
-  let some {content := .contract c, ..} := s.env.modules.lowered? cid
-    | refuse at_ "WK-REF" "missing resolved contract"
-  unless d.scopes.all (fun scope => owner.scopes.contains scope ||
-      (s.program.scopes[scope]?).any (fun item => item.parameters.isEmpty && item.whereClause.isNone)) do
-    refuse c.span "WK-CLAUSE" "the contract has additional parameter scopes"
-  let .reference target := c.target | refuse c.span "WK-REF" "unresolved contract target"
-  unless (← closedDeclaration target) == id do refuse c.span "WK-REF" "misindexed contract"
-  return c.clauses
-
-def clauseIdentity : Lowered.Clause → String × Option Label
-  | .requires _ l _ => ("requires", l)
-  | .ensures _ l _ => ("ensures", l)
-  | .invariant _ l .. => ("invariant", l)
-  | .reduces _ _ l .. => ("reduces", l)
-  | .proves _ _ l .. => ("proves", l)
-  | .through .. => ("through", none)
-  | .knowledge _ l .. => ("knowledge", l)
-  | .zeroKnowledge _ l .. => ("zero_knowledge", l)
-  | .charge .. => ("charge", none)
-
+/-- The knowledge clause that a scheme or a fork goal selects, by the same rule, with the form
+that the three-message exporter reads. -/
 def clause (s : Compile.State) (root : DeclarationId)
     (selected : Option String) (where_ : Span) : ExportM ClauseSource := do
   let contract ← contractOf s root where_
-  let mut labels : Std.HashSet String := {}
-  let mut chosen := none
-  let mut uncovered := #[]
   for cl in contract do
+    if let .requires sp .. := cl then refuse sp "WK-CLAUSE" "unsupported protocol precondition"
+  let (place, chosen) ← match chooseClause contract (· matches .knowledge ..) selected with
+    | .ok found => pure found
+    | .error (.duplicate second label) => refuse second "WK-CLAUSE" s!"duplicate clause label {label}"
+    | .error (.several second _) => refuse second "WK-CLAUSE" "several knowledge clauses; select a label"
+    | .error .absent | .error (.unknown _) | .error (.otherKind ..) =>
+      refuse where_ "WK-CLAUSE" s!"missing selected knowledge clause{(selected.map (" " ++ ·)).getD ""}"
+  let .knowledge sp label expr (.path (.reference ext)) none := chosen
+    | refuse chosen.span "WK-CLAUSE" "expected one source extractor"
+  let .call _ rel args none := expr
+    | refuse expr.span "WK-CLAUSE" "expected a relation call on statement arguments"
+  let uncovered := (contract.zipIdx.filter (·.2 != place)).map fun (cl, _) =>
     let (kind, label) := clauseIdentity cl
-    let name := label.map (·.name.text)
-    if let some n := name then
-      if labels.contains n then refuse cl.span "WK-CLAUSE" s!"duplicate clause label {n}"
-      labels := labels.insert n
-    match cl with
-    | .requires sp .. => refuse sp "WK-CLAUSE" "unsupported protocol precondition"
-    | _ => pure ()
-    if kind == "knowledge" && (selected.isNone || name == selected) then
-      if chosen.isSome then refuse cl.span "WK-CLAUSE" "several knowledge clauses; select a label"
-      let .knowledge sp _ expr (.path (.reference ext)) none := cl
-        | refuse cl.span "WK-CLAUSE" "expected one source extractor"
-      let .call _ rel args none := expr
-        | refuse expr.span "WK-CLAUSE" "expected a relation call on statement arguments"
-      chosen := some (sp, rel, args, ext, name)
-    else uncovered := uncovered.push (kind, name, location cl.span)
-  let some (sp, rel, args, ext, name) := chosen
-    | refuse where_ "WK-CLAUSE" s!"missing selected knowledge clause{(selected.map (" " ++ ·)).getD ""}"
-  return ⟨sp, rel, args, ext, name, uncovered.toList⟩
+    (kind, label.map (·.name.text), location cl.span)
+  return ⟨sp, rel, args, ext, label.map (·.name.text), uncovered.toList⟩
 
 end Zkc.Frontend.Written

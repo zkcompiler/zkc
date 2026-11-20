@@ -33,6 +33,7 @@ _charge-checks:
     cd lean/formal && lake lean checks/WrittenCharge.lean
     cd lean/formal && lake lean checks/OccurrenceDepth.lean
     cd lean/formal && lake lean checks/ProofArguments.lean
+    cd lean/formal && lake lean checks/GoalClause.lean
     cd lean/formal && lake lean checks/FixedTableSampling.lean
 
 # Build the public formal package and audit its dependencies and proof controls.
