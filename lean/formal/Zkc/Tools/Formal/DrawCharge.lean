@@ -115,18 +115,18 @@ end Layer
 open Zkc.Formal.Written Zkc.Formal.FiniteService
 open scoped Zkc.Formal.Written.RoundCharge
 
-private theorem emptyBindings (b : Emit.Bindings) (plain : b.rows = []) : b = {} := by
+private theorem emptyBindings (b : Zkc.Vocabulary.Project.Bindings) (plain : b.rows = []) : b = {} := by
   cases b with
   | mk rows _ => cases plain; rfl
 
 /-- Transport both dependent witnesses along the equality of vocabularies. The program in
 the result is the same admitted program under the standard interpretation. -/
-private def standardReadback {b : Emit.Bindings} {p : Zkc.Core.Typed b.vocabulary}
+private def standardReadback {b : Zkc.Vocabulary.Project.Bindings} {p : Zkc.Core.Typed b.vocabulary}
     {root red eval : Key} {n : Nat} (cert : TableVerifier.Certified (sourceRows b) (vectorRows b) p root red eval n (sourceEvents b))
     {charge : DrawCharge} (binding : Matches charge cert.linked 1 Zkc.Vocabulary.Field.bls12381Fr.order)
     (same : b = {}) :
     (checked : TableVerifier.Certified ArithmeticModel.scalarRows ArithmeticModel.vectors
-      (cast (congrArg (fun vocabulary : Emit.Bindings => Zkc.Core.Typed vocabulary.vocabulary) same) p)
+      (cast (congrArg (fun vocabulary : Zkc.Vocabulary.Project.Bindings => Zkc.Core.Typed vocabulary.vocabulary) same) p)
       root red eval n ArithmeticModel.events) × PLift (Matches charge checked.linked 1 Zkc.Vocabulary.Field.bls12381Fr.order) := by
   subst b
   exact ⟨cert,⟨binding⟩⟩

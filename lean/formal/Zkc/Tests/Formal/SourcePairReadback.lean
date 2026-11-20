@@ -62,7 +62,7 @@ private def members : CompileM (Array (String × InstanceId × ClosedType × Typ
     out := out.push (member, callee, result, tree)
   return out
 
-private def definitions (b : Emit.Bindings) (s : Compile.State)
+private def definitions (b : Zkc.Vocabulary.Project.Bindings) (s : Compile.State)
     (trees : Array (String × InstanceId × ClosedType × Typed.FunctionBody)) : IO (Array (Definition b.vocabulary)) := do
   let context : Emit.Named.Context b := { callees := default, apply := fun i _ _ => Typing.defect s!"unexpected function call {i}" }
   trees.mapM fun (name, id, out, tree) => do
@@ -74,7 +74,7 @@ private def definitions (b : Emit.Bindings) (s : Compile.State)
 
 private def checkLinked (s : Compile.State) (trees : Array (String × InstanceId × ClosedType × Typed.FunctionBody))
     (interpolation affine : Bool) : IO Unit := do
-  let .ok bindings := ({} : Emit.Bindings).insert ⟨"test.unit", .nil⟩ ⟨[], []⟩
+  let .ok bindings := ({} : Zkc.Vocabulary.Project.Bindings).insert ⟨"test.unit", .nil⟩ ⟨[], []⟩
     | throw (IO.userError "conflicting test primitive")
   let #[boundary, evaluate] ← definitions bindings s trees | throw (IO.userError "expected two members")
   let fresh := max boundary.key.number evaluate.key.number + 1
@@ -107,7 +107,7 @@ def check (root : System.FilePath) (variant : Variant) : IO Unit := do
     let messages := finalState.log.entries.map fun e => s!"{e.rule} {Message.render Renderer.plain e.message}"
     throw (IO.userError ("source elaboration failed\n" ++ String.intercalate "\n" messages.toList))
   let .ok trees := result | throw (IO.userError "source member elaboration interrupted")
-  let b : Emit.Bindings := {}
+  let b : Zkc.Vocabulary.Project.Bindings := {}
   let defs ← definitions b finalState trees
   let #[boundary, evaluate] := defs | throw (IO.userError "expected two members")
   let package : SourcePackage := ⟨b, ⟨defs.toList⟩, ⟨[], [], [], [], []⟩⟩

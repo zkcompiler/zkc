@@ -6,6 +6,8 @@ public import Zkc.Frontend.Emit.Dependencies
 @[expose] public section
 set_option autoImplicit false
 namespace Zkc.Frontend.Emit
+
+open Zkc.Vocabulary.Project
 open Static
 open Typing (EmitM EmitFailure)
 

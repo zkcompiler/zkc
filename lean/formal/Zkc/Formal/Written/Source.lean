@@ -2,7 +2,7 @@ module
 
 public import Zkc.Core.Admission.Theorems
 public import Zkc.Core.Scheme.Roles
-public import Zkc.Frontend.Emit.Bindings
+public import Zkc.Vocabulary.Project
 public import Zkc.Formal.Written.Execution
 public import Zkc.Formal.Written.Extraction
 
@@ -25,7 +25,7 @@ theorem singleton_role_returns {V : Vocabulary} (M : Model V) (hdr : ProtocolHea
     Returns ((project r body).denote (roleSem M r (Defs.fnTable M .nil) (Defs.rTable M .nil))
       path (Env.empty.extend ns vals)) trace := Iff.rfl
 
-abbrev Standard := (Zkc.Frontend.Emit.Bindings.mk [] (by decide)).vocabulary
+abbrev Standard := (Zkc.Vocabulary.Project.Bindings.mk [] (by decide)).vocabulary
 abbrev pointTy : Standard.Ty := .nominal (.inl (.group .g1))
 abbrev scalarTy : Standard.Ty := .nominal (.inl (.field .bls12381Fr))
 abbrev challengeLaw : Standard.LawKey := .uniform (.nominal (.field .bls12381Fr))

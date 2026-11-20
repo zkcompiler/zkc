@@ -19,7 +19,7 @@ open Zkc.Tools.Audit
 /-- The libraries of the package. -/
 def libraries (directory : System.FilePath) : Array Library := #[
   { name := "formal", root := `Zkc.Formal, imports := some #[`Init, `Std, `Lean, `Zkc.Core,
-      `Zkc.Frontend.Emit.Bindings, `Zkc.Frontend.Written.LeanTerms, `Zkc.Frontend.Written.ChargeData, `Mathlib, `VCVio], directory },
+      `Zkc.Vocabulary.Project.Bindings, `Zkc.Frontend.Written.LeanTerms, `Zkc.Frontend.Written.ChargeData, `Mathlib, `VCVio], directory },
   { name := "tests of the formal library", root := `Zkc.Tests.Formal, kind := .tests, directory }] ++
   Zkc.Tools.Formal.publicIssuers directory
 

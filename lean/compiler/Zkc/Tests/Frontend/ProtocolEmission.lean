@@ -8,7 +8,7 @@ import Zkc.Frontend.Emit.NamedProtocol
 namespace Zkc.Tests.Frontend.ProtocolEmission
 open Zkc.Frontend Static
 
-private abbrev bindings : Emit.Bindings := {}
+private abbrev bindings : Zkc.Vocabulary.Project.Bindings := {}
 
 private def input := "module delivery\ntype F = primitive(\"bls12-381.fr\")\nprotocol Share roles(P, V, W)(a: F @P, spec bound: nat) -> answer: F @(P, V, W):\n    m <- send a to V, W\n    c <- draw F from V to P, W\n    return m + c\nprotocol Caller roles(A, B, C)(a: F @C):\n    for i in 0..2:\n        answer <- Share(a, spec bound = i) @(P = C, V = A, W = B)\n        guard @A answer != 0\n"
 
@@ -30,7 +30,7 @@ private def emitAt (name : String) (earlier : Std.HashMap InstanceId Typed.Proto
   let (tree, _) ← Elab.runElab context lowered.locals (Elab.elabProtocolBody name signature head stmts result[0]?)
   let .protocol body := (Typed.Body.protocol tree).numbered.1 | throw .abandoned
   let roles ← Passes.placeRoles {roster := body.roster, calleeStops := fun _ => false, signatureOf := (earlier[·]?)} body
-  let b : Emit.Bindings := {}
+  let b : Zkc.Vocabulary.Project.Bindings := {}
   let ctx : Emit.Named.Context b := {callees := default, apply := fun _ _ _ => Typing.defect "unexpected call"}
   match (Emit.Named.emitProtocol ctx ⟨roles,body.roster⟩ ⟨inst⟩ body).run (← get) with
   | .ok code => return (inst, signature, code, body)

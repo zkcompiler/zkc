@@ -17,7 +17,7 @@ def implementation {V : Core.Vocabulary} (rows : ScalarRows V) (affine : Bool) (
 
 abbrev gateRow := Zkc.Tools.Formal.gateRow
 
-structure GateEndpoint (b : Emit.Bindings) (p : Core.Typed b.vocabulary) (rootKey red site loopKey : Key)
+structure GateEndpoint (b : Zkc.Vocabulary.Project.Bindings) (p : Core.Typed b.vocabulary) (rootKey red site loopKey : Key)
     (args : List Name) where
   head : ProtocolHeader b.vocabulary
   root : Member p.headers.protocols head
@@ -29,7 +29,7 @@ structure GateEndpoint (b : Emit.Bindings) (p : Core.Typed b.vocabulary) (rootKe
   members : atCall.linked.rounds.AllMembers (fun op => Gate.Laws (sourceRows b) (.inr gateRow) bound
     atCall.linked.entry.definitions op)
 
-def installGate {b : Emit.Bindings} {p : Core.Typed b.vocabulary} {rootKey red site loopKey : Key}
+def installGate {b : Zkc.Vocabulary.Project.Bindings} {p : Core.Typed b.vocabulary} {rootKey red site loopKey : Key}
     {args : List Name} {head : ProtocolHeader b.vocabulary} (root : Member p.headers.protocols head)
     (selected : head.key = rootKey) {state residual : b.vocabulary.Ty}
     (atCall : AtSite p root red site state (sourceRows b).scalarTy residual 0 4 (events b) args (loopRoute 4 loopKey 4 7)) :

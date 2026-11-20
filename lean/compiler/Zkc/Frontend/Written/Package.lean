@@ -50,16 +50,16 @@ def flowKind : FlowKind → String
   | .rows => ".rows"
   | .opening => ".opening"
 
-def primitiveName (name : Emit.PrimitiveName) : String :=
-  s!"(Zkc.Frontend.Emit.PrimitiveName.mk {reprStr name.name} ({reprStr name.arguments}))"
+def primitiveName (name : Zkc.Vocabulary.Project.PrimitiveName) : String :=
+  s!"(Zkc.Vocabulary.Project.PrimitiveName.mk {reprStr name.name} ({reprStr name.arguments}))"
 
 /-- A row of a linked vocabulary: a standard one, or a primitive that the project binds. -/
-def linkedRowKey : Sum Zkc.Vocabulary.RowKey Emit.PrimitiveName → String
+def linkedRowKey : Sum Zkc.Vocabulary.RowKey Zkc.Vocabulary.Project.PrimitiveName → String
   | .inl k => s!"(.inl ({reprStr k}))"
   | .inr name => s!"(.inr {primitiveName name})"
 
 section
-variable {b : Emit.Bindings}
+variable {b : Zkc.Vocabulary.Project.Bindings}
 
 def rowKey (k : b.vocabulary.RowKey) : String := linkedRowKey k
 
@@ -121,7 +121,7 @@ end
 /-! ## Summaries and annotations of a function -/
 
 section
-variable {b : Emit.Bindings}
+variable {b : Zkc.Vocabulary.Project.Bindings}
 
 mutual
   def expr : BodyAnalysis.Expr (LocalRaw b.vocabulary) → String
@@ -200,16 +200,16 @@ def associationTerm (a : Core.Association) : String :=
   let interpretations := a.interpretations.map fun (handle, chosen) => s!"({key handle}, {key chosen})"
   s!"⟨{list families}, {list relations}, {list interpretations}, {keys a.claims}, {keys a.specifications}⟩"
 
-def vocabularyTerm (b : Emit.Bindings) : String :=
+def vocabularyTerm (b : Zkc.Vocabulary.Project.Bindings) : String :=
   let rows := b.rows.map fun (name, signature) =>
     let inputs := list (signature.inputs.map linkedTy)
     let outputs := list (signature.outputs.map linkedTy)
     s!"({primitiveName name}, ⟨{inputs}, {outputs}⟩)"
-  s!"(Zkc.Frontend.Emit.Bindings.mk {list rows} (by decide +kernel)).vocabulary"
+  s!"(Zkc.Vocabulary.Project.Bindings.mk {list rows} (by decide +kernel)).vocabulary"
 
 /-- The modules that the declarations of a printed package use. -/
 def packageImports : List String :=
-  ["Zkc.Core.Admission.Theorems", "Zkc.Kernel", "Zkc.Frontend.Emit.Bindings"]
+  ["Zkc.Core.Admission.Theorems", "Zkc.Kernel", "Zkc.Vocabulary.Project"]
 
 /-- The declarations of a printed package and what a reader of them needs to refer to its
 definitions. -/

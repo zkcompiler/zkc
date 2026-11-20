@@ -2,12 +2,12 @@ module
 
 public import Zkc.Formal.Written.SumcheckRows
 public import Zkc.Formal.Interactive.PairReadback
-public import Zkc.Frontend.Emit.Bindings
+public import Zkc.Vocabulary.Project
 public import Zkc.Core.Admission.Theorems
 
 @[expose] public section
 namespace Zkc.Tests.Formal.SourcePairMembers
-open Core Frontend.Emit Formal.Interactive.Sumcheck
+open Core Zkc.Vocabulary.Project Formal.Interactive.Sumcheck
 abbrev bindings : Bindings := {}
 abbrev V := bindings.vocabulary
 

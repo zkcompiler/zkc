@@ -52,7 +52,7 @@ structure ResultStore where
   defaultInstances : Std.HashSet InstanceId := {}
   /-- The rows that bodies apply, by their identity. -/
   rows : Array Typing.Row := #[]
-  rowIndex : Std.HashMap Emit.PrimitiveName Typing.RowId := {}
+  rowIndex : Std.HashMap Zkc.Vocabulary.Project.PrimitiveName Typing.RowId := {}
   /-- The function instances in the order their typing finished. -/
   finished : Array InstanceId := #[]
   /-- The obligations of the laws typed, in the order they were typed. -/

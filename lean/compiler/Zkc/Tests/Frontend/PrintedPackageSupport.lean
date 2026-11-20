@@ -29,9 +29,9 @@ def compile (project : System.FilePath) (file : String) (edits : List (String ×
   IO.ofExcept (Written.sourceState assembly)
 
 /-- A program over the vocabulary of bindings, over the vocabulary of their rows written out. -/
-def atRows : {b : Emit.Bindings} → {rows : List (Emit.PrimitiveName × Emit.PrimitiveSignature)} →
+def atRows : {b : Zkc.Vocabulary.Project.Bindings} → {rows : List (Zkc.Vocabulary.Project.PrimitiveName × Zkc.Vocabulary.Project.PrimitiveSignature)} →
     {distinct : (rows.map Prod.fst).Nodup} → b.rows = rows → NamedProgram b.vocabulary →
-      NamedProgram (Emit.Bindings.mk rows distinct).vocabulary
+      NamedProgram (Zkc.Vocabulary.Project.Bindings.mk rows distinct).vocabulary
   | ⟨_, _⟩, _, _, rfl, program => program
 
 /-- The program by names and the association of a printed package are those that the frontend
@@ -39,9 +39,9 @@ gives to admission for the root: the same external rows, the same definitions, a
 association that the package was printed with. The comparison is of values, so a printer that
 wrote a different program or a different association, or lost a part of one, is found here. -/
 def expectStored (project : System.FilePath) (file : String) (edits : List (String × String))
-    (root : Nat) (expected : Association) {rows : List (Emit.PrimitiveName × Emit.PrimitiveSignature)}
+    (root : Nat) (expected : Association) {rows : List (Zkc.Vocabulary.Project.PrimitiveName × Zkc.Vocabulary.Project.PrimitiveSignature)}
     {distinct : (rows.map Prod.fst).Nodup}
-    (stored : NamedProgram (Emit.Bindings.mk rows distinct).vocabulary)
+    (stored : NamedProgram (Zkc.Vocabulary.Project.Bindings.mk rows distinct).vocabulary)
     (association : Association) : IO Unit := do
   let state ← compile project file edits
   let admitted ← IO.ofExcept (Written.admitInstance state root default)

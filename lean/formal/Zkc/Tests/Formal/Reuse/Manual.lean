@@ -4,12 +4,12 @@ namespace Zkc.Tests.Formal.Reuse.Manual
 open Core Frontend Formal.Interactive.Sumcheck ReductionRound
 open SourcePairMembers (sourceRows)
 
-private def pairOps (b : Emit.Bindings) (i : Nat) : Operations b.vocabulary :=
+private def pairOps (b : Zkc.Vocabulary.Project.Bindings) (i : Nat) : Operations b.vocabulary :=
   let message := if i == 0 then 13 else 15 + 8*i
   let bind := if i == 0 then 16 else 17 + 8*i
   ⟨.call ⟨message⟩,.call ⟨15⟩,.call ⟨bind⟩,.call ⟨22⟩⟩
 
-private def gateOps (b : Emit.Bindings) (i : Nat) : Operations b.vocabulary :=
+private def gateOps (b : Zkc.Vocabulary.Project.Bindings) (i : Nat) : Operations b.vocabulary :=
   let row (name : String) := Emit.primitiveName ⟨name,#[.type (StandardNames.fieldType .bls12381Fr),.nat (3-i)]⟩
   ⟨.row (.inr (row "circuit.gate_message")),.call ⟨22⟩,.row (.inr (row "circuit.gate_bind")),.row (.inr gateRow)⟩
 

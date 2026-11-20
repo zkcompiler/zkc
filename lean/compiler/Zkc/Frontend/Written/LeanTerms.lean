@@ -48,16 +48,16 @@ mutual
 end
 
 /-- A nominal type of a linked vocabulary: a standard one, or one of the project's. -/
-def linkedTypeKey : Sum Zkc.Vocabulary.TypeKey Emit.Parameter → String
+def linkedTypeKey : Sum Zkc.Vocabulary.TypeKey Zkc.Vocabulary.Project.Parameter → String
   | .inl k => s!"(.inl ({reprStr k}))"
   | .inr p => s!"(.inr ({reprStr p}))"
 
-def linkedTy (t : Emit.LinkedType) : String := coreTy linkedTypeKey t
+def linkedTy (t : Zkc.Vocabulary.Project.LinkedType) : String := coreTy linkedTypeKey t
 
 /-- A type of the vocabulary of the bindings. -/
-def ty {b : Emit.Bindings} (t : b.vocabulary.Ty) : String := linkedTy t
+def ty {b : Zkc.Vocabulary.Project.Bindings} (t : b.vocabulary.Ty) : String := linkedTy t
 
-def tys {b : Emit.Bindings} (ts : Tys b.vocabulary.TypeKey) : String := coreTys linkedTypeKey ts
+def tys {b : Zkc.Vocabulary.Project.Bindings} (ts : Tys b.vocabulary.TypeKey) : String := coreTys linkedTypeKey ts
 
 /-- A sampling law of the standard vocabulary. -/
 def lawKey : Zkc.Vocabulary.LawKey → String

@@ -9,6 +9,8 @@ set_option autoImplicit false
 
 namespace Zkc.Frontend.Typing
 
+open Zkc.Vocabulary.Project
+
 open Static Emit
 
 inductive EmitFailure where
@@ -42,7 +44,7 @@ partial def toTy (type : ClosedType) (active : List InstanceId := []) : EmitM Li
     | _, _ => defect s!"missing aggregate declaration for instance {i}"
   | .nonzero _ | .nominal .. =>
     if let some t := StandardNames.typeOf? type then return t.mapNominal Sum.inl
-    return .nominal (.inr (Parameter.ofType type))
+    return .nominal (.inr (parameterOfType type))
   | .rational | .specification _ => throw (.noCoreForm "specification type in executable code")
   | .opaque .. => throw (.waiting "an unresolved module member in executable code")
 
