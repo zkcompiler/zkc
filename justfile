@@ -24,7 +24,7 @@ test-interactive:
     cd lean/formal && lake lean checks/WorldObservation.lean
     cd lean/formal && lake env lean --run checks/AuditInteractive.lean
 
-# Compile source draw charges, check their VCVio bounds, and exercise source and address mutations.
+# Compile source draw charges, check their VCVio bounds, judge an admitted protocol within its charges, and exercise source and address mutations.
 test-written-charge: _charge-checks
     cd lean/formal && lake lean checks/ReplayCharge.lean
 
@@ -34,6 +34,7 @@ _charge-checks:
     cd lean/formal && lake lean checks/OccurrenceDepth.lean
     cd lean/formal && lake lean checks/ProofArguments.lean
     cd lean/formal && lake lean checks/GoalClause.lean
+    cd lean/formal && lake lean checks/CountCharge.lean
     cd lean/formal && lake lean checks/FixedTableSampling.lean
 
 # Build the public formal package and audit its dependencies and proof controls.

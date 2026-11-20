@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Formal.ProbabilisticProcess
+public import Zkc.Formal.Written.PortSamplers
 public import Zkc.Formal.Written.PrimeFive
 public import VCVio.OracleComp.Constructions.UniformFinMeasure
 
@@ -8,25 +8,6 @@ public import VCVio.OracleComp.Constructions.UniformFinMeasure
 namespace Zkc.Formal.Written.UniformChallenge
 open Core ProbabilisticProcess OracleComp ProbComp
 open scoped ENNReal
-
-/-- A service for one fully specified port. Matching uses the typed law, audience, arguments,
-reply type and occurrence represented by the source port. -/
-def serveAt {V : Vocabulary} (M : Model V) (port : InputPort V)
-    (draw : ProbComp ((RSig M).Reply (port.operation M))) : Service (RSig M) Unit :=
-  fun op s ↦ if h : InputPort.ofOp M op = some port then
-    let replyEq := congrArg (RSig M).Reply (InputPort.operation_ofOp M h).symm
-    (fun answer ↦ (some (cast replyEq answer),s)) <$> draw
-  else pure (none,s)
-
-theorem serves_at {V : Vocabulary} (M : Model V) (port : InputPort V)
-    (draw : ProbComp ((RSig M).Reply (port.operation M))) (s : Unit) :
-    serveAt M port draw (port.operation M) s = (fun answer ↦ (some answer,s)) <$> draw := by
-  simp [serveAt, InputPort.ofOp_operation]
-
-theorem unavailable_of_different_port {V : Vocabulary} (M : Model V) {p q : InputPort V}
-    (draw : ProbComp ((RSig M).Reply (p.operation M))) (apart : q ≠ p) (s : Unit) :
-    serveAt M p draw (q.operation M) s = pure (none,s) := by
-  simp [serveAt, InputPort.ofOp_operation, apart]
 
 abbrev M := PrimeFive.model
 

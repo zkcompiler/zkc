@@ -5,11 +5,13 @@ public meta import Lean
 public meta section
 
 /-!
-A command that asks the kernel to compute.
+Commands that ask the kernel to compute.
 
 `kernel_ok` defines a term of data as the kernel's normal form of what an `Except` expression
 holds when the kernel reduces it to `ok`, with the equation between the expression and the new
-constant.
+constant. `kernel_normal` defines a term of data as the kernel's normal form of an expression,
+with the equation between the two: the program of a role is the projection of a protocol's
+body, which is a term and no `Except`.
 
 Nothing here is trusted. Each definition and each equation is given to the kernel as it is, and
 the kernel checks it. Lean's unifier is not asked to compute: on a long program it evaluates a
@@ -135,6 +137,33 @@ def nameComponents (scope : Name) (names : Array Name) (term : Expr) : MetaM Exp
   unless next == names.size do
     throwError "kernel_ok: {names.size} names for {next} explicit arguments of data{indentExpr term}"
   return mkAppN term.getAppFn out
+
+/-- Closes an equation whose two sides the kernel finds definitionally equal, by reflexivity.
+Lean's own reduction is not asked: the kernel compares the sides here, so that a failure is
+reported at the tactic, and again when the proof is closed. -/
+elab "kernel_rfl" : tactic => Lean.Elab.Tactic.withMainContext do
+  let goal ← Lean.Elab.Tactic.getMainGoal
+  let some (_, lhs, rhs) := (← instantiateMVars (← goal.getType)).eq?
+    | throwError "kernel_rfl: the goal is no equation"
+  let same ← ofExceptKernelException (Lean.Kernel.isDefEq (← getEnv) (← getLCtx) lhs rhs)
+  unless same do
+    throwError "kernel_rfl: the kernel does not find the two sides definitionally equal"
+  goal.assign (← mkEqRefl lhs)
+
+/-- `kernel_normal name : type := term` defines `name` as the kernel's normal form of `term`,
+and states `name.eq : name = term`, which the kernel checks. -/
+elab "kernel_normal " name:ident " : " type:term " := " value:term : command =>
+  liftTermElabM do
+    let type ← elabType type
+    let value ← elabTermEnsuringType value type
+    synthesizeSyntheticMVarsNoPostponing
+    let type ← instantiateMVars type
+    let value ← instantiateMVars value
+    let declName := (← getCurrNamespace) ++ name.getId
+    define declName type (← normal value type)
+    addDecl <| .thmDecl {
+      name := declName ++ `eq, levelParams := [], type := ← mkEq (mkConst declName) value,
+      value := ← mkEqRefl (mkConst declName) }
 
 /-- `kernel_ok name with a b c : type := term`, for a `term` of an `Except` type that the kernel
 reduces to `ok`: defines `name` as the kernel's normal form of what it holds, states

@@ -2,6 +2,7 @@ import Zkc.Frontend.Written.Claim
 import Zkc.Frontend.Written.Charge
 import Zkc.Frontend.Driver.Files
 import Zkc.Tests.Frontend.SyntaxHarness
+import Zkc.Tests.Frontend.SourceClause
 
 /-!
 The clause that a written soundness goal reads.
@@ -14,6 +15,7 @@ written, is refused by these expectations.
 -/
 
 open Zkc.Frontend Zkc.Frontend.Written
+open Zkc.Tests.Frontend.SourceClause (Seen seen)
 
 private def assemblyOf (src : String) : Assembly :=
   Id.run <| assemble #[⟨"claim.zkc", Syntax.parseString "claim.zkc" src⟩] fun _ => pure none
@@ -23,35 +25,6 @@ private def edit (src before after : String) : IO String := do
   unless (src.splitOn before).length == 2 do
     throw (IO.userError s!"expected one occurrence of {before}")
   return src.replace before after
-
-/-- What a reader of a selected clause sees, by the names of the source. -/
-private structure Seen where
-  kind : String
-  label : Option String
-  role : String
-  relation : String
-  statement : List String
-  witness : List String
-  deriving BEq, Repr
-
-private def seen (c : AdmittedRoot) (goal : String) : Except String Seen := do
-  let clause ← goalClause c goal
-  let some key := c.state.results.key? c.id | throw "missing the root"
-  let some {content := .protocol head .., ..} := c.state.env.modules.lowered? key.declaration
-    | throw "missing the protocol"
-  let some application := clause.application | throw "the clause applies no relation"
-  let port (operand : Lowered.Expr) : Except String String := match operand with
-    | .local _ id => match head.ports.find? (·.binder.id == id) with
-      | some found => pure found.binder.name
-      | none => throw "an operand is no port"
-    | _ => throw "an operand is no name"
-  return {
-    kind := if clause.kind == .proves then "proves" else "reduces"
-    label := clause.label
-    role := (clause.role.bind (head.roster[·]?)).getD "?"
-    relation := c.state.program.nameOf application.relation
-    statement := (← application.statement.mapM port).toList
-    witness := (← application.witness.mapM port).toList }
 
 private def expect (title : String) (c : AdmittedRoot) (goal : String) (wanted : Seen) : IO Unit := do
   let found ← IO.ofExcept (seen c goal)

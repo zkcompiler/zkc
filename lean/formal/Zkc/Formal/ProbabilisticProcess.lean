@@ -30,4 +30,16 @@ def run {S : Sig} {H A State : Type} (service : Service S State)
       | some v => next v state' }
   p.interpret algebra (fun a s ↦ pure (.returned a,s)) (fun h s ↦ pure (.halted h,s))
 
+/-- The type of the reply to the first effect of a process; a process that begins with none has
+no reply. -/
+def ReplyToFirst {S : Sig} {H A : Type} : Process S H A → Type
+  | .call op _ => S.Reply op
+  | .done _ | .halt _ => Empty
+
+/-- What follows the reply to the first effect of a process. -/
+def afterFirst {S : Sig} {H A : Type} (p : Process S H A) : ReplyToFirst p → Process S H A :=
+  match p with
+  | .call _ next => next
+  | .done _ | .halt _ => nofun
+
 end Zkc.Formal.ProbabilisticProcess

@@ -40,6 +40,12 @@ theorem toProbability_le_iff {a b : ℚ≥0} : toProbability a ≤ toProbability
 theorem toProbability_mono {a b : ℚ≥0} (le : a ≤ b) : toProbability a ≤ toProbability b :=
   toProbability_le_iff.mpr le
 
+/-- A count over a positive count, as a probability. -/
+theorem toProbability_natCast_div (count total : ℕ) (positive : 0 < total) :
+    toProbability ((count : ℚ≥0) / total) = (count : ℝ≥0∞) / total := by
+  have nonzero : ((total : ℝ≥0)) ≠ 0 := by exact_mod_cast positive.ne'
+  simp [toProbability, ENNReal.coe_div nonzero]
+
 variable {S : Sig} {σ H A : Type}
 
 /-- The run of a process that calls: the service answers, and the run continues with the reply
@@ -129,6 +135,19 @@ def Service.Follows (service : Service S σ) (samplers : Samplers S) : Prop :=
   ∀ op draw, samplers op = some draw → ∀ s (excluded : S.Reply op → Prop),
     Pr{let out ← service op s}[∃ v, out.1 = some v ∧ excluded v] ≤ Pr{let v ← draw}[excluded v]
 
+/-- What a fee of samplers pays for has at most the fee of the probability of the answers of a
+service that draws as the samplers do. -/
+theorem Service.Follows.pays {service : Service S σ} {samplers : Samplers S}
+    (follows : service.Follows samplers) (op : S.Op) (s : σ) (fee : ℚ≥0)
+    (excluded : S.Reply op → Prop) (pays : paysBy samplers op fee excluded) :
+    Pr{let out ← service op s}[∃ v, out.1 = some v ∧ excluded v] ≤ toProbability fee := by
+  rcases pays with ⟨_, nothing⟩ | ⟨draw, has, weight⟩
+  · have none : Pr{let out ← service op s}[∃ v, out.1 = some v ∧ excluded v] = 0 :=
+      prEvent_eq_zero_of_forall_mem_support _ _ fun _ _ ⟨v, _, ex⟩ => nothing v ex
+    rw [none]
+    exact zero_le
+  · exact (follows op draw has s excluded).trans weight
+
 /-- From the judgment with the fees of samplers to a probability, for every service that draws
 as the samplers do and answers only what is allowed. -/
 theorem sampled_bounds_probability (service : Service S σ) (samplers : Samplers S)
@@ -137,14 +156,43 @@ theorem sampled_bounds_probability (service : Service S σ) (samplers : Samplers
     (follows : service.Follows samplers) (p : Process S H A) (budget : ℚ≥0) (s : σ)
     (judged : p.interpret (.charged allowed (paysBy samplers)) (fun a _ => ¬ bad a)
       (fun _ _ => True) budget) :
-    Pr{let out ← run service p s}[∃ a, out.1 = .returned a ∧ bad a] ≤ toProbability budget := by
-  refine charged_bounds_probability service allowed (paysBy samplers) bad permitted
-    (fun op s fee excluded pays => ?_) p budget s judged
-  rcases pays with ⟨_, nothing⟩ | ⟨draw, has, weight⟩
-  · have none : Pr{let out ← service op s}[∃ v, out.1 = some v ∧ excluded v] = 0 :=
-      prEvent_eq_zero_of_forall_mem_support _ _ fun _ _ ⟨v, _, ex⟩ => nothing v ex
-    rw [none]
-    exact zero_le
-  · exact (follows op draw has s excluded).trans weight
+    Pr{let out ← run service p s}[∃ a, out.1 = .returned a ∧ bad a] ≤ toProbability budget :=
+  charged_bounds_probability service allowed (paysBy samplers) bad permitted
+    (fun op s fee excluded pays => follows.pays op s fee excluded pays) p budget s judged
+
+/-! ## Fees within what each effect is allowed -/
+
+/-- The fees of samplers within allowances: a fee that the sampler of the effect pays for, and
+that is at most what the effect is allowed. A bound that is judged under this policy is paid
+effect by effect within the allowances, and not only in total: a fee cannot be moved from the
+effect that a source charges to another. -/
+def paysWithin (samplers : Samplers S) (allowance : S.Op → ℚ≥0) :
+    (op : S.Op) → ℚ≥0 → (S.Reply op → Prop) → Prop :=
+  fun op fee excluded => paysBy samplers op fee excluded ∧ fee ≤ allowance op
+
+/-- From the judgment with fees within allowances to a probability, for every service that draws
+as the samplers do and answers only what is allowed. -/
+theorem allowed_bounds_probability (service : Service S σ) (samplers : Samplers S)
+    (allowance : S.Op → ℚ≥0) (allowed : ∀ op, S.Reply op → Prop) (bad : A → Prop)
+    (permitted : ∀ op s reply t, (some reply, t) ∈ support (service op s) → allowed op reply)
+    (follows : service.Follows samplers) (p : Process S H A) (budget : ℚ≥0) (s : σ)
+    (judged : p.interpret (.charged allowed (paysWithin samplers allowance)) (fun a _ => ¬ bad a)
+      (fun _ _ => True) budget) :
+    Pr{let out ← run service p s}[∃ a, out.1 = .returned a ∧ bad a] ≤ toProbability budget :=
+  charged_bounds_probability service allowed (paysWithin samplers allowance) bad permitted
+    (fun op s fee excluded pays => follows.pays op s fee excluded pays.1) p budget s judged
+
+/-- A process that is judged never to return, within a budget and with fees within allowances,
+returns with probability at most the budget. -/
+theorem allowed_bounds_return (service : Service S σ) (samplers : Samplers S)
+    (allowance : S.Op → ℚ≥0) (allowed : ∀ op, S.Reply op → Prop)
+    (permitted : ∀ op s reply t, (some reply, t) ∈ support (service op s) → allowed op reply)
+    (follows : service.Follows samplers) (p : Process S H A) (budget : ℚ≥0) (s : σ)
+    (judged : p.interpret (.charged allowed (paysWithin samplers allowance)) (fun _ _ => False)
+      (fun _ _ => True) budget) :
+    Pr{let out ← run service p s}[∃ a, out.1 = .returned a] ≤ toProbability budget := by
+  have bound := allowed_bounds_probability service samplers allowance allowed (fun _ => True)
+    permitted follows p budget s (by simpa using judged)
+  simpa using bound
 
 end Zkc.Formal.ProbabilisticProcess
