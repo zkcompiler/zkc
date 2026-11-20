@@ -8,8 +8,8 @@ elements. The process draws once and returns the draw; a bad return is zero.
 The hypotheses of the bridge are met by a service that answers: it draws uniformly at the one
 port (`follows`, `permitted`). The process is judged within one fifth (`judged`), so the
 probability of a bad return is at most one fifth (`bounded`); it is one fifth (`attained`), so
-the bound of the bridge is reached. No smaller budget judges the process: one sixth does not
-(`not_within_a_sixth`).
+the bound of the bridge is reached. No budget below one fifth judges the process
+(`not_within_less`).
 -/
 
 open Zkc.Core Zkc.Formal Zkc.Formal.ProbabilisticProcess Zkc.Formal.Written OracleComp
@@ -39,8 +39,8 @@ theorem zero_weight : Pr{let v ← draw}[v = (0 : ZMod 5)] = 1 / 5 := by
   simp only [Finset.filter_eq', Finset.mem_univ, ite_true, Finset.card_singleton, Nat.cast_one]
   norm_num
 
-theorem fifth : ProbabilisticProcess.probability (1 / 5) = 1 / 5 := by
-  simp [ProbabilisticProcess.probability]
+theorem fifth : toProbability (1 / 5) = 1 / 5 := by
+  simp [toProbability]
 
 /-- The process is judged within one fifth: the fee of the draw pays for the reply zero. -/
 theorem judged :
@@ -90,14 +90,15 @@ theorem attained :
   rintro ⟨a, same, rfl⟩
   exact same
 
-/-- A sixth is not enough: a judgment within it would bound the probability below what it is. -/
-theorem not_within_a_sixth :
+/-- No smaller budget judges the process: a judgment within less than one fifth would bound the
+probability below what it is. -/
+theorem not_within_less (budget : ℚ≥0) (below : budget < 1 / 5) :
     ¬ (ask peers at_).interpret (.charged (Permitted M) (paysBy (samplers peers at_)))
-      (fun a _ => ¬ a = 0) (fun _ _ => True) (1 / 6) := by
+      (fun a _ => ¬ a = 0) (fun _ _ => True) budget := by
   intro within
   have bound := sampled_bounds_probability _ (samplers peers at_) (Permitted M) (fun a => a = 0)
-    (answers_permitted peers at_) (follows peers at_) (ask peers at_) (1 / 6) () within
+    (answers_permitted peers at_) (follows peers at_) (ask peers at_) budget () within
   rw [attained, ← fifth] at bound
-  exact absurd (probability_le_iff.mp bound) (by norm_num)
+  exact absurd (toProbability_le_iff.mp bound) (not_le.mpr below)
 
 end Zkc.Tests.Formal.ChargedProbability
