@@ -51,6 +51,8 @@ A companion can prove `coreObligation` directly and apply `of_core_obligation` t
 | Local functions and group algebra | Ordinary admitted local functions, typed row equations, one exact-trace theorem and one group-action extraction lemma serve both examples. | The current automatic calculation covers the operations in the two examples. A different extractor, algebra or run shape can require new evidence. The concrete model exercises the two-element field and group. |
 | Repeated events | Each declaration's source event and part identify its realizations. A per-definition index recovers full enclosing block keys and iteration numbers from the typed body. A missing or ambiguous address fails lookup. | Uniform loops have one static site. A stepped reduction has one physical realization per iteration. Source proof clients check this against the admitted Sumcheck and GKR reductions. |
 
+A generated module is about the program by names that is printed in it. That the print is the program the frontend gave to admission is not checked inside the module: `just test-packages` compares the two by value for the examples and reads a fixture of the printer back.
+
 The interactive theorem concerns a returning verifier fork. Honest-run completeness, simulation, Fiat–Shamir security, concrete curve instantiation and probability bounds require their own statements and evidence.
 
 ## World observations and the next proof boundary

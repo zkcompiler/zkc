@@ -1,7 +1,6 @@
 module
 
 public import Zkc.Core.Admission.Theorems
-public import Zkc.Kernel
 public import Zkc.Frontend.Emit.Reports
 public import Zkc.Frontend.Written.LeanTerms
 
@@ -28,8 +27,9 @@ A wrong print that still elaborates gives a module about another program. The ch
 packages compares `stored` with the frontend's program by value, and sends a fixture with
 every constructor of the stored form through `storedDefinition`.
 
-A module that holds a printed package imports the modules of `packageImports`, which this
-module imports as well: building it builds what a printed package needs.
+A module that holds a printed package imports the modules of `packageImports`. They are built
+before Lean reads the module; the printer itself has no use for the kernel command and does not
+import it.
 -/
 
 namespace Zkc.Frontend.Written

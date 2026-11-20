@@ -28,8 +28,19 @@ abbrev projectRow : Emit.PrimitiveName :=
     .cons (.type (.variant 12) .nil) <| .cons (.type (.specification 13) .nil) <|
     .cons (.type (.opaqueMember 14 "member") .nil) .nil⟩
 
+/-- Every form of a type over the keys of the standard vocabulary and a project type, with every
+kind of nominal type, every field and every group. -/
+abbrev everyLinkedType : List Emit.LinkedType :=
+  [.bool, .nat, .fin 5, .seq (.nominal (.inl (.field .bls12381Fr))) (some 2),
+    .seq (.nominal (.inr projectType)) none,
+    .tuple (.cons .nat (.cons (.nominal (.inl (.field .koalaBear4))) .nil)),
+    .record ⟨31⟩ true (.cons .bool .nil), .record ⟨33⟩ false .nil,
+    .variant ⟨32⟩ (.cons .nat (.cons (.tuple .nil) .nil)),
+    .nominal (.inl (.nonzero .koalaBear)), .nominal (.inl (.group .g1)),
+    .nominal (.inl (.group .g2)), .nominal (.inl (.group .gt))]
+
 abbrev bindings : Emit.Bindings :=
-  ⟨[(projectRow, ⟨[.nat], [.nominal (.inr projectType)]⟩)], by decide⟩
+  ⟨[(projectRow, ⟨everyLinkedType, [.nominal (.inr projectType)]⟩)], by decide⟩
 
 /-- The rows that the project binds, as the printer of a vocabulary reads them. -/
 def bindingRows : List (Emit.PrimitiveName × Emit.PrimitiveSignature) := bindings.rows
@@ -39,12 +50,8 @@ abbrev V : Vocabulary := bindings.vocabulary
 abbrev field : V.Ty := .nominal (.inl (.field .bls12381Fr))
 abbrev project : V.Ty := .nominal (.inr projectType)
 
-/-- Every form of a type, with every kind of nominal type of the standard vocabulary. -/
-abbrev everyType : List V.Ty :=
-  [.bool, .nat, .fin 5, .seq field (some 2), .seq project none,
-    .tuple (.cons .nat (.cons field .nil)), .record ⟨31⟩ true (.cons .bool .nil),
-    .record ⟨33⟩ false .nil, .variant ⟨32⟩ (.cons .nat (.cons (.tuple .nil) .nil)), field, project,
-    .nominal (.inl (.nonzero .koalaBear)), .nominal (.inl (.group .gt))]
+/-- Every form of a type, as a type of the vocabulary. -/
+abbrev everyType : List V.Ty := everyLinkedType
 
 /-- Every owned operation. -/
 def ownedNames : List OwnedName :=

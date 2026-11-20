@@ -50,7 +50,7 @@ Run every command from the root of the repository.
 | `just check` | the checks that need no build: `bash .github/scripts/public-tree-guard.sh`, `python3 scripts/check_docs.py --all`, and `python3 lean/compiler/scripts/generate_unicode_tables.py --check` |
 
 Lake builds incrementally, so `just build` after a change rebuilds only the modules that the
-change affects. Run `just test` and `just test-interactive` for changes that cross the compiler and interactive proof boundary. Include `just test-packages` when a change affects the Core program, admission, emission or the printed package. Include `just test-written-knowledge` when a change affects generated claims, their source types, role projection or shared proof rules.
+change affects. Run `just test` and `just test-interactive` for changes that cross the compiler and interactive proof boundary. Include `just test-packages` when a change affects the Core program, admission, emission, the printed package, the keys of the standard vocabulary or the parameters of a project primitive: no other recipe and no CI job checks that the fixture of the printer holds every constructor. Include `just test-written-knowledge` when a change affects generated claims, their source types, role projection or shared proof rules.
 
 ### The tests
 

@@ -4,17 +4,17 @@ import Zkc.Tests.Frontend.PrintedFixtures
 /-!
 The fixtures of the printer hold every constructor that a program by names can hold.
 
-From the types of the fixtures, the constructors of every inductive type that a value can hold
-are collected through the types of the constructors' fields. From the values of the fixtures,
-the constructors that they hold are collected. A constructor of the first collection that is
-not in the second is an error of this file, so a constructor added to the program by names, to
-a key of the vocabulary or to a parameter of a project primitive stops the build until a
-fixture holds it.
+For each fixture, the constructors of every inductive type that a value of its type can hold
+are collected through the types of the constructors' fields, and the constructors that its
+value holds are collected. A constructor of the first collection that is not in the second is
+an error of this file. `just test-packages` builds this file, so a constructor added to the
+program by names, to a key of the vocabulary or to a parameter of a project primitive makes
+that recipe fail until a fixture holds it.
 
 Numbers and strings are left out: they are literals. Proofs and types are not values. A
 constructor with a field of a type that has no constructor has no value and is not asked for.
-The comparison is by constructor: one occurrence of a constructor stands for every field of
-its type.
+The comparison is by constructor within one fixture: one occurrence of a constructor stands
+for every field of its type in that fixture.
 -/
 
 open Lean Meta
@@ -56,20 +56,18 @@ partial def held (value : Expr) : StateRefT NameSet MetaM Unit := do
     let field := arguments[i]!
     unless (← isProp (← inferType field)) || (← isType field) do held field
 
-/-- The constructors that values of the fixtures can hold and do not. -/
-def missing (fixtures : List Name) : MetaM (List Name) := do
-  let mut wanted : Std.HashSet Expr × NameSet := ({}, {})
-  let mut found : NameSet := {}
-  for fixture in fixtures do
-    let value := mkConst fixture
-    (_, wanted) ← (reachable (← inferType value)).run wanted
-    (_, found) ← (held value).run found
-  return (wanted.2.toList.filter (!found.contains ·)).mergeSort (·.toString < ·.toString)
+/-- The constructors that a value of the fixture's type can hold and the fixture does not. -/
+def missing (fixture : Name) : MetaM (List Name) := do
+  let value := mkConst fixture
+  let (_, _, wanted) ← (reachable (← inferType value)).run ({}, {})
+  let (_, found) ← (held value).run {}
+  return (wanted.toList.filter (!found.contains ·)).mergeSort (·.toString < ·.toString)
 
 run_meta do
-  let absent ← missing [``PrintedFixtures.bindingRows, ``PrintedFixtures.definitions,
-    ``PrintedFixtures.association]
-  unless absent.isEmpty do
-    throwError "the fixtures of the printer hold no{indentD (MessageData.joinSep (absent.map (m!"{·}")) Format.line)}"
+  for fixture in [``PrintedFixtures.bindingRows, ``PrintedFixtures.definitions,
+      ``PrintedFixtures.association] do
+    let absent ← missing fixture
+    unless absent.isEmpty do
+      throwError "{fixture} holds no{indentD (MessageData.joinSep (absent.map (m!"{·}")) Format.line)}"
 
 end Zkc.Tests.Frontend.PrintedFixtureCoverage
