@@ -34,13 +34,15 @@ def atRows : {b : Emit.Bindings} → {rows : List (Emit.PrimitiveName × Emit.Pr
       NamedProgram (Emit.Bindings.mk rows distinct).vocabulary
   | ⟨_, _⟩, _, _, rfl, program => program
 
-/-- The program by names of a printed package is the program that the frontend gives to
-admission for the root: the same external rows, and the same definitions. The comparison is of
-values, so a printer that wrote a different program, or lost a part of one, is found here. -/
+/-- The program by names and the association of a printed package are those that the frontend
+gives to admission for the root: the same external rows, the same definitions, and the
+association that the package was printed with. The comparison is of values, so a printer that
+wrote a different program or a different association, or lost a part of one, is found here. -/
 def expectStored (project : System.FilePath) (file : String) (edits : List (String × String))
-    (root : Nat) {rows : List (Emit.PrimitiveName × Emit.PrimitiveSignature)}
+    (root : Nat) (expected : Association) {rows : List (Emit.PrimitiveName × Emit.PrimitiveSignature)}
     {distinct : (rows.map Prod.fst).Nodup}
-    (stored : NamedProgram (Emit.Bindings.mk rows distinct).vocabulary) : IO Unit := do
+    (stored : NamedProgram (Emit.Bindings.mk rows distinct).vocabulary)
+    (association : Association) : IO Unit := do
   let state ← compile project file edits
   let admitted ← IO.ofExcept (Written.admitInstance state root default)
   let emission := admitted.emission
@@ -49,5 +51,7 @@ def expectStored (project : System.FilePath) (file : String) (edits : List (Stri
       throw (IO.userError s!"{file}, root {root}: the printed program differs from the stored program")
   else
     throw (IO.userError s!"{file}, root {root}: the printed external rows differ from the bindings")
+  unless decide (association = expected) do
+    throw (IO.userError s!"{file}, root {root}: the printed association differs from the package's")
 
 end Zkc.Tests.Frontend.PrintedPackageSupport

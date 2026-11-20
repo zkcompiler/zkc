@@ -13,10 +13,11 @@ elaborates. Two things stand for that. The comparison with the frontend's progra
 every module; and a fixture with every constructor of the program by names, printed, read by
 Lean and compared with the fixture by value.
 
-Three controls show that the check can fail. A program whose call names no definition does not
+Four controls show that the check can fail. A program whose call names no definition does not
 elaborate, and the kernel command refuses it. A key changed in a definition by names still
 elaborates, and only the comparison with the source refuses it. A module compared with the
-program of a different source is refused by that comparison.
+program of a different source is refused by that comparison. A module whose association alone
+is changed still admits, and only the comparison of the association refuses it.
 
 Run from `lean/compiler` with `lake env lean --run Zkc/Tests/Frontend/PrintedPackages.lean`.
 -/
@@ -47,6 +48,9 @@ def subjects : List Subject := [
 
 def literal (text : String) : String := reprStr text
 
+/-- The association that the packages of this check are printed with: none of a scheme. -/
+def noAssociation : Association := ⟨[], [], [], [], []⟩
+
 def edits (pairs : List (String × String)) : String :=
   "[" ++ ", ".intercalate (pairs.map fun (before, after) => s!"({literal before}, {literal after})") ++ "]"
 
@@ -56,11 +60,11 @@ def imports (others : List String) : String :=
 /-- The module of a printed package with what the check asks of it: the axioms of its theorems,
 and the comparison of its program by names with the source's. -/
 def checkModule (name text : String) (project : System.FilePath) (file : String)
-    (source : List (String × String)) (root : Nat) : String :=
+    (source : List (String × String)) (root : Nat) (association : Association) : String :=
   imports ["Zkc.Tests.Frontend.PrintedPackageSupport"] ++ s!"namespace {name}\n" ++ text ++
   "#print axioms readback\n#print axioms admitted_exists\n" ++
   s!"#eval Zkc.Tests.Frontend.PrintedPackageSupport.expectStored {literal project.toString} " ++
-  s!"{literal file} {edits source} {root} stored\nend {name}\n"
+  s!"{literal file} {edits source} {root} ({Written.associationTerm association}) stored association\nend {name}\n"
 
 /-- The fixture, printed, beside the comparison of what Lean reads with the fixture itself. -/
 def fixtureModule : String :=
@@ -73,15 +77,7 @@ def fixtureModule : String :=
   "open Zkc.Tests.Frontend in\n" ++
   "theorem definitions_read : printed = PrintedFixtures.definitions := by decide +kernel\n" ++
   "open Zkc.Tests.Frontend in\n" ++
-  "theorem association_read :\n" ++
-  "    (printedAssociation.families.map fun f => (f.generic, f.arguments, f.definition)) =\n" ++
-  "        (PrintedFixtures.association.families.map fun f => (f.generic, f.arguments, f.definition)) ∧\n" ++
-  "      (printedAssociation.relations.map fun r => (r.relation, r.binders, r.statement, r.witness)) =\n" ++
-  "        (PrintedFixtures.association.relations.map fun r => (r.relation, r.binders, r.statement, r.witness)) ∧\n" ++
-  "      printedAssociation.interpretations = PrintedFixtures.association.interpretations ∧\n" ++
-  "      printedAssociation.claims = PrintedFixtures.association.claims ∧\n" ++
-  "      printedAssociation.specifications = PrintedFixtures.association.specifications := by\n" ++
-  "  decide +kernel\n" ++
+  "theorem association_read : printedAssociation = PrintedFixtures.association := by decide +kernel\n" ++
   "end Fixture\n"
 
 /-- Lean's output on a module, and whether it ended without an error. -/
@@ -141,11 +137,12 @@ def run (project work : System.FilePath) : IO Unit := do
       | .error _ => refused := refused + 1
       | .ok found =>
         admitted := admitted + 1
-        let package := found.emission.package ⟨[], [], [], [], []⟩
+        let package := found.emission.package noAssociation
         let text := Written.package package
         let name := s!"{subject.label}{root}"
         let path := work / s!"{name}.lean"
-        IO.FS.writeFile path (checkModule name text.text project subject.file subject.edits root)
+        IO.FS.writeFile path
+          (checkModule name text.text project subject.file subject.edits root noAssociation)
         expectAccepted name path ["readback", "admitted_exists"]
         IO.println s!"{name}: {text.definitions.length} definitions, {package.bindings.rows.length} external rows, accepted"
         printed := printed + 1
@@ -159,20 +156,32 @@ def run (project work : System.FilePath) : IO Unit := do
   let some uncalled := raiseFirst text "abbrev V" "(.call ⟨"
     | throw (IO.userError "the control of elaboration found no call")
   IO.FS.writeFile (work / "ElaborationControl.lean")
-    (checkModule name uncalled project subject.file subject.edits root)
+    (checkModule name uncalled project subject.file subject.edits root noAssociation)
   expectRefused "elaboration control" ["kernel_ok: the kernel reduces the term to an error"]
     (work / "ElaborationControl.lean")
   -- A key changed in the first definition by names: it elaborates, and it is not the source's.
   let some rekeyed := raiseFirst text "abbrev V" ".op ⟨"
     | throw (IO.userError "the control of the stored program found no operation")
   IO.FS.writeFile (work / "StoredControl.lean")
-    (checkModule name rekeyed project subject.file subject.edits root)
+    (checkModule name rekeyed project subject.file subject.edits root noAssociation)
   expectRefused "stored control" [differs] (work / "StoredControl.lean") (only := true)
   -- The package of two rounds compared with the source of one round.
   let other := [("Proof = Sumcheck<10>", "Proof = Sumcheck<1>")]
-  IO.FS.writeFile (work / "SourceControl.lean") (checkModule name text project subject.file other root)
+  IO.FS.writeFile (work / "SourceControl.lean")
+    (checkModule name text project subject.file other root noAssociation)
   expectRefused "source control" [differs] (work / "SourceControl.lean") (only := true)
-  IO.println s!"{printed} printed packages accepted; 3 of 3 controls refused"
+  -- The association alone changed: a claim that the package was not printed with.
+  let written := s!"def association : Association := {Written.associationTerm noAssociation}"
+  let claimed : Association := { noAssociation with claims := [⟨123⟩] }
+  unless (text.splitOn written).length == 2 do
+    throw (IO.userError "the control of the association found no association to change")
+  let associated := text.replace written
+    s!"def association : Association := {Written.associationTerm claimed}"
+  IO.FS.writeFile (work / "AssociationControl.lean")
+    (checkModule name associated project subject.file subject.edits root noAssociation)
+  expectRefused "association control" ["the printed association differs from the package's"]
+    (work / "AssociationControl.lean") (only := true)
+  IO.println s!"{printed} printed packages accepted; 4 of 4 controls refused"
 
 end PrintedPackages
 
