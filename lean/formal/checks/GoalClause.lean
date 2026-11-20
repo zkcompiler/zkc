@@ -1,5 +1,6 @@
 import Zkc.Frontend.Written.Claim
 import Zkc.Frontend.Written.Charge
+import Zkc.Frontend.Driver.Files
 import Zkc.Tests.Frontend.SyntaxHarness
 
 /-!
@@ -130,6 +131,26 @@ private def refused {α} (title : String) (attempt : Except String α) (rule why
   let prover ← edit count "proves @V NearZero(xs)" "proves @P NearZero(xs)"
   refused "decided by the prover" (goalClause (← IO.ofExcept (admit prover "loose")) "loose") "GL3"
     "the deciding role of the clause is the verifier"
+
+  -- The verifier is found from the scheme, not from a place in the roster. With the roster
+  -- reversed the verifier is the first role: `@V` is read and `@P` is refused.
+  let turned ← edit count "protocol Count roles(P, V)" "protocol Count roles(V, P)"
+  expect "roster reversed" (← IO.ofExcept (admit turned "loose")) "loose" single
+  let turnedProver ← edit turned "proves @V NearZero(xs)" "proves @P NearZero(xs)"
+  refused "roster reversed, decided by the prover"
+    (goalClause (← IO.ofExcept (admit turnedProver "loose")) "loose") "GL3"
+    "the deciding role of the clause is the verifier"
+
+  -- A derived scheme that declares no prover, over a protocol of a module with a parameter:
+  -- the verifier comes from the events of the admitted protocol.
+  let project : System.FilePath := "../.."
+  let example_ ← IO.FS.readFile (project / "examples" / "sumcheck_example.zkc")
+  let written ← edit example_ "goal complete = completeness(Proof) <= 0"
+    "goal complete = completeness(Proof) <= 0\ngoal written_sound = soundness(Proof, stage = written, statement = fixed)"
+  let entry : SourceInput := ⟨"sumcheck_example.zkc", Syntax.parseString "sumcheck_example.zkc" written⟩
+  let assembly ← Driver.assembleFiles entry [project / "examples", project / "libraries", project / "examples/support"]
+  expect "a derived scheme" (← IO.ofExcept (admitSoundnessGoal assembly "written_sound")) "written_sound"
+    ⟨"proves", none, "V", "Sum", ["values", "claim"], []⟩
 
   -- A caller without a contract has no clause to read, and reads the charges of its callees.
   let wrapper := "protocol Caller<spec tolerance: nat> roles(P, V)(xs: [F; 8] @(P, V)):\n" ++

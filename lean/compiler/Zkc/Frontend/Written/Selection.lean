@@ -152,6 +152,9 @@ structure DecidingClause where
   proposition : Lowered.Expr
   /-- The application of a relation that the proposition is, when it is one. -/
   application : Option RelationApplication
+  /-- For `reduces`, what the clause reduces to, as written under the results of the protocol:
+  the soundness of a reduction is about it. -/
+  target : Option Lowered.Expr := none
 
 /-- Whether a soundness goal can read the clause. -/
 def decides : Lowered.Clause → Bool
@@ -174,9 +177,9 @@ def decidingClause (s : Compile.State) (root : DeclarationId) (selected : Option
     | .error (.unknown label) => refuse place "GL3" s!"`{name}` has no clause labelled `{label}`"
     | .error (.otherKind at_ kind label) =>
       refuse at_ "GL3" s!"`{label}` is a `{kind}` clause; soundness reads a `proves` or `reduces` clause"
-  let (kind, role, label, proposition) ← match clause with
-    | .proves _ role label relation => pure (DecidingKind.proves, role, label, relation)
-    | .reduces _ role label source _ => pure (DecidingKind.reduces, role, label, source)
+  let (kind, role, label, proposition, target) ← match clause with
+    | .proves _ role label relation => pure (DecidingKind.proves, role, label, relation, none)
+    | .reduces _ role label source target => pure (DecidingKind.reduces, role, label, source, some target)
     | other => refuse other.span "GL3" "expected a `proves` or `reduces` clause"
   let application ← match proposition with
     | .call at_ reference arguments witnesses => do
@@ -193,7 +196,8 @@ def decidingClause (s : Compile.State) (root : DeclarationId) (selected : Option
         | none => pure #[]
       pure (some { relation := id, reference, statement, witness })
     | _ => pure none
-  return { span := clause.span, kind, label := label.map (·.name.text), role, proposition, application }
+  return { span := clause.span, kind, label := label.map (·.name.text), role, proposition, application
+           target }
 
 /-- An imported scheme is also a root when an entry goal selects it. Reuse ordinary SC1
 instantiation in the defining file and retain the resulting table for body elaboration. -/
