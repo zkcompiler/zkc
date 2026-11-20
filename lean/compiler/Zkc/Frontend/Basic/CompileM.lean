@@ -90,6 +90,11 @@ structure Context where
   supplies the same memoized body request used by ordinary protocol applications. -/
   protocolBody : InstanceId → Span → ExceptT Interrupt (StateM State) Unit :=
     fun _ _ => throw (.waiting "the protocol body of a generated view")
+  /-- What the contract of a protocol instance applies is typed again where values are given to
+  the instance's specification-only parameters. Static evaluation asks for that here, and the
+  driver supplies it, as it supplies the body of a protocol. -/
+  contractClauses : InstanceId → Array Nat → Span → ExceptT Interrupt (StateM State) Unit :=
+    fun _ _ _ => throw (.waiting "the clauses of a contract at the values of a specification")
   deriving Inhabited
 
 end Compile

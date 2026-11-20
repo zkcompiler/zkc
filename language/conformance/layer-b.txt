@@ -384,6 +384,19 @@ module t
 type F = primitive("koala-bear")
 relation Rooted<h: nat>(x: F; w: F) where (h <= F::TwoAdicity): x == w * F::root(h)
 spec def bad(x: F, w: F) -> bool: Rooted<h = 30>(x; w)
+=== N-SX3c | refuse SP4 | the `where` of a relation is a condition of a clause that applies it
+module t
+type F = primitive("bls12-381.fr")
+section <n: nat>:
+    relation NearZero(xs: [F; n]) where (n <= 3): (∑ i ∈ 0..n, if xs[i] == 0 then 0 else 1) <= 1
+    protocol Count roles(P, V)(xs: [F; n] @(P, V)):
+        z <- draw index<n> from V to P
+        guard @V xs[z] == 0
+    spec for Count:
+        proves @V NearZero(xs)
+scheme Checked = Count<8>:
+    prover P
+    construction interactive
 === N-GL3a | refuse GL3 | a goal that names neither of two `proves` clauses
 module t
 use zkc::security::{completeness}
@@ -542,6 +555,22 @@ scheme Checked = Count<8>:
     prover P
     construction interactive
 goal loose = soundness(Checked, spec e = 9)
+=== N-GL2d | refuse SP4 | the `where` of a relation that a clause applies is checked where a goal gives the value
+module t
+use zkc::security::{soundness}
+type F = primitive("bls12-381.fr")
+section <n: nat, spec e: nat>:
+    relation NearZero(xs: [F; n]) where (e <= 3): (∑ i ∈ 0..n, if xs[i] == 0 then 0 else 1) <= e
+    protocol Count roles(P, V)(xs: [F; n] @(P, V)):
+        z <- draw index<n> from V to P
+        guard @V xs[z] == 0
+    spec for Count:
+        proves @V NearZero(xs)
+        charge sites.z <= 1 - (e + 1) / n
+scheme Checked = Count<8>:
+    prover P
+    construction interactive
+goal loose = soundness(Checked, spec e = 4)
 === M-SUM5 | refuse SX6 | `examples/sumcheck.zkc` with one change: two roles could decide
 module sumcheck<F: Field>
 

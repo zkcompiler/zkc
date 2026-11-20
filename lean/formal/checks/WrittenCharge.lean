@@ -65,10 +65,23 @@ private def sum (root : System.FilePath) (rounds : Nat) (edit : Option (String �
     unless why.contains reason do throw (IO.userError why)
   for (old, replacement) in [("proves @V Sum(values, claim)", "proves @V Sum(values, 0)"),
       ("proves @V Sum(values, claim)", "proves @P Sum(values, claim)"),
-      ("claim == ∑ v ∈ values, v", "claim == ∑ v ∈ values, 0")] do
+      ("claim == ∑ v ∈ values, v", "claim == ∑ v ∈ values, v + v")] do
     let c ← sum root 2 (some (old,replacement))
     let .error why := chargeSumcheck c 2 "challenge" | throw (IO.userError "issued a different source property")
     unless why.contains "written sum relation" do throw (IO.userError why)
+  -- The clause applies the relation as an expression does, in a module with a parameter too:
+  -- a body that compares a field element with a sum of naturals, and a condition of the head
+  -- that is false at the instance, are refused where the protocol is typed; a condition that
+  -- holds is not.
+  let head := "pub relation Sum<n: nat>(values: Table<n>, claim: F):"
+  for (old, replacement, rule) in [
+      ("claim == ∑ v ∈ values, v", "claim == ∑ v ∈ values, 0", "TY5"),
+      (head, "pub relation Sum<n: nat>(values: Table<n>, claim: F) where (n <= 1):", "SP4")] do
+    match ← (sum root 2 (some (old, replacement))).toBaseIO with
+    | .ok _ => throw (IO.userError s!"admitted a protocol whose clause applies a relation refused by {rule}")
+    | .error why => unless (toString why).contains rule do throw why
+  let conditioned ← sum root 2 (some (head, "pub relation Sum<n: nat>(values: Table<n>, claim: F) where (n <= 2):"))
+  let _ ← IO.ofExcept (chargeSumcheck conditioned 2 "challenge")
   let two ← SourceProtocolRoots.replaceOnce (root / "examples/sumcheck_example.zkc") "Proof = Sumcheck<10>" "Proof = Sumcheck<2>"
   let changed (edit : String → String) := SourceProtocolRoots.admitRoot two fun parts => do
     if parts.back? != some "sumcheck" then return ← SourcePairReadback.loadModule root .original parts

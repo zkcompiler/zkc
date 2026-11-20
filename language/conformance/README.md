@@ -1,8 +1,8 @@
 # Conformance tests
 
-These are the tests that an implementation of `../LANGUAGE.md` must pass: 504 programs, each
+These are the tests that an implementation of `../LANGUAGE.md` must pass: 506 programs, each
 with the outcome that the rules require. The 324 tests of layer A are frozen with that layer.
-The tests of the later layers (77 for layer B, 62 for C, 35 for D, 6 for E) are not frozen:
+The tests of the later layers (79 for layer B, 62 for C, 35 for D, 6 for E) are not frozen:
 their layers are carried, and an outcome that rests on a pending change says so in its note.
 
 ## How the files are read
@@ -67,7 +67,8 @@ the forms and the refusals of each rule, the tests cover:
 - a second case of one alternative, which is refused (`M-OR2`, `N-TY13a`); a `where` conjunct
   on a specification-only parameter, which does not refuse a protocol (`N-SP11c`), and an
   application that gives such a parameter as `spec e = term` (`N-SP11e`, `N-SP11g` to
-  `N-SP11i`, `N-GL2c`); what is a ring's (`N-TY6f`, `N-TY6i`); literal expressions (`N-TY6h`);
+  `N-SP11i`, `N-GL2c`); the `where` of a relation where a clause applies it (`N-SX3c`,
+  `N-GL2d`); what is a ring's (`N-TY6f`, `N-TY6i`); literal expressions (`N-TY6h`);
   types and facts kept separate (`N-TY4b`, `N-TY4c`, `N-TY8e`, `N-TY8f`, `N-TY10f`,
   `N-TY10g`); an alias, which is its definition (`N-TY13b`); a function loop that a run-time
   natural ends (`N-CT4a`);
@@ -85,11 +86,11 @@ By file:
 | `layer-a-lexical-grammar.txt` | 26 | 12 | 14 | 0 |
 | `layer-a-names-static.txt` | 88 | 30 | 58 | 0 |
 | `layer-a-types-facts.txt` | 149 | 67 | 82 | 0 |
-| `layer-b.txt` | 77 | 12 | 65 | 0 |
+| `layer-b.txt` | 79 | 12 | 67 | 0 |
 | `layer-c.txt` | 62 | 17 | 45 | 0 |
 | `layer-d.txt` | 35 | 11 | 23 | 1 |
 | `layer-e.txt` | 6 | 2 | 4 | 0 |
-| total | 504 | 170 | 333 | 1 |
+| total | 506 | 170 | 335 | 1 |
 
 By prefix and layer:
 
@@ -101,7 +102,7 @@ By prefix and layer:
 | `V-` | 31 | 5 | 12 | 5 | 0 | 53 |
 | `M-` | 48 | 32 | 13 | 0 | 0 | 93 |
 | `L-` | 18 | 0 | 0 | 0 | 0 | 18 |
-| `N-`, `X-` | 94 | 19 | 1 | 2 | 6 | 122 |
+| `N-`, `X-` | 94 | 21 | 1 | 2 | 6 | 124 |
 
 Layer A, by the family of the rule that a test is about (for a refusal, the rule that refuses;
 for an acceptance, the rule that its note names):
@@ -176,7 +177,7 @@ By the rule that refuses:
 | SC4 | 0 | 1 |
 | SC5 | 0 | 17 |
 | SP3 | 4 | 5 |
-| SP4 | 8 | 9 |
+| SP4 | 8 | 11 |
 | SP5 | 0 | 2 |
 | SP6 | 4 | 4 |
 | SP8 | 3 | 5 |
