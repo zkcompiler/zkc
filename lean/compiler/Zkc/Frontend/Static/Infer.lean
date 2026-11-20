@@ -101,26 +101,34 @@ def exprParameters (term : Lowered.Expr) : Array ParameterRef :=
 def typeParameters (type : Lowered.TypeTerm) : Array ParameterRef :=
   type.references.filterMap (·.parameter?)
 
-/-- The written terms of a reference, by the parameters of the declaration they give: the
-parameters that the reference's own segment covers, positionally then by name. -/
-def writtenTerms (declarationId : DeclarationId) (args : Option (Array Lowered.StaticArgument))
+/-- The written terms of a reference, by the parameters of the declaration they give. Each
+segment that names a declaration gives the parameters of the scopes it covers that no earlier
+segment gave, positionally then by name, as where a reference is evaluated: the arguments that
+an import fixed on a module are the module's, and the arguments on the last segment are the
+declaration's own. -/
+def writtenTerms (segments : Array (DeclarationId × Option (Array Lowered.StaticArgument)))
     (shared : ParameterRef → Bool) : CompileM (Array (ParameterRef × Lowered.Expr)) := do
   let program ← program
+  let some (declarationId, _) := segments.back? | return #[]
   let found ← declaration declarationId
-  let candidates := (deployedParameters program found).filter fun (reference, _) => !shared reference
-  let some list := args | return #[]
+  let parameters := (deployedParameters program found).filter fun (reference, _) => !shared reference
   let mut result := #[]
-  let mut position := 0
-  for arg in list do
-    match arg with
-    | .term _ none term =>
-      if let some (reference, _) := candidates[position]? then result := result.push (reference, term)
-      position := position + 1
-    | .term _ (some name) term =>
-      if let some (reference, _) := candidates.find? (·.2.name.text == name) then
-        result := result.push (reference, term)
-    | .inferred _ none => position := position + 1
-    | _ => pure ()
+  for (segmentId, args?) in segments do
+    let some list := args? | continue
+    let chain := ((program.declarations[segmentId]?).map (·.scopes)).getD #[]
+    let candidates := parameters.filter fun (reference, _) =>
+      chain.contains reference.scope && !result.any (·.1 == reference)
+    let mut position := 0
+    for arg in list do
+      match arg with
+      | .term _ none term =>
+        if let some (reference, _) := candidates[position]? then result := result.push (reference, term)
+        position := position + 1
+      | .term _ (some name) term =>
+        if let some (reference, _) := candidates.find? (·.2.name.text == name) then
+          result := result.push (reference, term)
+      | .inferred _ none => position := position + 1
+      | _ => pure ()
   return result
 
 /-- The terms of static arguments, in the order written. -/
@@ -238,15 +246,21 @@ mutual
         | some (MemberValue.definition id) => some id
         | _ => none
       | _ => none
-    let target : Option (DeclarationId × Option (Array Lowered.StaticArgument)) := match steps with
+    -- the declaration that the reference names, with the segments that give it arguments: its
+    -- own, and before it those of the declarations on the path (a module that an import fixed)
+    let target : Option (DeclarationId × Array (DeclarationId × Option (Array Lowered.StaticArgument))) :=
+      match steps with
       | [.self _, .member name _] =>
-        (problem.self?.bind (memberDefinition · name)).map fun id => (id, lastArguments)
+        (problem.self?.bind (memberDefinition · name)).map fun id => (id, #[(id, lastArguments)])
       | [.parameter reference, .member name _] =>
         match problem.known[reference]? with
-        | some (.«module» inst) => (memberDefinition inst name).map fun id => (id, lastArguments)
+        | some (.«module» inst) => (memberDefinition inst name).map fun id => (id, #[(id, lastArguments)])
         | _ => none
       | _ => match segments.back? with
-        | some (.segment (.declaration id) arguments _) => some (id, arguments)
+        | some (.segment (.declaration id) _ _) =>
+          some (id, segments.filterMap fun
+            | .segment (.declaration segmentId) arguments _ => some (segmentId, arguments)
+            | _ => none)
         | _ => none
     -- two applications of one fresh type member are matched argument by argument (SP12)
     let moduleOf : Option InstanceId := match steps with
@@ -272,7 +286,7 @@ mutual
       if problem.unknowns.contains reference then return problem.solve reference actual
       return problem
     | _ =>
-      let some (id, args) := target | return problem
+      let some (id, written) := target | return problem
       let found ← declaration id
       -- the written arguments of a type member give the member's own parameters (SP8)
       let ofMember := match steps with
@@ -281,7 +295,7 @@ mutual
       let shared (reference : ParameterRef) : Bool :=
         problem.unknowns.contains reference || problem.known.contains reference ||
           (ofMember && some reference.scope != found.ownScope)
-      let written ← writtenTerms id args shared
+      let written ← writtenTerms written shared
       let substitution : List (ParameterRef × Lowered.Expr × Context) :=
         written.toList.map fun (reference, term) => (reference, term, context)
       let inner : Context := .context found.file substitution

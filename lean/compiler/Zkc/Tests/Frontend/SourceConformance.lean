@@ -131,30 +131,41 @@ private def checkSendFacts (repository : Repository) : TestM Unit := do
       ] do
     checkProtocol repository name "X" (source steps) rule
 
-/-- A clause applies a relation as an expression does: a `where` on the head of the relation is
-a condition of the clause (SP4), at the values of the protocol's instance and at the values of
-the relation's own proof arguments. -/
-private def checkClauseConditions (repository : Repository) : TestM Unit := do
-  let source (relation : String) (clause : String := "proves @V Near(xs)") := "\n".intercalate [
-    "module t", "type F = primitive(\"bls12-381.fr\")",
+/-- A clause applies a relation as an expression does. A `where` on the head of the relation
+is a condition of the clause (SP4), at the values of the protocol's instance and at the values
+of the relation's own proof arguments; the operands have the types of the relation's
+parameters; and the body of the relation is typed. So for a `proves` clause, and for the source
+of a `reduces` clause. -/
+private def checkClauseApplications (repository : Repository) : TestM Unit := do
+  let source (relation : String) (clause : String) (result : String := "") := "\n".intercalate [
+    "module t", "type F = primitive(\"bls12-381.fr\")", "type K = primitive(\"koala-bear\")",
     "section <n: nat>:", "    " ++ relation,
-    "    protocol Count roles(P, V)(xs: [F; n] @(P, V)):",
+    s!"    protocol Count roles(P, V)(xs: [F; n] @(P, V)){result}:",
     "        z <- draw index<n> from V to P", "        guard @V xs[z] == 0",
+    (if result.isEmpty then "" else "        return xs"),
     "    spec for Count:", "        " ++ clause,
     "scheme Checked = Count<8>:", "    prover P", "    construction interactive", ""]
   let formula := "(∑ i ∈ 0..n, if xs[i] == 0 then 0 else 1) <= 1"
   let bounded := "(∑ i ∈ 0..n, if xs[i] == 0 then 0 else 1) <= e"
+  let proves := "proves @V Near(xs)"
   for (name, relation, clause, rule) in [
-      ("clause", s!"relation Near(xs: [F; n]): {formula}", "proves @V Near(xs)", none),
-      ("clause-where-holds", s!"relation Near(xs: [F; n]) where (n <= 8): {formula}",
-        "proves @V Near(xs)", none),
-      ("clause-where-fails", s!"relation Near(xs: [F; n]) where (n <= 3): {formula}",
-        "proves @V Near(xs)", some "SP4"),
+      ("clause", s!"relation Near(xs: [F; n]): {formula}", proves, none),
+      ("clause-where-holds", s!"relation Near(xs: [F; n]) where (n <= 8): {formula}", proves, none),
+      ("clause-where-fails", s!"relation Near(xs: [F; n]) where (n <= 3): {formula}", proves, some "SP4"),
       ("clause-proof-argument-holds", s!"relation Near<spec e: nat>(xs: [F; n]) where (e <= 3): {bounded}",
         "proves @V Near<spec e = 3>(xs)", none),
       ("clause-proof-argument-fails", s!"relation Near<spec e: nat>(xs: [F; n]) where (e <= 3): {bounded}",
-        "proves @V Near<spec e = 4>(xs)", some "SP4")] do
+        "proves @V Near<spec e = 4>(xs)", some "SP4"),
+      ("clause-operand-type", s!"relation Near(xs: [K; n]): {formula}", proves, some "TY5"),
+      ("clause-body", "relation Near(xs: [F; n]): xs", proves, some "TY5")] do
     checkProtocol repository name "Count<8>" (source relation clause) rule
+  -- the source of a `reduces` clause
+  let reduces := "reduces @V Near(xs) to Near(ys)"
+  let result := " -> ys: [F; n] @(P, V)"
+  for (name, relation, rule) in [
+      ("reduces-where-holds", s!"relation Near(xs: [F; n]) where (n <= 8): {formula}", none),
+      ("reduces-where-fails", s!"relation Near(xs: [F; n]) where (n <= 3): {formula}", some "SP4")] do
+    checkProtocol repository name "Count<8>" (source relation reduces result) rule
   -- the two reference cases: one is refused where the protocol is typed; the other is typed and
   -- admitted, and its rule refuses where a goal gives the value
   let blocks := readBlocks (← IO.FS.readFile (repository.conformance / "layer-b.txt"))
@@ -162,6 +173,21 @@ private def checkClauseConditions (repository : Repository) : TestM Unit := do
     let some block := blocks.find? (·.id == id) | failure s!"missing {id}"; continue
     let #[text] := block.files | failure s!"expected one source in {id}"; continue
     checkProtocol repository id "Count<8>" text rule
+
+/-- Static inference through a type of a module that an import fixed: the arguments that the
+import gives the module are the module's, and those written on the type are its own. `Outputs`
+of the GKR example takes `c: Circuit<d, w>` with `Circuit` imported from `circuits::layered<F>`;
+applied in a specification function, its `d` and `w` are found. -/
+private def checkInferenceThroughImport (repository : Repository) : TestM Unit := do
+  let example_ ← IO.FS.readFile (repository.examples / "gkr_example.zkc")
+  let imported := "use gkr<Fr>::{Gkr}"
+  unless (example_.splitOn imported).length == 2 do
+    failure "the GKR example does not import as this check expects"; return
+  let source := example_.replace imported
+      "use gkr<Fr>::{Gkr, Outputs}\nuse circuits::layered<Fr>::{Circuit}" ++
+    "\nspec def applied(c: Circuit<d = 4, w = 2>, inputs: [Fr; 4], outputs: [Fr; 4]) -> bool:\n" ++
+    "    Outputs(c, inputs, outputs)\n"
+  checkProtocol repository "inference-through-import" "Gkr<Fr, 4, 2>" source
 
 /-- Read the two SX7 tables as rendered. A missing, extra or reordered property, a
 different audience, or a drift in stage or construction is observable here. -/
@@ -185,7 +211,8 @@ def main : IO Unit := do
     checkProperties repository
     checkCertifiedFacts repository
     checkSendFacts repository
-    checkClauseConditions repository
+    checkClauseApplications repository
+    checkInferenceThroughImport repository
     for (call, rule) in [
         ("Child(a, spec bound = a, spec bound = a)", some "SX4"),
         ("Child(a, spec bound = a; spec bound = a)", some "SX3"),

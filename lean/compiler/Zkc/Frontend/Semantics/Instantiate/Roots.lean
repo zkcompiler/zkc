@@ -359,7 +359,7 @@ partial def defaultModule (env : Env) (bound : Option Bound) : CompileM (Option 
       let some resolution := state.resolutions.find? candidate.file path | continue
       let some last := resolution.segments.back? | continue
       let interfaceDeclaration ← declaration id
-      let written ← writtenTerms id last.staticArgs (fun _ => false)
+      let written ← writtenTerms #[(id, last.staticArgs)] (fun _ => false)
       let parameters := deployedParameters program interfaceDeclaration
       for ((reference, _), value) in parameters.zip values do
         if let some (_, term) := written.find? (·.1 == reference) then

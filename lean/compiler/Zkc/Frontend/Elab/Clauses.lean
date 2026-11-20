@@ -7,29 +7,25 @@ public import Zkc.Frontend.Elab.Events
 set_option autoImplicit false
 
 /-!
-# The conditions of a relation where a clause of a contract applies it
+# The relation applications of a contract's deciding clauses
 
 A `proves` clause and the source of a `reduces` clause apply a relation to ports of the
-protocol. A `where` on the head of a relation is a condition of each application (SP4), and an
-application in a clause is one. For a relation with such a condition, the application is taken
-through what an application in an expression goes through up to its instance: its arguments are
-paired with the statement and the witness of the relation, the static arguments of the relation
-are inferred from the types of the operands, the relation is instantiated, and the `where` of
-its head holds at that instance; when every proof argument of the relation has a value, the
-condition holds at those values too. It is done at the ports of an instance of the protocol, in
-a specification: the names of every role stand.
+protocol. Such an application is an application like any other: its arguments are paired with
+the statement and the witness of the relation, the static arguments of the relation are
+inferred from the types of the operands, the relation is instantiated, the `where` of its head
+holds at that instance (SP4), the operands have the types of its parameters, and its body is
+typed. When every proof argument of the relation has a value, the `where` holds at those values
+too. It is typed here, at the ports of an instance of the protocol, in a specification: the
+names of every role stand.
 
-A clause is specification and runs nowhere. An application that waits for a later layer of the
-language is left as it is and does not make the protocol wait. An application whose condition
-does not hold, or whose relation has no instance at the operands, refuses the protocol.
+A clause is specification and runs nowhere, so an operand or a body of a relation that waits
+for a later layer of the language leaves the clause as it is and does not make the protocol
+wait. A condition that cannot be evaluated is not taken to hold: the clause waits for it, and
+the protocol with it. An application that is refused refuses the protocol.
 
-Not done here. A relation without a condition is not instantiated, the operands are not
-converted to the parameter types, and the body of the relation is not typed: the elaborator
-does not type every specification expression of the examples yet (the sum of a table of field
-elements in `Sum` of `examples/sumcheck.zkc`, the static arguments of `Outputs` of
-`examples/gkr.zkc`), and a clause must not refuse a protocol for that. Also not done: the
-relation of a `knowledge` clause, which is applied to its statement only; what a clause states
-under the results or under the index of a loop; a formula that applies no relation; `requires`.
+Not typed here: the relation of a `knowledge` clause, which is applied to its statement only;
+what a clause states under the results or under the index of a loop; a formula that applies no
+relation; and `requires`.
 -/
 
 namespace Zkc.Frontend.Elab
@@ -44,20 +40,14 @@ def decidingApplications (clauses : Array Lowered.Clause) : Array Lowered.Expr :
     | .reduces _ _ _ source _ => some source
     | _ => none
 
-/-- Whether a condition stands at the head of a declaration or of a scope around it. -/
-def hasCondition (found : Declaration) : ElabM Bool := do
-  let program := (← getThe Compile.State).program
-  return found.scopes.any fun scope => (program.scopes[scope]?).any (·.whereClause.isSome)
-
 /-- One application of a relation in a clause. An expression that applies no relation
-declaration, or a relation without a condition, is left as it is. -/
+declaration is left as it is. -/
 def elabClauseApplication (expr : Lowered.Expr) : ElabM Unit := do
   let .call span callee arguments witnesses := expr | return
   let .declaration steps scopes ← calleeOf callee | return
   let some (id, _) := steps.back? | return
   let found ← liftM (declaration id : CompileM Declaration)
   let .relation node := found.node | return
-  unless ← hasCondition found do return
   -- every specification-only parameter of the relation is given by a specification argument,
   -- or is the protocol's own where they share a scope (SP11)
   let state ← getThe Compile.State
@@ -69,21 +59,37 @@ def elabClauseApplication (expr : Lowered.Expr) : ElabM Unit := do
     | _ => none
   let env ← staticEnv
   let proofArguments ← liftM (specificationClosure env found supplied owner.scopes span : CompileM _)
-  -- the instance of the relation at the types of the operands (SP6), whose `where` holds at
-  -- the deployed values (SP4) and, when every proof argument has a value, at those too
+  -- the static arguments of the relation, from the types of the operands (SP6); an operand of
+  -- a later layer leaves the clause as it is
   let assigned ← liftM (assignArguments env steps scopes span : CompileM _)
   let (parameters, result) ← signatureOf id
   let name ← liftM (Static.nameOf id : CompileM String)
   let paired ← pairRelationArguments name (node.statement.map (·.name.text))
     ((node.witness.getD #[]).map (·.name.text)) arguments witnesses span
-  let (values, _) ← inferArguments id assigned found.file parameters result paired (some .bool) span
+  let inferred ← try
+      pure (some (← inferArguments id assigned found.file parameters result paired (some .bool) span))
+    catch
+      | .waiting _ | .staticIndex _ => pure none
+      | other => throw other
+  let some (values, _) := inferred | return
+  -- the instance of the relation, whose `where` holds at the deployed values (SP4) and, when
+  -- every proof argument has a value, at those too; a condition that cannot be evaluated is
+  -- not taken to hold
   let description ← liftM (describeInstance id values : CompileM String)
   let inst ← liftM (instantiate id values { description, span } : CompileM InstanceId)
+  unless ((← getThe Compile.State).table.content? inst) matches some (.signature _ (some _)) do
+    waitFor (← liftM (signatureWait inst : CompileM String))
   if let some closure := proofArguments then
     liftM (closure.checkApplication inst span)
+  -- the operands at the parameter types of the instance, and the body of the relation, which
+  -- may wait for a later layer
+  try discard <| callDeclaration id assigned paired (some .bool) span
+  catch
+    | .waiting _ | .staticIndex _ => pure ()
+    | other => throw other
 
-/-- The conditions of the relations that the deciding clauses apply, at the ports of an
-instance. Every refused clause is reported, and one refused clause refuses them all. -/
+/-- The relation applications of the deciding clauses, at the ports of an instance. Every
+refused clause is reported, and one refused clause refuses them all. -/
 def elabClauses (signature : Typed.ProtocolSignature) (head : Lowered.ProtocolHead)
     (clauses : Array Lowered.Clause) : ElabM Unit := do
   for (port, closed) in head.ports.zip signature.ports do
@@ -96,7 +102,6 @@ def elabClauses (signature : Typed.ProtocolSignature) (head : Lowered.ProtocolHe
     try elabClauseApplication expr
     catch
       | .abandoned => refused := true
-      | .waiting _ | .staticIndex _ => pure ()
       | other => throw other
   if refused then throw .abandoned
 
