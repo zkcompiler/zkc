@@ -1,4 +1,5 @@
 import Zkc.Formal.ChargedProbability
+import Zkc.Formal.OracleProcess
 import Zkc.Formal.Written.UniformChallenge
 import Zkc.Formal.Written.SiteAllowance
 
@@ -10,7 +11,8 @@ The hypotheses of the bridge are met by a service that answers: it draws uniform
 port (`follows`, `permitted`). The process is judged within one fifth (`judged`), so the
 probability of a bad return is at most one fifth (`bounded`); it is one fifth (`attained`), so
 the bound of the bridge is reached. No budget below one fifth judges the process
-(`not_within_less`).
+(`not_within_less`). The same probability is that of VCVio's simulation of the process by the
+service's handler (`simulation_attained`).
 
 The last section is about the two parts of one event, for every model: a charge allows the
 owner and a hearer the same, and under the samplers of the owning port a hearer pays nothing.
@@ -29,9 +31,7 @@ variable (peers : List Role) (at_ : Occurrence)
 noncomputable abbrev samplers : Samplers (RSig M) := portSamplers M (port peers at_) draw
 
 theorem zero_weight : Pr{let v ← draw}[v = (0 : ZMod 5)] = 1 / 5 := by
-  change Pr{let i ← uniformFin 4}[i = (0 : Fin 5)] = _
-  rw [prEvent_uniformFin]
-  simp only [Finset.filter_eq', Finset.mem_univ, ite_true, Finset.card_singleton, Nat.cast_one]
+  rw [SampleableType.prEvent_uniformSample_eq_singleton, ZMod.card]
   norm_num
 
 theorem fifth : toProbability (1 / 5) = 1 / 5 := by
@@ -70,6 +70,15 @@ theorem attained :
   refine prEvent_congr_of_support _ _ _ fun out _ => ⟨?_, fun same => ⟨0, same, rfl⟩⟩
   rintro ⟨a, same, rfl⟩
   exact same
+
+/-- The same about VCVio's simulation of the process, read as a computation with oracles, by
+the service's handler: what is stated about the simulation is what is proved about the run. -/
+theorem simulation_attained :
+    Pr{let out ← (simulateQ (handlerOf (serveAt M (port peers at_) draw))
+        (embed (ask peers at_))).run.run ()}[∃ a, out.1 = some (.inl a) ∧ a = 0] = 1 / 5 := by
+  rw [← attained peers at_, prEvent_run _ _ _ fun outcome => ∃ a, outcome = .returned a ∧ a = 0]
+  exact prEvent_congr _ _ _ fun out =>
+    exists_congr fun _ => and_congr_left fun _ => outcomeOf_eq_returned.symm
 
 /-- No smaller budget judges the process: a judgment within less than one fifth would bound the
 probability below what it is. -/
