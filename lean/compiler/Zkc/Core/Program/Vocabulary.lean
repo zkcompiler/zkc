@@ -51,13 +51,11 @@ inductive RowKind (R : Type) where
   | pure
   /-- A function on a domain, which a pure row with the same inputs decides. -/
   | restricted (domain : R)
-deriving DecidableEq
 
 structure RowSignature (K R : Type) where
   ins : List (Ty K)
   outs : List (Ty K)
   kind : RowKind R
-deriving DecidableEq
 
 /-- A sampling law: a distribution on its one output. -/
 structure LawSignature (K : Type) where

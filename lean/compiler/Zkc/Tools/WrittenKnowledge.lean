@@ -1,20 +1,12 @@
 import Zkc.Frontend.Written.Export
-import Zkc.Frontend.Syntax.Parser
+import Zkc.Frontend.Driver.Files
 
 open Zkc.Frontend
 
-private def source (path : System.FilePath) : IO SourceInput := do
-  return ⟨path.toString, Syntax.parse path.toString (← IO.FS.readBinFile path)⟩
-
 private def generate (input root : System.FilePath) (request : Written.Request)
     (scope : String) (proof : Bool) : IO UInt32 := do
-  let entry ← source input
-  let assembly ← assemble #[entry] fun segments => do
-    let relative := "/".intercalate segments.toList ++ ".zkc"
-    for dir in [input.parent.getD ".", root / "libraries", root / "examples", root / "examples/support"] do
-      let path := dir / relative
-      if ← path.pathExists then return some (← source path)
-    return none
+  let assembly ← Driver.assembleFiles (← Driver.readSource input)
+    [input.parent.getD ".", root / "libraries", root / "examples", root / "examples/support"]
   match Written.exportSelected assembly request proof scope with
   | .ok text => IO.print text; return 0
   | .error reason => IO.eprintln reason; return 1

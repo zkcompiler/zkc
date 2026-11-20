@@ -46,9 +46,9 @@ test-frontend:
     cd lean/compiler && lake env lean --run Zkc/Tests/Frontend/SourceConformance.lean
     cd lean/compiler && lake env lean --run Zkc/Tests/Frontend/ProtocolViews.lean
 
-# Print every admitted example root as a Lean module, check each against its stored program, and refuse three controls.
+# Print every admitted example root as a Lean module in which the kernel elaborates the program, compare each with its source, read a fixture back, and refuse three controls.
 test-packages:
-    cd lean/compiler && lake build Zkc.Frontend.Written.Package Zkc.Tests.Frontend.PrintedPackageSupport
+    cd lean/compiler && lake build Zkc.Frontend.Written.Package Zkc.Tests.Frontend.PrintedPackageSupport Zkc.Tests.Frontend.PrintedFixtureCoverage
     cd lean/compiler && lake env lean --run Zkc/Tests/Frontend/PrintedPackages.lean
 
 # Export the written knowledge claim and kernel-check the returning fork and source mutations.

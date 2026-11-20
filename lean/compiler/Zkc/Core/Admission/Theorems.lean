@@ -65,6 +65,18 @@ theorem admitted_eq_of_readback {named : NamedProgram V} {assoc : Association} {
   rw [same, elaborateProgram_erase] at found
   exact (Except.ok.inj found).symm
 
+/-- The program of an admission is the program that its definitions elaborate to, one after
+another. A module that elaborates each definition of a program by names names the typed
+program of every admission of it. -/
+theorem admitted_eq_of_elaborated {named : NamedProgram V} {assoc : Association} {a : Admitted V}
+    {expected : Typed V} (accepted : admit named assoc = .ok a)
+    (same : ElaboratedFrom .empty named.definitions expected) : a.program = expected := by
+  have found : elaborateProgram named = .ok a.program :=
+    admitFrom_elaborates _ _ _ _ _ (admit_ok accepted).1
+  have also : elaborateProgram named = .ok expected := same.elaborates
+  rw [found] at also
+  exact Except.ok.inj also
+
 /-- Decide program identity using the input that admission actually checked. A caller can
 transport a meaning theorem in the positive case. The source association is a separate input. -/
 def identifyAdmitted {named : NamedProgram V} {assoc : Association} {a : Admitted V}

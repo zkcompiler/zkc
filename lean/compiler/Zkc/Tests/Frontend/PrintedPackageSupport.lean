@@ -1,5 +1,5 @@
 import Zkc.Frontend.Written.Root
-import Zkc.Frontend.Syntax.Parser
+import Zkc.Frontend.Driver.Files
 
 /-!
 What a check of a printed package needs beside the package: the roots of a source file as the
@@ -24,12 +24,8 @@ it uses from the examples and the libraries. -/
 def compile (project : System.FilePath) (file : String) (edits : List (String × String)) :
     IO Compile.State := do
   let entry ← source (project / "examples" / file) edits
-  let assembly ← assemble #[entry] fun segments => do
-    let relative := "/".intercalate segments.toList ++ ".zkc"
-    for dir in [project / "examples", project / "libraries", project / "examples/support"] do
-      let path := dir / relative
-      if ← path.pathExists then return some (← source path)
-    return none
+  let assembly ← Driver.assembleFiles entry
+    [project / "examples", project / "libraries", project / "examples/support"]
   IO.ofExcept (Written.sourceState assembly)
 
 /-- A program over the vocabulary of bindings, over the vocabulary of their rows written out. -/
