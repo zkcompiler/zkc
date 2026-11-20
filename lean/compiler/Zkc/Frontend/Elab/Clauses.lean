@@ -20,8 +20,10 @@ names of every role stand.
 
 A clause is specification and runs nowhere, so an operand or a body of a relation that waits
 for a later layer of the language leaves the clause as it is and does not make the protocol
-wait. A condition that cannot be evaluated is not taken to hold: the clause waits for it, and
-the protocol with it. An application that is refused refuses the protocol.
+wait. An operand that waits is met before the instance of the relation: the `where` of the
+relation is then not checked. A condition that cannot be evaluated is not taken to hold: the
+clause waits for it, and the protocol with it. An application that is refused refuses the
+protocol.
 
 Not typed here: the relation of a `knowledge` clause, which is applied to its statement only;
 what a clause states under the results or under the index of a loop; a formula that applies no

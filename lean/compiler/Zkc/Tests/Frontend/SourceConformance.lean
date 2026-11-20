@@ -41,6 +41,38 @@ private def checkNames (repository : Repository) : TestM Unit := do
     expectTrue (checked.contains id) s!"{id}: the contract error must be found before instantiation"
   note s!"Through name resolution: {accepted} positive cases, {early} early refusals, {later} negative cases left to later phases"
 
+/-- Every reference case through the typing of the program with protocol bodies, counted as
+`docs/source-elaboration.md` counts them. This is an inventory and not a verdict: a case can
+have no error here while an instance waits or a goal has yet to be checked. The counts are
+fixed so that a change of typing that moves a case is seen. -/
+private def checkBodyTyping (repository : Repository) : TestM Unit := do
+  let context := Typing.withProtocolBodies {vocabulary}
+  let mut clean := 0
+  let mut refused := 0
+  let mut listed := 0
+  let mut other := 0
+  let mut silent := 0
+  for path in ← sortedFiles repository.conformance "txt" do
+    for block in readBlocks (← IO.FS.readFile path) do
+      if block.expect.startsWith "skip" then continue
+      let inputs := block.files.mapIdx fun i text =>
+        let file := s!"{block.id}.{i}.zkc"
+        ({ name := file, parsed := Syntax.parseString file text } : SourceInput)
+      let assembly ← assemble inputs (loadModule repository)
+      let mut s : Compile.State := {}
+      for phase in Driver.sourcePhases assembly do s := (phase.runIn context s).2
+      s := (Typing.typeProgram.run context s).2
+      let errors := (s.log.entries.filter (·.isError)).map (·.rule)
+      let rules := refusalRules block.expect
+      if rules.isEmpty then
+        if errors.isEmpty then clean := clean + 1 else refused := refused + 1
+      else if errors.isEmpty then silent := silent + 1
+      else if errors.any (rules.contains ·) then listed := listed + 1
+      else other := other + 1
+  note s!"Through body typing: {clean} positive cases without an error and {refused} refused; {listed} negative cases refused by a listed rule, {other} by another rule, {silent} without an error"
+  expectTrue ((clean, refused, listed, other, silent) == (168, 2, 192, 2, 141))
+    "the outcomes of the reference cases through body typing differ from the recorded counts"
+
 /-- SC1 and SP11 distinguish a scheme's deployment arguments from the goal's spec values. -/
 private def checkSchemeArguments (repository : Repository) : TestM Unit := do
   let blocks := readBlocks (← IO.FS.readFile (repository.conformance / "layer-b.txt"))
@@ -228,5 +260,6 @@ def main : IO Unit := do
     corpusSuite repository
     conformanceSuite repository
     checkNames repository
+    checkBodyTyping repository
     checkSchemeArguments repository
   if tally.failed > 0 then throw (IO.userError "source conformance failed")

@@ -68,9 +68,9 @@ has yet to be checked. The independent corpus, default-instance pass, constructi
 goal discharge are outside this measurement.
 
 Of the 170 positive programs, 168 had no error through body typing and two were refused.
-Of the 333 negative programs, 191 produced a listed rule, two produced a different rule
-and 140 produced no error at this prefix. One further reference case is marked skipped.
-Compared with the previous 504-row inventory, only the three role cases below changed. Two reference cases were added after this measurement (`N-SX3c`, `N-GL2d`: the `where` of a relation where a clause applies it); the first is refused by its listed rule where the protocol is typed, and the second has no error at this prefix: its rule refuses where a goal gives the value. On the
+Of the 335 negative programs, 192 produced a listed rule, two produced a different rule
+and 141 produced no error at this prefix. One further reference case is marked skipped.
+`just test-frontend` runs this inventory and fixes the five counts. Compared with the previous 504-row inventory, only the three role cases below changed, and the two cases added since (`N-SX3c`, `N-GL2d`: the `where` of a relation where a clause applies it) are one more listed rule and one more case without an error at this prefix, whose rule refuses where a goal gives the value. On the
 separate 134-entry independent corpus all 69 positive cases had no error through this
 prefix. Of 53 negative cases, 50 produced a listed rule, two produced another rule and one
 produced no error. Three cases request parsing alone and nine have an underdetermined
