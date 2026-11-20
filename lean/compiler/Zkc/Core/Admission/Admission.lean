@@ -35,6 +35,7 @@ structure FamilyApplication where
   generic : Key
   arguments : List Static
   definition : Key
+deriving DecidableEq
 
 /-- The logical binders, the statement and the witness of a relation. -/
 structure RelationBinding where
@@ -42,6 +43,7 @@ structure RelationBinding where
   binders : List Key
   statement : List Key
   witness : List Key
+deriving DecidableEq
 
 /-- For proofs: what a statement about admitted definitions needs beyond them. The identity
 of what runs does not depend on it; the subject of a proof includes it. -/
@@ -53,6 +55,7 @@ structure Association where
   claims : List Key
   /-- The specification definitions that the above mention, transitively. -/
   specifications : List Key
+deriving DecidableEq
 
 /-- A family application whose instance is a definition of the program: the generic
 declaration, the substitution, and the definition, found. -/
