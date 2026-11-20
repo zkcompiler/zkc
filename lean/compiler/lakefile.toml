@@ -22,6 +22,14 @@ roots = ["Zkc.Vocabulary"]
 globs = ["Zkc.Vocabulary", "Zkc.Vocabulary.+"]
 requiresModuleSystem = true
 
+# A command that asks the kernel to compute. Meta code, outside the audited libraries: what it
+# adds to a module is checked by the kernel there.
+[[lean_lib]]
+name = "ZkcKernel"
+roots = ["Zkc.Kernel"]
+globs = ["Zkc.Kernel", "Zkc.Kernel.+"]
+requiresModuleSystem = true
+
 [[lean_lib]]
 name = "ZkcCoreTests"
 roots = ["Zkc.Tests.Core"]

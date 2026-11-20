@@ -1,4 +1,4 @@
-import Zkc.Core.Program.DefinitionChecks
+import Zkc.Kernel
 import Zkc.Formal.Interactive.RoundFamily
 import Zkc.Formal.Written.FiniteModel
 open Zkc.Core Zkc.Formal.Written Zkc.Formal.Written.FiniteModel
@@ -13,27 +13,22 @@ def constant (key n : Nat) (two : Bool) : Definition Standard :=
   .fn ⟨key⟩ (if two then [.nat,.nat] else [.nat]) [.nat] false none Summary.empty
     (.mk (if two then [0,1] else [0]) [.op ⟨1⟩ [2] (.literal .nat [n]) []] [2])
 def stored : NamedProgram Standard := ⟨[constant 5 3 false, constant 6 0 true, constant 7 1 true]⟩
-abbrev h5 : FnHeader Standard := ⟨⟨5⟩, [.nat], [.nat], false, none, Summary.empty⟩
-abbrev ns5 : Names h5.ins := .cons 0 (.nil)
-def body5 : Fn Standard [] h5 ns5 :=
-  .op ⟨1⟩ (.literal .nat [3] rfl) .nil (.cons 2 .nil) (.ret (.cons ⟨2,rfl⟩ .nil))
-theorem ok5 : FnConditions body5 := FnConditions.of_checks (by decide +kernel)
-abbrev h6 : FnHeader Standard := ⟨⟨6⟩, [.nat,.nat], [.nat], false, none, Summary.empty⟩
-abbrev ns6 : Names h6.ins := .cons 0 (.cons 1 (.nil))
-def body6 : Fn Standard [h5] h6 ns6 :=
-  .op ⟨1⟩ (.literal .nat [0] rfl) .nil (.cons 2 .nil) (.ret (.cons ⟨2,rfl⟩ .nil))
-theorem ok6 : FnConditions body6 := FnConditions.of_checks (by decide +kernel)
-abbrev h7 : FnHeader Standard := ⟨⟨7⟩, [.nat,.nat], [.nat], false, none, Summary.empty⟩
-abbrev ns7 : Names h7.ins := .cons 0 (.cons 1 (.nil))
-def body7 : Fn Standard [h6,h5] h7 ns7 :=
-  .op ⟨1⟩ (.literal .nat [1] rfl) .nil (.cons 2 .nil) (.ret (.cons ⟨2,rfl⟩ .nil))
-theorem ok7 : FnConditions body7 := FnConditions.of_checks (by decide +kernel)
+noncomputable section
+def programBase : Typed Standard := Typed.empty
+kernel_ok e5 with h5 ns5 body5 : Elaborated Standard programBase.headers :=
+  elaborateDefinition programBase.headers (constant 5 3 false)
+def p5 : Typed Standard := programBase.add e5
+kernel_ok e6 with h6 ns6 body6 : Elaborated Standard p5.headers :=
+  elaborateDefinition p5.headers (constant 6 0 true)
+def p6 : Typed Standard := p5.add e6
+kernel_ok e7 with h7 ns7 body7 : Elaborated Standard p6.headers :=
+  elaborateDefinition p6.headers (constant 7 1 true)
+def installed : Typed Standard := p6.add e7
 abbrev hs : Headers Standard := ⟨[h7,h6,h5],[]⟩
-def installed : Typed Standard :=
-  ⟨hs,.fn h7 ns7 body7 ok7 (.fn h6 ns6 body6 ok6 (.fn h5 ns5 body5 ok5 .nil)),by decide⟩
 theorem succeeds : (admit stored ⟨[],[],[],[],[]⟩).isOk := by decide +kernel
 theorem readback (a : Admitted Standard) (h : admit stored ⟨[],[],[],[],[]⟩ = .ok a) :
-    a.program = installed := admitted_eq_of_readback h (by rfl)
+    a.program = installed :=
+  admitted_eq_of_elaborated h (.cons e5.eq (.cons e6.eq (.cons e7.eq (.nil _))))
 abbrev fns := Defs.fnTable model installed.defs
 local instance : DecidableEq (model.Val (.nat : Standard.Ty)) := inferInstanceAs (DecidableEq Nat)
 def boundOp : LocalOp Standard hs.fns [.nat] [.nat] := .call (.tail (.tail .head))
@@ -76,4 +71,5 @@ theorem secondFailsCross (l : Law evalOne (Fin.val (n := 2))) : False := by
   change [0,1].countP (fun r : Nat => decide (l.evaluate 0 r = 1)) ≤ 1 at bad
   simp [← ev] at bad
 
+end
 end OccurrenceDepth

@@ -254,11 +254,11 @@ def exportSelected (assembly : Assembly) (request : Request) (withProof : Bool) 
   let pkg := emission.package ⟨[],[],[],[],[]⟩
   let historyType ← checkPorts pkg evidence c
   unless pkg.bindings.rows.isEmpty do unsupported "external primitive binding"
-  let printed ← package pkg evidence
+  let printed := package pkg
   let [(root, true)] := printed.definitions | unsupported "multi-definition root"
   let rendered := "\n".intercalate [printed.text,
-    s!"abbrev ports := ports{root.number}", s!"abbrev inputNames := names{root.number}",
-    s!"noncomputable abbrev body := body{root.number}", s!"noncomputable abbrev header := header{root.number}"]
+    s!"abbrev header := header{root.number}", s!"abbrev inputNames := names{root.number}",
+    s!"abbrev body := body{root.number}", "abbrev ports := header.ins"]
   if withProof then
     if let .error why := c.calculations then refuse c.source.where_ "WK-PROOF" why
   let proof := if withProof then certificate c else ""

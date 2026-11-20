@@ -52,6 +52,26 @@ def elaborateProgram (named : NamedProgram V) : Except (List (DefinitionRefusal 
 /-- Historical spelling of the named elaborator. -/
 abbrev elaborateFunctions (named : NamedProgram V) := elaborateProgram named
 
+/-! ## Elaboration, one definition at a time -/
+
+/-- Definitions that elaborate one after another, from a program to a program: each against the
+headers of the program before it. This is what a module states when it elaborates the
+definitions of a program by names one by one. -/
+inductive ElaboratedFrom : Typed V → List (Definition V) → Typed V → Prop where
+  | nil (p : Typed V) : ElaboratedFrom p [] p
+  | cons {p : Typed V} {definition : Definition V} {elaborated : Elaborated V p.headers}
+      {rest : List (Definition V)} {q : Typed V}
+      (first : elaborateDefinition p.headers definition = .ok elaborated)
+      (others : ElaboratedFrom (p.add elaborated) rest q) :
+      ElaboratedFrom p (definition :: rest) q
+
+/-- Definitions that elaborate one after another are what the elaboration in order gives. -/
+theorem ElaboratedFrom.elaborates {p q : Typed V} {definitions : List (Definition V)}
+    (h : ElaboratedFrom p definitions q) : elaborateFrom p definitions = .ok q := by
+  induction h with
+  | nil p => rfl
+  | cons first _ ih => simp only [elaborateFrom, first, Except.bind, ih]
+
 /-! ## The round trip of a program -/
 
 theorem elaborateFrom_append (p : Typed V) : ∀ (first second : List (Definition V)),

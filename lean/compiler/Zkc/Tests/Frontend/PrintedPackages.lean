@@ -1,21 +1,27 @@
 import Zkc.Frontend.Written.Package
 import Zkc.Tests.Frontend.PrintedPackageSupport
+import Zkc.Tests.Frontend.PrintedFixtures
 
 /-!
 The check of printed packages. Every root of the listed examples that the frontend admits is
-printed as a Lean module, and Lean is run on the module. A module passes when the kernel accepts
-it, its three theorems rest on `propext` and `Quot.sound` at most, and the program by names that
-Lean read from it is the program that the frontend gave to admission.
+printed as a Lean module, and Lean is run on the module. A module passes when the kernel
+elaborates every definition of it, its theorems rest on `propext` and `Quot.sound` at most, and
+the program by names that Lean read from it is the program that the frontend gave to admission.
 
-Three controls show that the check can fail. A key changed in a typed body is refused where
-the erasure of that definition is compared; a key changed in a definition by names is refused
-at the same place and by the comparison with the source; and a module compared with the program
-of a different source is refused by that comparison.
+A module holds one printed form of a program, so the kernel cannot find a wrong print that still
+elaborates. Two things stand for that. The comparison with the frontend's program, by value, in
+every module; and a fixture with every constructor of the program by names, printed, read by
+Lean and compared with the fixture by value.
+
+Three controls show that the check can fail. A program whose call names no definition does not
+elaborate, and the kernel command refuses it. A key changed in a definition by names still
+elaborates, and only the comparison with the source refuses it. A module compared with the
+program of a different source is refused by that comparison.
 
 Run from `lean/compiler` with `lake env lean --run Zkc/Tests/Frontend/PrintedPackages.lean`.
 -/
 
-open Zkc.Core Zkc.Frontend
+open Zkc.Core Zkc.Frontend Zkc.Tests.Frontend
 open Zkc.Tests.Frontend.PrintedPackageSupport
 
 namespace PrintedPackages
@@ -44,16 +50,39 @@ def literal (text : String) : String := reprStr text
 def edits (pairs : List (String × String)) : String :=
   "[" ++ ", ".intercalate (pairs.map fun (before, after) => s!"({literal before}, {literal after})") ++ "]"
 
+def imports (others : List String) : String :=
+  String.join ((Written.packageImports ++ others).map (s!"import {·}\n")) ++ "\nopen Zkc.Core\n"
+
 /-- The module of a printed package with what the check asks of it: the axioms of its theorems,
 and the comparison of its program by names with the source's. -/
 def checkModule (name text : String) (project : System.FilePath) (file : String)
     (source : List (String × String)) (root : Nat) : String :=
-  String.join (Written.packageImports.map (s!"import {·}\n")) ++
-  "import Zkc.Tests.Frontend.PrintedPackageSupport\n\n" ++
-  s!"open Zkc.Core\nnamespace {name}\n" ++ text ++
-  "#print axioms erasure\n#print axioms readback\n#print axioms admitted_exists\n" ++
+  imports ["Zkc.Tests.Frontend.PrintedPackageSupport"] ++ s!"namespace {name}\n" ++ text ++
+  "#print axioms readback\n#print axioms admitted_exists\n" ++
   s!"#eval Zkc.Tests.Frontend.PrintedPackageSupport.expectStored {literal project.toString} " ++
   s!"{literal file} {edits source} {root} stored\nend {name}\n"
+
+/-- The fixture, printed, beside the comparison of what Lean reads with the fixture itself. -/
+def fixtureModule : String :=
+  let printed := PrintedFixtures.definitions.map (Written.storedDefinition (b := PrintedFixtures.bindings))
+  imports ["Zkc.Tests.Frontend.PrintedFixtures"] ++ "namespace Fixture\n" ++
+  s!"abbrev V : Zkc.Core.Vocabulary := {Written.vocabularyTerm PrintedFixtures.bindings}\n" ++
+  String.join ((printed.zipIdx).map fun (text, i) => s!"def printed{i} : Definition V :=\n  {text}\n") ++
+  s!"def printed : List (Definition V) := [{", ".intercalate ((List.range printed.length).map (s!"printed{·}"))}]\n" ++
+  s!"def printedAssociation : Association := {Written.associationTerm PrintedFixtures.association}\n" ++
+  "open Zkc.Tests.Frontend in\n" ++
+  "theorem definitions_read : printed = PrintedFixtures.definitions := by decide +kernel\n" ++
+  "open Zkc.Tests.Frontend in\n" ++
+  "theorem association_read :\n" ++
+  "    (printedAssociation.families.map fun f => (f.generic, f.arguments, f.definition)) =\n" ++
+  "        (PrintedFixtures.association.families.map fun f => (f.generic, f.arguments, f.definition)) ∧\n" ++
+  "      (printedAssociation.relations.map fun r => (r.relation, r.binders, r.statement, r.witness)) =\n" ++
+  "        (PrintedFixtures.association.relations.map fun r => (r.relation, r.binders, r.statement, r.witness)) ∧\n" ++
+  "      printedAssociation.interpretations = PrintedFixtures.association.interpretations ∧\n" ++
+  "      printedAssociation.claims = PrintedFixtures.association.claims ∧\n" ++
+  "      printedAssociation.specifications = PrintedFixtures.association.specifications := by\n" ++
+  "  decide +kernel\n" ++
+  "end Fixture\n"
 
 /-- Lean's output on a module, and whether it ended without an error. -/
 def runLean (path : System.FilePath) : IO (Bool × String) := do
@@ -66,28 +95,29 @@ def allowedAxioms (name theorem_ output : String) : Bool :=
     output.contains s!"'{name}.{theorem_}' does not depend on any axioms"
 
 /-- Lean accepts the module, and each of its theorems rests on the two axioms at most. -/
-def expectAccepted (name : String) (path : System.FilePath) : IO Unit := do
+def expectAccepted (name : String) (path : System.FilePath) (theorems : List String) : IO Unit := do
   let (ok, output) ← runLean path
-  unless ok do throw (IO.userError s!"{name}: Lean refused the printed package\n{output}")
-  if output.contains "sorry" then throw (IO.userError s!"{name}: the printed package uses sorry")
-  for theorem_ in ["erasure", "readback", "admitted_exists"] do
+  unless ok do throw (IO.userError s!"{name}: Lean refused the module\n{output}")
+  if output.contains "sorry" then throw (IO.userError s!"{name}: the module uses sorry")
+  if output.contains "PANIC" then throw (IO.userError s!"{name}: Lean panicked on the module\n{output}")
+  for theorem_ in theorems do
     unless allowedAxioms name theorem_ output do
       throw (IO.userError s!"{name}: {theorem_} is missing or rests on another axiom\n{output}")
 
-/-- Lean refuses the module with exactly the errors expected of the control, one for each
-text. -/
-def expectRefused (name : String) (expected : List String) (path : System.FilePath) : IO Unit := do
+/-- Lean refuses the module, and its output has each of the texts expected of the control. With
+`only`, the module has exactly one error for each text. -/
+def expectRefused (name : String) (expected : List String) (path : System.FilePath)
+    (only := false) : IO Unit := do
   let (ok, output) ← runLean path
   if ok then throw (IO.userError s!"{name}: Lean accepted a control that must be refused")
   let errors := (output.splitOn "error").length - 1
-  unless expected.all (fun text => output.contains text) && errors == expected.length do
+  unless expected.all (fun text => output.contains text) && (!only || errors == expected.length) do
     throw (IO.userError s!"{name}: the control was refused for another reason\n{output}")
 
-/-- The text with the first key after `start` that an operation has raised by a thousand. -/
-def changeFirstKey (text start : String) : Option String := do
+/-- The text with the first number that follows `marker` after `start` raised by a thousand. -/
+def raiseFirst (text start marker : String) : Option String := do
   let before :: later := text.splitOn start | none
   if later.isEmpty then none
-  let marker := ".op ⟨"
   let first :: second :: rest := (start.intercalate later).splitOn marker | none
   let digits := second.takeWhile Char.isDigit
   let number ← digits.toNat?
@@ -95,6 +125,11 @@ def changeFirstKey (text start : String) : Option String := do
   return before ++ start ++ marker.intercalate (first :: changed :: rest)
 
 def run (project work : System.FilePath) : IO Unit := do
+  -- the fixture: every constructor of the program by names, printed and read back
+  IO.FS.writeFile (work / "Fixture.lean") (fixtureModule ++
+    "#print axioms Fixture.definitions_read\n#print axioms Fixture.association_read\n")
+  expectAccepted "Fixture" (work / "Fixture.lean") ["definitions_read", "association_read"]
+  IO.println s!"fixture: {PrintedFixtures.definitions.length} definitions and the association read back"
   let mut printed := 0
   let mut control : Option (String × String × Subject × Nat) := none
   for subject in subjects do
@@ -107,11 +142,11 @@ def run (project work : System.FilePath) : IO Unit := do
       | .ok found =>
         admitted := admitted + 1
         let package := found.emission.package ⟨[], [], [], [], []⟩
-        let text ← IO.ofExcept (Written.package package found.evidence)
+        let text := Written.package package
         let name := s!"{subject.label}{root}"
         let path := work / s!"{name}.lean"
         IO.FS.writeFile path (checkModule name text.text project subject.file subject.edits root)
-        expectAccepted name path
+        expectAccepted name path ["readback", "admitted_exists"]
         IO.println s!"{name}: {text.definitions.length} definitions, {package.bindings.rows.length} external rows, accepted"
         printed := printed + 1
         if subject.label == "Sumcheck" then control := some (name, text.text, subject, root)
@@ -119,27 +154,24 @@ def run (project work : System.FilePath) : IO Unit := do
       throw (IO.userError
         s!"{subject.label}: {admitted} roots admitted and {refused} not, expected {subject.admitted} and {subject.refused}")
   let some (name, text, subject, root) := control | throw (IO.userError "no package for the controls")
-  -- The decision that fails in the first two controls is the comparison of the first definition,
-  -- a function, with its erasure; Lean prints the proposition that it could not decide.
-  let erasureOfFirst := "(eraseFn names"
   let differs := "the printed program differs from the stored program"
-  -- A key changed in the first typed body: the erasure of that definition is not its stored form.
-  let some typed := changeFirstKey text "noncomputable def body"
-    | throw (IO.userError "the typed control found no operation")
-  IO.FS.writeFile (work / "TypedControl.lean")
-    (checkModule name typed project subject.file subject.edits root)
-  expectRefused "typed control" [erasureOfFirst] (work / "TypedControl.lean")
-  -- A key changed in the first definition by names: the same comparison fails, and the program
-  -- by names is no longer the source's.
-  let some stored := changeFirstKey text "abbrev V"
-    | throw (IO.userError "the stored control found no operation")
+  -- A call of a function that the program does not have: the definition does not elaborate.
+  let some uncalled := raiseFirst text "abbrev V" "(.call ⟨"
+    | throw (IO.userError "the control of elaboration found no call")
+  IO.FS.writeFile (work / "ElaborationControl.lean")
+    (checkModule name uncalled project subject.file subject.edits root)
+  expectRefused "elaboration control" ["kernel_ok: the kernel reduces the term to an error"]
+    (work / "ElaborationControl.lean")
+  -- A key changed in the first definition by names: it elaborates, and it is not the source's.
+  let some rekeyed := raiseFirst text "abbrev V" ".op ⟨"
+    | throw (IO.userError "the control of the stored program found no operation")
   IO.FS.writeFile (work / "StoredControl.lean")
-    (checkModule name stored project subject.file subject.edits root)
-  expectRefused "stored control" [erasureOfFirst, differs] (work / "StoredControl.lean")
+    (checkModule name rekeyed project subject.file subject.edits root)
+  expectRefused "stored control" [differs] (work / "StoredControl.lean") (only := true)
   -- The package of two rounds compared with the source of one round.
   let other := [("Proof = Sumcheck<10>", "Proof = Sumcheck<1>")]
   IO.FS.writeFile (work / "SourceControl.lean") (checkModule name text project subject.file other root)
-  expectRefused "source control" [differs] (work / "SourceControl.lean")
+  expectRefused "source control" [differs] (work / "SourceControl.lean") (only := true)
   IO.println s!"{printed} printed packages accepted; 3 of 3 controls refused"
 
 end PrintedPackages

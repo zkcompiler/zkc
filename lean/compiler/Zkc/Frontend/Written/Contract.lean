@@ -47,8 +47,8 @@ def portView (s : Compile.State) (protocol : InstanceId) (code : Typing.Protocol
 
 /-- The package of one function, in a namespace of its own, with the names by which the
 statement of a selected clause refers to it. -/
-def functionPackage (label : String) (p : SourcePackage) (ev : p.Admission) : ExportM String := do
-  let printed ← package p ev
+def functionPackage (label : String) (p : SourcePackage) : ExportM String := do
+  let printed := package p
   let [(k, false)] := printed.definitions | unsupported "function with other definitions"
   let scope := label ++ "Package"
   return "\n".intercalate [
@@ -56,8 +56,8 @@ def functionPackage (label : String) (p : SourcePackage) (ev : p.Admission) : Ex
     s!"abbrev stored{label} := {scope}.stored",
     s!"abbrev {label}Header := {scope}.header{k.number}",
     s!"abbrev {label}Names := {scope}.names{k.number}",
-    s!"noncomputable abbrev {label}Body := {scope}.body{k.number}",
-    s!"noncomputable abbrev installed{label} := {scope}.installed",
+    s!"abbrev {label}Body := {scope}.body{k.number}",
+    s!"abbrev installed{label} := {scope}.installed",
     s!"theorem {label}Readback (a : Admitted V) (h : admit stored{label} ⟨[],[],[],[],[]⟩ = .ok a) : " ++
       s!"a.program = installed{label} := {scope}.readback h",
     s!"theorem {label}Admitted : (admit stored{label} ⟨[],[],[],[],[]⟩).isOk = true := by",
@@ -78,8 +78,8 @@ def checkedClause (label : String) (s : Compile.State) (id : DeclarationId) (arg
   let emitted ← (Typing.emitRoot s inst).mapError fun
     | .defect why | .waiting why | .noCoreForm why => s!"{at_.file}:{at_.render}: WK-FUNCTION: {why}"
   let package := emitted.package ⟨[],[],[],[],[]⟩
-  let .ok evidence := package.checkEvidence | refuse at_ "WK-FUNCTION" "admission refused the selected function"
-  return (← functionPackage label package evidence, s)
+  let .ok _ := package.checkEvidence | refuse at_ "WK-FUNCTION" "admission refused the selected function"
+  return (← functionPackage label package, s)
 
 structure WrittenClause where
   parties : WrittenParties

@@ -42,7 +42,7 @@ Run every command from the root of the repository.
 | `just test` | `lake build` and `lake test` in `lean/compiler`, then `just audit` |
 | `just test-interactive` | build the interactive formal modules, check emitted source entries and mutations, and audit the interactive library and its mathematical controls |
 | `just test-frontend` | parse and format the source corpus, compare assembly and name diagnostics with the reference, and check typed generated views |
-| `just test-packages` | print every admitted root of seven examples as a Lean module, have the kernel check each typed program against its program by names, compare that program with what the frontend gave to admission, and refuse three controls |
+| `just test-packages` | print every admitted root of seven examples as a Lean module in which the kernel elaborates the program by names, compare that program with what the frontend gave to admission, read a fixture with every constructor back, and refuse three controls |
 | `just test-written-knowledge` | compile both Schnorr and Chaum–Pedersen written clauses, check admission and extraction, consume the public theorems, replay their project imports, and test permitted forks, source mutations and diagnostics |
 | `just test-written-charge` | issue and audit the two source-bound probability endpoints, check depth-specific member laws, close the proof arguments of each use, exercise independent fixed-table sampling and replay the charge issuer |
 | `just test-formal` | build and audit the formal library, its tests and the charge issuer together, then run the charge checks |
@@ -50,7 +50,7 @@ Run every command from the root of the repository.
 | `just check` | the checks that need no build: `bash .github/scripts/public-tree-guard.sh`, `python3 scripts/check_docs.py --all`, and `python3 lean/compiler/scripts/generate_unicode_tables.py --check` |
 
 Lake builds incrementally, so `just build` after a change rebuilds only the modules that the
-change affects. Run `just test` and `just test-interactive` for changes that cross the compiler and interactive proof boundary. Include `just test-packages` when a change affects the Core program, admission, emission or the printed package. Include `just test-written-knowledge` when a change affects generated claims, their source types, role projection or shared proof rules.
+change affects. Run `just test` and `just test-interactive` for changes that cross the compiler and interactive proof boundary. Include `just test-packages` when a change affects the Core program, admission, emission, the printed package, the keys of the standard vocabulary or the parameters of a project primitive: no other recipe and no CI job checks that the fixture of the printer holds every constructor. Include `just test-written-knowledge` when a change affects generated claims, their source types, role projection or shared proof rules.
 
 ### The tests
 
