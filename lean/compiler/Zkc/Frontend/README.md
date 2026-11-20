@@ -551,6 +551,14 @@ Where the reference leaves a choice, the code takes the reading marked in its co
   definition, and at each place recorded the operator is the call of that member of the module the
   parameter stands for; a callee is its ordinary instance there (a callee that the opaque typing
   reached with the fresh type is checked at it). The instance keeps those places with its code.
+  A place in a loop typed step by step, in a sum typed term by term or in a comprehension typed
+  by element is typed once for each, and every typing is recorded, also one that finds no member
+  (a function of the type's own module, an operation of a sort). The instance typing reads one
+  resolution for a place, so where two typings of a place stand for different things at the
+  instance (members of two modules, or a member and no member) the definition waits, with a
+  reason that names the place and both; two parameters that stand for one module are one
+  resolution. Such a definition is valid by SP12, and it is not handled until each typed use
+  carries its own member.
 - A row of a sort at a fresh type has the type of the row at the representative of the sort, the
   fresh type in its place; the code of the opaque typing is not emitted.
 - A `spec def` or a relation is typed by the elaborator with `rational` and `spec type`s and calls

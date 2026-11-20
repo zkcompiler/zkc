@@ -55,6 +55,9 @@ structure Context where
   (SP12): the places that its opaque elaboration resolved to a member of the parameter's
   interface. -/
   resolutions : Std.HashMap Typing.ResolvedPlace ParameterRef := {}
+  /-- The elaboration is the opaque one of a definition generic over a module parameter (SP12):
+  every typing of a place that may be a member of an interface is recorded. -/
+  «opaque» : Bool := false
   /-- The roster of the protocol whose body is elaborated; `none` in local code, where a
   statement has no role and an event does not stand (FN1). -/
   roster : Option (Array String) := none
@@ -75,8 +78,9 @@ structure State where
   iterationIndices : Std.HashSet LocalId := {}
   /-- The number of the next binder that elaboration makes. -/
   nextLocal : LocalId := 0
-  /-- In the opaque elaboration, the places resolved to a member of an interface (SP12). -/
-  resolved : Array (Typing.ResolvedPlace × ParameterRef) := #[]
+  /-- In the opaque elaboration, the typings of the places that may be members of an interface
+  (SP12), in the order of elaboration. -/
+  resolved : Array Typing.PlaceTyping := #[]
   /-- Whether a binder of deployed code binds a linear value (LN1). -/
   linear : Bool := false
   /-- The operands bound to keep the order of evaluation, by binder: the nodes they stand for. -/
