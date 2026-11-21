@@ -102,6 +102,85 @@ theorem Semantics.interpret_loopStep {D : Dialect} (sem : Semantics D) {Γ : Ctx
         halt :=
   Process.interpret_bind j _ halt _ _
 
+/-- A process as the walk of a program leaves it: the process itself, under a name that Lean's
+own reduction does not unfold. A goal that judges what is left of a program is stated on the
+sealed process, so that a tactic that normalizes its goal does not run the program; the walk
+reads through the name, and the kernel finds a sealed process equal to the process. -/
+@[irreducible] def Process.sealed (p : Process S H A) : Process S H A := p
+
+/-- A sealed process is the process. -/
+theorem Process.sealed_eq (p : Process S H A) : p.sealed = p := by
+  unfold Process.sealed
+  rfl
+
+/-- A function of the values of a list, taken one at a time: the form in which an invariant of
+a loop reads what the loop carries and what it has collected. -/
+def HList.Curried {α : Type} (V : α → Type) : List α → Type → Type
+  | [], R => R
+  | a :: rest, R => V a → HList.Curried V rest R
+
+/-- A function of values one at a time, on the list of them. -/
+def HList.uncurry {α : Type} {V : α → Type} {R : Type} :
+    {items : List α} → HList.Curried V items R → HList V items → R
+  | [], r, .nil => r
+  | _ :: _, f, .cons v rest => HList.uncurry (f v) rest
+
+/-- **The rule of a loop with an invariant.** A step that is a loop is judged when an invariant
+of the iteration number, the carried values and what was collected so far, latest first, holds
+before the first iteration; the body, judged once at any iteration from any state in which the
+invariant holds, ends in a state in which it holds at the next; and the rest is judged from
+every state in which it holds after the last. The invariant also reads what the judgment
+carries along a path (a budget, or nothing). -/
+theorem Term.interpret_loop_invariant {D : Dialect} (sem : Semantics D) {T : Type} {Γ : Ctx D.Ty}
+    {outs carried each : List D.Ty} (key : Key) (w : D.Who) (times : Times D w Γ)
+    (gives : ∀ a, a ∈ carried ++ each → D.Gives w a) (initial : HList (Var Γ) carried)
+    (inputs : Names (D.index w :: carried)) (body : Term D (Γ.extend inputs) (carried ++ each))
+    (results : Names (carried ++ each.map (D.collected times.size)))
+    (rest : Term D (Γ.extend results) outs) (path : List Frame) (env : Env sem.Val Γ)
+    (j : ProcessJudgment sem.S (T → Prop)) (mono : j.Monotone)
+    (done : HList sem.Val outs → T → Prop) (halt : sem.H → T → Prop) (t : T)
+    (inv : Nat → HList.Curried sem.Val carried
+      (HList.Curried (fun a => List (sem.Val a)) each (T → Prop)))
+    (first : HList.uncurry (HList.uncurry (inv 0) (env.all initial)) (HList.empties each) t)
+    (step : ∀ (i : Nat) (state : sem.LoopState carried each) (t : T), i < sem.times times env →
+      HList.uncurry (HList.uncurry (inv i) state.1) state.2 t →
+      (body.denote sem (path ++ [.iteration key i])
+          (env.extend inputs (.cons (sem.index w i) state.1))).interpret j
+        (fun out => HList.uncurry (HList.uncurry (inv (i + 1)) (HList.split carried out).1)
+          (state.2.push (HList.split carried out).2)) halt t)
+    (after : ∀ (state : sem.LoopState carried each) (t : T),
+      HList.uncurry (HList.uncurry (inv (sem.times times env)) state.1) state.2 t →
+      (rest.denote sem path (env.extend results
+        (state.1.append (sem.collected times.size state.2)))).interpret j done halt t) :
+    ((Term.step key (.loop w times gives initial inputs body) results rest).denote sem path
+      env).interpret j done halt t := by
+  rw [Term.interpret_loop]
+  refine Process.interpret_mono mono (fun state t' holds => after state t' holds)
+    (fun _ _ stopped => stopped) _ t ?_
+  have iterated := Process.interpret_iterate mono
+    (sem.loopStep w inputs (fun path' env' => body.denote sem path' env') key path env)
+    (fun i state t => HList.uncurry (HList.uncurry (inv i) state.1) state.2 t) halt
+    (sem.times times env)
+    (fun i state t' early holds => by
+      rw [Semantics.interpret_loopStep]
+      exact step i state t' early holds)
+    (sem.times times env) 0 (env.all initial, HList.empties each) t (by simp) first
+  simpa using iterated
+
+/-- What a loop has collected, latest first, holds the first `i` values of a list in order; with
+the next value of the list before it, it holds the first `i + 1`. The invariant of a loop that
+collects a known list, and its step. -/
+theorem List.collected_next {α : Type} (all collected : List α) (i : Nat) (x : α)
+    (soFar : collected.reverse = all.take i) (next : all[i]? = some x) :
+    (x :: collected).reverse = all.take (i + 1) := by
+  rw [List.reverse_cons, soFar, List.take_add_one, next]
+  rfl
+
+/-- What was collected of a list after as many iterations as it is long is the list. -/
+theorem List.collected_all {α : Type} (all collected : List α) (n : Nat) (length : all.length = n)
+    (soFar : collected.reverse = all.take n) : collected.reverse = all := by
+  rw [soFar, List.take_of_length_le (by omega)]
+
 /-- The judgment of a process without effects: there is no effect to judge, and the process is
 judged by how it ends. The judgment of a function's process, which makes the walk of a role's
 program the walk of a function's. -/

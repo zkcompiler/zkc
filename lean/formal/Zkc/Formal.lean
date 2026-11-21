@@ -6,6 +6,7 @@ public import Zkc.Formal.Written.FiniteModel
 public import Zkc.Formal.ModelComparison
 public import Zkc.Formal.ChargedProbability
 public import Zkc.Formal.OracleProcess
+public import Zkc.Formal.RoleRules
 public import Zkc.Formal.Walk
 public import Zkc.Formal.Written.PortSamplers
 public import Zkc.Formal.Written.LawSamplers
