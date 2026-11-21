@@ -203,42 +203,19 @@ theorem countTo_all (xs : List F) (n : ℕ) (length : xs.length = n) :
   unfold countTo
   rw [List.take_of_length_le (by omega)]
 
-/-- A natural as the one value that the loop of the relation carries. -/
-def carriedNat (n : ℕ) : HList (model D).Val [.nat] := .cons n .nil
-
-/-- The value of a carried list of one natural. -/
-def carriedValue : HList (model D).Val [.nat] → ℕ
-  | .cons v _ => v
-
 set_option hygiene false in
-/-- The body of the relation at a tolerance, walked: the count is one loop, entered by its rule
-with the invariant that the carried value is the count of the entries before the iteration; the
-body is walked once, at any iteration; after the loop the count is compared with the tolerance.
-It reads, by name, the table `xs` and its `length`; `before` is the program before the
-relation. -/
-macro "count_relation_walk " before:ident : tactic => `(tactic| (
+/-- The body of the relation at a tolerance, walked: the count is one loop, taken by the
+invariant that the carried value is the count of the entries before the iteration; the body is
+walked once, at any iteration; after the loop the count is compared with the tolerance. It
+reads, by name, the table `xs` and its `length`. -/
+macro "count_relation_walk" : tactic => `(tactic| (
   refine functionResult_of_judged ?_
   walk_step
-  refine (congrFun (Term.interpret_loop (localSem _ _ _) _ _ _ _ _ _ _ _ _ _ _ _ _ _) ()).mpr ?_
-  refine Process.interpret_mono ProcessJudgment.silent_monotone
-    (p := fun (state : (localSem (model D) ($before).headers.fns
-        (Defs.fnTable (model D) ($before).defs)).LoopState [.nat] []) _ =>
-      state.1 = carriedNat D (countTo D xs 8)) ?after (fun _ _ h => h) _ _
-    (Process.interpret_iterate ProcessJudgment.silent_monotone _
-      (fun i (state : (localSem (model D) ($before).headers.fns
-          (Defs.fnTable (model D) ($before).defs)).LoopState [.nat] []) _ =>
-        state.1 = carriedNat D (countTo D xs i)) _ 8 ?body 8 0 _ _ (by simp) ?initial)
-  case initial => rfl
-  case body =>
-    intro i state t early inv
-    rcases state with ⟨⟨⟩, collected⟩
-    rename_i c rest
-    cases rest
-    cases collected
-    have known : c = countTo D xs i := congrArg (carriedValue D) inv
-    refine (congrFun (Semantics.interpret_loopStep (localSem _ _ _) _ _ _ _ _ _ _ _ _ _ _) t).mpr ?_
+  walk_loop fun i (count : ℕ) _ => count = countTo D xs i
+  case first => rfl
+  case step =>
     walk_step
-    · have none : xs[i]? = none := at1
+    · have none : xs[i8]? = none := at1
       rw [List.getElem?_eq_none_iff] at none
       omega
     walk_step
@@ -250,31 +227,23 @@ macro "count_relation_walk " before:ident : tactic => `(tactic| (
       have nonzero : x4 ≠ D.zero := by
         subst h6 h5
         simpa using at6
-      show (HList.cons x10 HList.nil : HList (model D).Val [.nat]) = carriedNat D (countTo D xs (i + 1))
-      rw [countTo_succ D xs i x4 at1, h10, known]
-      simp [nonzero, carriedNat]
+      rw [countTo_succ D xs i8 x4 at1, h10, invariant8]
+      simp [nonzero]
     · -- the entry is zero: the choice gives 0
       walk_step
       walk_step
       have zero : x4 = D.zero := by
         subst h6 h5
         simpa using at6
-      show (HList.cons c HList.nil : HList (model D).Val [.nat]) = carriedNat D (countTo D xs (i + 1))
-      rw [countTo_succ D xs i x4 at1, known]
-      simp [zero, carriedNat]
+      rw [countTo_succ D xs i8 x4 at1, invariant8]
+      simp [zero]
   case after =>
-    intro a t counted
-    rcases a with ⟨⟨⟩, collected⟩
-    rename_i c rest
-    cases rest
-    cases collected
     walk_step
     walk_step
     walk_step
     walk_step
-    have known : c = countTo D xs 8 := congrArg (carriedValue D) counted
     subst h14 h13
-    rw [not_blt, known, countTo_all D xs 8 length]
+    rw [not_blt, invariant8, countTo_all D xs 8 length]
     rfl))
 
 /-- **What the relation of `loose` computes.** The function that the package has for
@@ -287,7 +256,7 @@ theorem loose_relation (xs : List F) (length : xs.length = 8) :
     looseBody.denote (localSem (model D) looseBefore.headers.fns (Defs.fnTable (model D) looseBefore.defs)) []
       (Env.empty.extend looseNames (.cons xs .nil)) from by kernel_rfl]
   delta looseBody
-  count_relation_walk looseBefore
+  count_relation_walk
 
 /-- **What the relation of `strict` computes.** -/
 theorem strict_relation (xs : List F) (length : xs.length = 8) :
@@ -297,7 +266,7 @@ theorem strict_relation (xs : List F) (length : xs.length = 8) :
     strictBody.denote (localSem (model D) strictBefore.headers.fns (Defs.fnTable (model D) strictBefore.defs)) []
       (Env.empty.extend strictNames (.cons xs .nil)) from by kernel_rfl]
   delta strictBody
-  count_relation_walk strictBefore
+  count_relation_walk
 
 /-- A table on which the relation of `loose` returns false has more than its tolerance of
 entries that are not zero. -/

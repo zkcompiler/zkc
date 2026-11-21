@@ -15,6 +15,17 @@ def functionResult {M : Model V} {t : V.Ty} : Local (HList M.Val [t]) → Option
   | .halt _ => none
   | .call op _ => nomatch op
 
+/-- A process without effects that is judged to end with a value is that value, done: the law of
+a function in the form in which a caller takes a computation by its law. -/
+theorem done_of_judged {A : Type} {p : Local A} {value : A}
+    (judged : p.interpret ProcessJudgment.silent (fun out _ => out = value)
+      (fun _ _ => False) ()) :
+    p = .done value := by
+  match p, judged with
+  | .done _, judged => exact congrArg Process.done judged
+  | .halt _, judged => exact judged.elim
+  | .call op _, _ => exact nomatch op
+
 /-- A function whose process is judged to end with one value has that value as its result. The
 judgment is of a process without effects, so the body of a function is walked as the program of
 a role is, a loop by its rule (`Term.interpret_loop`) with an invariant. -/
