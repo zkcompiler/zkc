@@ -53,8 +53,8 @@ The check reads the source with the frontend and writes modules on which Lean is
 The text follows the mathematics of the program and not its instructions. The same text,
 character for character, is accepted on a source whose `apply` computes each product another
 way: the vector read before the matrix, and a term added that cancels
-(`v[k] * m[i][k] + (v[k] - v[k])`), which reads the vector twice more and changes every name
-that the compiler gives a value. A walk reads each entry by the bounds of the loops, in
+(`v[k] * m[i][k] + (v[k] - v[k])`), which reads the vector twice more and changes the numbers
+that the compiler gives the values of `apply`. A walk reads each entry by the bounds of the loops, in
 whatever order the program reads, and what is left of a step is an equation in the field,
 which `ring` proves. On a source whose `apply` adds where it should multiply
 (`v[k] + m[i][k]`) the same text is refused at one place, that equation, and nothing that

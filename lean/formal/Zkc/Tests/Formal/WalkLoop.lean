@@ -175,6 +175,55 @@ theorem judged_free (M : Model V) (path : List Frame) (claim : Bool)
     · walk_step
       trivial
 
+/-- The same judgment by the walk to the places where a text has something to say: the two
+effects of a round are met at no fee, and the guard after the loop is a fork whose sides both
+end, which the text names. -/
+theorem judged_free_walked (M : Model V) (path : List Frame) (claim : Bool)
+    (allowed : ∀ op, (RSig M).Reply op → Prop) (samplers : Samplers (RSig M)) (budget : ℚ≥0) :
+    (roleMeaning M installed Member.head verifier path (inputs M claim)).interpret
+      (.charged allowed (paysBy samplers)) (fun _ _ => True) (fun _ _ => True) budget := by
+  walk
+  walk_loop fun _ (_ : Bool) _ => True
+  case first => trivial
+  case step =>
+    walk
+    refine ⟨0, fun _ => False, zero_le, Or.inl ⟨rfl, fun _ excluded => excluded⟩,
+      fun got _ _ => ?_⟩
+    walk
+    refine ⟨0, fun _ => False, zero_le, Or.inl ⟨rfl, fun _ excluded => excluded⟩,
+      fun drawn _ _ => ?_⟩
+    walk
+  case after =>
+    walk as held
+
+/-- A name for which the walk meets no fork is an error: here the one fork is named, both its
+sides end, and a second name names nothing. -/
+theorem second_name_names_nothing (M : Model V) (path : List Frame) (claim : Bool)
+    (allowed : ∀ op, (RSig M).Reply op → Prop) (samplers : Samplers (RSig M)) (budget : ℚ≥0) :
+    (roleMeaning M installed Member.head verifier path (inputs M claim)).interpret
+      (.charged allowed (paysBy samplers)) (fun _ _ => True) (fun _ _ => True) budget := by
+  walk
+  walk_loop fun _ (_ : Bool) _ => True
+  case first => trivial
+  case step =>
+    walk
+    refine ⟨0, fun _ => False, zero_le, Or.inl ⟨rfl, fun _ excluded => excluded⟩,
+      fun got _ _ => ?_⟩
+    walk
+    refine ⟨0, fun _ => False, zero_le, Or.inl ⟨rfl, fun _ excluded => excluded⟩,
+      fun drawn _ _ => ?_⟩
+    walk
+  case after =>
+    fail_if_success walk as held, further
+    fail_if_success walk as ⟨part, held⟩, further
+    walk
+
+/-- A goal that judges no process is not walked, with or without the reading of calls. -/
+example : True := by
+  fail_if_success walk
+  fail_if_success walk!
+  trivial
+
 end
 
 /-- info: 'Zkc.Tests.Formal.WalkLoop.six_effects' depends on axioms: [propext, Quot.sound] -/

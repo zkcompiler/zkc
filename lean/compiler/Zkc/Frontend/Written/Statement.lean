@@ -19,7 +19,7 @@ library and from the model that the check names:
 - `counts`: for each goal, that the counts of its table are those of the stored program and
   that its budget is the number that the frontend computed, both decided by the kernel;
 - `coverage`: the theorem `covered`, that the model of the statement covers the stored program;
-- `sites`: the key of each charged draw of the root under the name of its site in the source
+- `sites`: the key of each named draw of the root under the name of its site in the source
   (`site_<name>`), and for each goal the cap that its table gives the draw
   (`<goal>_cap_<name>`), decided by the kernel;
 - `entries`: where the walks of the module start: for the deciding role, each named function
@@ -579,12 +579,12 @@ def claimTexts (s : Statements) (model : ModelText) : Except String String := do
       s!"      {parts.premise "installed" s!"{name}Member"}\n\n"
   return text
 
-/-- The name of a charged draw of the root in a module: the name of its site in the source, with
+/-- The name of a draw of the root in a module: the name of its site in the source, with
 its place among the draws that realize the site where a stepped loop gives several. -/
 def siteLabel (site : String) (index count : Nat) : String :=
   if count == 1 then site else s!"{site}_{index}"
 
-/-- The charged draws of a goal's root, each with the name of its site in the source, its name
+/-- The named draws of a goal's root, each with the name of its site in the source, its name
 in a module and its key. The name in a module is the site's (`siteLabel`) where that is a plain
 name, and `key<number>` of the draw where it is not. A name that two draws would share (a site
 `r_0` beside the first draw of a stepped loop over `r`) is followed by the key of each. -/
@@ -597,7 +597,7 @@ def _root_.Zkc.Frontend.Written.ClaimedGoal.siteLabels (goal : ClaimedGoal) :
     if (draws.filter (·.2.1 == label)).length > 1 then (site, s!"{label}_key{key.number}", key)
     else (site, label, key)
 
-/-- The charged draws of a goal's root that its table of caps gives a cap, each with its name
+/-- The draws of a goal's root that its table of caps gives a cap, each with its name
 in a module and that cap. -/
 def _root_.Zkc.Frontend.Written.ClaimedGoal.siteCaps (goal : ClaimedGoal) :
     List (String × DrawCap) :=
@@ -605,7 +605,7 @@ def _root_.Zkc.Frontend.Written.ClaimedGoal.siteCaps (goal : ClaimedGoal) :
   goal.siteLabels.filterMap fun (_, label, key) =>
     (capped.find? (·.key == key)).map fun cap => (label, cap)
 
-/-- The charged draws of the root under the names of their sites: the key of each
+/-- The draws of the root under the names of their sites: the key of each
 (`site_<name>`, and `site_<name>_<index>` for each block of a stepped loop), once for the
 package, and for each goal the cap that its table gives the draw (`<goal>_cap_<name>`), decided
 by the kernel. A text can name a draw as the source does, and where it pays a fee at such a
@@ -614,7 +614,7 @@ not within it is refused with the name of the site. -/
 def sites (s : Statements) : String :=
   let named := (s.claims.goals.flatMap (·.siteLabels)).eraseDups
   String.join (named.map fun (site, label, key) =>
-    s!"/-- A charged draw of the root: `sites.{site}` of the source. -/\n" ++
+    s!"/-- A draw of the root: `sites.{site}` of the source. -/\n" ++
     s!"abbrev site_{label} : Key := ⟨{key.number}⟩\n\n") ++
   String.join (s.claims.goals.map fun goal =>
     String.join (goal.siteCaps.map fun (label, cap) =>

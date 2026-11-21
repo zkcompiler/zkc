@@ -112,65 +112,69 @@ elab "walk_pay " fee:term:max " excluding " set:term:max " as " reply:ident kept
   let startStx ← Term.exprToSyntax start
   let restStx ← Term.exprToSyntax rest
   let keyStx ← Term.exprToSyntax key
+  -- the goals that the rule leaves are those of this goal; what else is open stays behind them
+  let others := (← getGoals).drop 1
   evalTactic (← `(tactic|
     refine Zkc.Formal.Written.charged_pay_at _ _ $tableStx $placeStx (start := $startStx)
       (rest := $restStx) (key := $keyStx) _ _ _ _ $fee $set _
       (by simp [Zkc.Core.ROp.occurrence]) rfl ?weight ?within ?cap
       fun $reply $permitted $kept => ?_))
   let goals ← getGoals
-  let [weight, within, cap, after] := goals
-    | throwError "walk_pay: the rule of a paid draw left {goals.length} goals, not four"
+  let left := goals.take (goals.length - others.length)
+  let [weight, within, cap, after] := left
+    | throwError "walk_pay: the rule of a paid draw left {left.length} goals, not four"
   let after ← readReply after reply.getId
   -- what the rule leaves beside the walk judges no process: it is stated of the values, with
-  -- no variable of the walk
-  let stated (goal : MVarId) : MetaM MVarId := do
-    let goal ← Zkc.Formal.Walk.useEquations goal
-    return (← Zkc.Formal.Walk.readValues goal).getD goal
-  let weight ← stated weight
-  let within ← stated within
-  let cap ← stated cap
+  -- no variable of the walk. A goal that is true as it then stands is closed.
+  let beside (goal : MVarId) : MetaM (Option MVarId) := do
+    Zkc.Formal.Walk.readValues (← Zkc.Formal.Walk.useEquations goal)
+  let weightLeft := (← beside weight).toList
   -- the fee within the budget, where it is a hypothesis as it stands
-  let withinLeft := if (← observing? within.assumption).isSome then [] else [within]
+  let withinLeft ← match ← beside within with
+    | none => pure []
+    | some within => pure (if (← observing? within.assumption).isSome then [] else [within])
   -- the fee within the cap of the draw: the applications of the frames are computed, so that
   -- no iteration is in what the kernel decides
-  let capLeft ← cap.withContext do
-    let stated ← instantiateMVars (← cap.getType)
-    let applications ← mkAppM ``Zkc.Core.Frame.applications #[rest]
-    let computed ← Meta.reduce applications (skipTypes := true) (skipProofs := true)
-    let stated := stated.replace fun e => if e == applications then some computed else none
-    let cap ← cap.replaceTargetDefEq stated
-    -- where the module states the cap of this site, the fee is compared with what it states,
-    -- and the site has its name
-    let mut cap := cap
-    let mut stated := stated
-    let mut site := m!"this draw"
-    for name in ← Lean.labelled `walk_cap do
-      let some (_, lhs, value) := (← inferType (mkConst name)).eq? | continue
-      unless ← withReducible (isDefEq lhs stated.appArg!) do continue
-      let narrowed := mkApp stated.appFn! value
-      let next ← mkFreshExprSyntheticOpaqueMVar narrowed (← cap.getTag)
-      cap.assign (← mkAppM ``LE.le.trans_eq #[next, ← mkEqSymm (mkConst name)])
-      cap := next.mvarId!
-      stated := narrowed
-      site := m!"the draw `{lhs.appArg!}`"
-      break
-    let closedBy (goal : MVarId) (tactic : TSyntax `tactic) : TacticM Bool := do
-      let saved ← saveState
-      try
-        setGoals [goal]
-        evalTactic tactic
-        if (← getGoals).isEmpty then pure true else saved.restore; pure false
-      catch _ =>
-        saved.restore
-        pure false
-    if ← closedBy cap (← `(tactic| first | exact le_rfl | decide +kernel)) then pure []
-    else
-      -- refused where the kernel decides that the fee is over the cap; left to the text where
-      -- it decides neither
-      let over ← mkFreshExprSyntheticOpaqueMVar (mkNot stated)
-      if ← closedBy over.mvarId! (← `(tactic| decide +kernel)) then
-        throwError "walk_pay: the fee is not within the cap that the table gives {site}{indentExpr stated}"
-      pure [cap]
-  setGoals ([weight] ++ withinLeft ++ capLeft ++ [after])
+  let capLeft ← match ← beside cap with
+    | none => pure []
+    | some cap => cap.withContext do
+      let stated ← instantiateMVars (← cap.getType)
+      let applications ← mkAppM ``Zkc.Core.Frame.applications #[rest]
+      let computed ← Meta.reduce applications (skipTypes := true) (skipProofs := true)
+      let stated := stated.replace fun e => if e == applications then some computed else none
+      let cap ← cap.replaceTargetDefEq stated
+      -- where the module states the cap of this site, the fee is compared with what it states,
+      -- and the site has its name
+      let mut cap := cap
+      let mut stated := stated
+      let mut site := m!"this draw"
+      for name in ← Lean.labelled `walk_cap do
+        let some (_, lhs, value) := (← inferType (mkConst name)).eq? | continue
+        unless ← withReducible (isDefEq lhs stated.appArg!) do continue
+        let narrowed := mkApp stated.appFn! value
+        let next ← mkFreshExprSyntheticOpaqueMVar narrowed (← cap.getTag)
+        cap.assign (← mkAppM ``LE.le.trans_eq #[next, ← mkEqSymm (mkConst name)])
+        cap := next.mvarId!
+        stated := narrowed
+        site := m!"the draw `{lhs.appArg!}`"
+        break
+      let closedBy (goal : MVarId) (tactic : TSyntax `tactic) : TacticM Bool := do
+        let saved ← saveState
+        try
+          setGoals [goal]
+          evalTactic tactic
+          if (← getGoals).isEmpty then pure true else saved.restore; pure false
+        catch _ =>
+          saved.restore
+          pure false
+      if ← closedBy cap (← `(tactic| first | exact le_rfl | decide +kernel)) then pure []
+      else
+        -- refused where the kernel decides that the fee is over the cap; left to the text where
+        -- it decides neither
+        let over ← mkFreshExprSyntheticOpaqueMVar (mkNot stated)
+        if ← closedBy over.mvarId! (← `(tactic| decide +kernel)) then
+          throwError "walk_pay: the fee is not within the cap that the table gives {site}{indentExpr stated}"
+        pure [cap]
+  setGoals (weightLeft ++ withinLeft ++ capLeft ++ [after] ++ others)
 
 end Zkc.Formal.Written

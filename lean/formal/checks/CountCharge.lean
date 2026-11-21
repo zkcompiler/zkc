@@ -165,16 +165,6 @@ def ofCharge : List String :=
     "Witness.loose_attained", "Witness.strict_attained", "loose_exact", "strict_exact",
     "loose_sound", "loose_result", "strict_sound", "strict_result"]
 
-/-- What names the draw of the root as the source does (`site_z`), and what rests on it. The
-module of a source that does not charge that draw has no such name. -/
-def ofSite : List String :=
-  ["loose_exact", "strict_exact", "loose_within", "strict_within", "walked_within",
-    "walked_excludes", "returns_installed", "loose_judged", "strict_judged",
-    "Witness.loose_at_table", "Witness.strict_at_table", "Witness.loose_attained",
-    "Witness.strict_attained", "Witness.misplaced_judges_nothing", "Witness.foreign_not_counted",
-    "Witness.fixed_position_does_not_follow", "loose_installed", "strict_installed",
-    "loose_sound", "loose_result", "strict_sound", "strict_result"]
-
 /-- The proof module, as the generator assembles it: the package of the claims and what is
 generated around the proofs written for the protocol. -/
 def proofModule (name : String) (s : Subject) (template : String) : IO Module :=
@@ -307,21 +297,16 @@ def run (corpus template : System.FilePath) (work : System.FilePath) : IO Unit :
   -- The caps of both goals are below the bounds of their tolerances: the text reads another
   -- cap from each table than the bound, and what rests on it is not proved.
   expectUnproved "a charge below the bound" "BoundControl" theorems smallProof ofCharge
-  -- In these two the root has no charged draw, so the module has no theorem of a draw's cap
-  -- and no name for the draw: the text names a site that the source does not charge, and
-  -- nothing that reads the draw is proved.
+  -- In these two the root has no charged draw, so the module has no theorem of a draw's cap.
+  -- The draw has its name all the same: a site is named whether or not the source charges it.
   let uncapped := theorems.filter fun name => !written.statements.siteNames.contains name
-  expectUnproved "a charge on a loop that does not run" "SiteControl" uncapped elsewhereProof ofSite
-  expectUnproved "a charge of another protocol" "OwnerControl" uncapped foreignProof ofSite
-  -- The first is refused where the text reads the cap of the draw from the table, the other
-  -- two where it names the draw.
-  let (_, output) ← finishLean smallProof
-  unless output.contains "drawCap looseCaps = " && output.contains "drawCap strictCaps = " do
-    throw (IO.userError s!"the charge below the bound: refused for another reason\n{output}")
-  for (title, task) in [("on a loop that does not run", elsewhereProof),
+  expectUnproved "a charge on a loop that does not run" "SiteControl" uncapped elsewhereProof ofCharge
+  expectUnproved "a charge of another protocol" "OwnerControl" uncapped foreignProof ofCharge
+  -- Each is refused where the text reads the cap of the draw from the table.
+  for (title, task) in [("below the bound", smallProof), ("on a loop that does not run", elsewhereProof),
       ("of another protocol", foreignProof)] do
     let (_, output) ← finishLean task
-    unless output.contains "Unknown identifier `site_z`" do
+    unless output.contains "drawCap looseCaps = " && output.contains "drawCap strictCaps = " do
       throw (IO.userError s!"the charge {title}: refused for another reason\n{output}")
   let charges := ", ".intercalate (written.goals.map fun (name, arguments, caps) =>
     s!"{name} at tolerance {arguments[0]!} within {caps.ratio}")

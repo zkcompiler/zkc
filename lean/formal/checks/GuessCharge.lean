@@ -26,9 +26,9 @@ The check reads the source with the frontend and writes modules on which Lean is
   method of fees has to establish (`guessingJudged`), with the theorem that the claim follows
   from it; the text proves that judgment and the witness, and states neither the claim nor
   where the walk starts. It walks the verifier's loop by an invariant (no round has hit yet;
-  `(3 - i) / 8` of the budget is left), meets the message for free and pays at the draw, named
-  as the source names its site (`site_r`), within the cap that the generated theorem
-  `guessing_cap_r` gives it. After the generated theorems stands a consumer that names no
+  `(3 - i) / 8` of the budget is left), meets the message for free (`walk_free`) and pays one
+  eighth at the draw (`walk_pay`), which is compared with the cap that the generated theorem
+  `guessing_cap_r` states for the site `site_r`; the text names neither. After the generated theorems stands a consumer that names no
   generated proposition, writes the verifier as its place in the roster and the bound as the
   number `3 / 8`, and proves it from the published theorem.
 - The comparison module has the same printed package and the frontend.

@@ -68,7 +68,7 @@ prove is stated with the operations of the field. -/
     List.foldr (data F G).scalarAdd 0 xs = xs.sum := rfl
 
 /-- A literal of the scalar type is its number in the field. -/
-@[walk_value] theorem readLiteral_scalar [DecidableEq F] [DecidableEq G] (n : ℕ) (reads) :
+theorem readLiteral_scalar [DecidableEq F] [DecidableEq G] (n : ℕ) (reads) :
     Core.Ty.readLiteral (model F G)
         (.nominal (.inl (Zkc.Vocabulary.TypeKey.field Zkc.Vocabulary.Field.bls12381Fr))) [n] reads =
       (n : F) := by
@@ -84,6 +84,26 @@ prove is stated with the operations of the field. -/
       exact (Prod.mk.inj (Option.some.inj read)).1.symm
   · cases read
 
-attribute [walk_value] Nat.cast_zero Nat.cast_one Nat.cast_ofNat
+/-! How a literal reads: zero and one as the field's, any other as its numeral. The three are
+of patterns that do not overlap, and no lemma about numbers at large has the label, so that
+reading the values of a goal leaves a text's own hypotheses about numbers as they were. -/
+
+@[walk_value] theorem readLiteral_scalar_zero [DecidableEq F] [DecidableEq G] (reads) :
+    Core.Ty.readLiteral (model F G)
+        (.nominal (.inl (Zkc.Vocabulary.TypeKey.field Zkc.Vocabulary.Field.bls12381Fr))) [0] reads =
+      (0 : F) :=
+  (readLiteral_scalar 0 reads).trans (Nat.cast_zero (R := F))
+
+@[walk_value] theorem readLiteral_scalar_one [DecidableEq F] [DecidableEq G] (reads) :
+    Core.Ty.readLiteral (model F G)
+        (.nominal (.inl (Zkc.Vocabulary.TypeKey.field Zkc.Vocabulary.Field.bls12381Fr))) [1] reads =
+      (1 : F) :=
+  (readLiteral_scalar 1 reads).trans (Nat.cast_one (R := F))
+
+@[walk_value] theorem readLiteral_scalar_numeral [DecidableEq F] [DecidableEq G] (n : ℕ) (reads) :
+    Core.Ty.readLiteral (model F G)
+        (.nominal (.inl (Zkc.Vocabulary.TypeKey.field Zkc.Vocabulary.Field.bls12381Fr))) [n + 2]
+        reads = ((n + 2 : ℕ) : F) :=
+  readLiteral_scalar (n + 2) reads
 
 end Zkc.Formal.Written.ArithmeticModel
