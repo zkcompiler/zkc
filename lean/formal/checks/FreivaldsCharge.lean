@@ -155,11 +155,11 @@ def proofModule (name : String) (s : Subject) (model : ModelText) (template : St
 /-- A text that defines again, in its own scope, a name of the library that the statement of
 the goal's judgment uses, and proves the judgment written anew under that name: the fees within
 allowances, as a policy under which every fee pays for every set of replies. Under it the
-verifier is judged at its first effect, with no fee and every reply excluded. Before the
-statements of a module were propositions defined ahead of the text, the goal that such a text
-published was the claim under the text's own name, and every check passed (found by an audit,
-with the total of a charge as the name). The judgment written anew is not the judgment that was
-stated, so the text is refused where the claim is concluded from it. -/
+verifier is judged at its first effect, with no fee and every reply excluded. The judgment
+written anew is not the judgment that was stated before the text, so the text is refused where
+the claim is concluded from it. (An audit found the same of the claim: before the statements of
+a module were propositions defined ahead of the text, a text that defined the total of a charge
+again published a goal under its own name, and every check passed.) -/
 def shadowing (s : Subject) (model : ModelText) (template : String) : IO String := do
   let [goal] := s.statements.claims.goals | throw (IO.userError "the statements are not of one goal")
   let anew ← IO.ofExcept (s.statements.judgedAt model goal)
@@ -285,6 +285,9 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
     ["sound_installed", "sound_sound", "sound_result"]
   expectReason "a name of the statement defined again" shadowedProof
     "Type mismatch\n  sound_judged\nhas type"
+  let (_, shadowed) ← finishLean shadowedProof
+  unless (shadowed.splitOn "error:").length - 1 == 1 do
+    throw (IO.userError s!"a name of the statement defined again: refused at more than one place\n{shadowed}")
   -- The standard model has no sampler for a sequence of scalars: the kernel decides that it
   -- does not cover the package.
   let (ok, output) ← finishLean uncoveredProof

@@ -466,7 +466,10 @@ private def entered (at_ : Expr × Expr) : MetaM (Expr × Expr) := do
         if s.hasExprMVar then pure true else withReducible (isDefEq s g)
       unless fixed do return none
       unless ← isDefEq lhs p do return none
-      return some (← instantiateMVars rhs, ← instantiateMVars (mkAppN entry args))
+      -- an equation with a binder that its left side does not fix is not one to pass along
+      let equation ← instantiateMVars (mkAppN entry args)
+      if equation.hasExprMVar then return none
+      return some (← instantiateMVars rhs, equation)
     if let some (form, equation) := found then
       return (form, ← mkEqTrans at_.2 equation)
   return at_

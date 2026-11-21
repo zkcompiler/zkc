@@ -8,11 +8,13 @@ open Lean Meta Elab Tactic
 /-!
 The binders of a generated proposition, under the names that the generator gave them.
 
-A statement that is generated for a goal is a proposition with named binders: what the model is
-built from, the path, each input of the deciding role with its validity, and the premise. A
-proof of it begins by introducing them. `intro` with a list of names counts positions, and a
-text written that way changes whenever the generator adds a binder; `claim_intro` introduces
-every binder with the name that the proposition has for it.
+A statement that is generated for a goal is a proposition whose binders have names: what the
+model is built from, the path and each input of the deciding role in every such proposition,
+and in the judgment that a text proves (`<goal>Judged`) also the validity of each input and the
+premise. A proof of it begins by introducing them. `intro` with a list of names counts
+positions, and a text written that way changes whenever the generator adds a binder;
+`claim_intro` introduces every binder with the name that the proposition has for it. A
+hypothesis that the proposition states with an arrow has no name and gets none.
 -/
 
 namespace Zkc.Formal.Written

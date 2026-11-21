@@ -243,7 +243,7 @@ def _root_.Zkc.Frontend.Written.GoalClaims.functionsBeforeRoot (claims : GoalCla
       | some entry => claims.state.program.nameOf entry.key.declaration
       | none => ""
     (if name.isEmpty then "function" else name, key.number)
-  let taken := claims.goals.map (·.goal) ++ ["root", "callee", "verifier", "prover"]
+  let taken := claims.goals.map (·.goal) ++ ["root", "callee", "verifier", "prover", "site"]
   named.map fun (name, key) =>
     if taken.contains name || (named.filter (·.1 == name)).length > 1 then (s!"{name}{key}", key)
     else (name, key)
@@ -394,16 +394,20 @@ structure Parts where
   inputs : String
   premise : String → String → String
 
+/-- Whether a name of the source can stand in a generated name as it is: letters of the basic
+alphabet, digits and underscores, not beginning with a digit. A name of the source may be any
+identifier of Unicode, of which Lean reads some as other tokens. -/
+def plainName (name : String) : Bool :=
+  !name.isEmpty && name.all (fun c => c.isAlphanum || c == '_') && !name.front.isDigit
+
 /-- The names of the inputs of the root in a statement: the name that the source gives the port,
 after `input_`, so that a reader of a statement sees which inputs the relation is applied to and
 which the deciding role is run on. An input whose name in the source is no plain identifier, or
 is the name of another input, is named by its place. -/
 def inputNames (s : Statements) : List String :=
-  let plain (name : String) := !name.isEmpty && name.all (fun c => c.isAlphanum || c == '_') &&
-    !(name.front.isDigit)
   let names := s.claims.inputs.toList
   names.zipIdx.map fun (name, index) =>
-    if plain name && (names.filter (· == name)).length == 1 then s!"input_{name}" else s!"port{index}"
+    if plainName name && (names.filter (· == name)).length == 1 then s!"input_{name}" else s!"port{index}"
 
 def parts (s : Statements) (model : ModelText) (goal : ClaimedGoal) : Except String Parts := do
   unless goal.clause.kind == .proves do
@@ -578,31 +582,46 @@ its place among the draws that realize the site where a stepped loop gives sever
 def siteLabel (site : String) (index count : Nat) : String :=
   if count == 1 then site else s!"{site}_{index}"
 
+/-- The charged draws of a goal's root, each with the name of its site in the source, its name
+in a module and its key. The name in a module is the site's (`siteLabel`) where that is a plain
+name, and `key<number>` of the draw where it is not. A name that two draws would share (a site
+`r_0` beside the first draw of a stepped loop over `r`) is followed by the key of each. -/
+def _root_.Zkc.Frontend.Written.ClaimedGoal.siteLabels (goal : ClaimedGoal) :
+    List (String × String × Core.Key) :=
+  let draws := goal.sites.flatMap fun (site, keys) =>
+    keys.zipIdx.map fun (key, index) =>
+      (site, if plainName site then siteLabel site index keys.length else s!"key{key.number}", key)
+  draws.map fun (site, label, key) =>
+    if (draws.filter (·.2.1 == label)).length > 1 then (site, s!"{label}_key{key.number}", key)
+    else (site, label, key)
+
+/-- The charged draws of a goal's root that its table of caps gives a cap, each with its name
+in a module and that cap. -/
+def _root_.Zkc.Frontend.Written.ClaimedGoal.siteCaps (goal : ClaimedGoal) :
+    List (String × DrawCap) :=
+  let capped := (goal.caps.uses.getLast?.map (·.draws)).getD []
+  goal.siteLabels.filterMap fun (_, label, key) =>
+    (capped.find? (·.key == key)).map fun cap => (label, cap)
+
 /-- The charged draws of the root under the names of their sites: the key of each
-(`site_<name>`), once for the package, and for each goal the cap that its table gives the draw
-(`<goal>_cap_<name>`), decided by the kernel. A text names a draw as the source does. -/
+(`site_<name>`, and `site_<name>_<index>` for each block of a stepped loop), once for the
+package, and for each goal the cap that its table gives the draw (`<goal>_cap_<name>`), decided
+by the kernel. A text can name a draw as the source does. -/
 def sites (s : Statements) : String :=
-  let draws (goal : ClaimedGoal) : List (String × String × Core.Key) :=
-    goal.sites.flatMap fun (site, keys) =>
-      keys.zipIdx.map fun (key, index) => (site, siteLabel site index keys.length, key)
-  let named := (s.claims.goals.flatMap draws).eraseDups
+  let named := (s.claims.goals.flatMap (·.siteLabels)).eraseDups
   String.join (named.map fun (site, label, key) =>
     s!"/-- A charged draw of the root: `sites.{site}` of the source. -/\n" ++
     s!"abbrev site_{label} : Key := ⟨{key.number}⟩\n\n") ++
   String.join (s.claims.goals.map fun goal =>
-    let capped := (goal.caps.uses.getLast?.map (·.draws)).getD []
-    String.join ((draws goal).filterMap fun (_, label, key) =>
-      (capped.find? (·.key == key)).map fun cap =>
-        s!"/-- The cap that the table of `{goal.goal}` gives the draw `{label}`. -/\n" ++
-        s!"theorem {goal.goal}_cap_{label} :\n" ++
-        s!"    {goal.goal}Caps.capFrom {goal.goal}Caps.root [] site_{label} = " ++
-        s!"{cap.numerator} / {cap.denominator} := by\n  decide +kernel\n\n"))
+    String.join (goal.siteCaps.map fun (label, cap) =>
+      s!"/-- The cap that the table of `{goal.goal}` gives the draw `{label}`. -/\n" ++
+      s!"theorem {goal.goal}_cap_{label} :\n" ++
+      s!"    {goal.goal}Caps.capFrom {goal.goal}Caps.root [] site_{label} = " ++
+      s!"{cap.numerator} / {cap.denominator} := by\n  decide +kernel\n\n"))
 
 /-- The names of the theorems that `sites` writes. -/
 def siteNames (s : Statements) : List String :=
-  s.claims.goals.flatMap fun goal =>
-    goal.sites.flatMap fun (site, keys) =>
-      keys.zipIdx.map fun (_, index) => s!"{goal.goal}_cap_{siteLabel site index keys.length}"
+  s.claims.goals.flatMap fun goal => goal.siteCaps.map fun (label, _) => s!"{goal.goal}_cap_{label}"
 
 /-- What the method of fees has to establish for a goal, as the text of a proposition: on valid
 inputs of the deciding role on which the relation returns false, the role's process in the
@@ -678,8 +697,9 @@ def conclusionNames (s : Statements) : List String :=
 
 /-- For each goal, after the text of the proofs: the theorems `<goal>_sound : <goal>Goal`,
 `<goal>_result : <goal>Result` and `<goal>_met : <goal>Witnessed`, from the theorems
-`<goal>_installed : <goal>Claim` and `<goal>_witnessed : <goal>Witnessed` that the text has to
-prove. The statements were fixed before the text; only their proofs are written here. -/
+`<goal>_installed : <goal>Claim` (the text's, or the one that `conclusions` writes from the
+text's judgment) and `<goal>_witnessed : <goal>Witnessed` of the text. The statements were
+fixed before the text; only their proofs are written here. -/
 def closings (s : Statements) : String :=
   String.join (s.claims.goals.map fun goal =>
     let name := goal.goal
@@ -718,8 +738,10 @@ def footer (name : String) (theorems : List String) : String :=
   String.join (theorems.map (s!"#print axioms {·}\n")) ++ s!"end {name}\n"
 
 /-- **The module of the goals of one scheme**: the package of the claims; what is generated
-before any proof (the facts, the coverage, the counts, where the walks start, the transfers and
-the propositions of each goal); the author's text; the closing theorems and the comparisons
+before any proof (the facts, the coverage, the counts, the names of the charged draws, where
+the walks start, the transfers, the propositions of each goal and, for a text of the method of
+fees, the judgment of each goal with what follows from it); the author's text; the claim of
+each goal from the text's judgment, for that method; the closing theorems and the comparisons
 with the ceilings; what a check writes after them (`after`: a consumer of the published
 theorems); and a request for the axioms of every theorem. The order of the parts, the imports
 and the names of the generated theorems are decided here and by no caller. A text that sets an
