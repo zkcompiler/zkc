@@ -29,10 +29,12 @@ The check reads the source with the frontend and writes two modules, on which Le
   relation returns whether at most the goal's tolerance of the entries are not zero. On a table
   on which that function returns false, the verifier is judged never to return within the
   budget of the goal's charge, with each fee within what the charge allows the effect that pays
-  it; against every service that draws the position uniformly, it returns with probability at
-  most the total of the charge. For each goal a concrete table and a service meet every
-  hypothesis, and there the verifier returns with probability exactly the total of the charge;
-  a charge on another instruction, and a charge of another definition, judge it at no budget.
+  it; against every service that draws each coin by the sampler of its law, it returns with
+  probability at most the total of the charge. The statement names no port and no sampler: the
+  samplers are those of the laws of the model (`lawSamplers`). For each goal a concrete table
+  and a service meet every hypothesis, and there the verifier returns with probability exactly
+  the total of the charge; a charge on another instruction, and a charge of another definition,
+  judge it at no budget; a service that always gives one position does not follow the samplers.
 - The comparison module has the same printed package and the frontend: the program by names
   and the association that Lean reads from the package are those that the frontend gives to
   admission for the claims, and its first definitions are those of the root's own package.
@@ -170,7 +172,8 @@ def theorems : List String := [
   "verifier.eq", "loose_relation", "strict_relation", "walked_within", "walked_excludes",
   "walk_reads_any_key", "judged_within", "returns_within", "loose_sound", "strict_sound",
   "Witness.loose_at_table", "Witness.strict_at_table", "Witness.loose_attained",
-  "Witness.strict_attained", "Witness.misplaced_judges_nothing", "Witness.foreign_judges_nothing"]
+  "Witness.strict_attained", "Witness.misplaced_judges_nothing", "Witness.foreign_judges_nothing",
+  "Witness.fixed_position_does_not_follow"]
 
 /-- The theorems that say what the relations compute, and those that rest on them. -/
 def ofRelation : List String :=
@@ -179,8 +182,9 @@ def ofRelation : List String :=
 
 def proofModule (name : String) (s : Subject) (template : String) : String :=
   imports ["Zkc.Formal.Walk", "Zkc.Formal.OracleProcess", "Zkc.Formal.Written.PortSamplers",
-    "Zkc.Formal.Written.SiteAllowance", "Zkc.Formal.Written.FunctionMeaning",
-    "Zkc.Formal.Written.StandardModel", "Zkc.Formal.Written.FiniteModel"] ++
+    "Zkc.Formal.Written.LawSamplers", "Zkc.Formal.Written.SiteAllowance",
+    "Zkc.Formal.Written.FunctionMeaning", "Zkc.Formal.Written.StandardModel",
+    "Zkc.Formal.Written.FiniteModel"] ++
   s!"namespace {name}\n" ++ s.package ++ facts s ++ template ++
   String.join (theorems.map (s!"#print axioms {·}\n")) ++ s!"end {name}\n"
 
@@ -278,10 +282,12 @@ def run (corpus template : System.FilePath) (work : System.FilePath) : IO Unit :
   -- With `<` for `<=` the function of the relation computes another comparison: what is said
   -- of it, and what rests on that, is not proved; the theorems about the verifier stand.
   expectUnproved "the relation changed" "RelationControl" changedProof ofRelation
-  -- The prover's program is not the one that draws: no theorem about the walk is proved, and
-  -- what the relations compute is.
+  -- The prover's program is not the one that draws: no theorem about the walk is proved. What
+  -- the relations compute is, and so is that a service with a fixed position does not follow the
+  -- samplers, which read no role.
   expectUnproved "the roles exchanged" "RolesControl" exchangedProof
-    ((theorems.drop 1).filter fun name => !["loose_relation", "strict_relation"].contains name)
+    ((theorems.drop 1).filter fun name =>
+      !["loose_relation", "strict_relation", "Witness.fixed_position_does_not_follow"].contains name)
   -- Only `loose` and what is stated of it at its table fail, and `strict` stands.
   expectUnproved "a charge below the bound" "BoundControl" smallProof
     ["loose_sound", "Witness.loose_at_table", "Witness.loose_attained"]

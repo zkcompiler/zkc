@@ -53,11 +53,13 @@ def coinAt (at_ : Occurrence) : InputPort V :=
 /-- The draw of the position in a run that starts at `path`. -/
 abbrev coin (path : List Frame) : InputPort V := coinAt ⟨path, ⟨0⟩⟩
 
-/-- The fees of a charge in a run of the root: the position is drawn uniformly, and each fee is
-within what the charge allows the effect that pays it. -/
+/-- The samplers of the statement: at each coin, the sampler of its law in the model. -/
+abbrev samplers : Samplers (RSig (model D)) := lawSamplers (model D) (StandardModel.draws D)
+
+/-- The fees of a charge in a run of the root: each coin is drawn by the sampler of its law, and
+each fee is within what the charge allows the effect that pays it. -/
 abbrev fees (charge : DrawCharge) (path : List Frame) :=
-  paysWithin (portSamplers (model D) (coin path) (drawPosition 7))
-    (allowance (model D) charge rootKey path)
+  paysWithin (samplers D) (allowance (model D) charge rootKey path)
 
 /-- The verifier's process, as the walk reads it. -/
 abbrev walked (path : List Frame) (xs : List F) :=
@@ -75,7 +77,7 @@ theorem walked_within (path : List Frame) (xs : List F) (tolerance : ℕ) (charg
       (fun _ _ => False) (fun _ _ => True) (budget charge) := by
   walk_step
   refine ⟨ceiling charge, fun z : ℕ => xs[z]? = some D.zero, ?_,
-    ⟨Or.inr ⟨drawPosition 7, portSamplers_at _ (coin path) _, ?_⟩, ?_⟩, fun z allowedZ kept => ?_⟩
+    ⟨Or.inr ⟨drawPosition 7, rfl, ?_⟩, ?_⟩, fun z allowedZ kept => ?_⟩
   · simp [budget, site]
   · rw [prEvent_drawPosition_entry xs 7 length]
     refine le_trans ?_ (toProbability_mono covers)
@@ -387,7 +389,7 @@ theorem returns_within (charge : DrawCharge) (tolerance : ℕ)
     (path : List Frame) (xs : List F) (length : xs.length = 8)
     (far : tolerance < xs.countP (· ≠ D.zero))
     {σ : Type} (service : Service (RSig (model D)) σ)
-    (follows : service.Follows (portSamplers (model D) (coin path) (drawPosition 7)))
+    (follows : service.Follows (samplers D))
     (permitted : ∀ op s reply t, (some reply, t) ∈ support (service op s) →
       Permitted (model D) op reply) (s : σ) :
     ∃ root : Member a.program.headers.protocols rootHeader,
@@ -409,7 +411,7 @@ theorem returns_installed (charge : DrawCharge) (tolerance : ℕ)
     (positive : 0 < charge.denominator) (path : List Frame) (xs : List F) (length : xs.length = 8)
     (far : tolerance < xs.countP (· ≠ D.zero))
     {σ : Type} (service : Service (RSig (model D)) σ)
-    (follows : service.Follows (portSamplers (model D) (coin path) (drawPosition 7)))
+    (follows : service.Follows (samplers D))
     (permitted : ∀ op s reply t, (some reply, t) ∈ support (service op s) →
       Permitted (model D) op reply) (s : σ) :
     Pr{let out ← (simulateQ (handlerOf service) (embed
@@ -430,7 +432,7 @@ verifier returns with probability at most the total of the goal's charge. -/
 theorem loose_sound {a : Admitted V} (admitted : admit stored association = .ok a)
     (path : List Frame) (xs : List F) (length : xs.length = 8)
     {σ : Type} (service : Service (RSig (model D)) σ)
-    (follows : service.Follows (portSamplers (model D) (coin path) (drawPosition 7)))
+    (follows : service.Follows (samplers D))
     (permitted : ∀ op s reply t, (some reply, t) ∈ support (service op s) →
       Permitted (model D) op reply) (s : σ) :
     ∃ root : Member a.program.headers.protocols rootHeader,
@@ -456,7 +458,7 @@ theorem loose_sound {a : Admitted V} (admitted : admit stored association = .ok 
 theorem strict_sound {a : Admitted V} (admitted : admit stored association = .ok a)
     (path : List Frame) (xs : List F) (length : xs.length = 8)
     {σ : Type} (service : Service (RSig (model D)) σ)
-    (follows : service.Follows (portSamplers (model D) (coin path) (drawPosition 7)))
+    (follows : service.Follows (samplers D))
     (permitted : ∀ op s reply t, (some reply, t) ∈ support (service op s) →
       Permitted (model D) op reply) (s : σ) :
     ∃ root : Member a.program.headers.protocols rootHeader,
@@ -492,27 +494,26 @@ def looseTable : List Bool := [true, true, true, true, true, false, false, false
 /-- A table outside the relation at the tolerance of `strict`: two entries are not zero. -/
 def strictTable : List Bool := [true, true, false, false, false, false, false, false]
 
-/-- The service of the coin: it draws a position uniformly, and answers nothing else. -/
-abbrev service (path : List Frame) : Service (RSig (model data)) Unit :=
-  serveAt (model data) (coin path) (drawPosition 7)
+/-- The service of the laws: it answers each coin by the sampler of its law, and nothing
+else. -/
+abbrev service : Service (RSig (model data)) Unit :=
+  serveLaws (model data) (StandardModel.draws data)
 
 /-- A position below eight is what the coin may give. -/
 theorem position_permitted (path : List Frame) (z : ℕ) (below : z < 8) :
     Permitted (model data) ((coin path).operation (model data)) z :=
   ⟨below, ⟨[], .fin 8⟩, rfl, rfl, rfl, below⟩
 
-theorem service_permitted (path : List Frame) (op : ROp (model data)) (s : Unit)
+theorem service_permitted (op : ROp (model data)) (s : Unit)
     (reply : (RSig (model data)).Reply op) (t : Unit)
-    (reached : (some reply, t) ∈ support (service path op s)) : Permitted (model data) op reply :=
-  serveAt_permitted _ _ _
-    (fun z drawn => position_permitted path z (lt_of_mem_support_drawPosition 7 z drawn))
-    op s reply t reached
+    (reached : (some reply, t) ∈ support (service op s)) : Permitted (model data) op reply :=
+  serveLaws_permitted _ _ (StandardModel.draws_permitted data) op s reply t reached
 
 /-- The probability that the simulation of the verifier of a program returns at a table, against
 the service. -/
 abbrev returnsAt (p : Typed V) (root : Member p.headers.protocols rootHeader) (path : List Frame)
     (xs : List Bool) : ℝ≥0∞ :=
-  Pr{let out ← (simulateQ (handlerOf (service path)) (embed
+  Pr{let out ← (simulateQ (handlerOf service) (embed
       (roleMeaning (model data) p root verifierRole path (inputs data xs)))).run.run ()}[
     ∃ results, out.1 = some (.inl results)]
 
@@ -537,7 +538,7 @@ theorem loose_at_table {a : Admitted V} (admitted : admit stored association = .
       (loose_relation data looseTable rfl).trans (by decide)
     ⟨rejected, returns_installed data looseCharge looseTolerance (by decide) (by decide)
       loose_exact.ge (by decide) path looseTable rfl (loose_far data looseTable rfl rejected)
-      (service path) (serveAt_follows _ _ _) (service_permitted path) ()⟩)
+      service (serveLaws_follows _ _) service_permitted ()⟩)
 
 /-- The goal `strict` at its table, with nothing left to assume. -/
 theorem strict_at_table {a : Admitted V} (admitted : admit stored association = .ok a)
@@ -558,7 +559,7 @@ theorem strict_at_table {a : Admitted V} (admitted : admit stored association = 
       (strict_relation data strictTable rfl).trans (by decide)
     ⟨rejected, returns_installed data strictCharge strictTolerance (by decide) (by decide)
       strict_exact.ge (by decide) path strictTable rfl (strict_far data strictTable rfl rejected)
-      (service path) (serveAt_follows _ _ _) (service_permitted path) ()⟩)
+      service (serveLaws_follows _ _) service_permitted ()⟩)
 
 /-! ### The probability at the tables -/
 
@@ -582,12 +583,13 @@ def outcomeAt (path : List Frame) (xs : List Bool) (i : Fin 8) :
 entries that are zero. -/
 theorem returns_exactly (path : List Frame) (xs : List Bool) (length : xs.length = 8)
     (ends : ∀ i : Fin 8,
-      run (service path) (afterDraw path xs i.val) () = pure (outcomeAt path xs i, ())) :
-    Pr{let out ← run (service path) (walked data path xs) ()}[
+      run service (afterDraw path xs i.val) () = pure (outcomeAt path xs i, ())) :
+    Pr{let out ← run service (walked data path xs) ()}[
         ∃ results, out.1 = .returned results] = (xs.count data.zero : ℝ≥0∞) / ((7 : ℕ) + 1) := by
   rw [begins]
-  have drawn := prEvent_run_serveAt (model data) (coin path) ($ᵗ (Fin (7 + 1)))
-    (fun i : Fin 8 => (i : ℕ)) (afterDraw path xs) (outcomeAt path xs) ends
+  have drawn := prEvent_run_serveLaws (model data) (StandardModel.draws data)
+    ((coin path).operation (model data)) ($ᵗ (Fin (7 + 1))) (fun i : Fin 8 => (i : ℕ)) rfl
+    (afterDraw path xs) (outcomeAt path xs) ends
     (fun outcome => ∃ results, outcome = .returned results)
   rw [← prEvent_drawPosition_entry xs 7 length, drawPosition, prEvent_map]
   refine drawn.trans (prEvent_congr_of_support _ _ _ fun i _ => ?_)
@@ -605,12 +607,12 @@ theorem count_is_total (charge : DrawCharge) (positive : 0 < charge.denominator)
     toProbability_budget charge positive]
 
 theorem loose_ends (path : List Frame) (i : Fin 8) :
-    run (service path) (afterDraw path looseTable i.val) () =
+    run service (afterDraw path looseTable i.val) () =
       pure (outcomeAt path looseTable i, ()) := by
   fin_cases i <;> kernel_rfl
 
 theorem strict_ends (path : List Frame) (i : Fin 8) :
-    run (service path) (afterDraw path strictTable i.val) () =
+    run service (afterDraw path strictTable i.val) () =
       pure (outcomeAt path strictTable i, ()) := by
   fin_cases i <;> kernel_rfl
 
@@ -688,8 +690,9 @@ theorem unallowed_judges_nothing (charge : DrawCharge) (path : List Frame)
       have free : fee = 0 := by simpa [nothing] using allowed
       rcases paid with ⟨_, none⟩ | ⟨draw, has, weight⟩
       · exact none (5 : ℕ) (zeros 5 (position_permitted path 5 (by decide)) rfl)
-      · obtain rfl : drawPosition 7 = draw :=
-          Option.some.inj ((portSamplers_at (model data) (coin path) (drawPosition 7)).symm.trans has)
+      · obtain rfl : drawPosition 7 = draw := Option.some.inj
+          ((show samplers data ((coin path).operation (model data)) = some (drawPosition 7) from
+            rfl).symm.trans has)
         have absurd : (3 : ℝ≥0∞) / 8 ≤ 0 := by
           simpa [free, toProbability] using (excluded_weighs path excluded zeros).trans weight
         simp at absurd)
@@ -726,6 +729,31 @@ theorem foreign_judges_nothing {a : Admitted V} (admitted : admit stored associa
         (fun _ _ => True) any :=
   unallowed_judges_nothing foreign path
     (by simp [allowance, foreign, looseCharge]) admitted any
+
+/-! ### The hypothesis on the service has content -/
+
+/-- **A service that does not draw as the law does is not covered.** The service that always
+gives the position 5, where the table of `loose` is zero, does not follow the samplers: the
+bound is claimed of services that draw the position by the law of the coin, and of no other. -/
+theorem fixed_position_does_not_follow (path : List Frame) :
+    ¬ (serveAt (model data) (coin path) (pure (5 : ℕ))).Follows (samplers data) := by
+  intro follows
+  have bound : Pr{let out ← (fun answer : ℕ => (some answer, ())) <$> (pure 5 : ProbComp ℕ)}[
+      ∃ v, out.1 = some v ∧ v = 5] ≤ Pr{let v ← drawPosition 7}[v = 5] := by
+    have at_coin := follows ((coin path).operation (model data)) (drawPosition 7) rfl ()
+      (fun v => v = (5 : ℕ))
+    rw [serves_at] at at_coin
+    exact at_coin
+  have weight : Pr{let v ← drawPosition 7}[v = 5] = 1 / 8 := by
+    rw [prEvent_drawPosition]
+    have one : (Finset.univ.filter fun i : Fin (7 + 1) => (i : ℕ) = 5).card = 1 := by decide
+    rw [one]
+    norm_num
+  have sure : Pr{let out ← (fun answer : ℕ => (some answer, ())) <$> (pure 5 : ProbComp ℕ)}[
+      ∃ v, out.1 = some v ∧ v = 5] = 1 := by
+    simp
+  rw [sure, weight] at bound
+  norm_num at bound
 
 end Witness
 end
