@@ -302,7 +302,7 @@ theorem judged (path : List Frame) :
     rw [total]
     norm_num
   case step =>
-    obtain ⟨rfl, enough⟩ := invariant
+    obtain ⟨rfl, enough⟩ := invariant_i
     have split : (2 - i : ℕ) = (2 - (i + 1)) + 1 := by omega
     rw [split, Nat.cast_add, Nat.cast_one, add_mul, one_mul] at enough
     walk
@@ -312,7 +312,7 @@ theorem judged (path : List Frame) :
       refine ⟨rfl, le_trans (le_of_eq ?_) enough⟩
       norm_num
     case step =>
-      obtain ⟨rfl, left⟩ := invariant
+      obtain ⟨rfl, left⟩ := invariant_j
       have inner : (3 - j : ℕ) = (3 - (j + 1)) + 1 := by omega
       rw [inner, Nat.cast_add, Nat.cast_one, add_mul, one_mul, ← add_assoc] at left
       walk
@@ -325,11 +325,11 @@ theorem judged (path : List Frame) :
       refine ⟨?_, le_tsub_of_add_le_right left⟩
       exact Bool.eq_false_iff.mpr fun same => differs (Nat.eq_of_beq_eq_true same)
     case after =>
-      obtain ⟨rfl, left⟩ := invariant
+      obtain ⟨rfl, left⟩ := invariant_j
       walk
       exact ⟨rfl, by simpa using left⟩
   case after =>
-    obtain ⟨rfl, _⟩ := invariant
+    obtain ⟨rfl, _⟩ := invariant_i
     walk
 
 end

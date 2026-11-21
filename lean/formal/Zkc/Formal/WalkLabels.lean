@@ -19,6 +19,14 @@ found. A read that no law decides is split into its two forms, as any value that
 on. -/
 register_label_attr walk_read
 
+/-- **How a value of a model reads.** An equation between an operation of a model and what it
+is in the mathematics: that the addition of the arithmetic model over a field is the field's.
+Where a walk stops at a goal that judges no process (the end of a program, the law of a
+computation, the weight of an excluded set), the goal and the hypotheses are rewritten by the
+labelled equations, so that a text finishes with the mathematics of its field and names no
+operation of a model. -/
+register_label_attr walk_value
+
 /-- **The cap of a site.** A theorem `table.capFrom place applications site = value`, which a
 module of statements proves for each charged draw of its root. Where a text pays a fee at such
 a draw, the fee is compared with the value, and a fee that is not within it is refused with the

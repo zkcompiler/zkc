@@ -121,6 +121,14 @@ elab "walk_pay " fee:term:max " excluding " set:term:max " as " reply:ident kept
   let [weight, within, cap, after] := goals
     | throwError "walk_pay: the rule of a paid draw left {goals.length} goals, not four"
   let after ← readReply after reply.getId
+  -- what the rule leaves beside the walk judges no process: it is stated of the values, with
+  -- no variable of the walk
+  let stated (goal : MVarId) : MetaM MVarId := do
+    let goal ← Zkc.Formal.Walk.useEquations goal
+    return (← Zkc.Formal.Walk.readValues goal).getD goal
+  let weight ← stated weight
+  let within ← stated within
+  let cap ← stated cap
   -- the fee within the budget, where it is a hypothesis as it stands
   let withinLeft := if (← observing? within.assumption).isSome then [] else [within]
   -- the fee within the cap of the draw: the applications of the frames are computed, so that

@@ -3,6 +3,7 @@ module
 public import Mathlib.Algebra.Module.Basic
 public import Mathlib.Algebra.Field.Basic
 public import Zkc.Formal.Written.StandardModel
+public import Zkc.Formal.WalkLabels
 
 @[expose] public section
 namespace Zkc.Formal.Written.ArithmeticModel
@@ -37,5 +38,33 @@ abbrev model := StandardModel.model (data F G)
 abbrev groupRows := StandardModel.groupRows (data F G)
 abbrev functionRows := StandardModel.functionRows (data F G)
 abbrev unpack_ne_zero := StandardModel.unpack_ne_zero (data F G)
+
+end Zkc.Formal.Written.ArithmeticModel
+
+namespace Zkc.Formal.Written.ArithmeticModel
+
+variable {F G : Type} [Field F] [AddCommGroup G] [Module F G]
+
+/-! What the operations of the model are in the field and in the module: each holds by
+definition. A walk reads them where it stops (`walk_value`), so that what a text has left to
+prove is stated with the operations of the field. -/
+
+@[walk_value] theorem data_zero : (data F G).zero = 0 := rfl
+@[walk_value] theorem data_scalarAdd (x y : F) : (data F G).scalarAdd x y = x + y := rfl
+@[walk_value] theorem data_sub (x y : F) : (data F G).sub x y = x - y := rfl
+@[walk_value] theorem data_mul (x y : F) : (data F G).mul x y = x * y := rfl
+@[walk_value] theorem data_inv (x : F) : (data F G).inv x = x⁻¹ := rfl
+@[walk_value] theorem data_add (p q : G) : (data F G).add p q = p + q := rfl
+@[walk_value] theorem data_scale (p : G) (k : F) : (data F G).scale p k = k • p := rfl
+@[walk_value] theorem data_zeroPoint : (data F G).zeroPoint = 0 := rfl
+@[walk_value] theorem data_literal (n : ℕ) : (data F G).literal n = n := rfl
+
+/-- The sum of a sequence in the model is its sum in the field. -/
+@[walk_value] theorem data_sum (xs : List F) :
+    List.foldr (data F G).scalarAdd (data F G).zero xs = xs.sum := rfl
+
+/-- The same, where the zero of the model is already read as the zero of the field. -/
+@[walk_value] theorem data_sum_zero (xs : List F) :
+    List.foldr (data F G).scalarAdd 0 xs = xs.sum := rfl
 
 end Zkc.Formal.Written.ArithmeticModel
