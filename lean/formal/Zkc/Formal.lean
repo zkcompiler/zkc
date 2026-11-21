@@ -9,6 +9,8 @@ public import Zkc.Formal.OracleProcess
 public import Zkc.Formal.Walk
 public import Zkc.Formal.Written.PortSamplers
 public import Zkc.Formal.Written.LawSamplers
+public import Zkc.Formal.Written.UniformVector
+public import Zkc.Formal.Written.ArithmeticDraws
 public import Zkc.Formal.Written.SiteAllowance
 public import Zkc.Formal.Written.ReductionModel
 public import Zkc.Formal.Written.UniformChallenge

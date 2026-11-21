@@ -21,9 +21,12 @@ It follows the samplers, and what it answers is permitted when what the samplers
 hypotheses of the bridge from the judgment with fees to a probability, met by a service that
 answers.
 
-In the standard model the law `uniform` of the positions below `n + 1` draws one uniformly
-(`StandardModel.draws`). The other laws have no sampler there yet, so no fee is paid at their
-coins.
+The standard vocabulary has the uniform law at each type, so the samplers of a model of it are
+given by type (`uniformDraws`). In the standard model, over any algebra, the law `uniform` of
+the positions below `n + 1` draws one uniformly (`StandardModel.draws`); a model whose scalars
+can be sampled draws more (`ArithmeticModel.draws`). No fee is paid at a coin whose law has no
+sampler. The table of the laws with a sampler (`StandardModel.sampled`) is the table of the
+draws in both directions (`StandardModel.sampled_iff_draws`).
 
 `StandardModel.covers` says of a program by names that the standard model interprets every row
 that it links (`StandardModel.interprets`) and has a sampler for every law that it draws
@@ -107,23 +110,65 @@ theorem prEvent_run_serveLaws {ι H A : Type} (op : ROp M) (base : ProbComp ι)
 
 end
 
+/-! ## The laws of the standard vocabulary
+
+The standard vocabulary has one law at each of its types, the uniform one, and its coins have
+no payload. The samplers of a model of it are given by type: the type of the law, over the
+nominal types of the vocabulary, and the type of the reply, over those of the package. -/
+
+section
+variable (M : Model Standard)
+
+/-- The distribution of the uniform law at each type and for each type of reply; none where the
+model has none. -/
+abbrev UniformDraws :=
+  (type : Zkc.Vocabulary.Ty) → (τ : Standard.Ty) → Option (ProbComp (M.Val τ))
+
+/-- The samplers of the laws of the standard vocabulary, from those of the uniform law by
+type. -/
+def uniformDraws (draw : UniformDraws M) : LawDraws M
+  | .uniform type, [], _, τ => draw type τ
+  | _, _ :: _, _, _ => none
+
+/-- What the samplers draw is permitted when, type by type, what the uniform law draws is what
+the world may give at its coin. -/
+theorem uniformDraws_permitted (draw : UniformDraws M)
+    (allowed : ∀ (type : Zkc.Vocabulary.Ty) (τ : Standard.Ty) (sampler : ProbComp (M.Val τ)),
+      draw type τ = some sampler → ∀ v, v ∈ support sampler →
+        Allows M (.coin (.uniform type)) [] .nil τ v)
+    (op : ROp M) (sampler : ProbComp ((RSig M).Reply op))
+    (has : lawSamplers M (uniformDraws M draw) op = some sampler)
+    (v : (RSig M).Reply op) (drawn : v ∈ support sampler) : Permitted M op v := by
+  match op, sampler, has, v, drawn with
+  | .own (.coin (.uniform type)) _ _ [] .nil τ, sampler, has, v, drawn =>
+    exact allowed type τ sampler has v drawn
+
+end
+
+/-- The uniform law in the standard model: at the positions below `n + 1` it draws one of them
+uniformly. -/
+noncomputable def StandardModel.uniformDraw {F G : Type} [DecidableEq F] [DecidableEq G]
+    (D : StandardModel.Data F G) : UniformDraws (StandardModel.model D)
+  | .fin (n + 1), .fin m => if m = n + 1 then some (drawPosition n) else none
+  | _, _ => none
+
 /-- The samplers of the laws in the standard model: `uniform` of the positions below `n + 1`
 draws one of them uniformly. -/
 noncomputable def StandardModel.draws {F G : Type} [DecidableEq F] [DecidableEq G]
-    (D : StandardModel.Data F G) : LawDraws (StandardModel.model D)
-  | .uniform (.fin (n + 1)), [], _, .fin m => if m = n + 1 then some (drawPosition n) else none
-  | _, _, _, _ => none
+    (D : StandardModel.Data F G) : LawDraws (StandardModel.model D) :=
+  uniformDraws (StandardModel.model D) (StandardModel.uniformDraw D)
 
-/-- What the standard samplers draw is permitted: a position below the bound of its type. -/
-theorem StandardModel.draws_permitted {F G : Type} [DecidableEq F] [DecidableEq G]
-    (D : StandardModel.Data F G) (op : ROp (StandardModel.model D))
-    (sampler : ProbComp ((RSig (StandardModel.model D)).Reply op))
-    (has : lawSamplers (StandardModel.model D) (StandardModel.draws D) op = some sampler)
-    (v : (RSig (StandardModel.model D)).Reply op) (drawn : v ∈ support sampler) :
-    Permitted (StandardModel.model D) op v := by
-  match op, sampler, has, v, drawn with
-  | .own (.coin (.uniform (.fin (n + 1)))) _ _ [] .nil (.fin m), sampler, has, v, drawn =>
-    simp only [lawSamplers, StandardModel.draws] at has
+/-- What the uniform law of the standard model draws is what the world may give: a position
+below the bound of its type. -/
+theorem StandardModel.uniformDraw_allowed {F G : Type} [DecidableEq F] [DecidableEq G]
+    (D : StandardModel.Data F G) (type : Zkc.Vocabulary.Ty) (τ : Standard.Ty)
+    (sampler : ProbComp ((StandardModel.model D).Val τ))
+    (has : StandardModel.uniformDraw D type τ = some sampler)
+    (v : (StandardModel.model D).Val τ) (drawn : v ∈ support sampler) :
+    Allows (StandardModel.model D) (.coin (.uniform type)) [] .nil τ v := by
+  unfold StandardModel.uniformDraw at has
+  split at has
+  · rename_i n m
     split at has
     · rename_i same
       subst same
@@ -131,28 +176,58 @@ theorem StandardModel.draws_permitted {F G : Type} [DecidableEq F] [DecidableEq 
       have below := lt_of_mem_support_drawPosition n v drawn
       exact ⟨below, ⟨[], .fin (n + 1)⟩, rfl, rfl, rfl, below⟩
     · exact absurd has (by simp)
+  · exact absurd has (by simp)
+
+/-- What the standard samplers draw is permitted: a position below the bound of its type. -/
+theorem StandardModel.draws_permitted {F G : Type} [DecidableEq F] [DecidableEq G]
+    (D : StandardModel.Data F G) (op : ROp (StandardModel.model D))
+    (sampler : ProbComp ((RSig (StandardModel.model D)).Reply op))
+    (has : lawSamplers (StandardModel.model D) (StandardModel.draws D) op = some sampler)
+    (v : (RSig (StandardModel.model D)).Reply op) (drawn : v ∈ support sampler) :
+    Permitted (StandardModel.model D) op v :=
+  uniformDraws_permitted _ _ (StandardModel.uniformDraw_allowed D) op sampler has v drawn
+
+/-- Whether the standard draws have a sampler for the uniform law of a type at a type of
+reply. -/
+def StandardModel.sampledType : Zkc.Vocabulary.Ty → Standard.Ty → Bool
+  | .fin (n + 1), .fin m => m == n + 1
+  | _, _ => false
 
 /-- Whether the standard draws have a sampler for a law at a type of reply. -/
 def StandardModel.sampled : Standard.LawKey → Standard.Ty → Bool
-  | .uniform (.fin (n + 1)), .fin m => m == n + 1
-  | _, _ => false
+  | .uniform type, τ => StandardModel.sampledType type τ
+
+/-- **The table is the table of the draws.** Over every algebra, a law is in the table exactly
+when the model has a sampler for it. -/
+theorem StandardModel.sampled_iff_draws {F G : Type} [DecidableEq F] [DecidableEq G]
+    (D : StandardModel.Data F G) (law : Standard.LawKey) (τ : Standard.Ty) :
+    StandardModel.sampled law τ = (StandardModel.draws D law [] .nil τ).isSome := by
+  obtain ⟨type⟩ := law
+  change StandardModel.sampledType type τ = (StandardModel.uniformDraw D type τ).isSome
+  unfold StandardModel.sampledType StandardModel.uniformDraw
+  split
+  · rename_i n m
+    by_cases same : m = n + 1 <;> simp [same]
+  · rfl
 
 /-- A law that the table has is drawn. -/
 theorem StandardModel.draws_of_sampled {F G : Type} [DecidableEq F] [DecidableEq G]
     (D : StandardModel.Data F G) (law : Standard.LawKey) (τ : Standard.Ty)
     (has : StandardModel.sampled law τ = true) :
-    (StandardModel.draws D law [] .nil τ).isSome = true := by
-  match law, τ, has with
-  | .uniform (.fin (n + 1)), .fin m, has =>
-    have same : m = n + 1 := by simpa [StandardModel.sampled] using has
-    subst same
-    simp [StandardModel.draws]
+    (StandardModel.draws D law [] .nil τ).isSome = true :=
+  StandardModel.sampled_iff_draws D law τ ▸ has
+
+/-- Whether a program by names links only rows that the standard model interprets and draws
+only laws of a table of samplers. -/
+def StandardModel.coveredBy (sampled : Standard.LawKey → Standard.Ty → Bool)
+    (p : NamedProgram Standard) : Bool :=
+  p.rows.all StandardModel.interprets && p.laws.all fun (law, τ) => sampled law τ
 
 /-- **The standard model covers a program**: it interprets every row of the vocabulary that the
 program links, and has a sampler for the law of every coin that the program draws. A result over
 the standard model is published for a program that it covers; of another program it would speak
 of rows that the model gives a constant, or of coins at which no fee can be paid. -/
 def StandardModel.covers (p : NamedProgram Standard) : Bool :=
-  p.rows.all StandardModel.interprets && p.laws.all fun (law, τ) => StandardModel.sampled law τ
+  StandardModel.coveredBy StandardModel.sampled p
 
 end Zkc.Formal.Written
