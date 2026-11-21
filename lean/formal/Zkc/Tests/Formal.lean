@@ -4,3 +4,4 @@ import Zkc.Tests.Formal.Reuse.Controls
 import Zkc.Tests.Formal.SourceHonestSumcheck
 import Zkc.Tests.Formal.ModelComparison
 import Zkc.Tests.Formal.ChargedProbability
+import Zkc.Tests.Formal.ExternalRound

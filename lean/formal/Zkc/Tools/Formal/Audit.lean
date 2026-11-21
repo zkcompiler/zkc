@@ -26,7 +26,7 @@ def libraries (directory : System.FilePath) : Array Library := #[
 /-- Verify the configuration actually handed to the package audit. Source clients
 are required even when the local build cache contains all of their dependencies. -/
 def checkIssuers (configured : Array Library) : IO Unit := do
-  for root in [`Zkc.Tools.Formal.DrawCharge] do
+  for root in [`Zkc.Tools.Formal.DrawCharge, `Zkc.Tools.Formal.SingleRoundGoal] do
     unless configured.any (fun lib => lib.root == root && lib.withoutReplay.isNone) do
       throw (IO.userError s!"missing public kernel replay root {root}")
 

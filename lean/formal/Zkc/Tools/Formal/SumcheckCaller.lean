@@ -42,21 +42,17 @@ def tableSumClaim? (c : Written.AdmittedRoot) : Option DeclarationId := do
   let .protocol head .. := decl.content | none
   let #[values, claim] := head.ports | none
   let clauses ← (Written.contractOf s key.declaration default).toOption
-  let #[.proves _ (some 1) _ (.call _ ref #[.positional _ (.local _ xs), .positional _ (.local _ v)] none)] :=
-    clauses.filter (fun cl => cl matches .proves ..) | none
+  let [(clause,place)] := clauses.toList.zipIdx.filter (fun (cl,_) => cl matches .proves ..) | none
+  let .proves span (some 1) .. := clause | none
+  let (typed, after) ← (Written.evaluate s span (Typing.typedClauses c.id #[] (only := some place))).toOption
+  let #[(_, .apply _ (.instance inst) #[.local _ xs, .local _ v])] := typed | none
   guard (xs == values.binder.id && v == claim.binder.id)
-  let id ← (Written.closedDeclaration ref).toOption
-  let owner ← s.program.declarations[id]?
+  let selected ← after.table.entries[inst]?
+  let id := selected.key.declaration
+  let owner ← after.program.declarations[id]?
   let .relation _ := owner.node | none
-  let preconditions ← (Written.contractOf s id ref.span).toOption
+  let preconditions ← (Written.contractOf after id span).toOption
   guard (!preconditions.any (fun clause => clause matches .requires ..))
-  let checked ← s.results.checked? c.id
-  let .protocol typed := checked.definition.body | none
-  let (signature, _) := (do
-    let inst ← Static.instantiate id key.arguments ⟨s.program.nameOf id, ref.span⟩
-    Emit.signatureTypes inst).run Written.sourceContext s
-  let .ok (arguments, some .bool) := signature | none
-  guard (arguments == typed.ports.map (·.binder.type))
   let relation ← s.env.modules.lowered? id
   let .function fn (.body expr) := relation.content | none
   let #[table, target] := fn.parameters | none

@@ -10,28 +10,41 @@ open Core
 variable {V : Vocabulary} (rows : ScalarRows V) {hs : Headers V} {ds : Defs V hs}
 variable {msg state residual : V.Ty} {ops : Members hs rows.scalarTy msg state residual}
 
-def PairLaws.interpret (laws : PairLaws rows ds ops) (M : Model V) [Lean.Grind.Field (rows.F M)]
+def PairLaws.interpret {decode : ScalarRows.PairEncoding} (laws : PairLaws rows ds ops decode) (M : Model V) [Lean.Grind.Field (rows.F M)]
     [DecidableEq (rows.F M)] (math : rows.Arithmetic M) (points : List (rows.F M)) (distinct : points.Nodup)
     (collisions : CollisionBound (fun a : rows.F M × rows.F M => a.1 + a.2) line 1 := lineCollisions) :
     RoundInterpretation M (Defs.fnTable M ds) Cube.claims points 1 ops where
-  boundary m := (endpoints rows M laws.aligned m).1 + (endpoints rows M laws.aligned m).2
-  evaluate m := line (endpoints rows M laws.aligned m)
+  boundary m := (decode _ (endpoints rows M laws.aligned m)).1 + (decode _ (endpoints rows M laws.aligned m)).2
+  evaluate m := line (decode _ (endpoints rows M laws.aligned m))
   ends := laws.boundary M math
   atPoint := laws.evaluate M math
   roots := by
     intro n table m wrong
-    change points.countP (fun r => decide (line (endpoints rows M laws.aligned m) r = Cube.sum n (Cube.interpolate r n table.1 table.2))) ≤ 1
+    change points.countP (fun r => decide (line (decode _ (endpoints rows M laws.aligned m)) r = Cube.sum n (Cube.interpolate r n table.1 table.2))) ≤ 1
     simpa only [Cube.sum_interpolate] using
-      collisions (endpoints rows M laws.aligned m) (Cube.sum n table.1, Cube.sum n table.2) wrong points distinct
+      collisions (decode _ (endpoints rows M laws.aligned m)) (Cube.sum n table.1, Cube.sum n table.2) wrong points distinct
 
 variable {Γ : Ctx (LTy V)} {events : Events rows.scalarTy} {running : Var Γ (shared rows.scalarTy)}
 variable {outs : List (LTy V)} {term : Term (protocolDialect V hs) Γ outs} {count : Nat}
+
+/-- One installer sees the whole sequence, so it can reuse evidence across occurrences. -/
+abbrev SequenceInstaller (decode : ScalarRows.PairEncoding) :=
+  {hs : Headers V} → (defs : Defs V hs) → (hs.fns.map (·.key)).Nodup →
+    {events : Events rows.scalarTy} → {Γ : Ctx (LTy V)} → {st : V.Ty} →
+    {running : Var Γ (shared rows.scalarTy)} → {outs : List (LTy V)} →
+    {term : Term (protocolDialect V hs) Γ outs} → {n : Nat} →
+    (rounds : Sequence hs events st running term n) →
+    Option (PLift (rounds.AllMembers (fun ops => PairLaws rows defs ops decode)))
+
+def checkEncoding {decode : ScalarRows.PairEncoding} (proof : rows.Companion decode) :
+    SequenceInstaller rows decode :=
+  fun {_} defs unique {_ _ _ _ _ _ _} rounds => rounds.checkMembers _ fun ops => certifyEncoding rows defs unique ops proof
 
 def checkPairSequence (defs : Defs V hs) (unique : (hs.fns.map (·.key)).Nodup)
     (evaluation : ∀ k, FunctionReadback _ (rows.EvaluationLaw k))
     (rounds : Sequence hs events state running term count)
     (alternatives : List (∀ k, FunctionReadback _ (rows.EvaluationLaw k)) := []) :=
-  rounds.checkMembers (fun op => PairLaws rows defs op) fun op => certifyPairs rows defs unique op evaluation alternatives
+  checkEncoding rows (rows.endpointCompanion evaluation alternatives) defs unique rounds
 
 theorem pairs_sound (rounds : Sequence hs events state running term count)
     (checked : rounds.AllMembers (fun ops => PairLaws rows ds ops))
