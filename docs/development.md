@@ -64,10 +64,9 @@ pending frontend port; they are not the active test driver. Its
 
 ### Lean proof tools
 
-Use [Lean Beam](https://github.com/leanprover/lean-beam) by default for Lean search, navigation,
-diagnostics, proof experiments and profiling. Keep `lean-lsp-mcp` enabled for now as a fallback
-when Beam is unavailable, incompatible, fails, or lacks a needed feature. Routine navigation and
-proof work should stay in the same Beam workspace.
+Use [Lean Beam](https://github.com/leanprover/lean-beam) for Lean search, navigation,
+diagnostics, proof experiments and profiling. Routine navigation and proof work should stay in
+the same Beam workspace.
 
 Lean 4.36 bundles Beam on Linux and macOS. It is an optional development tool, with no dependency
 or import in the compiler package. Register the selected toolchain's `bin/lean-beam-mcp` with the
@@ -77,27 +76,23 @@ covers both. One bundled server serves projects using its containing Lean instal
 the tool to the package's pin; do not change a project's toolchain merely to use Beam. If MCP
 is not loaded, the matching Beam CLI is another entry point.
 
-Use the `lean-beam` skill for tool operation and the `lean4` skill for proof methodology and
-review. The Beam default here takes precedence over generic LSP-first advice in proof skills.
+Use the `lean-beam` skill for tool operation.
 
 Beam provides name search (`lean_workspace_symbols`), file structure (`lean_document_symbols`),
 type information (`lean_hover`), definition and reference lookup, as well as proof-state inspection
-and speculative execution. LSP's external mathematical search integrations remain optional
-fallbacks; they are not needed for ordinary zkc symbol navigation.
+and speculative execution.
 
 Every Beam request identifies the Lake package root, such as the absolute path to `lean/compiler`,
 through `workspace.root`. After a source edit, use the version returned by `lean_update` or
-`lean_sync`; positions are zero-based UTF-16 coordinates. LSP MCP positions are one-based.
+`lean_sync`; positions are zero-based UTF-16 coordinates.
 Prefer independent `lean_run_at` attempts for small candidates. Retain a handle when candidates
 share substantial preparation, release unused handles, and reacquire them after edits.
 For a changed dependency, sync and save that module before refreshing its importer.
 `lean_save` writes a development checkpoint from the server state; it does not edit source.
 
-Use one artifact-producing workflow at a time per package. Before an external build or an LSP
-fallback that may rebuild dependencies, drop the affected Beam workspace (or stop its CLI session)
-and confirm cleanup. LSP dependency handling can build imports even when its explicit build tool
-is disabled. Recreate Beam after external artifact changes; the servers do not share document
-versions or proof handles. Do not stop another session's processes.
+Use one artifact-producing workflow at a time per package. Before an external build, drop the
+affected Beam workspace (or stop its CLI session) and confirm cleanup. Recreate Beam after
+external artifact changes. Do not stop another session's processes.
 
 A successful tactic attempt can still leave goals, and a checkpoint-ready file can contain
 `sorry` warnings. After proof edits stabilize, run the affected compilation and the audit below.
