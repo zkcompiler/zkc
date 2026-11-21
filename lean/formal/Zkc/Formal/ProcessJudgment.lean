@@ -65,6 +65,51 @@ theorem Term.interpret_step {D : Dialect} (sem : Semantics D) {Γ : Ctx D.Ty} {o
       (i.denote sem key path env).interpret j (fun vs => (rest.denote sem path (env.extend ns vs)).interpret j done halt) halt := by
   rw [Term.denote_step, Process.interpret_bind]
 
+/-- **The rule of a loop**, for every dialect and every judgment: a step that is a loop is judged
+as the iteration of its body from the initial carried values and nothing collected, followed by
+the rest on what the iteration returns. With `Process.interpret_iterate` the body is judged once,
+at a symbolic iteration number, under an invariant. -/
+theorem Term.interpret_loop {D : Dialect} (sem : Semantics D) {Γ : Ctx D.Ty}
+    {outs carried each : List D.Ty} (key : Key) (w : D.Who) (times : Times D w Γ)
+    (gives : ∀ a, a ∈ carried ++ each → D.Gives w a) (initial : HList (Var Γ) carried)
+    (inputs : Names (D.index w :: carried)) (body : Term D (Γ.extend inputs) (carried ++ each))
+    (results : Names (carried ++ each.map (D.collected times.size)))
+    (rest : Term D (Γ.extend results) outs) (path : List Frame) (env : Env sem.Val Γ)
+    (j : ProcessJudgment sem.S L) (done : HList sem.Val outs → L) (halt : sem.H → L) :
+    ((Term.step key (.loop w times gives initial inputs body) results rest).denote sem path
+        env).interpret j done halt =
+      (Process.iterate (sem.times times env)
+          (sem.loopStep w inputs (fun path' env' => body.denote sem path' env') key path env)
+          0 (env.all initial, HList.empties each)).interpret j
+        (fun state => (rest.denote sem path (env.extend results
+          (state.1.append (sem.collected times.size state.2)))).interpret j done halt) halt :=
+  (Term.interpret_step sem key _ results rest path env j done halt).trans
+    (Process.interpret_bind j _ halt _ _)
+
+/-- **One iteration of a loop**: the body at the frame of the iteration, with the iteration
+number and the carried values bound to its inputs, then what the iteration hands on. -/
+theorem Semantics.interpret_loopStep {D : Dialect} (sem : Semantics D) {Γ : Ctx D.Ty}
+    {carried each : List D.Ty} (w : D.Who) (inputs : Names (D.index w :: carried))
+    (run : List Frame → Env sem.Val (Γ.extend inputs) →
+      Process sem.S sem.H (HList sem.Val (carried ++ each)))
+    (key : Key) (path : List Frame) (env : Env sem.Val Γ) (i : Nat)
+    (state : sem.LoopState carried each) (j : ProcessJudgment sem.S L)
+    (done : sem.LoopState carried each → L) (halt : sem.H → L) :
+    (sem.loopStep w inputs run key path env i state).interpret j done halt =
+      (run (path ++ [.iteration key i]) (env.extend inputs
+          (.cons (sem.index w i) state.1))).interpret j
+        (fun out => done ((HList.split carried out).1, state.2.push (HList.split carried out).2))
+        halt :=
+  Process.interpret_bind j _ halt _ _
+
+/-- The judgment of a process without effects: there is no effect to judge, and the process is
+judged by how it ends. The judgment of a function's process, which makes the walk of a role's
+program the walk of a function's. -/
+def ProcessJudgment.silent : ProcessJudgment NoSig (Unit → Prop) where
+  node op _ _ := nomatch op
+
+theorem ProcessJudgment.silent_monotone : ProcessJudgment.silent.Monotone := fun op => nomatch op
+
 def ProcessJudgment.every (allowed : ∀ op, S.Reply op → Prop) : ProcessJudgment S Prop where
   node op next := ∀ v, allowed op v → next v
 
