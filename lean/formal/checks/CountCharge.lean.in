@@ -2,35 +2,35 @@
 The verifier of `Count<8>` within the charges of its two goals.
 
 Before this text the check writes the printed package of what the two goals claim (the protocol
-of the scheme, then the relation of the clause at the value of each goal) and what it read from
-the source: the key of the root (`rootKey`, with `rootHeader`, `rootNames`, `rootBody` and
-`calleeProgram`, the program before the root), the roles (`verifierRole`, `proverRole`), and
-for each goal the value of its proof argument, its charge on the draw and its relation
-(`looseTolerance`, `looseCharge`, `looseKey` with `looseHeader`, `looseNames`, `looseBody`,
-`looseBefore`, the program before the relation, and `looseMember`, its place among the
-functions; the same for `strict`).
+of the scheme, then the relation of the clause at the value of each goal) and, generated from
+what the frontend read: the facts (`rootKey` with `rootHeader`, `rootNames`, `rootBody`,
+`rootMember` and `calleeProgram`, the program before the root; `verifierRole`, `proverRole`; for
+each goal `looseArgument0`, `looseCharge`, `looseKey` with `looseHeader`, `looseNames`,
+`looseBody`, `looseBefore`, the program before the relation, and `looseMember`), the transfers
+`at_root`, `at_loose` and `at_strict`, and the claims `looseClaim` and `strictClaim`. After this
+text it writes the goals `loose_sound` and `strict_sound` from `loose_installed` and
+`strict_installed`, which this text proves.
 
-Nothing of the relation is bound by hand. The source says
+Nothing of the statement is written here. The source says
 `NearZero(xs): (∑ i ∈ 0..n, if xs[i] == 0 then 0 else 1) <= e`; the package has it as a function
 at each goal's value, and `loose_relation` and `strict_relation` say what that function
-computes: whether at most the tolerance of the entries are not zero. The goals take as their
-premise that the admitted function returns false on the table.
+computes: whether at most the tolerance of the entries are not zero.
 -/
 
-open Zkc.Formal Zkc.Formal.ProbabilisticProcess Zkc.Formal.Written OracleComp ProbComp
-open Zkc.Frontend.Written (DrawCharge)
-open scoped NNRat ENNReal
+/-- The tolerance of each goal: its one proof argument. -/
+abbrev looseTolerance : ℕ := looseArgument0
+abbrev strictTolerance : ℕ := strictArgument0
 
 noncomputable section
 
 /-- The charge of `loose` is the bound at its tolerance: of eight positions, all but
 `tolerance + 1` can be zero in a table outside the relation. -/
 theorem loose_exact : ceiling looseCharge = ((7 - looseTolerance : ℕ) : ℚ≥0) / (8 : ℕ) := by
-  norm_num [ceiling, looseCharge, looseTolerance]
+  norm_num [ceiling, looseCharge, looseTolerance, looseArgument0]
 
 /-- The charge of `strict` is the bound at its tolerance. -/
 theorem strict_exact : ceiling strictCharge = ((7 - strictTolerance : ℕ) : ℚ≥0) / (8 : ℕ) := by
-  norm_num [ceiling, strictCharge, strictTolerance]
+  norm_num [ceiling, strictCharge, strictTolerance, strictArgument0]
 
 /-- **The model covers the package.** The standard model interprets every row of the vocabulary
 that the package links and has a sampler for the law of every coin that it draws, so the
@@ -318,45 +318,6 @@ theorem strict_far (xs : List F) (length : xs.length = 8)
 
 end
 
-/-- What holds of the root of the installed program holds of the root of every admitted
-program. -/
-theorem at_root {a : Admitted V} (admitted : admit stored association = .ok a)
-    (P : (p : Typed V) → Member p.headers.protocols rootHeader → Prop)
-    (holds : P installed Member.head) :
-    ∃ root : Member a.program.headers.protocols rootHeader,
-      a.program.findProtocol rootKey = some ⟨rootHeader, root⟩ ∧ P a.program root := by
-  have same := readback admitted
-  generalize a.program = p at same
-  subst same
-  exact ⟨Member.head, by kernel_rfl, holds⟩
-
-/-- What holds of the root and of the relation of `loose` in the installed program holds of them
-in every admitted program, each found by its key. -/
-theorem at_loose {a : Admitted V} (admitted : admit stored association = .ok a)
-    (P : (p : Typed V) → Member p.headers.protocols rootHeader → Member p.headers.fns looseHeader → Prop)
-    (holds : P installed Member.head looseMember) :
-    ∃ root : Member a.program.headers.protocols rootHeader,
-      a.program.findProtocol rootKey = some ⟨rootHeader, root⟩ ∧
-      ∃ relation : Member a.program.headers.fns looseHeader,
-        a.program.find looseKey = some (.fn relation) ∧ P a.program root relation := by
-  have same := readback admitted
-  generalize a.program = p at same
-  subst same
-  exact ⟨Member.head, by kernel_rfl, looseMember, by kernel_rfl, holds⟩
-
-/-- The same for the relation of `strict`. -/
-theorem at_strict {a : Admitted V} (admitted : admit stored association = .ok a)
-    (P : (p : Typed V) → Member p.headers.protocols rootHeader → Member p.headers.fns strictHeader → Prop)
-    (holds : P installed Member.head strictMember) :
-    ∃ root : Member a.program.headers.protocols rootHeader,
-      a.program.findProtocol rootKey = some ⟨rootHeader, root⟩ ∧
-      ∃ relation : Member a.program.headers.fns strictHeader,
-        a.program.find strictKey = some (.fn relation) ∧ P a.program root relation := by
-  have same := readback admitted
-  generalize a.program = p at same
-  subst same
-  exact ⟨Member.head, by kernel_rfl, strictMember, by kernel_rfl, holds⟩
-
 section
 variable {F G : Type} (D : StandardModel.Data F G) [DecidableEq F] [DecidableEq G]
 
@@ -430,63 +391,24 @@ theorem returns_installed (charge : DrawCharge) (tolerance : ℕ)
   rw [meaning_walked]
   exact walked_within D path xs tolerance charge length far owned site covers
 
+end
+
 /-! ## The two goals -/
 
-/-- The goal `loose`. In every admitted program the protocol and the relation of the goal are
-found by their keys, and on a table of eight entries on which that relation returns false the
-verifier returns with probability at most the total of the goal's charge. -/
-theorem loose_sound {a : Admitted V} (admitted : admit stored association = .ok a)
-    (path : List Frame) (xs : List F) (length : xs.length = 8)
-    {σ : Type} (service : Service (RSig (model D)) σ)
-    (follows : service.Follows (samplers D))
-    (permitted : ∀ op s reply t, (some reply, t) ∈ support (service op s) →
-      Permitted (model D) op reply) (s : σ) :
-    ∃ root : Member a.program.headers.protocols rootHeader,
-      a.program.findProtocol rootKey = some ⟨rootHeader, root⟩ ∧
-      ∃ relation : Member a.program.headers.fns looseHeader,
-        a.program.find looseKey = some (.fn relation) ∧
-        (functionResult (t := .bool)
-            (fnMeaning (model D) a.program relation (.cons xs .nil)) = some false →
-          Pr{let out ← (simulateQ (handlerOf service) (embed
-              (roleMeaning (model D) a.program root verifierRole path (inputs D xs)))).run.run s}[
-            ∃ results, out.1 = some (.inl results)] ≤ total looseCharge) :=
-  at_loose admitted
-    (fun p root relation =>
-      functionResult (t := .bool) (fnMeaning (model D) p relation (.cons xs .nil)) = some false →
-        Pr{let out ← (simulateQ (handlerOf service) (embed
-            (roleMeaning (model D) p root verifierRole path (inputs D xs)))).run.run s}[
-          ∃ results, out.1 = some (.inl results)] ≤ total looseCharge)
-    (fun rejected => returns_installed D looseCharge looseTolerance (by decide) (by decide)
-      loose_exact.ge (by decide) path xs length (loose_far D xs length rejected) service follows
-      permitted s)
+/-- The claim of `loose`: the validity of the table gives its length, and the relation of the
+goal says how many of its entries are not zero. -/
+theorem loose_installed : looseClaim := by
+  intro F G D _ _ path xs valid σ service follows permitted s rejected
+  have length : (xs : List F).length = 8 := valid.2 8 rfl
+  exact returns_installed D looseCharge looseTolerance (by decide) (by decide) loose_exact.ge
+    (by decide) path xs length (loose_far D xs length rejected) service follows permitted s
 
-/-- The goal `strict`, as `loose`. -/
-theorem strict_sound {a : Admitted V} (admitted : admit stored association = .ok a)
-    (path : List Frame) (xs : List F) (length : xs.length = 8)
-    {σ : Type} (service : Service (RSig (model D)) σ)
-    (follows : service.Follows (samplers D))
-    (permitted : ∀ op s reply t, (some reply, t) ∈ support (service op s) →
-      Permitted (model D) op reply) (s : σ) :
-    ∃ root : Member a.program.headers.protocols rootHeader,
-      a.program.findProtocol rootKey = some ⟨rootHeader, root⟩ ∧
-      ∃ relation : Member a.program.headers.fns strictHeader,
-        a.program.find strictKey = some (.fn relation) ∧
-        (functionResult (t := .bool)
-            (fnMeaning (model D) a.program relation (.cons xs .nil)) = some false →
-          Pr{let out ← (simulateQ (handlerOf service) (embed
-              (roleMeaning (model D) a.program root verifierRole path (inputs D xs)))).run.run s}[
-            ∃ results, out.1 = some (.inl results)] ≤ total strictCharge) :=
-  at_strict admitted
-    (fun p root relation =>
-      functionResult (t := .bool) (fnMeaning (model D) p relation (.cons xs .nil)) = some false →
-        Pr{let out ← (simulateQ (handlerOf service) (embed
-            (roleMeaning (model D) p root verifierRole path (inputs D xs)))).run.run s}[
-          ∃ results, out.1 = some (.inl results)] ≤ total strictCharge)
-    (fun rejected => returns_installed D strictCharge strictTolerance (by decide) (by decide)
-      strict_exact.ge (by decide) path xs length (strict_far D xs length rejected) service follows
-      permitted s)
-
-end
+/-- The claim of `strict`, as `loose`. -/
+theorem strict_installed : strictClaim := by
+  intro F G D _ _ path xs valid σ service follows permitted s rejected
+  have length : (xs : List F).length = 8 := valid.2 8 rfl
+  exact returns_installed D strictCharge strictTolerance (by decide) (by decide) strict_exact.ge
+    (by decide) path xs length (strict_far D xs length rejected) service follows permitted s
 
 /-! ## The hypotheses are met, and the bound is reached -/
 

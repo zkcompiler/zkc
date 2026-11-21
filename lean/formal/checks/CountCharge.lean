@@ -1,6 +1,7 @@
 import Zkc.Frontend.Written.Claim
 import Zkc.Frontend.Written.Charge
 import Zkc.Frontend.Written.Package
+import Zkc.Frontend.Written.Statement
 import Zkc.Tests.Frontend.SyntaxHarness
 import Zkc.Tests.Frontend.SourceClause
 import Zkc.Tests.Frontend.PrintedPackageSupport
@@ -21,9 +22,13 @@ The check reads the source with the frontend and writes two modules, on which Le
 
 - The proof module has the printed package of what the two goals claim: the protocol of the
   scheme, then the relation of the clause at the value of each goal, as the functions that the
-  frontend emits (`Written.goalClaims`). With it come what was read from the source as terms
-  (the key of the root, the roles, and for each goal the value of its proof argument, its
-  charge on the draw and the key of its relation), and the text of `CountCharge.lean.in`. It
+  frontend emits (`Written.goalClaims`). Around the text of `CountCharge.lean.in` stands what
+  `Written.Statements` writes from what the frontend read: the facts (the key of the root, the
+  roles, and for each goal the value of its proof argument, its charge on the draw and its
+  relation), the transfer of a statement to every admitted program, the claim of each goal
+  about the installed program (`looseClaim`, `strictClaim`), and after the text the goals for
+  every admitted program (`loose_sound`, `strict_sound`). The text of the check proves the
+  claims (`loose_installed`, `strict_installed`) and chooses nothing of them. The module
   imports nothing of the frontend but the record of a charge. Its theorems are about every
   program that admission gives for the stored program of the package. The function of each
   relation returns whether at most the goal's tolerance of the entries are not zero. On a table
@@ -55,7 +60,9 @@ outside the table of the model inside the loop of the relation (the model does n
 package), the relation changed, the roles exchanged, a charge below the bound of its tolerance,
 a charge on another instruction, and a charge of another definition. Two other sizes are read by the
 frontend alone: the charge of `Count<5>` at the tolerance 4 is zero, and the negative ceiling
-of `Count<4>` is no charge.
+of `Count<4>` is no charge. A goal that states a ceiling at the total of its charge is issued
+the comparison, which the kernel decides; one that states a ceiling below it is issued no
+statement.
 -/
 
 open Zkc.Core Zkc.Frontend Zkc.Frontend.Written
@@ -63,28 +70,24 @@ open Zkc.Tests.Frontend Zkc.Tests.Frontend.PrintedPackageSupport
 
 namespace CountCharge
 
-/-- What a goal gives: the value of its proof argument, its charge on the draw, and the key of
-the relation of its clause at that value in the claims' package. -/
-structure Goal where
-  name : String
-  tolerance : Nat
-  charge : DrawCharge
-  relation : Nat
-  deriving DecidableEq
-
-/-- What the check reads of a source. -/
+/-- What the check reads of a source: what its two goals claim, with what their statements
+need, and the stored text of the definitions of the root's own package. -/
 structure Subject where
   text : String
-  root : Nat
-  verifier : Nat
-  prover : Nat
-  /-- The printed package of the claims. -/
-  package : String
-  /-- The keys of its definitions in order, and whether each is a protocol. -/
-  definitions : List (Nat × Bool)
-  /-- The stored text of the definitions of the root's own package. -/
+  statements : Statements
   deployed : List (Nat × String)
-  goals : List Goal
+
+/-- The root, the verifier and the prover of a subject. -/
+def Subject.places (s : Subject) : Nat × Nat × Nat :=
+  (s.statements.claims.root, ((s.statements.roles.find? (·.1 == "verifier")).map (·.2)).getD 0,
+    ((s.statements.roles.find? (·.1 == "prover")).map (·.2)).getD 0)
+
+/-- The name, the proof arguments and the charge of each goal. -/
+def Subject.goals (s : Subject) : List (String × Array Nat × DrawCharge) :=
+  s.statements.goals.map fun goal => (goal.claimed.goal, goal.specification, goal.charge)
+
+/-- The printed package of the claims. -/
+def Subject.package (s : Subject) : String := (Written.package s.statements.package).text
 
 def noAssociation : Association := ⟨[], [], [], [], []⟩
 
@@ -112,61 +115,17 @@ def read (text : String) : IO Subject := do
     unless claimed.statement == #[0] && claimed.witness == some #[] do
       throw (IO.userError s!"goal {goal}: the relation is applied to other ports than the table")
     let (selected, _) ← IO.ofExcept (selectNamedGoal c.state goal .soundness)
-    let #[tolerance] := selected.specification
-      | throw (IO.userError s!"goal {goal} gives other proof arguments than the tolerance")
-    goals := goals ++ [⟨goal, tolerance, ← IO.ofExcept (goalDrawCharge c goal [] "z"), claimed.relation⟩]
+    unless selected.specification.size == 1 do
+      throw (IO.userError s!"goal {goal} gives other proof arguments than the tolerance")
+    goals := goals ++ [{ claimed, specification := selected.specification
+                         charge := ← IO.ofExcept (goalDrawCharge c goal [] "z")
+                         ceiling := selected.ceiling : StatedGoal }]
   let some verifier := (← IO.ofExcept (goalClause c "loose")).role
     | throw (IO.userError "the clause has no deciding role")
   let some prover := head.roster.toList.idxOf? "P" | throw (IO.userError "the roster has no prover")
-  let printed := Written.package (claims.emission.package noAssociation)
-  let definitions := printed.definitions.map fun (key, isProtocol) => (key.number, isProtocol)
-  unless definitions.contains (c.id, true) do
-    throw (IO.userError "the package of the claims does not have the root")
   let own := c.emission.package noAssociation
   let deployed := own.named.definitions.map fun d => (d.key.number, storedDefinition (b := own.bindings) d)
-  return ⟨text, c.id, verifier, prover, printed.text, definitions, deployed, goals⟩
-
-def chargeTerm (charge : DrawCharge) : String :=
-  let draw (blocks : List (Key × Nat)) (key : Key) :=
-    let around := ", ".intercalate (blocks.map fun (block, number) => s!"(⟨{block.number}⟩, {number})")
-    s!"([{around}], ⟨{key.number}⟩)"
-  let draws := ", ".intercalate (charge.draws.map fun (blocks, key) => draw blocks key)
-  s!"⟨⟨{charge.owner.number}⟩, {charge.numerator}, {charge.denominator}, [{draws}]⟩"
-
-/-- The name, in the package, of the program before the definition with a key. -/
-def programBefore (s : Subject) (key : Nat) : String :=
-  match (s.definitions.takeWhile (·.1 != key)).getLast? with
-  | some (before, _) => s!"program{before}"
-  | none => s!"program{Written.baseSuffix}"
-
-/-- The member of a list of headers that is `depth` places after its head. -/
-def memberAt : Nat → String
-  | 0 => "Member.head"
-  | depth + 1 => s!"(Member.tail {memberAt depth})"
-
-/-- The place of a function among the functions of the installed program, which stand last
-first: as many places after the head as functions follow it in the package. -/
-def functionMember (s : Subject) (key : Nat) : String :=
-  memberAt ((s.definitions.dropWhile (·.1 != key)).drop 1 |>.filter (!·.2)).length
-
-/-- What was read from the source, as terms for the proof module. -/
-def facts (s : Subject) : String :=
-  s!"abbrev rootKey : Key := ⟨{s.root}⟩\n" ++
-  s!"noncomputable abbrev rootHeader := header{s.root}\n" ++
-  s!"noncomputable abbrev rootNames := names{s.root}\n" ++
-  s!"noncomputable abbrev rootBody := body{s.root}\n" ++
-  s!"noncomputable abbrev calleeProgram : Typed V := {programBefore s s.root}\n" ++
-  s!"abbrev verifierRole : Role := {s.verifier}\nabbrev proverRole : Role := {s.prover}\n" ++
-  String.join (s.goals.map fun goal =>
-    s!"def {goal.name}Charge : Zkc.Frontend.Written.DrawCharge := {chargeTerm goal.charge}\n" ++
-    s!"def {goal.name}Tolerance : Nat := {goal.tolerance}\n" ++
-    s!"abbrev {goal.name}Key : Key := ⟨{goal.relation}⟩\n" ++
-    s!"noncomputable abbrev {goal.name}Header := header{goal.relation}\n" ++
-    s!"noncomputable abbrev {goal.name}Names := names{goal.relation}\n" ++
-    s!"noncomputable abbrev {goal.name}Body := body{goal.relation}\n" ++
-    s!"noncomputable abbrev {goal.name}Before : Typed V := {programBefore s goal.relation}\n" ++
-    s!"noncomputable abbrev {goal.name}Member : Member installed.headers.fns header{goal.relation} :=\n" ++
-    s!"  {functionMember s goal.relation}\n")
+  return ⟨text, ⟨claims, [("verifier", verifier), ("prover", prover)], goals⟩, deployed⟩
 
 def imports (others : List String) : String :=
   String.join ((Written.packageImports ++ others).map (s!"import {·}\n")) ++ "\nopen Zkc.Core\n"
@@ -174,23 +133,40 @@ def imports (others : List String) : String :=
 /-- The theorems of the proof module, whose axioms the check reads. -/
 def theorems : List String := [
   "covered", "verifier.eq", "loose_relation", "strict_relation", "walked_within", "walked_excludes",
-  "walk_reads_any_key", "judged_within", "returns_within", "loose_sound", "strict_sound",
+  "walk_reads_any_key", "judged_within", "returns_within", "loose_installed", "strict_installed",
+  "loose_sound", "strict_sound",
   "Witness.loose_at_table", "Witness.strict_at_table", "Witness.loose_attained",
   "Witness.strict_attained", "Witness.misplaced_judges_nothing", "Witness.foreign_judges_nothing",
   "Witness.fixed_position_does_not_follow"]
 
 /-- The theorems that say what the relations compute, and those that rest on them. -/
 def ofRelation : List String :=
-  ["loose_relation", "strict_relation", "loose_sound", "strict_sound", "Witness.loose_at_table",
-    "Witness.strict_at_table"]
+  ["loose_relation", "strict_relation", "loose_installed", "strict_installed", "loose_sound",
+    "strict_sound", "Witness.loose_at_table", "Witness.strict_at_table"]
 
-def proofModule (name : String) (s : Subject) (template : String) : String :=
-  imports ["Zkc.Formal.Walk", "Zkc.Formal.OracleProcess", "Zkc.Formal.Written.PortSamplers",
-    "Zkc.Formal.Written.LawSamplers", "Zkc.Formal.Written.SiteAllowance",
-    "Zkc.Formal.Written.FunctionMeaning", "Zkc.Formal.Written.StandardModel",
-    "Zkc.Formal.Written.FiniteModel"] ++
-  s!"namespace {name}\n" ++ s.package ++ facts s ++ template ++
-  String.join (theorems.map (s!"#print axioms {·}\n")) ++ s!"end {name}\n"
+/-- The proof module: the package of the claims; what the frontend read, the transfers to an
+admitted program and the claims of the goals, all generated; the proofs written for the
+protocol; and the goals for every admitted program, generated. -/
+def proofModule (name : String) (s : Subject) (template : String) : IO String := do
+  let stated := s.statements
+  let claims ← IO.ofExcept (stated.claimTexts standardModelText)
+  let closings ← IO.ofExcept (stated.closings standardModelText)
+  let ceilings ← IO.ofExcept stated.ceilings
+  return imports ["Zkc.Formal.Walk", "Zkc.Formal.OracleProcess", "Zkc.Formal.Written.PortSamplers",
+      "Zkc.Formal.Written.LawSamplers", "Zkc.Formal.Written.SiteAllowance",
+      "Zkc.Formal.Written.FunctionMeaning", "Zkc.Formal.Written.StandardModel",
+      "Zkc.Formal.Written.FiniteModel"] ++
+    s!"namespace {name}\n" ++ s.package ++ Statements.opens ++ stated.facts ++ "\n" ++
+    stated.transfers ++ claims ++ template ++ "\n" ++ closings ++ ceilings ++
+    String.join (theorems.map (s!"#print axioms {·}\n")) ++ s!"end {name}\n"
+
+/-- A module with the package of a subject, its facts, and the comparison of each goal's total
+with its ceiling. -/
+def ceilingModule (name : String) (s : Subject) : IO String := do
+  let ceilings ← IO.ofExcept s.statements.ceilings
+  return imports ["Zkc.Formal.Written.Ceiling"] ++ s!"namespace {name}\n" ++ s.package ++
+    Statements.opens ++ s.statements.facts ++ "\n" ++ ceilings ++
+    s!"#print axioms loose_ceiling\nend {name}\n"
 
 /-- A module with the package of a subject and the one theorem that the standard model covers
 it. -/
@@ -203,7 +179,7 @@ def coverageModule (name : String) (s : Subject) : String :=
 def comparisonModule (name : String) (s : Subject) : String :=
   imports ["Zkc.Tests.Frontend.PrintedPackageSupport"] ++ s!"namespace {name}\n" ++ s.package ++
   s!"#eval Zkc.Tests.Frontend.PrintedPackageSupport.expectGoalClaims {literal s.text} " ++
-  s!"{reprStr (s.goals.map (·.name))} " ++
+  s!"{reprStr (s.goals.map (·.1))} " ++
   s!"({Written.associationTerm noAssociation}) stored association\nend {name}\n"
 
 /-- Lean on a module, in the formal package, as a task. -/
@@ -233,12 +209,12 @@ def run (corpus template : System.FilePath) (work : System.FilePath) : IO Unit :
     | throw (IO.userError "missing the reference case N-GL2a")
   let template ← IO.FS.readFile template
   let written ← read source
-  unless (written.root, written.verifier, written.prover) == (1, 1, 0) do
+  unless written.places == (1, 1, 0) do
     throw (IO.userError "the root and the roles of the source are not where they were")
 
   -- The roster reversed: the verifier is the first role, and the key of the root is as it was.
   let turned ← read (← edit source "protocol Count roles(P, V)" "protocol Count roles(V, P)")
-  unless (turned.root, turned.verifier, turned.prover) == (1, 0, 1) do
+  unless turned.places == (1, 0, 1) do
     throw (IO.userError "with the roster reversed the verifier is not the first role")
   unless turned.goals == written.goals do
     throw (IO.userError "with the roster reversed the goals changed")
@@ -246,7 +222,7 @@ def run (corpus template : System.FilePath) (work : System.FilePath) : IO Unit :
   -- The relation changed: the deployed definitions and both charges are what they were, and the
   -- package of the claims has another function for the relation.
   let changed ← read (← edit source "else 1) <= e\n" "else 1) < e\n")
-  unless changed.deployed == written.deployed && changed.goals.map (·.charge) == written.goals.map (·.charge) do
+  unless changed.deployed == written.deployed && changed.goals == written.goals do
     throw (IO.userError "a change of the relation changed a deployed definition or a charge")
   if changed.package == written.package then
     throw (IO.userError "a change of the relation changed nothing in the package of the claims")
@@ -255,7 +231,7 @@ def run (corpus template : System.FilePath) (work : System.FilePath) : IO Unit :
   -- outside the relation has no zero entry, and the charge is zero; with four entries the
   -- ceiling that the source writes is negative, and no charge is read.
   let five ← read (← edit source "scheme Checked = Count<8>:" "scheme Checked = Count<5>:")
-  unless (five.goals.map fun goal => (goal.charge.numerator, goal.charge.denominator)) == [(0, 1), (3, 5)] do
+  unless (five.goals.map fun (_, _, charge) => (charge.numerator, charge.denominator)) == [(0, 1), (3, 5)] do
     throw (IO.userError "the charges of Count<5> are not 0 and 3/5")
   let four ← edit source "scheme Checked = Count<8>:" "scheme Checked = Count<4>:"
   let .error refusal := (goalRoot four "loose").bind (goalDrawCharge · "loose" [] "z")
@@ -263,30 +239,46 @@ def run (corpus template : System.FilePath) (work : System.FilePath) : IO Unit :
   unless refusal.contains "nonnegative" do
     throw (IO.userError s!"Count<4> was refused for another reason: {refusal}")
 
+  -- A goal that states a ceiling. At the total of its charge, 3/8, the statement is issued with the
+  -- comparison, which the kernel decides; below it no statement is issued (GL4).
+  let goalLine := "goal loose = soundness(Checked, spec e = 4)"
+  let atTotal ← read (← edit source goalLine (goalLine ++ " <= 3/8"))
+  let ceilingProof ← start work "CeilingAtTotal" (← ceilingModule "CeilingAtTotal" atTotal)
+  let below ← read (← edit source goalLine (goalLine ++ " <= 1/4"))
+  match below.statements.ceilings with
+  | .ok _ => throw (IO.userError "a goal whose ceiling is below the total of its charge was issued a statement")
+  | .error why =>
+    unless why.contains "GL4" && why.contains "1/4" && why.contains "3/8" do
+      throw (IO.userError s!"the ceiling below the total was refused for another reason: {why}")
+
   -- The controls: the roles exchanged; the charge of `loose` below the bound of its tolerance;
   -- the charge of `loose` on the guard; the charge of `loose` owned by another definition.
-  let some loose := written.goals.find? (·.name == "loose") | throw (IO.userError "missing the goal loose")
+  let some (_, _, loose) := written.goals.find? (·.1 == "loose")
+    | throw (IO.userError "missing the goal loose")
   let withLoose (charge : DrawCharge) : Subject :=
-    { written with goals := written.goals.map fun goal =>
-        if goal.name == "loose" then { goal with charge } else goal }
+    { written with statements := { written.statements with
+        goals := written.statements.goals.map fun goal =>
+          if goal.claimed.goal == "loose" then { goal with charge } else goal } }
   -- A row outside the table of the model, inside the loop of the relation: the power of a field
   -- element, which the standard model gives a constant.
   let uncovered ← read (← edit source "if xs[i] == 0 then 0 else 1" "if xs[i] ^ 2 == 0 then 0 else 1")
   let uncoveredProof ← start work "CoverageControl" (coverageModule "CoverageControl" uncovered)
-  let exchanged := { written with verifier := written.prover, prover := written.verifier }
-  let changedProof ← start work "RelationControl" (proofModule "RelationControl" changed template)
-  let small := withLoose { loose.charge with numerator := loose.charge.numerator - 1 }
-  let elsewhere := withLoose { loose.charge with draws := [([], ⟨5⟩)] }
-  let foreign := withLoose { loose.charge with owner := ⟨loose.charge.owner.number + 1⟩ }
+  let (_, verifier, prover) := written.places
+  let exchanged := { written with statements := { written.statements with
+    roles := [("verifier", prover), ("prover", verifier)] } }
+  let changedProof ← start work "RelationControl" (← proofModule "RelationControl" changed template)
+  let small := withLoose { loose with numerator := loose.numerator - 1 }
+  let elsewhere := withLoose { loose with draws := [([], ⟨5⟩)] }
+  let foreign := withLoose { loose with owner := ⟨loose.owner.number + 1⟩ }
 
-  let proof ← start work "Count" (proofModule "Count" written template)
+  let proof ← start work "Count" (← proofModule "Count" written template)
   let comparison ← start work "CountSource" (comparisonModule "CountSource" written)
-  let turnedProof ← start work "CountTurned" (proofModule "CountTurned" turned template)
+  let turnedProof ← start work "CountTurned" (← proofModule "CountTurned" turned template)
   let turnedComparison ← start work "CountTurnedSource" (comparisonModule "CountTurnedSource" turned)
-  let exchangedProof ← start work "RolesControl" (proofModule "RolesControl" exchanged template)
-  let smallProof ← start work "BoundControl" (proofModule "BoundControl" small template)
-  let elsewhereProof ← start work "SiteControl" (proofModule "SiteControl" elsewhere template)
-  let foreignProof ← start work "OwnerControl" (proofModule "OwnerControl" foreign template)
+  let exchangedProof ← start work "RolesControl" (← proofModule "RolesControl" exchanged template)
+  let smallProof ← start work "BoundControl" (← proofModule "BoundControl" small template)
+  let elsewhereProof ← start work "SiteControl" (← proofModule "SiteControl" elsewhere template)
+  let foreignProof ← start work "OwnerControl" (← proofModule "OwnerControl" foreign template)
 
   let allowed := ["propext", "Classical.choice", "Quot.sound"]
   for (name, task) in [("Count", proof), ("CountTurned", turnedProof)] do
@@ -295,6 +287,8 @@ def run (corpus template : System.FilePath) (work : System.FilePath) : IO Unit :
   for (name, task) in [("CountSource", comparison), ("CountTurnedSource", turnedComparison)] do
     let (ok, output) ← finish task
     acceptedOutput name ok output []
+  let (ok, output) ← finish ceilingProof
+  acceptedOutput "CeilingAtTotal" ok output ["loose_ceiling"] allowed
   -- The package with a row outside the table is not covered: the kernel decides it.
   let (ok, output) ← finish uncoveredProof
   if ok then throw (IO.userError "Lean accepted that the model covers a package with a row outside its table")
@@ -312,13 +306,13 @@ def run (corpus template : System.FilePath) (work : System.FilePath) : IO Unit :
         "Witness.fixed_position_does_not_follow"].contains name)
   -- Only `loose` and what is stated of it at its table fail, and `strict` stands.
   expectUnproved "a charge below the bound" "BoundControl" smallProof
-    ["loose_sound", "Witness.loose_at_table", "Witness.loose_attained"]
+    ["loose_installed", "loose_sound", "Witness.loose_at_table", "Witness.loose_attained"]
   expectUnproved "a charge on another instruction" "SiteControl" elsewhereProof
-    ["loose_sound", "Witness.loose_at_table"]
+    ["loose_installed", "loose_sound", "Witness.loose_at_table"]
   expectUnproved "a charge of another definition" "OwnerControl" foreignProof
-    ["loose_sound", "Witness.loose_at_table"]
-  let charges := ", ".intercalate (written.goals.map fun goal =>
-    s!"{goal.name} at tolerance {goal.tolerance} within {goal.charge.numerator}/{goal.charge.denominator}")
+    ["loose_installed", "loose_sound", "Witness.loose_at_table"]
+  let charges := ", ".intercalate (written.goals.map fun (name, arguments, charge) =>
+    s!"{name} at tolerance {arguments[0]!} within {charge.numerator}/{charge.denominator}")
   IO.println (s!"Count<8> is judged within the charges of its goals ({charges}), " ++
     "on the tables on which the admitted relation returns false, in either order of the roster; " ++
     "6 of 6 controls refused.")
