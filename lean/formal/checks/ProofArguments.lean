@@ -101,4 +101,44 @@ private def refused {α} (attempt : Except String α) (rule : String) : IO Unit 
   let #[call] := origin.specification | throw (IO.userError "missing inherited application")
   checkAmount sharedCaller "loose" [call.instruction] (3, 8)
   refused (selectGoal (shared.replace "child <- Count(xs)" "child <- Count<spec e = 1>(xs)")) "SP11"
+  -- The body of a relation that a clause applies is typed at the values of each use. `ZeroAt`
+  -- reads the table at a proof argument: at 7 of 8 it is typed, and at 8 the goal is refused; a
+  -- caller that gives the value is refused where it writes it, and where a goal gives it to the
+  -- caller, on the path to the application.
+  let placed (id : String) : IO String :=
+    match (blocks.find? (·.id == id)).bind (·.files[0]?) with
+    | some text => pure text
+    | none => throw (IO.userError s!"missing the reference case {id}")
+  let inside ← placed "N-GL2e"
+  let outside ← placed "N-GL2f"
+  let selectPlaced (text : String) := admitSoundnessGoal (assemblyOf text) "placed"
+  let reads ← IO.ofExcept (selectPlaced inside)
+  let charge ← IO.ofExcept (goalDrawCharge reads "placed" [] "z")
+  unless (charge.numerator, charge.denominator) == (7, 8) do
+    throw (IO.userError s!"the charge of the relation that reads at a proof argument: {repr charge}")
+  refused (selectPlaced outside) "TY7"
+  let relay (argument goal : String) :=
+    (inside.replace "scheme Checked = Count<8>:" (
+      "protocol Relay<spec place: nat> roles(P, V)(xs: [F; 8] @(P, V)):\n" ++
+      s!"    child <- Count<8, spec e = {argument}>(xs)\n" ++ "scheme Checked = Relay:")).replace
+      "Checked, spec e = 7" s!"Checked, spec place = {goal}"
+  let relayed ← IO.ofExcept (selectPlaced (relay "place" "7"))
+  let #[relayOrigin] := relayed.emission.origins.filter (·.definition.number == relayed.id)
+    | throw (IO.userError "missing the relay")
+  let #[child] := relayOrigin.specification | throw (IO.userError "missing the relay's application")
+  let through ← IO.ofExcept (goalDrawCharge relayed "placed" [child.instruction] "z")
+  unless (through.numerator, through.denominator) == (7, 8) do
+    throw (IO.userError s!"the charge through the relay: {repr through}")
+  refused (selectPlaced (relay "8" "7")) "TY7"
+  let beyond ← IO.ofExcept (selectPlaced (relay "place" "8"))
+  refused (goalDrawCharge beyond "placed" [child.instruction] "z") "TY7"
+  -- A relation that the relation of the clause applies is typed at the same values: where it
+  -- shares the scope of the parameter, and where it is given the value in a specification
+  -- argument. A relation that leaves the argument out is refused where the protocol is typed.
+  discard <| IO.ofExcept (selectPlaced (← placed "N-GL2g"))
+  refused (selectPlaced (← placed "N-GL2h")) "TY7"
+  let given ← placed "N-GL2i"
+  refused (selectPlaced given) "TY7"
+  discard <| IO.ofExcept (selectPlaced (given.replace "spec e = 8" "spec e = 7"))
+  refused (selectPlaced (← placed "N-GL2j")) "SP11"
   IO.println "Count<8> selected two exact ceilings on one admitted verifier, directly and through shared callees."

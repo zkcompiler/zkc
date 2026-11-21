@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Frontend.Elab.Family
+public import Zkc.Frontend.Static.Specification
 
 @[expose] public section
 
@@ -567,6 +568,20 @@ def deployedStaticArguments (steps : Array (DeclarationId × Option (Array Lower
         if parameter.spec then
           refuseHere "SP11" span
             s!"`{parameter.name.text}` is a specification-only static parameter; deployed code gives it only in a specification argument, `spec … = {parameter.name.text}`"
+
+/-- The proof arguments of a call or of an application of a relation (SP11): the
+specification-only parameters of the callee, each written as a specification argument or
+shared with the definition in which the call stands. None when the callee has none. -/
+def callProofArguments (steps : Array (DeclarationId × Option (Array Lowered.StaticArgument)))
+    (found : Declaration) (place : Span) : ElabM (Option SpecificationClosure) := do
+  let state ← getThe Compile.State
+  if (specificationParameters state.program found).isEmpty then return none
+  let some entry := state.table.entries[(← getContext).instance]? | throw .abandoned
+  let owner ← liftM (declaration entry.key.declaration : CompileM Declaration)
+  let supplied := steps.flatMap fun (_, args) => (args.getD #[]).filterMap fun
+    | .spec at_ name term => some (at_, name, term)
+    | _ => none
+  liftM (specificationClosure (← staticEnv) found supplied owner.scopes place : CompileM _)
 
 /-- Pairs the arguments of a call with the parameters: positional first, then named (FN6). -/
 def pairArguments (name : String) (parameters : Array String) (arguments : Array Lowered.Argument)
@@ -1286,12 +1301,13 @@ mutual
       let assigned ← liftM (assignArguments env steps scopes span : CompileM _)
       let (parameters, _) ← signatureOf id
       let name ← liftM (nameOf id : CompileM String)
-      let paired ← match (← liftM (declaration id : CompileM Declaration)).node with
+      let found ← liftM (declaration id : CompileM Declaration)
+      let paired ← match found.node with
         | .relation node =>
           pairRelationArguments name (node.statement.map (·.name.text))
             ((node.witness.getD #[]).map (·.name.text)) arguments witnesses span
         | _ => pairArguments name (parameters.map (·.1)) arguments witnesses span
-      callDeclaration id assigned paired expected span
+      callDeclaration id assigned paired expected span (← callProofArguments steps found span)
     | .member inst definition name staticArgs =>
       let parameters ← memberParameters inst name
       let paired ← pairArguments name parameters arguments witnesses span
@@ -1310,9 +1326,16 @@ mutual
     let .seq _ _ := xs.type | waitFor "the length of a value that is no collection"
     return operationNode span .nat .seqLength #[xs]
 
-  /-- A call of a declaration with its arguments paired with its parameters. -/
+  /-- A call of a declaration with its arguments paired with its parameters.
+
+  A callee with specification-only parameters is a specification item, and it is instantiated
+  with their values (SP11): where each proof argument of the call has a value, the call
+  reaches the instance at those values, after the conditions of the callee are checked at them;
+  where one has none (the definition that calls is itself typed without the values of a goal),
+  it reaches the instance without them, whose body waits. -/
   partial def callDeclaration (id : DeclarationId) (assigned : StaticEnvironment) (args : Array Arg)
-      (expected : Option ClosedType) (place : Span) : ElabM Typed.Expr := do
+      (expected : Option ClosedType) (place : Span)
+      (proofArguments : Option SpecificationClosure := none) : ElabM Typed.Expr := do
     let found ← liftM (declaration id : CompileM Declaration)
     let name := (← getThe Compile.State).program.nameOf id
     -- a specification function is called only from specifications (SX2)
@@ -1338,7 +1361,16 @@ mutual
     let (parameters, result) ← signatureOf id
     let (values, states) ← inferArguments id assigned found.file parameters result args expected place
     let description ← liftM (describeInstance id values : CompileM String)
-    let inst ← liftM (instantiate id values { description, span := place } : CompileM InstanceId)
+    let deployed ← liftM (instantiate id values { description, span := place } : CompileM InstanceId)
+    let inst ← match proofArguments with
+      | none => pure deployed
+      | some closure =>
+        if ← liftM (closure.isClosed : CompileM Bool) then
+          let proofValues ← liftM (closure.close deployed {} place : CompileM (Array Nat))
+          let description ← liftM (describeInstance id values proofValues : CompileM String)
+          liftM (instantiate id values { description, span := place } (specification := proofValues) :
+            CompileM InstanceId)
+        else pure deployed
     let (parameterTypes, resultType) ← match (← getThe Compile.State).table.content? inst with
       | some (.signature parameterTypes (some resultType)) =>
         if parameterTypes.all (·.2.isSome) then

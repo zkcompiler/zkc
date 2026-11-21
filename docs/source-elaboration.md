@@ -43,7 +43,7 @@ after specialization.
 
 | Boundary inspected | Finding and consequence |
 |---|---|
-| Parser and printer | Parsing the 506 reference programs distinguishes grammar errors from later refusals. The corpus also exercises canonical printing, tree equality and comment retention. It cannot establish the static or security rules of a program that parses. |
+| Parser and printer | Parsing the 512 reference programs distinguishes grammar errors from later refusals. The corpus also exercises canonical printing, tree equality and comment retention. It cannot establish the static or security rules of a program that parses. |
 | Scope and declarations | Whether a resolved declaration is a relation or an executable algorithm, its statement/witness split and the existence of a named loop can be checked before a goal is selected. Performing these checks in ordinary elaboration also catches malformed siblings of a selected clause. An unresolved module member needs an instance. |
 | Closed instance | A relation and its extractor must agree on instantiated operand types, result tuple, role and run shape. Cost closure and simulator permissions have their own conditions. General checking of those requirements is incomplete. A successful name check gives a later phase work to do. |
 | Written exporter | The resolver retains clause and goal structure, with declaration identities, binder numbers, branch boundaries and source locations. The property selects these fields directly. The ordinary FN6 binder supplies statement operands in parameter order, including named public ports. The written group consumer checks its narrower signature, view and theorem requirements at the chosen instance. |

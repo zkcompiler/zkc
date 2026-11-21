@@ -1,8 +1,8 @@
 # Conformance tests
 
-These are the tests that an implementation of `../LANGUAGE.md` must pass: 506 programs, each
+These are the tests that an implementation of `../LANGUAGE.md` must pass: 512 programs, each
 with the outcome that the rules require. The 324 tests of layer A are frozen with that layer.
-The tests of the later layers (79 for layer B, 62 for C, 35 for D, 6 for E) are not frozen:
+The tests of the later layers (85 for layer B, 62 for C, 35 for D, 6 for E) are not frozen:
 their layers are carried, and an outcome that rests on a pending change says so in its note.
 
 ## How the files are read
@@ -86,11 +86,11 @@ By file:
 | `layer-a-lexical-grammar.txt` | 26 | 12 | 14 | 0 |
 | `layer-a-names-static.txt` | 88 | 30 | 58 | 0 |
 | `layer-a-types-facts.txt` | 149 | 67 | 82 | 0 |
-| `layer-b.txt` | 79 | 12 | 67 | 0 |
+| `layer-b.txt` | 85 | 14 | 71 | 0 |
 | `layer-c.txt` | 62 | 17 | 45 | 0 |
 | `layer-d.txt` | 35 | 11 | 23 | 1 |
 | `layer-e.txt` | 6 | 2 | 4 | 0 |
-| total | 506 | 170 | 335 | 1 |
+| total | 512 | 172 | 339 | 1 |
 
 By prefix and layer:
 
@@ -102,7 +102,7 @@ By prefix and layer:
 | `V-` | 31 | 5 | 12 | 5 | 0 | 53 |
 | `M-` | 48 | 32 | 13 | 0 | 0 | 93 |
 | `L-` | 18 | 0 | 0 | 0 | 0 | 18 |
-| `N-`, `X-` | 94 | 21 | 1 | 2 | 6 | 124 |
+| `N-`, `X-` | 94 | 27 | 1 | 2 | 6 | 130 |
 
 Layer A, by the family of the rule that a test is about (for a refusal, the rule that refuses;
 for an acceptance, the rule that its note names):

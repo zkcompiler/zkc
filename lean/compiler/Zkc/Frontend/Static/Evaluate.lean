@@ -66,16 +66,21 @@ def instanceEnv (program : Program) (declaration : Declaration) (values : Array 
     values := ((specificationParameters program declaration).zip specification).foldl
       (init := deployed) fun map ((reference, _), value) => map.insert reference (.natural value) }
 
-/-- Whether a static term names a specification-only parameter. -/
-def mentionsSpecParameter (term : Lowered.Expr) : CompileM Bool := do
+/-- The specification-only parameters that a static term names. -/
+def specParametersOf (term : Lowered.Expr) : CompileM (Array ParameterRef) := do
   let state ← get
+  let mut found := #[]
   for (.reference _ segments) in term.references do
     for (.segment step _ _) in segments do
       if let .parameter reference := step then
         let spec := ((state.program.scopes[reference.scope]?).bind
           (·.parameters[reference.index]?)).any (·.spec)
-        if spec then return true
-  return false
+        if spec then found := found.push reference
+  return found
+
+/-- Whether a static term names a specification-only parameter. -/
+def mentionsSpecParameter (term : Lowered.Expr) : CompileM Bool :=
+  return !(← specParametersOf term).isEmpty
 
 /-- The source text at a place of the file of an environment: what a message quotes, and the
 name of a local name. -/
