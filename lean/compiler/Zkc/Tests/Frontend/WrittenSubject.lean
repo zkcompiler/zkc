@@ -162,22 +162,40 @@ def Running.finish (running : Running) : IO Unit := do
 /-- The axioms beyond which no theorem of a subject may rest. -/
 def allowed : List String := ["propext", "Classical.choice", "Quot.sound"]
 
-/-- A subject checked: Lean accepts its proof module, with every theorem on the allowed axioms,
-and the module in which Lean reads the source again; each control is refused as it says. The
-modules are read at once. The result is the proof module and Lean's output on it. -/
-def check (work : System.FilePath) (name : String) (subject : Subject) (proof : Proof)
-    (controls : List Control) : IO (Module × Bool × String) := do
+/-- A subject whose modules Lean is reading: its proof module, the module in which Lean reads
+the source again, and its controls. -/
+structure Checking where
+  name : String
+  module : Module
+  honest : Task (Except IO.Error (Bool × String))
+  comparison : Task (Except IO.Error (Bool × String))
+  controls : List Running
+
+/-- Lean on the modules of a subject, at once: the proof module, the comparison of the package
+with the frontend, and each control. -/
+def start (work : System.FilePath) (name : String) (subject : Subject) (proof : Proof)
+    (controls : List Control := []) : IO Checking := do
   let module ← subject.module name proof
   let honest ← startLakeLean work name module.text
   let comparison ← startLakeLean work s!"{name}Source"
     (comparisonModule s!"{name}Source" subject.text (subject.goals.map (·.goal)) subject.package)
-  let running ← controls.mapM (·.start work proof)
-  let (ok, output) ← finishLean honest
-  acceptedOutput name ok output module.theorems allowed
-  let (sourceOk, sourceOutput) ← finishLean comparison
-  acceptedOutput s!"{name}Source" sourceOk sourceOutput []
-  for control in running do
+  return ⟨name, module, honest, comparison, ← controls.mapM (·.start work proof)⟩
+
+/-- A subject judged: Lean accepts its proof module, with every theorem on the allowed axioms,
+and the module in which Lean reads the source again; each control is refused as it says. The
+result is Lean's output on the proof module. -/
+def Checking.finish (checking : Checking) : IO (Bool × String) := do
+  let (ok, output) ← finishLean checking.honest
+  acceptedOutput checking.name ok output checking.module.theorems allowed
+  let (sourceOk, sourceOutput) ← finishLean checking.comparison
+  acceptedOutput s!"{checking.name}Source" sourceOk sourceOutput []
+  for control in checking.controls do
     control.finish
-  return (module, ok, output)
+  return (ok, output)
+
+/-- A subject checked: `start`, then `finish`. -/
+def check (work : System.FilePath) (name : String) (subject : Subject) (proof : Proof)
+    (controls : List Control := []) : IO (Bool × String) := do
+  (← start work name subject proof controls).finish
 
 end Zkc.Tests.Frontend.WrittenSubject

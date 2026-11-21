@@ -168,7 +168,7 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
     "variable [assumed : Fact guessingJudged]\n" ++
     "theorem guessing_judged : guessingJudged := assumed.out\n"
 
-  let (_, _, _) ← check work "Guess" written proof [
+  let _ ← check work "Guess" written proof [
     -- The cap of the draw is one sixteenth: the invariant does not start within the budget of
     -- three sixteenths, the fee of one eighth that the text pays is not within the cap that
     -- the module states for the draw, which the refusal names as the source does, and the

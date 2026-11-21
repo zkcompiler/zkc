@@ -5,6 +5,7 @@ import Zkc.Frontend.Written.Statement
 import Zkc.Tests.Frontend.SyntaxHarness
 import Zkc.Tests.Frontend.SourceClause
 import Zkc.Tests.Frontend.PrintedPackageSupport
+import Zkc.Tests.Frontend.WrittenSubject
 import Zkc.Core.Admission.Theorems
 import Zkc.Kernel
 import Zkc.Vocabulary.Project
@@ -87,59 +88,41 @@ statement.
 
 open Zkc.Core Zkc.Frontend Zkc.Frontend.Written
 open Zkc.Tests.Frontend Zkc.Tests.Frontend.PrintedPackageSupport
+open Zkc.Tests.Frontend.WrittenSubject
 
 namespace CountCharge
 
-/-- What the check reads of a source: what its two goals claim, with what their statements
-need, and the stored text of the definitions of the root's own package. -/
-structure Subject where
-  text : String
-  statements : Statements
-  deployed : List (Nat × String)
+/-- What the check asserts of what the frontend read of a source of the subject: both goals
+select one root; each reads the clause `proves @V NearZero(xs)`, decided by the verifier of the
+scheme, on the only port of the protocol; each gives one proof argument, the tolerance; and
+the coins are positions, so the statements are about the standard model. What the two claim is
+one package, and the table of caps of each goal is read with its claim. -/
+def reading : Reading where
+  goals := ["loose", "strict"]
+  ports := #["xs"]
+  clause := ⟨"proves", none, "V", "NearZero", ["xs"], []⟩
+  operands := #[0]
+  arguments := 1
+
+/-- A source of the subject read, with what is asserted of the reading. -/
+def read (text : String) : IO Subject := WrittenSubject.read text reading
 
 /-- The root, the verifier and the prover of a subject. -/
-def Subject.places (s : Subject) : Nat × Nat × Nat :=
+def places (s : Subject) : Nat × Nat × Nat :=
   (s.statements.claims.root, s.statements.claims.verifier, s.statements.claims.prover)
 
 /-- The name, the proof arguments and the table of caps of each goal. -/
-def Subject.goals (s : Subject) : List (String × Array Nat × CapTable) :=
-  s.statements.claims.goals.map fun goal => (goal.goal, goal.specification, goal.caps)
+def tables (s : Subject) : List (String × Array Nat × CapTable) :=
+  s.goals.map fun goal => (goal.goal, goal.specification, goal.caps)
 
-/-- The printed package of the claims. -/
-def Subject.package (s : Subject) : String := (Written.package s.statements.package).text
-
-def noAssociation : Association := ⟨[], [], [], [], []⟩
+/-- The stored text of the definitions of the root's own package. -/
+def deployed (s : Subject) : IO (List (Nat × String)) := do
+  let c ← IO.ofExcept (goalRoot s.text "loose")
+  let own := c.emission.package ⟨[], [], [], [], []⟩
+  return own.named.definitions.map fun d => (d.key.number, storedDefinition (b := own.bindings) d)
 
 /-- The source with its one occurrence of `before` replaced. -/
-def edit (text before after : String) : IO String := do
-  unless (text.splitOn before).length == 2 do
-    throw (IO.userError s!"expected one occurrence of {before}")
-  return text.replace before after
-
-/-- A source read: both goals select one root; each reads the clause `proves @V NearZero(xs)`,
-decided by the verifier of the scheme, on the only port of the protocol; each gives one proof
-argument; and what the two claim is one package. The table of caps of each goal is read with
-its claim. -/
-def read (text : String) : IO Subject := do
-  let c ← IO.ofExcept (goalRoot text "loose")
-  let head ← IO.ofExcept (SourceClause.rootHead c)
-  unless head.ports.map (·.binder.name) == #["xs"] do
-    throw (IO.userError "the protocol has other ports than the table")
-  let claims ← IO.ofExcept (goalClaims c ["loose", "strict"])
-  for claimed in claims.goals do
-    let goal := claimed.goal
-    let clause ← IO.ofExcept (SourceClause.seen c goal)
-    unless clause == ⟨"proves", none, "V", "NearZero", ["xs"], []⟩ do
-      throw (IO.userError s!"goal {goal} reads another clause: {repr clause}")
-    unless claimed.statement == #[0] && claimed.witness == some #[] do
-      throw (IO.userError s!"goal {goal}: the relation is applied to other ports than the table")
-    unless claimed.specification.size == 1 do
-      throw (IO.userError s!"goal {goal} gives other proof arguments than the tolerance")
-  unless (head.roster[claims.verifier]?, head.roster[claims.prover]?) == (some "V", some "P") do
-    throw (IO.userError "the verifier and the prover of the scheme are not the roles V and P")
-  let own := c.emission.package noAssociation
-  let deployed := own.named.definitions.map fun d => (d.key.number, storedDefinition (b := own.bindings) d)
-  return ⟨text, ⟨claims, []⟩, deployed⟩
+def edit (text before after : String) : IO String := replaceOnce text before after
 
 /-- The theorems of the text of the proofs. -/
 def ofText : List String := [
@@ -165,36 +148,31 @@ def ofCharge : List String :=
     "Witness.loose_attained", "Witness.strict_attained", "loose_exact", "strict_exact",
     "loose_sound", "loose_result", "strict_sound", "strict_result"]
 
-/-- The proof module, as the generator assembles it: the package of the claims and what is
-generated around the proofs written for the protocol. -/
-def proofModule (name : String) (s : Subject) (template : String) : IO Module :=
-  IO.ofExcept (s.statements.module standardModelText name { text := template, theorems := ofText })
-
 def run (corpus template : System.FilePath) (work : System.FilePath) : IO Unit := do
   let blocks := readBlocks (← IO.FS.readFile corpus)
   let some source := (blocks.find? (·.id == "N-GL2a")).bind (·.files[0]?)
     | throw (IO.userError "missing the reference case N-GL2a")
   let template ← IO.FS.readFile template
   let written ← read source
-  unless written.places == (1, 1, 0) do
+  unless places written == (1, 1, 0) do
     throw (IO.userError "the root and the roles of the source are not where they were")
   -- The tables of caps, as the frontend read them: the one draw of the root, once, at the
   -- charge of each goal's tolerance.
-  unless written.goals.map (·.2.2) ==
+  unless (tables written).map (·.2.2) ==
       [⟨[⟨⟨1⟩, [⟨⟨0⟩, 3, 8, 1⟩], []⟩]⟩, ⟨[⟨⟨1⟩, [⟨⟨0⟩, 3, 4, 1⟩], []⟩]⟩] do
-    throw (IO.userError s!"the tables of caps are not the draw of the root at 3/8 and at 3/4: {repr (written.goals.map (·.2.2))}")
+    throw (IO.userError s!"the tables of caps are not the draw of the root at 3/8 and at 3/4: {repr ((tables written).map (·.2.2))}")
 
   -- The roster reversed: the verifier is the first role, and the key of the root is as it was.
   let turned ← read (← edit source "protocol Count roles(P, V)" "protocol Count roles(V, P)")
-  unless turned.places == (1, 0, 1) do
+  unless places turned == (1, 0, 1) do
     throw (IO.userError "with the roster reversed the verifier is not the first role")
-  unless turned.goals == written.goals do
+  unless tables turned == tables written do
     throw (IO.userError "with the roster reversed the goals changed")
 
   -- The relation changed: the deployed definitions and both tables are what they were, and the
   -- package of the claims has another function for the relation.
   let changed ← read (← edit source "else 1) <= e\n" "else 1) < e\n")
-  unless changed.deployed == written.deployed && changed.goals == written.goals do
+  unless (← deployed changed) == (← deployed written) && tables changed == tables written do
     throw (IO.userError "a change of the relation changed a deployed definition or a table of caps")
   if changed.package == written.package then
     throw (IO.userError "a change of the relation changed nothing in the package of the claims")
@@ -203,7 +181,7 @@ def run (corpus template : System.FilePath) (work : System.FilePath) : IO Unit :
   -- outside the relation has no zero entry, and the charge is zero; with four entries the
   -- ceiling that the source writes is negative, and no charge is read.
   let five ← read (← edit source "scheme Checked = Count<8>:" "scheme Checked = Count<5>:")
-  unless (five.goals.map fun (_, _, caps) => caps.ratio) == [0, (3 : Rat) / 5] do
+  unless ((tables five).map fun (_, _, caps) => caps.ratio) == [0, (3 : Rat) / 5] do
     throw (IO.userError "the charges of Count<5> are not 0 and 3/5")
   let four ← edit source "scheme Checked = Count<8>:" "scheme Checked = Count<4>:"
   let .error refusal := (goalRoot four "loose").bind (goalClaims · ["loose"])
@@ -250,40 +228,47 @@ def run (corpus template : System.FilePath) (work : System.FilePath) : IO Unit :
       "    spec for Other:\n" ++ chargeLine ++ "    spec for Count:\n"))
   for (title, control) in [("below the bound", small), ("on a loop that does not run", elsewhere),
       ("of another protocol", foreign)] do
-    unless control.deployed == written.deployed do
+    unless (← deployed control) == (← deployed written) do
       throw (IO.userError s!"the charge {title}: a deployed definition changed")
-    if control.goals == written.goals then
+    if tables control == tables written then
       throw (IO.userError s!"the charge {title}: the tables of caps are what they were")
-  unless small.goals.map (·.2.2) ==
+  unless (tables small).map (·.2.2) ==
       [⟨[⟨⟨1⟩, [⟨⟨0⟩, 1, 4, 1⟩], []⟩]⟩, ⟨[⟨⟨1⟩, [⟨⟨0⟩, 5, 8, 1⟩], []⟩]⟩] do
     throw (IO.userError "the smaller charge is not 1/4 and 5/8 at the draw")
   for control in [elsewhere, foreign] do
-    unless control.goals.all (·.2.2 == ⟨[⟨⟨1⟩, [], []⟩]⟩) do
-      throw (IO.userError s!"a charge that is not on the draw of the root gave a cap: {repr (control.goals.map (·.2.2))}")
+    unless (tables control).all (·.2.2 == ⟨[⟨⟨1⟩, [], []⟩]⟩) do
+      throw (IO.userError s!"a charge that is not on the draw of the root gave a cap: {repr ((tables control).map (·.2.2))}")
   -- A row outside the table of the model, inside the loop of the relation: the power of a field
   -- element, which the standard model gives a constant.
   let uncovered ← read (← edit source "if xs[i] == 0 then 0 else 1" "if xs[i] ^ 2 == 0 then 0 else 1")
   let uncoveredProof ← startLakeLean work "CoverageControl"
-    (uncovered.statements.coverageModule standardModelText "CoverageControl").text
-  let changedProof ← startLakeLean work "RelationControl" (← proofModule "RelationControl" changed template).text
+    (uncovered.statements.coverageModule "CoverageControl").text
 
-  let module ← proofModule "Count" written template
-  let theorems := module.theorems
-  let proof ← startLakeLean work "Count" module.text
-  let comparison ← startLakeLean work "CountSource" (comparisonModule "CountSource" written.text (written.goals.map (·.1)) written.package)
-  let turnedProof ← startLakeLean work "CountTurned" (← proofModule "CountTurned" turned template).text
-  let turnedComparison ← startLakeLean work "CountTurnedSource" (comparisonModule "CountTurnedSource" turned.text (turned.goals.map (·.1)) turned.package)
-  let smallProof ← startLakeLean work "BoundControl" (← proofModule "BoundControl" small template).text
-  let elsewhereProof ← startLakeLean work "SiteControl" (← proofModule "SiteControl" elsewhere template).text
-  let foreignProof ← startLakeLean work "OwnerControl" (← proofModule "OwnerControl" foreign template).text
-
-  let allowed := ["propext", "Classical.choice", "Quot.sound"]
-  for (name, task) in [("Count", proof), ("CountTurned", turnedProof)] do
-    let (ok, output) ← finishLean task
-    acceptedOutput name ok output theorems allowed
-  for (name, task) in [("CountSource", comparison), ("CountTurnedSource", turnedComparison)] do
-    let (ok, output) ← finishLean task
-    acceptedOutput name ok output []
+  let proof : Proof := { text := template, theorems := ofText }
+  -- Each of the three charges is refused where the text reads the cap of the draw from the
+  -- table.
+  let atCap := ["drawCap looseCaps = ", "drawCap strictCaps = "]
+  let count ← start work "Count" written proof [
+    -- With `<` for `<=` the function of the relation computes another comparison: what is
+    -- said of it, and what rests on that, is not proved; the theorems about the verifier
+    -- stand.
+    { title := "the relation changed", name := "RelationControl", subject := changed,
+      text := template, unproved := ofRelation },
+    -- The caps of both goals are below the bounds of their tolerances: the text reads another
+    -- cap from each table than the bound, and what rests on it is not proved.
+    { title := "a charge below the bound", name := "BoundControl", subject := small,
+      text := template, unproved := ofCharge, places := atCap },
+    -- In these two the root has no charged draw, so the module has no theorem of a draw's
+    -- cap. The draw has its name all the same: a site is named whether or not the source
+    -- charges it.
+    { title := "a charge on a loop that does not run", name := "SiteControl", subject := elsewhere,
+      text := template, unproved := ofCharge, places := atCap },
+    { title := "a charge of another protocol", name := "OwnerControl", subject := foreign,
+      text := template, unproved := ofCharge, places := atCap }]
+  -- The roster reversed: the same text proves the same theorems.
+  let turnedCount ← start work "CountTurned" turned proof
+  let _ ← count.finish
+  let _ ← turnedCount.finish
   let (ok, output) ← finishLean ceilingProof
   acceptedOutput "CeilingAtTotal" ok output ["loose_ceiling"] allowed
   -- The package with a row outside the table is not covered: the kernel decides it.
@@ -291,24 +276,7 @@ def run (corpus template : System.FilePath) (work : System.FilePath) : IO Unit :
   if ok then throw (IO.userError "Lean accepted that the model covers a package with a row outside its table")
   unless output.contains "StandardModel.covers stored = true" && output.contains "is false" do
     throw (IO.userError s!"the coverage control was refused for another reason\n{output}")
-  -- With `<` for `<=` the function of the relation computes another comparison: what is said
-  -- of it, and what rests on that, is not proved; the theorems about the verifier stand.
-  expectUnproved "the relation changed" "RelationControl" theorems changedProof ofRelation
-  -- The caps of both goals are below the bounds of their tolerances: the text reads another
-  -- cap from each table than the bound, and what rests on it is not proved.
-  expectUnproved "a charge below the bound" "BoundControl" theorems smallProof ofCharge
-  -- In these two the root has no charged draw, so the module has no theorem of a draw's cap.
-  -- The draw has its name all the same: a site is named whether or not the source charges it.
-  let uncapped := theorems.filter fun name => !written.statements.siteNames.contains name
-  expectUnproved "a charge on a loop that does not run" "SiteControl" uncapped elsewhereProof ofCharge
-  expectUnproved "a charge of another protocol" "OwnerControl" uncapped foreignProof ofCharge
-  -- Each is refused where the text reads the cap of the draw from the table.
-  for (title, task) in [("below the bound", smallProof), ("on a loop that does not run", elsewhereProof),
-      ("of another protocol", foreignProof)] do
-    let (_, output) ← finishLean task
-    unless output.contains "drawCap looseCaps = " && output.contains "drawCap strictCaps = " do
-      throw (IO.userError s!"the charge {title}: refused for another reason\n{output}")
-  let charges := ", ".intercalate (written.goals.map fun (name, arguments, caps) =>
+  let charges := ", ".intercalate ((tables written).map fun (name, arguments, caps) =>
     s!"{name} at tolerance {arguments[0]!} within {caps.ratio}")
   IO.println (s!"Count<8> is judged within the tables of caps of its goals ({charges}), " ++
     "on the tables on which the admitted relation returns false, in either order of the roster; " ++

@@ -161,7 +161,7 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
     { text := steppedText, theorems := ["stepped_relation", "stepped_judged", "stepped_witnessed"] }
   let steppedProof ← startLakeLean work "Steps" steppedModule.text
 
-  let (_, _, _) ← check work "Either" written { text := template, theorems := ofText }
+  let _ ← check work "Either" written { text := template, theorems := ofText }
     [exchangedControl]
   let (ok, output) ← finishLean steppedProof
   acceptedOutput "Steps" ok output steppedModule.theorems allowed

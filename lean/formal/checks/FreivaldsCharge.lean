@@ -5,6 +5,7 @@ import Zkc.Frontend.Written.Statement
 import Zkc.Tests.Frontend.SyntaxHarness
 import Zkc.Tests.Frontend.SourceClause
 import Zkc.Tests.Frontend.PrintedPackageSupport
+import Zkc.Tests.Frontend.WrittenSubject
 import Zkc.Core.Admission.Theorems
 import Zkc.Kernel
 import Zkc.Vocabulary.Project
@@ -92,6 +93,7 @@ the text declared for its scope, is read from what Lean stored (`published`); th
 
 open Zkc.Core Zkc.Frontend Zkc.Frontend.Written
 open Zkc.Tests.Frontend Zkc.Tests.Frontend.PrintedPackageSupport
+open Zkc.Tests.Frontend.WrittenSubject
 
 namespace FreivaldsCharge
 
@@ -115,37 +117,20 @@ def source (clause : String) (front : String := "") (product : String := "m[i][k
   "scheme Checked = Freivalds<2>:\n    prover P\n    construction interactive\n" ++
   "goal sound = soundness(Checked)\n"
 
-/-- What the check reads of a source: what its goal claims, with what the statement needs. -/
-structure Subject where
-  text : String
-  statements : Statements
-
-/-- The printed package of the claims. -/
-def Subject.package (s : Subject) : String := (Written.package s.statements.package).text
-
-def noAssociation : Association := ⟨[], [], [], [], []⟩
-
-/-- A source read: the goal selects the root; it reads the clause `proves @V Product(…)` with
-the given operands, decided by the verifier of the scheme, on the ports of the protocol, which
-are the three matrices after those written in front; and it gives no proof argument. The table
-of caps of the goal is read with its claim. -/
-def read (text : String) (operands : List String) (front : Array String := #[]) : IO Subject := do
-  let c ← IO.ofExcept (goalRoot text "sound")
-  let head ← IO.ofExcept (SourceClause.rootHead c)
-  unless head.ports.map (·.binder.name) == front ++ #["a", "b", "c"] do
-    throw (IO.userError "the protocol has other ports than the three matrices")
-  let claims ← IO.ofExcept (goalClaims c ["sound"])
-  let [claimed] := claims.goals | throw (IO.userError "the claims are not of one goal")
-  let clause ← IO.ofExcept (SourceClause.seen c "sound")
-  unless clause == ⟨"proves", none, "V", "Product", operands, []⟩ do
-    throw (IO.userError s!"the goal reads another clause: {repr clause}")
-  unless claimed.witness == some #[] do
-    throw (IO.userError "the relation has witness parameters")
-  unless claimed.specification.isEmpty do
-    throw (IO.userError "the goal gives proof arguments")
-  unless (head.roster[claims.verifier]?, head.roster[claims.prover]?) == (some "V", some "P") do
-    throw (IO.userError "the verifier and the prover of the scheme are not the roles V and P")
-  return ⟨text, ⟨claims, claims.functionsBeforeRoot⟩⟩
+/-- What the check asserts of what the frontend read of a source of the subject: the goal
+selects the root; it reads the clause `proves @V Product(…)` with the given operands, decided
+by the verifier of the scheme, on the ports of the protocol, which are the three matrices after
+those written in front; the relation is applied to the given inputs of the deployed header; the
+goal gives no proof argument; and the package draws a sequence of scalars, so the statements
+are about the arithmetic model over a field with at least the order of the source's scalar
+field. -/
+def reading (operands : List String) (inputs : Array Nat) (front : Array String := #[]) :
+    Reading where
+  goals := ["sound"]
+  ports := front ++ #["a", "b", "c"]
+  clause := ⟨"proves", none, "V", "Product", operands, []⟩
+  operands := inputs
+  model := scalarFieldModelText
 
 /-- The theorems of the text of the proofs. -/
 def ofText : List String := [
@@ -164,14 +149,11 @@ def ofApply : List String :=
 def ofClaim : List String :=
   ["sound_judged", "sound_installed", "Witness.sound_at_corner", "sound_sound", "sound_result"]
 
-/-- The proof module over a model, as the generator assembles it: the package of the claims
-and what is generated around the proofs written for the protocol, which use the fixed
-sequences of the library and Mathlib's matrices. -/
-def proofModule (name : String) (s : Subject) (model : ModelText) (template : String) :
-    IO Module :=
-  IO.ofExcept (s.statements.module model name
-    { text := template, theorems := ofText
-      imports := ["Zkc.Formal.Written.FixedSequences", "Mathlib.Data.Matrix.Mul"] })
+/-- The text of the proofs with what it imports: the fixed sequences of the library and
+Mathlib's matrices. -/
+def proofOf (template : String) : Proof :=
+  { text := template, theorems := ofText
+    imports := ["Zkc.Formal.Written.FixedSequences", "Mathlib.Data.Matrix.Mul"] }
 
 /-- A text that defines again, in its own scope, a name of the library that the statement of
 the goal's judgment uses, and proves the judgment written anew under that name: the fees within
@@ -181,18 +163,14 @@ written anew is not the judgment that was stated before the text, so the text is
 the claim is concluded from it. (An audit found the same of the claim: before the statements of
 a module were propositions defined ahead of the text, a text that defined the total of a charge
 again published a goal under its own name, and every check passed.) -/
-def shadowing (s : Subject) (model : ModelText) (template : String) : IO String := do
-  let [goal] := s.statements.claims.goals | throw (IO.userError "the statements are not of one goal")
-  let anew ← IO.ofExcept (s.statements.judgedAt model goal)
-  let established := template.replace "theorem sound_judged : soundJudged := by"
+def shadowing (s : Subject) (template : String) : IO String := do
+  let goal ← s.goal
+  let anew ← IO.ofExcept (s.statements.judgedAt s.statements.chosenModel goal)
+  let established ← replaceOnce template "theorem sound_judged : soundJudged := by"
     "theorem sound_established : soundJudged := by"
-  if established == template then
-    throw (IO.userError "the text does not prove the judgment under its name")
   -- what the text concludes from the judgment, it concludes from the judgment as it was stated
-  let renamed := established.replace "  (sound_claim_of_judged sound_judged (F := Scalars)"
+  let renamed ← replaceOnce established "  (sound_claim_of_judged sound_judged (F := Scalars)"
     "  (sound_claim_of_judged sound_established (F := Scalars)"
-  if renamed == established then
-    throw (IO.userError "the text does not use the claim at its witness")
   return renamed ++ "\n" ++
     "def paysWithin {S : Sig} (_ : Samplers S) (_ : S.Op → ℚ≥0) :\n" ++
     "    (op : S.Op) → ℚ≥0 → (S.Reply op → Prop) → Prop := fun _ _ _ => True\n\n" ++
@@ -201,13 +179,6 @@ def shadowing (s : Subject) (model : ModelText) (template : String) : IO String 
     "  intros\n  walk_step\n" ++
     "  exact ⟨0, fun _ => True, zero_le, trivial, fun _ _ kept => (kept trivial).elim⟩\n"
 
-/-- A control is refused where it is meant to be: Lean's output has the line. -/
-def expectReason (title : String) (task : Task (Except IO.Error (Bool × String)))
-    (line : String) : IO Unit := do
-  let (_, output) ← finishLean task
-  unless output.contains line do
-    throw (IO.userError s!"{title}: refused for another reason than `{line}`\n{output}")
-
 /-- An action of the check that must end in a refusal. -/
 def refuses (title : String) (action : IO Unit) : IO Unit := do
   let refused ← (do action; pure false) <|> pure true
@@ -215,129 +186,107 @@ def refuses (title : String) (action : IO Unit) : IO Unit := do
 
 def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
   let template ← IO.FS.readFile template
-  let written ← read (source "Product(a, b, c)") ["a", "b", "c"]
+  let inOrder := reading ["a", "b", "c"] #[0, 1, 2]
+  let written ← read (source "Product(a, b, c)") inOrder
   let stated := written.statements
-  let [goal] := stated.claims.goals | throw (IO.userError "the statements are not of one goal")
+  let goal ← written.goal
   unless stated.claims.root == 1 && (stated.claims.verifier, stated.claims.prover) == (1, 0) do
     throw (IO.userError "the root and the roles of the source are not where they were")
   unless stated.functions == [("apply", 2)] do
     throw (IO.userError s!"the root calls other functions than `apply`: {stated.functions}")
-  unless goal.statement == #[0, 1, 2] do
-    throw (IO.userError "the relation is applied to other ports than the three matrices in order")
   let order := Zkc.Vocabulary.Field.bls12381Fr.order
   unless goal.caps == ⟨[⟨⟨1⟩, [⟨⟨0⟩, 1, order, 1⟩], []⟩]⟩ do
     throw (IO.userError "the table of caps is not one over the order of the scalar field, on the draw of the root, once")
 
   -- The operands exchanged: the package and the charge are what they were, and the relation is
   -- applied to the ports in another order.
-  let exchanged ← read (source "Product(b, a, c)") ["b", "a", "c"]
+  let exchanged ← read (source "Product(b, a, c)") (reading ["b", "a", "c"] #[1, 0, 2])
   unless exchanged.package == written.package do
     throw (IO.userError "exchanging the operands of the clause changed the package of the claims")
-  unless (exchanged.statements.claims.goals.map (·.statement)) == [#[1, 0, 2]] do
-    throw (IO.userError "with the operands exchanged the relation is not applied to the ports exchanged")
 
   -- A `spec` port in front of the matrices, which nothing uses: the operands are the same
   -- inputs of the deployed header, and the proof module is the same text.
-  let fronted ← read (source "Product(a, b, c)" "spec note: bool, ") ["a", "b", "c"] #["note"]
-  unless (fronted.statements.claims.goals.map (·.statement)) == [#[0, 1, 2]] do
-    throw (IO.userError "with a spec port in front the relation is applied to other inputs")
-  let module ← proofModule "Freivalds" written scalarFieldModelText template
-  let theorems := module.theorems
-  unless (← proofModule "Freivalds" fronted scalarFieldModelText template).text == module.text do
+  let fronted ← read (source "Product(a, b, c)" "spec note: bool, ")
+    (reading ["a", "b", "c"] #[0, 1, 2] #["note"])
+  let proof := proofOf template
+  unless (← fronted.module "Freivalds" proof).text == (← written.module "Freivalds" proof).text do
     throw (IO.userError "a spec port in front of the matrices changed the proof module")
 
   -- A charge of half the source's, in the source: the program is what it was, and the cap of
   -- the draw is half.
   let halved ← read (← replaceOnce (source "Product(a, b, c)") "charge sites.r <= 1 / F::Order"
-    "charge sites.r <= 1 / (2 * F::Order)") ["a", "b", "c"]
+    "charge sites.r <= 1 / (2 * F::Order)") inOrder
   unless halved.package == written.package &&
-      (halved.statements.claims.goals.map (·.caps)) == [⟨[⟨⟨1⟩, [⟨⟨0⟩, 1, 2 * order, 1⟩], []⟩]⟩] do
+      (halved.goals.map (·.caps)) == [⟨[⟨⟨1⟩, [⟨⟨0⟩, 1, 2 * order, 1⟩], []⟩]⟩] do
     throw (IO.userError "the halved charge changed the package, or is not half at the draw")
 
   -- The product computed another way: the vector is read before the matrix, and a term is
   -- added that cancels. The deployed function is another, and what the goal claims is the same.
   let rewritten ← read (source "Product(a, b, c)" (product := "v[k] * m[i][k] + (v[k] - v[k])"))
-    ["a", "b", "c"]
+    inOrder
   -- A sum where the product stands: another function, which is not the product of a matrix
   -- and a vector.
-  let summed ← read (source "Product(a, b, c)" (product := "v[k] + m[i][k]")) ["a", "b", "c"]
+  let summed ← read (source "Product(a, b, c)" (product := "v[k] + m[i][k]")) inOrder
   for (title, altered) in [("computed another way", rewritten), ("replaced by a sum", summed)] do
     if altered.package == written.package then
       throw (IO.userError s!"the product {title}: the package is what it was")
-    unless (altered.statements.claims.goals.map fun goal => (goal.statement, goal.caps)) ==
+    unless (altered.goals.map fun goal => (goal.statement, goal.caps)) ==
         [(goal.statement, goal.caps)] do
       throw (IO.userError s!"the product {title}: the goal claims something else")
 
-  let proof ← startLakeLean work "Freivalds" module.text
-  let rewrittenProof ← startLakeLean work "FreivaldsRewritten"
-    (← proofModule "FreivaldsRewritten" rewritten scalarFieldModelText template).text
-  let summedProof ← startLakeLean work "ProductControl"
-    (← proofModule "ProductControl" summed scalarFieldModelText template).text
-  let comparison ← startLakeLean work "FreivaldsSource" (comparisonModule "FreivaldsSource" written.text ["sound"] written.package)
-  let exchangedProof ← startLakeLean work "OperandsControl"
-    (← proofModule "OperandsControl" exchanged scalarFieldModelText template).text
-  let halvedProof ← startLakeLean work "BoundControl"
-    (← proofModule "BoundControl" halved scalarFieldModelText template).text
   -- The hypothesis on the field weakened to a field of one element or more.
   let anyField : ModelText :=
     { scalarFieldModelText with hypotheses := [("large", "1 ≤ Fintype.card F")] }
-  let unassumedProof ← startLakeLean work "FieldControl"
-    (← proofModule "FieldControl" written anyField template).text
+  let freivalds ← start work "Freivalds" written proof [
+    -- The same text on a sum: the equation of one step of `apply` is not one of the field,
+    -- and nothing that rests on the law of `apply` is proved. The law of the relation, which
+    -- does not call `apply`, stands.
+    { title := "a sum for the product", name := "ProductControl", subject := summed,
+      text := template, unproved := ofApply, only := true,
+      places := ["unsolved goals"],
+      occurrences := [("M ⟨i, early_i⟩ ⟨k, early_k⟩ * w ⟨k, early_k⟩ = ", 1)] },
+    -- The claim is about `b * a`: its premise is not the one from which the text gets that
+    -- the product of `a` and `b` differs. The laws of the two functions and the theorems
+    -- about the verifier stand.
+    { title := "the operands exchanged", name := "OperandsControl", subject := exchanged,
+      text := template, unproved := ofClaim,
+      places := ["sound_far G input_a input_b input_c A B C ha hb hc rejected"] },
+    -- The ceiling of half the charge is not one over the order: the comparison with what a
+    -- uniform scalar pays for is not proved.
+    { title := "a charge of half", name := "BoundControl", subject := halved,
+      text := template, unproved := "large_covers" :: ofClaim, places := ["drawCap soundCaps ="] },
+    -- A field of one element or more is not a field of the source's order or more: the
+    -- comparison of the ceiling is not available where the claim needs it. The witness of the
+    -- text is of the hypothesis that was stated, so it is not a witness here.
+    { title := "a weaker hypothesis on the field", name := "FieldControl", subject := written,
+      text := template, model := some anyField,
+      unproved := ["sound_judged", "sound_installed", "Witness.sound_at_corner", "sound_witnessed",
+        "sound_sound", "sound_result", "sound_met"],
+      places := ["large_covers large"] },
+    -- A name of the library defined again by the text: the claim that the text then proves is
+    -- not the claim that was stated before it, and the goal is not concluded from it.
+    { title := "a name of the statement defined again", name := "ShadowControl", subject := written,
+      text := ← shadowing written template,
+      unproved := ["sound_installed", "sound_sound", "sound_result"], only := true,
+      places := ["Type mismatch\n  sound_judged\nhas type"] }]
+  -- The same text on the product computed another way: every theorem is proved.
+  let rewrittenCheck ← start work "FreivaldsRewritten" rewritten proof
+  -- The standard model has no sampler for a sequence of scalars.
   let uncoveredProof ← startLakeLean work "CoverageControl"
-    (written.statements.coverageModule standardModelText "CoverageControl").text
-  let shadowedProof ← startLakeLean work "ShadowControl"
-    (← proofModule "ShadowControl" written scalarFieldModelText
-      (← shadowing written scalarFieldModelText template)).text
+    (written.statements.coverageModule "CoverageControl" (model := standardModelText)).text
 
-  let allowed := ["propext", "Classical.choice", "Quot.sound"]
-  let (ok, output) ← finishLean proof
-  acceptedOutput "Freivalds" ok output theorems allowed
+  let (ok, output) ← freivalds.finish
+  let theorems := freivalds.module.theorems
   -- The reading of Lean's output: a report of axioms that stands twice is not read, and a text
   -- with an option for debugging is not run.
   refuses "a report of axioms printed again"
     (acceptedOutput "Freivalds" ok
       (output ++ "'Freivalds.sound_sound' does not depend on any axioms\n") theorems allowed)
   refuses "a text with an option for debugging"
-    (discard (proofModule "Freivalds" written scalarFieldModelText
-      (template ++ "set_option debug.skipKernelTC true in\n")))
-  let (ok, output) ← finishLean comparison
-  acceptedOutput "FreivaldsSource" ok output []
-  -- The same text on the product computed another way: every theorem is proved.
-  let (ok, output) ← finishLean rewrittenProof
-  acceptedOutput "FreivaldsRewritten" ok output theorems allowed
-  -- The same text on a sum: the equation of one step of `apply` is not one of the field, and
-  -- nothing that rests on the law of `apply` is proved. The law of the relation, which does
-  -- not call `apply`, stands.
-  expectUnproved "a sum for the product" "ProductControl" theorems summedProof ofApply
-  expectPlaces "a sum for the product" summedProof ["unsolved goals"]
-  expectReason "a sum for the product" summedProof
-    "M ⟨i, early_i⟩ ⟨k, early_k⟩ * w ⟨k, early_k⟩ = "
-  -- The claim is about `b * a`: its premise is not the one from which the text gets that the
-  -- product of `a` and `b` differs. The laws of the two functions and the theorems about the
-  -- verifier stand.
-  expectUnproved "the operands exchanged" "OperandsControl" theorems exchangedProof ofClaim
-  expectReason "the operands exchanged" exchangedProof "sound_far G input_a input_b input_c A B C ha hb hc rejected"
-  -- The ceiling of half the charge is not one over the order: the comparison with what a
-  -- uniform scalar pays for is not proved.
-  expectUnproved "a charge of half" "BoundControl" theorems halvedProof ("large_covers" :: ofClaim)
-  expectReason "a charge of half" halvedProof "drawCap soundCaps ="
-  -- A field of one element or more is not a field of the source's order or more: the
-  -- comparison of the ceiling is not available where the claim needs it.
-  -- The witness of the text is of the hypothesis that was stated, so it is not a witness here.
-  expectUnproved "a weaker hypothesis on the field" "FieldControl" theorems unassumedProof
-    ["sound_judged", "sound_installed", "Witness.sound_at_corner", "sound_witnessed",
-      "sound_sound", "sound_result", "sound_met"]
-  expectReason "a weaker hypothesis on the field" unassumedProof "large_covers large"
-  -- A name of the library defined again by the text: the claim that the text then proves is not
-  -- the claim that was stated before it, and the goal is not concluded from it.
-  expectUnproved "a name of the statement defined again" "ShadowControl" theorems shadowedProof
-    ["sound_installed", "sound_sound", "sound_result"]
-  expectReason "a name of the statement defined again" shadowedProof
-    "Type mismatch\n  sound_judged\nhas type"
-  expectPlaces "a name of the statement defined again" shadowedProof
-    ["Type mismatch\n  sound_judged\nhas type"]
-  -- The standard model has no sampler for a sequence of scalars: the kernel decides that it
-  -- does not cover the package.
+    (discard (written.module "Freivalds"
+      (proofOf (template ++ "set_option debug.skipKernelTC true in\n"))))
+  let _ ← rewrittenCheck.finish
+  -- The kernel decides that the standard model does not cover the package.
   let (ok, output) ← finishLean uncoveredProof
   if ok then throw (IO.userError "Lean accepted that the standard model covers the package")
   unless output.contains "StandardModel.covers stored = true" && output.contains "is false" do
