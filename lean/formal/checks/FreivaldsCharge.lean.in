@@ -9,9 +9,11 @@ the function that the root calls `applyKey`, `applyHeader`, `applyNames`, `apply
 `applyBefore` and `applyMember`; for the goal `soundCharge`, `soundKey` with `soundHeader`,
 `soundNames`, `soundBody`, `soundBefore` and `soundMember`), that the arithmetic model covers
 the package (`covered`), where the walks start (`verifierProgram` with `verifier_meaning`,
-`apply_meaning`, `sound_meaning`), the transfers `at_root` and `at_sound`, and the claim
-`soundClaim`.
-After this text it writes the goal `sound_sound` from `sound_installed`, which this text proves.
+`apply_meaning`, `sound_meaning`), the transfers `at_root` and `at_sound`, and the propositions
+`soundClaim`, `soundGoal`, `soundResult` and `soundWitnessed`.
+After this text it writes the theorems of the propositions that were stated before it: the goal
+`sound_sound` from `sound_installed`, the result `sound_result` with the coverage, and
+`sound_met` from `sound_witnessed`. This text proves the two that are asked of it.
 
 Nothing of the statement is written here. The source says
 `Product(a, b, c): ∀ i ∈ 0..n, ∀ j ∈ 0..n, (∑ k ∈ 0..n, a[i][k] * b[k][j]) == c[i][j]` and
@@ -238,6 +240,36 @@ variable (G) in
 abbrev process (path : List Frame) (a b c : List (List F)) :=
   roleMeaning (model F G) installed rootMember verifierRole path (inputs G a b c)
 
+/-- On matrices whose product is the third, every permitted vector leads the verifier to return,
+and none to stop: the bound on the returns of the verifier is not a bound on a verifier that
+cannot return. -/
+theorem returns_on_product (path : List Frame) (a b c : List (List F))
+    (A B C : Matrix (Fin 2) (Fin 2) F) (ha : a = rows A) (hb : b = rows B) (hc : c = rows C)
+    (same : A * B = C) :
+    (process G path a b c).interpret (.every (Permitted (model F G))) (fun _ => True)
+      (fun _ => False) := by
+  rw [process, verifier_meaning]
+  walk_step
+  intro r allowedR
+  have length : (r : List F).length = 2 := allowedR.1.2 2 rfl
+  obtain ⟨w, hw⟩ := List.exists_ofFn_of_length (r : List F) 2 length
+  walk_step
+  walk_compute .cons (List.ofFn (B.mulVec w)) .nil
+  · exact apply_law G b r B w hb hw
+  walk_compute .cons (List.ofFn (A.mulVec (B.mulVec w))) .nil
+  · exact apply_law G a x4 A (B.mulVec w) ha h4
+  walk_compute .cons (List.ofFn (C.mulVec w)) .nil
+  · exact apply_law G c r C w hc hw
+  walk_step
+  walk_step
+  · have passes : A.mulVec (B.mulVec w) = C.mulVec w := by
+      subst same
+      exact Matrix.mulVec_mulVec _ _ _
+    have equal : x5 = x6 := h5.trans ((congrArg List.ofFn passes).trans h6.symm)
+    simp [h7, equal] at at5
+  · walk_step
+    trivial
+
 /-- What every judgment of the verifier that lets no run return pays for: a fee at the coin, for
 every vector on which the check passes. -/
 theorem walked_excludes (allowed : ∀ op, (RSig (model F G)).Reply op → Prop)
@@ -348,6 +380,38 @@ theorem walked_within (path : List Frame) (a b c : List (List F))
     have same : x5 = x6 := of_decide_eq_true (h7 ▸ at5)
     exact kept ⟨w, hw, List.ofFn_injective (h5 ▸ h6 ▸ same)⟩
 
+omit [Fintype F] in
+/-- On every three matrices, the zero vector is a reply that the service of the laws can give
+and on which the verifier returns. -/
+theorem returns_possible (path : List Frame) (a b c : List (List F))
+    (A B C : Matrix (Fin 2) (Fin 2) F) (ha : a = rows A) (hb : b = rows B) (hc : c = rows C) :
+    (process G path a b c).interpret
+      (.possible fun op v => (some v, ()) ∈ support
+        (serveLaws (model F G) (ArithmeticModel.draws F G) op ()))
+      (fun _ => True) (fun _ => False) := by
+  rw [process, verifier_meaning]
+  walk_step
+  refine ⟨List.ofFn (fun _ : Fin 2 => (0 : F)), ?_, ?_⟩
+  · show (some _, ()) ∈ support ((fun answer => (some answer, ())) <$> drawVector F 2)
+    simp only [drawVector, support_map, Set.mem_image, Prod.mk.injEq, and_true]
+    exact ⟨_, ⟨fun _ => 0, by simp, rfl⟩, rfl⟩
+  walk_step
+  walk_compute .cons (List.ofFn (B.mulVec (fun _ => 0))) .nil
+  · exact apply_law G b x0 B (fun _ => 0) hb h0
+  walk_compute .cons (List.ofFn (A.mulVec (B.mulVec (fun _ => 0)))) .nil
+  · exact apply_law G a x4 A (B.mulVec (fun _ => 0)) ha h4
+  walk_compute .cons (List.ofFn (C.mulVec (fun _ => 0))) .nil
+  · exact apply_law G c x0 C (fun _ => 0) hc h0
+  walk_step
+  walk_step
+  · have passes : A.mulVec (B.mulVec (fun _ : Fin 2 => (0 : F))) = C.mulVec (fun _ => 0) := by
+      have zero : (fun _ : Fin 2 => (0 : F)) = 0 := rfl
+      rw [zero, Matrix.mulVec_zero, Matrix.mulVec_zero, Matrix.mulVec_zero]
+    have equal : x5 = x6 := h5.trans ((congrArg List.ofFn passes).trans h6.symm)
+    simp [h7, equal] at at5
+  · walk_step
+    trivial
+
 /-- The probability, at the root of the installed program: against every service that draws the
 vector uniformly and answers only what is permitted, the simulation of the verifier returns with
 probability at most the total of the charge. -/
@@ -446,6 +510,34 @@ theorem sound_at_corner (path : List Frame) :
     (serveLaws_follows _ _)
     (serveLaws_permitted _ _ (ArithmeticModel.draws_permitted Scalars Scalars)) () rejected
 
+/-- **The event of the claim happens at the witness.** Against the service of the laws, the
+simulation of the verifier returns with a probability that is not zero: the zero vector is
+drawn, and the check passes on it. -/
+theorem returns_at_corner (path : List Frame) :
+    0 < Pr{let out ← (simulateQ (handlerOf (serveLaws (model Scalars Scalars)
+          (ArithmeticModel.draws Scalars Scalars))) (embed
+        (roleMeaning (model Scalars Scalars) installed rootMember verifierRole path
+          (.cons (rows none) (.cons (rows none) (.cons (rows corner) .nil)))))).run.run ()}[
+      ∃ results, out.1 = some (.inl results)] := by
+  rw [prEvent_simulation_returns]
+  exact returns_pos_of_possible _ _ (returns_possible (G := Scalars) path (rows none) (rows none)
+    (rows corner) none none corner rfl rfl rfl)
+
 end Witness
+
+open Zkc.Formal.Written.ScalarField in
+/-- **The hypotheses of the claim are met** over the scalar field of the source: the zero
+matrices and the matrix with a corner are valid, the relation returns false on them, the field
+has the order of the charge, and the service of the laws draws within the samplers and answers
+what is permitted. -/
+theorem sound_witnessed : soundWitnessed :=
+  ⟨Witness.Scalars, Witness.Scalars, inferInstance, inferInstance, inferInstance, inferInstance,
+    inferInstance, inferInstance, inferInstance, Witness.large,
+    rows Witness.none, Witness.rows_valid Witness.none, rows Witness.none,
+    Witness.rows_valid Witness.none, rows Witness.corner, Witness.rows_valid Witness.corner,
+    Unit, serveLaws (model Witness.Scalars Witness.Scalars)
+      (ArithmeticModel.draws Witness.Scalars Witness.Scalars), ⟨()⟩, serveLaws_follows _ _,
+    serveLaws_permitted _ _ (ArithmeticModel.draws_permitted Witness.Scalars Witness.Scalars),
+    Witness.rejected⟩
 
 end

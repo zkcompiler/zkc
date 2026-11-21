@@ -289,8 +289,9 @@ def run (corpus : System.FilePath) (work : System.FilePath) : IO Unit := do
       goals := pairClaims.goals.map fun claimed =>
         { claimed, specification := #[], charge := ⟨⟨pairAdmitted.id⟩, 0, 1, []⟩, ceiling := none } }
   let pairText ← IO.ofExcept (pairStated.claimTexts standardModelText)
+  -- The premise stands in the claim and in the statement that its hypotheses are met.
   expect "the statement of a relation with a witness does not quantify the witness"
-    ((pairText.splitOn "∀ (witness0 : ").length == 2)
+    ((pairText.splitOn "∀ (witness0 : ").length == 3)
   let stated ← start work "ClaimsWitness" (← statementModule "ClaimsWitness" pairStated)
   let (ok, output) ← IO.ofExcept proof.get
   acceptedOutput "Claims" ok output theorems

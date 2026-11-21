@@ -26,16 +26,19 @@ The check reads the source with the frontend and writes two modules, on which Le
   `Written.Statements` writes from what the frontend read: the facts (the key of the root, the
   roles, and for each goal the value of its proof argument, its charge on the draw and its
   relation), where the walks start, the transfer of a statement to every admitted program, the
-  claim of each goal about the installed program (`looseClaim`, `strictClaim`), and after the
-  text the goals for every admitted program (`loose_sound`, `strict_sound`). The text of the check proves the
+  claim of each goal about the installed program (`looseClaim`, `strictClaim`) with its goal
+  for every admitted program, its result with the coverage and the statement that its
+  hypotheses are met, all as propositions defined before the text; and after the text the
+  theorems of those (`loose_sound`, `loose_result`, `loose_met`, and the same for `strict`). The text of the check proves the
   claims (`loose_installed`, `strict_installed`) and chooses nothing of them. The module
   imports nothing of the frontend but the record of a charge. Its theorems are about every
   program that admission gives for the stored program of the package. The function of each
   relation returns whether at most the goal's tolerance of the entries are not zero. On a table
   on which that function returns false, the verifier is judged never to return within the
   budget of the goal's charge, with each fee within what the charge allows the effect that pays
-  it; against every service that draws each coin by the sampler of its law, it returns with
-  probability at most the total of the charge. The statement names no port and no sampler: the
+  it; against every service that is no more likely to answer a coin within a set of replies
+  than the sampler of the coin's law is to draw one there, it returns with probability at most
+  the total of the charge. The statement names no port and no sampler: the
   samplers are those of the laws of the model (`lawSamplers`). For each goal a concrete table
   and a service meet every hypothesis, and there the verifier returns with probability exactly
   the total of the charge; a charge on another instruction, and a charge of another definition,
@@ -129,26 +132,31 @@ def read (text : String) : IO Subject := do
 
 /-- The theorems of the proof module, whose axioms the check reads. -/
 def theorems : List String := [
-  "covered", "verifierProgram.eq", "verifier_meaning", "loose_meaning", "strict_meaning",
-  "loose_relation", "strict_relation", "walked_within", "walked_excludes",
+  "admitted_exists", "covered", "verifierProgram.eq", "verifier_meaning", "loose_meaning",
+  "strict_meaning", "loose_relation", "strict_relation", "walked_within", "walked_excludes",
   "walk_reads_any_key", "judged_within", "returns_within", "loose_installed", "strict_installed",
-  "loose_sound", "strict_sound",
   "Witness.loose_at_table", "Witness.strict_at_table", "Witness.loose_attained",
   "Witness.strict_attained", "Witness.misplaced_judges_nothing", "Witness.foreign_judges_nothing",
-  "Witness.fixed_position_does_not_follow"]
+  "Witness.fixed_position_does_not_follow", "loose_witnessed", "strict_witnessed",
+  "loose_sound", "loose_result", "loose_met", "strict_sound", "strict_result", "strict_met"]
 
 /-- The theorems that say what the relations compute, and those that rest on them. -/
 def ofRelation : List String :=
-  ["loose_relation", "strict_relation", "loose_installed", "strict_installed", "loose_sound",
-    "strict_sound", "Witness.loose_at_table", "Witness.strict_at_table"]
+  ["loose_relation", "strict_relation", "loose_installed", "strict_installed",
+    "Witness.loose_at_table", "Witness.strict_at_table", "loose_witnessed", "strict_witnessed",
+    "loose_sound", "loose_result", "loose_met", "strict_sound", "strict_result", "strict_met"]
+
+/-- The claim of `loose` and what rests on it. -/
+def ofLoose : List String := ["loose_installed", "Witness.loose_at_table", "loose_sound", "loose_result"]
 
 /-- The proof module: the package of the claims; what the frontend read, the transfers to an
 admitted program and the claims of the goals, all generated; the proofs written for the
 protocol; and the goals for every admitted program, generated. -/
 def proofModule (name : String) (s : Subject) (template : String) : IO String := do
+  refuseUnchecked name template
   let stated := s.statements
   let claims ← IO.ofExcept (stated.claimTexts standardModelText)
-  let closings ← IO.ofExcept (stated.closings standardModelText)
+  let closings := stated.closings
   let ceilings ← IO.ofExcept stated.ceilings
   return packageHeader ["Zkc.Formal.Walk", "Zkc.Formal.OracleProcess", "Zkc.Formal.Written.PortSamplers",
       "Zkc.Formal.Written.LawSamplers", "Zkc.Formal.Written.SiteAllowance",
@@ -189,8 +197,8 @@ def run (corpus template : System.FilePath) (work : System.FilePath) : IO Unit :
   let written ← read source
   unless written.places == (1, 1, 0) do
     throw (IO.userError "the root and the roles of the source are not where they were")
-  unless written.statements.entryNames.all theorems.contains do
-    throw (IO.userError s!"an entry of a walk is not among the theorems read: {written.statements.entryNames}")
+  unless (written.statements.entryNames ++ written.statements.closingNames).all theorems.contains do
+    throw (IO.userError "a generated theorem is not among the theorems read")
 
   -- The roster reversed: the verifier is the first role, and the key of the root is as it was.
   let turned ← read (← edit source "protocol Count roles(P, V)" "protocol Count roles(V, P)")
@@ -282,16 +290,16 @@ def run (corpus template : System.FilePath) (work : System.FilePath) : IO Unit :
   -- samplers, which read no role.
   expectUnproved "the roles exchanged" "RolesControl" theorems exchangedProof
     (theorems.filter fun name =>
-      !["covered", "verifierProgram.eq", "verifier_meaning", "loose_meaning", "strict_meaning",
-        "loose_relation", "strict_relation",
-        "Witness.fixed_position_does_not_follow"].contains name)
+      !["admitted_exists", "covered", "verifierProgram.eq", "verifier_meaning", "loose_meaning",
+        "strict_meaning", "loose_relation", "strict_relation",
+        "Witness.fixed_position_does_not_follow", "loose_witnessed", "strict_witnessed",
+        "loose_met", "strict_met"].contains name)
   -- Only `loose` and what is stated of it at its table fail, and `strict` stands.
   expectUnproved "a charge below the bound" "BoundControl" theorems smallProof
-    ["loose_installed", "loose_sound", "Witness.loose_at_table", "Witness.loose_attained"]
-  expectUnproved "a charge on another instruction" "SiteControl" theorems elsewhereProof
-    ["loose_installed", "loose_sound", "Witness.loose_at_table"]
-  expectUnproved "a charge of another definition" "OwnerControl" theorems foreignProof
-    ["loose_installed", "loose_sound", "Witness.loose_at_table"]
+    ["loose_installed", "Witness.loose_at_table", "Witness.loose_attained", "loose_sound",
+      "loose_result"]
+  expectUnproved "a charge on another instruction" "SiteControl" theorems elsewhereProof ofLoose
+  expectUnproved "a charge of another definition" "OwnerControl" theorems foreignProof ofLoose
   let charges := ", ".intercalate (written.goals.map fun (name, arguments, charge) =>
     s!"{name} at tolerance {arguments[0]!} within {charge.numerator}/{charge.denominator}")
   IO.println (s!"Count<8> is judged within the charges of its goals ({charges}), " ++

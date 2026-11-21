@@ -23,18 +23,25 @@ the size of the field.
 The check reads the source with the frontend and writes modules on which Lean is run.
 
 - The proof module has the printed package of what the goal claims and, around the text of
-  `FreivaldsCharge.lean.in`, what `Written.Statements` writes: the facts, with those of the
-  function that the root calls under its name in the source; that the arithmetic model covers
-  the package; where the walks start; the transfers; the claim `soundClaim`; and the goal
-  `sound_sound` for every admitted program. The claim is over the arithmetic model on every field that can be sampled
-  and has at least as many elements as the scalar field of the source
-  (`scalarFieldModelText`). The text proves the claim. It says what `apply` and `Product`
-  compute, each loop taken by an invariant (`walk_loop`); the verifier is walked once, its
-  three calls taken by the law of `apply` (`walk_compute`), and is judged never to return
-  within the budget of the charge on matrices whose product differs; against every service
-  that draws each coin by the sampler of its law, it returns with probability at most the
-  total of the charge. The hypotheses are met over the scalar field of the source, on the zero
-  matrices and a matrix with one entry.
+  `FreivaldsCharge.lean.in`, what `Written.Statements` writes. Before the text: the facts, with
+  those of the function that the root calls under its name in the source; that the arithmetic
+  model covers the package; where the walks start; the transfers; and four propositions, the
+  claim about the installed program (`soundClaim`), the goal for every admitted program
+  (`soundGoal`), the result with the coverage (`soundResult`), and that the hypotheses of the
+  claim are met together (`soundWitnessed`). After the text: the theorems of the last three.
+  The claim is over the arithmetic model on every finite field with a decidable equality that
+  can be sampled and has at least as many elements as the scalar field of the source, with any
+  module over it for the type of group points (`scalarFieldModelText`). The text proves the
+  claim and the witness. It says what `apply` and `Product` compute, each loop taken by an
+  invariant (`walk_loop`); the verifier is walked with its three calls taken by the law of
+  `apply` (`walk_compute`), once for the judgment and once on a hypothesis for its converse,
+  and is judged never to return within the budget of the charge on matrices whose product
+  differs; against every service that is no more likely to answer a coin within a set of
+  replies than the sampler of the coin's law is to draw one there, it returns with probability
+  at most the total of the charge. On matrices whose product holds every permitted vector
+  leads it to return. The hypotheses are met over the scalar field of the source, on the zero
+  matrices and a matrix with one entry, and there it returns with a probability that is not
+  zero.
 - The comparison module has the same printed package and the frontend: the program by names
   and the association that Lean reads from the package are those that the frontend gives to
   admission for the claims.
@@ -42,7 +49,7 @@ The check reads the source with the frontend and writes modules on which Lean is
 What the source says and the proof module takes as given is asserted here against the source:
 the clause that the goal reads and the ports that the relation is applied to.
 
-Four controls are refused by Lean, each for the theorems that depend on what it changes and at
+Five controls are refused by Lean, each for the theorems that depend on what it changes and at
 the line that the check names: the operands of the relation exchanged in the clause
 (`Product(b, a, c)`: the claim is then about another product; the text is refused where it
 takes from the premise that the product of `a` and `b` differs); a charge of half the source's (refused where the ceiling
@@ -50,7 +57,15 @@ is compared with what a uniform scalar pays for); the hypothesis on the size of 
 weakened to one element or more (refused where that comparison is used); and the coverage of
 the package by the standard model, which has no sampler for a sequence of scalars (decided
 false by the kernel). The first three show that the text does not prove the altered claim;
-none of them refutes it.
+none of them refutes it. The fifth is a text and not a claim: one that defines again, in its
+own scope, a name that the statement of the goal uses (the total of a charge) and proves the
+claim written anew under it. Every statement of the module is a proposition defined before the
+text, so the goal is not concluded from that proof.
+
+The check trusts the text in two ways that it does not test: that it prints nothing that reads
+as Lean's report of the axioms of a theorem (a report is read only where there is exactly
+one), and that it declares no syntax that changes what the closing theorems mean. It refuses a
+text that sets an option for debugging, one of which has the kernel skip a declaration.
 -/
 
 open Zkc.Core Zkc.Frontend Zkc.Frontend.Written
@@ -115,22 +130,24 @@ def read (text : String) (operands : List String) : IO Subject := do
 
 /-- The theorems of the proof module, whose axioms the check reads. -/
 def theorems : List String := [
-  "covered", "verifierProgram.eq", "verifier_meaning", "apply_meaning", "sound_meaning",
-  "apply_law", "sound_relation", "sound_far", "walked_within", "walked_excludes",
-  "returns_installed", "large_covers", "sound_installed", "sound_sound", "Witness.rejected",
-  "Witness.sound_at_corner"]
+  "admitted_exists", "covered", "verifierProgram.eq", "verifier_meaning", "apply_meaning",
+  "sound_meaning", "apply_law", "sound_relation", "sound_far", "returns_on_product",
+  "walked_within", "walked_excludes", "returns_possible", "returns_installed", "large_covers",
+  "sound_installed", "Witness.rejected", "Witness.sound_at_corner", "Witness.returns_at_corner",
+  "sound_witnessed", "sound_sound", "sound_result", "sound_met"]
 
 /-- The claim and what rests on it. -/
-def ofClaim : List String := ["sound_installed", "sound_sound", "Witness.sound_at_corner"]
+def ofClaim : List String :=
+  ["sound_installed", "Witness.sound_at_corner", "sound_sound", "sound_result"]
 
 /-- The proof module over a model: the package of the claims; what the frontend read, the
 coverage, the transfers and the claim, all generated; the proofs written for the protocol; and
 the goal for every admitted program, generated. -/
 def proofModule (name : String) (s : Subject) (model : ModelText) (template : String) :
     IO String := do
+  refuseUnchecked name template
   let stated := s.statements
   let claims ← IO.ofExcept (stated.claimTexts model)
-  let closings ← IO.ofExcept (stated.closings model)
   return packageHeader ["Zkc.Formal.Walk", "Zkc.Formal.OracleProcess",
       "Zkc.Formal.Written.LawSamplers", "Zkc.Formal.Written.SiteAllowance",
       "Zkc.Formal.Written.FunctionMeaning", "Zkc.Formal.Written.ArithmeticDraws",
@@ -138,7 +155,7 @@ def proofModule (name : String) (s : Subject) (model : ModelText) (template : St
       "Mathlib.Data.Matrix.Mul"] ++
     s!"namespace {name}\n" ++ s.package ++ Statements.opens ++ stated.facts ++ "\n" ++
     Statements.coverage model ++ stated.entries ++ stated.transfers ++ claims ++ template ++
-    "\n" ++ closings ++
+    "\n" ++ stated.closings ++
     String.join (theorems.map (s!"#print axioms {·}\n")) ++ s!"end {name}\n"
 
 /-- A module with the package of a subject and the one theorem that a model covers it. -/
@@ -152,12 +169,40 @@ def comparisonModule (name : String) (s : Subject) : String :=
   s!"#eval Zkc.Tests.Frontend.PrintedPackageSupport.expectGoalClaims {literal s.text} " ++
   s!"[\"sound\"] ({Written.associationTerm noAssociation}) stored association\nend {name}\n"
 
+/-- A text that defines again, in its own scope, a name of the library that the statement of
+the goal uses, and proves the claim written anew under that name: the total of a charge as the
+largest probability. Before the statements of a module were propositions defined ahead of the
+text, the goal that such a text published had that total for its bound, and every check passed
+(found by an audit). The claim written anew is not the claim that was stated, so the text is
+now refused where the goal is concluded from it. -/
+def shadowing (s : Subject) (model : ModelText) (template : String) : IO String := do
+  let [goal] := s.statements.goals | throw (IO.userError "the statements are not of one goal")
+  let anew ← IO.ofExcept (s.statements.claimAt model goal "installed" "rootMember" "soundMember")
+  let established := template.replace "theorem sound_installed : soundClaim := by"
+    "theorem sound_established : soundClaim := by"
+  if established == template then
+    throw (IO.userError "the text does not prove the claim under its name")
+  -- what the text concludes from the claim, it concludes from the claim as it was stated
+  let renamed := established.replace "  sound_installed (F := Scalars)" "  sound_established (F := Scalars)"
+  if renamed == established then
+    throw (IO.userError "the text does not use the claim at its witness")
+  return renamed ++ "\n" ++
+    "noncomputable def total (_ : DrawCharge) : ℝ≥0∞ := ⊤\n\n" ++
+    s!"theorem sound_installed :\n  {anew} := by\n" ++
+    "  intro F G _ _ _ _ _ _ _ path large a va b vb c vc σ service follows permitted s rejected\n" ++
+    "  exact (sound_established path large a va b vb c vc service follows permitted s rejected).trans le_top\n"
+
 /-- A control is refused where it is meant to be: Lean's output has the line. -/
 def expectReason (title : String) (task : Task (Except IO.Error (Bool × String)))
     (line : String) : IO Unit := do
   let (_, output) ← finishLean task
   unless output.contains line do
     throw (IO.userError s!"{title}: refused for another reason than `{line}`\n{output}")
+
+/-- An action of the check that must end in a refusal. -/
+def refuses (title : String) (action : IO Unit) : IO Unit := do
+  let refused ← (do action; pure false) <|> pure true
+  unless refused do throw (IO.userError s!"{title}: not refused")
 
 def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
   let template ← IO.FS.readFile template
@@ -166,8 +211,8 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
   let [goal] := stated.goals | throw (IO.userError "the statements are not of one goal")
   unless stated.claims.root == 1 && stated.roles == [("verifier", 1), ("prover", 0)] do
     throw (IO.userError "the root and the roles of the source are not where they were")
-  unless stated.entryNames.all theorems.contains do
-    throw (IO.userError s!"an entry of a walk is not among the theorems read: {stated.entryNames}")
+  unless (stated.entryNames ++ stated.closingNames).all theorems.contains do
+    throw (IO.userError "a generated theorem is not among the theorems read")
   unless stated.functions == [("apply", 2)] do
     throw (IO.userError s!"the root calls other functions than `apply`: {stated.functions}")
   unless goal.claimed.statement == #[0, 1, 2] do
@@ -202,10 +247,20 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
     (← proofModule "FieldControl" written anyField template)
   let uncoveredProof ← startLakeLean work "CoverageControl"
     (coverageModule "CoverageControl" written standardModelText)
+  let shadowedProof ← startLakeLean work "ShadowControl"
+    (← proofModule "ShadowControl" written scalarFieldModelText
+      (← shadowing written scalarFieldModelText template))
 
   let allowed := ["propext", "Classical.choice", "Quot.sound"]
   let (ok, output) ← finishLean proof
   acceptedOutput "Freivalds" ok output theorems allowed
+  -- The reading of Lean's output: a report of axioms that stands twice is not read, and a text
+  -- with an option for debugging is not run.
+  refuses "a report of axioms printed again"
+    (acceptedOutput "Freivalds" ok
+      (output ++ "'Freivalds.sound_sound' does not depend on any axioms\n") theorems allowed)
+  refuses "a text with an option for debugging"
+    (refuseUnchecked "Freivalds" (template ++ "set_option debug.skipKernelTC true in\n"))
   let (ok, output) ← finishLean comparison
   acceptedOutput "FreivaldsSource" ok output []
   -- The claim is about `b * a`: its premise is not the one from which the text gets that the
@@ -219,8 +274,16 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
   expectReason "a charge of half" halvedProof "ceiling soundCharge ="
   -- A field of one element or more is not a field of the source's order or more: the
   -- comparison of the ceiling is not available where the claim needs it.
-  expectUnproved "a weaker hypothesis on the field" "FieldControl" theorems unassumedProof ofClaim
+  -- The witness of the text is of the hypothesis that was stated, so it is not a witness here.
+  expectUnproved "a weaker hypothesis on the field" "FieldControl" theorems unassumedProof
+    ["sound_installed", "Witness.sound_at_corner", "sound_witnessed", "sound_sound",
+      "sound_result", "sound_met"]
   expectReason "a weaker hypothesis on the field" unassumedProof "large_covers large"
+  -- A name of the library defined again by the text: the claim that the text then proves is not
+  -- the claim that was stated before it, and the goal is not concluded from it.
+  expectUnproved "a name of the statement defined again" "ShadowControl" theorems shadowedProof
+    ["sound_sound", "sound_result"]
+  expectReason "a name of the statement defined again" shadowedProof "sound_installed"
   -- The standard model has no sampler for a sequence of scalars: the kernel decides that it
   -- does not cover the package.
   let (ok, output) ← finishLean uncoveredProof
@@ -229,7 +292,7 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
     throw (IO.userError s!"the coverage control was refused for another reason\n{output}")
   IO.println (s!"Freivalds<2> is judged within the charge of its goal (1/{order}), on the matrices on " ++
     "which the admitted relation returns false, over every field of at least that order; " ++
-    "4 of 4 controls refused, each at its line.")
+    "5 of 5 controls refused, each at its line.")
 
 end FreivaldsCharge
 

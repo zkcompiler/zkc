@@ -131,14 +131,32 @@ def axiomsOf (theorem_ output : String) : Option (List String) :=
         String.ofList (name.toList.filter (!·.isWhitespace)))
     | _ => none
 
+/-- How often Lean's output reports the axioms of a theorem. A check asks for each report once,
+so one line is Lean's; a second line was printed by something else. -/
+def axiomReports (theorem_ output : String) : Nat :=
+  ((output.splitOn s!"'{theorem_}' does not depend on any axioms").length - 1) +
+    ((output.splitOn s!"'{theorem_}' depends on axioms: [").length - 1)
+
+/-- A text of proofs is refused before Lean is run on it when it sets an option for debugging:
+one of them has the kernel not check a declaration, and a check reads Lean's acceptance as the
+kernel's. This guards against an accident. A check is no defence against a text written to
+deceive it: it trusts that the text prints nothing that reads as Lean's report of axioms twice,
+and declares no syntax that changes what a later statement means. -/
+def refuseUnchecked (name text : String) : IO Unit := do
+  if text.contains "debug." then
+    throw (IO.userError s!"{name}: the text sets an option for debugging")
+
 /-- What is expected of an accepted module: Lean ends without an error, nothing in it is left
-to `sorry`, and each of the theorems rests on the allowed axioms at most. -/
+to `sorry`, and each of the theorems is reported once and rests on the allowed axioms at
+most. -/
 def acceptedOutput (name : String) (ok : Bool) (output : String) (theorems : List String)
     (allowed : List String := ["propext", "Quot.sound"]) : IO Unit := do
   unless ok do throw (IO.userError s!"{name}: Lean refused the module\n{output}")
   if output.contains "sorry" then throw (IO.userError s!"{name}: the module uses sorry")
   if output.contains "PANIC" then throw (IO.userError s!"{name}: Lean panicked on the module\n{output}")
   for theorem_ in theorems do
+    unless axiomReports s!"{name}.{theorem_}" output ≤ 1 do
+      throw (IO.userError s!"{name}: the axioms of {theorem_} are reported more than once")
     match axiomsOf s!"{name}.{theorem_}" output with
     | some found =>
       unless found.all allowed.contains do
@@ -177,6 +195,9 @@ def expectUnproved (title name : String) (theorems : List String)
     (task : Task (Except IO.Error (Bool × String))) (expected : List String) : IO Unit := do
   let (ok, output) ← finishLean task
   if ok then throw (IO.userError s!"{title}: Lean accepted a control that must be refused")
+  for theorem_ in theorems do
+    unless axiomReports s!"{name}.{theorem_}" output ≤ 1 do
+      throw (IO.userError s!"{title}: the axioms of {theorem_} are reported more than once")
   let unproved := theorems.filter fun theorem_ =>
     ((axiomsOf s!"{name}.{theorem_}" output).getD ["sorryAx"]).contains "sorryAx"
   unless unproved == expected do
