@@ -47,7 +47,10 @@ The check reads the source with the frontend and writes modules on which Lean is
   admission for the claims.
 
 What the source says and the proof module takes as given is asserted here against the source:
-the clause that the goal reads and the ports that the relation is applied to.
+the clause that the goal reads and the ports that the relation is applied to. The operands of a
+claim are inputs of the deployed header, which has no `spec` port: the same source with a
+`spec` port that nothing uses in front of the matrices gives the same proof module, character
+for character.
 
 Five controls are refused by Lean, each for the theorems that depend on what it changes and at
 the line that the check names: the operands of the relation exchanged in the clause
@@ -73,8 +76,8 @@ open Zkc.Tests.Frontend Zkc.Tests.Frontend.PrintedPackageSupport
 
 namespace FreivaldsCharge
 
-/-- The source, with a clause. -/
-def source (clause : String) : String :=
+/-- The source, with a clause, and with ports written in front of the three matrices. -/
+def source (clause : String) (front : String := "") : String :=
   "module t\n" ++
   "use zkc::security::{soundness}\n" ++
   "type F = primitive(\"bls12-381.fr\")\n" ++
@@ -82,7 +85,7 @@ def source (clause : String) : String :=
   "    def apply(m: [[F; n]; n], v: [F; n]) -> [F; n]: [∑ k ∈ 0..n, m[i][k] * v[k] for i in 0..n]\n" ++
   "    relation Product(a: [[F; n]; n], b: [[F; n]; n], c: [[F; n]; n]):\n" ++
   "        ∀ i ∈ 0..n, ∀ j ∈ 0..n, (∑ k ∈ 0..n, a[i][k] * b[k][j]) == c[i][j]\n" ++
-  "    protocol Freivalds roles(P, V)(a: [[F; n]; n] @(P, V), b: [[F; n]; n] @(P, V), c: [[F; n]; n] @(P, V)):\n" ++
+  s!"    protocol Freivalds roles(P, V)({front}a: [[F; n]; n] @(P, V), b: [[F; n]; n] @(P, V), c: [[F; n]; n] @(P, V)):\n" ++
   "        r <- draw [F; n] from V to P\n" ++
   "        guard @V apply(a, apply(b, r)) == apply(c, r)\n" ++
   "    spec for Freivalds:\n" ++
@@ -102,12 +105,13 @@ def Subject.package (s : Subject) : String := (Written.package s.statements.pack
 def noAssociation : Association := ⟨[], [], [], [], []⟩
 
 /-- A source read: the goal selects the root; it reads the clause `proves @V Product(…)` with
-the given operands, decided by the verifier of the scheme, on the three ports of the protocol;
-it gives no proof argument; and it has a charge on the draw `r`. -/
-def read (text : String) (operands : List String) : IO Subject := do
+the given operands, decided by the verifier of the scheme, on the ports of the protocol, which
+are the three matrices after those written in front; it gives no proof argument; and it has a
+charge on the draw `r`. -/
+def read (text : String) (operands : List String) (front : Array String := #[]) : IO Subject := do
   let c ← IO.ofExcept (goalRoot text "sound")
   let head ← IO.ofExcept (SourceClause.rootHead c)
-  unless head.ports.map (·.binder.name) == #["a", "b", "c"] do
+  unless head.ports.map (·.binder.name) == front ++ #["a", "b", "c"] do
     throw (IO.userError "the protocol has other ports than the three matrices")
   let claims ← IO.ofExcept (goalClaims c ["sound"])
   let [claimed] := claims.goals | throw (IO.userError "the claims are not of one goal")
@@ -116,17 +120,12 @@ def read (text : String) (operands : List String) : IO Subject := do
     throw (IO.userError s!"the goal reads another clause: {repr clause}")
   unless claimed.witness == some #[] do
     throw (IO.userError "the relation has witness parameters")
-  let (selected, _) ← IO.ofExcept (selectNamedGoal c.state "sound" .soundness)
-  unless selected.specification.isEmpty do
+  unless claimed.specification.isEmpty do
     throw (IO.userError "the goal gives proof arguments")
+  unless (head.roster[claims.verifier]?, head.roster[claims.prover]?) == (some "V", some "P") do
+    throw (IO.userError "the verifier and the prover of the scheme are not the roles V and P")
   let charge ← IO.ofExcept (goalDrawCharge c "sound" [] "r")
-  let some verifier := (← IO.ofExcept (goalClause c "sound")).role
-    | throw (IO.userError "the clause has no deciding role")
-  let some prover := head.roster.toList.idxOf? "P" | throw (IO.userError "the roster has no prover")
-  let goal : StatedGoal :=
-    { claimed, specification := selected.specification, charge, ceiling := selected.ceiling }
-  return ⟨text, ⟨claims, [("verifier", verifier), ("prover", prover)], [goal],
-    claims.functionsBeforeRoot⟩⟩
+  return ⟨text, ⟨claims, [{ claimed, charge }], claims.functionsBeforeRoot⟩⟩
 
 /-- The theorems of the proof module, whose axioms the check reads. -/
 def theorems : List String := [
@@ -209,7 +208,7 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
   let written ← read (source "Product(a, b, c)") ["a", "b", "c"]
   let stated := written.statements
   let [goal] := stated.goals | throw (IO.userError "the statements are not of one goal")
-  unless stated.claims.root == 1 && stated.roles == [("verifier", 1), ("prover", 0)] do
+  unless stated.claims.root == 1 && (stated.claims.verifier, stated.claims.prover) == (1, 0) do
     throw (IO.userError "the root and the roles of the source are not where they were")
   unless (stated.entryNames ++ stated.closingNames).all theorems.contains do
     throw (IO.userError "a generated theorem is not among the theorems read")
@@ -229,6 +228,15 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
     throw (IO.userError "exchanging the operands of the clause changed the package of the claims")
   unless (exchanged.statements.goals.map (·.claimed.statement)) == [#[1, 0, 2]] do
     throw (IO.userError "with the operands exchanged the relation is not applied to the ports exchanged")
+
+  -- A `spec` port in front of the matrices, which nothing uses: the operands are the same
+  -- inputs of the deployed header, and the proof module is the same text.
+  let fronted ← read (source "Product(a, b, c)" "spec note: bool, ") ["a", "b", "c"] #["note"]
+  unless (fronted.statements.goals.map (·.claimed.statement)) == [#[0, 1, 2]] do
+    throw (IO.userError "with a spec port in front the relation is applied to other inputs")
+  unless (← proofModule "Freivalds" fronted scalarFieldModelText template) ==
+      (← proofModule "Freivalds" written scalarFieldModelText template) do
+    throw (IO.userError "a spec port in front of the matrices changed the proof module")
 
   -- A charge of half the source's.
   let halved : Subject := { written with statements := { stated with

@@ -25,11 +25,25 @@ probability also requires a theorem for the admitted verifier.
 
 ## What goals claim, as one package
 
-`Written.goalClaims` reads what written soundness goals of one scheme claim. For each goal it
-gives the clause, the relation that the clause applies as an instance at the static values of
-the application and the proof values of the goal, and the ports of the protocol at the
-statement and at the witness of the relation, by their places (the witness is absent where the
-clause is written short). The relations are instantiated one after another in one state that
+`Written.goalClaims` reads what written soundness goals of one scheme claim. It gives the
+scheme with its prover and its verifier, and for each goal the clause, the relation that the
+clause applies as an instance at the static values of the application and the proof values of
+the goal, the operands at the statement and at the witness of the relation (the witness is
+absent where the clause is written short), the proof arguments and the ceiling. The records are
+made by this function alone (their constructors are private), so that a statement cannot pair a
+goal with a role, an operand or a proof argument that is not its own.
+
+An operand is an input of the deployed header, by its place there. The source's ports and the
+header's inputs are two lists, since a `spec` port is erased (SX2); the place is found in the
+list from which the named protocol is emitted (`Typed.ProtocolBody.deployedPorts`), and the
+emitted header is compared with it. A statement operand is an input that both the prover and
+the verifier of the scheme hold: the scheme's statement (SC4), of which GL3 asks every
+statement argument to be a function. An input that the verifier holds alone is refused under
+GL3, at the operand; a `spec` port, which GL3 admits under a fixed statement as a value that no
+role holds, is refused as not issued yet. The goals of a package are of one scheme: goals of two
+scheme declarations are refused, also where the schemes have one protocol and one verifier.
+
+The relations are instantiated one after another in one state that
 starts as the state of the root, so each has a key of its own, and two goals with one value
 claim one relation. The package (`Typing.emitRoots`) is what the root reaches, in the order and
 with the stored definitions of the root's own package, followed by what each relation adds; a
@@ -42,6 +56,13 @@ process of each role of the root is the same in both, for every model. A stateme
 goal can therefore name one admission and find the protocol and the relation by their keys,
 and what it says of the protocol is said of the deployed one.
 
+`lake lean checks/GoalStatement.lean` asserts what a change of the source does to a statement:
+a `spec` port that nothing uses, in front of the operand or behind it, leaves the operand and
+the text of the claim as they are, and another port of the same type as operand changes both;
+the refusals above; the verifier of each of two schemes of one protocol. It then has Lean prove
+a module in which a consumer that names no generated proposition uses the published theorem at
+the inputs of the source, and refuse the same consumer where the clause names the other input.
+
 An operand of a clause that is no port is not read yet. Where a relation links a primitive that
 no deployed definition links, the claims' package is over a larger vocabulary than the root's,
 and the two are not compared.
@@ -50,8 +71,8 @@ and the two are not compared.
 
 `Written.Statements` (`Written/Statement.lean`) writes the text that stands around a proof in a
 module with the claims' package: the facts (keys, headers and places of the root, of the
-functions before it that the text names and of each goal's relation, the roles, each goal's
-proof arguments and charge), that the model covers the package, where the walks of the module
+functions before it that the text names and of each goal's relation, the verifier and the prover
+of the claims' scheme, each goal's proof arguments and charge), that the model covers the package, where the walks of the module
 start (the meaning of the deciding role, of each named function and of each goal's relation as
 the sealed denotation of its body), the transfers of a statement from the installed program to
 every admitted one, and for each goal four propositions that are defined before any proof: the
@@ -61,8 +82,14 @@ After the text of the proofs it writes the theorems of the last three from a pro
 claim and a witness, and the comparison of a goal's total with its ceiling. A statement names the model through a `ModelText`: the model,
 its samplers, its coverage, and what the statement assumes of it (`scalarFieldModelText` is
 the arithmetic model on a field with at least the order of the source's scalar field). It is
-written for one charge on a draw of the root; a goal whose ceiling is below the total of its
-charge is refused (GL4). `lean/formal/checks/CountCharge.lean` and
+written for one charge on a draw of the root, which the caller reads; a goal whose ceiling is
+below the total of its charge is refused (GL4). The deciding role, the operands, the proof
+arguments and the ceiling are read from the claims and from nothing that a caller gives. A
+statement names the inputs of the root as the source names its ports (`input_flag`), so that a
+reader sees which inputs the relation is applied to and which the deciding role is run on. A goal
+whose clause is a `reduces` gets no statement yet: the statement of a reduction is about a
+return on which the reduced statement is true. The `requires` of a contract are not hypotheses
+of a statement, which is then the stronger one. `lean/formal/checks/CountCharge.lean` and
 `lean/formal/checks/FreivaldsCharge.lean` are its users, and
 `lean/formal/checks/GoalClaim.lean` has Lean elaborate the statement of a goal whose relation
 has a witness.

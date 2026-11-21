@@ -24,8 +24,8 @@ The check reads the source with the frontend and writes two modules, on which Le
   scheme, then the relation of the clause at the value of each goal, as the functions that the
   frontend emits (`Written.goalClaims`). Around the text of `CountCharge.lean.in` stands what
   `Written.Statements` writes from what the frontend read: the facts (the key of the root, the
-  roles, and for each goal the value of its proof argument, its charge on the draw and its
-  relation), where the walks start, the transfer of a statement to every admitted program, the
+  verifier and the prover of the scheme, and for each goal the value of its proof argument, its
+  charge on the draw and its relation), where the walks start, the transfer of a statement to every admitted program, the
   claim of each goal about the installed program (`looseClaim`, `strictClaim`) with its goal
   for every admitted program, its result with the coverage and the statement that its
   hypotheses are met, all as propositions defined before the text; and after the text the
@@ -58,11 +58,13 @@ proves the same theorems. With `<=` of the relation changed to `<`, the deployed
 and both charges are what they were and the relation is another function: Lean refuses the
 theorems that say what the relation computes and those that rest on them.
 
-Six controls are refused by Lean, each for the theorems that depend on what it changes: a row
+Five controls are refused by Lean, each for the theorems that depend on what it changes: a row
 outside the table of the model inside the loop of the relation (the model does not cover that
-package), the relation changed, the roles exchanged, a charge below the bound of its tolerance,
-a charge on another instruction, and a charge of another definition. Two other sizes are read by the
-frontend alone: the charge of `Count<5>` at the tolerance 4 is zero, and the negative ceiling
+package), the relation changed, a charge below the bound of its tolerance, a charge on another
+instruction, and a charge of another definition. The deciding role of a statement is the
+verifier of the goals' scheme and no caller chooses it, so the roles are exchanged in the
+source: a scheme whose prover is `V` makes `P` the verifier, and the frontend refuses the goal,
+whose clause is decided by `V` (GL3). Two other sizes are read by the frontend alone: the charge of `Count<5>` at the tolerance 4 is zero, and the negative ceiling
 of `Count<4>` is no charge. A goal that states a ceiling at the total of its charge is issued
 the comparison, which the kernel decides; one that states a ceiling below it is issued no
 statement.
@@ -82,12 +84,11 @@ structure Subject where
 
 /-- The root, the verifier and the prover of a subject. -/
 def Subject.places (s : Subject) : Nat × Nat × Nat :=
-  (s.statements.claims.root, ((s.statements.roles.find? (·.1 == "verifier")).map (·.2)).getD 0,
-    ((s.statements.roles.find? (·.1 == "prover")).map (·.2)).getD 0)
+  (s.statements.claims.root, s.statements.claims.verifier, s.statements.claims.prover)
 
 /-- The name, the proof arguments and the charge of each goal. -/
 def Subject.goals (s : Subject) : List (String × Array Nat × DrawCharge) :=
-  s.statements.goals.map fun goal => (goal.claimed.goal, goal.specification, goal.charge)
+  s.statements.goals.map fun goal => (goal.claimed.goal, goal.claimed.specification, goal.charge)
 
 /-- The printed package of the claims. -/
 def Subject.package (s : Subject) : String := (Written.package s.statements.package).text
@@ -117,18 +118,14 @@ def read (text : String) : IO Subject := do
       throw (IO.userError s!"goal {goal} reads another clause: {repr clause}")
     unless claimed.statement == #[0] && claimed.witness == some #[] do
       throw (IO.userError s!"goal {goal}: the relation is applied to other ports than the table")
-    let (selected, _) ← IO.ofExcept (selectNamedGoal c.state goal .soundness)
-    unless selected.specification.size == 1 do
+    unless claimed.specification.size == 1 do
       throw (IO.userError s!"goal {goal} gives other proof arguments than the tolerance")
-    goals := goals ++ [{ claimed, specification := selected.specification
-                         charge := ← IO.ofExcept (goalDrawCharge c goal [] "z")
-                         ceiling := selected.ceiling : StatedGoal }]
-  let some verifier := (← IO.ofExcept (goalClause c "loose")).role
-    | throw (IO.userError "the clause has no deciding role")
-  let some prover := head.roster.toList.idxOf? "P" | throw (IO.userError "the roster has no prover")
+    goals := goals ++ [{ claimed, charge := ← IO.ofExcept (goalDrawCharge c goal [] "z") : StatedGoal }]
+  unless (head.roster[claims.verifier]?, head.roster[claims.prover]?) == (some "V", some "P") do
+    throw (IO.userError "the verifier and the prover of the scheme are not the roles V and P")
   let own := c.emission.package noAssociation
   let deployed := own.named.definitions.map fun d => (d.key.number, storedDefinition (b := own.bindings) d)
-  return ⟨text, ⟨claims, [("verifier", verifier), ("prover", prover)], goals, []⟩, deployed⟩
+  return ⟨text, ⟨claims, goals, []⟩, deployed⟩
 
 /-- The theorems of the proof module, whose axioms the check reads. -/
 def theorems : List String := [
@@ -239,8 +236,17 @@ def run (corpus template : System.FilePath) (work : System.FilePath) : IO Unit :
     unless why.contains "GL4" && why.contains "1/4" && why.contains "3/8" do
       throw (IO.userError s!"the ceiling below the total was refused for another reason: {why}")
 
-  -- The controls: the roles exchanged; the charge of `loose` below the bound of its tolerance;
-  -- the charge of `loose` on the guard; the charge of `loose` owned by another definition.
+  -- The roles exchanged in the source: with `V` the prover of the scheme the verifier is `P`,
+  -- and the clause, which `V` decides, is not decided by the verifier of the scheme.
+  let exchanged ← edit source "scheme Checked = Count<8>:\n    prover P\n" "scheme Checked = Count<8>:\n    prover V\n"
+  match (goalRoot exchanged "loose").bind (goalClaims · ["loose", "strict"]) with
+  | .ok _ => throw (IO.userError "a goal whose clause is decided by the prover of its scheme was read")
+  | .error why =>
+    unless why.contains "GL3" && why.contains "the deciding role of the clause is the verifier of the scheme" do
+      throw (IO.userError s!"the scheme with the roles exchanged was refused for another reason: {why}")
+
+  -- The controls: the charge of `loose` below the bound of its tolerance; the charge of `loose`
+  -- on the guard; the charge of `loose` owned by another definition.
   let some (_, _, loose) := written.goals.find? (·.1 == "loose")
     | throw (IO.userError "missing the goal loose")
   let withLoose (charge : DrawCharge) : Subject :=
@@ -251,9 +257,6 @@ def run (corpus template : System.FilePath) (work : System.FilePath) : IO Unit :
   -- element, which the standard model gives a constant.
   let uncovered ← read (← edit source "if xs[i] == 0 then 0 else 1" "if xs[i] ^ 2 == 0 then 0 else 1")
   let uncoveredProof ← startLakeLean work "CoverageControl" (coverageModule "CoverageControl" uncovered)
-  let (_, verifier, prover) := written.places
-  let exchanged := { written with statements := { written.statements with
-    roles := [("verifier", prover), ("prover", verifier)] } }
   let changedProof ← startLakeLean work "RelationControl" (← proofModule "RelationControl" changed template)
   let small := withLoose { loose with numerator := loose.numerator - 1 }
   let elsewhere := withLoose { loose with draws := [([], ⟨5⟩)] }
@@ -263,7 +266,6 @@ def run (corpus template : System.FilePath) (work : System.FilePath) : IO Unit :
   let comparison ← startLakeLean work "CountSource" (comparisonModule "CountSource" written)
   let turnedProof ← startLakeLean work "CountTurned" (← proofModule "CountTurned" turned template)
   let turnedComparison ← startLakeLean work "CountTurnedSource" (comparisonModule "CountTurnedSource" turned)
-  let exchangedProof ← startLakeLean work "RolesControl" (← proofModule "RolesControl" exchanged template)
   let smallProof ← startLakeLean work "BoundControl" (← proofModule "BoundControl" small template)
   let elsewhereProof ← startLakeLean work "SiteControl" (← proofModule "SiteControl" elsewhere template)
   let foreignProof ← startLakeLean work "OwnerControl" (← proofModule "OwnerControl" foreign template)
@@ -285,15 +287,6 @@ def run (corpus template : System.FilePath) (work : System.FilePath) : IO Unit :
   -- With `<` for `<=` the function of the relation computes another comparison: what is said
   -- of it, and what rests on that, is not proved; the theorems about the verifier stand.
   expectUnproved "the relation changed" "RelationControl" theorems changedProof ofRelation
-  -- The prover's program is not the one that draws: no theorem about the walk is proved. What
-  -- the relations compute is, and so is that a service with a fixed position does not follow the
-  -- samplers, which read no role.
-  expectUnproved "the roles exchanged" "RolesControl" theorems exchangedProof
-    (theorems.filter fun name =>
-      !["admitted_exists", "covered", "verifierProgram.eq", "verifier_meaning", "loose_meaning",
-        "strict_meaning", "loose_relation", "strict_relation",
-        "Witness.fixed_position_does_not_follow", "loose_witnessed", "strict_witnessed",
-        "loose_met", "strict_met"].contains name)
   -- Only `loose` and what is stated of it at its table fail, and `strict` stands.
   expectUnproved "a charge below the bound" "BoundControl" theorems smallProof
     ["loose_installed", "Witness.loose_at_table", "Witness.loose_attained", "loose_sound",
@@ -304,7 +297,7 @@ def run (corpus template : System.FilePath) (work : System.FilePath) : IO Unit :
     s!"{name} at tolerance {arguments[0]!} within {charge.numerator}/{charge.denominator}")
   IO.println (s!"Count<8> is judged within the charges of its goals ({charges}), " ++
     "on the tables on which the admitted relation returns false, in either order of the roster; " ++
-    "6 of 6 controls refused.")
+    "5 of 5 controls refused, and a scheme whose prover decides the clause is refused by the frontend.")
 
 end CountCharge
 

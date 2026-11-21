@@ -300,8 +300,7 @@ def emitProtocol (context : Context b) (protocol : ProtocolContext) (key : Core.
   let action : NamedM b (Core.Definition b.vocabulary) := do
     let mut inputs := #[]
     let mut ports := #[]
-    for port in body.ports do
-      if port.specification then continue
+    for port in body.deployedPorts do
       let name ← fresh
       bind port.binder.id (.value name)
       inputs := inputs.push name
