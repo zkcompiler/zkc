@@ -567,6 +567,12 @@ Where the reference leaves a choice, the code takes the reading marked in its co
   statement and witness (the core reads no `relation` definition), a header bound to the formal
   library as an `opaque` definition whose name carries the external name; any other is typed only.
   A specification item reads its specification-only parameters at 0, 1, 2 and 3 without a goal.
+  A call of a specification item with specification-only parameters, in a specification item or
+  in a clause, reaches the instance at their values where each has one in the environment of
+  the call (a parameter shared with the caller, or a specification argument over the caller's
+  own), after the callee's conditions are checked at them; where one has none, it reaches the
+  instance without them, whose body waits. A call that leaves a parameter of another scope out
+  is refused by SP11.
 - A law of an interface is typed at every implementing module instance the checker reaches, with
   `Self` that instance, and a law of a module at each instance of the module's scope, both at the
   default values of the law's own parameters where its `where` holds; each typed law leaves an

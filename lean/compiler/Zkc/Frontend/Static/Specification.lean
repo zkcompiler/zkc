@@ -26,13 +26,16 @@ def specificationClosure (env : Env) (target : Declaration)
     return (ref, term)
   return some ⟨env, arguments⟩
 
-/-- A caller with an open proof parameter defers the affected application until a goal
-supplies its value. A fully closed application checks its constraints during elaboration. -/
+/-- Whether every proof argument has a value where the closure was made: a shared parameter, and
+every specification-only parameter that a written term names, has one in the environment. A
+caller that is typed without the values of a goal has none for its own parameters, and defers
+the application until a goal supplies them; a specification item typed at the values of a goal
+has them. A fully closed application checks its constraints during elaboration. -/
 def SpecificationClosure.isClosed (closure : SpecificationClosure) : CompileM Bool :=
   closure.arguments.allM fun (ref, term) => do
     match term with
     | none => return closure.lexical.values.contains ref
-    | some expr => return !(← mentionsSpecParameter expr)
+    | some expr => return (← specParametersOf expr).all closure.lexical.values.contains
 
 /-- Evaluate in the caller, then check the callee's specification conjuncts at the result, and
 what the contract of the callee applies at the same values. The values stay outside the

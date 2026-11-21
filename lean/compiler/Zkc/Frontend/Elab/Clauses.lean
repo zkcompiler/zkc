@@ -15,8 +15,8 @@ the statement and the witness of the relation, the static arguments of the relat
 inferred from the types of the operands, the relation is instantiated, the `where` of its head
 holds at that instance (SP4), the operands have the types of its parameters, and its body is
 typed. When every proof argument of the relation has a value, the `where` holds at those values
-too. It is typed here, at the ports of an instance of the protocol, in a specification: the
-names of every role stand.
+too, and the body of the relation is typed at them. It is typed here, at the ports of an
+instance of the protocol, in a specification: the names of every role stand.
 
 A clause is specification and runs nowhere, so an operand or a body of a relation that waits
 for a later layer of the language leaves the clause as it is and does not make the protocol
@@ -52,15 +52,8 @@ def elabClauseApplication (expr : Lowered.Expr) : ElabM Unit := do
   let .relation node := found.node | return
   -- every specification-only parameter of the relation is given by a specification argument,
   -- or is the protocol's own where they share a scope (SP11)
-  let state ← getThe Compile.State
-  let context ← getContext
-  let some entry := state.table.entries[context.instance]? | throw .abandoned
-  let owner ← liftM (declaration entry.key.declaration : CompileM Declaration)
-  let supplied := steps.flatMap fun (_, args) => (args.getD #[]).filterMap fun
-    | .spec at_ name term => some (at_, name, term)
-    | _ => none
+  let proofArguments ← callProofArguments steps found span
   let env ← staticEnv
-  let proofArguments ← liftM (specificationClosure env found supplied owner.scopes span : CompileM _)
   -- the static arguments of the relation, from the types of the operands (SP6); an operand of
   -- a later layer leaves the clause as it is
   let assigned ← liftM (assignArguments env steps scopes span : CompileM _)
@@ -74,18 +67,18 @@ def elabClauseApplication (expr : Lowered.Expr) : ElabM Unit := do
       | .waiting _ | .staticIndex _ => pure none
       | other => throw other
   let some (values, _) := inferred | return
-  -- the instance of the relation, whose `where` holds at the deployed values (SP4) and, when
-  -- every proof argument has a value, at those too; a condition that cannot be evaluated is
-  -- not taken to hold
+  -- the instance of the relation, whose `where` holds at the deployed values (SP4); a condition
+  -- that cannot be evaluated is not taken to hold
   let description ← liftM (describeInstance id values : CompileM String)
   let inst ← liftM (instantiate id values { description, span } : CompileM InstanceId)
   unless ((← getThe Compile.State).table.content? inst) matches some (.signature _ (some _)) do
     waitFor (← liftM (signatureWait inst : CompileM String))
-  if let some closure := proofArguments then
-    liftM (closure.checkApplication inst span)
-  -- the operands at the parameter types of the instance, and the body of the relation, which
-  -- may wait for a later layer
-  try discard <| callDeclaration id assigned paired (some .bool) span
+  -- the operands at the parameter types of the instance, and the body of the relation. When
+  -- every proof argument has a value, the call reaches the relation at those values: its
+  -- `where` holds there, and its body is typed there, where an index, a size or a condition
+  -- can depend on a proof argument. A body that waits for a later layer leaves the clause as
+  -- it is
+  try discard <| callDeclaration id assigned paired (some .bool) span proofArguments
   catch
     | .waiting _ | .staticIndex _ => pure ()
     | other => throw other

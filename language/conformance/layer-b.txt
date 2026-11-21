@@ -571,6 +571,106 @@ scheme Checked = Count<8>:
     prover P
     construction interactive
 goal loose = soundness(Checked, spec e = 4)
+=== N-GL2e | accept | the body of a relation that a clause applies is typed where a goal gives the value: the index is below the size
+module t
+use zkc::security::{soundness}
+type F = primitive("bls12-381.fr")
+section <n: nat, spec e: nat>:
+    relation ZeroAt(xs: [F; n]): xs[e] == 0
+    protocol Count roles(P, V)(xs: [F; n] @(P, V)):
+        z <- draw index<n> from V to P
+        guard @V xs[z] == 0
+    spec for Count:
+        proves @V ZeroAt(xs)
+        charge sites.z <= 1 - 1 / n
+scheme Checked = Count<8>:
+    prover P
+    construction interactive
+goal placed = soundness(Checked, spec e = 7)
+=== N-GL2f | refuse TY7 | the body of a relation that a clause applies is typed where a goal gives the value: the index is the size or more
+module t
+use zkc::security::{soundness}
+type F = primitive("bls12-381.fr")
+section <n: nat, spec e: nat>:
+    relation ZeroAt(xs: [F; n]): xs[e] == 0
+    protocol Count roles(P, V)(xs: [F; n] @(P, V)):
+        z <- draw index<n> from V to P
+        guard @V xs[z] == 0
+    spec for Count:
+        proves @V ZeroAt(xs)
+        charge sites.z <= 1 - 1 / n
+scheme Checked = Count<8>:
+    prover P
+    construction interactive
+goal placed = soundness(Checked, spec e = 8)
+=== N-GL2g | accept | a relation that a relation applies reads the specification-only parameter of their scope at the value of the goal
+module t
+use zkc::security::{soundness}
+type F = primitive("bls12-381.fr")
+section <n: nat, spec e: nat>:
+    relation Reads(xs: [F; n]): xs[e] == 0
+    relation ZeroAt(xs: [F; n]): Reads(xs)
+    protocol Count roles(P, V)(xs: [F; n] @(P, V)):
+        z <- draw index<n> from V to P
+        guard @V xs[z] == 0
+    spec for Count:
+        proves @V ZeroAt(xs)
+        charge sites.z <= 1 - 1 / n
+scheme Checked = Count<8>:
+    prover P
+    construction interactive
+goal placed = soundness(Checked, spec e = 7)
+=== N-GL2h | refuse TY7 | a relation that a relation applies is typed at the value of the goal: the index is the size
+module t
+use zkc::security::{soundness}
+type F = primitive("bls12-381.fr")
+section <n: nat, spec e: nat>:
+    relation Reads(xs: [F; n]): xs[e] == 0
+    relation ZeroAt(xs: [F; n]): Reads(xs)
+    protocol Count roles(P, V)(xs: [F; n] @(P, V)):
+        z <- draw index<n> from V to P
+        guard @V xs[z] == 0
+    spec for Count:
+        proves @V ZeroAt(xs)
+        charge sites.z <= 1 - 1 / n
+scheme Checked = Count<8>:
+    prover P
+    construction interactive
+goal placed = soundness(Checked, spec e = 8)
+=== N-GL2i | refuse TY7 | a relation of another scope is given the value in a specification argument, and is typed at it
+module t
+use zkc::security::{soundness}
+type F = primitive("bls12-381.fr")
+relation Reads<n: nat, spec k: nat>(xs: [F; n]): xs[k] == 0
+section <n: nat, spec e: nat>:
+    relation ZeroAt(xs: [F; n]): Reads<spec k = e>(xs)
+    protocol Count roles(P, V)(xs: [F; n] @(P, V)):
+        z <- draw index<n> from V to P
+        guard @V xs[z] == 0
+    spec for Count:
+        proves @V ZeroAt(xs)
+        charge sites.z <= 1 - 1 / n
+scheme Checked = Count<8>:
+    prover P
+    construction interactive
+goal placed = soundness(Checked, spec e = 8)
+=== N-GL2j | refuse SP11 | a relation that applies a relation of another scope gives its specification-only parameter
+module t
+use zkc::security::{soundness}
+type F = primitive("bls12-381.fr")
+relation Reads<n: nat, spec k: nat>(xs: [F; n]): xs[k] == 0
+section <n: nat, spec e: nat>:
+    relation ZeroAt(xs: [F; n]): Reads(xs)
+    protocol Count roles(P, V)(xs: [F; n] @(P, V)):
+        z <- draw index<n> from V to P
+        guard @V xs[z] == 0
+    spec for Count:
+        proves @V ZeroAt(xs)
+        charge sites.z <= 1 - 1 / n
+scheme Checked = Count<8>:
+    prover P
+    construction interactive
+goal placed = soundness(Checked, spec e = 7)
 === M-SUM5 | refuse SX6 | `examples/sumcheck.zkc` with one change: two roles could decide
 module sumcheck<F: Field>
 
