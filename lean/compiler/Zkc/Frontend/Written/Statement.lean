@@ -306,12 +306,13 @@ reduction, and a walk reads a term in an environment; so for the deciding role o
 each function before the root that the text names and for each goal's relation, the meaning in
 the installed program is stated to be the sealed denotation of the body, which the kernel
 checks. The program of the role is `<role>Program`, in the kernel's normal form; the equations
-are `<role>_meaning`, `<function>_meaning` and `<goal>_meaning`, for every model. A walk
-starts by rewriting with one of them. -/
+are `<role>_meaning`, `<function>_meaning` and `<goal>_meaning`, for every model. Each has the
+label `walk_entry`: a walk on a goal that judges such a meaning passes along the equation that
+fits, and a text names none of them. -/
 def entries (s : Statements) : String :=
   let function (label member program : String) :=
     s!"/-- The function of `{label}` in its program is the denotation of its body. -/\n" ++
-    s!"theorem {label}_meaning (M : Model V) (inputs : HList M.Val {label}Header.ins) :\n" ++
+    s!"@[walk_entry]\ntheorem {label}_meaning (M : Model V) (inputs : HList M.Val {label}Header.ins) :\n" ++
     s!"    fnMeaning M {program} {member} inputs =\n" ++
     s!"      ({label}Body.denote (localSem M {label}Before.headers.fns (Defs.fnTable M {label}Before.defs)) []\n" ++
     s!"        (Env.empty.extend {label}Names inputs)).sealed := by\n  kernel_rfl\n\n"
@@ -323,7 +324,7 @@ def entries (s : Statements) : String :=
       s!"  project {label}Role rootBody\n\n" ++
       s!"/-- The process of the {label} in a run of the installed program is the denotation of its\n" ++
       "program. -/\n" ++
-      s!"theorem {label}_meaning (M : Model V) (path : List Frame)\n" ++
+      s!"@[walk_entry]\ntheorem {label}_meaning (M : Model V) (path : List Frame)\n" ++
       s!"    (inputs : HList (RV M {label}Role) rootHeader.ins) :\n" ++
       s!"    roleMeaning M installed rootMember {label}Role path inputs =\n" ++
       s!"      ({label}Program.denote (roleSem M {label}Role (Defs.fnTable M calleeProgram.defs)\n" ++
