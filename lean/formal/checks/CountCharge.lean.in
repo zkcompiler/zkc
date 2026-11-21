@@ -358,17 +358,19 @@ end
 /-- The claim of `loose`: the validity of the table gives its length, and the relation of the
 goal says how many of its entries are not zero. -/
 theorem loose_installed : looseClaim := by
-  intro F G D _ _ path xs valid σ service follows permitted s rejected
+  intro F G D _ _ path xs valid rejected
   have length : (xs : List F).length = 8 := valid.2 8 rfl
-  exact returns_installed D looseCharge looseTolerance (by decide) (by decide) loose_exact.ge
-    (by decide) path xs length (loose_far D xs length rejected) service follows permitted s
+  exact returnsWithin_of_returns _ _ _ _ fun service follows permitted s =>
+    returns_installed D looseCharge looseTolerance (by decide) (by decide) loose_exact.ge
+      (by decide) path xs length (loose_far D xs length rejected) service follows permitted s
 
 /-- The claim of `strict`, as `loose`. -/
 theorem strict_installed : strictClaim := by
-  intro F G D _ _ path xs valid σ service follows permitted s rejected
+  intro F G D _ _ path xs valid rejected
   have length : (xs : List F).length = 8 := valid.2 8 rfl
-  exact returns_installed D strictCharge strictTolerance (by decide) (by decide) strict_exact.ge
-    (by decide) path xs length (strict_far D xs length rejected) service follows permitted s
+  exact returnsWithin_of_returns _ _ _ _ fun service follows permitted s =>
+    returns_installed D strictCharge strictTolerance (by decide) (by decide) strict_exact.ge
+      (by decide) path xs length (strict_far D xs length rejected) service follows permitted s
 
 /-! ## The hypotheses are met, and the bound is reached -/
 
@@ -657,14 +659,14 @@ table is valid, the relation returns false on it, and the service of the laws dr
 samplers and answers what is permitted. -/
 theorem loose_witnessed : looseWitnessed :=
   ⟨Bool, Bool, Zkc.Formal.Written.FiniteModel.data, inferInstance, inferInstance,
-    Witness.looseTable, Witness.loose_valid, Unit, Witness.service, ⟨()⟩,
-    serveLaws_follows _ _, Witness.service_permitted,
+    Witness.looseTable, Witness.loose_valid,
+    ⟨Unit, Witness.service, ⟨()⟩, serveLaws_follows _ _, Witness.service_permitted⟩,
     (loose_relation _ Witness.looseTable rfl).trans (by decide)⟩
 
 /-- **The hypotheses of the claim of `strict` are met.** -/
 theorem strict_witnessed : strictWitnessed :=
   ⟨Bool, Bool, Zkc.Formal.Written.FiniteModel.data, inferInstance, inferInstance,
-    Witness.strictTable, Witness.strict_valid, Unit, Witness.service, ⟨()⟩,
-    serveLaws_follows _ _, Witness.service_permitted,
+    Witness.strictTable, Witness.strict_valid,
+    ⟨Unit, Witness.service, ⟨()⟩, serveLaws_follows _ _, Witness.service_permitted⟩,
     (strict_relation _ Witness.strictTable rfl).trans (by decide)⟩
 end

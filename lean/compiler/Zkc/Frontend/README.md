@@ -77,7 +77,11 @@ start (the meaning of the deciding role, of each named function and of each goal
 the sealed denotation of its body), the transfers of a statement from the installed program to
 every admitted one, and for each goal four propositions that are defined before any proof: the
 claim about the installed program, the goal for every admitted program, the result (the model
-covers the package, and the goal), and that the hypotheses of the claim are met together.
+covers the package, and the goal), and that the hypotheses of the claim are met together. The
+claim applies the experiment of the formal library (`ReturnsWithin`,
+`lean/formal/Zkc/Formal/ReturnExperiment.lean`) to the process of the deciding role on its
+inputs, the samplers of the model and the bound; the generator does not write which services
+the bound is against or which event it is of.
 After the text of the proofs it writes the theorems of the last three from a proof of the
 claim and a witness, and the comparison of a goal's total with its ceiling. A statement names the model through a `ModelText`: the model,
 its samplers, its coverage, and what the statement assumes of it (`scalarFieldModelText` is

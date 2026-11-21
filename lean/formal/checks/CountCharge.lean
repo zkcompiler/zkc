@@ -155,7 +155,7 @@ def proofModule (name : String) (s : Subject) (template : String) : IO String :=
   let claims ← IO.ofExcept (stated.claimTexts standardModelText)
   let closings := stated.closings
   let ceilings ← IO.ofExcept stated.ceilings
-  return packageHeader ["Zkc.Formal.Walk", "Zkc.Formal.OracleProcess", "Zkc.Formal.Written.PortSamplers",
+  return packageHeader ["Zkc.Formal.Walk", "Zkc.Formal.OracleProcess", "Zkc.Formal.ReturnExperiment", "Zkc.Formal.Written.PortSamplers",
       "Zkc.Formal.Written.LawSamplers", "Zkc.Formal.Written.SiteAllowance",
       "Zkc.Formal.Written.FunctionMeaning", "Zkc.Formal.Written.StandardModel",
       "Zkc.Formal.Written.FiniteModel"] ++

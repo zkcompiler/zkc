@@ -442,13 +442,14 @@ end
 says that the product differs, and the field of the model has at least the order that the
 charge is written with. -/
 theorem sound_installed : soundClaim := by
-  intro F G _ _ _ _ _ _ _ path large a validA b validB c validC σ service follows permitted s rejected
+  intro F G _ _ _ _ _ _ _ path large a validA b validB c validC rejected
   obtain ⟨A, ha⟩ := rows_of_valid G a validA
   obtain ⟨B, hb⟩ := rows_of_valid G b validB
   obtain ⟨C, hc⟩ := rows_of_valid G c validC
-  exact returns_installed (F := F) (G := G) path a b c A B C ha hb hc soundCharge
-    (sound_far (F := F) G a b c A B C ha hb hc rejected) (by decide) (by decide)
-    (large_covers large) (by decide) service follows permitted s
+  exact returnsWithin_of_returns _ _ _ _ fun service follows permitted s =>
+    returns_installed (F := F) (G := G) path a b c A B C ha hb hc soundCharge
+      (sound_far (F := F) G a b c A B C ha hb hc rejected) (by decide) (by decide)
+      (large_covers large) (by decide) service follows permitted s
 
 
 /-! ## The hypotheses are met -/
@@ -504,11 +505,11 @@ theorem sound_at_corner (path : List Frame) :
         (roleMeaning (model Scalars Scalars) installed rootMember verifierRole path
           (.cons (rows none) (.cons (rows none) (.cons (rows corner) .nil)))))).run.run ()}[
       ∃ results, out.1 = some (.inl results)] ≤ total soundCharge :=
-  sound_installed (F := Scalars) (G := Scalars) path large (rows none) (rows_valid none)
-    (rows none) (rows_valid none) (rows corner) (rows_valid corner)
+  (sound_installed (F := Scalars) (G := Scalars) path large (rows none) (rows_valid none)
+    (rows none) (rows_valid none) (rows corner) (rows_valid corner) rejected).returns
     (serveLaws (model Scalars Scalars) (ArithmeticModel.draws Scalars Scalars))
-    (serveLaws_follows _ _)
-    (serveLaws_permitted _ _ (ArithmeticModel.draws_permitted Scalars Scalars)) () rejected
+    ⟨serveLaws_follows _ _,
+      serveLaws_permitted _ _ (ArithmeticModel.draws_permitted Scalars Scalars)⟩ ()
 
 /-- **The event of the claim happens at the witness.** Against the service of the laws, the
 simulation of the verifier returns with a probability that is not zero: the zero vector is
@@ -535,9 +536,9 @@ theorem sound_witnessed : soundWitnessed :=
     inferInstance, inferInstance, inferInstance, Witness.large,
     rows Witness.none, Witness.rows_valid Witness.none, rows Witness.none,
     Witness.rows_valid Witness.none, rows Witness.corner, Witness.rows_valid Witness.corner,
-    Unit, serveLaws (model Witness.Scalars Witness.Scalars)
+    ⟨Unit, serveLaws (model Witness.Scalars Witness.Scalars)
       (ArithmeticModel.draws Witness.Scalars Witness.Scalars), ⟨()⟩, serveLaws_follows _ _,
-    serveLaws_permitted _ _ (ArithmeticModel.draws_permitted Witness.Scalars Witness.Scalars),
+      serveLaws_permitted _ _ (ArithmeticModel.draws_permitted Witness.Scalars Witness.Scalars)⟩,
     Witness.rejected⟩
 
 end

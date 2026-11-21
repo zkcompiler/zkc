@@ -144,7 +144,7 @@ them, with no proof: the facts, the transfers to an admitted program and the cla
 goal. Lean elaborates the statements. -/
 def statementModule (name : String) (stated : Statements) : IO String := do
   let claims ← IO.ofExcept (stated.claimTexts standardModelText)
-  return imports ["Zkc.Formal.OracleProcess", "Zkc.Formal.Written.LawSamplers",
+  return imports ["Zkc.Formal.OracleProcess", "Zkc.Formal.ReturnExperiment", "Zkc.Formal.Written.LawSamplers",
       "Zkc.Formal.Written.FunctionMeaning", "Zkc.Formal.Written.StandardModel",
       "Zkc.Formal.Written.Ceiling"] ++
     s!"namespace {name}\n" ++ (Written.package stated.package).text ++ Statements.opens ++
