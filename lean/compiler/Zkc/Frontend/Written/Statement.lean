@@ -586,16 +586,22 @@ def siteLabel (site : String) (index count : Nat) : String :=
 
 /-- The named draws of a goal's root, each with the name of its site in the source, its name
 in a module and its key. The name in a module is the site's (`siteLabel`) where that is a plain
-name, and `key<number>` of the draw where it is not. A name that two draws would share (a site
-`r_0` beside the first draw of a stepped loop over `r`) is followed by the key of each. -/
+name, and `key<number>` of the draw where it is not. A name that two charged draws would share
+(a site `r_0` beside the first draw of a stepped loop over `r`) is followed by the key of each.
+The name of a charged draw does not depend on the draws that the contract does not charge: a
+draw without a charge whose name another draw has is the one that is followed by its key. -/
 def _root_.Zkc.Frontend.Written.ClaimedGoal.siteLabels (goal : ClaimedGoal) :
     List (String × String × Core.Key) :=
+  let capped := (goal.caps.uses.getLast?.map (·.draws)).getD []
+  let charged (key : Core.Key) : Bool := capped.any (·.key == key)
   let draws := goal.sites.flatMap fun (site, keys) =>
     keys.zipIdx.map fun (key, index) =>
       (site, if plainName site then siteLabel site index keys.length else s!"key{key.number}", key)
   draws.map fun (site, label, key) =>
-    if (draws.filter (·.2.1 == label)).length > 1 then (site, s!"{label}_key{key.number}", key)
-    else (site, label, key)
+    let sharing := draws.filter fun other => other.2.1 == label && other.2.2 != key
+    let shared :=
+      if charged key then sharing.any fun other => charged other.2.2 else !sharing.isEmpty
+    if shared then (site, s!"{label}_key{key.number}", key) else (site, label, key)
 
 /-- The draws of a goal's root that its table of caps gives a cap, each with its name
 in a module and that cap. -/

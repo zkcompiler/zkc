@@ -88,8 +88,8 @@ def namesDraw (s : Compile.State) (owner : InstanceId) (name : String) : ExportM
     | throw s!"expected one source event named {name}"
   return source.audience matches .transfer _ (some _)
 
-/-- The charged draws of a use by the names of their sites: each name with the keys of the
-draws that realize it (one, or one for each block of a stepped loop). -/
+/-- Draws by the names of their sites: each name with the keys of the draws that realize it
+(one, or one for each block of a stepped loop). -/
 abbrev SiteKeys := List (String × List Core.Key)
 
 /-- The use of a definition at its proof arguments, in a table under construction: its place.

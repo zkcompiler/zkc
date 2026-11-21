@@ -782,28 +782,42 @@ def stateForText (goal : MVarId) : MetaM (Option MVarId) := do
 
 /-- The equations of the walk, read into the hypotheses of a goal whose process goes on: a
 hypothesis that speaks of a variable of the walk (a guard that passed, what a read found) is
-restated of the value. The equations are left as they are, and so is a hypothesis that judges
-a process (the one that a walk of a hypothesis goes on with): the variables stay in a process.
-One hypothesis is restated at a time, and the context is read again after each, since
-restating a hypothesis gives those after it other identities. -/
-private partial def readThrough (goal : MVarId) : MetaM MVarId := goal.withContext do
-  let context ← getLCtx
-  for equation in context do
-    unless isWalkEquation equation do continue
-    let some (_, .fvar standing, value) := (← instantiateMVars equation.type).eq? | continue
-    for decl in context do
-      if decl.isImplementationDetail || isWalkEquation decl || decl.fvarId == standing then continue
-      let type ← instantiateMVars decl.type
-      if type.consumeMData.getAppFn.isConstOf ``Zkc.Core.Process.interpret then continue
-      unless type.containsFVar standing && (← isProp type) do continue
-      let motive ← mkLambdaFVars #[.fvar standing] type
-      let result ← goal.replaceLocalDecl decl.fvarId (type.replaceFVar (.fvar standing) value)
-        (← mkCongrArg motive equation.toExpr)
-      return ← readThrough result.mvarId
-  return goal
+restated of the value. Left as they are: the equations; a hypothesis that judges a process
+(the one that a walk of a hypothesis goes on with), since the variables stay in a process; a
+hypothesis that something else depends on (another hypothesis or the goal names its proof),
+which cannot be replaced; and one whose statement is not a statement any more with the value
+in the variable's place. One hypothesis is restated at a time, and the context is read again
+after each, since restating a hypothesis gives those after it other identities; a hypothesis
+that is still there after it was restated is not restated again. -/
+private partial def readThrough (goal : MVarId) (kept : Array FVarId := #[]) : MetaM MVarId :=
+  goal.withContext do
+    let context ← getLCtx
+    let target ← instantiateMVars (← goal.getType)
+    for equation in context do
+      unless isWalkEquation equation do continue
+      let some (_, .fvar standing, value) := (← instantiateMVars equation.type).eq? | continue
+      for decl in context do
+        if decl.isImplementationDetail || isWalkEquation decl || decl.fvarId == standing then continue
+        if kept.contains decl.fvarId then continue
+        let type ← instantiateMVars decl.type
+        if type.consumeMData.getAppFn.isConstOf ``Zkc.Core.Process.interpret then continue
+        unless type.containsFVar standing && (← isProp type) do continue
+        -- its proof is named elsewhere: it stays
+        let named ← context.anyM fun other => do
+          if other.fvarId == decl.fvarId then return false
+          return (← instantiateMVars other.type).containsFVar decl.fvarId
+        if named || target.containsFVar decl.fvarId then continue
+        let motive ← mkLambdaFVars #[.fvar standing] type
+        unless ← Meta.isTypeCorrect motive do continue
+        let result ← goal.replaceLocalDecl decl.fvarId (type.replaceFVar (.fvar standing) value)
+          (← mkCongrArg motive equation.toExpr)
+        let stays ← result.mvarId.withContext do return (← getLCtx).contains decl.fvarId
+        return ← readThrough result.mvarId (if stays then kept.push decl.fvarId else kept)
+    return goal
 
 /-- A goal that holds as it stands: it is `True`, a hypothesis, an equation of a term with
-itself, or its hypotheses contradict one another. Nothing is decided or computed to close it.
+itself, or its hypotheses contradict one another (`contradiction`, which also decides a
+hypothesis that has no variable). The goal itself is not decided or computed.
 With `hypothesis`, the goal concludes from a judgment, which is introduced under that name
 first. -/
 private def closes (goal : MVarId) (hypothesis : Option Lean.Name := none) : TacticM Bool := do
@@ -850,6 +864,8 @@ private partial def walkFrom (goal : MVarId) (calls : Bool)
     -- a fork takes the first name, whatever the number of its sides; each side goes on with
     -- the names that are left
     let left := if forked then names.tail else names
+    -- a fork of a value that has no form leaves nothing to walk and nothing to name
+    if next.isEmpty then return ([], left.isEmpty)
     let reached ← next.mapM fun side => walkFrom side calls left hypothesis
     return (reached.flatMap (·.1), reached.any (·.2))
   match ← ahead goal hypothesis.isSome with

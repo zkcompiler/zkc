@@ -171,6 +171,16 @@ def clashingSites : String := charged
     "    charge sites.r_0 <= 1 / 4\n")
   "Clash"
 
+/-- The same with no charge on the stepped loop: the charged draw has its site's name, as it
+had when only charged draws were named. -/
+def clashingUncharged : String := charged
+  ("protocol Clash roles(P, V)(claim: bool @(P, V)):\n" ++
+    "    for i in 0..2:\n        r <- draw index<i + 2> from V to P\n" ++
+    "    r_0 <- draw index<4> from V to P\n    guard @V claim\n" ++
+    "spec for Clash:\n    proves @V Holds(claim)\n" ++
+    "    charge sites.r_0 <= 1 / 4\n")
+  "Clash"
+
 /-- A site whose name is an identifier of the source and no plain name for a module. -/
 def greekSite : String := charged
   ("protocol Greek roles(P, V)(claim: bool @(P, V)):\n" ++
@@ -444,7 +454,7 @@ def run (work : System.FilePath) : IO Unit := do
       ⟨⟨2⟩, [⟨⟨3⟩, 1, 4, 1⟩], [⟨⟨0⟩, 1, 0⟩, ⟨⟨1⟩, 3, 0⟩]⟩]⟩, 3 / 4))
   expect "the blocks of a stepped loop do not each have a draw"
     (tableOf steppedDraws == some (⟨[⟨⟨1⟩, [⟨⟨0⟩, 1, 2, 1⟩, ⟨⟨2⟩, 1, 2, 1⟩, ⟨⟨4⟩, 1, 2, 1⟩], []⟩]⟩, 3 / 2))
-  -- The names that a module gives the charged draws of the root: the site's, with the place
+  -- The names that a module gives the draws of the root, charged or not: the site's, with the place
   -- of the block in a stepped loop; the key where two draws would share a name or the site's
   -- name is no plain identifier.
   let labelsOf (text : String) : Except String (List (String × Nat)) := do
@@ -456,6 +466,8 @@ def run (work : System.FilePath) : IO Unit := do
         steppedDraws, [("r_0", 0), ("r_1", 2), ("r_2", 4)]),
       ("two draws that would share a name are not told apart by their keys",
         clashingSites, [("r_0_key0", 0), ("r_1", 2), ("r_0_key4", 4)]),
+      ("a charged draw has not its site's name beside a draw without a charge that would share it",
+        clashingUncharged, [("r_0_key0", 0), ("r_1", 2), ("r_0", 4)]),
       ("a site whose name is no plain identifier is not named by its key",
         greekSite, [("key0", 0)])] do
     match labelsOf text with
