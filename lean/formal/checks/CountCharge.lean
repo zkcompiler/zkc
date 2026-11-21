@@ -35,6 +35,9 @@ The check reads the source with the frontend and writes two modules, on which Le
   and a service meet every hypothesis, and there the verifier returns with probability exactly
   the total of the charge; a charge on another instruction, and a charge of another definition,
   judge it at no budget; a service that always gives one position does not follow the samplers.
+- The proof module also states that the standard model covers the package (`covered`): it
+  interprets every row of the vocabulary that the package links, read from the stored program
+  through its loops and arms, and has a sampler for the law of every coin that it draws.
 - The comparison module has the same printed package and the frontend: the program by names
   and the association that Lean reads from the package are those that the frontend gives to
   admission for the claims, and its first definitions are those of the root's own package.
@@ -47,9 +50,10 @@ proves the same theorems. With `<=` of the relation changed to `<`, the deployed
 and both charges are what they were and the relation is another function: Lean refuses the
 theorems that say what the relation computes and those that rest on them.
 
-Five controls are refused by Lean, each for the theorems that depend on what it changes: the
-relation changed, the roles exchanged, a charge below the bound of its tolerance, a charge on
-another instruction, and a charge of another definition. Two other sizes are read by the
+Six controls are refused by Lean, each for the theorems that depend on what it changes: a row
+outside the table of the model inside the loop of the relation (the model does not cover that
+package), the relation changed, the roles exchanged, a charge below the bound of its tolerance,
+a charge on another instruction, and a charge of another definition. Two other sizes are read by the
 frontend alone: the charge of `Count<5>` at the tolerance 4 is zero, and the negative ceiling
 of `Count<4>` is no charge.
 -/
@@ -169,7 +173,7 @@ def imports (others : List String) : String :=
 
 /-- The theorems of the proof module, whose axioms the check reads. -/
 def theorems : List String := [
-  "verifier.eq", "loose_relation", "strict_relation", "walked_within", "walked_excludes",
+  "covered", "verifier.eq", "loose_relation", "strict_relation", "walked_within", "walked_excludes",
   "walk_reads_any_key", "judged_within", "returns_within", "loose_sound", "strict_sound",
   "Witness.loose_at_table", "Witness.strict_at_table", "Witness.loose_attained",
   "Witness.strict_attained", "Witness.misplaced_judges_nothing", "Witness.foreign_judges_nothing",
@@ -187,6 +191,14 @@ def proofModule (name : String) (s : Subject) (template : String) : String :=
     "Zkc.Formal.Written.FiniteModel"] ++
   s!"namespace {name}\n" ++ s.package ++ facts s ++ template ++
   String.join (theorems.map (s!"#print axioms {·}\n")) ++ s!"end {name}\n"
+
+/-- A module with the package of a subject and the one theorem that the standard model covers
+it. -/
+def coverageModule (name : String) (s : Subject) : String :=
+  imports ["Zkc.Formal.Written.LawSamplers"] ++ s!"namespace {name}\n" ++ s.package ++
+  "open Zkc.Formal.Written in\n" ++
+  "theorem covered : StandardModel.covers stored = true := by decide +kernel\n" ++
+  s!"#print axioms covered\nend {name}\n"
 
 def comparisonModule (name : String) (s : Subject) : String :=
   imports ["Zkc.Tests.Frontend.PrintedPackageSupport"] ++ s!"namespace {name}\n" ++ s.package ++
@@ -257,6 +269,10 @@ def run (corpus template : System.FilePath) (work : System.FilePath) : IO Unit :
   let withLoose (charge : DrawCharge) : Subject :=
     { written with goals := written.goals.map fun goal =>
         if goal.name == "loose" then { goal with charge } else goal }
+  -- A row outside the table of the model, inside the loop of the relation: the power of a field
+  -- element, which the standard model gives a constant.
+  let uncovered ← read (← edit source "if xs[i] == 0 then 0 else 1" "if xs[i] ^ 2 == 0 then 0 else 1")
+  let uncoveredProof ← start work "CoverageControl" (coverageModule "CoverageControl" uncovered)
   let exchanged := { written with verifier := written.prover, prover := written.verifier }
   let changedProof ← start work "RelationControl" (proofModule "RelationControl" changed template)
   let small := withLoose { loose.charge with numerator := loose.charge.numerator - 1 }
@@ -279,6 +295,11 @@ def run (corpus template : System.FilePath) (work : System.FilePath) : IO Unit :
   for (name, task) in [("CountSource", comparison), ("CountTurnedSource", turnedComparison)] do
     let (ok, output) ← finish task
     acceptedOutput name ok output []
+  -- The package with a row outside the table is not covered: the kernel decides it.
+  let (ok, output) ← finish uncoveredProof
+  if ok then throw (IO.userError "Lean accepted that the model covers a package with a row outside its table")
+  unless output.contains "StandardModel.covers stored = true" && output.contains "is false" do
+    throw (IO.userError s!"the coverage control was refused for another reason\n{output}")
   -- With `<` for `<=` the function of the relation computes another comparison: what is said
   -- of it, and what rests on that, is not proved; the theorems about the verifier stand.
   expectUnproved "the relation changed" "RelationControl" changedProof ofRelation
@@ -286,8 +307,9 @@ def run (corpus template : System.FilePath) (work : System.FilePath) : IO Unit :
   -- the relations compute is, and so is that a service with a fixed position does not follow the
   -- samplers, which read no role.
   expectUnproved "the roles exchanged" "RolesControl" exchangedProof
-    ((theorems.drop 1).filter fun name =>
-      !["loose_relation", "strict_relation", "Witness.fixed_position_does_not_follow"].contains name)
+    (theorems.filter fun name =>
+      !["covered", "verifier.eq", "loose_relation", "strict_relation",
+        "Witness.fixed_position_does_not_follow"].contains name)
   -- Only `loose` and what is stated of it at its table fail, and `strict` stands.
   expectUnproved "a charge below the bound" "BoundControl" smallProof
     ["loose_sound", "Witness.loose_at_table", "Witness.loose_attained"]
@@ -299,7 +321,7 @@ def run (corpus template : System.FilePath) (work : System.FilePath) : IO Unit :
     s!"{goal.name} at tolerance {goal.tolerance} within {goal.charge.numerator}/{goal.charge.denominator}")
   IO.println (s!"Count<8> is judged within the charges of its goals ({charges}), " ++
     "on the tables on which the admitted relation returns false, in either order of the roster; " ++
-    "5 of 5 controls refused.")
+    "6 of 6 controls refused.")
 
 end CountCharge
 

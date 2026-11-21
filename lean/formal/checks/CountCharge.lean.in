@@ -32,6 +32,12 @@ theorem loose_exact : ceiling looseCharge = ((7 - looseTolerance : ℕ) : ℚ≥
 theorem strict_exact : ceiling strictCharge = ((7 - strictTolerance : ℕ) : ℚ≥0) / (8 : ℕ) := by
   norm_num [ceiling, strictCharge, strictTolerance]
 
+/-- **The model covers the package.** The standard model interprets every row of the vocabulary
+that the package links and has a sampler for the law of every coin that it draws, so the
+theorems below are about this program, and not about one in which a row is a constant or a
+coin has no distribution. -/
+theorem covered : StandardModel.covers stored = true := by decide +kernel
+
 -- The verifier's program, in the kernel's normal form.
 kernel_normal verifier :
     Term (roleDialect V calleeProgram.headers verifierRole) (Ctx.empty.extend rootNames) rootHeader.outs :=
