@@ -12,6 +12,9 @@ namespace Zkc.Core.Controls
 
 open Zkc.Core Zkc.Core.Shapes
 
+-- These tests compute the meaning of small programs by Lean's own reduction.
+unseal Zkc.Core.fnMeaning Zkc.Core.roleMeaning Zkc.Core.protocolMeaning
+
 set_option maxRecDepth 4000
 
 /-! ## What the world gives -/

@@ -17,6 +17,9 @@ nothing else:
   names and of each goal's relation, the roles, and each goal's proof arguments and charge, as
   terms;
 - `coverage`: the theorem `covered`, that the model of the statement covers the stored program;
+- `entries`: where the walks of the module start: for the deciding role, each named function
+  and each goal's relation, the meaning in the installed program as the sealed denotation of
+  the body;
 - `transfers`: that what holds of the root and of a relation in the installed program holds of
   them in every program that admission gives, each found by its key;
 - `claimTexts`: for each goal, the proposition `<goal>Claim` about the installed program. On valid
@@ -30,8 +33,8 @@ nothing else:
   of its charge is within it. A goal whose ceiling is below that total is refused here (GL4),
   before any module is written.
 
-So a proof module is: the package, `opens`, `facts`, `coverage`, `transfers`, `claimTexts`, the
-proofs written for the protocol, `closings`. The proofs choose nothing of the statement: the
+So a proof module is: the package, `opens`, `facts`, `coverage`, `entries`, `transfers`,
+`claimTexts`, the proofs written for the protocol, `closings`. The proofs choose nothing of the statement: the
 subject, the premise, the experiment, the samplers and the bound are written here.
 
 The model is named by a `ModelText`: the binders of what it is built from, the model, its
@@ -227,6 +230,48 @@ def facts (s : Statements) : String :=
     s!"noncomputable abbrev {name}Before : Typed V := {s.programBefore relation}\n" ++
     s!"noncomputable abbrev {name}Member : Member installed.headers.fns header{relation} :=\n" ++
     s!"  {s.memberOf relation false}\n")
+
+/-- Where the walks of a module start. The meanings of a program are closed to Lean's own
+reduction, and a walk reads a term in an environment; so for the deciding role of the root, for
+each function before the root that the text names and for each goal's relation, the meaning in
+the installed program is stated to be the sealed denotation of the body, which the kernel
+checks. The program of the role is `<role>Program`, in the kernel's normal form; the equations
+are `<role>_meaning`, `<function>_meaning` and `<goal>_meaning`, for every model. A walk
+starts by rewriting with one of them. -/
+def entries (s : Statements) : String :=
+  let function (label member program : String) :=
+    s!"/-- The function of `{label}` in its program is the denotation of its body. -/\n" ++
+    s!"theorem {label}_meaning (M : Model V) (inputs : HList M.Val {label}Header.ins) :\n" ++
+    s!"    fnMeaning M {program} {member} inputs =\n" ++
+    s!"      ({label}Body.denote (localSem M {label}Before.headers.fns (Defs.fnTable M {label}Before.defs)) []\n" ++
+    s!"        (Env.empty.extend {label}Names inputs)).sealed := by\n  kernel_rfl\n\n"
+  let role := match s.roles.head? with
+    | none => ""
+    | some (label, _) =>
+      s!"-- The program of the {label}, in the kernel's normal form.\n" ++
+      s!"kernel_normal {label}Program :\n" ++
+      s!"    Term (roleDialect V calleeProgram.headers {label}Role) (Ctx.empty.extend rootNames) rootHeader.outs :=\n" ++
+      s!"  project {label}Role rootBody\n\n" ++
+      s!"/-- The process of the {label} in a run of the installed program is the denotation of its\n" ++
+      "program. -/\n" ++
+      s!"theorem {label}_meaning (M : Model V) (path : List Frame)\n" ++
+      s!"    (inputs : HList (RV M {label}Role) rootHeader.ins) :\n" ++
+      s!"    roleMeaning M installed rootMember {label}Role path inputs =\n" ++
+      s!"      ({label}Program.denote (roleSem M {label}Role (Defs.fnTable M calleeProgram.defs)\n" ++
+      s!"        (Defs.rTable M calleeProgram.defs)) path (Env.empty.extend rootNames inputs)).sealed := by\n" ++
+      "  kernel_rfl\n\n"
+  "noncomputable section\n\n" ++ role ++
+  String.join (s.functions.map fun (label, _) => function label s!"{label}Member" "calleeProgram") ++
+  String.join (s.goals.map fun goal =>
+    function goal.claimed.goal s!"{goal.claimed.goal}Member" "installed") ++
+  "end\n\n"
+
+/-- The names of the theorems that `entries` writes. -/
+def entryNames (s : Statements) : List String :=
+  (match s.roles.head? with
+    | none => []
+    | some (label, _) => [s!"{label}Program.eq", s!"{label}_meaning"]) ++
+  s.functions.map (s!"{·.1}_meaning") ++ s.goals.map (s!"{·.claimed.goal}_meaning")
 
 /-- That what holds of the root, and of the root with a goal's relation, in the installed
 program holds of them in every admitted program, each found by its key. -/

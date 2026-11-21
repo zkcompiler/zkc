@@ -9,6 +9,10 @@ namespace Zkc.Formal.Interactive.Sumcheck.HonestPairs
 open Core ReductionRound JointEntry
 open TableHalves (table)
 open PointReturn (point ports)
+
+-- This file passes between the meaning of a program and its tables by definitional unfolding.
+unseal Zkc.Core.fnMeaning Zkc.Core.roleMeaning Zkc.Core.protocolMeaning
+
 variable {V : Vocabulary} {hs : Headers V} (rows : ScalarRows V)
 variable (sums : (n : Nat) → SumRow rows n) (vectors : (n : Nat) → TableRestriction.Rows rows.scalarTy n)
 variable (events : Events rows.scalarTy)

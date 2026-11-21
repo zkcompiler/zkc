@@ -6,6 +6,10 @@ public import Zkc.Formal.Interactive.PairMembers
 @[expose] public section
 namespace Zkc.Formal.Interactive.Sumcheck.ScalarRows
 open Core
+
+-- This file passes between the meaning of a program and its tables by definitional unfolding.
+unseal Zkc.Core.fnMeaning Zkc.Core.roleMeaning Zkc.Core.protocolMeaning
+
 variable {V : Vocabulary} (rows : ScalarRows V)
 
 def BoundaryLaw (k : Key) (run : FunctionMeaning (rows.scalarHeader k [rows.pair])) : Prop :=

@@ -5,6 +5,10 @@ public import Zkc.Core.Evidence.ProtocolReadback
 @[expose] public section
 namespace Zkc.Formal.Interactive.Sumcheck.EmptyReduction
 open Core
+
+-- This file passes between the meaning of a program and its tables by definitional unfolding.
+unseal Zkc.Core.fnMeaning Zkc.Core.roleMeaning Zkc.Core.protocolMeaning
+
 variable {V : Vocabulary}
 
 def header (key : Key) (state scalar : V.Ty) (prefixSize : Nat) (shape : Shape V) : ProtocolHeader V :=

@@ -7,7 +7,8 @@ what the frontend read: the facts (`rootKey` with `rootHeader`, `rootNames`, `ro
 `rootMember` and `calleeProgram`, the program before the root; `verifierRole`, `proverRole`; for
 each goal `looseArgument0`, `looseCharge`, `looseKey` with `looseHeader`, `looseNames`,
 `looseBody`, `looseBefore`, the program before the relation, and `looseMember`), that the
-standard model covers the package (`covered`), the transfers `at_root`, `at_loose` and
+standard model covers the package (`covered`), where the walks start (`verifierProgram` with
+`verifier_meaning`, `loose_meaning`, `strict_meaning`), the transfers `at_root`, `at_loose` and
 `at_strict`, and the claims `looseClaim` and `strictClaim`. After this
 text it writes the goals `loose_sound` and `strict_sound` from `loose_installed` and
 `strict_installed`, which this text proves.
@@ -33,11 +34,6 @@ theorem loose_exact : ceiling looseCharge = ((7 - looseTolerance : ℕ) : ℚ≥
 theorem strict_exact : ceiling strictCharge = ((7 - strictTolerance : ℕ) : ℚ≥0) / (8 : ℕ) := by
   norm_num [ceiling, strictCharge, strictTolerance, strictArgument0]
 
--- The verifier's program, in the kernel's normal form.
-kernel_normal verifier :
-    Term (roleDialect V calleeProgram.headers verifierRole) (Ctx.empty.extend rootNames) rootHeader.outs :=
-  project verifierRole rootBody
-
 section
 variable {F G : Type} (D : StandardModel.Data F G) [DecidableEq F] [DecidableEq G]
 
@@ -62,10 +58,9 @@ each fee is within what the charge allows the effect that pays it. -/
 abbrev fees (charge : DrawCharge) (path : List Frame) :=
   paysWithin (samplers D) (allowance (model D) charge rootKey path)
 
-/-- The verifier's process, as the walk reads it. -/
-abbrev walked (path : List Frame) (xs : List F) :=
-  verifier.denote (roleSem (model D) verifierRole (Defs.fnTable _ calleeProgram.defs)
-    (Defs.rTable _ calleeProgram.defs)) path (Env.empty.extend rootNames (inputs D xs))
+/-- The verifier's process in a run of the installed program. -/
+abbrev process (path : List Frame) (xs : List F) :=
+  roleMeaning (model D) installed rootMember verifierRole path (inputs D xs)
 
 /-- The verifier is judged never to return on a table outside the relation, within the budget of
 a charge of the root on the draw whose ceiling covers the bound: the fee of the draw pays for the
@@ -74,8 +69,9 @@ theorem walked_within (path : List Frame) (xs : List F) (tolerance : ℕ) (charg
     (length : xs.length = 8) (far : tolerance < xs.countP (· ≠ D.zero))
     (owned : charge.owner = rootKey) (site : charge.draws = [([], ⟨0⟩)])
     (covers : ((7 - tolerance : ℕ) : ℚ≥0) / (8 : ℕ) ≤ ceiling charge) :
-    (walked D path xs).interpret (.charged (Permitted (model D)) (fees D charge path))
+    (process D path xs).interpret (.charged (Permitted (model D)) (fees D charge path))
       (fun _ _ => False) (fun _ _ => True) (budget charge) := by
+  rw [process, verifier_meaning]
   walk_step
   refine ⟨ceiling charge, fun z : ℕ => xs[z]? = some D.zero, ?_,
     ⟨Or.inr ⟨drawPosition 7, rfl, ?_⟩, ?_⟩, fun z allowedZ kept => ?_⟩
@@ -113,10 +109,11 @@ every position at which the table is zero. -/
 theorem walked_excludes (allowed : ∀ op, (RSig (model D)).Reply op → Prop)
     (pays : (op : ROp (model D)) → ℚ≥0 → ((RSig (model D)).Reply op → Prop) → Prop)
     (path : List Frame) (xs : List F) (within : ℚ≥0)
-    (judged : (walked D path xs).interpret (.charged allowed pays) (fun _ _ => False)
+    (judged : (process D path xs).interpret (.charged allowed pays) (fun _ _ => False)
       (fun _ _ => True) within) :
     ∃ fee excluded, fee ≤ within ∧ pays ((coin path).operation (model D)) fee excluded ∧
       ∀ z : ℕ, allowed ((coin path).operation (model D)) z → xs[z]? = some D.zero → excluded z := by
+  rw [process, verifier_meaning] at judged
   walk_step at judged
   obtain ⟨fee, excluded, least, paid, rest⟩ := judged
   refine ⟨fee, excluded, least, paid, fun z allowedZ zero => ?_⟩
@@ -136,12 +133,17 @@ theorem walked_excludes (allowed : ∀ op, (RSig (model D)).Reply op → Prop)
     · walk_step at after
       exact after
 
-/-- The verifier's process in a run of the installed program is the process that the walk
-reads. -/
+/-- The verifier's program in the environment of a run: what the kernel runs where a run is
+computed. -/
+abbrev walked (path : List Frame) (xs : List F) :=
+  verifierProgram.denote (roleSem (model D) verifierRole (Defs.fnTable _ calleeProgram.defs)
+    (Defs.rTable _ calleeProgram.defs)) path (Env.empty.extend rootNames (inputs D xs))
+
+/-- The verifier's process in a run of the installed program is that denotation. -/
 theorem meaning_walked (path : List Frame) (xs : List F) :
     roleMeaning (model D) installed (Member.head : Member installed.headers.protocols rootHeader)
-      verifierRole path (inputs D xs) = walked D path xs := by
-  kernel_rfl
+      verifierRole path (inputs D xs) = walked D path xs :=
+  (verifier_meaning (model D) path (inputs D xs)).trans (Process.sealed_eq _)
 
 /-- The first instruction of a program, under another key. -/
 def withFirstKey {dialect : Dialect} {Γ : Ctx dialect.Ty} {outs : List dialect.Ty} (key : Key) :
@@ -154,7 +156,7 @@ judgment of the verifier pays a fee at that draw. -/
 theorem walk_reads_any_key (key : Key) (allowed : ∀ op, (RSig (model D)).Reply op → Prop)
     (pays : (op : ROp (model D)) → ℚ≥0 → ((RSig (model D)).Reply op → Prop) → Prop)
     (path : List Frame) (xs : List F) (within : ℚ≥0)
-    (judged : ((withFirstKey key verifier).denote
+    (judged : ((withFirstKey key verifierProgram).denote
         (roleSem (model D) verifierRole (Defs.fnTable _ calleeProgram.defs)
           (Defs.rTable _ calleeProgram.defs)) path
         (Env.empty.extend rootNames (inputs D xs))).interpret
@@ -247,20 +249,14 @@ that many of them are not zero. -/
 theorem loose_relation (xs : List F) (length : xs.length = 8) :
     functionResult (t := .bool) (fnMeaning (model D) installed looseMember (.cons xs .nil)) =
       some (decide (xs.countP (· ≠ D.zero) ≤ looseTolerance)) := by
-  rw [show fnMeaning (model D) installed looseMember (.cons xs .nil) =
-    looseBody.denote (localSem (model D) looseBefore.headers.fns (Defs.fnTable (model D) looseBefore.defs)) []
-      (Env.empty.extend looseNames (.cons xs .nil)) from by kernel_rfl]
-  delta looseBody
+  rw [loose_meaning (model D) (.cons xs .nil)]
   count_relation_walk
 
 /-- **What the relation of `strict` computes.** -/
 theorem strict_relation (xs : List F) (length : xs.length = 8) :
     functionResult (t := .bool) (fnMeaning (model D) installed strictMember (.cons xs .nil)) =
       some (decide (xs.countP (· ≠ D.zero) ≤ strictTolerance)) := by
-  rw [show fnMeaning (model D) installed strictMember (.cons xs .nil) =
-    strictBody.denote (localSem (model D) strictBefore.headers.fns (Defs.fnTable (model D) strictBefore.defs)) []
-      (Env.empty.extend strictNames (.cons xs .nil)) from by kernel_rfl]
-  delta strictBody
+  rw [strict_meaning (model D) (.cons xs .nil)]
   count_relation_walk
 
 /-- A table on which the relation of `loose` returns false has more than its tolerance of
@@ -304,9 +300,7 @@ theorem judged_within (charge : DrawCharge) (tolerance : ℕ)
     (fun p root => (roleMeaning (model D) p root verifierRole path (inputs D xs)).interpret
       (.charged (Permitted (model D)) (fees D charge path)) (fun _ _ => False)
       (fun _ _ => True) (budget charge))
-    (by
-      rw [meaning_walked]
-      exact walked_within D path xs tolerance charge length far owned site covers)
+    (walked_within D path xs tolerance charge length far owned site covers)
 
 /-- **The probability.** Against every service that draws the position uniformly and answers
 only what is permitted, the simulation of the verifier by the service's handler returns with
@@ -352,7 +346,6 @@ theorem returns_installed (charge : DrawCharge) (tolerance : ℕ)
   rw [prEvent_simulation_returns, ← toProbability_budget charge positive]
   refine allowed_bounds_return service _ (allowance (model D) charge rootKey path)
     (Permitted (model D)) permitted follows _ (budget charge) s ?_
-  rw [meaning_walked]
   exact walked_within D path xs tolerance charge length far owned site covers
 
 end
@@ -575,7 +568,6 @@ theorem unallowed_judges_nothing (charge : DrawCharge) (path : List Frame)
       (.charged (Permitted (model data)) (fees data charge path)) (fun _ _ => False)
       (fun _ _ => True) any)
     (by
-      rw [meaning_walked]
       intro judged
       obtain ⟨fee, excluded, _, ⟨paid, allowed⟩, zeros⟩ :=
         walked_excludes data _ _ path looseTable any judged

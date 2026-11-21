@@ -6,6 +6,9 @@ open Zkc.Core Zkc.Formal Zkc.Formal.ModelComparison
 
 namespace Zkc.Tests.Formal.ModelComparison
 
+-- These tests compute the meaning of small programs by Lean's own reduction.
+unseal Zkc.Core.fnMeaning Zkc.Core.roleMeaning Zkc.Core.protocolMeaning
+
 variable {V : Vocabulary} (M N : Model V)
 
 private def bitRelation : Values M N

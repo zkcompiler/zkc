@@ -78,6 +78,14 @@ def roleMeaning (p : Typed V) {hdr : ProtocolHeader V} (x : Member p.headers.pro
     Program M (HList (RV M r) hdr.outs) :=
   Defs.rTable M p.defs _ x r path ins
 
+/-! The three meanings are closed to Lean's own reduction. A statement about a program is about
+`fnMeaning`, `roleMeaning` or `protocolMeaning` applied to it; where Lean matches two such
+statements, or normalizes one, an open meaning is unfolded into its table and the program is run
+by a reduction without sharing. The kernel finds a meaning equal to its table, so a proof passes
+between them by a kernel check (`kernel_rfl`), and a theorem that does so by definitional
+unfolding opens the names for itself (`unseal … in`). -/
+attribute [irreducible] fnMeaning protocolMeaning roleMeaning
+
 end
 
 end Zkc.Core

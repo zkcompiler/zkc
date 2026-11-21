@@ -25,9 +25,9 @@ The check reads the source with the frontend and writes two modules, on which Le
   frontend emits (`Written.goalClaims`). Around the text of `CountCharge.lean.in` stands what
   `Written.Statements` writes from what the frontend read: the facts (the key of the root, the
   roles, and for each goal the value of its proof argument, its charge on the draw and its
-  relation), the transfer of a statement to every admitted program, the claim of each goal
-  about the installed program (`looseClaim`, `strictClaim`), and after the text the goals for
-  every admitted program (`loose_sound`, `strict_sound`). The text of the check proves the
+  relation), where the walks start, the transfer of a statement to every admitted program, the
+  claim of each goal about the installed program (`looseClaim`, `strictClaim`), and after the
+  text the goals for every admitted program (`loose_sound`, `strict_sound`). The text of the check proves the
   claims (`loose_installed`, `strict_installed`) and chooses nothing of them. The module
   imports nothing of the frontend but the record of a charge. Its theorems are about every
   program that admission gives for the stored program of the package. The function of each
@@ -129,7 +129,8 @@ def read (text : String) : IO Subject := do
 
 /-- The theorems of the proof module, whose axioms the check reads. -/
 def theorems : List String := [
-  "covered", "verifier.eq", "loose_relation", "strict_relation", "walked_within", "walked_excludes",
+  "covered", "verifierProgram.eq", "verifier_meaning", "loose_meaning", "strict_meaning",
+  "loose_relation", "strict_relation", "walked_within", "walked_excludes",
   "walk_reads_any_key", "judged_within", "returns_within", "loose_installed", "strict_installed",
   "loose_sound", "strict_sound",
   "Witness.loose_at_table", "Witness.strict_at_table", "Witness.loose_attained",
@@ -154,7 +155,8 @@ def proofModule (name : String) (s : Subject) (template : String) : IO String :=
       "Zkc.Formal.Written.FunctionMeaning", "Zkc.Formal.Written.StandardModel",
       "Zkc.Formal.Written.FiniteModel"] ++
     s!"namespace {name}\n" ++ s.package ++ Statements.opens ++ stated.facts ++ "\n" ++
-    Statements.coverage standardModelText ++ stated.transfers ++ claims ++ template ++ "\n" ++
+    Statements.coverage standardModelText ++ stated.entries ++ stated.transfers ++ claims ++
+    template ++ "\n" ++
     closings ++ ceilings ++
     String.join (theorems.map (s!"#print axioms {·}\n")) ++ s!"end {name}\n"
 
@@ -278,7 +280,8 @@ def run (corpus template : System.FilePath) (work : System.FilePath) : IO Unit :
   -- samplers, which read no role.
   expectUnproved "the roles exchanged" "RolesControl" theorems exchangedProof
     (theorems.filter fun name =>
-      !["covered", "verifier.eq", "loose_relation", "strict_relation",
+      !["covered", "verifierProgram.eq", "verifier_meaning", "loose_meaning", "strict_meaning",
+        "loose_relation", "strict_relation",
         "Witness.fixed_position_does_not_follow"].contains name)
   -- Only `loose` and what is stated of it at its table fail, and `strict` stands.
   expectUnproved "a charge below the bound" "BoundControl" theorems smallProof

@@ -4,6 +4,10 @@ namespace Zkc.Tests.Formal.Reuse.Manual
 open Core Frontend Formal.Interactive.Sumcheck ReductionRound
 open SourcePairMembers (sourceRows)
 
+-- This file passes between the meaning of a program and its tables by definitional unfolding.
+unseal Zkc.Core.fnMeaning Zkc.Core.roleMeaning Zkc.Core.protocolMeaning
+
+
 private def pairOps (b : Zkc.Vocabulary.Project.Bindings) (i : Nat) : Operations b.vocabulary :=
   let message := if i == 0 then 13 else 15 + 8*i
   let bind := if i == 0 then 16 else 17 + 8*i

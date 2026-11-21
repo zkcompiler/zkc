@@ -55,6 +55,7 @@ theorem Defs.sound : ∀ {hs : Headers V} (defs : Defs V hs),
             (post' := fun out rvs => rvs = hideAll M j out.1) fun _ _ e => e
       | tail p => exact Defs.sound rest _ p j path ins
 
+unseal fnMeaning roleMeaning protocolMeaning in
 /-- Every role program is a projection of its protocol, on parts of one input. -/
 theorem projection (p : Typed V) {hdr : ProtocolHeader V} (x : Member p.headers.protocols hdr)
     (r : Role) (path : List Frame) (ins : HList (LVal M) hdr.ins) :

@@ -6,6 +6,10 @@ public import Zkc.Formal.Interactive.TableVerifier
 namespace Zkc.Formal.Interactive.Sumcheck.TableVerifier
 open Core ReductionRound
 open TableHalves (table)
+
+-- This file passes between the meaning of a program and its tables by definitional unfolding.
+unseal Zkc.Core.fnMeaning Zkc.Core.roleMeaning Zkc.Core.protocolMeaning
+
 variable {V : Vocabulary} (rows : ScalarRows V) (vectors : (d : Nat) → TableRestriction.Rows rows.scalarTy d)
 
 structure Certified (p : Core.Typed V) (rootKey red eval : Key) (n : Nat) (events : Events rows.scalarTy) where
