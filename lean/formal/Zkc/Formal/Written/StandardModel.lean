@@ -106,6 +106,15 @@ def vectorSum (size : Option Nat) : Row D (scalarSeq .sum size) := by
   cases args; rename_i xs tail; cases tail
   exact ⟨.cons (List.foldr D.scalarAdd D.zero xs) .nil, fun _ ↦ ⟨trivial, trivial⟩⟩
 
+/-- Two sequences of field elements are equal: entry by entry, and of one length. -/
+def vectorEqual (size : Option Nat) : Row D (scalarSeq .equal size) := by
+  intro sig known args permitted
+  cases known
+  cases args; rename_i xs tail; cases tail; rename_i ys tail; cases tail
+  change List F at xs
+  change List F at ys
+  exact ⟨.cons (decide (xs = ys)) .nil, fun _ ↦ ⟨trivial, trivial⟩⟩
+
 local macro "unary_row " f:term : term => `(by
   intro sig known args permitted; cases known; cases args; rename_i x tail; cases tail
   exact ⟨.cons ($f x) .nil, fun _ ↦ ⟨trivial, trivial⟩⟩)
@@ -121,6 +130,7 @@ def row : (k : Standard.RowKey) → Row D k
   | .inl (.field .add .bls12381Fr .all) => binary_row D.scalarAdd
   | .inl (.field .sub .bls12381Fr .all) => binary_row D.sub
   | .inl (.field .mul .bls12381Fr .all) => binary_row D.mul
+  | .inl (.field .neg .bls12381Fr .all) => unary_row (fun (x : F) ↦ D.sub D.zero x)
   | .inl (.field .equal .bls12381Fr .all) => binary_row (fun (x y : F) ↦ decide (x = y))
   | .inl (.field .nonzero .bls12381Fr .all) => by
     intro sig known args permitted
@@ -136,7 +146,38 @@ def row : (k : Standard.RowKey) → Row D k
   | .inl (.seq .sub (.atom (.field .bls12381Fr)) (some n)) => vectorBinary D D.sub n rfl
   | .inl (.seq .scale (.atom (.field .bls12381Fr)) (some n)) => vectorScale D n
   | .inl (.seq .sum (.atom (.field .bls12381Fr)) n) => vectorSum D n
+  | .inl (.seq .equal (.atom (.field .bls12381Fr)) n) => vectorEqual D n
   | k => defaultRow D k
+
+/-- The rows that the model interprets: those that `row` has an arm for. Every other row of the
+vocabulary is given a constant (`defaultRow`), which is a meaning and not the intended one; a
+result over this model is about a program whose rows are all in this table. -/
+def interprets : Standard.RowKey → Bool
+  | .inl (.group .scale (.group .g1)) => true
+  | .inl (.group .add (.group .g1)) => true
+  | .inl (.group .equal (.group .g1)) => true
+  | .inl (.field .add .bls12381Fr .all) => true
+  | .inl (.field .sub .bls12381Fr .all) => true
+  | .inl (.field .mul .bls12381Fr .all) => true
+  | .inl (.field .neg .bls12381Fr .all) => true
+  | .inl (.field .equal .bls12381Fr .all) => true
+  | .inl (.field .nonzero .bls12381Fr .all) => true
+  | .inl (.field .isNonzero .bls12381Fr .all) => true
+  | .inl (.field .inverse .bls12381Fr .nonzero) => true
+  | .inl (.field .fromNonzero .bls12381Fr .nonzero) => true
+  | .inl (.seq .add (.atom (.field .bls12381Fr)) (some _)) => true
+  | .inl (.seq .sub (.atom (.field .bls12381Fr)) (some _)) => true
+  | .inl (.seq .scale (.atom (.field .bls12381Fr)) (some _)) => true
+  | .inl (.seq .sum (.atom (.field .bls12381Fr)) _) => true
+  | .inl (.seq .equal (.atom (.field .bls12381Fr)) _) => true
+  | _ => false
+
+/-- A row outside the table is given the default, and no other row is: the table has exactly
+the arms of `row`. -/
+theorem row_eq_default (k : Standard.RowKey) (outside : interprets k = false) :
+    row D k = defaultRow D k := by
+  unfold row
+  split <;> first | rfl | (simp [interprets] at outside)
 
 def model : Model Standard := {
   carriers D with

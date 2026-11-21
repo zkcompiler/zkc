@@ -20,6 +20,7 @@ public import Zkc.Core.Program.LinkedVocabulary
 public import Zkc.Core.Program.Lists
 public import Zkc.Core.Program.Located
 public import Zkc.Core.Program.NamedProgram
+public import Zkc.Core.Program.Links
 public import Zkc.Core.Program.Erase
 public import Zkc.Core.Program.EraseProgram
 public import Zkc.Core.Program.Place

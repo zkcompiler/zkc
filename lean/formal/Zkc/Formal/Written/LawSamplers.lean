@@ -2,6 +2,7 @@ module
 
 public import Zkc.Formal.Written.PortSamplers
 public import Zkc.Formal.Written.StandardModel
+public import Zkc.Core.Program.Links
 
 @[expose] public section
 
@@ -23,6 +24,10 @@ answers.
 In the standard model the law `uniform` of the positions below `n + 1` draws one uniformly
 (`StandardModel.draws`). The other laws have no sampler there yet, so no fee is paid at their
 coins.
+
+`StandardModel.covers` says of a program by names that the standard model interprets every row
+that it links (`StandardModel.interprets`) and has a sampler for every law that it draws
+(`StandardModel.sampled`). It is decided by the kernel on the stored program.
 -/
 
 namespace Zkc.Formal.Written
@@ -126,5 +131,28 @@ theorem StandardModel.draws_permitted {F G : Type} [DecidableEq F] [DecidableEq 
       have below := lt_of_mem_support_drawPosition n v drawn
       exact ⟨below, ⟨[], .fin (n + 1)⟩, rfl, rfl, rfl, below⟩
     · exact absurd has (by simp)
+
+/-- Whether the standard draws have a sampler for a law at a type of reply. -/
+def StandardModel.sampled : Standard.LawKey → Standard.Ty → Bool
+  | .uniform (.fin (n + 1)), .fin m => m == n + 1
+  | _, _ => false
+
+/-- A law that the table has is drawn. -/
+theorem StandardModel.draws_of_sampled {F G : Type} [DecidableEq F] [DecidableEq G]
+    (D : StandardModel.Data F G) (law : Standard.LawKey) (τ : Standard.Ty)
+    (has : StandardModel.sampled law τ = true) :
+    (StandardModel.draws D law [] .nil τ).isSome = true := by
+  match law, τ, has with
+  | .uniform (.fin (n + 1)), .fin m, has =>
+    have same : m = n + 1 := by simpa [StandardModel.sampled] using has
+    subst same
+    simp [StandardModel.draws]
+
+/-- **The standard model covers a program**: it interprets every row of the vocabulary that the
+program links, and has a sampler for the law of every coin that the program draws. A result over
+the standard model is published for a program that it covers; of another program it would speak
+of rows that the model gives a constant, or of coins at which no fee can be paid. -/
+def StandardModel.covers (p : NamedProgram Standard) : Bool :=
+  p.rows.all StandardModel.interprets && p.laws.all fun (law, τ) => StandardModel.sampled law τ
 
 end Zkc.Formal.Written
