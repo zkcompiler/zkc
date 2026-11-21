@@ -76,6 +76,11 @@ structure State where
   /-- The indices of the iterations that are typed on their own: each stands for its number in
   a size, and is no size in a condition (TY9). -/
   iterationIndices : Std.HashSet LocalId := {}
+  /-- The specification arguments of applications that read the index of a loop typed as one
+  loop: the index, and the place of the argument. Such an argument has no value for each
+  iteration, and it does not make the loop be typed per iteration: a specification changes
+  no deployed code. The loop refuses it when it stays one loop (SP11). -/
+  proofIndexReads : Array (LocalId × Syntax.Span) := #[]
   /-- The number of the next binder that elaboration makes. -/
   nextLocal : LocalId := 0
   /-- In the opaque elaboration, the typings of the places that may be members of an interface

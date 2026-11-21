@@ -20,7 +20,12 @@ The check reads sources with the frontend and asserts, of what it returns:
 - a function that the verifier and the relation both call is one definition;
 - a relation that the relation applies comes before it;
 - the ports at the statement and at the witness, for a clause written short and one that gives
-  the witness; an operand that is no port is refused.
+  the witness; an operand that is no port is refused;
+- the claim of a goal types the one clause that the goal reads;
+- a relation applied in a relation, typed without a goal at default values, changes no key and
+  no stored definition of the deployed protocol;
+- the contract of a protocol generic over a module parameter is typed in both typings, and its
+  claim is read with the resolutions that the instance keeps.
 
 Then Lean is run on three modules for the two goals of the reference case `N-GL2a`.
 
@@ -189,6 +194,45 @@ def run (corpus : System.FilePath) (work : System.FilePath) : IO Unit := do
     (near.statement == #[0] && near.witness == some #[1])
   let short ← only (← read (← edit pair "proves near: Near(x; w)" "proves @V near: Near(x)") ["sound"]).2
   expect "the operands of Near(x), written short" (short.statement == #[0] && short.witness == none)
+
+  -- The claim of a goal types the clause that the goal reads and no other.
+  let pairRoot ← IO.ofExcept (goalRoot pair "sound")
+  for place in [0, 1] do
+    let (typed, _) ← IO.ofExcept
+      (evaluate pairRoot.state default (Typing.typedClauses pairRoot.id #[] (only := some place)))
+    expect s!"the typing of the clause at {place} types {typed.map (·.1)}" (typed.map (·.1) == #[place])
+
+  -- A specification item is typed without a goal at default values of its specification-only
+  -- parameters, and a relation that it applies is then reached at those values. That changes
+  -- no key and no stored definition of what is deployed.
+  let applied ← fixture "N-GL2g"
+  let plain ← edit applied "relation ZeroAt(xs: [F; n]): Reads(xs)" "relation ZeroAt(xs: [F; n]): xs[e] == 0"
+  let appliedRoot ← IO.ofExcept (goalRoot applied "placed")
+  let plainRoot ← IO.ofExcept (goalRoot plain "placed")
+  expect "a relation applied in a relation changed the key or the stored text of the deployed protocol"
+    (appliedRoot.id == plainRoot.id &&
+      storedTexts (appliedRoot.emission.package noAssociation) ==
+        storedTexts (plainRoot.emission.package noAssociation))
+
+  -- A contract of a protocol generic over a module parameter is typed in both typings, and the
+  -- goal reads the resolutions that the instance keeps: a relation over the type member, applied
+  -- to a port of that type, is a definition of the claims' package after the module's member.
+  let generic := "module client\nuse zkc::security::{soundness}\n" ++
+    "pub struct Box:\n    pub n: nat\n" ++
+    "interface Carrier:\n    type T\n    def digit(a: T) -> nat\n" ++
+    "module First: Carrier:\n    type T = Box\n    def digit(a): a.n\n" ++
+    "relation Holds<Y: Carrier>(a: Y::T): a.digit() == 9\n" ++
+    "pub protocol Show<X: Carrier> roles(P, V)(x: X::T @(P, V)):\n" ++
+    "    r <- draw index<8> from V to P\n    guard @V x.digit() == 9\n" ++
+    "spec for Show:\n    proves @V Holds<X>(x)\n" ++
+    "scheme S = Show<First>:\n    prover P\n    construction interactive\n" ++
+    "goal sound = soundness(S)\n"
+  let (genericRoot, genericClaims) ← read generic ["sound"]
+  let held ← only genericClaims
+  expect "the claim of a generic protocol"
+    (held.statement == #[0] &&
+      (storedTexts (packageOf genericClaims)).length ==
+        (storedTexts (genericRoot.emission.package noAssociation)).length + 1)
 
   -- An operand that is no port.
   let computed ← edit count "proves @V NearZero(xs)" "proves @V NearZero(xs ++ [])"

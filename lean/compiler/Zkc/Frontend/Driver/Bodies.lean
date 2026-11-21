@@ -105,11 +105,15 @@ partial def withProtocolBodies (context : Compile.Context) : Compile.Context :=
 
 /-- The typed applications of the deciding clauses of a protocol instance at values of its
 specification-only parameters, each with the place of its clause in the contract
-(`Emit.typedClauses`). The instances that it makes enter the state, so a consumer that states a
-claim runs it on a state of its own. A clause that waits makes the request wait. -/
-def typedClauses (inst : InstanceId) (values : Array Nat) : CompileM (Array (Nat × Typed.Expr)) :=
+(`Emit.typedClauses`); of the clause at the place `only` alone, when it is given, so that a
+clause that the consumer does not read cannot make the request wait. The instances that it makes
+enter the state, so a consumer that states a claim runs it on a state of its own. A clause that
+waits makes the request wait. -/
+def typedClauses (inst : InstanceId) (values : Array Nat) (only : Option Nat := none) :
+    CompileM (Array (Nat × Typed.Expr)) :=
   fun context =>
-    (Emit.typedClauses inst values typeBody (lenient := false)) (withProtocolBodies context)
+    (Emit.typedClauses inst values typeBody (lenient := false) (only := only))
+      (withProtocolBodies context)
 
 /-- The checks of FN5 that need no body: a kernel stands on a deployed `def` with a body. -/
 def checkKernels : CompileM Unit := do

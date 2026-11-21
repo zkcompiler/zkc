@@ -144,6 +144,12 @@ def elabApplication (span : Span) (event : EventId) (binder : Option Lowered.Bin
     | _ => none
   let env ← staticEnv
   let proofArguments ← liftM (specificationClosure env found supplied caller.scopes span : CompileM _)
+  -- a specification argument that reads the index of a loop typed as one loop is remembered:
+  -- the loop refuses it when it stays one loop
+  for (at_, _, term) in supplied do
+    for binder in term.locals do
+      if (← get).indices.contains binder then
+        modify fun state => { state with proofIndexReads := state.proofIndexReads.push (binder, at_) }
   deployedStaticArguments steps
   -- the role map, by name (RM1)
   let roster := context.roster.getD #[]

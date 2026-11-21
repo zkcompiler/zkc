@@ -230,51 +230,91 @@ def elaborateProtocol (inst : InstanceId) (description name : String) (env : Env
   let .protocol body := numbered | throw (.defect "a protocol body that is no protocol body")
   return (← checkedProtocol definition body, body, elaborated.resolved)
 
-/-- What the deciding clauses of the contract of a protocol instance apply, typed at values of
-the instance's specification-only parameters (`Elab.elabClauses`): each typed application with
-the place of its clause in the contract. The instances of relations that it asks for enter the
-state in which it runs. A clause that waits for a later layer is left out when `lenient`, and
-makes the typing wait otherwise. -/
-def typedClauses (inst : InstanceId) (specification : Array Nat)
+/-- The elaboration of what the deciding clauses of the contract of a protocol instance apply
+(`Elab.elabClauses`), at static values of the protocol and at values of its specification-only
+parameters: each typed application with the place of its clause in the contract, and the
+typings of the places that the opaque elaboration resolved. `only` is the place of the one
+clause to type, when a consumer reads one. The instances of relations that it asks for enter
+the state in which it runs. A clause that waits for a later layer is left out when `lenient`,
+and makes the typing wait otherwise. -/
+def elaborateClauses (inst : InstanceId) (arguments : Array StaticValue) (specification : Array Nat)
     (typeBody : InstanceId → Span → CompileM Unit)
-    (resolutions : Std.HashMap Typing.ResolvedPlace ParameterRef := {}) (lenient : Bool := true) :
-    CompileM (Array (Nat × Typed.Expr)) := do
+    (resolutions : Std.HashMap Typing.ResolvedPlace ParameterRef) (lenient : Bool)
+    («opaque» : Bool := false) (only : Option Nat := none) :
+    CompileM (Array (Nat × Typed.Expr) × Array Typing.PlaceTyping) := do
   let state ← get
   let some entry := state.table.entries[inst]? | throw .abandoned
   let modules ← getModules
-  let some contract := modules.indexes.contracts[entry.key.declaration]? | return #[]
-  let some clauses := modules.lowered? contract | return #[]
-  let .contract node := clauses.content | return #[]
-  if clauses.refused || (Elab.decidingApplications node.clauses).isEmpty then return #[]
-  let some lowered := modules.lowered? entry.key.declaration | return #[]
-  let .protocol head _ _ := lowered.content | return #[]
+  let some contract := modules.indexes.contracts[entry.key.declaration]? | return (#[], #[])
+  let some clauses := modules.lowered? contract | return (#[], #[])
+  let .contract node := clauses.content | return (#[], #[])
+  if clauses.refused || (Elab.decidingApplications node.clauses).isEmpty then return (#[], #[])
+  let some lowered := modules.lowered? entry.key.declaration | return (#[], #[])
+  let .protocol head _ _ := lowered.content | return (#[], #[])
   let found ← declaration entry.key.declaration
   let description ← describeInstance entry.key.declaration entry.key.arguments specification
     entry.key.owner
-  let env := instanceEnv state.program found entry.key.arguments specification
+  let env := instanceEnv state.program found arguments specification
   let context : Elab.Context :=
     { env, «instance» := inst, name := description, typeBody, specification := true
-      resolutions, roster := some head.roster, protocolBody := calleeBody typeBody }
+      resolutions, «opaque», roster := some head.roster, protocolBody := calleeBody typeBody }
   let signature ← Elab.protocolSignatureIn head env
-  let (typed, _) ← Elab.runElab context clauses.locals
-    (Elab.elabClauses signature head node.clauses lenient)
+  let (typed, elaborated) ← Elab.runElab context clauses.locals
+    (Elab.elabClauses signature head node.clauses lenient only)
+  return (typed, elaborated.resolved)
+
+/-- The places of an instance's code that its opaque typing resolved to members of an interface
+(SP12), as the instance keeps them: those of its body and of its contract. -/
+def keptResolutions (inst : InstanceId) : CompileM (Std.HashMap Typing.ResolvedPlace ParameterRef) := do
+  match (← getResults).body? inst with
+  | some (.protocol code) =>
+    return code.resolved.foldl (init := {}) fun map (place, reference) => map.insert place reference
+  | _ => return {}
+
+/-- What the deciding clauses of the contract of a protocol instance apply, typed at values of
+the instance's specification-only parameters, in the state in which it runs
+(`elaborateClauses`). Where no resolutions are given, those that the instance keeps are used:
+a goal types the contract of an instance whose body was typed before. -/
+def typedClauses (inst : InstanceId) (specification : Array Nat)
+    (typeBody : InstanceId → Span → CompileM Unit)
+    (resolutions : Std.HashMap Typing.ResolvedPlace ParameterRef := {}) (lenient : Bool := true)
+    (only : Option Nat := none) : CompileM (Array (Nat × Typed.Expr)) := do
+  let some entry := (← get).table.entries[inst]? | throw .abandoned
+  let resolutions ← if resolutions.isEmpty then keptResolutions inst else pure resolutions
+  let (typed, _) ← elaborateClauses inst entry.key.arguments specification typeBody resolutions
+    lenient (only := only)
   return typed
 
-/-- The check of what the deciding clauses of a contract apply, at values of the instance's
-specification-only parameters.
-
-The elaboration runs aside, on a copy of the state, and only its diagnostics are kept. The
-instances of relations that it asks for must not enter the program: deployed definitions are
-numbered by their instances, and what a specification says does not change the identity of
-deployed code. -/
-def typeClauses (inst : InstanceId) (specification : Array Nat)
-    (typeBody : InstanceId → Span → CompileM Unit)
-    (resolutions : Std.HashMap Typing.ResolvedPlace ParameterRef := {}) : CompileM Unit := do
-  let state ← get
-  let (result, after) := (typedClauses inst specification typeBody resolutions).run (← read) state
-  if let .error failure := result then
+/-- An elaboration of clauses run aside, on a copy of the state: only its diagnostics are kept.
+The instances of relations that it asks for must not enter the program: deployed definitions
+are numbered by their instances, and what a specification says does not change the identity
+of deployed code. -/
+def aside {α : Type} (attempt : CompileM α) : CompileM α := do
+  let (result, after) := attempt.run (← read) (← get)
+  match result with
+  | .ok value => return value
+  | .error failure =>
     modify fun s => { s with log := after.log }
     throw failure
+
+/-- The check of what the deciding clauses of a contract apply, at values of the instance's
+specification-only parameters, run aside. -/
+def typeClauses (inst : InstanceId) (specification : Array Nat)
+    (typeBody : InstanceId → Span → CompileM Unit)
+    (resolutions : Std.HashMap Typing.ResolvedPlace ParameterRef := {}) : CompileM Unit :=
+  discard <| aside (typedClauses inst specification typeBody resolutions)
+
+/-- The opaque typing of what the deciding clauses of the contract of a protocol generic over a
+module parameter apply (SP12), run aside: the typings of the places that it resolves. A
+contract is typed twice as a body is, so a clause reads of a type member what its interface
+declares and no more, and calls the members that a body may call. -/
+def opaqueClauseTypings (inst : InstanceId) (opaqueArguments : Array StaticValue)
+    (specification : Array Nat) (typeBody : InstanceId → Span → CompileM Unit) :
+    CompileM (Array Typing.PlaceTyping) :=
+  aside do
+    let (_, typings) ← elaborateClauses inst opaqueArguments specification typeBody {} true
+      («opaque» := true)
+    return typings
 
 /-- The code of a protocol instance: its lowered body elaborated at the instance, checked by the
 passes and by the core, and what the session keeps of it. `typeBody` asks for the body of a
@@ -305,7 +345,9 @@ def protocolBody (inst : InstanceId) (typeBody : InstanceId → Span → Compile
         let opaqueEnv := instanceEnv state.program found opaqueArguments entry.key.specification
         let (_, _, typings) ← elaborateProtocol inst description name opaqueEnv head
           statements returned[0]? lowered.locals typeBody {} («opaque» := true)
-        placeResolutions name found entry.key.arguments typings
+        -- the contract in the opaque typing too: its places are resolved as the body's are
+        let clauseTypings ← opaqueClauseTypings inst opaqueArguments entry.key.specification typeBody
+        placeResolutions name found entry.key.arguments (typings ++ clauseTypings)
     else pure {}
   let errors := (← get).log.errors
   if let .protocol node := found.node then Passes.checkSiteNames node

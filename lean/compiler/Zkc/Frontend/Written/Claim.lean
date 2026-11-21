@@ -104,7 +104,8 @@ def claimedGoal (c : AdmittedRoot) (state : Compile.State) (goal : String) :
   let some key := c.state.results.key? c.id | throw "missing the instance of the scheme's protocol"
   let some {content := .protocol head .., ..} := c.state.env.modules.lowered? key.declaration
     | throw "missing the protocol of the scheme"
-  let (typed, state) ← evaluate state clause.span (Typing.typedClauses c.id selected.specification)
+  let (typed, state) ← evaluate state clause.span
+    (Typing.typedClauses c.id selected.specification (only := some clause.place))
   let some (_, tree) := typed.find? (·.1 == clause.place)
     | refuse clause.span "WK-CLAUSE" "the clause was not typed"
   let .apply _ (.instance relation) _ := tree

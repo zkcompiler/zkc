@@ -677,6 +677,15 @@ Each reading is followed by the alternative it rules out.
 - An application gives every specification-only parameter of its callee, except those of a scope
   that the caller shares with the callee, which are the caller's own (SP11); a deployed static
   argument that reads a specification-only parameter is refused by SP11 where it stands.
+  A specification argument is a static term: one that reads the index of a loop is remembered
+  where the application is typed, without making the loop be typed per iteration (a
+  specification changes no deployed code), and is refused by SP11 when the loop stays one
+  loop. In a loop typed per iteration the index is a static natural and each application has
+  its own value.
+- The contract of a protocol generic over a module parameter is typed twice, as its body is
+  (SP12): in the opaque typing a clause reads of a type member what the interface declares, and
+  the places that it resolves to members are kept with those of the body; the typing at the
+  instance, and the typing at a goal's values, read them.
 - Events are numbered in the order of the text, depth first, the arms of a choice in order and the
   body of a loop once; a send to several receivers has a part per receiver, each a core site of
   its own. An explicit `#[site(…)]` names an event independently of its local binding pattern.
