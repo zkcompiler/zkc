@@ -5,6 +5,7 @@ import Zkc.Frontend.Written.Statement
 import Zkc.Tests.Frontend.SyntaxHarness
 import Zkc.Tests.Frontend.SourceClause
 import Zkc.Tests.Frontend.PrintedPackageSupport
+import Zkc.Tests.Frontend.WrittenSubject
 import Zkc.Core.Admission.Theorems
 import Zkc.Kernel
 import Zkc.Vocabulary.Project
@@ -50,6 +51,7 @@ is refused with the name of that site.
 
 open Zkc.Core Zkc.Frontend Zkc.Frontend.Written
 open Zkc.Tests.Frontend Zkc.Tests.Frontend.PrintedPackageSupport
+open Zkc.Tests.Frontend.WrittenSubject
 
 namespace EitherCharge
 
@@ -69,31 +71,15 @@ def source (first second : String) : String :=
   "scheme Checked = Either:\n    prover P\n    construction interactive\n" ++
   "goal either = soundness(Checked, stage = written)\n"
 
-structure Subject where
-  text : String
-  statements : Statements
-
-def Subject.package (s : Subject) : String := (Written.package s.statements.package).text
-
-def noAssociation : Association := ⟨[], [], [], [], []⟩
-
-/-- A source read: the goal selects the root, reads the clause `proves @V Holds(claim)` on the
-first of the three ports, decided by the verifier of the scheme, and gives no proof argument. -/
-def read (text : String) : IO Subject := do
-  let c ← IO.ofExcept (goalRoot text "either")
-  let head ← IO.ofExcept (SourceClause.rootHead c)
-  unless head.ports.map (·.binder.name) == #["claim", "first", "second"] do
-    throw (IO.userError "the protocol has other ports than the claim and the two positions")
-  let claims ← IO.ofExcept (goalClaims c ["either"])
-  let [claimed] := claims.goals | throw (IO.userError "the claims are not of one goal")
-  let clause ← IO.ofExcept (SourceClause.seen c "either")
-  unless clause == ⟨"proves", none, "V", "Holds", ["claim"], []⟩ do
-    throw (IO.userError s!"the goal reads another clause: {repr clause}")
-  unless claimed.statement == #[0] && claimed.witness == some #[] && claimed.specification.isEmpty do
-    throw (IO.userError "the relation is applied to other inputs than the claim")
-  unless (head.roster[claims.verifier]?, head.roster[claims.prover]?) == (some "V", some "P") do
-    throw (IO.userError "the verifier and the prover of the scheme are not the roles V and P")
-  return ⟨text, ⟨claims, claims.functionsBeforeRoot⟩⟩
+/-- What the check asserts of what the frontend read of a source of the subject: the goal
+selects the root; it reads the clause `proves @V Holds(claim)` on the first of the three ports,
+decided by the verifier of the scheme; it gives no proof argument; and its coins are positions,
+so the statements are about the standard model. -/
+def reading : Reading where
+  goals := ["either"]
+  ports := #["claim", "first", "second"]
+  clause := ⟨"proves", none, "V", "Holds", ["claim"], []⟩
+  operands := #[0]
 
 /-- A root with a stepped loop: three draws of positions of two, three and four, each followed
 by a guard that it is not the first position, and then a guard on the claim. Each draw is
@@ -142,15 +128,10 @@ def ofText : List String :=
 def ofWalk : List String :=
   ["either_judged", "either_judged_forked", "either_installed", "either_sound", "either_result"]
 
-/-- The proof module, as the generator assembles it. -/
-def proofModule (name : String) (s : Subject) (template : String) : IO Module :=
-  IO.ofExcept (s.statements.module standardModelText name { text := template, theorems := ofText })
-
 def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
   let template ← IO.FS.readFile template
-  let written ← read (source "1 / 8" "1 / 4")
-  let [goal] := written.statements.claims.goals
-    | throw (IO.userError "the statements are not of one goal")
+  let written ← read (source "1 / 8" "1 / 4") reading
+  let goal ← written.goal
   -- The table of caps: the draws of the two arms, once each, and the two arms added.
   unless goal.total == 3 / 8 && (goal.caps.uses.map fun use => use.draws.map fun draw =>
       (draw.numerator, draw.denominator, draw.count)) == [[(1, 8, 1), (1, 4, 1)]] do
@@ -159,43 +140,31 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
     throw (IO.userError s!"the draws are not named `x` and `y`: {goal.siteLabels.map (·.2.1)}")
   -- The charges exchanged: the program and the budget are what they were, and the caps are
   -- exchanged.
-  let exchanged ← read (source "1 / 4" "1 / 8")
-  unless exchanged.package == written.package &&
-      (exchanged.statements.claims.goals.map (·.total)) == [3 / 8] do
+  let exchanged ← read (source "1 / 4" "1 / 8") reading
+  unless exchanged.package == written.package && (exchanged.goals.map (·.total)) == [3 / 8] do
     throw (IO.userError "exchanging the charges changed the package or the budget")
+  -- The fee of one quarter at the draw of the second arm is over its cap of one eighth: at
+  -- two places and no other, one in each proof of the judgment.
+  let refusal := "the fee is not within the cap that the table gives the draw `site_y`\n  1 / 4 ≤ 1 / 8"
+  let exchangedControl : Control :=
+    { title := "the charges exchanged", name := "CapControl", subject := exchanged,
+      text := template, unproved := ofWalk, places := [refusal, refusal], only := true,
+      occurrences := [(refusal, 2)] }
 
-  let module ← proofModule "Either" written template
-  let theorems := module.theorems
-  let proof ← startLakeLean work "Either" module.text
-  let comparison ← startLakeLean work "EitherSource"
-    (comparisonModule "EitherSource" written.text ["either"] written.package)
-  let exchangedProof ← startLakeLean work "CapControl"
-    (← proofModule "CapControl" exchanged template).text
   -- The stepped loop: three blocks, each with its draw.
-  let steppedRoot ← IO.ofExcept (goalRoot steppedSource "stepped")
-  let steppedClaims ← IO.ofExcept (goalClaims steppedRoot ["stepped"])
-  let steppedStatements : Statements := ⟨steppedClaims, steppedClaims.functionsBeforeRoot⟩
-  unless (steppedClaims.goals.map fun goal => goal.siteLabels.map (·.2.1)) == [["r_0", "r_1", "r_2"]] do
+  let stepped ← read steppedSource
+    { goals := ["stepped"], ports := #["claim"],
+      clause := ⟨"proves", none, "V", "Holds", ["claim"], []⟩, operands := #[0] }
+  unless (stepped.goals.map fun goal => goal.siteLabels.map (·.2.1)) == [["r_0", "r_1", "r_2"]] do
     throw (IO.userError "the stepped loop has not a draw in each of three blocks")
-  let steppedModule ← IO.ofExcept (steppedStatements.module standardModelText "Steps"
-    { text := steppedText, theorems := ["stepped_relation", "stepped_judged", "stepped_witnessed"] })
+  let steppedModule ← stepped.module "Steps"
+    { text := steppedText, theorems := ["stepped_relation", "stepped_judged", "stepped_witnessed"] }
   let steppedProof ← startLakeLean work "Steps" steppedModule.text
 
-  let allowed := ["propext", "Classical.choice", "Quot.sound"]
-  let (ok, output) ← finishLean proof
-  acceptedOutput "Either" ok output theorems allowed
-  let (ok, output) ← finishLean comparison
-  acceptedOutput "EitherSource" ok output []
+  let (_, _, _) ← check work "Either" written { text := template, theorems := ofText }
+    [exchangedControl]
   let (ok, output) ← finishLean steppedProof
   acceptedOutput "Steps" ok output steppedModule.theorems allowed
-  -- The fee of one quarter at the draw of the second arm is over its cap of one eighth.
-  expectUnproved "the charges exchanged" "CapControl" theorems exchangedProof ofWalk
-  -- at two places and no other, one in each proof of the judgment
-  let refusal := "the fee is not within the cap that the table gives the draw `site_y`\n  1 / 4 ≤ 1 / 8"
-  expectPlaces "the charges exchanged" exchangedProof [refusal, refusal]
-  let (_, output) ← finishLean exchangedProof
-  unless (output.splitOn refusal).length == 3 do
-    throw (IO.userError s!"the charges exchanged: the fee is not refused twice at `site_y`\n{output}")
   IO.println ("Either is judged within the table of caps of its goal (the draws of its two arms " ++
     "at 1/8 and 1/4: 3/8), with a guard inside each arm and a guard before the draw; " ++
     "the blocks of a stepped loop are walked; " ++

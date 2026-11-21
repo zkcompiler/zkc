@@ -5,6 +5,7 @@ import Zkc.Frontend.Written.Statement
 import Zkc.Tests.Frontend.SyntaxHarness
 import Zkc.Tests.Frontend.SourceClause
 import Zkc.Tests.Frontend.PrintedPackageSupport
+import Zkc.Tests.Frontend.WrittenSubject
 import Zkc.Core.Admission.Theorems
 import Zkc.Kernel
 import Zkc.Vocabulary.Project
@@ -65,6 +66,7 @@ Four controls are refused by Lean, each at the places that the check names and a
 
 open Zkc.Core Zkc.Frontend Zkc.Frontend.Written
 open Zkc.Tests.Frontend Zkc.Tests.Frontend.PrintedPackageSupport
+open Zkc.Tests.Frontend.WrittenSubject
 
 namespace GuessCharge
 
@@ -80,31 +82,15 @@ def source (rounds charge : String) : String :=
   s!"scheme Checked = Guess<{rounds}>:\n    prover P\n    construction interactive\n" ++
   "goal guessing = soundness(Checked, stage = written)\n"
 
-structure Subject where
-  text : String
-  statements : Statements
-
-def Subject.package (s : Subject) : String := (Written.package s.statements.package).text
-
-def noAssociation : Association := ⟨[], [], [], [], []⟩
-
-/-- A source read: the goal selects the root, reads the clause `proves @V Holds(claim)` on the
-first of the two ports, decided by the verifier of the scheme, and gives no proof argument. -/
-def read (text : String) : IO Subject := do
-  let c ← IO.ofExcept (goalRoot text "guessing")
-  let head ← IO.ofExcept (SourceClause.rootHead c)
-  unless head.ports.map (·.binder.name) == #["claim", "guess"] do
-    throw (IO.userError "the protocol has other ports than the claim and the guess")
-  let claims ← IO.ofExcept (goalClaims c ["guessing"])
-  let [claimed] := claims.goals | throw (IO.userError "the claims are not of one goal")
-  let clause ← IO.ofExcept (SourceClause.seen c "guessing")
-  unless clause == ⟨"proves", none, "V", "Holds", ["claim"], []⟩ do
-    throw (IO.userError s!"the goal reads another clause: {repr clause}")
-  unless claimed.statement == #[0] && claimed.witness == some #[] && claimed.specification.isEmpty do
-    throw (IO.userError "the relation is applied to other inputs than the claim")
-  unless (head.roster[claims.verifier]?, head.roster[claims.prover]?) == (some "V", some "P") do
-    throw (IO.userError "the verifier and the prover of the scheme are not the roles V and P")
-  return ⟨text, ⟨claims, claims.functionsBeforeRoot⟩⟩
+/-- What the check asserts of what the frontend read of a source of the subject: the goal
+selects the root; it reads the clause `proves @V Holds(claim)` on the first of the two ports,
+decided by the verifier of the scheme; it gives no proof argument; and its coins are positions,
+so the statements are about the standard model. -/
+def reading : Reading where
+  goals := ["guessing"]
+  ports := #["claim", "guess"]
+  clause := ⟨"proves", none, "V", "Holds", ["claim"], []⟩
+  operands := #[0]
 
 /-- The theorems of the text of the proofs. -/
 def ofText : List String :=
@@ -144,18 +130,14 @@ def consumer : String :=
   "    ⟨serveLaws_follows _ _, serveLaws_permitted _ _ (StandardModel.draws_permitted data)⟩ ()\n\n" ++
   "end\n"
 
-/-- The proof module, as the generator assembles it: the package of the claims and what is
-generated around the proofs written for the protocol, then the consumer. -/
-def proofModule (name : String) (s : Subject) (template : String) : IO Module :=
-  IO.ofExcept (s.statements.module standardModelText name { text := template, theorems := ofText }
-    (after := { text := consumer, theorems := ["consumer"] }))
-
 def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
   let template ← IO.FS.readFile template
-  let written ← read (source "3" "1 / 8")
-  let stated := written.statements
-  let [goal] := stated.claims.goals | throw (IO.userError "the statements are not of one goal")
-  unless stated.claims.root == 0 && (stated.claims.verifier, stated.claims.prover) == (1, 0) do
+  let proof : Proof :=
+    { text := template, theorems := ofText, after := { text := consumer, theorems := ["consumer"] } }
+  let written ← read (source "3" "1 / 8") reading
+  let goal ← written.goal
+  let claims := written.statements.claims
+  unless claims.root == 0 && (claims.verifier, claims.prover) == (1, 0) do
     throw (IO.userError "the root and the roles of the source are not where they were")
   -- The table of caps, as the frontend read it: the draw of the loop's body, at one eighth,
   -- three times.
@@ -163,13 +145,13 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
     throw (IO.userError s!"the table of caps is not the draw at 1/8, three times: {repr goal.caps}")
 
   -- The charge halved in the source: the program is what it was, and the cap is another.
-  let halved ← read (source "3" "1 / 16")
+  let halved ← read (source "3" "1 / 16") reading
   unless halved.package == written.package &&
-      (halved.statements.claims.goals.map (·.caps)) == [⟨[⟨⟨0⟩, [⟨⟨3⟩, 1, 16, 3⟩], []⟩]⟩] do
+      (halved.goals.map (·.caps)) == [⟨[⟨⟨0⟩, [⟨⟨3⟩, 1, 16, 3⟩], []⟩]⟩] do
     throw (IO.userError "the halved charge changed the package, or is not half at the draw")
   -- Four rounds: the count of the draw is four.
-  let four ← read (source "4" "1 / 8")
-  unless (four.statements.claims.goals.map fun goal => (goal.caps, goal.total)) ==
+  let four ← read (source "4" "1 / 8") reading
+  unless (four.goals.map fun goal => (goal.caps, goal.total)) ==
       [(⟨[⟨⟨0⟩, [⟨⟨3⟩, 1, 8, 4⟩], []⟩]⟩, 1 / 2)] do
     throw (IO.userError "with four rounds the draw is not counted four times")
   -- An invariant that leaves one fee too few.
@@ -177,7 +159,6 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
     "((2 - i : ℕ) : ℚ≥0) * (1 / 8) ≤ budget"
   let short ← replaceOnce short "have split : (3 - i : ℕ) = (3 - (i + 1)) + 1 := by omega"
     "have split : (2 - i : ℕ) = (2 - (i + 1)) + 1 := by omega"
-
   -- A text that proves nothing of the judgment: after its last `end` it declares the judgment
   -- as an instance variable of the module's scope, with the two linters that would report that
   -- switched off, and takes the judgment from the variable.
@@ -187,49 +168,36 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
     "variable [assumed : Fact guessingJudged]\n" ++
     "theorem guessing_judged : guessingJudged := assumed.out\n"
 
-  let module ← proofModule "Guess" written template
-  let theorems := module.theorems
-  let proof ← startLakeLean work "Guess" module.text
-  let comparison ← startLakeLean work "GuessSource" (comparisonModule "GuessSource" written.text ["guessing"] written.package)
-  let halvedProof ← startLakeLean work "CapControl" (← proofModule "CapControl" halved template).text
-  let fourProof ← startLakeLean work "RoundsControl" (← proofModule "RoundsControl" four template).text
-  let shortProof ← startLakeLean work "InvariantControl"
-    (← proofModule "InvariantControl" written short).text
-  let assumedProof ← startLakeLean work "AssumedControl"
-    (← proofModule "AssumedControl" written assumed).text
-
-  let allowed := ["propext", "Classical.choice", "Quot.sound"]
-  let (ok, output) ← finishLean proof
-  acceptedOutput "Guess" ok output theorems allowed
-  let (ok, output) ← finishLean comparison
-  acceptedOutput "GuessSource" ok output []
-  -- The cap of the draw is one sixteenth: the invariant does not start within the budget of
-  -- three sixteenths, the fee of one eighth that the text pays is not within the cap that the
-  -- module states for the draw, which the refusal names as the source does, and the consumer's
-  -- number is not the budget.
-  expectUnproved "the charge halved" "CapControl" theorems halvedProof ofWalk
-  expectPlaces "the charge halved" halvedProof
-    ["↑(3 - 0) * (1 / 8) ≤ guessingCaps.budget",
-      "the fee is not within the cap that the table gives the draw `site_r`\n  1 / 8 ≤ 1 / 16",
-      "toProbability (↑3 / ↑16) = 3 / 8"]
-  -- Four rounds: the invariant of the text pays three, and the body at the fourth round has
-  -- nothing left to pay with; the consumer's number is not the budget of one half.
-  expectUnproved "four rounds" "RoundsControl" theorems fourProof ofWalk
-  expectPlaces "four rounds" fourProof
-    ["omega could not prove the goal", "toProbability (↑1 / ↑2) = 3 / 8"]
-  -- An invariant that leaves one fee too few: the loop rule is applied and its first goal is
-  -- met; in the goal of the body the fee of the third round is not within what is left.
-  expectUnproved "an invariant one fee short" "InvariantControl" theorems shortProof ofWalk
-  expectPlaces "an invariant one fee short" shortProof ["omega could not prove the goal"]
-  -- The judgment taken as a hypothesis: every theorem that the generator writes after the text
-  -- takes the variable, so Lean proves each and reports no axiom beyond the allowed; none states
-  -- its proposition, and the module is refused where the stored statements are read.
-  expectUnproved "a judgment taken as a hypothesis" "AssumedControl" theorems assumedProof []
-  expectPlaces "a judgment taken as a hypothesis" assumedProof
-    ["`AssumedControl.guessing_installed` does not state `AssumedControl.guessingClaim`",
-      "`AssumedControl.guessing_sound` does not state `AssumedControl.guessingGoal`",
-      "`AssumedControl.guessing_result` does not state `AssumedControl.guessingResult`",
-      "`AssumedControl.guessing_met` does not state `AssumedControl.guessingWitnessed`"]
+  let (_, _, _) ← check work "Guess" written proof [
+    -- The cap of the draw is one sixteenth: the invariant does not start within the budget of
+    -- three sixteenths, the fee of one eighth that the text pays is not within the cap that
+    -- the module states for the draw, which the refusal names as the source does, and the
+    -- consumer's number is not the budget.
+    { title := "the charge halved", name := "CapControl", subject := halved, text := template,
+      unproved := ofWalk, only := true,
+      places := ["↑(3 - 0) * (1 / 8) ≤ guessingCaps.budget",
+        "the fee is not within the cap that the table gives the draw `site_r`\n  1 / 8 ≤ 1 / 16",
+        "toProbability (↑3 / ↑16) = 3 / 8"] },
+    -- Four rounds: the invariant of the text pays three, and the body at the fourth round has
+    -- nothing left to pay with; the consumer's number is not the budget of one half.
+    { title := "four rounds", name := "RoundsControl", subject := four, text := template,
+      unproved := ofWalk, only := true,
+      places := ["omega could not prove the goal", "toProbability (↑1 / ↑2) = 3 / 8"] },
+    -- An invariant that leaves one fee too few: the loop rule is applied and its first goal
+    -- is met; in the goal of the body the fee of the third round is not within what is left.
+    { title := "an invariant one fee short", name := "InvariantControl", subject := written,
+      text := short, unproved := ofWalk, only := true,
+      places := ["omega could not prove the goal"] },
+    -- The judgment taken as a hypothesis: every theorem that the generator writes after the
+    -- text takes the variable, so Lean proves each and reports no axiom beyond the allowed;
+    -- none states its proposition, and the module is refused where the stored statements are
+    -- read.
+    { title := "a judgment taken as a hypothesis", name := "AssumedControl", subject := written,
+      text := assumed, unproved := [], only := true,
+      places := ["`AssumedControl.guessing_installed` does not state `AssumedControl.guessingClaim`",
+        "`AssumedControl.guessing_sound` does not state `AssumedControl.guessingGoal`",
+        "`AssumedControl.guessing_result` does not state `AssumedControl.guessingResult`",
+        "`AssumedControl.guessing_met` does not state `AssumedControl.guessingWitnessed`"] }]
   IO.println ("Guess<3> is judged within the table of caps of its goal (the draw at 1/8, three " ++
     "times: 3/8), a fee at every round of the loop; a consumer written apart states the bound " ++
     "as 3/8; 4 of 4 controls refused, each at the places that the check names and at no other.")
