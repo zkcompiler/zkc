@@ -309,7 +309,7 @@ def proofModule (name text guarded : String) : IO String := do
   return packageHeader ["Zkc.Formal.OracleProcess", "Zkc.Formal.ReturnExperiment", "Zkc.Formal.Written.LawSamplers",
       "Zkc.Formal.Written.SiteCaps",
       "Zkc.Formal.Written.FunctionMeaning", "Zkc.Formal.Written.StandardModel",
-      "Zkc.Formal.Written.FiniteModel", "Zkc.Formal.Written.Ceiling"] ++
+      "Zkc.Formal.Written.FiniteModel"] ++
     s!"namespace {name}\n" ++ (Written.package s.package).text ++ Statements.opens ++ s.facts ++ "\n" ++
     Statements.coverage standardModelText ++ s.counts ++ s.transfers ++
     (← IO.ofExcept (s.claimTexts standardModelText)) ++ proofText guarded ++ "\n" ++ s.closings ++

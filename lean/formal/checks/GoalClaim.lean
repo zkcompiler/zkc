@@ -146,8 +146,7 @@ def statementModule (name : String) (stated : Statements) : IO String := do
   let claims ← IO.ofExcept (stated.claimTexts standardModelText)
   return imports ["Zkc.Formal.OracleProcess", "Zkc.Formal.ReturnExperiment", "Zkc.Formal.Written.LawSamplers",
       "Zkc.Formal.Written.SiteCaps",
-      "Zkc.Formal.Written.FunctionMeaning", "Zkc.Formal.Written.StandardModel",
-      "Zkc.Formal.Written.Ceiling"] ++
+      "Zkc.Formal.Written.FunctionMeaning", "Zkc.Formal.Written.StandardModel"] ++
     s!"namespace {name}\n" ++ (Written.package stated.package).text ++ Statements.opens ++
     stated.facts ++ "\n" ++ stated.transfers ++ claims ++ s!"end {name}\n"
 
