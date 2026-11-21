@@ -8,6 +8,10 @@ public import Zkc.Formal.Interactive.Experiment
 @[expose] public section
 namespace Zkc.Formal.Interactive.Sumcheck.EmptySumcheck
 open Core
+
+-- This file passes between the meaning of a program and its tables by definitional unfolding.
+unseal Zkc.Core.fnMeaning Zkc.Core.roleMeaning Zkc.Core.protocolMeaning
+
 variable {V : Vocabulary} (t : V.Ty)
 
 abbrev header (k : Key) (shape : Shape V) : ProtocolHeader V :=

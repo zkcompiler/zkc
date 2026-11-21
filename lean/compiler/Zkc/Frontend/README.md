@@ -51,8 +51,10 @@ and the two are not compared.
 `Written.Statements` (`Written/Statement.lean`) writes the text that stands around a proof in a
 module with the claims' package: the facts (keys, headers and places of the root, of the
 functions before it that the text names and of each goal's relation, the roles, each goal's
-proof arguments and charge), that the model covers the package, the transfers of a statement
-from the installed program to every admitted one, the claim of each goal about the installed
+proof arguments and charge), that the model covers the package, where the walks of the module
+start (the meaning of the deciding role, of each named function and of each goal's relation as
+the sealed denotation of its body), the transfers of a statement from the installed program to
+every admitted one, the claim of each goal about the installed
 program, the goal for every admitted program from a proof of that claim, and the comparison of
 a goal's total with its ceiling. A statement names the model through a `ModelText`: the model,
 its samplers, its coverage, and what the statement assumes of it (`scalarFieldModelText` is

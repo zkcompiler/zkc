@@ -154,6 +154,7 @@ theorem checkAgrees (c : Functions V) (admits : c.admit = admit) (checks : c.che
   intro named assoc a h
   exact admitFrom_checkAll .empty [] named.definitions _ _ (admit_ok h).1
 
+unseal fnMeaning roleMeaning protocolMeaning in
 /-- The actual projected role process runs safely at every invocation path, against
 permitted peer replies, under any accepted function contracts. -/
 theorem rolesSafe (c : Functions V) (implements : c.admit = admit) : Statements.rolesSafe c := by
@@ -164,6 +165,7 @@ theorem rolesSafe (c : Functions V) (implements : c.admit = admit) : Statements.
     (List.nodup_append.mp a.program.distinct).1 (acceptedBodies _ checked)).2
   exact Process.every_mono _ _ (fun _ _ => trivial) (fun _ h => h) (roles hdr callee r path args valid)
 
+unseal fnMeaning roleMeaning protocolMeaning in
 /-- Validity: a function of an admitted program never stops `undefined`, on any valid inputs that
 satisfy the requirements of its header's summary: what every admitted program carries, that its
 functions satisfy their summaries. -/
@@ -173,11 +175,13 @@ theorem functionsSafe : Statements.functionsSafe (V := V) :=
       ((a.assured M).1 _ f ins
         (((localSem M _ (Defs.fnTable M a.program.defs)).dyns_valid_iff ins).mpr valid) required)
 
+unseal fnMeaning roleMeaning protocolMeaning in
 /-- Validity: a function of an admitted program returns valid values: what every admitted
 program carries. -/
 theorem functionsKeepValidity : Statements.functionsKeepValidity (V := V) :=
   fun a M _ f ins outs valid ran => (a.assured M).2.1 _ f ins outs valid ran
 
+unseal fnMeaning roleMeaning protocolMeaning in
 /-- A view: a function of an admitted program that its header says cannot stop does not
 stop, on valid inputs that satisfy the requirements of its header's summary. -/
 theorem headersSayWhoStops : Statements.headersSayWhoStops (V := V) :=

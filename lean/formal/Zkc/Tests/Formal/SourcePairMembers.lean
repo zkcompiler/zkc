@@ -8,6 +8,10 @@ public import Zkc.Core.Admission.Theorems
 @[expose] public section
 namespace Zkc.Tests.Formal.SourcePairMembers
 open Core Zkc.Vocabulary.Project Formal.Interactive.Sumcheck
+
+-- This file passes between the meaning of a program and its tables by definitional unfolding.
+unseal Zkc.Core.fnMeaning Zkc.Core.roleMeaning Zkc.Core.protocolMeaning
+
 abbrev bindings : Bindings := {}
 abbrev V := bindings.vocabulary
 

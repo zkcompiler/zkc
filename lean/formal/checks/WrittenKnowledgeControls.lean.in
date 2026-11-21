@@ -2,6 +2,9 @@
 
 open Zkc.Core Zkc.Formal.Written Zkc.Formal.Written.FiniteModel
 
+-- These checks compute the meaning of small programs by Lean's own reduction.
+unseal Zkc.Core.fnMeaning Zkc.Core.roleMeaning Zkc.Core.protocolMeaning
+
 set_option maxRecDepth 4000
 set_option maxHeartbeats 1800000
 

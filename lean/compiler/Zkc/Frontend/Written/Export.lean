@@ -15,7 +15,7 @@ open Core
 def preamble (withProof : Bool) (scope : String) : String :=
   let library := if withProof then "Zkc.Formal.Written.GroupReplay" else "Zkc.Formal.Written.FunctionMeaning"
   let imports := "\n".intercalate ((library :: packageImports).map ("public import " ++ ·))
-  "module\n\n" ++ imports ++ "\n\n@[expose] public noncomputable section\nopen Zkc.Core Zkc.Formal.Written Std.WP\nset_option experimental.vcgen true\nset_option maxRecDepth 4000\nset_option maxHeartbeats 1800000\nset_option linter.unusedVariables false\nnamespace " ++ scope ++ "\n"
+  "module\n\n" ++ imports ++ "\n\n@[expose] public noncomputable section\nopen Zkc.Core Zkc.Formal.Written Std.WP\n-- This module passes between the meaning of a program and its body by definitional unfolding.\nunseal Zkc.Core.fnMeaning Zkc.Core.roleMeaning Zkc.Core.protocolMeaning\nset_option experimental.vcgen true\nset_option maxRecDepth 4000\nset_option maxHeartbeats 1800000\nset_option linter.unusedVariables false\nnamespace " ++ scope ++ "\n"
 
 /-- Source identifiers occupy one namespace in the generated record, including context.
 The prefix keeps Lean's constructor and generated projection names available. -/

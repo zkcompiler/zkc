@@ -25,8 +25,8 @@ The check reads the source with the frontend and writes modules on which Lean is
 - The proof module has the printed package of what the goal claims and, around the text of
   `FreivaldsCharge.lean.in`, what `Written.Statements` writes: the facts, with those of the
   function that the root calls under its name in the source; that the arithmetic model covers
-  the package; the transfers; the claim `soundClaim`; and the goal `sound_sound` for every
-  admitted program. The claim is over the arithmetic model on every field that can be sampled
+  the package; where the walks start; the transfers; the claim `soundClaim`; and the goal
+  `sound_sound` for every admitted program. The claim is over the arithmetic model on every field that can be sampled
   and has at least as many elements as the scalar field of the source
   (`scalarFieldModelText`). The text proves the claim. It says what `apply` and `Product`
   compute, each loop taken by an invariant (`walk_loop`); the verifier is walked once, its
@@ -44,8 +44,8 @@ the clause that the goal reads and the ports that the relation is applied to.
 
 Four controls are refused by Lean, each for the theorems that depend on what it changes and at
 the line that the check names: the operands of the relation exchanged in the clause
-(`Product(b, a, c)`: the claim is then about another product; the text is refused where it says
-which product its premise is about); a charge of half the source's (refused where the ceiling
+(`Product(b, a, c)`: the claim is then about another product; the text is refused where it
+takes from the premise that the product of `a` and `b` differs); a charge of half the source's (refused where the ceiling
 is compared with what a uniform scalar pays for); the hypothesis on the size of the field
 weakened to one element or more (refused where that comparison is used); and the coverage of
 the package by the standard model, which has no sampler for a sequence of scalars (decided
@@ -115,9 +115,10 @@ def read (text : String) (operands : List String) : IO Subject := do
 
 /-- The theorems of the proof module, whose axioms the check reads. -/
 def theorems : List String := [
-  "covered", "verifier.eq", "apply_law", "sound_relation", "sound_far", "walked_within",
-  "walked_excludes", "meaning_walked", "returns_installed", "large_covers", "sound_installed",
-  "sound_sound", "Witness.rejected", "Witness.sound_at_corner"]
+  "covered", "verifierProgram.eq", "verifier_meaning", "apply_meaning", "sound_meaning",
+  "apply_law", "sound_relation", "sound_far", "walked_within", "walked_excludes",
+  "returns_installed", "large_covers", "sound_installed", "sound_sound", "Witness.rejected",
+  "Witness.sound_at_corner"]
 
 /-- The claim and what rests on it. -/
 def ofClaim : List String := ["sound_installed", "sound_sound", "Witness.sound_at_corner"]
@@ -136,7 +137,8 @@ def proofModule (name : String) (s : Subject) (model : ModelText) (template : St
       "Zkc.Formal.Written.FixedSequences", "Zkc.Formal.Written.ScalarField",
       "Mathlib.Data.Matrix.Mul"] ++
     s!"namespace {name}\n" ++ s.package ++ Statements.opens ++ stated.facts ++ "\n" ++
-    Statements.coverage model ++ stated.transfers ++ claims ++ template ++ "\n" ++ closings ++
+    Statements.coverage model ++ stated.entries ++ stated.transfers ++ claims ++ template ++
+    "\n" ++ closings ++
     String.join (theorems.map (s!"#print axioms {·}\n")) ++ s!"end {name}\n"
 
 /-- A module with the package of a subject and the one theorem that a model covers it. -/
@@ -164,6 +166,8 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
   let [goal] := stated.goals | throw (IO.userError "the statements are not of one goal")
   unless stated.claims.root == 1 && stated.roles == [("verifier", 1), ("prover", 0)] do
     throw (IO.userError "the root and the roles of the source are not where they were")
+  unless stated.entryNames.all theorems.contains do
+    throw (IO.userError s!"an entry of a walk is not among the theorems read: {stated.entryNames}")
   unless stated.functions == [("apply", 2)] do
     throw (IO.userError s!"the root calls other functions than `apply`: {stated.functions}")
   unless goal.claimed.statement == #[0, 1, 2] do
@@ -204,10 +208,11 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
   acceptedOutput "Freivalds" ok output theorems allowed
   let (ok, output) ← finishLean comparison
   acceptedOutput "FreivaldsSource" ok output []
-  -- The claim is about `b * a`: the text, which says of its premise that it is about `a * b`,
-  -- does not prove it. The laws of the two functions and the theorems about the verifier stand.
+  -- The claim is about `b * a`: its premise is not the one from which the text gets that the
+  -- product of `a` and `b` differs. The laws of the two functions and the theorems about the
+  -- verifier stand.
   expectUnproved "the operands exchanged" "OperandsControl" theorems exchangedProof ofClaim
-  expectReason "the operands exchanged" exchangedProof "Hypothesis `rejected` has type"
+  expectReason "the operands exchanged" exchangedProof "sound_far G a b c A B C ha hb hc rejected"
   -- The ceiling of half the charge is not one over the order: the comparison with what a
   -- uniform scalar pays for is not proved.
   expectUnproved "a charge of half" "BoundControl" theorems halvedProof ("large_covers" :: ofClaim)

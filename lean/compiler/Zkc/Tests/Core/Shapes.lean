@@ -422,6 +422,7 @@ example : relayDeployed.entry = relayHeader := rfl
 /-- The first role gives to the second, which is online: the first proves. -/
 example : relayDeployed.roles = some (0, 1) := by decide +kernel
 
+unseal fnMeaning roleMeaning protocolMeaning in
 /-- The second role's run under no handlers starts by getting the value from the first, at
 the occurrence of the first event. -/
 example : (match relayDeployed.run plainModel 1 (hideAll plainModel 1 (.cons (5 : Nat) .nil)) .nil with

@@ -8,7 +8,9 @@ from what the frontend read: the facts (`rootKey` with `rootHeader`, `rootNames`
 the function that the root calls `applyKey`, `applyHeader`, `applyNames`, `applyBody`,
 `applyBefore` and `applyMember`; for the goal `soundCharge`, `soundKey` with `soundHeader`,
 `soundNames`, `soundBody`, `soundBefore` and `soundMember`), that the arithmetic model covers
-the package (`covered`), the transfers `at_root` and `at_sound`, and the claim `soundClaim`.
+the package (`covered`), where the walks start (`verifierProgram` with `verifier_meaning`,
+`apply_meaning`, `sound_meaning`), the transfers `at_root` and `at_sound`, and the claim
+`soundClaim`.
 After this text it writes the goal `sound_sound` from `sound_installed`, which this text proves.
 
 Nothing of the statement is written here. The source says
@@ -22,11 +24,6 @@ Where the product differs, the vectors on which the comparison holds are zeros o
 -/
 
 noncomputable section
-
--- The verifier's program, in the kernel's normal form.
-kernel_normal verifier :
-    Term (roleDialect V calleeProgram.headers verifierRole) (Ctx.empty.extend rootNames) rootHeader.outs :=
-  project verifierRole rootBody
 
 /-! ## Matrices as the values of sequences of sequences -/
 
@@ -72,10 +69,7 @@ theorem apply_law (m : List (List F)) (v : List F) (M : Matrix (Fin 2) (Fin 2) F
     (hm : m = rows M) (hv : v = List.ofFn w) :
     fnMeaning (model F G) calleeProgram applyMember (.cons m (.cons v .nil)) =
       .done (.cons (List.ofFn (M.mulVec w)) .nil) := by
-  rw [show fnMeaning (model F G) calleeProgram applyMember (.cons m (.cons v .nil)) =
-    applyBody.denote (localSem (model F G) applyBefore.headers.fns (Defs.fnTable (model F G) applyBefore.defs)) []
-      (Env.empty.extend applyNames (.cons m (.cons v .nil))) from by kernel_rfl]
-  delta applyBody body2
+  rw [apply_meaning (model F G) (.cons m (.cons v .nil))]
   refine done_of_judged ?_
   walk_loop fun i (collected : List F) _ => collected.reverse = (List.ofFn (M.mulVec w)).take i
   case first => rfl
@@ -129,10 +123,7 @@ theorem sound_relation (a b c : List (List F)) (A B C : Matrix (Fin 2) (Fin 2) F
     functionResult (t := .bool)
         (fnMeaning (model F G) installed soundMember (.cons a (.cons b (.cons c .nil)))) =
       some (decide (A * B = C)) := by
-  rw [show fnMeaning (model F G) installed soundMember (.cons a (.cons b (.cons c .nil))) =
-    soundBody.denote (localSem (model F G) soundBefore.headers.fns (Defs.fnTable (model F G) soundBefore.defs)) []
-      (Env.empty.extend soundNames (.cons a (.cons b (.cons c .nil)))) from by kernel_rfl]
-  delta soundBody body3
+  rw [sound_meaning (model F G) (.cons a (.cons b (.cons c .nil)))]
   refine functionResult_of_judged ?_
   walk_step
   walk_loop fun i (holds : Bool) _ => (holds = true ↔ ∀ p : Fin 2, p.val < i → (A * B) p = C p)
@@ -243,10 +234,9 @@ def coinAt (at_ : Occurrence) : InputPort V :=
 abbrev coin (path : List Frame) : InputPort V := coinAt ⟨path, ⟨0⟩⟩
 
 variable (G) in
-/-- The verifier's process, as the walk reads it. -/
-abbrev walked (path : List Frame) (a b c : List (List F)) :=
-  verifier.denote (roleSem (model F G) verifierRole (Defs.fnTable _ calleeProgram.defs)
-    (Defs.rTable _ calleeProgram.defs)) path (Env.empty.extend rootNames (inputs G a b c))
+/-- The verifier's process in a run of the installed program. -/
+abbrev process (path : List Frame) (a b c : List (List F)) :=
+  roleMeaning (model F G) installed rootMember verifierRole path (inputs G a b c)
 
 /-- What every judgment of the verifier that lets no run return pays for: a fee at the coin, for
 every vector on which the check passes. -/
@@ -254,12 +244,13 @@ theorem walked_excludes (allowed : ∀ op, (RSig (model F G)).Reply op → Prop)
     (pays : (op : ROp (model F G)) → ℚ≥0 → ((RSig (model F G)).Reply op → Prop) → Prop)
     (path : List Frame) (a b c : List (List F)) (A B C : Matrix (Fin 2) (Fin 2) F)
     (ha : a = rows A) (hb : b = rows B) (hc : c = rows C) (within : ℚ≥0)
-    (judged : (walked G path a b c).interpret (.charged allowed pays) (fun _ _ => False)
+    (judged : (process G path a b c).interpret (.charged allowed pays) (fun _ _ => False)
       (fun _ _ => True) within) :
     ∃ fee excluded, fee ≤ within ∧ pays ((coin path).operation (model F G)) fee excluded ∧
       ∀ (r : List F) (w : Fin 2 → F), r = List.ofFn w →
         allowed ((coin path).operation (model F G)) r →
         A.mulVec (B.mulVec w) = C.mulVec w → excluded r := by
+  rw [process, verifier_meaning] at judged
   walk_step at judged
   obtain ⟨fee, excluded, least, paid, rest⟩ := judged
   refine ⟨fee, excluded, least, paid, fun r w hw allowedR passes => ?_⟩
@@ -279,13 +270,6 @@ theorem walked_excludes (allowed : ∀ op, (RSig (model F G)).Reply op → Prop)
     simp [h7, same] at at5
   · walk_step at after
     exact after
-
-/-- The verifier's process in a run of the installed program is the process that the walk
-reads. -/
-theorem meaning_walked (path : List Frame) (a b c : List (List F)) :
-    roleMeaning (model F G) installed (Member.head : Member installed.headers.protocols rootHeader)
-      verifierRole path (inputs G a b c) = walked G path a b c := by
-  kernel_rfl
 
 end
 
@@ -325,9 +309,10 @@ theorem walked_within (path : List Frame) (a b c : List (List F))
     (charge : DrawCharge) (differ : A * B ≠ C)
     (owned : charge.owner = rootKey) (site : charge.draws = [([], ⟨0⟩)])
     (covers : (1 : ℝ≥0∞) / (Fintype.card F : ℝ≥0∞) ≤ toProbability (ceiling charge)) :
-    (walked G path a b c).interpret
+    (process G path a b c).interpret
       (.charged (Permitted (model F G)) (fees F G charge path))
       (fun _ _ => False) (fun _ _ => True) (budget charge) := by
+  rw [process, verifier_meaning]
   walk_step
   refine ⟨ceiling charge,
     fun r : List F => ∃ w : Fin 2 → F, r = List.ofFn w ∧ A.mulVec (B.mulVec w) = C.mulVec w, ?_,
@@ -383,7 +368,6 @@ theorem returns_installed (path : List Frame) (a b c : List (List F))
   rw [prEvent_simulation_returns, ← toProbability_budget charge positive]
   refine allowed_bounds_return service _ (allowance (model F G) charge rootKey path)
     (Permitted (model F G)) permitted follows _ (budget charge) s ?_
-  rw [meaning_walked]
   exact walked_within path a b c A B C ha hb hc charge differ owned site covers
 
 end
@@ -395,9 +379,6 @@ says that the product differs, and the field of the model has at least the order
 charge is written with. -/
 theorem sound_installed : soundClaim := by
   intro F G _ _ _ _ _ _ _ path large a validA b validB c validC σ service follows permitted s rejected
-  -- the premise is about the product of the first two ports, in this order
-  guard_hyp rejected : functionResult (t := .bool) (fnMeaning (ArithmeticModel.model F G) installed
-    soundMember (.cons a (.cons b (.cons c .nil)))) = some false
   obtain ⟨A, ha⟩ := rows_of_valid G a validA
   obtain ⟨B, hb⟩ := rows_of_valid G b validB
   obtain ⟨C, hc⟩ := rows_of_valid G c validC

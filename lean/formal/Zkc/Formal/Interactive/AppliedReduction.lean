@@ -8,6 +8,10 @@ public import Zkc.Formal.Interactive.GateSequence
 @[expose] public section
 namespace Zkc.Formal.Interactive.Sumcheck.ReductionRound
 open Core
+
+-- This file passes between the meaning of a program and its tables by definitional unfolding.
+unseal Zkc.Core.fnMeaning Zkc.Core.roleMeaning Zkc.Core.protocolMeaning
+
 variable {V : Vocabulary} {state t residual : V.Ty} {k n : Nat} {p : Core.Typed V} {key : Key} {events : Events t}
 
 /-- The private state and shared public reduction ports used by the GKR layer call. -/

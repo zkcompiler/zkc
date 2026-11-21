@@ -16,6 +16,7 @@ def singletonProgram {V : Vocabulary} (hdr : ProtocolHeader V) (ns : Names hdr.i
     (body : Prot V ⟨[], []⟩ hdr ns) (ok : ProtocolConditions hdr body) : Typed V :=
   ⟨⟨[], [hdr]⟩, .protocol hdr ns body ok .nil, by simp [Headers.keys]⟩
 
+unseal Zkc.Core.roleMeaning in
 /-- A singleton root executes the projection of its body in the initial input environment.
 Instantiate this equation before replaying instructions to keep the program table opaque. -/
 theorem singleton_role_returns {V : Vocabulary} (M : Model V) (hdr : ProtocolHeader V)
@@ -48,6 +49,7 @@ inductive InputPort (V : Vocabulary) where
   deriving DecidableEq
 
 namespace InputPort
+
 variable {V : Vocabulary} (M : Model V)
 
 def operation : InputPort V → ROp M

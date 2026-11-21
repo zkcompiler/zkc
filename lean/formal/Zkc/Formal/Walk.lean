@@ -3,6 +3,7 @@ module
 public import Zkc.Formal.ProcessJudgment
 public import Zkc.Formal.RoleRules
 public import Zkc.Core.Meaning.Role
+public import Zkc.Core.Meaning.Program
 public meta import Lean
 
 public meta section
@@ -40,7 +41,8 @@ rule as it checks a step:
 
 - `walk_compute value` takes a computation of a role by its law. The law, that the operation
   gives `value` on the operands, is left as the goal `law`; the body of a function that the
-  operation calls is not read. `walk_compute value at h` does the same on a hypothesis.
+  operation calls is not read, and the law of a call is stated of the meaning of the function
+  in its program (`fnMeaning`). `walk_compute value at h` does the same on a hypothesis.
 - `walk_loop invariant` takes a loop by an invariant (`Term.interpret_loop_invariant`). The
   invariant is a function of the iteration number, of each carried value, of what was collected
   so far for each collected type, latest first, and of what the judgment carries along a path.
@@ -432,7 +434,8 @@ private def restAfter (a : Array Expr) (names rest : Expr) : MetaM Expr := do
     mkLambdaFVars #[vs] (mkAppN (mkConst ``Zkc.Core.Term.denote) #[D, sem, newΓ, a[3]!, rest, path, extended])
 
 /-- A computation of a role, taken by its law: the goal `law`, that the operation gives the
-value on the operands in a form to read, and the rest on the value. -/
+value on the operands in a form to read, and the rest on the value. For a call of a function of
+a program the law is about the meaning of the function there. -/
 private def compute (goal : MVarId) (value : Syntax) (hypothesis := false) :
     TacticM (List MVarId) := goal.withContext do
   let (j, a, t) ← readTermStep goal hypothesis
@@ -459,8 +462,19 @@ private def compute (goal : MVarId) (value : Syntax) (hypothesis := false) :
   let sides := lawType.getAppArgs
   let (cells, nil) ← spine sides[1]!.appArg!
   let operands ← cells.mapM fun (_, operand) => readValue operand
+  -- a call of a function of a program is stated as the meaning of the function there, which is
+  -- the form that a law of the function has
+  let read := rebuild cells nil operands
+  let operation ← kernelWhnf o[6]!
+  let table := s[4]!
+  let computed :=
+    if operation.isAppOfArity ``Zkc.Core.LocalOp.call 4 && table.isAppOfArity ``Zkc.Core.Defs.fnTable 4
+        && (table.getArg! 3).isAppOfArity ``Zkc.Core.Typed.defs 2 then
+      mkAppN (mkConst ``Zkc.Core.fnMeaning) #[s[0]!, s[1]!, (table.getArg! 3).appArg!,
+        operation.getArg! 2, operation.getArg! 3, read]
+    else mkApp sides[1]!.appFn! read
   let law ← mkFreshExprSyntheticOpaqueMVar (tag := `law)
-    (mkAppN lawType.getAppFn #[sides[0]!, mkApp sides[1]!.appFn! (rebuild cells nil operands), sides[2]!])
+    (mkAppN lawType.getAppFn #[sides[0]!, computed, sides[2]!])
   -- the step is the rest on the value: the judgment of the one is the judgment of the other
   let equation := mkApp withValue law
   let equationType ← inferType equation
