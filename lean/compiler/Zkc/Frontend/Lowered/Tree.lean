@@ -431,6 +431,46 @@ partial def Expr.mapLocalReads {α : Type} (expr : Expr) (visit : LocalId → Bo
   | .type written => fromType written
   | .number .. | .bytes .. | .bool .. | .error _ => #[]
 
+/-- Whether a local name is an operand of `+ * ^ - / %` somewhere in an expression: the
+condition under which the range of a term depends on an index (TY8). An index that is read
+only as a position, a condition or an argument is none. -/
+partial def Expr.arithmeticOperand (binder : LocalId) : Expr → Bool
+  | .operator _ applied operands =>
+    let arithmetic := match applied with
+      | .add | .subtract | .multiply | .divide | .remainder | .power => true
+      | _ => false
+    (arithmetic && operands.any fun | .local _ read => read == binder | _ => false) ||
+      operands.any (arithmeticOperand binder)
+  | .call _ _ arguments witnesses =>
+    (arguments ++ witnesses.getD #[]).any fun
+      | .positional _ value | .named _ _ value | .spec _ _ value => arithmeticOperand binder value
+  | .slice _ target lower upper =>
+    arithmeticOperand binder target || lower.any (arithmeticOperand binder) ||
+      upper.any (arithmeticOperand binder)
+  | .field _ target _ | .position _ target _ => arithmeticOperand binder target
+  | .method _ target _ _ arguments =>
+    arithmeticOperand binder target || arguments.any fun
+      | .positional _ value | .named _ _ value | .spec _ _ value => arithmeticOperand binder value
+  | .conditional _ _ a b c =>
+    arithmeticOperand binder a || arithmeticOperand binder b || arithmeticOperand binder c
+  | .tuple _ items _ | .list _ items => items.any (arithmeticOperand binder)
+  | .repetition _ a b | .inner _ a b => arithmeticOperand binder a || arithmeticOperand binder b
+  | .record _ _ fields => fields.any fun (.field _ _ value) => arithmeticOperand binder value
+  | .recordUpdate _ value fields =>
+    arithmeticOperand binder value || fields.any fun (.field _ _ value) => arithmeticOperand binder value
+  | .comprehension _ element domain filter =>
+    let inDomain := match domain with
+      | .range _ start stop _ => arithmeticOperand binder start || arithmeticOperand binder stop
+      | .collection _ _ source => arithmeticOperand binder source
+    inDomain || arithmeticOperand binder element || filter.any (arithmeticOperand binder)
+  | .fold _ _ domain body =>
+    let inDomain := match domain with
+      | .range _ start stop _ => arithmeticOperand binder start || arithmeticOperand binder stop
+      | .collection _ _ source => arithmeticOperand binder source
+    inDomain || arithmeticOperand binder body
+  | .block _ _ result => arithmeticOperand binder result
+  | _ => false
+
 /-- Local binders read in source order, including static arguments of references. -/
 def Expr.locals (expr : Expr) : Array LocalId := expr.mapLocalReads (fun id _ => id) (fun _ => false)
 
