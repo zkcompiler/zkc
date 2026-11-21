@@ -285,9 +285,8 @@ def run (corpus : System.FilePath) (work : System.FilePath) : IO Unit := do
   -- the bound of its statement is zero; Lean elaborates the statement.
   let (pairAdmitted, pairClaims) ← read pair ["sound"]
   let pairStated : Statements :=
-    { claims := pairClaims, roles := [("verifier", 1), ("prover", 0)]
-      goals := pairClaims.goals.map fun claimed =>
-        { claimed, specification := #[], charge := ⟨⟨pairAdmitted.id⟩, 0, 1, []⟩, ceiling := none } }
+    { claims := pairClaims
+      goals := pairClaims.goals.map fun claimed => { claimed, charge := ⟨⟨pairAdmitted.id⟩, 0, 1, []⟩ } }
   let pairText ← IO.ofExcept (pairStated.claimTexts standardModelText)
   -- The premise stands in the claim and in the statement that its hypotheses are met.
   expect "the statement of a relation with a witness does not quantify the witness"

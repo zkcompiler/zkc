@@ -288,6 +288,20 @@ structure ProtocolBody where
   results : Array BodyResult
   deriving Inhabited
 
+namespace ProtocolBody
+
+/-- The ports of the deployed header (SX2): those that are no `spec` port, in the order of the
+head. The emitted protocol has one input for each, in this order, and a claim finds the place of
+an operand among them. This is the one definition of where a port is after erasure. -/
+def deployedPorts (body : ProtocolBody) : Array BodyPort := body.ports.filter (!·.specification)
+
+/-- The place of a port among the inputs of the deployed header, by its binder: none for a
+`spec` port, which has no place there, and for a binder that is no port. -/
+def inputPlace? (body : ProtocolBody) (binder : LocalId) : Option Nat :=
+  body.deployedPorts.findIdx? (·.binder.id == binder)
+
+end ProtocolBody
+
 inductive Body where
   | function (body : FunctionBody)
   | protocol (body : ProtocolBody)

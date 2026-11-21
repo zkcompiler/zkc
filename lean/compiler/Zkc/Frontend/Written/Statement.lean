@@ -14,8 +14,8 @@ file writes what stands around a proof in such a module, from what the frontend 
 library and from the model that the check names:
 
 - `facts`: the keys, headers and places of the root, of the functions before it that the text
-  names and of each goal's relation, the roles, and each goal's proof arguments and charge, as
-  terms;
+  names and of each goal's relation, the verifier and the prover of the scheme, and each goal's
+  proof arguments and charge, as terms;
 - `coverage`: the theorem `covered`, that the model of the statement covers the stored program;
 - `entries`: where the walks of the module start: for the deciding role, each named function
   and each goal's relation, the meaning in the installed program as the sealed denotation of
@@ -44,6 +44,15 @@ So a proof module is: the package, `opens`, `facts`, `coverage`, `entries`, `tra
 publishes is a proposition defined before the text of the proofs; a name that the text defines
 afterwards cannot change what it says. The subject, the premise, the experiment, the samplers
 and the bound are written here.
+
+What a statement says of its goal is read from the claims (`goalClaims`) and from nothing that
+a caller gives beside them: the deciding role is the verifier of the claims' scheme, the
+operands are the inputs of the deployed header at the places that the claims give, and the
+proof arguments and the ceiling are the goal's. A caller gives the model, the labels of the
+functions that the text names, and, until the budget of a goal is the table of its root, the
+charge of one draw. A goal whose clause is a `reduces` gets no statement: the statement of a
+reduction is about a return on which the reduced statement is true, and a bound on every return
+is another claim.
 
 The model is named by a `ModelText`: the binders of what it is built from, the model, its
 samplers and its coverage as terms over them, and what the statement assumes of it. It is
@@ -120,20 +129,16 @@ def ModelText.assumedConjuncts (model : ModelText) : String :=
 def ModelText.assumedNames (model : ModelText) : String :=
   " ".intercalate (model.hypotheses.map (·.1))
 
-/-- A goal of the claims with what its statement needs beside its clause: the values of its
-proof arguments, its charge on a draw of the root, and its ceiling when it has one. -/
+/-- A goal of the claims with its charge on a draw of the root. -/
 structure StatedGoal where
   claimed : ClaimedGoal
-  specification : Array Nat
   charge : DrawCharge
-  ceiling : Option Rat
 
-/-- The claims of goals of one scheme, with what their statements need. `roles` are the roles
-that the text names, each with the label of its name (`verifier` gives `verifierRole`); the
-first is the deciding role. -/
+/-- The claims of goals of one scheme, with what their statements need. The deciding role is
+the verifier of the claims' scheme; the text names it `verifierRole` and the prover
+`proverRole`. -/
 structure Statements where
   claims : GoalClaims
-  roles : List (String × Nat)
   goals : List StatedGoal
   /-- The functions of the package before the root that the text names, each with the label of
   its name (`apply` gives `applyMember`): what the root may call. -/
@@ -198,7 +203,7 @@ def calleeMember (s : Statements) (key : Nat) : String :=
 /-- The ports of the root, each with its type as a term and whether the deciding role holds
 it. -/
 def ports (s : Statements) : Except String (List (String × Bool)) := do
-  let some (_, deciding) := s.roles.head? | throw "the statements name no deciding role"
+  let deciding := s.claims.verifier
   let some root := s.package.named.definitions.find? (·.key.number == s.claims.root)
     | throw "the package of the claims does not have the root"
   let .protocol _ _ ins _ _ := root | throw "the root of the claims is no protocol"
@@ -228,7 +233,8 @@ def facts (s : Statements) : String :=
   s!"noncomputable abbrev calleeProgram : Typed V := {s.programBefore root}\n" ++
   s!"noncomputable abbrev rootMember : Member installed.headers.protocols header{root} :=\n" ++
   s!"  {s.memberOf root true}\n" ++
-  String.join (s.roles.map fun (label, role) => s!"abbrev {label}Role : Role := {role}\n") ++
+  s!"abbrev verifierRole : Role := {s.claims.verifier}\n" ++
+  s!"abbrev proverRole : Role := {s.claims.prover}\n" ++
   String.join (s.functions.map fun (label, key) =>
     s!"abbrev {label}Key : Key := ⟨{key}⟩\n" ++
     s!"noncomputable abbrev {label}Header := header{key}\n" ++
@@ -241,7 +247,7 @@ def facts (s : Statements) : String :=
     let name := goal.claimed.goal
     let relation := goal.claimed.relation
     s!"def {name}Charge : Zkc.Frontend.Written.DrawCharge := {chargeTerm goal.charge}\n" ++
-    String.join (goal.specification.toList.zipIdx.map fun (value, index) =>
+    String.join (goal.claimed.specification.toList.zipIdx.map fun (value, index) =>
       s!"def {name}Argument{index} : Nat := {value}\n") ++
     s!"abbrev {name}Key : Key := ⟨{relation}⟩\n" ++
     s!"noncomputable abbrev {name}Header := header{relation}\n" ++
@@ -265,9 +271,8 @@ def entries (s : Statements) : String :=
     s!"    fnMeaning M {program} {member} inputs =\n" ++
     s!"      ({label}Body.denote (localSem M {label}Before.headers.fns (Defs.fnTable M {label}Before.defs)) []\n" ++
     s!"        (Env.empty.extend {label}Names inputs)).sealed := by\n  kernel_rfl\n\n"
-  let role := match s.roles.head? with
-    | none => ""
-    | some (label, _) =>
+  let label := "verifier"
+  let role :=
       s!"-- The program of the {label}, in the kernel's normal form.\n" ++
       s!"kernel_normal {label}Program :\n" ++
       s!"    Term (roleDialect V calleeProgram.headers {label}Role) (Ctx.empty.extend rootNames) rootHeader.outs :=\n" ++
@@ -288,9 +293,7 @@ def entries (s : Statements) : String :=
 
 /-- The names of the theorems that `entries` writes. -/
 def entryNames (s : Statements) : List String :=
-  (match s.roles.head? with
-    | none => []
-    | some (label, _) => [s!"{label}Program.eq", s!"{label}_meaning"]) ++
+  ["verifierProgram.eq", "verifier_meaning"] ++
   s.functions.map (s!"{·.1}_meaning") ++ s.goals.map (s!"{·.claimed.goal}_meaning")
 
 /-- That what holds of the root, and of the root with a goal's relation, in the installed
@@ -335,22 +338,46 @@ structure Parts where
   inputs : String
   premise : String → String → String
 
+/-- The names of the inputs of the root in a statement: the name that the source gives the port,
+after `input_`, so that a reader of a statement sees which inputs the relation is applied to and
+which the deciding role is run on. An input whose name in the source is no plain identifier, or
+is the name of another input, is named by its place. -/
+def inputNames (s : Statements) : List String :=
+  let plain (name : String) := !name.isEmpty && name.all (fun c => c.isAlphanum || c == '_') &&
+    !(name.front.isDigit)
+  let names := s.claims.inputs.toList
+  names.zipIdx.map fun (name, index) =>
+    if plain name && (names.filter (· == name)).length == 1 then s!"input_{name}" else s!"port{index}"
+
 def parts (s : Statements) (model : ModelText) (goal : StatedGoal) : Except String Parts := do
+  -- a goal of these statements is one of their claims, and not the claim of another package
+  unless s.claims.goals.any (fun own => own.goal == goal.claimed.goal &&
+      own.relation == goal.claimed.relation && own.statement == goal.claimed.statement &&
+      own.witness == goal.claimed.witness && own.specification == goal.claimed.specification &&
+      own.ceiling == goal.claimed.ceiling) do
+    throw s!"{goal.claimed.goal}: the goal is not one of the claims that these statements are of"
+  unless goal.claimed.clause.kind == .proves do
+    throw (s!"{goal.claimed.goal}: the goal reads a `reduces` clause. The statement of a reduction " ++
+      "is about a return on which the reduced statement is true, and is not issued yet")
   let ports ← s.ports
+  let named := s.inputNames
+  unless named.length == ports.length do
+    throw s!"{goal.claimed.goal}: the inputs of the deployed header are not those that the claims name"
+  let name (index : Nat) := named.getD index s!"port{index}"
   let held := ports.zipIdx.filter (·.1.2)
   let binders := String.join (held.map fun ((type, _), index) =>
-    s!"    (port{index} : {model.model}.Val {type}) (valid{index} : {model.model}.Valid {type} port{index})\n")
+    s!"    ({name index} : {model.model}.Val {type}) (valid_{name index} : {model.model}.Valid {type} {name index})\n")
   let quantified := String.join (held.map fun ((type, _), index) =>
-    s!"    ∀ (port{index} : {model.model}.Val {type}), {model.model}.Valid {type} port{index} →\n")
+    s!"    ∀ ({name index} : {model.model}.Val {type}), {model.model}.Valid {type} {name index} →\n")
   let existential := String.join (held.map fun ((type, _), index) =>
-    s!"    ∃ (port{index} : {model.model}.Val {type}), {model.model}.Valid {type} port{index} ∧\n")
-  let names := " ".intercalate (held.map fun (_, index) => s!"port{index} valid{index}")
+    s!"    ∃ ({name index} : {model.model}.Val {type}), {model.model}.Valid {type} {name index} ∧\n")
+  let names := " ".intercalate (held.map fun (_, index) => s!"{name index} valid_{name index}")
   let cons (items : List String) := items.foldr (fun item rest => s!"(.cons {item} {rest})") ".nil"
-  let inputs := cons (ports.zipIdx.map fun ((_, holds), index) => if holds then s!"port{index}" else "()")
+  let inputs := cons (ports.zipIdx.map fun ((_, holds), index) => if holds then name index else "()")
   for position in goal.claimed.statement do
     unless (ports[position]?.map (·.2)) == some true do
-      throw s!"{goal.claimed.goal}: the deciding role does not hold the port at {position} of the statement"
-  let statement := goal.claimed.statement.toList.map (s!"port{·}")
+      throw s!"{goal.claimed.goal}: the deciding role does not hold the input at {position} of the deployed header"
+  let statement := goal.claimed.statement.toList.map name
   let types ← s.relationInputs goal
   let witnessTypes := types.drop statement.length
   let premise (program relation : String) : String :=
@@ -375,7 +402,7 @@ the total of its charge is within it. A source whose charges add up to more than
 promises gets no statement, and is told the two numbers. -/
 def checkCeilings (s : Statements) : Except String Unit := do
   for goal in s.goals do
-    let some ceiling := goal.ceiling | continue
+    let some ceiling := goal.claimed.ceiling | continue
     unless goal.total ≤ ceiling do
       throw (s!"GL4: the goal `{goal.claimed.goal}` states the ceiling {ceiling}, and the total of its " ++
         s!"charge is {goal.total}")
@@ -386,7 +413,7 @@ def ceilings (s : Statements) : Except String String := do
   s.checkCeilings
   let mut text := ""
   for goal in s.goals do
-    let some ceiling := goal.ceiling | continue
+    let some ceiling := goal.claimed.ceiling | continue
     let name := goal.claimed.goal
     text := text ++
       s!"/-- The total of the charge of `{name}` is within the ceiling that the goal states. -/\n" ++
@@ -395,10 +422,9 @@ def ceilings (s : Statements) : Except String String := do
   return text
 
 /-- The probability that the simulation of the deciding role of a program returns, as text. -/
-def returns (s : Statements) (model : ModelText) (program root inputs : String) : String :=
-  let role := (s.roles.head?.map (·.1)).getD "deciding"
+def returns (model : ModelText) (program root inputs : String) : String :=
   s!"Pr\{let out ← (simulateQ (handlerOf service) (embed\n" ++
-  s!"          (roleMeaning {model.model} {program} {root} {role}Role path {inputs}))).run.run s}[\n" ++
+  s!"          (roleMeaning {model.model} {program} {root} verifierRole path {inputs}))).run.run s}[\n" ++
   "        ∃ results, out.1 = some (.inl results)]"
 
 /-- The same service as the quantifiers of a proposition. -/
@@ -434,7 +460,7 @@ def claimAt (s : Statements) (model : ModelText) (goal : StatedGoal)
   return s!"∀ {model.binders} (path : List Frame),\n" ++
     model.assumed ++ parts.quantified ++ serviceQuantified model ++
     s!"    {parts.premise program relation} →\n" ++
-    s!"      {s.returns model program root parts.inputs} ≤ total {goal.claimed.goal}Charge"
+    s!"      {returns model program root parts.inputs} ≤ total {goal.claimed.goal}Charge"
 
 /-- For each goal, what is stated before any proof is written, so that no name defined by the
 text of a proof can change it:

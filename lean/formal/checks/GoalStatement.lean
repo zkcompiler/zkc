@@ -1,0 +1,318 @@
+import Zkc.Frontend.Written.Claim
+import Zkc.Frontend.Written.Charge
+import Zkc.Frontend.Written.Package
+import Zkc.Frontend.Written.Statement
+import Zkc.Tests.Frontend.SyntaxHarness
+import Zkc.Tests.Frontend.PrintedPackageSupport
+
+/-!
+The statement of a written soundness goal is about the goal of the source.
+
+A statement names a deciding role, applies the relation of the goal's clause to operands and
+bounds an event. Each of the three is read from the goal by `goalClaims`, and the generator
+(`Written.Statements`) takes none of them from its caller. The check reads sources with the
+frontend and asserts what a change of the source does to the statement, with the two directions
+side by side: a change that leaves the goal as it is leaves the statement as it is, and a change
+of the goal changes the statement or is refused.
+
+- **The operands.** The ports of the source and the inputs of the deployed header are two
+  lists, since a `spec` port is erased. With a `spec` port that nothing uses in front of the
+  operand, or behind it, the operand is the same input of the header and the claim is the same
+  text; with another port of the same type as operand, the operand is another input and the
+  claim another text. A claim names its inputs as the source names its ports: the relation is
+  applied to `input_flag`, and the deciding role is run on `input_flag` and `input_other`.
+- **Which values a statement may be about** (GL3 with SC4). An operand that the verifier holds
+  alone is refused under GL3, though the deciding role can read it; one that the prover holds
+  alone is refused under SX6, as before; one that is a `spec` port is refused as not issued yet.
+  Each refusal names the operand.
+- **The deciding role.** Two schemes of one protocol with the provers `P` and `V` have the
+  verifiers `V` and `P`. A goal of each, read alone, has its own verifier. The goals of two
+  schemes are refused as one package, in either order, also where the two schemes have one
+  verifier; two goals of one scheme are one package, and the claim of each is the text that it
+  has when the goal is read alone.
+- **The event.** A goal that reads a `reduces` clause has its claims read, and gets no
+  statement: its statement is about a return on which the reduced statement is true.
+- **The records.** The statements of one source with the claimed goal of another, under the same
+  name, are refused; and Lean refuses a module that alters the operands of a claimed goal or the
+  verifier of a package, since the two records are made by the reader alone.
+
+Then Lean is run on two more modules. Both have a consumer that a reader of the source could write
+without the generator: a theorem that names none of the generated propositions, has the
+verifier as its place in the roster, and says, of every admitted program, that this role of the
+protocol with the inputs `flag = false` and `other = true` returns with probability at most zero when the relation is false of `false`,
+under the service that draws by the laws. Its proof is the published theorem of the goal at
+those inputs.
+
+- In the first module the source has a `spec` port in front of `flag` and its clause is
+  `proves @V IsSet(flag)`. The published theorem and the consumer are proved.
+- In the control the clause is `proves @V IsSet(other)`, with a verifier that guards `other`.
+  The published theorem is proved, and it is about the other input: the consumer is refused,
+  where it gives the published theorem its premise.
+-/
+
+open Zkc.Core Zkc.Frontend Zkc.Frontend.Written
+open Zkc.Tests.Frontend Zkc.Tests.Frontend.PrintedPackageSupport
+
+namespace GoalStatementCheck
+
+def expect (title : String) (holds : Bool) : IO Unit :=
+  unless holds do throw (IO.userError title)
+
+/-- A protocol of two flags whose verifier draws a bit and guards `flag`: its ports, and the
+clause of its contract. -/
+def flags (ports clause : String) : String :=
+  "module t\nuse zkc::security::{soundness}\nrelation IsSet(b: bool): b\n" ++
+  s!"protocol Flags roles(P, V)({ports}):\n" ++
+  "    bit <- draw bool from V to P\n    guard @V flag\n" ++
+  s!"spec for Flags:\n    {clause}\n    charge sites.bit <= 1 / 2\n" ++
+  "scheme Checked = Flags:\n    prover P\n    construction interactive\n" ++
+  "goal sound = soundness(Checked)\n"
+
+def both : String := "flag: bool @(P, V), other: bool @(P, V)"
+
+/-- The statements of the goals of a source, each with the charge of one draw. -/
+def statementsOf (text : String) (goals : List String) (draw : String) : Except String Statements := do
+  let some first := goals.head? | throw "no goal"
+  let root ← goalRoot text first
+  let claims ← goalClaims root goals
+  let stated ← claims.goals.mapM fun claimed => do
+    return ({ claimed, charge := ← goalDrawCharge root claimed.goal [] draw } : StatedGoal)
+  return { claims, goals := stated }
+
+/-- The places of the operands of the one goal of a source among the inputs of the deployed
+header, and the text of its claim about the installed program. -/
+def claimOf (text : String) : Except String (Array Nat × String) := do
+  let s ← statementsOf text ["sound"] "bit"
+  let [goal] := s.goals | throw "not one goal"
+  return (goal.claimed.statement, ← s.claimAt standardModelText goal "installed" "rootMember" "soundMember")
+
+/-- A source whose goal is refused, for a reason that the refusal states. -/
+def refused (title text : String) (reasons : List String) : IO Unit :=
+  match claimOf text with
+  | .ok _ => throw (IO.userError s!"{title}: a statement was written")
+  | .error why =>
+    unless reasons.all (fun reason => why.contains reason) do
+      throw (IO.userError s!"{title}: refused for another reason: {why}")
+
+/-- One protocol under three schemes, the second with the roles of prover and verifier
+exchanged, and four goals: `a` and `d` of the first scheme, `b` of the second, `c` of the
+third. -/
+def schemes : String :=
+  "module t\nuse zkc::security::{soundness}\nrelation IsSet(b: bool): b\n" ++
+  "protocol Pair roles(P, V)(flag: bool @(P, V)):\n    guard @V flag\n    guard @P true\n" ++
+  "spec for Pair:\n    proves @V vr: IsSet(flag)\n    proves @P pr: IsSet(flag)\n" ++
+  "scheme First = Pair:\n    prover P\n    construction interactive\n" ++
+  "scheme Second = Pair:\n    prover V\n    construction interactive\n" ++
+  "scheme Third = Pair:\n    prover P\n    construction interactive\n" ++
+  "goal a = soundness(First, clause = vr)\ngoal b = soundness(Second, clause = pr)\n" ++
+  "goal c = soundness(Third, clause = vr)\ngoal d = soundness(First, clause = vr)\n"
+
+/-- A reduction: the verifier returns its input, and the clause reduces the statement about the
+input to the statement about the result. -/
+def reduction : String :=
+  "module t\nuse zkc::security::{soundness}\nrelation IsSet(b: bool): b\n" ++
+  "protocol Flags roles(P, V)(flag: bool @(P, V)) -> echoed: bool @(P, V):\n" ++
+  "    bit <- draw bool from V to P\n    return flag\n" ++
+  "spec for Flags:\n    reduces @V IsSet(flag) to IsSet(echoed)\n    charge sites.bit <= 1 / 2\n" ++
+  "scheme Checked = Flags:\n    prover P\n    construction interactive\n" ++
+  "goal sound = soundness(Checked)\n"
+
+/-- A protocol whose verifier decides without a coin: it guards one of two flags. The draw of
+the contract's charge is in a loop that does not run. -/
+def decided (ports guarded clause : String) : String :=
+  "module t\nuse zkc::security::{soundness}\nrelation IsSet(b: bool): b\n" ++
+  s!"protocol Flags roles(P, V)({ports}):\n" ++
+  s!"    guard @V {guarded}\n    for i in 0..0:\n        z <- draw index<1> from V to P\n" ++
+  s!"spec for Flags:\n    {clause}\n    charge sites.z <= 0\n" ++
+  "scheme Checked = Flags:\n    prover P\n    construction interactive\n" ++
+  "goal sound = soundness(Checked)\n"
+
+/-- The text of the proofs of a module about `decided`: the verifier rejects where the guarded
+flag is false, which is where the relation is false of it; the hypotheses are met over the
+finite model; and the consumer.
+
+The consumer names no generated proposition and no generated role: the verifier is the second
+role of the roster, written as its place. It states, for every admitted program with the
+protocol and the relation found by their keys: where the relation returns false of `false`, that
+role on the inputs `false` and `true` returns with probability at most zero under the service of
+the laws. Its proof is the published theorem `sound_sound` at those inputs. -/
+def proofText (guarded : String) : String :=
+  let (first, second) := if guarded == "flag" then ("false", "other") else ("flag", "false")
+  "noncomputable section\n" ++
+  "open Zkc.Formal.Written.StandardModel\n" ++
+  "open Zkc.Formal.Written.FiniteModel (data)\n\n" ++
+  "theorem sound_installed : soundClaim := by\n" ++
+  "  intro F G D _ _ path flag _ other _ σ service follows permitted state premise\n" ++
+  s!"  have declined : {guarded} = false := by\n" ++
+  "    have computed : functionResult (t := .bool)\n" ++
+  s!"        (fnMeaning (model D) installed soundMember (.cons {guarded} .nil)) = some {guarded} := by\n" ++
+  "      kernel_rfl\n" ++
+  "    rw [computed] at premise\n    exact Option.some.inj premise\n" ++
+  "  subst declined\n" ++
+  "  rw [prEvent_simulation_returns]\n" ++
+  "  have rejected : roleMeaning (model D) installed rootMember verifierRole path\n" ++
+  s!"      (.cons {first} (.cons {second} .nil)) = .halt (.declared .reject ⟨path, ⟨0⟩⟩) := by\n" ++
+  "    kernel_rfl\n" ++
+  "  rw [rejected]\n  simp [run, Process.interpret]\n\n" ++
+  "theorem sound_witnessed : soundWitnessed :=\n" ++
+  "  ⟨_, _, data, inferInstance, inferInstance, false, trivial, false, trivial, Unit,\n" ++
+  "    serveLaws (model data) (draws data), ⟨()⟩, serveLaws_follows _ _,\n" ++
+  "    serveLaws_permitted _ _ (StandardModel.draws_permitted data), by kernel_rfl⟩\n\n" ++
+  "end\n"
+
+def consumer : String :=
+  "noncomputable section\n" ++
+  "open Zkc.Formal.Written.StandardModel\n" ++
+  "open Zkc.Formal.Written.FiniteModel (data)\n\n" ++
+  "theorem consumer {a : Admitted V} (admitted : admit stored association = .ok a) :\n" ++
+  "    ∃ root : Member a.program.headers.protocols rootHeader,\n" ++
+  "      a.program.findProtocol rootKey = some ⟨rootHeader, root⟩ ∧\n" ++
+  "      ∃ relation : Member a.program.headers.fns soundHeader,\n" ++
+  "        a.program.find soundKey = some (.fn relation) ∧\n" ++
+  "        (functionResult (t := .bool)\n" ++
+  "            (fnMeaning (model data) a.program relation (.cons false .nil)) = some false →\n" ++
+  "          Pr{let out ← (simulateQ (handlerOf (serveLaws (model data) (draws data))) (embed\n" ++
+  "              (roleMeaning (model data) a.program root 1 []\n" ++
+  "                (.cons false (.cons true .nil))))).run.run ()}[\n" ++
+  "            ∃ results, out.1 = some (.inl results)] ≤ 0) := by\n" ++
+  "  have free : total soundCharge = 0 := by norm_num [total, soundCharge]\n" ++
+  "  obtain ⟨root, found, relation, foundRelation, claim⟩ := sound_sound admitted\n" ++
+  "  refine ⟨root, found, relation, foundRelation, fun rejected => ?_⟩\n" ++
+  "  rw [← free]\n" ++
+  "  exact claim data [] false trivial true trivial (serveLaws (model data) (draws data))\n" ++
+  "    (serveLaws_follows _ _) (serveLaws_permitted _ _ (StandardModel.draws_permitted data)) ()\n" ++
+  "    rejected\n\n" ++
+  "end\n"
+
+/-- The theorems of a proof module, whose axioms the check reads. -/
+def theorems : List String :=
+  ["admitted_exists", "covered", "sound_installed", "sound_witnessed", "sound_sound",
+    "sound_result", "sound_met", "consumer"]
+
+/-- The proof module of a source: the package of its claims, what the generator writes around
+the proofs, the proofs and the consumer. -/
+def proofModule (name text guarded : String) : IO String := do
+  let s ← IO.ofExcept (statementsOf text ["sound"] "z")
+  return packageHeader ["Zkc.Formal.OracleProcess", "Zkc.Formal.Written.LawSamplers",
+      "Zkc.Formal.Written.FunctionMeaning", "Zkc.Formal.Written.StandardModel",
+      "Zkc.Formal.Written.FiniteModel", "Zkc.Formal.Written.Ceiling"] ++
+    s!"namespace {name}\n" ++ (Written.package s.package).text ++ Statements.opens ++ s.facts ++ "\n" ++
+    Statements.coverage standardModelText ++ s.transfers ++
+    (← IO.ofExcept (s.claimTexts standardModelText)) ++ proofText guarded ++ "\n" ++ s.closings ++
+    consumer ++ String.join (theorems.map (s!"#print axioms {·}\n")) ++ s!"end {name}\n"
+
+def run (work : System.FilePath) : IO Unit := do
+  -- The operands: a `spec` port that nothing uses changes neither the input nor the claim, and
+  -- another port of the same type changes both.
+  let base ← IO.ofExcept (claimOf (flags both "proves @V IsSet(flag)"))
+  expect "the operand `flag` is not the first input of the deployed header" (base.1 == #[0])
+  expect s!"the claim does not name its inputs as the source does:\n{base.2}"
+    (base.2.contains "soundMember (.cons input_flag .nil)) = some false" &&
+      base.2.contains "verifierRole path (.cons input_flag (.cons input_other .nil))")
+  let inFront ← IO.ofExcept (claimOf (flags ("spec note: bool, " ++ both) "proves @V IsSet(flag)"))
+  expect "a spec port in front of the operand changed the operand or the claim" (inFront == base)
+  let behind ← IO.ofExcept (claimOf (flags (both ++ ", spec note: bool") "proves @V IsSet(flag)"))
+  expect "a spec port behind the operand changed the operand or the claim" (behind == base)
+  let other ← IO.ofExcept (claimOf (flags both "proves @V IsSet(other)"))
+  expect "the operand `other` is not the second input of the deployed header" (other.1 == #[1])
+  expect "another operand of the same type left the claim as it was"
+    (other.2 != base.2 && other.2.contains "soundMember (.cons input_other .nil)) = some false")
+  let otherInFront ← IO.ofExcept (claimOf (flags ("spec note: bool, " ++ both) "proves @V IsSet(other)"))
+  expect "a spec port in front of the other operand changed the operand or the claim" (otherInFront == other)
+
+  -- Which values a statement may be about.
+  refused "an operand that is a spec port" (flags ("spec note: bool, " ++ both) "proves @V IsSet(note)")
+    ["WK-CLAUSE", "`note` is a specification port"]
+  refused "an operand that the verifier holds alone"
+    (flags "flag: bool @(P, V), other: bool @V private" "proves @V IsSet(other)")
+    ["GL3", "`other` is held by V", "SC4"]
+  refused "an operand that the prover holds alone"
+    (flags "flag: bool @(P, V), other: bool @P" "proves @V IsSet(other)") ["SX6"]
+
+  -- The deciding role: of the goal's scheme, and one scheme to a package.
+  let verifiers (goals : List String) : Except String (Nat × Nat × Nat) := do
+    let root ← goalRoot schemes goals.head!
+    let claims ← goalClaims root goals
+    return (claims.verifier, claims.prover, claims.goals.length)
+  for (goal, verifier, prover) in [("a", 1, 0), ("b", 0, 1), ("c", 1, 0), ("d", 1, 0)] do
+    expect s!"the verifier and the prover of the goal {goal}, read alone"
+      ((verifiers [goal]).toOption == some (verifier, prover, 1))
+  expect "two goals of one scheme are not one package" ((verifiers ["a", "d"]).toOption == some (1, 0, 2))
+  -- The claim of a goal read with another goal of its scheme is its claim read alone.
+  let claimsOf (goals : List String) : Except String (List (String × String)) := do
+    let root ← goalRoot schemes goals.head!
+    let claims ← goalClaims root goals
+    let s : Statements :=
+      { claims, goals := claims.goals.map fun claimed => { claimed, charge := ⟨⟨root.id⟩, 0, 1, []⟩ } }
+    s.goals.mapM fun goal => do
+      return (goal.claimed.goal,
+        ← s.claimAt standardModelText goal "installed" "rootMember" s!"{goal.claimed.goal}Member")
+  let together ← IO.ofExcept (claimsOf ["a", "d"])
+  expect "the claims of two goals of one scheme are not their claims read alone"
+    (together == (← IO.ofExcept (claimsOf ["a"])) ++ (← IO.ofExcept (claimsOf ["d"])))
+  for goals in [["a", "b"], ["b", "a"], ["a", "c"], ["c", "a"]] do
+    match verifiers goals with
+    | .ok _ => throw (IO.userError s!"the goals {goals} of two schemes were read as one package")
+    | .error why =>
+      expect s!"the goals {goals} were refused for another reason: {why}"
+        (why.contains "WK-GOAL" && why.contains "the claims of a package are of one scheme")
+  match (goalRoot schemes "a").bind (goalClaims · []) with
+  | .ok _ => throw (IO.userError "a package of claims without a goal was read")
+  | .error _ => pure ()
+
+  -- A goal of the statements is one of their claims: the claim of another source, with the same
+  -- name, is refused.
+  let ofFlag ← IO.ofExcept (statementsOf (flags both "proves @V IsSet(flag)") ["sound"] "bit")
+  let ofOther ← IO.ofExcept (statementsOf (flags both "proves @V IsSet(other)") ["sound"] "bit")
+  match ({ ofFlag with goals := ofOther.goals } : Statements).claimTexts standardModelText with
+  | .ok _ => throw (IO.userError "statements were written of a goal that is not of their claims")
+  | .error why =>
+    expect s!"the goal of another package was refused for another reason: {why}"
+      (why.contains "not one of the claims")
+
+  -- The event: the claims of a reduction are read, and no statement is written for them.
+  let reduced ← IO.ofExcept (statementsOf reduction ["sound"] "bit")
+  let [reducedGoal] := reduced.goals | throw (IO.userError "the reduction has not one goal")
+  expect "the clause of the reduction is not read as a reduction" (reducedGoal.claimed.clause.kind == .reduces)
+  for written in [reduced.claimTexts standardModelText,
+      reduced.claimAt standardModelText reducedGoal "installed" "rootMember" "soundMember"] do
+    match written with
+    | .ok _ => throw (IO.userError "a statement was written for a `reduces` clause")
+    | .error why => expect s!"the reduction was refused for another reason: {why}" (why.contains "reduces")
+
+  -- The records of a goal are made by the reader alone: Lean refuses to alter them.
+  let closed ← startLakeLean work "Closed"
+    ("import Zkc.Frontend.Written.Statement\nopen Zkc.Frontend.Written\n" ++
+      "example (claimed : ClaimedGoal) : ClaimedGoal := { claimed with statement := #[1] }\n" ++
+      "example (claims : GoalClaims) : GoalClaims := { claims with verifier := 0 }\n" ++
+      "example (claimed : ClaimedGoal) : Array Nat := claimed.statement\n")
+
+  -- Lean: the published theorem at the inputs of the source, by a consumer written apart.
+  let fronted := decided ("spec note: bool, " ++ both) "flag" "proves @V IsSet(flag)"
+  let aboutOther := decided ("spec note: bool, " ++ both) "other" "proves @V IsSet(other)"
+  let proof ← startLakeLean work "Operands" (← proofModule "Operands" fronted "flag")
+  let control ← startLakeLean work "OperandsControl" (← proofModule "OperandsControl" aboutOther "other")
+  let (ok, output) ← finishLean closed
+  expect s!"the records of a goal were altered outside the reader\n{output}"
+    (!ok && output.contains "constructor for `ClaimedGoal` is marked as private" &&
+      output.contains "constructor for `GoalClaims` is marked as private" &&
+      (output.splitOn "error").length == 3)
+  let allowed := ["propext", "Classical.choice", "Quot.sound"]
+  let (ok, output) ← finishLean proof
+  acceptedOutput "Operands" ok output theorems allowed
+  -- The published theorem of the control is about the second input. It is proved; the consumer,
+  -- which reads the first, is not, and is refused where it gives the theorem its premise.
+  expectUnproved "a clause about the other input" "OperandsControl" theorems control ["consumer"]
+  let (_, refusal) ← finishLean control
+  expect s!"the consumer of the control was refused for another reason\n{refusal}"
+    (refusal.contains "The argument\n  rejected\nhas type" &&
+      refusal.contains "(HList.cons true HList.nil)) = some false\nin the application\n  claim data")
+  IO.println ("The statement of a goal reads its operands in the deployed header, its deciding role " ++
+    "in the goal's scheme and its event in the clause: a spec port that nothing uses leaves the " ++
+    "claim as it is, another operand changes it, and a consumer written apart uses the published " ++
+    "theorem at the inputs of the source; 2 of 2 controls refused.")
+
+end GoalStatementCheck
+
+#eval show IO Unit from
+  IO.FS.withTempDir fun work => GoalStatementCheck.run work
