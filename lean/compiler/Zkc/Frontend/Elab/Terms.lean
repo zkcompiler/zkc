@@ -2267,8 +2267,9 @@ to the end makes the caller wait or not checked; a refused body abandons the cal
   /-- `∑`, `∏`, `∀`, `∃` over a domain (TY11): on a type of a sort the row of the form, applied
   to the collection itself or to the collected terms; on naturals, `bool` and a declared type a
   `mut` accumulator from the start of the form, which each iteration combines with its term. A
-  sum of naturals over a static range whose term mentions the index is written one term at a
-  time, up to 4,096 terms (TY8); so is every fold whose index stands where it is static. `body`
+  sum of naturals over a static range in whose term the index is an operand of `+ * ^ - / %` is
+  written one term at a time, up to 4,096 terms (TY8: its range is taken index by index); so
+  is every fold whose index stands where it is static. `body`
   is absent for the function of the fixed table applied to a collection: the term is the
   element. -/
   partial def elabFold (span : Span) (form : Fold) (generator : Lowered.Generator)
@@ -2417,11 +2418,13 @@ to the end makes the caller wait or not checked; a refused body abandons the cal
         let update := Typed.Stmt.update span accumulator.id (← combine use term false) {}
         let loop : Typed.Loop := .loop index typedDomain #[] (.uniform #[update] #[])
         let start ← start
-        -- a sum of naturals over a static range whose term mentions the index: term by term
+        -- a sum of naturals over a static range whose range depends on the index, which is when
+        -- the index is an operand of arithmetic in the term (TY8): term by term. A term that
+        -- reads the index as a position or in a condition is one loop
         if accumulation == .sum then
           if let (some n, some _, some body) := (domain.count, domain.start, body) then
             if domain.item.isNone && domain.index.origin == .written && n ≤ 4096 &&
-                body.locals.contains domain.index.id then
+                body.arithmeticOperand domain.index.id then
               checkStepped n span
               return ← steppedFold (← perIteration domain n (elabExpr body elementExpected))
         return .block (info span type) #[.bind span accumulator start {},

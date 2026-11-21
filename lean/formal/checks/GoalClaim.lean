@@ -17,6 +17,8 @@ The check reads sources with the frontend and asserts, of what it returns:
   text that it has alone, whatever the relation is and whichever goals are read;
 - two goals of one scheme with two proof values give two relations with two keys, and a goal
   read twice gives one;
+- the count of the relation, whose index is read as a position, is one loop, and a sum whose
+  index is an operand of arithmetic is its terms in sequence (TY8);
 - a function that the verifier and the relation both call is one definition;
 - a relation that the relation applies comes before it;
 - the ports at the statement and at the witness, for a clause written short and one that gives
@@ -161,6 +163,19 @@ def run (corpus : System.FilePath) (work : System.FilePath) : IO Unit := do
   expect "the claims of two goals do not add two definitions"
     ((storedTexts (packageOf both)).length == (storedTexts (root.emission.package noAssociation)).length + 2)
   expect "the operands of NearZero(xs)" (loose.statement == #[0] && loose.witness == some #[])
+  -- The count of the relation reads its index as a position, so it is one loop (TY8), with
+  -- no block for each entry; a sum whose index is an operand of arithmetic stays its terms in
+  -- sequence.
+  let relationText (claims : GoalClaims) (claimed : ClaimedGoal) : String :=
+    (((storedTexts (packageOf claims)).find? (·.1 == claimed.relation)).map (·.2)).getD ""
+  let counted (text needle : String) : Nat := (text.splitOn needle).length - 1
+  expect "the count of NearZero is not one loop"
+    (counted (relationText both loose) ".loop " == 1 && counted (relationText both loose) ".block " == 0)
+  let weighted ← edit count "if xs[i] == 0 then 0 else 1" "if xs[i] == 0 then 0 else i + 1"
+  let (_, weightedClaims) ← read weighted ["loose"]
+  let weightedRelation ← only weightedClaims
+  expect "a sum whose index is an operand of arithmetic is not its eight terms in sequence"
+    (counted (relationText weightedClaims weightedRelation) ".block " == 8)
   let (_, twice) ← read count ["loose", "loose"]
   expect "a goal read twice claims two relations"
     ((storedTexts (packageOf twice)).length == (storedTexts (root.emission.package noAssociation)).length + 1)

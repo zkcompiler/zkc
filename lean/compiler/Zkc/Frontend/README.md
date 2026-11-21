@@ -536,10 +536,13 @@ Where the reference leaves a choice, the code takes the reading marked in its co
 - A function returns one value of its result type; `()` is the empty tuple. A `linear struct`
   is used exactly once; any other record is copied freely.
 - The index of an empty range has no value: every check through it holds (TY11: the element is
-  typed once, also when the range is empty). A `∑` of naturals over a static range whose term
-  mentions the index is written one term at a time, from `0`, up to 4,096 terms, so that its
-  range is the sum of the ranges of its terms (TY8); otherwise it is a loop that carries the sum,
-  whose range over a static count is the count times the bound of its term. A `∏` of naturals has
+  typed once, also when the range is empty). A `∑` of naturals over a static range in whose
+  term the index is an operand of `+ * ^ - / %` is written one term at a time, from `0`, up to
+  4,096 terms, so that its range is the sum of the ranges of its terms (TY8: that is when the
+  range of the term depends on the index); otherwise it is a loop that carries the sum, whose
+  range over a static count is the count times the bound of its term. A term that reads the
+  index as a position or in a condition, `∑ i ∈ 0..n, if xs[i] == 0 then 0 else 1`, is such a
+  loop. A `∏` of naturals has
   no upper bound: TY8 gives it none, nor does the core to a carried product. A fold written one
   term at a time starts from the start of the form and combines each term in turn.
 - The index of a loop over a static range is typed as a natural; where it stands in a static
