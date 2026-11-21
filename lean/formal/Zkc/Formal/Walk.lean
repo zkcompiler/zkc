@@ -100,8 +100,19 @@ along the equation between the term and the step that the rule is about:
   the text gave the arguments of the invariant; the invariant is the hypothesis
   `invariant_<index>`, and that the iteration is one of the loop's is `early_<index>`.
 
+A region is walked as a program is. An instruction that runs a region (a choice, which runs
+the arm that its condition chooses; a block, which runs its body under its frame) is not
+computed as one instruction: the goal passes to the judgment of the region, whose condition at
+the end is the judgment of what follows it (`Process.interpret_bind`). Inside the region every
+rule is as outside, so the values of an arm have variables, its effects, loops and calls are
+met, and a fork inside it is named; at its end the goal is the judgment of the rest. Where the
+kernel computes the condition of a choice, the walk goes into the arm chosen; where the
+condition is not known, the choice is a fork on the condition, which a text names, and each
+side goes into its arm. A case analysis on a variant and an attempt are still computed as one
+instruction: the values inside them have no variables, and no check walks one.
+
 `walk_step` on a computation that calls a function reads the function's body; on a loop it has
-no step. A block and an application wait for their first subject.
+no step. An application waits for its first subject.
 
 A walk enters by itself. The meaning of a role or of a function in a program (`roleMeaning`,
 `fnMeaning`) is closed to Lean's own reduction, and the equation between it and the sealed
@@ -299,9 +310,15 @@ private partial def applied (e : Expr) : MetaM Expr := do
     applied (mkAppN (mkAppN f values) (args.extract 6 args.size))
   else computedTypes e
 
-/-- What the judgment asks at the end, of `done` or of `halt` (argument 5 or 6). -/
-private def Judged.ask (j : Judged) (position : Nat) (value : Expr) : MetaM Expr :=
-  return j.goal (← applied (mkAppN (mkApp (j.fn.getAppArgs[position]!) value) j.extra))
+/-- What the judgment asks at the end, of `done` or of `halt` (argument 5 or 6). Where that is
+the judgment of a process (the end of a region, after which the program goes on, sealed since
+the walk went into the region), it is stated as it is; where it is a statement of the values,
+it is in a form to read. -/
+private def Judged.ask (j : Judged) (position : Nat) (value : Expr) : MetaM Expr := do
+  let asked := (mkAppN (mkApp (j.fn.getAppArgs[position]!) value) j.extra).headBeta
+  if asked.getAppFn.isConstOf ``Zkc.Core.Process.interpret && asked.getAppNumArgs ≥ 8 then
+    return j.goal asked
+  return j.goal (← applied asked)
 
 /-- Close a goal whose process has ended, by the goal that states what the judgment asks of the
 end: of the values returned, or of the payload of a stop. `equation` is between the process that
@@ -383,6 +400,13 @@ private partial def waitsOn (e : Expr) : MetaM (Expr × (Expr → Expr)) := do
   | .proj typeName idx struct => inner struct fun x => .proj typeName idx x
   | _ =>
     let args := e.getAppArgs
+    -- a part of the pair that structural recursion builds, applied: what is left of a region
+    -- that the kernel computes as one instruction (an arm of a case analysis, the body of an
+    -- attempt) after an effect inside it; the step waits inside the pair. A choice and a
+    -- block are not met here: the walk goes into them.
+    if let .proj typeName idx struct := e.getAppFn then
+      if (← whnf (← inferType struct)).isAppOf ``PProd then
+        return ← inner struct fun x => mkAppN (.proj typeName idx x) args
     let .const name _ := e.getAppFn
       | throwError "walk: the step is stuck at a term that is not an application of a constant{indentExpr e}"
     let position ← do
@@ -495,6 +519,82 @@ private def splitStuck (goal : MVarId) (j : Judged) (bound why stuck : Expr)
         | none => Lean.Core.mkFreshUserName `part)
     return current
   return (sides, true)
+
+/-- **A region is walked as a program is.** `bound` is a region and then the rest: the term of
+an arm of a choice or of a block in its environment, bound to what follows it. The judgment of
+such a process is the judgment of the region whose condition at the end is the judgment of the
+rest on what the region returns (`Process.interpret_bind`). The goal passes to that judgment,
+so every rule of the walk is the same inside a region as outside: its values have variables,
+its effects, loops and calls are met as any other, and at its end the goal is the judgment of
+what follows. `why` is the equation between the process of the goal and `bound`, and `isRegion`
+the equation between what is left in `bound` and the region. -/
+private def enterRegion (goal : MVarId) (j : Judged) (bound why region isRegion : Expr) :
+    MetaM MVarId := goal.withContext do
+  let b := bound.getAppArgs
+  let rest := b[5]!
+  let a := j.fn.getAppArgs
+  let (judgment, done, halt) := (a[4]!, a[5]!, a[6]!)
+  -- the process of the goal is the region, then the rest
+  let motive ← withLocalDeclD `left (← inferType b[4]!) fun left =>
+    mkLambdaFVars #[left] (mkAppN bound.getAppFn (b.set! 4 left))
+  let regionThenRest := mkAppN bound.getAppFn (b.set! 4 region)
+  let toRegion ← mkEqTrans why (← mkCongrArg motive isRegion)
+  -- the judgment of the region: at its end, the judgment of the rest, which stays sealed, as
+  -- every process that a goal of the walk judges: a tactic of the text that reduces its goal
+  -- does not run what follows the region
+  let valuesType := (← whnf (← inferType rest)).bindingDomain!
+  let after ← withLocalDeclD `values valuesType fun values =>
+    mkLambdaFVars #[values] (mkApp j.fn (j.seal (mkApp rest values).headBeta))
+  let inside := { j with fn := ← mkAppM ``Zkc.Core.Process.interpret #[judgment, after, halt] }
+  let next ← mkFreshExprSyntheticOpaqueMVar (inside.of region)
+  -- `interpret (region.bind rest) = interpret region` with that condition, at what follows
+  let bind ← mkAppM ``Zkc.Core.Process.interpret_bind #[judgment, done, halt, rest, region]
+  let mut judged ← mkExpectedTypeHint bind
+    (← mkEq (mkApp j.fn regionThenRest) (mkApp inside.fn region))
+  for extra in j.extra do
+    judged ← mkCongrFun judged extra
+  let ia := inside.fn.getAppArgs
+  let sealing ← mkEqSymm (mkApp4 (mkConst ``Zkc.Core.Process.sealed_eq) ia[0]! ia[1]! ia[2]! region)
+  let sealedMotive ← withLocalDeclD `p (← inferType region) fun p =>
+    mkLambdaFVars #[p] (mkAppN (mkApp inside.fn p) j.extra)
+  let toInside ← mkEqTrans judged (← mkCongrArg sealedMotive sealing)
+  -- the goal, or the hypothesis that it concludes from, passes along the equation
+  let stated ← withLocalDeclD `judged (mkSort Level.zero) fun x => mkLambdaFVars #[x] (j.goal x)
+  j.pass goal regionThenRest toRegion (← mkEqMPR (← mkCongrArg stated toInside) next)
+  return next.mvarId!
+
+/-- What an instruction denotes, where it runs a region: a block is its body under its frame,
+and a choice is the region that its condition chooses. The result is the process in that form
+and the equation between what the instruction denotes (`left`) and it. For a choice whose
+condition the kernel computes, the form is the region chosen; for one whose condition is not
+known, it is the choice written on its condition, on which the step then waits. -/
+private def regionOf (left instr sem key path env : Expr) : MetaM (Option (Expr × Expr)) := do
+  let ia := instr.getAppArgs
+  let n := ia.size
+  if instr.isAppOf ``Zkc.Core.Instr.block && n ≥ 2 then
+    let rule ← mkAppM ``Zkc.Core.Instr.denote_block #[sem, key, ia[n - 2]!, ia[n - 1]!, path, env]
+    let region := (← inferType rule).appArg!
+    return some (region, ← mkExpectedTypeHint rule (← mkEq left region))
+  if instr.isAppOf ``Zkc.Core.Instr.choose && n ≥ 6 then
+    let rule ← mkAppM ``Zkc.Core.Instr.denote_choose
+      #[sem, key, ia[n - 6]!, ia[n - 5]!, ia[n - 4]!, ia[n - 3]!, ia[n - 2]!, ia[n - 1]!, path, env]
+    let chosen := (← inferType rule).appArg!
+    let toChosen ← mkExpectedTypeHint rule (← mkEq left chosen)
+    unless chosen.isAppOfArity ``cond 4 do return some (chosen, toChosen)
+    let c := chosen.getAppArgs
+    let value ← kernelWhnf c[1]!
+    let decided (literal : Bool) : MetaM (Option (Expr × Expr)) := do
+      let (lemma, region) :=
+        if literal then (``Bool.cond_true, c[2]!) else (``Bool.cond_false, c[3]!)
+      let motive ← withLocalDeclD `condition (mkConst ``Bool) fun condition =>
+        mkLambdaFVars #[condition] (mkAppN chosen.getAppFn (c.set! 1 condition))
+      let toLiteral ← mkCongrArg motive (← byComputation c[1]! value)
+      let toRegion ← mkAppOptM lemma #[c[0]!, c[2]!, c[3]!]
+      return some (region, ← mkEqTrans toChosen (← mkEqTrans toLiteral toRegion))
+    if value.isConstOf ``Bool.true then return ← decided true
+    if value.isConstOf ``Bool.false then return ← decided false
+    return some (chosen, toChosen)
+  return none
 
 /-- One step on what is left of an instruction and then the rest: `bound` is that process,
 `left.bind rest`, and `why` is the equation between the process of the goal and it. -/
@@ -634,6 +734,14 @@ private def stepOrFork (goal : MVarId) (hypothesis := false) (fork : Option Lean
   let j ← readGoal goal hypothesis
   let p := j.process
   if p.isAppOfArity ``Zkc.Core.Process.bind 6 then
+    -- what is left is a region (the side of a choice whose condition is now known): the walk
+    -- goes into it. Lean's core reduction finds it: the choice on a known condition is one of
+    -- its arms, and the arm is not unfolded. The kernel checks the equation, which costs it at
+    -- most the first instruction of the arm.
+    let left := p.getAppArgs[4]!
+    let reduced ← whnfCore left
+    if reduced.isAppOfArity ``Zkc.Core.Term.denote 7 then
+      return ([← enterRegion goal j p (← mkEqRefl p) reduced (← byComputation left reduced)], false)
     -- what is left of an instruction after an effect or a split
     advance goal j p (← mkEqRefl p) fork named
   else if p.isAppOfArity ``Zkc.Core.Term.denote 7 then
@@ -649,6 +757,16 @@ private def stepOrFork (goal : MVarId) (hypothesis := false) (fork : Option Lean
       let stated := (← inferType rule).appArg!
       let bound := mkAppN stated.getAppFn (stated.getAppArgs.set! 5 (← restAfter a names rest))
       let why ← mkExpectedTypeHint rule (← mkEq p bound)
+      -- an instruction that runs a region: the walk goes into the region
+      let left := bound.getAppArgs[4]!
+      if let some (form, isForm) ← regionOf left (← kernelWhnf i) sem key path env then
+        if form.isAppOfArity ``Zkc.Core.Term.denote 7 then
+          return ([← enterRegion goal j bound why form isForm], false)
+        -- a choice on a condition that is not known: the step waits on the condition
+        let motive ← withLocalDeclD `left (← inferType left) fun x =>
+          mkLambdaFVars #[x] (mkAppN bound.getAppFn (bound.getAppArgs.set! 4 x))
+        return ← splitStuck goal j (mkAppN bound.getAppFn (bound.getAppArgs.set! 4 form))
+          (← mkEqTrans why (← mkCongrArg motive isForm)) form fork named
       advance goal j bound why fork named
     else if term.isAppOfArity ``Zkc.Core.Term.ret 4 then
       -- the term returns the values of its names
