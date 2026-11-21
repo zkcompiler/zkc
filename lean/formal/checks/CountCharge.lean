@@ -157,7 +157,7 @@ def ofCharge : List String :=
 /-- The proof module, as the generator assembles it: the package of the claims and what is
 generated around the proofs written for the protocol. -/
 def proofModule (name : String) (s : Subject) (template : String) : IO Module :=
-  IO.ofExcept (s.statements.module standardModelText name { text := template, theorems := ofText })
+  IO.ofExcept (s.statements.module standardModelText name { text := template, theorems := ofText, method := .direct })
 
 def run (corpus template : System.FilePath) (work : System.FilePath) : IO Unit := do
   let blocks := readBlocks (← IO.FS.readFile corpus)
@@ -286,8 +286,10 @@ def run (corpus template : System.FilePath) (work : System.FilePath) : IO Unit :
   -- The caps of both goals are below the bounds of their tolerances: the text reads another
   -- cap from each table than the bound, and what rests on it is not proved.
   expectUnproved "a charge below the bound" "BoundControl" theorems smallProof ofCharge
-  expectUnproved "a charge on a loop that does not run" "SiteControl" theorems elsewhereProof ofCharge
-  expectUnproved "a charge of another protocol" "OwnerControl" theorems foreignProof ofCharge
+  -- In these two the root has no charged draw, so the module has no theorem of a draw's cap.
+  let uncapped := theorems.filter fun name => !written.statements.siteNames.contains name
+  expectUnproved "a charge on a loop that does not run" "SiteControl" uncapped elsewhereProof ofCharge
+  expectUnproved "a charge of another protocol" "OwnerControl" uncapped foreignProof ofCharge
   -- Each is refused where the text reads the cap of the draw from the table.
   for (title, task) in [("below the bound", smallProof), ("on a loop that does not run", elsewhereProof),
       ("of another protocol", foreignProof)] do

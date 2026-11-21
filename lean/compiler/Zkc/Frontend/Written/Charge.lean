@@ -79,6 +79,19 @@ def chargedSites (s : Compile.State) (owner : InstanceId) :
     | _ => none
   return (charged, s.program.nameOf entry.key.declaration, place)
 
+/-- Whether the one event of a declaration that a site names is a draw. -/
+def namesDraw (s : Compile.State) (owner : InstanceId) (name : String) : ExportM Bool := do
+  let some entry := s.table.entries[owner]? | throw "missing charge instance"
+  let some {content := .protocol head .., ..} := s.env.modules.lowered? entry.key.declaration
+    | throw "expected a resolved protocol"
+  let #[(source, _)] := head.events.zipIdx.filter (fun (e, _) => e.name == some name)
+    | throw s!"expected one source event named {name}"
+  return source.audience matches .transfer _ (some _)
+
+/-- The charged draws of a use by the names of their sites: each name with the keys of the
+draws that realize it (one, or one for each block of a stepped loop). -/
+abbrev SiteKeys := List (String × List Core.Key)
+
 /-- The use of a definition at its proof arguments, in a table under construction: its place.
 A use that the table has is found again, so two applications that give a callee the same proof
 arguments are calls of one use. The calls of a new use are the applications of the stored
@@ -87,7 +100,7 @@ that application; its draws are the realizations of the draws that the contract 
 definition charges, at the cap that the charge has at these proof arguments. The counts are
 those of the stored body. -/
 partial def capsOfUse (c : AdmittedRoot) (subject : ProofSubject) :
-    StateT (Array (ProofSubject × UseCaps)) ExportM Nat := do
+    StateT (Array (ProofSubject × UseCaps × SiteKeys)) ExportM Nat := do
   if let some place := (← get).findIdx? (·.1 == subject) then return place
   let named := (c.emission.package ⟨[], [], [], [], []⟩).named
   let some (.protocol _ _ _ _ body) := named.definitions.find? (·.key.number == subject.protocol)
@@ -111,32 +124,32 @@ partial def capsOfUse (c : AdmittedRoot) (subject : ProofSubject) :
         s!"a second charge on `sites.{".".intercalate names.toList}`: a site has one cap"
     capped := capped.push names
   let mut draws : Array DrawCap := #[]
+  let mut sites : SiteKeys := []
   for (names, span) in charged do
     let #[site] := names
       | refuse span "WK-CHARGE" "a charge on a site of a callee is not in a table of caps yet"
-    let charge ← match drawCharge c.state c.evidence.admitted.program ⟨subject.protocol⟩ site
-        subject.specification with
-      | .ok charge => pure charge
-      | .error why =>
-        if why.contains "is not a draw" then
-          refuse span "WK-CHARGE" (s!"`sites.{site}` is no draw: a charge on an application or an " ++
-            "attempt is not in a table of caps yet")
-        else throw why
+    unless ← namesDraw c.state subject.protocol site do
+      refuse span "WK-CHARGE" (s!"`sites.{site}` is no draw: a charge on an application or an " ++
+        "attempt is not in a table of caps yet")
+    let charge ← drawCharge c.state c.evidence.admitted.program ⟨subject.protocol⟩ site
+      subject.specification
     for (_, key) in charge.draws do
       let some (_, _, some count) := found.find? (·.1 == key)
         | refuse span "WK-CHARGE" (s!"the draw `{site}` of `{name}` is under a loop whose count is " ++
             "read at run time, or in an attempt: it has no count in a table of caps yet")
       draws := draws.push ⟨key, charge.numerator, charge.denominator, count⟩
-  modify (·.push (subject, ⟨⟨subject.protocol⟩, draws.toList, calls.toList⟩))
+    sites := sites ++ [(site, charge.draws.map (·.2))]
+  modify (·.push (subject, ⟨⟨subject.protocol⟩, draws.toList, calls.toList⟩, sites))
   return (← get).size - 1
 
 /-- **The table of caps of a goal's root** (SX8): the uses that the root reaches at the goal's
 proof arguments, callees first and the root's last, each with the caps that the contract of its
 definition gives its charged draws at the proof arguments of that use. No caller names a draw:
-the table is of every charge that the root reaches. -/
-def goalCaps (c : AdmittedRoot) (specification : Array Nat) : ExportM CapTable := do
+the table is of every charge that the root reaches. With it, the charged draws of the root by
+the names of their sites, for a text that names a draw as the source does. -/
+def goalCaps (c : AdmittedRoot) (specification : Array Nat) : ExportM (CapTable × SiteKeys) := do
   let (_, uses) ← (capsOfUse c ⟨c.id, specification⟩).run #[]
-  return ⟨uses.toList.map (·.2)⟩
+  return (⟨uses.toList.map (·.2.1)⟩, (uses.back?.map (·.2.2)).getD [])
 
 /-- The named request selects the deployed root even in an assembly with several schemes. -/
 def admitSoundnessGoal (assembly : Assembly) (name : String) : ExportM AdmittedRoot := do
