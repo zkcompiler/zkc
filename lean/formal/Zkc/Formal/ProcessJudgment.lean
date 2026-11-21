@@ -167,32 +167,6 @@ theorem Term.interpret_loop_invariant {D : Dialect} (sem : Semantics D) {T : Typ
     (sem.times times env) 0 (env.all initial, HList.empties each) t (by simp) first
   simpa using iterated
 
-/-- What a loop has collected, latest first, holds the first `i` values of a list in order; with
-the next value of the list before it, it holds the first `i + 1`. The invariant of a loop that
-collects a known list, and its step. -/
-theorem List.collected_next {α : Type} (all collected : List α) (i : Nat) (x : α)
-    (soFar : collected.reverse = all.take i) (next : all[i]? = some x) :
-    (x :: collected).reverse = all.take (i + 1) := by
-  rw [List.reverse_cons, soFar, List.take_add_one, next]
-  rfl
-
-/-- What was collected of a list after as many iterations as it is long is the list. -/
-theorem List.collected_all {α : Type} (all collected : List α) (n : Nat) (length : all.length = n)
-    (soFar : collected.reverse = all.take n) : collected.reverse = all := by
-  rw [soFar, List.take_of_length_le (by omega)]
-
-/-- A statement of the positions below `j + 1` is the statement of those below `j` and the
-statement at `j`: the step of a loop that carries whether a statement held at every position so
-far. -/
-theorem Fin.forall_val_lt_succ {n : Nat} (P : Fin n → Prop) (j : Nat) (below : j < n) :
-    (∀ q : Fin n, q.val < j + 1 → P q) ↔ (∀ q : Fin n, q.val < j → P q) ∧ P ⟨j, below⟩ := by
-  refine ⟨fun h => ⟨fun q lt => h q (by omega), h ⟨j, below⟩ (Nat.lt_succ_self j)⟩, ?_⟩
-  rintro ⟨before, at_⟩ q lt
-  by_cases same : q.val = j
-  · obtain rfl : q = ⟨j, below⟩ := Fin.ext same
-    exact at_
-  · exact before q (by omega)
-
 /-- The judgment of a process without effects: there is no effect to judge, and the process is
 judged by how it ends. The judgment of a function's process, which makes the walk of a role's
 program the walk of a function's. -/

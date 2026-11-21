@@ -42,11 +42,15 @@ The check reads the source with the frontend and writes modules on which Lean is
 What the source says and the proof module takes as given is asserted here against the source:
 the clause that the goal reads and the ports that the relation is applied to.
 
-Four controls are refused by Lean, each for the theorems that depend on what it changes: the
-operands of the relation exchanged in the clause (`Product(b, a, c)`: the claim is then about
-another product, and the text does not prove it); a charge of half the source's; the claim
-without the hypothesis on the size of the field; and the coverage of the package by the
-standard model, which has no sampler for a sequence of scalars.
+Four controls are refused by Lean, each for the theorems that depend on what it changes and at
+the line that the check names: the operands of the relation exchanged in the clause
+(`Product(b, a, c)`: the claim is then about another product; the text is refused where it says
+which product its premise is about); a charge of half the source's (refused where the ceiling
+is compared with what a uniform scalar pays for); the hypothesis on the size of the field
+weakened to one element or more (refused where that comparison is used); and the coverage of
+the package by the standard model, which has no sampler for a sequence of scalars (decided
+false by the kernel). The first three show that the text does not prove the altered claim;
+none of them refutes it.
 -/
 
 open Zkc.Core Zkc.Frontend Zkc.Frontend.Written
@@ -146,6 +150,13 @@ def comparisonModule (name : String) (s : Subject) : String :=
   s!"#eval Zkc.Tests.Frontend.PrintedPackageSupport.expectGoalClaims {literal s.text} " ++
   s!"[\"sound\"] ({Written.associationTerm noAssociation}) stored association\nend {name}\n"
 
+/-- A control is refused where it is meant to be: Lean's output has the line. -/
+def expectReason (title : String) (task : Task (Except IO.Error (Bool × String)))
+    (line : String) : IO Unit := do
+  let (_, output) ← finishLean task
+  unless output.contains line do
+    throw (IO.userError s!"{title}: refused for another reason than `{line}`\n{output}")
+
 def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
   let template ← IO.FS.readFile template
   let written ← read (source "Product(a, b, c)") ["a", "b", "c"]
@@ -180,8 +191,11 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
     (← proofModule "OperandsControl" exchanged scalarFieldModelText template)
   let halvedProof ← startLakeLean work "BoundControl"
     (← proofModule "BoundControl" halved scalarFieldModelText template)
+  -- The hypothesis on the field weakened to a field of one element or more.
+  let anyField : ModelText :=
+    { arithmeticModelText with hypotheses := [("large", "1 ≤ Fintype.card F")] }
   let unassumedProof ← startLakeLean work "FieldControl"
-    (← proofModule "FieldControl" written arithmeticModelText template)
+    (← proofModule "FieldControl" written anyField template)
   let uncoveredProof ← startLakeLean work "CoverageControl"
     (coverageModule "CoverageControl" written standardModelText)
 
@@ -190,13 +204,18 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
   acceptedOutput "Freivalds" ok output theorems allowed
   let (ok, output) ← finishLean comparison
   acceptedOutput "FreivaldsSource" ok output []
-  -- The claim is about `b * a`: what the text says of `a * b` does not prove it. The laws of
-  -- the two functions and the theorems about the verifier stand.
+  -- The claim is about `b * a`: the text, which says of its premise that it is about `a * b`,
+  -- does not prove it. The laws of the two functions and the theorems about the verifier stand.
   expectUnproved "the operands exchanged" "OperandsControl" theorems exchangedProof ofClaim
-  -- Half the charge is below what a uniform scalar pays for in a field of the source's order.
+  expectReason "the operands exchanged" exchangedProof "Hypothesis `rejected` has type"
+  -- The ceiling of half the charge is not one over the order: the comparison with what a
+  -- uniform scalar pays for is not proved.
   expectUnproved "a charge of half" "BoundControl" theorems halvedProof ("large_covers" :: ofClaim)
-  -- Without the hypothesis, the field may be smaller than the charge assumes.
-  expectUnproved "no hypothesis on the field" "FieldControl" theorems unassumedProof ofClaim
+  expectReason "a charge of half" halvedProof "ceiling soundCharge ="
+  -- A field of one element or more is not a field of the source's order or more: the
+  -- comparison of the ceiling is not available where the claim needs it.
+  expectUnproved "a weaker hypothesis on the field" "FieldControl" theorems unassumedProof ofClaim
+  expectReason "a weaker hypothesis on the field" unassumedProof "large_covers large"
   -- The standard model has no sampler for a sequence of scalars: the kernel decides that it
   -- does not cover the package.
   let (ok, output) ← finishLean uncoveredProof
@@ -205,7 +224,7 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
     throw (IO.userError s!"the coverage control was refused for another reason\n{output}")
   IO.println (s!"Freivalds<2> is judged within the charge of its goal (1/{order}), on the matrices on " ++
     "which the admitted relation returns false, over every field of at least that order; " ++
-    "4 of 4 controls refused.")
+    "4 of 4 controls refused, each at its line.")
 
 end FreivaldsCharge
 
