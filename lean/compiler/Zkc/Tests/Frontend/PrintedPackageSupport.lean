@@ -1,5 +1,6 @@
 import Zkc.Frontend.Written.Charge
 import Zkc.Frontend.Written.Claim
+import Zkc.Frontend.Written.Package
 import Zkc.Frontend.Driver.Files
 
 /-!
@@ -110,9 +111,16 @@ def runLean (path : System.FilePath) (options : Array String := #[]) : IO (Bool 
 
 /-- Lean's output on a module in the workspace of the current directory, through `lake`: with
 the options of the package, and with the modules of every package of the workspace, which two
-packages that share a root name do not give to a bare `lean`. -/
+packages that share a root name do not give to a bare `lean`.
+
+The module is elaborated one declaration after another. When declarations are elaborated
+concurrently, a theorem whose proof ends in an exception (a timeout) is left as a name without
+a body: Lean then prints that it depends on no axioms, and that what uses it depends on itself.
+A check reads which theorems are unproved from what Lean prints of their axioms, so it needs
+the other behaviour: the failed theorem is unknown, and what uses it rests on `sorryAx`. -/
 def runLakeLean (path : System.FilePath) : IO (Bool × String) := do
-  let out ← IO.Process.output { cmd := "lake", args := #["-q", "lean", path.toString] }
+  let out ← IO.Process.output
+    { cmd := "lake", args := #["-q", "lean", path.toString, "--", "-DElab.async=false"] }
   return (out.exitCode == 0, out.stdout ++ out.stderr)
 
 /-- The axioms that Lean's output says a theorem rests on, when the output has them. -/
@@ -146,6 +154,33 @@ def refusedOutput (name : String) (ok : Bool) (output : String) (expected : List
   let errors := (output.splitOn "error").length - 1
   unless expected.all (fun text => output.contains text) && (!only || errors == expected.length) do
     throw (IO.userError s!"{name}: the control was refused for another reason\n{output}")
+
+/-- The imports of a module with a printed package and others, and the namespace that the
+package is read in. -/
+def packageHeader (others : List String) : String :=
+  String.join ((Written.packageImports ++ others).map (s!"import {·}\n")) ++ "\nopen Zkc.Core\n"
+
+/-- Lean on a module in the package of the working directory, as a task. -/
+def startLakeLean (work : System.FilePath) (name text : String) :
+    IO (Task (Except IO.Error (Bool × String))) := do
+  let path := work / s!"{name}.lean"
+  IO.FS.writeFile path text
+  IO.asTask (runLakeLean path)
+
+/-- What a run of Lean that was started as a task gave. -/
+def finishLean (task : Task (Except IO.Error (Bool × String))) : IO (Bool × String) :=
+  IO.ofExcept task.get
+
+/-- A control: Lean refuses the module, and of `theorems` those that are left unproved, itself
+or by what they use, are the expected ones. -/
+def expectUnproved (title name : String) (theorems : List String)
+    (task : Task (Except IO.Error (Bool × String))) (expected : List String) : IO Unit := do
+  let (ok, output) ← finishLean task
+  if ok then throw (IO.userError s!"{title}: Lean accepted a control that must be refused")
+  let unproved := theorems.filter fun theorem_ =>
+    ((axiomsOf s!"{name}.{theorem_}" output).getD ["sorryAx"]).contains "sorryAx"
+  unless unproved == expected do
+    throw (IO.userError s!"{title}: unproved are {unproved}, expected {expected}\n{output}")
 
 /-- Lean accepts the module, and each of its theorems rests on the allowed axioms at most. -/
 def expectAccepted (name : String) (path : System.FilePath) (theorems : List String)

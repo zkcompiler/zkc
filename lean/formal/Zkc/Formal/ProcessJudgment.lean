@@ -181,6 +181,18 @@ theorem List.collected_all {α : Type} (all collected : List α) (n : Nat) (leng
     (soFar : collected.reverse = all.take n) : collected.reverse = all := by
   rw [soFar, List.take_of_length_le (by omega)]
 
+/-- A statement of the positions below `j + 1` is the statement of those below `j` and the
+statement at `j`: the step of a loop that carries whether a statement held at every position so
+far. -/
+theorem Fin.forall_val_lt_succ {n : Nat} (P : Fin n → Prop) (j : Nat) (below : j < n) :
+    (∀ q : Fin n, q.val < j + 1 → P q) ↔ (∀ q : Fin n, q.val < j → P q) ∧ P ⟨j, below⟩ := by
+  refine ⟨fun h => ⟨fun q lt => h q (by omega), h ⟨j, below⟩ (Nat.lt_succ_self j)⟩, ?_⟩
+  rintro ⟨before, at_⟩ q lt
+  by_cases same : q.val = j
+  · obtain rfl : q = ⟨j, below⟩ := Fin.ext same
+    exact at_
+  · exact before q (by omega)
+
 /-- The judgment of a process without effects: there is no effect to judge, and the process is
 judged by how it ends. The judgment of a function's process, which makes the walk of a role's
 program the walk of a function's. -/

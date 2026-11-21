@@ -13,8 +13,10 @@ A module about what goals claim holds the printed package of the claims (`goalCl
 file writes what stands around a proof in such a module, from what the frontend read and from
 nothing else:
 
-- `facts`: the keys, headers and places of the root and of each goal's relation, the roles, and
-  each goal's proof arguments and charge, as terms;
+- `facts`: the keys, headers and places of the root, of the functions before it that the text
+  names and of each goal's relation, the roles, and each goal's proof arguments and charge, as
+  terms;
+- `coverage`: the theorem `covered`, that the model of the statement covers the stored program;
 - `transfers`: that what holds of the root and of a relation in the installed program holds of
   them in every program that admission gives, each found by its key;
 - `claimTexts`: for each goal, the proposition `<goal>Claim` about the installed program. On valid
@@ -28,12 +30,12 @@ nothing else:
   of its charge is within it. A goal whose ceiling is below that total is refused here (GL4),
   before any module is written.
 
-So a proof module is: the package, `opens`, `facts`, `transfers`, `claimTexts`, the proofs written
-for the protocol, `closings`. The proofs choose nothing of the statement: the subject, the
-premise, the experiment, the samplers and the bound are written here.
+So a proof module is: the package, `opens`, `facts`, `coverage`, `transfers`, `claimTexts`, the
+proofs written for the protocol, `closings`. The proofs choose nothing of the statement: the
+subject, the premise, the experiment, the samplers and the bound are written here.
 
-The model is named by a `ModelText`: the binders of what it is built from, the model and its
-samplers as terms over them. The statement is for one charge on a draw of the root; a root with
+The model is named by a `ModelText`: the binders of what it is built from, the model, its
+samplers and its coverage as terms over them, and what the statement assumes of it. The statement is for one charge on a draw of the root; a root with
 charges at several sites or under applications waits for the table of caps by site.
 -/
 
@@ -50,6 +52,13 @@ structure ModelText where
   model : String
   /-- The samplers of the laws of the model, as a term over the binders. -/
   samplers : String
+  /-- Whether the model covers a stored program: the function that says that it interprets the
+  rows that the program links and has a sampler for the laws that it draws. -/
+  covers : String
+  /-- What the statement assumes of what the model is built from: the name of each hypothesis
+  and its proposition over the binders. A hypothesis is part of the claim; the proof gets it
+  after the path. -/
+  hypotheses : List (String × String) := []
 
 /-- The standard model built from an algebra, with the samplers of its laws. -/
 def standardModelText : ModelText where
@@ -57,6 +66,36 @@ def standardModelText : ModelText where
   arguments := "D"
   model := "(StandardModel.model D)"
   samplers := "(lawSamplers (StandardModel.model D) (StandardModel.draws D))"
+  covers := "StandardModel.covers"
+
+/-- The arithmetic model over a field that can be sampled, with the samplers of its laws: a
+scalar and a sequence of scalars are drawn uniformly. -/
+def arithmeticModelText : ModelText where
+  binders := "{F G : Type} [Field F] [Fintype F] [DecidableEq F] [SampleableType F] " ++
+    "[AddCommGroup G] [Module F G] [DecidableEq G]"
+  arguments := ""
+  model := "(ArithmeticModel.model F G)"
+  samplers := "(lawSamplers (ArithmeticModel.model F G) (ArithmeticModel.draws F G))"
+  covers := "ArithmeticModel.covers"
+
+/-- The arithmetic model over a field with at least as many elements as the scalar field of the
+source. A charge that the source writes with the order of its scalar field then bounds what a
+uniform scalar of the model pays for; the scalar field itself is such a field. -/
+def scalarFieldModelText : ModelText :=
+  { arithmeticModelText with
+    hypotheses := [("large", "Zkc.Vocabulary.Field.bls12381Fr.order ≤ Fintype.card F")] }
+
+/-- The hypotheses of a model as the antecedents of a proposition. -/
+def ModelText.assumed (model : ModelText) : String :=
+  String.join (model.hypotheses.map fun (_, proposition) => s!"    {proposition} →\n")
+
+/-- The hypotheses of a model as the binders of a theorem. -/
+def ModelText.assumedBinders (model : ModelText) : String :=
+  String.join (model.hypotheses.map fun (name, proposition) => s!"    ({name} : {proposition})\n")
+
+/-- The names of the hypotheses of a model, as arguments. -/
+def ModelText.assumedNames (model : ModelText) : String :=
+  " ".intercalate (model.hypotheses.map (·.1))
 
 /-- A goal of the claims with what its statement needs beside its clause: the values of its
 proof arguments, its charge on a draw of the root, and its ceiling when it has one. -/
@@ -73,6 +112,9 @@ structure Statements where
   claims : GoalClaims
   roles : List (String × Nat)
   goals : List StatedGoal
+  /-- The functions of the package before the root that the text names, each with the label of
+  its name (`apply` gives `applyMember`): what the root may call. -/
+  functions : List (String × Nat) := []
 
 /-- A charge as a term. -/
 def chargeTerm (charge : DrawCharge) : String :=
@@ -107,6 +149,29 @@ last first: as many places after the head as definitions of its kind follow it. 
 def memberOf (s : Statements) (key : Nat) (isProtocol : Bool) : String :=
   memberAt (((s.definitions.dropWhile (·.1 != key)).drop 1).filter (·.2 == isProtocol)).length
 
+/-- The functions of the package of claims that stand before the root, each under the name of
+its declaration in the source: what the root may call. A name that two of them share, or that a
+goal has, is followed by the key. -/
+def _root_.Zkc.Frontend.Written.GoalClaims.functionsBeforeRoot (claims : GoalClaims) :
+    List (String × Nat) :=
+  let definitions := (Written.package (claims.emission.package ⟨[], [], [], [], []⟩)).definitions
+  let before := (definitions.takeWhile (·.1.number != claims.root)).filter (!·.2)
+  let named : List (String × Nat) := before.map fun (key, _) =>
+    let name := match claims.state.table.entries[key.number]? with
+      | some entry => claims.state.program.nameOf entry.key.declaration
+      | none => ""
+    (if name.isEmpty then "function" else name, key.number)
+  let taken := claims.goals.map (·.goal) ++ ["root", "callee", "verifier", "prover"]
+  named.map fun (name, key) =>
+    if taken.contains name || (named.filter (·.1 == name)).length > 1 then (s!"{name}{key}", key)
+    else (name, key)
+
+/-- The place of a function among the functions of the program before the root, which stand
+last first. -/
+def calleeMember (s : Statements) (key : Nat) : String :=
+  let before := s.definitions.takeWhile (·.1 != s.claims.root)
+  memberAt (((before.dropWhile (·.1 != key)).drop 1).filter (!·.2)).length
+
 /-- The ports of the root, each with its type as a term and whether the deciding role holds
 it. -/
 def ports (s : Statements) : Except String (List (String × Bool)) := do
@@ -129,8 +194,8 @@ def opens : String :=
   "open Zkc.Frontend.Written (DrawCharge)\n" ++
   "open scoped NNRat ENNReal\n"
 
-/-- What was read from the source, as terms: the root, the roles, and for each goal its proof
-arguments, its charge and its relation. -/
+/-- What was read from the source, as terms: the root, the roles, the functions before the root
+that the text names, and for each goal its proof arguments, its charge and its relation. -/
 def facts (s : Statements) : String :=
   let root := s.claims.root
   s!"abbrev rootKey : Key := ⟨{root}⟩\n" ++
@@ -141,6 +206,14 @@ def facts (s : Statements) : String :=
   s!"noncomputable abbrev rootMember : Member installed.headers.protocols header{root} :=\n" ++
   s!"  {s.memberOf root true}\n" ++
   String.join (s.roles.map fun (label, role) => s!"abbrev {label}Role : Role := {role}\n") ++
+  String.join (s.functions.map fun (label, key) =>
+    s!"abbrev {label}Key : Key := ⟨{key}⟩\n" ++
+    s!"noncomputable abbrev {label}Header := header{key}\n" ++
+    s!"noncomputable abbrev {label}Names := names{key}\n" ++
+    s!"noncomputable abbrev {label}Body := body{key}\n" ++
+    s!"noncomputable abbrev {label}Before : Typed V := {s.programBefore key}\n" ++
+    s!"noncomputable abbrev {label}Member : Member calleeProgram.headers.fns header{key} :=\n" ++
+    s!"  {s.calleeMember key}\n") ++
   String.join (s.goals.map fun goal =>
     let name := goal.claimed.goal
     let relation := goal.claimed.relation
@@ -272,6 +345,14 @@ def serviceBinders (model : ModelText) : String :=
   s!"    (permitted : ∀ op s reply t, (some reply, t) ∈ support (service op s) →\n" ++
   s!"      Permitted {model.model} op reply) (s : σ)"
 
+/-- The theorem `covered`: the model covers the stored program of the package, decided by the
+kernel. A statement over a model is issued with it, so that the statement is about this program
+and not about one in which a row is a constant or a coin has no distribution. -/
+def coverage (model : ModelText) : String :=
+  "/-- **The model covers the package.** It interprets every row of the vocabulary that the\n" ++
+  "package links and has a sampler for the law of every coin that the package draws. -/\n" ++
+  s!"theorem covered : {model.covers} stored = true := by decide +kernel\n\n"
+
 /-- For each goal, the proposition `<goal>Claim` about the installed program. -/
 def claimTexts (s : Statements) (model : ModelText) : Except String String := do
   let mut text := ""
@@ -284,7 +365,7 @@ def claimTexts (s : Statements) (model : ModelText) : Except String String := do
       "every service that draws each coin by the sampler of its law and answers what is permitted\n" ++
       "returns with probability at most the total of the goal's charge. -/\n" ++
       s!"def {name}Claim : Prop :=\n  ∀ {model.binders} (path : List Frame),\n" ++
-      parts.quantified ++ serviceQuantified model ++
+      model.assumed ++ parts.quantified ++ serviceQuantified model ++
       s!"    {parts.premise "installed" s!"{name}Member"} →\n" ++
       s!"      {s.returns model "installed" "rootMember" parts.inputs} ≤ total {name}Charge\n\n"
   return text
@@ -304,7 +385,7 @@ def closings (s : Statements) (model : ModelText) : Except String String := do
       "probability at most the total of the goal's charge. -/\n" ++
       s!"theorem {name}_sound " ++ "{a : Admitted V} (admitted : admit stored association = .ok a)\n" ++
       s!"    {model.binders} (path : List Frame)\n" ++
-      parts.binders ++ serviceBinders model ++ " :\n" ++
+      model.assumedBinders ++ parts.binders ++ serviceBinders model ++ " :\n" ++
       "    ∃ root : Member a.program.headers.protocols rootHeader,\n" ++
       "      a.program.findProtocol rootKey = some ⟨rootHeader, root⟩ ∧\n" ++
       s!"      ∃ relation : Member a.program.headers.fns {name}Header,\n" ++
@@ -314,7 +395,8 @@ def closings (s : Statements) (model : ModelText) : Except String String := do
       s!"  at_{name} admitted\n" ++
       s!"    (fun p root relation => {parts.premise "p" "relation"} →\n" ++
       s!"      {s.returns model "p" "root" parts.inputs} ≤ total {name}Charge)\n" ++
-      s!"    ({name}_installed {model.arguments} path {parts.names} service follows permitted s)\n\n"
+      s!"    ({name}_installed {model.arguments} path {model.assumedNames} {parts.names} " ++
+        "service follows permitted s)\n\n"
   return text
 
 end Statements

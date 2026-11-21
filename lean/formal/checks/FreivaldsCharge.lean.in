@@ -1,0 +1,470 @@
+/-!
+The verifier of Freivalds' check of a matrix product within the charge of its goal.
+
+Before this text the check writes the printed package of what the goal claims (the function
+`apply`, the protocol of the scheme, then the relation `Product` of the clause) and, generated
+from what the frontend read: the facts (`rootKey` with `rootHeader`, `rootNames`, `rootBody`,
+`rootMember` and `calleeProgram`, the program before the root; `verifierRole`, `proverRole`; for
+the function that the root calls `applyKey`, `applyHeader`, `applyNames`, `applyBody`,
+`applyBefore` and `applyMember`; for the goal `soundCharge`, `soundKey` with `soundHeader`,
+`soundNames`, `soundBody`, `soundBefore` and `soundMember`), that the arithmetic model covers
+the package (`covered`), the transfers `at_root` and `at_sound`, and the claim `soundClaim`.
+After this text it writes the goal `sound_sound` from `sound_installed`, which this text proves.
+
+Nothing of the statement is written here. The source says
+`Product(a, b, c): ∀ i ∈ 0..n, ∀ j ∈ 0..n, (∑ k ∈ 0..n, a[i][k] * b[k][j]) == c[i][j]` and
+`apply(m, v) = [∑ k ∈ 0..n, m[i][k] * v[k] for i in 0..n]`; the package has both as functions
+at `n = 2`, and `sound_relation` and `apply_law` say what they compute in the terms of
+matrices: whether the product of two matrices is a third, and the product of a matrix and a
+vector. The verifier draws a vector and compares `apply(a, apply(b, r))` with `apply(c, r)`.
+Where the product differs, the vectors on which the comparison holds are zeros of a row of
+`A * B - C` that is not zero, which a uniform vector hits with probability at most `1 / |F|`.
+-/
+
+noncomputable section
+
+-- The verifier's program, in the kernel's normal form.
+kernel_normal verifier :
+    Term (roleDialect V calleeProgram.headers verifierRole) (Ctx.empty.extend rootNames) rootHeader.outs :=
+  project verifierRole rootBody
+
+/-! ## Matrices as the values of sequences of sequences -/
+
+section
+variable {F : Type}
+
+/-- A matrix as the value of a sequence of sequences: the list of its rows. -/
+def rows (M : Matrix (Fin 2) (Fin 2) F) : List (List F) := List.ofFn fun i => List.ofFn (M i)
+
+/-- The row of a matrix at a position. -/
+theorem rows_at (M : Matrix (Fin 2) (Fin 2) F) (i : ℕ) (below : i < 2) :
+    (rows M)[i]? = some (List.ofFn (M ⟨i, below⟩)) :=
+  List.getElem?_ofFn_of_lt _ i below
+
+end
+
+/-! ## What the functions of the package compute -/
+
+section
+variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
+
+variable (F G) in
+/-- The arithmetic model over a field and a module over it. -/
+abbrev model : Model V := ArithmeticModel.model F G
+
+/-- The type of a square matrix of the source: two sequences of two scalars. -/
+abbrev matrixTy : V.Ty := .seq (.seq scalarTy (some 2)) (some 2)
+
+variable (G) in
+/-- A valid value of the type of a matrix is the list of the rows of a matrix. -/
+theorem rows_of_valid (m : (model F G).Val matrixTy) (valid : (model F G).Valid matrixTy m) :
+    ∃ M : Matrix (Fin 2) (Fin 2) F, m = rows M := by
+  obtain ⟨row, isRows⟩ := List.exists_ofFn_of_length (m : List (List F)) 2 (valid.2 2 rfl)
+  have each : ∀ i, ∃ entries : Fin 2 → F, row i = List.ofFn entries := fun i =>
+    List.exists_ofFn_of_length (row i) 2 ((valid.1 (row i) (isRows ▸ (List.mem_ofFn' row (row i)).mpr ⟨i, rfl⟩)).2 2 rfl)
+  choose entries isEntries using each
+  exact ⟨entries, isRows.trans (congrArg List.ofFn (funext isEntries))⟩
+
+variable (G) in
+/-- **What `apply` computes.** On the rows of a matrix and the list of a vector, the function
+returns the list of the product of the matrix and the vector. -/
+theorem apply_law (m : List (List F)) (v : List F) (M : Matrix (Fin 2) (Fin 2) F) (w : Fin 2 → F)
+    (hm : m = rows M) (hv : v = List.ofFn w) :
+    fnMeaning (model F G) calleeProgram applyMember (.cons m (.cons v .nil)) =
+      .done (.cons (List.ofFn (M.mulVec w)) .nil) := by
+  rw [show fnMeaning (model F G) calleeProgram applyMember (.cons m (.cons v .nil)) =
+    applyBody.denote (localSem (model F G) applyBefore.headers.fns (Defs.fnTable (model F G) applyBefore.defs)) []
+      (Env.empty.extend applyNames (.cons m (.cons v .nil))) from by kernel_rfl]
+  delta applyBody body2
+  refine done_of_judged ?_
+  walk_loop fun i (collected : List F) _ => collected.reverse = (List.ofFn (M.mulVec w)).take i
+  case first => rfl
+  case step =>
+    walk_loop fun k (collected : List F) _ =>
+      collected.reverse = (List.ofFn fun k => M ⟨i6, early6⟩ k * w k).take k
+    case first => rfl
+    case step =>
+      walk_step
+      · rw [hm, rows_at M i6 early6] at at0
+        cases at0
+      have row : List.ofFn (M ⟨i6, early6⟩) = x4 := by
+        rw [hm, rows_at M i6 early6] at at0
+        exact Option.some.inj at0
+      walk_step
+      · rw [← row, List.getElem?_ofFn_of_lt _ i4 early4] at at1
+        cases at1
+      have entry : M ⟨i6, early6⟩ ⟨i4, early4⟩ = x5 := by
+        rw [← row, List.getElem?_ofFn_of_lt _ i4 early4] at at1
+        exact Option.some.inj at1
+      walk_step
+      · rw [hv, List.getElem?_ofFn_of_lt _ i4 early4] at at2
+        cases at2
+      have coordinate : w ⟨i4, early4⟩ = x6 := by
+        rw [hv, List.getElem?_ofFn_of_lt _ i4 early4] at at2
+        exact Option.some.inj at2
+      walk_step
+      walk_step
+      refine List.collected_next _ _ _ _ invariant4 ?_
+      rw [List.getElem?_ofFn_of_lt _ i4 early4, h7, ← entry, ← coordinate]
+      rfl
+    case after =>
+      walk_step
+      walk_step
+      have products : x8 = List.ofFn fun k => M ⟨i6, early6⟩ k * w k :=
+        h8.trans (List.collected_all _ _ 2 (by simp) invariant4)
+      have value : M.mulVec w ⟨i6, early6⟩ = x9 := by
+        rw [h9, products]
+        exact List.sum_ofFn.symm
+      refine List.collected_next _ _ _ _ invariant6 ?_
+      rw [List.getElem?_ofFn_of_lt _ i6 early6, value]
+  case after =>
+    walk_step
+    exact congrArg (HList.cons · HList.nil) (h10.trans (List.collected_all _ _ 2 (by simp) invariant6))
+
+variable (G) in
+/-- **What the relation computes.** On the rows of three matrices, the function that the package
+has for `Product` returns whether the product of the first two is the third. -/
+theorem sound_relation (a b c : List (List F)) (A B C : Matrix (Fin 2) (Fin 2) F)
+    (ha : a = rows A) (hb : b = rows B) (hc : c = rows C) :
+    functionResult (t := .bool)
+        (fnMeaning (model F G) installed soundMember (.cons a (.cons b (.cons c .nil)))) =
+      some (decide (A * B = C)) := by
+  rw [show fnMeaning (model F G) installed soundMember (.cons a (.cons b (.cons c .nil))) =
+    soundBody.denote (localSem (model F G) soundBefore.headers.fns (Defs.fnTable (model F G) soundBefore.defs)) []
+      (Env.empty.extend soundNames (.cons a (.cons b (.cons c .nil)))) from by kernel_rfl]
+  delta soundBody body3
+  refine functionResult_of_judged ?_
+  walk_step
+  walk_loop fun i (holds : Bool) _ => (holds = true ↔ ∀ p : Fin 2, p.val < i → (A * B) p = C p)
+  case first => exact ⟨fun _ p below => absurd below (Nat.not_lt_zero _), fun _ => rfl⟩
+  case step =>
+    walk_step
+    walk_loop fun j (holds : Bool) _ =>
+      (holds = true ↔ ∀ q : Fin 2, q.val < j → (A * B) ⟨i15, early15⟩ q = C ⟨i15, early15⟩ q)
+    case first => exact ⟨fun _ q below => absurd below (Nat.not_lt_zero _), fun _ => rfl⟩
+    case step =>
+      walk_loop fun k (collected : List F) _ =>
+        collected.reverse = (List.ofFn fun k => A ⟨i15, early15⟩ k * B k ⟨i13, early13⟩).take k
+      case first => rfl
+      case step =>
+        walk_step
+        · rw [ha, rows_at A i15 early15] at at2
+          cases at2
+        have rowA : List.ofFn (A ⟨i15, early15⟩) = x10 := by
+          rw [ha, rows_at A i15 early15] at at2
+          exact Option.some.inj at2
+        walk_step
+        · rw [← rowA, List.getElem?_ofFn_of_lt _ i7 early7] at at3
+          cases at3
+        have entryA : A ⟨i15, early15⟩ ⟨i7, early7⟩ = x11 := by
+          rw [← rowA, List.getElem?_ofFn_of_lt _ i7 early7] at at3
+          exact Option.some.inj at3
+        walk_step
+        · rw [hb, rows_at B i7 early7] at at4
+          cases at4
+        have rowB : List.ofFn (B ⟨i7, early7⟩) = x12 := by
+          rw [hb, rows_at B i7 early7] at at4
+          exact Option.some.inj at4
+        walk_step
+        · rw [← rowB, List.getElem?_ofFn_of_lt _ i13 early13] at at5
+          cases at5
+        have entryB : B ⟨i7, early7⟩ ⟨i13, early13⟩ = x13 := by
+          rw [← rowB, List.getElem?_ofFn_of_lt _ i13 early13] at at5
+          exact Option.some.inj at5
+        walk_step
+        walk_step
+        refine List.collected_next _ _ _ _ invariant7 ?_
+        rw [List.getElem?_ofFn_of_lt _ i7 early7, h14, ← entryA, ← entryB]
+        rfl
+      case after =>
+        walk_step
+        walk_step
+        · rw [hc, rows_at C i15 early15] at at9
+          cases at9
+        have rowC : List.ofFn (C ⟨i15, early15⟩) = x17 := by
+          rw [hc, rows_at C i15 early15] at at9
+          exact Option.some.inj at9
+        walk_step
+        · rw [← rowC, List.getElem?_ofFn_of_lt _ i13 early13] at at10
+          cases at10
+        have entryC : C ⟨i15, early15⟩ ⟨i13, early13⟩ = x18 := by
+          rw [← rowC, List.getElem?_ofFn_of_lt _ i13 early13] at at10
+          exact Option.some.inj at10
+        walk_step
+        walk_step
+        walk_step
+        have products : x15 = List.ofFn fun k => A ⟨i15, early15⟩ k * B k ⟨i13, early13⟩ :=
+          h15.trans (List.collected_all _ _ 2 (by simp) invariant7)
+        have entry : (A * B) ⟨i15, early15⟩ ⟨i13, early13⟩ = x16 := by
+          rw [h16, products, Matrix.mul_apply]
+          exact List.sum_ofFn.symm
+        rw [h20, Bool.and_eq_true, invariant13, h19, decide_eq_true_iff, ← entry, ← entryC]
+        exact (Fin.forall_val_lt_succ _ i13 early13).symm
+    case after =>
+      walk_step
+      walk_step
+      rw [h22, Bool.and_eq_true, invariant15, invariant13, Fin.forall_val_lt_succ _ i15 early15]
+      exact and_congr Iff.rfl ⟨fun h => funext fun q => h q q.isLt, fun h q _ => congrFun h q⟩
+  case after =>
+    walk_step
+    refine congrArg (HList.cons · HList.nil) ?_
+    rw [Bool.eq_iff_iff, invariant15, decide_eq_true_iff]
+    exact ⟨fun h => Matrix.ext fun p q => congrFun (h p p.isLt) q, fun h p _ => by rw [h]⟩
+
+variable (G) in
+/-- Three matrices on whose rows the relation returns false: the product of the first two is not
+the third. -/
+theorem sound_far (a b c : List (List F)) (A B C : Matrix (Fin 2) (Fin 2) F)
+    (ha : a = rows A) (hb : b = rows B) (hc : c = rows C)
+    (rejected : functionResult (t := .bool)
+      (fnMeaning (model F G) installed soundMember (.cons a (.cons b (.cons c .nil)))) = some false) :
+    A * B ≠ C := by
+  rw [sound_relation G a b c A B C ha hb hc] at rejected
+  simpa using rejected
+
+end
+
+/-! ## The verifier within the charge -/
+
+section
+variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
+
+variable (G) in
+/-- What the verifier holds when the run starts: the three matrices. -/
+def inputs (a b c : List (List F)) : HList (RV (model F G) verifierRole) rootHeader.ins :=
+  .cons a (.cons b (.cons c .nil))
+
+/-- A draw of a vector at an occurrence: the verifier's coin, which the prover hears. -/
+def coinAt (at_ : Occurrence) : InputPort V :=
+  .own (.coin (.uniform (.seq (.nominal (.field .bls12381Fr)) (some 2)))) [proverRole] at_
+    (.seq scalarTy (some 2))
+
+/-- The draw of the vector in a run that starts at `path`. -/
+abbrev coin (path : List Frame) : InputPort V := coinAt ⟨path, ⟨0⟩⟩
+
+variable (G) in
+/-- The verifier's process, as the walk reads it. -/
+abbrev walked (path : List Frame) (a b c : List (List F)) :=
+  verifier.denote (roleSem (model F G) verifierRole (Defs.fnTable _ calleeProgram.defs)
+    (Defs.rTable _ calleeProgram.defs)) path (Env.empty.extend rootNames (inputs G a b c))
+
+/-- What every judgment of the verifier that lets no run return pays for: a fee at the coin, for
+every vector on which the check passes. -/
+theorem walked_excludes (allowed : ∀ op, (RSig (model F G)).Reply op → Prop)
+    (pays : (op : ROp (model F G)) → ℚ≥0 → ((RSig (model F G)).Reply op → Prop) → Prop)
+    (path : List Frame) (a b c : List (List F)) (A B C : Matrix (Fin 2) (Fin 2) F)
+    (ha : a = rows A) (hb : b = rows B) (hc : c = rows C) (within : ℚ≥0)
+    (judged : (walked G path a b c).interpret (.charged allowed pays) (fun _ _ => False)
+      (fun _ _ => True) within) :
+    ∃ fee excluded, fee ≤ within ∧ pays ((coin path).operation (model F G)) fee excluded ∧
+      ∀ (r : List F) (w : Fin 2 → F), r = List.ofFn w →
+        allowed ((coin path).operation (model F G)) r →
+        A.mulVec (B.mulVec w) = C.mulVec w → excluded r := by
+  walk_step at judged
+  obtain ⟨fee, excluded, least, paid, rest⟩ := judged
+  refine ⟨fee, excluded, least, paid, fun r w hw allowedR passes => ?_⟩
+  by_contra kept
+  have after := rest r allowedR kept
+  clear rest
+  walk_step at after
+  walk_compute .cons (List.ofFn (B.mulVec w)) .nil at after
+  · exact apply_law G b r B w hb hw
+  walk_compute .cons (List.ofFn (A.mulVec (B.mulVec w))) .nil at after
+  · exact apply_law G a x4 A (B.mulVec w) ha h4
+  walk_compute .cons (List.ofFn (C.mulVec w)) .nil at after
+  · exact apply_law G c r C w hc hw
+  walk_step at after
+  walk_step at after
+  · have same : x5 = x6 := by rw [h5, h6, passes]
+    simp [h7, same] at at5
+  · walk_step at after
+    exact after
+
+/-- The verifier's process in a run of the installed program is the process that the walk
+reads. -/
+theorem meaning_walked (path : List Frame) (a b c : List (List F)) :
+    roleMeaning (model F G) installed (Member.head : Member installed.headers.protocols rootHeader)
+      verifierRole path (inputs G a b c) = walked G path a b c := by
+  kernel_rfl
+
+end
+
+section
+variable {F : Type} [Fintype F]
+
+/-- In a field with at least as many elements as the scalar field of the source, what a uniform
+scalar pays for is within the ceiling of the charge that the source writes with that order. -/
+theorem large_covers (large : Zkc.Vocabulary.Field.bls12381Fr.order ≤ Fintype.card F) :
+    (1 : ℝ≥0∞) / (Fintype.card F : ℝ≥0∞) ≤ toProbability (ceiling soundCharge) := by
+  have exact : ceiling soundCharge =
+      ((1 : ℕ) : ℚ≥0) / (Zkc.Vocabulary.Field.bls12381Fr.order : ℕ) := rfl
+  rw [exact, toProbability_natCast_div _ _ (by decide), Nat.cast_one]
+  exact ENNReal.div_le_div_left (by exact_mod_cast large) _
+
+end
+
+section
+variable {F G : Type} [Field F] [Fintype F] [DecidableEq F] [SampleableType F] [AddCommGroup G]
+  [Module F G] [DecidableEq G]
+
+variable (F G) in
+/-- The samplers of the statement: at each coin, the sampler of its law in the model. -/
+abbrev samplers : Samplers (RSig (model F G)) := lawSamplers (model F G) (ArithmeticModel.draws F G)
+
+variable (F G) in
+/-- The fees of a charge in a run of the root. -/
+abbrev fees (charge : DrawCharge) (path : List Frame) :=
+  paysWithin (samplers F G) (allowance (model F G) charge rootKey path)
+
+/-- The verifier is judged never to return on three matrices whose product differs, within the
+budget of a charge of the root on the draw whose ceiling is at least `1 / |F|`: the fee of the
+draw pays for the vectors on which the check passes, which are zeros of a row of `A * B - C`
+that is not zero. The three calls of `apply` are taken by its law. -/
+theorem walked_within (path : List Frame) (a b c : List (List F))
+    (A B C : Matrix (Fin 2) (Fin 2) F) (ha : a = rows A) (hb : b = rows B) (hc : c = rows C)
+    (charge : DrawCharge) (differ : A * B ≠ C)
+    (owned : charge.owner = rootKey) (site : charge.draws = [([], ⟨0⟩)])
+    (covers : (1 : ℝ≥0∞) / (Fintype.card F : ℝ≥0∞) ≤ toProbability (ceiling charge)) :
+    (walked G path a b c).interpret
+      (.charged (Permitted (model F G)) (fees F G charge path))
+      (fun _ _ => False) (fun _ _ => True) (budget charge) := by
+  walk_step
+  refine ⟨ceiling charge,
+    fun r : List F => ∃ w : Fin 2 → F, r = List.ofFn w ∧ A.mulVec (B.mulVec w) = C.mulVec w, ?_,
+    ⟨Or.inr ⟨drawVector F 2, rfl, ?_⟩, ?_⟩, fun r allowedR kept => ?_⟩
+  · simp [budget, site]
+  · obtain ⟨i, j, nonzero⟩ : ∃ i j, (A * B - C) i j ≠ 0 := by
+      by_contra none
+      refine differ (sub_eq_zero.mp (Matrix.ext fun i j => ?_))
+      by_contra entry
+      exact none ⟨i, j, entry⟩
+    refine (prEvent_drawVector_le_of_linear_form _ (fun k => (A * B - C) i k) j nonzero ?_).trans covers
+    rintro w ⟨w', same, passes⟩
+    obtain rfl : w = w' := List.ofFn_injective same
+    have row := congrFun passes i
+    rw [Matrix.mulVec_mulVec] at row
+    have zero : ((A * B - C).mulVec w) i = 0 := by
+      rw [Matrix.sub_mulVec, Pi.sub_apply, row, sub_self]
+    exact zero
+  · simp [allowance, occurrenceOf, owned, site, ROp.occurrence]
+  have length : (r : List F).length = 2 := allowedR.1.2 2 rfl
+  obtain ⟨w, hw⟩ := List.exists_ofFn_of_length (r : List F) 2 length
+  walk_step
+  walk_compute .cons (List.ofFn (B.mulVec w)) .nil
+  · exact apply_law G b r B w hb hw
+  walk_compute .cons (List.ofFn (A.mulVec (B.mulVec w))) .nil
+  · exact apply_law G a x4 A (B.mulVec w) ha h4
+  walk_compute .cons (List.ofFn (C.mulVec w)) .nil
+  · exact apply_law G c r C w hc hw
+  walk_step
+  walk_step
+  · trivial
+  · walk_step
+    have same : x5 = x6 := of_decide_eq_true (h7 ▸ at5)
+    exact kept ⟨w, hw, List.ofFn_injective (h5 ▸ h6 ▸ same)⟩
+
+/-- The probability, at the root of the installed program: against every service that draws the
+vector uniformly and answers only what is permitted, the simulation of the verifier returns with
+probability at most the total of the charge. -/
+theorem returns_installed (path : List Frame) (a b c : List (List F))
+    (A B C : Matrix (Fin 2) (Fin 2) F) (ha : a = rows A) (hb : b = rows B) (hc : c = rows C)
+    (charge : DrawCharge) (differ : A * B ≠ C)
+    (owned : charge.owner = rootKey) (site : charge.draws = [([], ⟨0⟩)])
+    (covers : (1 : ℝ≥0∞) / (Fintype.card F : ℝ≥0∞) ≤ toProbability (ceiling charge))
+    (positive : 0 < charge.denominator)
+    {σ : Type} (service : Service (RSig (model F G)) σ)
+    (follows : service.Follows (samplers F G))
+    (permitted : ∀ op s reply t, (some reply, t) ∈ support (service op s) →
+      Permitted (model F G) op reply) (s : σ) :
+    Pr{let out ← (simulateQ (handlerOf service) (embed
+        (roleMeaning (model F G) installed (Member.head : Member installed.headers.protocols rootHeader)
+          verifierRole path (inputs G a b c)))).run.run s}[
+      ∃ results, out.1 = some (.inl results)] ≤ total charge := by
+  rw [prEvent_simulation_returns, ← toProbability_budget charge positive]
+  refine allowed_bounds_return service _ (allowance (model F G) charge rootKey path)
+    (Permitted (model F G)) permitted follows _ (budget charge) s ?_
+  rw [meaning_walked]
+  exact walked_within path a b c A B C ha hb hc charge differ owned site covers
+
+end
+
+/-! ## The goal -/
+
+/-- The claim of `sound`: the validity of each matrix gives its rows, the relation of the goal
+says that the product differs, and the field of the model has at least the order that the
+charge is written with. -/
+theorem sound_installed : soundClaim := by
+  intro F G _ _ _ _ _ _ _ path large a validA b validB c validC σ service follows permitted s rejected
+  -- the premise is about the product of the first two ports, in this order
+  guard_hyp rejected : functionResult (t := .bool) (fnMeaning (ArithmeticModel.model F G) installed
+    soundMember (.cons a (.cons b (.cons c .nil)))) = some false
+  obtain ⟨A, ha⟩ := rows_of_valid G a validA
+  obtain ⟨B, hb⟩ := rows_of_valid G b validB
+  obtain ⟨C, hc⟩ := rows_of_valid G c validC
+  exact returns_installed (F := F) (G := G) path a b c A B C ha hb hc soundCharge
+    (sound_far (F := F) G a b c A B C ha hb hc rejected) (by decide) (by decide)
+    (large_covers large) (by decide) service follows permitted s
+
+
+/-! ## The hypotheses are met -/
+
+namespace Witness
+open Zkc.Formal.Written.ScalarField
+
+/-- The scalar field of the source: the integers modulo its order, a prime. -/
+abbrev Scalars : Type := ScalarField
+
+/-- The scalar field has the order that the charge is written with. -/
+theorem large : Zkc.Vocabulary.Field.bls12381Fr.order ≤ Fintype.card Scalars :=
+  ScalarField.card.ge
+
+/-- A matrix with one entry that is not zero. -/
+def corner : Matrix (Fin 2) (Fin 2) Scalars := fun i j => if i = 0 ∧ j = 0 then 1 else 0
+
+/-- The product of the zero matrices is not the matrix with a corner. -/
+theorem zero_mul_ne_corner : (0 : Matrix (Fin 2) (Fin 2) Scalars) * 0 ≠ corner := by
+  intro same
+  have entry := congrFun (congrFun same 0) 0
+  rw [mul_zero] at entry
+  exact zero_ne_one entry
+
+/-- The rows of a matrix are a valid value of the type of a matrix. -/
+theorem rows_valid (M : Matrix (Fin 2) (Fin 2) Scalars) :
+    (model Scalars Scalars).Valid matrixTy (rows M) := by
+  refine ⟨fun v mem => ⟨fun _ _ => trivial, fun n size => ?_⟩, fun n size => ?_⟩
+  · cases size
+    obtain ⟨i, rfl⟩ := (List.mem_ofFn' _ v).mp mem
+    exact List.length_ofFn
+  · cases size
+    exact List.length_ofFn
+
+/-- The zero matrix. -/
+abbrev none : Matrix (Fin 2) (Fin 2) Scalars := 0
+
+/-- The relation returns false on the zero matrices and the matrix with a corner. -/
+theorem rejected :
+    functionResult (t := .bool) (fnMeaning (model Scalars Scalars) installed soundMember
+      (.cons (rows none) (.cons (rows none) (.cons (rows corner) .nil)))) = some false :=
+  (sound_relation Scalars (rows none) (rows none) (rows corner) none none corner rfl rfl rfl).trans
+    (congrArg some (decide_eq_false zero_mul_ne_corner))
+
+/-- **The hypotheses of the claim are met.** Over the scalar field of the source, on the zero
+matrices and a matrix with a corner, the relation returns false, the matrices are valid, the
+field has the order of the charge, and the service of the laws draws by the samplers and
+answers what is permitted: there the verifier returns with probability at most the total of
+the charge. -/
+theorem sound_at_corner (path : List Frame) :
+    Pr{let out ← (simulateQ (handlerOf (serveLaws (model Scalars Scalars)
+          (ArithmeticModel.draws Scalars Scalars))) (embed
+        (roleMeaning (model Scalars Scalars) installed rootMember verifierRole path
+          (.cons (rows none) (.cons (rows none) (.cons (rows corner) .nil)))))).run.run ()}[
+      ∃ results, out.1 = some (.inl results)] ≤ total soundCharge :=
+  sound_installed (F := Scalars) (G := Scalars) path large (rows none) (rows_valid none)
+    (rows none) (rows_valid none) (rows corner) (rows_valid corner)
+    (serveLaws (model Scalars Scalars) (ArithmeticModel.draws Scalars Scalars))
+    (serveLaws_follows _ _)
+    (serveLaws_permitted _ _ (ArithmeticModel.draws_permitted Scalars Scalars)) () rejected
+
+end Witness
+
+end
