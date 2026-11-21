@@ -109,7 +109,7 @@ def steppedText : String :=
   "  claim_intro\n" ++
   "  obtain rfl : input_claim = false :=\n" ++
   "    Option.some.inj ((stepped_relation D input_claim).symm.trans rejected)\n" ++
-  "  walk\n  walk_free as first\n" ++
+  "  walk_free as first\n" ++
   "  walk as firstKept\n" ++
   "  -- inside a block as outside, a value of a step has a variable: the guard is stated of the draw\n" ++
   "  guard_hyp firstKept : (!first.beq 0) = true\n" ++

@@ -46,7 +46,8 @@ end Subject
 /-- What a check asserts of what the frontend read of a source. Each is a fact that the proof
 module takes as given: the ports of the root, the clause that every goal reads and the inputs
 that its relation is applied to, the number of proof arguments of a goal, the roles of the
-scheme, and the class of models that the generator chose for the statements. -/
+scheme, and the class of models that the generator chose for the statements. A relation with
+witness parameters is not a subject yet: `read` asserts that the clause gives none. -/
 structure Reading where
   /-- The goals, the first of which selects the root. -/
   goals : List String
@@ -123,7 +124,9 @@ structure Control where
   text : String
   /-- The description of the model, where the control states a claim about another class. -/
   model : Option ModelText := none
-  /-- The theorems that are left unproved, themselves or by what they use, and no other. -/
+  /-- The theorems that are left unproved, themselves or by what they use, and no other: of the
+  theorems of the control's own module. A theorem that the control's module does not state (a
+  cap of a draw that its source does not charge) is not among them. -/
   unproved : List String
   /-- The texts of the places at which Lean refuses the module: each occurs in its output. -/
   places : List String := []

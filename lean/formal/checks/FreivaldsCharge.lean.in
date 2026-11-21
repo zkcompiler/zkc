@@ -275,7 +275,6 @@ theorem walked_within (path : List Frame) (a b c : List (List F))
     (process G path a b c).interpret
       (.charged (Permitted (model F G)) (fees F G caps path))
       (fun _ _ => False) (fun _ _ => True) caps.budget := by
-  walk
   walk_pay (drawCap caps) excluding
     (fun r : List F => ∃ w : Fin 2 → F, r = List.ofFn w ∧ A.mulVec (B.mulVec w) = C.mulVec w)
     as r kept

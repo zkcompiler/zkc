@@ -7,6 +7,8 @@ A subject is a source with a soundness goal, the text of its proofs, and a check
 **The source** declares a protocol, the relation that its verifier decides, a contract with a `proves` clause and the charges of its draws, a scheme and a goal:
 
 ```
+module t
+use zkc::security::{soundness}
 relation Holds(claim: bool): claim
 protocol Either roles(P, V)(claim: bool @(P, V), first: index<8> @P, second: index<4> @P):
     if claim:
@@ -30,7 +32,18 @@ goal either = soundness(Checked, stage = written)
 
 The claim of the goal: on inputs on which the relation returns false, the verifier returns with probability at most the total of the charges that the root reaches (here three eighths), against every service that draws each coin no more favourably than its law.
 
-**The text** is a Lean file without a header. It proves, for each goal, the judgment that the generator states (`<goal>_judged : <goal>Judged`) and that the hypotheses of the claim are met at some input (`<goal>_witnessed : <goal>Witnessed`). It states nothing: every proposition is generated before the text.
+**The text** is a Lean file without a header, between `noncomputable section` and `end`. It proves, for each goal, the judgment that the generator states (`<goal>_judged : <goal>Judged`) and that the hypotheses of the claim are met at some input (`<goal>_witnessed : <goal>Witnessed`). The propositions that a module publishes are all generated before the text, and the text states none of them. What it states is its own: what the relation computes, and any law or lemma that its proofs use. The first is needed by every text, since the judgment assumes that the relation returns false and the text has to say what that means of the inputs:
+
+```lean
+theorem either_relation {F G : Type} (D : StandardModel.Data F G) [DecidableEq F]
+    [DecidableEq G] (claim : Bool) :
+    functionResult (t := .bool)
+      (fnMeaning (StandardModel.model D) installed eitherMember (.cons claim .nil)) =
+        some claim := by
+  kernel_rfl
+```
+
+A relation that the kernel does not compute on variables (one with a loop) is walked as any function is (`Count<8>`, Freivalds).
 
 **The check** is a Lean file that reads the source with the frontend, asserts what it read, and runs Lean on the generated module. With the library of `lean/compiler/Zkc/Tests/Frontend/WrittenSubject.lean` it is data:
 
@@ -49,9 +62,20 @@ def run (template work : System.FilePath) : IO Unit := do
     [/- controls -/]
 ```
 
-Run it from `lean/formal` with `lake lean checks/EitherCharge.lean`. It is accepted when Lean accepts the module, every listed theorem rests on `propext`, `Classical.choice` and `Quot.sound` at most, and every control is refused as it says.
+The rest of a check file is frame that the four checks share word for word: the imports, the `open`s, and at the end `#eval show IO Unit from IO.FS.withTempDir fun work => run "checks/EitherCharge.lean.in" work`. The path of the text is relative to `lean/formal`, where a check is run: `lake lean checks/EitherCharge.lean`. A text that uses a lemma of a library module that the generated module does not import names the module in `imports` of its proof (Freivalds: `Zkc.Formal.Written.FixedSequences`, `Mathlib.Data.Matrix.Mul`).
 
-A `Reading` asserts the ports of the root, the clause that each goal reads, the inputs of the deployed header that the relation is applied to, the number of proof arguments, the roles of the scheme, and the class of models (`model`, the standard model unless said). A reading that is not what the check asserts is an error: the text is written against it.
+A subject is accepted when Lean accepts the proof module; every theorem of it, generated or of the text, rests on `propext`, `Classical.choice` and `Quot.sound` at most; Lean accepts the module in which the package is compared with what the frontend gives to admission (`<Name>Source`); and every control is refused as it says.
+
+A `Reading` asserts the ports of the root, the clause that each goal reads, the inputs of the deployed header that the relation is applied to, the number of proof arguments, the roles of the scheme, and the class of models (`model`, the standard model unless said). A reading that is not what the check asserts is an error: the text is written against it. A relation with witness parameters is not a subject yet. What else a check asserts of the reading is its own; the four checks assert the table of caps and the names of the draws:
+
+```lean
+  let goal ← written.goal
+  unless goal.total == 3 / 8 && (goal.caps.uses.map fun use => use.draws.map fun draw =>
+      (draw.numerator, draw.denominator, draw.count)) == [[(1, 8, 1), (1, 4, 1)]] do
+    throw (IO.userError "the table of caps is not the two draws at 1/8 and 1/4")
+  unless goal.siteLabels.map (·.2.1) == ["x", "y"] do
+    throw (IO.userError "the draws are not named `x` and `y`")
+```
 
 ## What stands before the text
 
@@ -59,16 +83,17 @@ The generator (`lean/compiler/Zkc/Frontend/Written/Statement.lean`) writes the p
 
 | Name | What it is |
 | --- | --- |
-| `installed`, `rootMember`, `verifierRole`, `proverRole` | the admitted program, the root in it, the two roles |
+| `installed`, `rootMember`, `verifierRole`, `proverRole` | the program that the module installs from the package, the root in it, the two roles |
 | `eitherMember` | the function of the relation at the goal's value; a function that the root calls has `<function>Member` |
 | `eitherCaps`, `either_budget` | the table of caps of the goal, and its budget as a number |
 | `site_x`, `site_y` | each named draw of the root, under its name in the source, charged or not |
 | `either_cap_x`, `either_cap_y` | the cap that the table gives each charged draw |
 | `eitherJudged` | the judgment that the text proves |
 | `either_witnessed_of` | the theorem that gives `eitherWitnessed` from an input on which the relation returns false |
-| `eitherClaim`, `eitherGoal`, `eitherResult`, `eitherWitnessed` | the published propositions; their theorems are written after the text |
+| `eitherClaim`, `eitherGoal`, `eitherResult`, `eitherWitnessed` | the published propositions: the claim about the installed program, the goal for every admitted program, the result with the coverage, and that the hypotheses are met |
+| `either_installed`, `either_sound`, `either_result`, `either_met` | their theorems, written after the text from `either_judged` and `either_witnessed` |
 
-The class of models is read from the package: the standard model over any data (`D : StandardModel.Data F G`) where every coin is a position, and the arithmetic model over a field `F` with at least the order of the source's scalar field (a hypothesis `large`) where the package draws a scalar.
+The class of models is read from the package: the standard model over any data (`D : StandardModel.Data F G`) where every coin is a position, and otherwise the arithmetic model over a field `F` with at least the order of the source's scalar field (a hypothesis `large`), which has samplers for a position, a scalar and a sequence of scalars. A package that draws anything else is refused where its module states the coverage.
 
 To see a generated module, keep the working directory of a check: replace `IO.FS.withTempDir fun work =>` by a function that passes a directory of yours, and read `<Name>.lean` there.
 
@@ -81,7 +106,6 @@ theorem either_judged : eitherJudged := by
   claim_intro
   obtain rfl : input_claim = false :=
     Option.some.inj ((either_relation D input_claim).symm.trans rejected)
-  walk
   walk_free as sent
   walk as allowed
   walk_pay (1 / 4) excluding (fun drawn : ℕ => drawn = sent) as drawn differs
@@ -91,9 +115,11 @@ theorem either_judged : eitherJudged := by
   exact differs (Nat.eq_of_beq_eq_true hit)
 ```
 
-**`claim_intro`** introduces the binders of the judgment under the names that the generator gave them: what the model is built from (`D`, or `F` and `G`), `path`, each input as `input_<port>` with `valid_input_<port>`, a hypothesis of the model by its name, and `rejected`, that the relation returns false.
+**`claim_intro`** introduces the binders of the judgment under the names that the generator gave them: what the model is built from (`D`, or `F` and `G`), `path`, each input that the verifier holds as `input_<port>` with `valid_input_<port>` (`input_claim` here; the two positions are the prover's and have no binder), a hypothesis of the model by its name, and `rejected`, that the relation returns false.
 
-**`walk`** goes to the next effect, loop, call of a function by a role, or the end of the program. It goes into the arm of a choice and into a block as into a program. At the end, what is left is what the judgment asks there, stated in the inputs, the replies and the names of the text. `walk … at h` walks a hypothesis that judges a process.
+**`walk`** goes to the next effect, loop, call of a function by a role, or the end of the program. It goes into the arm of a choice and into a block as into a program. At the end, what is left is what the judgment asks there, stated in the inputs, the replies and the names of the text. `walk … at h` walks a hypothesis that judges a process. The two tactics of an effect walk to the effect themselves, so a text writes `walk` where it names a fork, before a loop or a call, and to reach the end.
+
+A condition of the source shows in a goal as the values that it computes: `or` as `||`, `==` on positions as `Nat.beq`, `!=` as its negation, and an operand that the kernel computes is gone (`false || c` is `c`). The hypothesis of the last guard above is `hit : drawn.beq sent = true`, and `Nat.eq_of_beq_eq_true` reads it. To see a goal, write `trace_state` after a tactic and run the check.
 
 **Nothing that an instruction binds has a name.** A value of a step shows in a goal under a name that a text cannot write (`value✝`). A text names what it speaks of:
 
@@ -104,7 +130,9 @@ theorem either_judged : eitherJudged := by
 **At an effect** under the judgment with fees:
 
 - `walk_free as v`: nothing is excluded and no fee is paid. The reply is `v`, and `permitted_v` says that it is permitted. A message got has no sampler and is met this way.
-- `walk_pay fee excluding set as v kept`: a coin pays `fee` for the replies in `set`. It leaves `weight` (the sampler draws a reply of the set with probability at most the fee: the mathematics of the step), `within` (the fee is within the budget, unless a hypothesis says so as it stands) and `cap` (the fee is within the cap of the draw, unless the kernel decides it), and then the rest after a reply `v` with `kept : ¬ set v`. A fee over the cap that the module states is refused with the name of the site.
+- `walk_pay fee excluding set as v kept`: a coin pays `fee` for the replies in `set`. It leaves, in this order: `weight`, that the sampler draws a reply of the set with probability at most the fee, which is the mathematics of the step; `within`, that the fee is at most what is left of the budget (the budget less the fees paid before), unless a hypothesis of the goal is exactly that; `cap`, that the fee is within the cap of the draw, unless the kernel decides it; and then the rest after a reply `v` with `kept : ¬ set v`, judged within the budget less the fee. A fee over the cap that the module states is refused with the name of the site.
+
+For a draw of a position in the standard model, `prEvent_drawPosition_eq_le n v` bounds the probability that a position of `index<n + 1>` is `v` by one in `n + 1` (so `7` for `index<8>`), stated with `toProbability`; `simpa using` puts it in the form of `weight`.
 
 **A loop** is taken by an invariant, a function of the iteration number, of each carried value, of what was collected so far and of what the judgment carries (the budget):
 
@@ -139,7 +167,7 @@ A control is a module that Lean must refuse: the subject with its source or its 
   only := true }
 ```
 
-A control of a charge is a source: no caller gives a statement its table. A text is altered with `replaceOnce`, which fails when the place that it alters is gone. A control is worth what it would catch: state the place, and run the check once with the thing that the control guards switched off.
+A control of a charge is a source: no caller gives a statement its table. A text is altered with `replaceOnce`, which fails when the place that it alters is gone. Where two proofs of one module meet the same refusal, `occurrences` says how often its text occurs, since a text twice among the places says only that it occurs. A control is worth what it would catch: run the check once with the control given the unaltered subject, and see that the check fails ("Lean accepted a control that must be refused").
 
 ## What a text cannot do yet
 

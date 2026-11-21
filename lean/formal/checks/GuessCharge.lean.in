@@ -46,10 +46,8 @@ theorem guessing_judged : guessingJudged := by
     have split : (3 - i : ℕ) = (3 - (i + 1)) + 1 := by omega
     rw [split, Nat.cast_add, Nat.cast_one, add_mul, one_mul] at enough
     -- the message: nothing is excluded
-    walk
     walk_free as sent
     -- the draw: the fee of one eighth pays for the position that was sent
-    walk
     walk_pay (1 / 8) excluding (fun drawn : ℕ => drawn = sent) as drawn differs
     case weight => simpa using prEvent_drawPosition_eq_le 7 sent
     case within => exact le_trans le_add_self enough

@@ -10,8 +10,8 @@ public import Zkc.Frontend.Written.Package
 The statements of written soundness goals, as the text of a module.
 
 A module about what goals claim holds the printed package of the claims (`goalClaims`). This
-file writes what stands around a proof in such a module, from what the frontend read, from the
-library and from the model that the check names:
+file writes what stands around a proof in such a module, from what the frontend read and from
+the library, about the class of models that it reads from the package (`chosenModel`):
 
 - `facts`: the keys, headers and places of the root, of the functions before it that the text
   names and of each goal's relation, the verifier and the prover of the scheme, and each goal's
@@ -58,8 +58,8 @@ So a proof module is: the package, `opens`, `facts`, `coverage`, `counts`, `site
 `transfers`, `claimTexts`, `judgments`, `ceilings`, the proofs written for the protocol,
 `conclusions`, `closings`, what a check adds, `publications`.
 `Statements.module` assembles it, with its imports and with the names of the theorems whose
-axioms it asks for; a caller gives the model, the text of the proofs with what that text
-imports and the names of its theorems, and what it adds after the closing theorems. Every
+axioms it asks for; a caller gives the text of the proofs with what that text imports and the
+names of its theorems, and what it adds after the closing theorems. Every
 statement that the module publishes is a proposition defined before the text of the proofs; a
 name that the text defines afterwards cannot change what it says. The subject, the premise, the experiment, the samplers
 and the bound are written here.
@@ -67,8 +67,8 @@ and the bound are written here.
 What a statement says of its goal is read from the claims (`goalClaims`) and from nothing that
 a caller gives beside them: the deciding role is the verifier of the claims' scheme, the
 operands are the inputs of the deployed header at the places that the claims give, and the
-proof arguments, the ceiling and the table of caps are the goal's. A caller gives the model and
-the labels of the functions that the text names. A goal whose clause is a `reduces` gets no
+proof arguments, the ceiling and the table of caps are the goal's. A caller gives the labels of
+the functions that the text names. A goal whose clause is a `reduces` gets no
 statement: the statement of a reduction is about a return on which the reduced statement is
 true, and a bound on every return is another claim.
 
@@ -76,7 +76,9 @@ The model is named by a `ModelText`: the binders of what it is built from, the m
 samplers and its coverage as terms over them, and what the statement assumes of it. It is part
 of the claim, not of the proof, and no caller chooses it: `Statements.chosenModel` reads it
 from the package (the laws of the coins that the stored program draws). The choice is not
-trusted: every module states that its model covers the package, and the kernel decides that. The
+trusted: every proof module states that its model covers the package (`covered`), and the
+kernel decides that. A module of statements without proofs and the module of a ceiling state no
+coverage. The
 bound of a statement is the total of the goal's table of caps (`<goal>Caps.total`): every
 charge that the root reaches at the goal's proof arguments, by use, read by `goalClaims`.
 -/
@@ -225,10 +227,13 @@ the descriptions whose samplers the package needs.
 
 - A package whose coins are all positions (`index<n>`) is about the standard model over any
   data: nothing is assumed of a field.
-- A package that draws anything else (a scalar, a sequence of scalars) is about the arithmetic
-  model over a field with at least as many elements as the scalar field of the source: a
-  uniform scalar of the source is one of that many, and a charge that the source writes with
-  that order bounds what a uniform scalar of the model pays for only in such a field.
+- A package that draws anything else is about the arithmetic model over a field with at least
+  as many elements as the scalar field of the source: a uniform scalar of the source is one of
+  that many, and a charge that the source writes with that order bounds what a uniform scalar
+  of the model pays for only in such a field. That model has samplers for a position, a scalar
+  of that field and a sequence of such scalars. A package that draws something else again (a
+  truth value, a group element, a scalar of another field) gets this class too, and its module
+  is refused where the coverage is stated: no class has a sampler for it yet.
 
 No caller chooses the class. A class that covers too little is refused by the kernel where the
 module states the coverage; one that assumes more than a subject needs shows as a hypothesis of

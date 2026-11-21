@@ -33,7 +33,6 @@ theorem either_judged : eitherJudged := by
   obtain rfl : input_claim = false :=
     Option.some.inj ((either_relation D input_claim).symm.trans rejected)
   -- the choice takes the second arm; its message: nothing is excluded
-  walk
   walk_free as sent
   -- the guard on the message: where it does not pass the run stops
   walk as allowed
