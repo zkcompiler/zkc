@@ -10,30 +10,59 @@ public meta import Lean
 public meta section
 
 /-!
-The walk of a role's program under a judgment, one step at a time.
+The walk of a role's program under a judgment.
 
 A goal is a judgment of a process: `Process.interpret J done halt P …`, where `P` is the
 denotation of a term in an environment, or what is left of an instruction after an effect.
-`walk_step` asks the kernel for the head normal form of what the next instruction denotes, and
-states the goal that follows:
 
-- for values, the rest of the term in the environment extended by them. A value that is a
-  variable, a literal or a truth value is used as it is; any other gets a local variable with
-  the equation that says what it is, in a form to read;
+## What a text writes
+
+`walk` goes to the next place where a text has something to say: an effect, where the text says
+what the judgment asks of it (for the judgment with fees, `walk_free` and `walk_pay` of
+`Zkc/Formal/Written/WalkFees.lean`); a loop, which the text takes by an invariant
+(`walk_loop`); a call of a function, which it takes by the function's law (`walk_law`); or the
+end of the program, where what is left is what the judgment asks of the end. `walk … at h`
+walks a hypothesis that judges a process: what a judgment of the process gives, as the walk of
+a goal says what a judgment of it needs.
+
+A text follows the mathematics of a program, not its instructions.
+
+- **Nothing that an instruction binds has a name.** A value of a step that is no variable, no
+  literal and no truth value gets a variable and the equation that says what it is, both under
+  names that a text cannot write. While the process goes on, the variable stands for the value
+  in it, so that the kernel computes on the value only what the program does. Where the walk
+  stops with the process going on, the hypotheses are restated of the values. Where no process
+  goes on (the end, and a goal that a rule leaves beside the walk), the variables are replaced
+  by the values, and the operations of a model are read as the library says they are
+  (`walk_value`: the addition of the arithmetic model over a field is the field's). What a
+  text has left to prove at the end is stated in the inputs, the replies and its own names.
+- **A text names what it speaks of.** A reply has the name that the text gives it at the
+  effect. Where a step waits on a value (the condition of a guard, an element of a sequence
+  whose position is not known to be in it), there is a goal for each form of the value; a side
+  that is closed as it stands is closed, and the walk goes on in every other. `walk as h`
+  names the hypothesis that says which form the value is, `walk as ⟨x, h⟩` also the parts of
+  the form, and `walk as ⟨x, h⟩, g` the forks on the way in order. A name for which no fork is
+  met is an error. The arguments of an invariant have the names that the text gave them.
+- **A read that the context decides is no fork.** Where a step waits on a read of a sequence
+  and the context decides what the read finds, the step goes on with it. The context decides a
+  read by a hypothesis that says what it finds, by a law of reads (a theorem with the label
+  `walk_read`, as the entry of the list of a function at a position below its size) whose
+  premises are hypotheses or follow from them by arithmetic, or by the length of the list and
+  a bound of the position. A text that reads a sequence in another order, or once more, says
+  nothing new.
+
+## One step
+
+`walk_step` is one step of the walk. It asks the kernel for the head normal form of what the
+next instruction denotes, and states the goal that follows:
+
+- for values, the rest of the term in the environment extended by them;
 - for a stop, what the judgment asks of a stop;
 - for an effect, the judgment at the effect, with the rest after its reply;
-- where the step waits on a value (the element of a sequence at a position, the condition of a
-  guard), a goal for each form of that value, with the equation that says which form it is; each
-  of these goals then takes the step that its form makes possible;
-- where the step waits on a read of a sequence that the context decides, the step goes on with
-  what the read finds, and there is no goal for the other form. The context decides a read by a
-  hypothesis that says what it finds, by a law of reads (a theorem with the label `walk_read`,
-  as the entry of the list of a function at a position below its size) whose premises are
-  hypotheses or follow from them by arithmetic, or by the length of the list and a bound of the
-  position. A text that reads a sequence in another order, or once more, says nothing new.
+- where the step waits on a value, a goal for each form of that value, with the equation that
+  says which form it is; each of these goals then takes the step that its form makes possible.
 
-`walk_step at h` takes the same step on a hypothesis that judges a process: what a judgment of
-the process gives, as the walk of a goal says what a judgment of it needs.
+`walk_step at h` takes the same step on a hypothesis that judges a process.
 
 Nothing is unified. A step passes from the goal to the next along an equation of processes:
 the term is its first instruction and then the rest (`Term.denote_step`), what the instruction

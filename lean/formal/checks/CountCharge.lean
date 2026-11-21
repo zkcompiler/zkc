@@ -50,6 +50,12 @@ The check reads the source with the frontend and writes two modules, on which Le
   the total of the table; a table that caps another instruction judges it at no budget and has
   not the counts of the stored program, as a table of another definition has not; a service
   that always gives one position does not follow the samplers.
+  The text has the two kinds of read of a sequence. In the relation the position is the
+  loop's, below the length of the table: the walk reads the entry by itself, and the text has
+  no case for a position outside the table. In the verifier the position is drawn, and nothing
+  in the context says that it is in the table: the read is a fork, whose open side the text
+  names (the entry found, and that it was found); a text that named a fork where the walk
+  meets none would be refused.
 - The proof module also states that the standard model covers the package (`covered`): it
   interprets every row of the vocabulary that the package links, read from the stored program
   through its loops and arms, and has a sampler for the law of every coin that it draws.
