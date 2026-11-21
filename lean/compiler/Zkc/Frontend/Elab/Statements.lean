@@ -527,6 +527,13 @@ mutual
         | _, _ => throw failure
     match uniform with
     | some (index, item, statements, values) =>
+      -- the loop is one loop: its index is no static term, and a specification argument is one
+      if let some (_, at_) := (← get).proofIndexReads.find? (·.1 == domain.index.id) then
+        let name := (indexName domain).getD "the index"
+        refuseHere "SP11" at_
+          (s!"`{name}` is the index of a loop that is one loop for every iteration; a specification " ++
+            s!"argument is a static term, and has no value for each iteration: give a value that " ++
+            s!"does not read `{name}`")
       let binders ← (collected.zip values).mapM fun (entry, value) =>
         bindLocal (binderOf entry) (.seq value.type domain.count)
       return #[.«for» span (.loop index (domain.typed item) binders (.uniform statements values))

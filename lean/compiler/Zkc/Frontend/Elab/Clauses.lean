@@ -95,10 +95,11 @@ def elabClauseApplication (expr : Lowered.Expr) (lenient : Bool := true) :
   unlessWaiting lenient (callDeclaration id assigned paired (some .bool) span proofArguments)
 
 /-- The relation applications of the deciding clauses, at the ports of an instance: each typed
-application with the place of its clause in the contract. Every refused clause is reported,
-and one refused clause refuses them all. -/
+application with the place of its clause in the contract; of the clause at the place `only`
+alone, when it is given. Every refused clause is reported, and one refused clause refuses them
+all. -/
 def elabClauses (signature : Typed.ProtocolSignature) (head : Lowered.ProtocolHead)
-    (clauses : Array Lowered.Clause) (lenient : Bool := true) :
+    (clauses : Array Lowered.Clause) (lenient : Bool := true) (only : Option Nat := none) :
     ElabM (Array (Nat × Typed.Expr)) := do
   for (port, closed) in head.ports.zip signature.ports do
     discard <| bindLocal port.binder closed.type
@@ -108,6 +109,7 @@ def elabClauses (signature : Typed.ProtocolSignature) (head : Lowered.ProtocolHe
   let mut refused := false
   let mut typed := #[]
   for (clause, place) in clauses.zipIdx do
+    if only.any (· != place) then continue
     let some expr := decidingApplication? clause | continue
     try
       if let some application ← elabClauseApplication expr lenient then

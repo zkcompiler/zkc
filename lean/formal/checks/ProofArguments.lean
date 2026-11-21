@@ -141,4 +141,16 @@ private def refused {α} (attempt : Except String α) (rule : String) : IO Unit 
   refused (selectPlaced given) "TY7"
   discard <| IO.ofExcept (selectPlaced (given.replace "spec e = 8" "spec e = 7"))
   refused (selectPlaced (← placed "N-GL2j")) "SP11"
+  -- A specification argument is a static term. In a loop that is one loop for every iteration
+  -- the index is none, and the application is refused; in a loop typed per iteration each
+  -- application gives its own value, and its charge is read at that value.
+  refused (selectGoal (← placed "N-GL2k")) "SP11"
+  let stepped ← IO.ofExcept (selectGoal (← placed "N-GL2l"))
+  let #[steppedOrigin] := stepped.emission.origins.filter (·.definition.number == stepped.id)
+    | throw (IO.userError "missing the caller of the stepped loop")
+  let amounts ← steppedOrigin.specification.toList.mapM fun call => do
+    let charge ← IO.ofExcept (goalDrawCharge stepped "loose" [call.instruction] "z")
+    pure (charge.numerator, charge.denominator)
+  unless amounts == [(7, 8), (5, 7), (1, 2)] do
+    throw (IO.userError s!"the charges of the three applications of a stepped loop: {amounts}")
   IO.println "Count<8> selected two exact ceilings on one admitted verifier, directly and through shared callees."

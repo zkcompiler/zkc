@@ -415,6 +415,44 @@ protocol X roles(P, V)(base: G @(P, V), point: G @(P, V), scalar: G::Scalar @P):
     guard @V y == point
 spec for X:
     proves @V DLog(base)
+=== N-SP12i | accept | a contract is typed in both typings: a clause calls a member of the interface on a value of the type member, as the body does
+module t
+pub struct Box:
+    pub n: nat
+interface Carrier:
+    type T
+    def digit(a: T) -> nat
+module First: Carrier:
+    type T = Box
+    def digit(a): a.n
+relation IsNine(v: nat): v == 9
+protocol Show<X: Carrier> roles(P, V)(x: X::T @(P, V)):
+    r <- draw index<8> from V to P
+    guard @V x.digit() == 9
+spec for Show:
+    proves @V IsNine(x.digit())
+scheme S = Show<First>:
+    prover P
+    construction interactive
+=== N-SP12j | refuse TY13 | a contract is typed in both typings: a clause reads no field of the carrier of a type member
+module t
+pub struct Box:
+    pub n: nat
+interface Carrier:
+    type T
+    def digit(a: T) -> nat
+module First: Carrier:
+    type T = Box
+    def digit(a): a.n
+relation IsNine(v: nat): v == 9
+protocol Show<X: Carrier> roles(P, V)(x: X::T @(P, V)):
+    r <- draw index<8> from V to P
+    guard @V x.digit() == 9
+spec for Show:
+    proves @V IsNine(x.n)
+scheme S = Show<First>:
+    prover P
+    construction interactive
 === N-GL3a | refuse GL3 | a goal that names neither of two `proves` clauses
 module t
 use zkc::security::{completeness}
@@ -689,6 +727,44 @@ scheme Checked = Count<8>:
     prover P
     construction interactive
 goal placed = soundness(Checked, spec e = 7)
+=== N-GL2k | refuse SP11 | a specification argument is a static term: the index of a loop that is one loop for every iteration is none
+module t
+use zkc::security::{soundness}
+type F = primitive("bls12-381.fr")
+section <n: nat, spec e: nat>:
+    relation NearZero(xs: [F; n]): (∑ i ∈ 0..n, if xs[i] == 0 then 0 else 1) <= e
+    protocol Count roles(P, V)(xs: [F; n] @(P, V)):
+        z <- draw index<n> from V to P
+        guard @V xs[z] == 0
+    spec for Count:
+        proves @V NearZero(xs)
+        charge sites.z <= 1 - (e + 1) / n
+protocol Caller roles(P, V)(xs: [F; 8] @(P, V)):
+    for i in 0..3:
+        child <- Count<8, spec e = i>(xs)
+scheme Checked = Caller:
+    prover P
+    construction interactive
+goal loose = soundness(Checked)
+=== N-GL2l | accept | in a loop typed per iteration the index is a static natural, and each application gives its own value
+module t
+use zkc::security::{soundness}
+type F = primitive("bls12-381.fr")
+section <n: nat, spec e: nat>:
+    relation NearZero(xs: [F; n]): (∑ i ∈ 0..n, if xs[i] == 0 then 0 else 1) <= e
+    protocol Count roles(P, V)(xs: [F; n] @(P, V)):
+        z <- draw index<n> from V to P
+        guard @V xs[z] == 0
+    spec for Count:
+        proves @V NearZero(xs)
+        charge sites.z <= 1 - (e + 1) / n
+protocol Caller roles(P, V)(xs: [F; 8] @(P, V)):
+    for i in 0..3:
+        child <- Count<8 - i, spec e = i>(xs[0..8 - i])
+scheme Checked = Caller:
+    prover P
+    construction interactive
+goal loose = soundness(Checked)
 === M-SUM5 | refuse SX6 | `examples/sumcheck.zkc` with one change: two roles could decide
 module sumcheck<F: Field>
 
