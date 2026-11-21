@@ -755,7 +755,7 @@ def footer (name : String) (theorems : List String) : String :=
   String.join (theorems.map (s!"#print axioms {·}\n")) ++ s!"end {name}\n"
 
 /-- **The module of the goals of one scheme**: the package of the claims; what is generated
-before any proof (the facts, the coverage, the counts, the names of the charged draws, where
+before any proof (the facts, the coverage, the counts, the names of the draws, where
 the walks start, the transfers, the propositions of each goal and, for a text of the method of
 fees, the judgment of each goal with what follows from it, and the comparisons with the
 ceilings); the author's text; the claim of each goal from the text's judgment, for that method;

@@ -145,7 +145,10 @@ partial def capsOfUse (c : AdmittedRoot) (subject : ProofSubject) :
 /-- The draws of the root by the names that the source gives them, each with the keys of the
 draws that realize it (one, or one for each block of a stepped loop): every draw that has a
 name and is emitted, whether the contract charges it or not. A draw of a loop that does not
-run is realized by no instruction and has no name here. -/
+run is realized by no instruction and has no name here; nor has a draw of which a realization
+is not found by its address (two instructions at one coordinate). A name is a convenience of a
+text: a goal is not refused for a draw that has none, and a charge on such a draw is refused
+where the charge is read (`drawCharge`). -/
 def drawSites (c : AdmittedRoot) : ExportM SiteKeys := do
   let s := c.state
   let some entry := s.table.entries[c.id]? | throw "missing root instance"
@@ -159,8 +162,7 @@ def drawSites (c : AdmittedRoot) : ExportM SiteKeys := do
     let some name := source.name | continue
     let .transfer _ (some _) := source.audience | continue
     let occurrences := Typing.SiteEntry.realizations code.sites event "value"
-    let some draws := occurrences.toList.mapM addresses.resolve
-      | throw s!"ambiguous or missing address of the draw {name}"
+    let some draws := occurrences.toList.mapM addresses.resolve | continue
     unless draws.isEmpty do sites := sites ++ [(name, draws.map (·.2))]
   return sites
 
