@@ -145,6 +145,7 @@ goal. Lean elaborates the statements. -/
 def statementModule (name : String) (stated : Statements) : IO String := do
   let claims ← IO.ofExcept (stated.claimTexts standardModelText)
   return imports ["Zkc.Formal.OracleProcess", "Zkc.Formal.ReturnExperiment", "Zkc.Formal.Written.LawSamplers",
+      "Zkc.Formal.Written.SiteCaps",
       "Zkc.Formal.Written.FunctionMeaning", "Zkc.Formal.Written.StandardModel",
       "Zkc.Formal.Written.Ceiling"] ++
     s!"namespace {name}\n" ++ (Written.package stated.package).text ++ Statements.opens ++
@@ -283,10 +284,8 @@ def run (corpus : System.FilePath) (work : System.FilePath) : IO Unit := do
   -- The statement of a goal whose relation has a witness: the premise is that the relation
   -- returns false at the statement for every valid witness. The promise pair has no charge, so
   -- the bound of its statement is zero; Lean elaborates the statement.
-  let (pairAdmitted, pairClaims) ← read pair ["sound"]
-  let pairStated : Statements :=
-    { claims := pairClaims
-      goals := pairClaims.goals.map fun claimed => { claimed, charge := ⟨⟨pairAdmitted.id⟩, 0, 1, []⟩ } }
+  let (_, pairClaims) ← read pair ["sound"]
+  let pairStated : Statements := { claims := pairClaims }
   let pairText ← IO.ofExcept (pairStated.claimTexts standardModelText)
   -- The premise stands in the claim and in the statement that its hypotheses are met.
   expect "the statement of a relation with a witness does not quantify the witness"

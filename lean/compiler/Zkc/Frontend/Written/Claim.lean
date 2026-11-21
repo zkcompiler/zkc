@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Frontend.Written.Root
+public import Zkc.Frontend.Written.Charge
 public import Zkc.Frontend.Emit.Root
 public import Zkc.Core.Scheme.Roles
 
@@ -17,7 +18,7 @@ reader can compare it with the source.
 
 A goal is read by one function, and what its statement says is in what that function returns:
 the scheme with its prover and its verifier, the clause, the relation, the operands, the proof
-arguments and the ceiling. The records are made here and nowhere else, so a consumer cannot
+arguments, the ceiling and the table of caps of the root at the goal's proof arguments. The records are made here and nowhere else, so a consumer cannot
 pair a goal with another goal's role or operands.
 
 An operand of the clause is an input of the deployed header, by its place there. The ports of
@@ -100,6 +101,9 @@ structure ClaimedGoal where
   specification : Array Nat
   /-- The ceiling that the goal states, when it states one (GL4). -/
   ceiling : Option Rat
+  /-- The table of caps of the root at the goal's proof arguments (SX8): every charge that the
+  root reaches, by use. The bound of the goal's statement is its total. -/
+  caps : CapTable
 
 /-- What written soundness goals of one scheme claim, as one package. It is made by
 `goalClaims` alone. -/
@@ -178,8 +182,9 @@ the scheme that the goal names. -/
     if (node.witness.getD #[]).isEmpty then pure (some #[])
     else if application.witness.isEmpty then pure none
     else some <$> application.witness.mapM (operandPlace body none)
+  let caps ← goalCaps c selected.specification
   return ({ goal, clause, relation, statement, witness, specification := selected.specification,
-            ceiling := selected.ceiling }, selected.scheme, state)
+            ceiling := selected.ceiling, caps }, selected.scheme, state)
 
 /-- What written soundness goals of one scheme claim (GL3), as one package: for each goal its
 clause, the relation that the clause applies as a definition at the proof values of the goal,
@@ -218,6 +223,10 @@ root's own package, first and unchanged. -/
       | throw "WK-CORE: the package of the claims does not have the root"
     unless inputs.map (·.holders) == body.deployedPorts.toList.map (·.holders.toArray.toList) do
       throw "WK-CORE: the inputs of the deployed header are not the deployed ports of the protocol"
+    -- the counts of each goal's table are those of the program that the module prints
+    for goal in claimed do
+      unless goal.caps.counted package.named ⟨c.id⟩ do
+        throw s!"WK-CHARGE: the counts of the table of caps of `{goal.goal}` are not those of the package"
     return { root := c.id, scheme := scheme.declaration, schemeName := scheme.name, prover, verifier
              inputs := body.deployedPorts.map (·.binder.name)
              goals := claimed, state, emission, emitted, evidence }

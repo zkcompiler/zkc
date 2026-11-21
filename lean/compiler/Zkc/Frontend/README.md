@@ -86,9 +86,13 @@ After the text of the proofs it writes the theorems of the last three from a pro
 claim and a witness, and the comparison of a goal's total with its ceiling. A statement names the model through a `ModelText`: the model,
 its samplers, its coverage, and what the statement assumes of it (`scalarFieldModelText` is
 the arithmetic model on a field with at least the order of the source's scalar field). It is
-written for one charge on a draw of the root, which the caller reads; a goal whose ceiling is
-below the total of its charge is refused (GL4). The deciding role, the operands, the proof
-arguments and the ceiling are read from the claims and from nothing that a caller gives. A
+bounded by the total of the goal's table of caps (`<goal>Caps.total`), which `goalClaims` reads
+with the claim (`goalCaps`): the uses that the root reaches at the goal's proof arguments, each
+with the caps that the contract of its definition gives its charged draws and with its calls.
+The module states that the counts of the table are the stored program's and what its budget is
+(`Statements.counts`); a goal whose ceiling is below the total is refused (GL4). The deciding
+role, the operands, the proof arguments, the ceiling and the table are read from the claims and
+from nothing that a caller gives. A
 statement names the inputs of the root as the source names its ports (`input_flag`), so that a
 reader sees which inputs the relation is applied to and which the deciding role is run on. A goal
 whose clause is a `reduces` gets no statement yet: the statement of a reduction is about a

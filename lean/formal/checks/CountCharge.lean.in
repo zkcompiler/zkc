@@ -1,13 +1,14 @@
 /-!
-The verifier of `Count<8>` within the charges of its two goals.
+The verifier of `Count<8>` within the tables of caps of its two goals.
 
 Before this text the check writes the printed package of what the two goals claim (the protocol
 of the scheme, then the relation of the clause at the value of each goal) and, generated from
 what the frontend read: the facts (`rootKey` with `rootHeader`, `rootNames`, `rootBody`,
 `rootMember` and `calleeProgram`, the program before the root; `verifierRole`, `proverRole`; for
-each goal `looseArgument0`, `looseCharge`, `looseKey` with `looseHeader`, `looseNames`,
+each goal `looseArgument0`, `looseCaps`, `looseKey` with `looseHeader`, `looseNames`,
 `looseBody`, `looseBefore`, the program before the relation, and `looseMember`), that the
-standard model covers the package (`covered`), where the walks start (`verifierProgram` with
+standard model covers the package (`covered`), that the counts of each goal's table of caps are
+the program's and what its budget is (`loose_counted`, `loose_budget`), where the walks start (`verifierProgram` with
 `verifier_meaning`, `loose_meaning`, `strict_meaning`), the transfers `at_root`, `at_loose` and
 `at_strict`, and for each goal the propositions `looseClaim`, `looseGoal`, `looseResult` and
 `looseWitnessed`. After this
@@ -28,14 +29,23 @@ abbrev strictTolerance : ℕ := strictArgument0
 
 noncomputable section
 
-/-- The charge of `loose` is the bound at its tolerance: of eight positions, all but
-`tolerance + 1` can be zero in a table outside the relation. -/
-theorem loose_exact : ceiling looseCharge = ((7 - looseTolerance : ℕ) : ℚ≥0) / (8 : ℕ) := by
-  norm_num [ceiling, looseCharge, looseTolerance, looseArgument0]
+/-- The cap of the draw of the position in a table of caps: what the root's use allows the draw
+at key 0. -/
+abbrev drawCap (caps : CapTable) : ℚ≥0 := caps.capFrom caps.root [] ⟨0⟩
 
-/-- The charge of `strict` is the bound at its tolerance. -/
-theorem strict_exact : ceiling strictCharge = ((7 - strictTolerance : ℕ) : ℚ≥0) / (8 : ℕ) := by
-  norm_num [ceiling, strictCharge, strictTolerance, strictArgument0]
+/-- The cap of `loose` at the draw is the bound at its tolerance: of eight positions, all but
+`tolerance + 1` can be zero in a table outside the relation. The kernel reads it from the table. -/
+theorem loose_exact : drawCap looseCaps = ((7 - looseTolerance : ℕ) : ℚ≥0) / (8 : ℕ) := by
+  decide +kernel
+
+/-- The cap of `strict` at the draw is the bound at its tolerance. -/
+theorem strict_exact : drawCap strictCaps = ((7 - strictTolerance : ℕ) : ℚ≥0) / (8 : ℕ) := by
+  decide +kernel
+
+/-- The cap of the draw is within the budget of each table. -/
+theorem loose_within : drawCap looseCaps ≤ looseCaps.budget := by decide +kernel
+
+theorem strict_within : drawCap strictCaps ≤ strictCaps.budget := by decide +kernel
 
 section
 variable {F G : Type} (D : StandardModel.Data F G) [DecidableEq F] [DecidableEq G]
@@ -56,29 +66,29 @@ abbrev coin (path : List Frame) : InputPort V := coinAt ⟨path, ⟨0⟩⟩
 /-- The samplers of the statement: at each coin, the sampler of its law in the model. -/
 abbrev samplers : Samplers (RSig (model D)) := lawSamplers (model D) (StandardModel.draws D)
 
-/-- The fees of a charge in a run of the root: each coin is drawn by the sampler of its law, and
-each fee is within what the charge allows the effect that pays it. -/
-abbrev fees (charge : DrawCharge) (path : List Frame) :=
-  paysWithin (samplers D) (allowance (model D) charge rootKey path)
+/-- The fees of a table of caps in a run of the root: each coin is drawn by the sampler of its
+law, and each fee is within what the table allows the effect that pays it. -/
+abbrev fees (caps : CapTable) (path : List Frame) :=
+  paysWithin (samplers D) (caps.allowance (model D) path)
 
 /-- The verifier's process in a run of the installed program. -/
 abbrev process (path : List Frame) (xs : List F) :=
   roleMeaning (model D) installed rootMember verifierRole path (inputs D xs)
 
 /-- The verifier is judged never to return on a table outside the relation, within the budget of
-a charge of the root on the draw whose ceiling covers the bound: the fee of the draw pays for the
+a table of caps whose cap of the root's draw covers the bound: the fee of the draw pays for the
 positions at which the table is zero. -/
-theorem walked_within (path : List Frame) (xs : List F) (tolerance : ℕ) (charge : DrawCharge)
+theorem walked_within (path : List Frame) (xs : List F) (tolerance : ℕ) (caps : CapTable)
     (length : xs.length = 8) (far : tolerance < xs.countP (· ≠ D.zero))
-    (owned : charge.owner = rootKey) (site : charge.draws = [([], ⟨0⟩)])
-    (covers : ((7 - tolerance : ℕ) : ℚ≥0) / (8 : ℕ) ≤ ceiling charge) :
-    (process D path xs).interpret (.charged (Permitted (model D)) (fees D charge path))
-      (fun _ _ => False) (fun _ _ => True) (budget charge) := by
+    (within : drawCap caps ≤ caps.budget)
+    (covers : ((7 - tolerance : ℕ) : ℚ≥0) / (8 : ℕ) ≤ drawCap caps) :
+    (process D path xs).interpret (.charged (Permitted (model D)) (fees D caps path))
+      (fun _ _ => False) (fun _ _ => True) caps.budget := by
   rw [process, verifier_meaning]
   walk_step
-  refine ⟨ceiling charge, fun z : ℕ => xs[z]? = some D.zero, ?_,
+  refine ⟨drawCap caps, fun z : ℕ => xs[z]? = some D.zero, ?_,
     ⟨Or.inr ⟨drawPosition 7, rfl, ?_⟩, ?_⟩, fun z allowedZ kept => ?_⟩
-  · simp [budget, site]
+  · exact within
   · rw [prEvent_drawPosition_entry xs 7 length]
     refine le_trans ?_ (toProbability_mono covers)
     rw [toProbability_natCast_div _ 8 (by norm_num)]
@@ -88,7 +98,8 @@ theorem walked_within (path : List Frame) (xs : List F) (tolerance : ℕ) (charg
     have eight : ((7 : ℕ) : ℝ≥0∞) + 1 = ((8 : ℕ) : ℝ≥0∞) := by norm_num
     rw [eight]
     exact ENNReal.div_le_div_right counted _
-  · simp [allowance, occurrenceOf, owned, site, ROp.occurrence]
+  · exact (CapTable.allowanceFrom_at (model D) caps caps.root path [] ⟨0⟩ _
+      (by simp [ROp.occurrence])).ge
   walk_step
   walk_step
   walk_step
@@ -284,35 +295,34 @@ end
 section
 variable {F G : Type} (D : StandardModel.Data F G) [DecidableEq F] [DecidableEq G]
 
-/-- **Within the charge.** In every admitted program, on a table of eight entries of which more
+/-- **Within the caps.** In every admitted program, on a table of eight entries of which more
 than `tolerance` are not zero, the verifier is judged never to return within the budget of a
-charge of the root on the draw of the position whose ceiling is at least `(7 - tolerance) / 8`,
-each fee within what the charge allows the effect that pays it. -/
-theorem judged_within (charge : DrawCharge) (tolerance : ℕ)
-    (owned : charge.owner = rootKey) (site : charge.draws = [([], ⟨0⟩)])
-    (covers : ((7 - tolerance : ℕ) : ℚ≥0) / (8 : ℕ) ≤ ceiling charge)
+table of caps whose cap of the draw of the position is at least `(7 - tolerance) / 8`, each fee
+within what the table allows the effect that pays it. -/
+theorem judged_within (caps : CapTable) (tolerance : ℕ)
+    (within : drawCap caps ≤ caps.budget)
+    (covers : ((7 - tolerance : ℕ) : ℚ≥0) / (8 : ℕ) ≤ drawCap caps)
     {a : Admitted V} (admitted : admit stored association = .ok a)
     (path : List Frame) (xs : List F) (length : xs.length = 8)
     (far : tolerance < xs.countP (· ≠ D.zero)) :
     ∃ root : Member a.program.headers.protocols rootHeader,
       a.program.findProtocol rootKey = some ⟨rootHeader, root⟩ ∧
       (roleMeaning (model D) a.program root verifierRole path (inputs D xs)).interpret
-        (.charged (Permitted (model D)) (fees D charge path)) (fun _ _ => False)
-        (fun _ _ => True) (budget charge) :=
+        (.charged (Permitted (model D)) (fees D caps path)) (fun _ _ => False)
+        (fun _ _ => True) caps.budget :=
   at_root admitted
     (fun p root => (roleMeaning (model D) p root verifierRole path (inputs D xs)).interpret
-      (.charged (Permitted (model D)) (fees D charge path)) (fun _ _ => False)
-      (fun _ _ => True) (budget charge))
-    (walked_within D path xs tolerance charge length far owned site covers)
+      (.charged (Permitted (model D)) (fees D caps path)) (fun _ _ => False)
+      (fun _ _ => True) caps.budget)
+    (walked_within D path xs tolerance caps length far within covers)
 
 /-- **The probability.** Against every service that draws the position uniformly and answers
 only what is permitted, the simulation of the verifier by the service's handler returns with
-probability at most the total of the charge. A service is any handler of the verifier's effects
+probability at most the total of the table of caps. A service is any handler of the verifier's effects
 with a state (`handlerOf_serviceOf`). -/
-theorem returns_within (charge : DrawCharge) (tolerance : ℕ)
-    (owned : charge.owner = rootKey) (site : charge.draws = [([], ⟨0⟩)])
-    (covers : ((7 - tolerance : ℕ) : ℚ≥0) / (8 : ℕ) ≤ ceiling charge)
-    (positive : 0 < charge.denominator)
+theorem returns_within (caps : CapTable) (tolerance : ℕ)
+    (within : drawCap caps ≤ caps.budget)
+    (covers : ((7 - tolerance : ℕ) : ℚ≥0) / (8 : ℕ) ≤ drawCap caps)
     {a : Admitted V} (admitted : admit stored association = .ok a)
     (path : List Frame) (xs : List F) (length : xs.length = 8)
     (far : tolerance < xs.countP (· ≠ D.zero))
@@ -324,19 +334,19 @@ theorem returns_within (charge : DrawCharge) (tolerance : ℕ)
       a.program.findProtocol rootKey = some ⟨rootHeader, root⟩ ∧
       Pr{let out ← (simulateQ (handlerOf service) (embed
           (roleMeaning (model D) a.program root verifierRole path (inputs D xs)))).run.run s}[
-        ∃ results, out.1 = some (.inl results)] ≤ total charge := by
+        ∃ results, out.1 = some (.inl results)] ≤ caps.total := by
   obtain ⟨root, found, judged⟩ :=
-    judged_within D charge tolerance owned site covers admitted path xs length far
+    judged_within D caps tolerance within covers admitted path xs length far
   refine ⟨root, found, ?_⟩
-  rw [prEvent_simulation_returns, ← toProbability_budget charge positive]
-  exact allowed_bounds_return service _ (allowance (model D) charge rootKey path)
-    (Permitted (model D)) permitted follows _ (budget charge) s judged
+  rw [prEvent_simulation_returns, CapTable.total]
+  exact allowed_bounds_return service _ (caps.allowance (model D) path)
+    (Permitted (model D)) permitted follows _ caps.budget s judged
 
 /-- The probability, at the root of the installed program. -/
-theorem returns_installed (charge : DrawCharge) (tolerance : ℕ)
-    (owned : charge.owner = rootKey) (site : charge.draws = [([], ⟨0⟩)])
-    (covers : ((7 - tolerance : ℕ) : ℚ≥0) / (8 : ℕ) ≤ ceiling charge)
-    (positive : 0 < charge.denominator) (path : List Frame) (xs : List F) (length : xs.length = 8)
+theorem returns_installed (caps : CapTable) (tolerance : ℕ)
+    (within : drawCap caps ≤ caps.budget)
+    (covers : ((7 - tolerance : ℕ) : ℚ≥0) / (8 : ℕ) ≤ drawCap caps)
+    (path : List Frame) (xs : List F) (length : xs.length = 8)
     (far : tolerance < xs.countP (· ≠ D.zero))
     {σ : Type} (service : Service (RSig (model D)) σ)
     (follows : service.Follows (samplers D))
@@ -345,11 +355,11 @@ theorem returns_installed (charge : DrawCharge) (tolerance : ℕ)
     Pr{let out ← (simulateQ (handlerOf service) (embed
         (roleMeaning (model D) installed (Member.head : Member installed.headers.protocols rootHeader)
           verifierRole path (inputs D xs)))).run.run s}[
-      ∃ results, out.1 = some (.inl results)] ≤ total charge := by
-  rw [prEvent_simulation_returns, ← toProbability_budget charge positive]
-  refine allowed_bounds_return service _ (allowance (model D) charge rootKey path)
-    (Permitted (model D)) permitted follows _ (budget charge) s ?_
-  exact walked_within D path xs tolerance charge length far owned site covers
+      ∃ results, out.1 = some (.inl results)] ≤ caps.total := by
+  rw [prEvent_simulation_returns, CapTable.total]
+  refine allowed_bounds_return service _ (caps.allowance (model D) path)
+    (Permitted (model D)) permitted follows _ caps.budget s ?_
+  exact walked_within D path xs tolerance caps length far within covers
 
 end
 
@@ -361,16 +371,16 @@ theorem loose_installed : looseClaim := by
   intro F G D _ _ path xs valid rejected
   have length : (xs : List F).length = 8 := valid.2 8 rfl
   exact returnsWithin_of_returns _ _ _ _ fun service follows permitted s =>
-    returns_installed D looseCharge looseTolerance (by decide) (by decide) loose_exact.ge
-      (by decide) path xs length (loose_far D xs length rejected) service follows permitted s
+    returns_installed D looseCaps looseTolerance loose_within loose_exact.ge
+      path xs length (loose_far D xs length rejected) service follows permitted s
 
 /-- The claim of `strict`, as `loose`. -/
 theorem strict_installed : strictClaim := by
   intro F G D _ _ path xs valid rejected
   have length : (xs : List F).length = 8 := valid.2 8 rfl
   exact returnsWithin_of_returns _ _ _ _ fun service follows permitted s =>
-    returns_installed D strictCharge strictTolerance (by decide) (by decide) strict_exact.ge
-      (by decide) path xs length (strict_far D xs length rejected) service follows permitted s
+    returns_installed D strictCaps strictTolerance strict_within strict_exact.ge
+      path xs length (strict_far D xs length rejected) service follows permitted s
 
 /-! ## The hypotheses are met, and the bound is reached -/
 
@@ -409,7 +419,7 @@ abbrev returnsAt (p : Typed V) (root : Member p.headers.protocols rootHeader) (p
 
 /-- The goal `loose` at its table, with nothing left to assume: the relation of the goal
 returns false on the table, the service draws as the samplers do and answers what is
-permitted, and the verifier returns within the total of the charge. -/
+permitted, and the verifier returns within the total of the goal's table of caps. -/
 theorem loose_at_table {a : Admitted V} (admitted : admit stored association = .ok a)
     (path : List Frame) :
     ∃ root : Member a.program.headers.protocols rootHeader,
@@ -418,16 +428,16 @@ theorem loose_at_table {a : Admitted V} (admitted : admit stored association = .
         a.program.find looseKey = some (.fn relation) ∧
         functionResult (t := .bool)
           (fnMeaning (model data) a.program relation (.cons looseTable .nil)) = some false ∧
-        returnsAt a.program root path looseTable ≤ total looseCharge :=
+        returnsAt a.program root path looseTable ≤ looseCaps.total :=
   at_loose admitted
     (fun p root relation =>
       functionResult (t := .bool) (fnMeaning (model data) p relation (.cons looseTable .nil)) = some false ∧
-        returnsAt p root path looseTable ≤ total looseCharge)
+        returnsAt p root path looseTable ≤ looseCaps.total)
     (have rejected : functionResult (t := .bool)
         (fnMeaning (model data) installed looseMember (.cons looseTable .nil)) = some false :=
       (loose_relation data looseTable rfl).trans (by decide)
-    ⟨rejected, returns_installed data looseCharge looseTolerance (by decide) (by decide)
-      loose_exact.ge (by decide) path looseTable rfl (loose_far data looseTable rfl rejected)
+    ⟨rejected, returns_installed data looseCaps looseTolerance loose_within
+      loose_exact.ge path looseTable rfl (loose_far data looseTable rfl rejected)
       service (serveLaws_follows _ _) service_permitted ()⟩)
 
 /-- The goal `strict` at its table, with nothing left to assume. -/
@@ -439,16 +449,16 @@ theorem strict_at_table {a : Admitted V} (admitted : admit stored association = 
         a.program.find strictKey = some (.fn relation) ∧
         functionResult (t := .bool)
           (fnMeaning (model data) a.program relation (.cons strictTable .nil)) = some false ∧
-        returnsAt a.program root path strictTable ≤ total strictCharge :=
+        returnsAt a.program root path strictTable ≤ strictCaps.total :=
   at_strict admitted
     (fun p root relation =>
       functionResult (t := .bool) (fnMeaning (model data) p relation (.cons strictTable .nil)) = some false ∧
-        returnsAt p root path strictTable ≤ total strictCharge)
+        returnsAt p root path strictTable ≤ strictCaps.total)
     (have rejected : functionResult (t := .bool)
         (fnMeaning (model data) installed strictMember (.cons strictTable .nil)) = some false :=
       (strict_relation data strictTable rfl).trans (by decide)
-    ⟨rejected, returns_installed data strictCharge strictTolerance (by decide) (by decide)
-      strict_exact.ge (by decide) path strictTable rfl (strict_far data strictTable rfl rejected)
+    ⟨rejected, returns_installed data strictCaps strictTolerance strict_within
+      strict_exact.ge path strictTable rfl (strict_far data strictTable rfl rejected)
       service (serveLaws_follows _ _) service_permitted ()⟩)
 
 /-- The table of `loose` is a valid value of the type of the port. -/
@@ -496,13 +506,12 @@ theorem returns_exactly (path : List Frame) (xs : List Bool) (length : xs.length
   · exact iff_of_true ⟨_, rfl⟩ ‹_›
   · exact iff_of_false (fun ⟨_, same⟩ => by cases same) ‹_›
 
-/-- A count of zero entries over eight is the total of a charge when it is its budget. -/
-theorem count_is_total (charge : DrawCharge) (positive : 0 < charge.denominator) (zeros : ℕ)
-    (exact : (zeros : ℚ≥0) / (8 : ℕ) = budget charge) :
-    (zeros : ℝ≥0∞) / ((7 : ℕ) + 1) = total charge := by
+/-- A count of zero entries over eight is the total of a table when it is its budget. -/
+theorem count_is_total (caps : CapTable) (zeros : ℕ)
+    (exact : (zeros : ℚ≥0) / (8 : ℕ) = caps.budget) :
+    (zeros : ℝ≥0∞) / ((7 : ℕ) + 1) = caps.total := by
   have eight : ((7 : ℕ) : ℝ≥0∞) + 1 = ((8 : ℕ) : ℝ≥0∞) := by norm_num
-  rw [eight, ← toProbability_natCast_div zeros 8 (by norm_num), exact,
-    toProbability_budget charge positive]
+  rw [eight, ← toProbability_natCast_div zeros 8 (by norm_num), exact, CapTable.total]
 
 theorem loose_ends (path : List Frame) (i : Fin 8) :
     run service (afterDraw path looseTable i.val) () =
@@ -515,37 +524,36 @@ theorem strict_ends (path : List Frame) (i : Fin 8) :
   fin_cases i <;> kernel_rfl
 
 /-- **The bound of `loose` is reached.** At its table the verifier of every admitted program
-returns with probability exactly the total of the charge: the bound is not met by a verifier
-that never returns, and the charge is not larger than it has to be. -/
+returns with probability exactly the total of the goal's table of caps: the bound is not met by
+a verifier that never returns, and the cap is not larger than it has to be. -/
 theorem loose_attained {a : Admitted V} (admitted : admit stored association = .ok a)
     (path : List Frame) :
     ∃ root : Member a.program.headers.protocols rootHeader,
       a.program.findProtocol rootKey = some ⟨rootHeader, root⟩ ∧
-      returnsAt a.program root path looseTable = total looseCharge :=
-  at_root admitted (fun p root => returnsAt p root path looseTable = total looseCharge)
+      returnsAt a.program root path looseTable = looseCaps.total :=
+  at_root admitted (fun p root => returnsAt p root path looseTable = looseCaps.total)
     (by
       unfold returnsAt
       rw [prEvent_simulation_returns, meaning_walked,
         returns_exactly path looseTable rfl (loose_ends path)]
       have zeros : looseTable.count data.zero = 3 := by decide
       rw [zeros]
-      exact count_is_total looseCharge (by decide) 3 (by norm_num [budget, ceiling, looseCharge]))
+      exact count_is_total looseCaps 3 loose_budget.symm)
 
 /-- **The bound of `strict` is reached.** -/
 theorem strict_attained {a : Admitted V} (admitted : admit stored association = .ok a)
     (path : List Frame) :
     ∃ root : Member a.program.headers.protocols rootHeader,
       a.program.findProtocol rootKey = some ⟨rootHeader, root⟩ ∧
-      returnsAt a.program root path strictTable = total strictCharge :=
-  at_root admitted (fun p root => returnsAt p root path strictTable = total strictCharge)
+      returnsAt a.program root path strictTable = strictCaps.total :=
+  at_root admitted (fun p root => returnsAt p root path strictTable = strictCaps.total)
     (by
       unfold returnsAt
       rw [prEvent_simulation_returns, meaning_walked,
         returns_exactly path strictTable rfl (strict_ends path)]
       have zeros : strictTable.count data.zero = 6 := by decide
       rw [zeros]
-      exact count_is_total strictCharge (by decide) 6
-        (by norm_num [budget, ceiling, strictCharge]))
+      exact count_is_total strictCaps 6 (by rw [strict_budget]; norm_num))
 
 /-! ### The fee is paid at the draw of the root -/
 
@@ -564,21 +572,21 @@ theorem excluded_weighs (path : List Frame) (excluded : ℕ → Prop)
   exact prEvent_mono_of_support _ _ _ fun z drawn zero =>
     zeros z (position_permitted path z (lt_of_mem_support_drawPosition 7 z drawn)) zero
 
-/-- A charge that allows the draw nothing judges the verifier at the table at no budget: the
+/-- A table of caps that allows the draw nothing judges the verifier at the table at no budget: the
 zero fee excludes no position, and the verifier returns at three of them. -/
-theorem unallowed_judges_nothing (charge : DrawCharge) (path : List Frame)
-    (nothing : allowance (model data) charge rootKey path ((coin path).operation (model data)) = 0)
+theorem unallowed_judges_nothing (caps : CapTable) (path : List Frame)
+    (nothing : caps.allowance (model data) path ((coin path).operation (model data)) = 0)
     {a : Admitted V} (admitted : admit stored association = .ok a) (any : ℚ≥0) :
     ∃ root : Member a.program.headers.protocols rootHeader,
       a.program.findProtocol rootKey = some ⟨rootHeader, root⟩ ∧
       ¬ (roleMeaning (model data) a.program root verifierRole path
           (inputs data looseTable)).interpret
-        (.charged (Permitted (model data)) (fees data charge path)) (fun _ _ => False)
+        (.charged (Permitted (model data)) (fees data caps path)) (fun _ _ => False)
         (fun _ _ => True) any :=
   at_root admitted
     (fun p root => ¬ (roleMeaning (model data) p root verifierRole path
         (inputs data looseTable)).interpret
-      (.charged (Permitted (model data)) (fees data charge path)) (fun _ _ => False)
+      (.charged (Permitted (model data)) (fees data caps path)) (fun _ _ => False)
       (fun _ _ => True) any)
     (by
       intro judged
@@ -594,14 +602,14 @@ theorem unallowed_judges_nothing (charge : DrawCharge) (path : List Frame)
           simpa [free, toProbability] using (excluded_weighs path excluded zeros).trans weight
         simp at absurd)
 
-/-- The charge of `loose`, on the guard and not on the draw. -/
-def misplaced : DrawCharge := { looseCharge with draws := [([], ⟨5⟩)] }
+/-- The table of `loose` with its cap on the guard and not on the draw. -/
+def misplaced : CapTable := ⟨[⟨rootKey, [⟨⟨5⟩, 3, 8, 1⟩], []⟩]⟩
 
-/-- The charge of `loose`, of another definition with a draw at the same key. -/
-def foreign : DrawCharge := { looseCharge with owner := ⟨rootKey.number + 1⟩ }
+/-- The table of `loose` as the table of another definition, with a draw at the same key. -/
+def foreign : CapTable := ⟨[⟨⟨rootKey.number + 1⟩, [⟨⟨0⟩, 3, 8, 1⟩], []⟩]⟩
 
-/-- **The fee is paid at the draw.** A charge on another instruction judges the verifier at no
-budget. -/
+/-- **The fee is paid at the draw.** A table whose cap is on another instruction allows the draw
+nothing, and judges the verifier at no budget. -/
 theorem misplaced_judges_nothing {a : Admitted V} (admitted : admit stored association = .ok a)
     (path : List Frame) (any : ℚ≥0) :
     ∃ root : Member a.program.headers.protocols rootHeader,
@@ -611,21 +619,16 @@ theorem misplaced_judges_nothing {a : Admitted V} (admitted : admit stored assoc
         (.charged (Permitted (model data)) (fees data misplaced path)) (fun _ _ => False)
         (fun _ _ => True) any :=
   unallowed_judges_nothing misplaced path
-    (by simp [allowance, occurrenceOf, misplaced, looseCharge, ROp.occurrence, coin, coinAt,
-      InputPort.operation]) admitted any
+    ((CapTable.allowanceFrom_at (model data) misplaced misplaced.root path [] ⟨0⟩ _
+      (by simp [ROp.occurrence, coin, coinAt, InputPort.operation])).trans (by decide +kernel))
+    admitted any
 
-/-- **The fee is paid in the definition that owns the charge.** A charge of another definition
-judges the verifier at no budget, though it names a draw at the same key. -/
-theorem foreign_judges_nothing {a : Admitted V} (admitted : admit stored association = .ok a)
-    (path : List Frame) (any : ℚ≥0) :
-    ∃ root : Member a.program.headers.protocols rootHeader,
-      a.program.findProtocol rootKey = some ⟨rootHeader, root⟩ ∧
-      ¬ (roleMeaning (model data) a.program root verifierRole path
-          (inputs data looseTable)).interpret
-        (.charged (Permitted (model data)) (fees data foreign path)) (fun _ _ => False)
-        (fun _ _ => True) any :=
-  unallowed_judges_nothing foreign path
-    (by simp [allowance, foreign, looseCharge]) admitted any
+/-- **A table states the counts of the program.** The table with its cap on the guard, and the
+table of another definition, do not: the guard is no coin, and the last use of a table is of the
+root. No goal is stated with such a table, whose result has the counts. -/
+theorem misplaced_not_counted : misplaced.counted stored rootKey = false := by decide +kernel
+
+theorem foreign_not_counted : foreign.counted stored rootKey = false := by decide +kernel
 
 /-! ### The hypothesis on the service has content -/
 

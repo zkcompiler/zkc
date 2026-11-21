@@ -1,0 +1,111 @@
+/-!
+The verifier of `Guess<3>` within the charges of its goal.
+
+Before this text the check writes the printed package of what the goal claims and, generated
+from what the frontend read: the facts (`rootKey` with `rootHeader`, `rootNames`, `rootBody`,
+`rootMember`; `verifierRole`, `proverRole`; `guessingCaps`, the table of caps of the goal;
+`guessingKey` with `guessingHeader` and `guessingMember`), that the standard model covers the
+package (`covered`), that the counts of the table are the program's and what its budget is
+(`guessing_counted`, `guessing_budget`), where the walks start (`verifierProgram` with
+`verifier_meaning`, `guessing_meaning`), the transfers, and the propositions `guessingClaim`,
+`guessingGoal`, `guessingResult` and `guessingWitnessed`. After this text it writes the
+theorems of the last three. This text proves the claim and the witness.
+
+The protocol has three rounds. In each the verifier gets a position and draws one, and it
+rejects unless the claim holds or a drawn position was the one that it got. On a false claim
+the verifier returns only where some round drew the position sent: each round pays one eighth
+for that position, at the draw's cap, and the budget of the table is three eighths. The loop is
+taken by an invariant that says that no round has hit yet and how much of the budget is left.
+-/
+
+noncomputable section
+
+section
+variable {F G : Type} (D : StandardModel.Data F G) [DecidableEq F] [DecidableEq G]
+
+/-- The model of the standard rows over a field and a group. -/
+abbrev model : Model V := StandardModel.model D
+
+/-- The samplers of the statement: at each coin, the sampler of its law in the model. -/
+abbrev samplers : Samplers (RSig (model D)) := lawSamplers (model D) (StandardModel.draws D)
+
+/-- What the verifier holds when the run starts: the claim, and nothing of the guess. -/
+def inputs (claim : Bool) : HList (RV (model D) verifierRole) rootHeader.ins :=
+  .cons claim (.cons () .nil)
+
+/-- The relation of the goal returns the claim. -/
+theorem guessing_relation (claim : Bool) :
+    functionResult (t := .bool)
+      (fnMeaning (model D) installed guessingMember (.cons claim .nil)) = some claim := by
+  kernel_rfl
+
+/-- The cap of the draw, read from the table by the kernel. -/
+theorem cap_of_draw : guessingCaps.capFrom guessingCaps.root [] ⟨3⟩ = 1 / 8 := by decide +kernel
+
+/-- **Within the table.** On a false claim the verifier is judged never to return within the
+budget of the goal's table, each fee within the cap of the draw that pays it: in every round
+the fee of the draw pays for the position that the prover sent. -/
+theorem walked_within (path : List Frame) :
+    (roleMeaning (model D) installed rootMember verifierRole path (inputs D false)).interpret
+      (.charged (Permitted (model D))
+        (paysWithin (samplers D) (guessingCaps.allowance (model D) path)))
+      (fun _ _ => False) (fun _ _ => True) guessingCaps.budget := by
+  rw [verifier_meaning]
+  walk_step
+  walk_step
+  walk_loop fun i (hit : Bool) budget => hit = false ∧ ((3 - i : ℕ) : ℚ≥0) * (1 / 8) ≤ budget
+  case first => exact ⟨rfl, by decide +kernel⟩
+  case step =>
+    obtain ⟨rfl, enough⟩ := invariant9
+    have split : (3 - i9 : ℕ) = (3 - (i9 + 1)) + 1 := by omega
+    rw [split, Nat.cast_add, Nat.cast_one, add_mul, one_mul] at enough
+    -- the message: nothing is excluded
+    walk_step
+    refine charged_free _ _ _ _ _ _ fun sent _ => ?_
+    walk_step
+    -- the draw: the fee of one eighth pays for the position that was sent
+    walk_step
+    refine charged_pay_at (model D) (samplers D) guessingCaps guessingCaps.root
+      (rest := [.iteration ⟨9⟩ i9]) (key := ⟨3⟩) _ _ _ t9 (1 / 8)
+      (fun drawn : ℕ => drawn = sent) (drawPosition 7) (by simp [ROp.occurrence]) rfl ?_
+      (le_trans le_add_self enough) ?_ fun drawn _ differs => ?_
+    · simpa using prEvent_drawPosition_eq_le 7 sent
+    · exact cap_of_draw.ge
+    walk_step
+    walk_step
+    walk_step
+    walk_step
+    walk_step
+    walk_step
+    walk_step
+    refine ⟨?_, le_tsub_of_add_le_right enough⟩
+    rw [h10]
+    exact Bool.eq_false_iff.mpr fun same => differs (Nat.eq_of_beq_eq_true same)
+  case after =>
+    obtain ⟨rfl, _⟩ := invariant9
+    walk_step
+    walk_step
+    trivial
+
+end
+
+/-! ## The goal -/
+
+/-- The claim of `guessing`: the relation says that the claim is false, and the verifier then
+returns within the total of the table. -/
+theorem guessing_installed : guessingClaim := by
+  intro F G D _ _ path claim _ rejected
+  have isFalse : claim = false := Option.some.inj ((guessing_relation D claim).symm.trans rejected)
+  subst isFalse
+  exact returnsWithin_of_never _ _ _ _ _ (walked_within D path)
+
+/-- **The hypotheses of the claim are met**: over the field of two elements, on the false claim,
+with the service of the laws. -/
+theorem guessing_witnessed : guessingWitnessed :=
+  ⟨Bool, Bool, Zkc.Formal.Written.FiniteModel.data, inferInstance, inferInstance, false, trivial,
+    ⟨Unit, serveLaws _ (StandardModel.draws Zkc.Formal.Written.FiniteModel.data), ⟨()⟩,
+      serveLaws_follows _ _,
+      serveLaws_permitted _ _ (StandardModel.draws_permitted Zkc.Formal.Written.FiniteModel.data)⟩,
+    guessing_relation _ false⟩
+
+end

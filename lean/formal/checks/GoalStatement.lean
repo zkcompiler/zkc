@@ -32,9 +32,15 @@ of the goal changes the statement or is refused.
   has when the goal is read alone.
 - **The event.** A goal that reads a `reduces` clause has its claims read, and gets no
   statement: its statement is about a return on which the reduced statement is true.
-- **The records.** The statements of one source with the claimed goal of another, under the same
-  name, are refused; and Lean refuses a module that alters the operands of a claimed goal or the
-  verifier of a package, since the two records are made by the reader alone.
+- **The budget.** The table of caps of a goal is read with the goal: every charge that the root
+  reaches, by use (SX8). Two charged draws of the root are both in it; a callee at two proof
+  arguments is two uses, each call names its own, and exchanging the arguments exchanges the
+  caps of the two calls while the total stays; two calls at one argument share a use; a call in
+  a kept loop has the loop's count; the blocks of a stepped loop each have a draw. A charge on
+  an application is refused as not in a table yet. No caller names a draw.
+- **The records.** The goals of statements are those of their claims, and Lean refuses a module
+  that alters the operands or the table of caps of a claimed goal, or the verifier of a
+  package: the two records are made by the reader alone.
 
 Then Lean is run on two more modules. Both have a consumer that a reader of the source could write
 without the generator: a theorem that names none of the generated propositions, has the
@@ -72,21 +78,17 @@ def flags (ports clause : String) : String :=
 
 def both : String := "flag: bool @(P, V), other: bool @(P, V)"
 
-/-- The statements of the goals of a source, each with the charge of one draw. -/
-def statementsOf (text : String) (goals : List String) (draw : String) : Except String Statements := do
+/-- The statements of the goals of a source. -/
+def statementsOf (text : String) (goals : List String) : Except String Statements := do
   let some first := goals.head? | throw "no goal"
-  let root ← goalRoot text first
-  let claims ← goalClaims root goals
-  let stated ← claims.goals.mapM fun claimed => do
-    return ({ claimed, charge := ← goalDrawCharge root claimed.goal [] draw } : StatedGoal)
-  return { claims, goals := stated }
+  return { claims := ← goalClaims (← goalRoot text first) goals }
 
 /-- The places of the operands of the one goal of a source among the inputs of the deployed
 header, and the text of its claim about the installed program. -/
 def claimOf (text : String) : Except String (Array Nat × String) := do
-  let s ← statementsOf text ["sound"] "bit"
-  let [goal] := s.goals | throw "not one goal"
-  return (goal.claimed.statement, ← s.claimAt standardModelText goal "installed" "rootMember" "soundMember")
+  let s ← statementsOf text ["sound"]
+  let [goal] := s.claims.goals | throw "not one goal"
+  return (goal.statement, ← s.claimAt standardModelText goal "installed" "rootMember" "soundMember")
 
 /-- A source whose goal is refused, for a reason that the refusal states. -/
 def refused (title text : String) (reasons : List String) : IO Unit :=
@@ -108,6 +110,83 @@ def schemes : String :=
   "scheme Third = Pair:\n    prover P\n    construction interactive\n" ++
   "goal a = soundness(First, clause = vr)\ngoal b = soundness(Second, clause = pr)\n" ++
   "goal c = soundness(Third, clause = vr)\ngoal d = soundness(First, clause = vr)\n"
+
+/-- A root over a claim, for the tables of caps: the definitions before the scheme, and the name
+of the root. -/
+def charged (definitions root : String) : String :=
+  "module t\nuse zkc::security::{soundness}\nrelation Holds(claim: bool): claim\n" ++ definitions ++
+  s!"scheme Checked = {root}:\n    prover P\n    construction interactive\n" ++
+  "goal sound = soundness(Checked)\n"
+
+/-- A root with two charged draws. -/
+def twoDraws : String := charged
+  ("protocol Two roles(P, V)(claim: bool @(P, V)):\n" ++
+    "    x <- draw index<8> from V to P\n    y <- draw index<2> from V to P\n    guard @V claim\n" ++
+    "spec for Two:\n    proves @V Holds(claim)\n    charge sites.x <= 3 / 8\n    charge sites.y <= 1 / 2\n")
+  "Two"
+
+/-- A callee whose charge is its proof argument over eight, applied twice. -/
+def twoCalls (first second : String) : String := charged
+  ("protocol Once<spec e: nat> roles(P, V)(claim: bool @(P, V)):\n" ++
+    "    z <- draw index<8> from V to P\n" ++
+    "spec for Once:\n    charge sites.z <= e / 8\n" ++
+    "protocol Caller roles(P, V)(claim: bool @(P, V)):\n" ++
+    s!"    Once<spec e = {first}>(claim)\n    Once<spec e = {second}>(claim)\n    guard @V claim\n" ++
+    "spec for Caller:\n    proves @V Holds(claim)\n")
+  "Caller"
+
+/-- A callee applied once and three times in a kept loop, beside a draw of the caller. -/
+def loopedCalls : String := charged
+  ("protocol Once roles(P, V)(claim: bool @(P, V)):\n" ++
+    "    z <- draw index<8> from V to P\n" ++
+    "spec for Once:\n    charge sites.z <= 1 / 8\n" ++
+    "protocol Caller roles(P, V)(claim: bool @(P, V)):\n" ++
+    "    Once(claim)\n    for i in 0..3:\n        Once(claim)\n" ++
+    "    own <- draw index<4> from V to P\n    guard @V claim\n" ++
+    "spec for Caller:\n    proves @V Holds(claim)\n    charge sites.own <= 1 / 4\n")
+  "Caller"
+
+/-- A stepped loop: the type of the draw depends on the index. -/
+def steppedDraws : String := charged
+  ("protocol Steps roles(P, V)(claim: bool @(P, V)):\n" ++
+    "    for i in 0..3:\n        r <- draw index<i + 2> from V to P\n    guard @V claim\n" ++
+    "spec for Steps:\n    proves @V Holds(claim)\n    charge sites.r <= 1 / 2\n")
+  "Steps"
+
+/-- A charge on an application. -/
+def chargedCall : String := charged
+  ("protocol Once roles(P, V)(claim: bool @(P, V)):\n" ++
+    "    z <- draw index<8> from V to P\n" ++
+    "protocol Caller roles(P, V)(claim: bool @(P, V)):\n" ++
+    "    first <- Once(claim)\n    guard @V claim\n" ++
+    "spec for Caller:\n    proves @V Holds(claim)\n    charge sites.first <= 1 / 8\n")
+  "Caller"
+
+/-- A charge of the caller on a site of its callee. -/
+def calleeSite : String := charged
+  ("protocol Once roles(P, V)(claim: bool @(P, V)):\n" ++
+    "    z <- draw index<8> from V to P\n" ++
+    "protocol Caller roles(P, V)(claim: bool @(P, V)):\n" ++
+    "    first <- Once(claim)\n    guard @V claim\n" ++
+    "spec for Caller:\n    proves @V Holds(claim)\n    charge sites.first.z <= 1 / 8\n")
+  "Caller"
+
+/-- A draw under a loop whose count is read at run time, with a charge on it or with none. -/
+def runtimeDraws (charge : String) : String := charged
+  ("protocol Runs roles(P, V)(claim: bool @(P, V), n: index<4> @(P, V)):\n" ++
+    "    for i in 0..n:\n        z <- draw index<8> from V to P\n    guard @V claim\n" ++
+    "spec for Runs:\n    proves @V Holds(claim)\n" ++ charge)
+  "Runs"
+
+/-- An application under a loop whose count is read at run time. -/
+def runtimeCalls : String := charged
+  ("protocol Once roles(P, V)(claim: bool @(P, V)):\n" ++
+    "    z <- draw index<8> from V to P\n" ++
+    "spec for Once:\n    charge sites.z <= 1 / 8\n" ++
+    "protocol Caller roles(P, V)(claim: bool @(P, V), n: index<4> @(P, V)):\n" ++
+    "    for i in 0..n:\n        Once(claim)\n    guard @V claim\n" ++
+    "spec for Caller:\n    proves @V Holds(claim)\n")
+  "Caller"
 
 /-- A reduction: the verifier returns its input, and the clause reduces the statement about the
 input to the statement about the result. -/
@@ -157,7 +236,7 @@ def proofText (guarded : String) : String :=
   "  have never : Pr{let out ← (simulateQ (handlerOf service) (embed\n" ++
   "      (roleMeaning (model D) installed rootMember verifierRole path\n" ++
   s!"        (.cons {first} (.cons {second} .nil))))).run.run state}[\n" ++
-  "      ∃ results, out.1 = some (.inl results)] ≤ total soundCharge := by\n" ++
+  "      ∃ results, out.1 = some (.inl results)] ≤ soundCaps.total := by\n" ++
   "    rw [prEvent_simulation_returns, rejected]\n    simp [run, Process.interpret]\n" ++
   "  simpa using never\n\n" ++
   "theorem sound_witnessed : soundWitnessed :=\n" ++
@@ -181,7 +260,8 @@ def consumer : String :=
   "              (roleMeaning (model data) a.program root 1 []\n" ++
   "                (.cons false (.cons true .nil))))).run.run ()}[\n" ++
   "            ∃ results, out.1 = some (.inl results)] ≤ 0) := by\n" ++
-  "  have free : total soundCharge = 0 := by norm_num [total, soundCharge]\n" ++
+  "  have free : soundCaps.total = 0 := by\n" ++
+  "    rw [CapTable.total, sound_budget]\n    simp [toProbability]\n" ++
   "  obtain ⟨root, found, relation, foundRelation, claim⟩ := sound_sound admitted\n" ++
   "  refine ⟨root, found, relation, foundRelation, fun rejected => ?_⟩\n" ++
   "  rw [← free]\n" ++
@@ -191,18 +271,19 @@ def consumer : String :=
 
 /-- The theorems of a proof module, whose axioms the check reads. -/
 def theorems : List String :=
-  ["admitted_exists", "covered", "sound_installed", "sound_witnessed", "sound_sound",
-    "sound_result", "sound_met", "consumer"]
+  ["admitted_exists", "covered", "sound_counted", "sound_budget", "sound_installed",
+    "sound_witnessed", "sound_sound", "sound_result", "sound_met", "consumer"]
 
 /-- The proof module of a source: the package of its claims, what the generator writes around
 the proofs, the proofs and the consumer. -/
 def proofModule (name text guarded : String) : IO String := do
-  let s ← IO.ofExcept (statementsOf text ["sound"] "z")
+  let s ← IO.ofExcept (statementsOf text ["sound"])
   return packageHeader ["Zkc.Formal.OracleProcess", "Zkc.Formal.ReturnExperiment", "Zkc.Formal.Written.LawSamplers",
+      "Zkc.Formal.Written.SiteCaps",
       "Zkc.Formal.Written.FunctionMeaning", "Zkc.Formal.Written.StandardModel",
       "Zkc.Formal.Written.FiniteModel", "Zkc.Formal.Written.Ceiling"] ++
     s!"namespace {name}\n" ++ (Written.package s.package).text ++ Statements.opens ++ s.facts ++ "\n" ++
-    Statements.coverage standardModelText ++ s.transfers ++
+    Statements.coverage standardModelText ++ s.counts ++ s.transfers ++
     (← IO.ofExcept (s.claimTexts standardModelText)) ++ proofText guarded ++ "\n" ++ s.closings ++
     consumer ++ String.join (theorems.map (s!"#print axioms {·}\n")) ++ s!"end {name}\n"
 
@@ -246,12 +327,9 @@ def run (work : System.FilePath) : IO Unit := do
   -- The claim of a goal read with another goal of its scheme is its claim read alone.
   let claimsOf (goals : List String) : Except String (List (String × String)) := do
     let root ← goalRoot schemes goals.head!
-    let claims ← goalClaims root goals
-    let s : Statements :=
-      { claims, goals := claims.goals.map fun claimed => { claimed, charge := ⟨⟨root.id⟩, 0, 1, []⟩ } }
-    s.goals.mapM fun goal => do
-      return (goal.claimed.goal,
-        ← s.claimAt standardModelText goal "installed" "rootMember" s!"{goal.claimed.goal}Member")
+    let s : Statements := { claims := ← goalClaims root goals }
+    s.claims.goals.mapM fun goal => do
+      return (goal.goal, ← s.claimAt standardModelText goal "installed" "rootMember" s!"{goal.goal}Member")
   let together ← IO.ofExcept (claimsOf ["a", "d"])
   expect "the claims of two goals of one scheme are not their claims read alone"
     (together == (← IO.ofExcept (claimsOf ["a"])) ++ (← IO.ofExcept (claimsOf ["d"])))
@@ -265,20 +343,48 @@ def run (work : System.FilePath) : IO Unit := do
   | .ok _ => throw (IO.userError "a package of claims without a goal was read")
   | .error _ => pure ()
 
-  -- A goal of the statements is one of their claims: the claim of another source, with the same
-  -- name, is refused.
-  let ofFlag ← IO.ofExcept (statementsOf (flags both "proves @V IsSet(flag)") ["sound"] "bit")
-  let ofOther ← IO.ofExcept (statementsOf (flags both "proves @V IsSet(other)") ["sound"] "bit")
-  match ({ ofFlag with goals := ofOther.goals } : Statements).claimTexts standardModelText with
-  | .ok _ => throw (IO.userError "statements were written of a goal that is not of their claims")
-  | .error why =>
-    expect s!"the goal of another package was refused for another reason: {why}"
-      (why.contains "not one of the claims")
+  -- The budget: the table of caps of the goal, as uses, and its total.
+  let tableOf (text : String) : Option (CapTable × Rat) := do
+    let s ← (statementsOf text ["sound"]).toOption
+    let [goal] := s.claims.goals | none
+    return (goal.caps, goal.total)
+  expect "two charged draws of the root are not both in its table"
+    (tableOf twoDraws == some (⟨[⟨⟨1⟩, [⟨⟨0⟩, 3, 8, 1⟩, ⟨⟨1⟩, 1, 2, 1⟩], []⟩]⟩, 7 / 8))
+  expect "a callee at the proof arguments 3 and 2 is not two uses, each call with its own"
+    (tableOf (twoCalls "3" "2") == some (⟨[⟨⟨1⟩, [⟨⟨0⟩, 3, 8, 1⟩], []⟩, ⟨⟨1⟩, [⟨⟨0⟩, 1, 4, 1⟩], []⟩,
+      ⟨⟨2⟩, [], [⟨⟨0⟩, 1, 0⟩, ⟨⟨1⟩, 1, 1⟩]⟩]⟩, 5 / 8))
+  expect "exchanging the proof arguments does not exchange the caps of the two calls"
+    (tableOf (twoCalls "2" "3") == some (⟨[⟨⟨1⟩, [⟨⟨0⟩, 1, 4, 1⟩], []⟩, ⟨⟨1⟩, [⟨⟨0⟩, 3, 8, 1⟩], []⟩,
+      ⟨⟨2⟩, [], [⟨⟨0⟩, 1, 0⟩, ⟨⟨1⟩, 1, 1⟩]⟩]⟩, 5 / 8))
+  expect "two calls at one proof argument do not share a use"
+    (tableOf (twoCalls "3" "3") == some (⟨[⟨⟨1⟩, [⟨⟨0⟩, 3, 8, 1⟩], []⟩,
+      ⟨⟨2⟩, [], [⟨⟨0⟩, 1, 0⟩, ⟨⟨1⟩, 1, 0⟩]⟩]⟩, 3 / 4))
+  expect "a call in a kept loop has not the count of the loop"
+    (tableOf loopedCalls == some (⟨[⟨⟨1⟩, [⟨⟨0⟩, 1, 8, 1⟩], []⟩,
+      ⟨⟨2⟩, [⟨⟨3⟩, 1, 4, 1⟩], [⟨⟨0⟩, 1, 0⟩, ⟨⟨1⟩, 3, 0⟩]⟩]⟩, 3 / 4))
+  expect "the blocks of a stepped loop do not each have a draw"
+    (tableOf steppedDraws == some (⟨[⟨⟨1⟩, [⟨⟨0⟩, 1, 2, 1⟩, ⟨⟨2⟩, 1, 2, 1⟩, ⟨⟨4⟩, 1, 2, 1⟩], []⟩]⟩, 3 / 2))
+  -- What has no table yet is refused with the reason, and no claim is read.
+  for (title, text, reason) in [
+      ("a charge on an application", chargedCall, "`sites.first` is no draw"),
+      ("a charge on a site of a callee", calleeSite, "a charge on a site of a callee"),
+      ("a charged draw under a loop of a run-time count",
+        runtimeDraws "    charge sites.z <= 1 / 8\n", "the draw `z` of `Runs` is under a loop whose count is read at run time"),
+      ("an application under a loop of a run-time count", runtimeCalls,
+        "the application at instruction 1 of `Caller` is under a loop whose count is read at run time")] do
+    match statementsOf text ["sound"] with
+    | .ok _ => throw (IO.userError s!"{title} was read into a table")
+    | .error why =>
+      expect s!"{title} was refused for another reason: {why}"
+        (why.contains "WK-CHARGE" && why.contains reason)
+  -- A draw without a charge under such a loop is in no table: it is allowed nothing.
+  expect "a draw without a charge under a loop of a run-time count is in a table"
+    (tableOf (runtimeDraws "") == some (⟨[⟨⟨1⟩, [], []⟩]⟩, 0))
 
   -- The event: the claims of a reduction are read, and no statement is written for them.
-  let reduced ← IO.ofExcept (statementsOf reduction ["sound"] "bit")
-  let [reducedGoal] := reduced.goals | throw (IO.userError "the reduction has not one goal")
-  expect "the clause of the reduction is not read as a reduction" (reducedGoal.claimed.clause.kind == .reduces)
+  let reduced ← IO.ofExcept (statementsOf reduction ["sound"])
+  let [reducedGoal] := reduced.claims.goals | throw (IO.userError "the reduction has not one goal")
+  expect "the clause of the reduction is not read as a reduction" (reducedGoal.clause.kind == .reduces)
   for written in [reduced.claimTexts standardModelText,
       reduced.claimAt standardModelText reducedGoal "installed" "rootMember" "soundMember"] do
     match written with
@@ -290,6 +396,7 @@ def run (work : System.FilePath) : IO Unit := do
     ("import Zkc.Frontend.Written.Statement\nopen Zkc.Frontend.Written\n" ++
       "example (claimed : ClaimedGoal) : ClaimedGoal := { claimed with statement := #[1] }\n" ++
       "example (claims : GoalClaims) : GoalClaims := { claims with verifier := 0 }\n" ++
+      "example (claimed : ClaimedGoal) : ClaimedGoal := { claimed with caps := ⟨[]⟩ }\n" ++
       "example (claimed : ClaimedGoal) : Array Nat := claimed.statement\n")
 
   -- Lean: the published theorem at the inputs of the source, by a consumer written apart.
@@ -301,7 +408,7 @@ def run (work : System.FilePath) : IO Unit := do
   expect s!"the records of a goal were altered outside the reader\n{output}"
     (!ok && output.contains "constructor for `ClaimedGoal` is marked as private" &&
       output.contains "constructor for `GoalClaims` is marked as private" &&
-      (output.splitOn "error").length == 3)
+      (output.splitOn "error").length == 4)
   let allowed := ["propext", "Classical.choice", "Quot.sound"]
   let (ok, output) ← finishLean proof
   acceptedOutput "Operands" ok output theorems allowed

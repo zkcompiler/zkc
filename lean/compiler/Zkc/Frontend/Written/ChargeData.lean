@@ -108,6 +108,19 @@ cap, and its count. -/
 def sites (table : CapTable) : List (Site × Nat × Nat × Nat) :=
   table.sitesFrom table.uses.length table.root [] 1
 
+/-- The totals of uses in their order, as rationals, after the totals `done` of the uses before
+them: what the frontend compares with a ceiling (GL4). It is the computation of the formal
+library's `CapTable.totals`, and a generated module states that the two give one number. -/
+def ratiosAfter : List UseCaps → List Rat → List Rat
+  | [], done => done
+  | use :: rest, done =>
+    ratiosAfter rest (done ++
+      [(use.draws.map fun draw => (draw.count : Rat) * ((draw.numerator : Rat) / draw.denominator)).sum +
+        (use.calls.map fun call => (call.count : Rat) * done.getD call.callee 0).sum])
+
+/-- The total of a table as a rational: that of the root's use. -/
+def ratio (table : CapTable) : Rat := (ratiosAfter table.uses []).getLastD 0
+
 end CapTable
 
 end Zkc.Frontend.Written
