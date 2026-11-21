@@ -16,8 +16,8 @@ denotation of a term in an environment, or what is left of an instruction after 
 states the goal that follows:
 
 - for values, the rest of the term in the environment extended by them. A value that is a
-  variable or a literal is used as it is; any other gets a local variable with the equation
-  that says what it is, in a form to read;
+  variable, a literal or a truth value is used as it is; any other gets a local variable with
+  the equation that says what it is, in a form to read;
 - for a stop, what the judgment asks of a stop;
 - for an effect, the judgment at the effect, with the rest after its reply;
 - where the step waits on a value (the element of a sequence at a position, the condition of a
@@ -79,16 +79,20 @@ private def unwrapped (e : Expr) : MetaM Expr := do
   let same ← ofExceptKernelException (Lean.Kernel.isDefEq (← getEnv) (← getLCtx) e inner)
   return if same then inner else e
 
+/-- A value that a step uses as it is: a variable, a literal, or a truth value. -/
+private def isPlain (e : Expr) : Bool :=
+  e.isFVar || e.isLit || e.isConstOf ``Bool.true || e.isConstOf ``Bool.false
+
 /-- Whether a term is a field of a semantics that says how a loop names or collects a value. -/
 private def ofSemantics (e : Expr) : Bool :=
   e.isAppOf ``Zkc.Core.Semantics.collect || e.isAppOf ``Zkc.Core.Semantics.index
 
 /-- A value in a form to read. Its reads of an environment are replaced by what they read: a
-subterm that mentions an environment and that the kernel reduces to a local variable or to a
-literal is replaced by it. What a role holds of a value is the value. A function applied to its
-argument is its body there. Everything else stays as the semantics wrote it: the operations of
-the model are not unfolded, since the kernel's normal form of an operation on a variable is its
-recursor. The result is definitionally the term given. -/
+subterm that mentions an environment and that the kernel reduces to a local variable, to a
+literal or to a truth value is replaced by it. What a role holds of a value is the value. A
+function applied to its argument is its body there. Everything else stays as the semantics
+wrote it: the operations of the model are not unfolded, since the kernel's normal form of an
+operation on a variable is its recursor. The result is definitionally the term given. -/
 private partial def settle (e : Expr) : MetaM Expr := do
   match e with
   | .app .. | .proj .. =>
@@ -96,7 +100,7 @@ private partial def settle (e : Expr) : MetaM Expr := do
       let type ← inferType e
       unless (← isProp type) || (← Meta.isType e) || (← whnf type).isForall do
         let read ← kernelWhnf e
-        if read.isFVar || read.isLit then return read
+        if isPlain read then return read
     match e with
     | .proj typeName idx struct => return .proj typeName idx (← settle struct)
     | _ =>
@@ -188,12 +192,12 @@ private def computedTypes (e : Expr) : MetaM Expr :=
     let computed ← whnfD sub
     return if computed == sub then .continue else .visit computed)
 
-/-- A value in a form to read, as a step states it: what it settles to, and the variable or the
-literal that it is when the kernel finds one. -/
+/-- A value in a form to read, as a step states it: what it settles to, and the variable, the
+literal or the truth value that it is when the kernel finds one. -/
 private def readValue (value : Expr) : MetaM Expr := do
   let read ← settle value
   let head ← kernelWhnf read
-  return if head.isFVar || head.isLit then head else read
+  return if isPlain head then head else read
 
 /-- A function of values one at a time (`HList.uncurry`), applied to a list of them and to what
 follows it, is the function at the values: the form in which the invariant of a loop is read.
@@ -219,8 +223,9 @@ private partial def nameNumbers (names : Expr) : MetaM (Array Nat) := do
     let n ← kernelWhnf n
     return (n.rawNatLit?.orElse fun _ => n.nat?).getD 0
 
-/-- The goal after values. Each value is settled. A value that settles to a local variable or a
-literal is used as it is; any other gets a new local variable `x<name>`, at its computed type,
+/-- The goal after values. Each value is settled. A value that settles to a local variable, a
+literal or a truth value is used as it is; any other gets a new local variable `x<name>`, at
+its computed type,
 with the equation `h<name>` that says what it is. The goal is then the rest on these. The old
 goal is closed by the new one at the values themselves. -/
 private def bindValues (goal : MVarId) (j : Judged) (values : Expr) (rest : Expr) (numbers : Array Nat) :
@@ -228,8 +233,7 @@ private def bindValues (goal : MVarId) (j : Judged) (values : Expr) (rest : Expr
   let (cells, nil) ← spine values
   -- a value that is what was read, under what a role holds of it, is that variable
   let settled ← cells.mapM fun (_, value) => readValue value
-  let named := (List.range cells.size).toArray.filter fun i =>
-    !(settled[i]!.isFVar || settled[i]!.isLit)
+  let named := (List.range cells.size).toArray.filter fun i => !isPlain settled[i]!
   let mut decls := #[]
   for i in named do
     decls := decls.push (Name.mkSimple s!"x{numbers.getD i i}", ← readType (← inferType settled[i]!))

@@ -125,10 +125,7 @@ def read (text : String) : IO Subject := do
   let some prover := head.roster.toList.idxOf? "P" | throw (IO.userError "the roster has no prover")
   let own := c.emission.package noAssociation
   let deployed := own.named.definitions.map fun d => (d.key.number, storedDefinition (b := own.bindings) d)
-  return ⟨text, ⟨claims, [("verifier", verifier), ("prover", prover)], goals⟩, deployed⟩
-
-def imports (others : List String) : String :=
-  String.join ((Written.packageImports ++ others).map (s!"import {·}\n")) ++ "\nopen Zkc.Core\n"
+  return ⟨text, ⟨claims, [("verifier", verifier), ("prover", prover)], goals, []⟩, deployed⟩
 
 /-- The theorems of the proof module, whose axioms the check reads. -/
 def theorems : List String := [
@@ -152,56 +149,35 @@ def proofModule (name : String) (s : Subject) (template : String) : IO String :=
   let claims ← IO.ofExcept (stated.claimTexts standardModelText)
   let closings ← IO.ofExcept (stated.closings standardModelText)
   let ceilings ← IO.ofExcept stated.ceilings
-  return imports ["Zkc.Formal.Walk", "Zkc.Formal.OracleProcess", "Zkc.Formal.Written.PortSamplers",
+  return packageHeader ["Zkc.Formal.Walk", "Zkc.Formal.OracleProcess", "Zkc.Formal.Written.PortSamplers",
       "Zkc.Formal.Written.LawSamplers", "Zkc.Formal.Written.SiteAllowance",
       "Zkc.Formal.Written.FunctionMeaning", "Zkc.Formal.Written.StandardModel",
       "Zkc.Formal.Written.FiniteModel"] ++
     s!"namespace {name}\n" ++ s.package ++ Statements.opens ++ stated.facts ++ "\n" ++
-    stated.transfers ++ claims ++ template ++ "\n" ++ closings ++ ceilings ++
+    Statements.coverage standardModelText ++ stated.transfers ++ claims ++ template ++ "\n" ++
+    closings ++ ceilings ++
     String.join (theorems.map (s!"#print axioms {·}\n")) ++ s!"end {name}\n"
 
 /-- A module with the package of a subject, its facts, and the comparison of each goal's total
 with its ceiling. -/
 def ceilingModule (name : String) (s : Subject) : IO String := do
   let ceilings ← IO.ofExcept s.statements.ceilings
-  return imports ["Zkc.Formal.Written.Ceiling"] ++ s!"namespace {name}\n" ++ s.package ++
+  return packageHeader ["Zkc.Formal.Written.Ceiling"] ++ s!"namespace {name}\n" ++ s.package ++
     Statements.opens ++ s.statements.facts ++ "\n" ++ ceilings ++
     s!"#print axioms loose_ceiling\nend {name}\n"
 
 /-- A module with the package of a subject and the one theorem that the standard model covers
 it. -/
 def coverageModule (name : String) (s : Subject) : String :=
-  imports ["Zkc.Formal.Written.LawSamplers"] ++ s!"namespace {name}\n" ++ s.package ++
-  "open Zkc.Formal.Written in\n" ++
-  "theorem covered : StandardModel.covers stored = true := by decide +kernel\n" ++
+  packageHeader ["Zkc.Formal.Written.LawSamplers"] ++ s!"namespace {name}\n" ++ s.package ++
+  "open Zkc.Formal.Written\n" ++ Statements.coverage standardModelText ++
   s!"#print axioms covered\nend {name}\n"
 
 def comparisonModule (name : String) (s : Subject) : String :=
-  imports ["Zkc.Tests.Frontend.PrintedPackageSupport"] ++ s!"namespace {name}\n" ++ s.package ++
+  packageHeader ["Zkc.Tests.Frontend.PrintedPackageSupport"] ++ s!"namespace {name}\n" ++ s.package ++
   s!"#eval Zkc.Tests.Frontend.PrintedPackageSupport.expectGoalClaims {literal s.text} " ++
   s!"{reprStr (s.goals.map (·.1))} " ++
   s!"({Written.associationTerm noAssociation}) stored association\nend {name}\n"
-
-/-- Lean on a module, in the formal package, as a task. -/
-def start (work : System.FilePath) (name text : String) :
-    IO (Task (Except IO.Error (Bool × String))) := do
-  let path := work / s!"{name}.lean"
-  IO.FS.writeFile path text
-  IO.asTask (runLakeLean path)
-
-def finish (task : Task (Except IO.Error (Bool × String))) : IO (Bool × String) :=
-  IO.ofExcept task.get
-
-/-- A control: Lean refuses the module, and the theorems that are left unproved, itself or by
-what they use, are the expected ones. -/
-def expectUnproved (title name : String) (task : Task (Except IO.Error (Bool × String)))
-    (expected : List String) : IO Unit := do
-  let (ok, output) ← finish task
-  if ok then throw (IO.userError s!"{title}: Lean accepted a control that must be refused")
-  let unproved := theorems.filter fun theorem_ =>
-    ((axiomsOf s!"{name}.{theorem_}" output).getD ["sorryAx"]).contains "sorryAx"
-  unless unproved == expected do
-    throw (IO.userError s!"{title}: unproved are {unproved}, expected {expected}\n{output}")
 
 def run (corpus template : System.FilePath) (work : System.FilePath) : IO Unit := do
   let blocks := readBlocks (← IO.FS.readFile corpus)
@@ -243,7 +219,7 @@ def run (corpus template : System.FilePath) (work : System.FilePath) : IO Unit :
   -- comparison, which the kernel decides; below it no statement is issued (GL4).
   let goalLine := "goal loose = soundness(Checked, spec e = 4)"
   let atTotal ← read (← edit source goalLine (goalLine ++ " <= 3/8"))
-  let ceilingProof ← start work "CeilingAtTotal" (← ceilingModule "CeilingAtTotal" atTotal)
+  let ceilingProof ← startLakeLean work "CeilingAtTotal" (← ceilingModule "CeilingAtTotal" atTotal)
   let below ← read (← edit source goalLine (goalLine ++ " <= 1/4"))
   match below.statements.ceilings with
   | .ok _ => throw (IO.userError "a goal whose ceiling is below the total of its charge was issued a statement")
@@ -262,54 +238,54 @@ def run (corpus template : System.FilePath) (work : System.FilePath) : IO Unit :
   -- A row outside the table of the model, inside the loop of the relation: the power of a field
   -- element, which the standard model gives a constant.
   let uncovered ← read (← edit source "if xs[i] == 0 then 0 else 1" "if xs[i] ^ 2 == 0 then 0 else 1")
-  let uncoveredProof ← start work "CoverageControl" (coverageModule "CoverageControl" uncovered)
+  let uncoveredProof ← startLakeLean work "CoverageControl" (coverageModule "CoverageControl" uncovered)
   let (_, verifier, prover) := written.places
   let exchanged := { written with statements := { written.statements with
     roles := [("verifier", prover), ("prover", verifier)] } }
-  let changedProof ← start work "RelationControl" (← proofModule "RelationControl" changed template)
+  let changedProof ← startLakeLean work "RelationControl" (← proofModule "RelationControl" changed template)
   let small := withLoose { loose with numerator := loose.numerator - 1 }
   let elsewhere := withLoose { loose with draws := [([], ⟨5⟩)] }
   let foreign := withLoose { loose with owner := ⟨loose.owner.number + 1⟩ }
 
-  let proof ← start work "Count" (← proofModule "Count" written template)
-  let comparison ← start work "CountSource" (comparisonModule "CountSource" written)
-  let turnedProof ← start work "CountTurned" (← proofModule "CountTurned" turned template)
-  let turnedComparison ← start work "CountTurnedSource" (comparisonModule "CountTurnedSource" turned)
-  let exchangedProof ← start work "RolesControl" (← proofModule "RolesControl" exchanged template)
-  let smallProof ← start work "BoundControl" (← proofModule "BoundControl" small template)
-  let elsewhereProof ← start work "SiteControl" (← proofModule "SiteControl" elsewhere template)
-  let foreignProof ← start work "OwnerControl" (← proofModule "OwnerControl" foreign template)
+  let proof ← startLakeLean work "Count" (← proofModule "Count" written template)
+  let comparison ← startLakeLean work "CountSource" (comparisonModule "CountSource" written)
+  let turnedProof ← startLakeLean work "CountTurned" (← proofModule "CountTurned" turned template)
+  let turnedComparison ← startLakeLean work "CountTurnedSource" (comparisonModule "CountTurnedSource" turned)
+  let exchangedProof ← startLakeLean work "RolesControl" (← proofModule "RolesControl" exchanged template)
+  let smallProof ← startLakeLean work "BoundControl" (← proofModule "BoundControl" small template)
+  let elsewhereProof ← startLakeLean work "SiteControl" (← proofModule "SiteControl" elsewhere template)
+  let foreignProof ← startLakeLean work "OwnerControl" (← proofModule "OwnerControl" foreign template)
 
   let allowed := ["propext", "Classical.choice", "Quot.sound"]
   for (name, task) in [("Count", proof), ("CountTurned", turnedProof)] do
-    let (ok, output) ← finish task
+    let (ok, output) ← finishLean task
     acceptedOutput name ok output theorems allowed
   for (name, task) in [("CountSource", comparison), ("CountTurnedSource", turnedComparison)] do
-    let (ok, output) ← finish task
+    let (ok, output) ← finishLean task
     acceptedOutput name ok output []
-  let (ok, output) ← finish ceilingProof
+  let (ok, output) ← finishLean ceilingProof
   acceptedOutput "CeilingAtTotal" ok output ["loose_ceiling"] allowed
   -- The package with a row outside the table is not covered: the kernel decides it.
-  let (ok, output) ← finish uncoveredProof
+  let (ok, output) ← finishLean uncoveredProof
   if ok then throw (IO.userError "Lean accepted that the model covers a package with a row outside its table")
   unless output.contains "StandardModel.covers stored = true" && output.contains "is false" do
     throw (IO.userError s!"the coverage control was refused for another reason\n{output}")
   -- With `<` for `<=` the function of the relation computes another comparison: what is said
   -- of it, and what rests on that, is not proved; the theorems about the verifier stand.
-  expectUnproved "the relation changed" "RelationControl" changedProof ofRelation
+  expectUnproved "the relation changed" "RelationControl" theorems changedProof ofRelation
   -- The prover's program is not the one that draws: no theorem about the walk is proved. What
   -- the relations compute is, and so is that a service with a fixed position does not follow the
   -- samplers, which read no role.
-  expectUnproved "the roles exchanged" "RolesControl" exchangedProof
+  expectUnproved "the roles exchanged" "RolesControl" theorems exchangedProof
     (theorems.filter fun name =>
       !["covered", "verifier.eq", "loose_relation", "strict_relation",
         "Witness.fixed_position_does_not_follow"].contains name)
   -- Only `loose` and what is stated of it at its table fail, and `strict` stands.
-  expectUnproved "a charge below the bound" "BoundControl" smallProof
+  expectUnproved "a charge below the bound" "BoundControl" theorems smallProof
     ["loose_installed", "loose_sound", "Witness.loose_at_table", "Witness.loose_attained"]
-  expectUnproved "a charge on another instruction" "SiteControl" elsewhereProof
+  expectUnproved "a charge on another instruction" "SiteControl" theorems elsewhereProof
     ["loose_installed", "loose_sound", "Witness.loose_at_table"]
-  expectUnproved "a charge of another definition" "OwnerControl" foreignProof
+  expectUnproved "a charge of another definition" "OwnerControl" theorems foreignProof
     ["loose_installed", "loose_sound", "Witness.loose_at_table"]
   let charges := ", ".intercalate (written.goals.map fun (name, arguments, charge) =>
     s!"{name} at tolerance {arguments[0]!} within {charge.numerator}/{charge.denominator}")

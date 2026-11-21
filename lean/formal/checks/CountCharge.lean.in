@@ -6,8 +6,9 @@ of the scheme, then the relation of the clause at the value of each goal) and, g
 what the frontend read: the facts (`rootKey` with `rootHeader`, `rootNames`, `rootBody`,
 `rootMember` and `calleeProgram`, the program before the root; `verifierRole`, `proverRole`; for
 each goal `looseArgument0`, `looseCharge`, `looseKey` with `looseHeader`, `looseNames`,
-`looseBody`, `looseBefore`, the program before the relation, and `looseMember`), the transfers
-`at_root`, `at_loose` and `at_strict`, and the claims `looseClaim` and `strictClaim`. After this
+`looseBody`, `looseBefore`, the program before the relation, and `looseMember`), that the
+standard model covers the package (`covered`), the transfers `at_root`, `at_loose` and
+`at_strict`, and the claims `looseClaim` and `strictClaim`. After this
 text it writes the goals `loose_sound` and `strict_sound` from `loose_installed` and
 `strict_installed`, which this text proves.
 
@@ -31,12 +32,6 @@ theorem loose_exact : ceiling looseCharge = ((7 - looseTolerance : ℕ) : ℚ≥
 /-- The charge of `strict` is the bound at its tolerance. -/
 theorem strict_exact : ceiling strictCharge = ((7 - strictTolerance : ℕ) : ℚ≥0) / (8 : ℕ) := by
   norm_num [ceiling, strictCharge, strictTolerance, strictArgument0]
-
-/-- **The model covers the package.** The standard model interprets every row of the vocabulary
-that the package links and has a sampler for the law of every coin that it draws, so the
-theorems below are about this program, and not about one in which a row is a constant or a
-coin has no distribution. -/
-theorem covered : StandardModel.covers stored = true := by decide +kernel
 
 -- The verifier's program, in the kernel's normal form.
 kernel_normal verifier :

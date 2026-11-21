@@ -3,37 +3,12 @@ module
 public import Zkc.Formal.Written.ReductionModel
 public import Zkc.Formal.Written.RoundCharge
 public import Zkc.Formal.Written.PolynomialBounds
-public import Mathlib.Algebra.Field.ZMod
-import Mathlib.Tactic.Primality
+public import Zkc.Formal.Written.ScalarField
 
 @[expose] public section
 namespace Zkc.Formal.Written.RoundCharge
 open Core Interactive Sumcheck FiniteService ProbabilisticProcess OracleComp
 open scoped ArithmeticModel ENNReal
-
-set_option maxHeartbeats 2000000 in
-/-- Primality of the scalar order used by the source vocabulary. Mathlib verifies the
-Lucas witnesses and the full factorization recursively in the kernel. -/
-theorem scalarOrder_prime : Nat.Prime Zkc.Vocabulary.Field.bls12381Fr.order := by
-  change Nat.Prime 52435875175126190479447740508185965837690552500527637822603658699938581184513
-  primality (cert := .witnesses [
-    .lucas { root := 7, primeFactors := [2, 3, 11, 19, 10177, 125527, 859267, 906349, 2508409, 2529403, 52437899, 254760293] },
-    .lucas { root := 7, primeFactors := [2, 3, 53] },
-    .lucas { root := 5, primeFactors := [2, 3, 20921] },
-    .lucas { root := 3, primeFactors := [2, 5, 523] },
-    .lucas { root := 2, primeFactors := [2, 3, 47737] },
-    .lucas { root := 5, primeFactors := [2, 3, 13, 17] },
-    .lucas { root := 2, primeFactors := [2, 3, 47, 1607] },
-    .lucas { root := 5, primeFactors := [2, 11, 73] },
-    .lucas { root := 11, primeFactors := [2, 3, 7, 79] },
-    .lucas { root := 2, primeFactors := [2, 3, 23, 18329] },
-    .lucas { root := 3, primeFactors := [2, 29, 79] },
-    .lucas { root := 2, primeFactors := [2, 43, 609743] },
-    .lucas { root := 5, primeFactors := [2, 7, 97, 449] },
-    .lucas { root := 2, primeFactors := [2, 63690073] },
-    .lucas { root := 7, primeFactors := [2, 3, 2653753] },
-    .lucas { root := 5, primeFactors := [2, 3, 110573] },
-    .lucas { root := 3, primeFactors := [2, 7, 11, 359] }])
 
 scoped instance : Fact (Nat.Prime Zkc.Vocabulary.Field.bls12381Fr.order) := ⟨scalarOrder_prime⟩
 
