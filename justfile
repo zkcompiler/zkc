@@ -34,6 +34,7 @@ _charge-checks:
     cd lean/formal && lake lean checks/OccurrenceDepth.lean
     cd lean/formal && lake lean checks/ProofArguments.lean
     cd lean/formal && lake lean checks/GoalClause.lean
+    cd lean/formal && lake lean checks/GoalClaim.lean
     cd lean/formal && lake lean checks/CountCharge.lean
     cd lean/formal && lake lean checks/FixedTableSampling.lean
 

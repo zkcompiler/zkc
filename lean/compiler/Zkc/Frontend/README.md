@@ -22,6 +22,29 @@ instruction from a caller. Each key in the path must identify one application in
 caller. The interface has no iteration coordinate for an argument that needs the index of a
 uniform loop. These values describe the authored charge. Certifying a false-acceptance
 probability also requires a theorem for the admitted verifier.
+
+## What goals claim, as one package
+
+`Written.goalClaims` reads what written soundness goals of one scheme claim. For each goal it
+gives the clause, the relation that the clause applies as an instance at the static values of
+the application and the proof values of the goal, and the ports of the protocol at the
+statement and at the witness of the relation, by their places (the witness is absent where the
+clause is written short). The relations are instantiated one after another in one state that
+starts as the state of the root, so each has a key of its own, and two goals with one value
+claim one relation. The package (`Typing.emitRoots`) is what the root reaches, in the order and
+with the stored definitions of the root's own package, followed by what each relation adds; a
+function that the protocol and a relation both call is one definition.
+
+From `lean/formal`, run `lake lean checks/GoalClaim.lean`. It compares the stored definitions
+of the claims of `Count<8>` with those of the root's package, and runs Lean on a module with
+both packages: the kernel accepts that the deployed definitions come first and that the
+process of each role of the root is the same in both, for every model. A statement about a
+goal can therefore name one admission and find the protocol and the relation by their keys,
+and what it says of the protocol is said of the deployed one.
+
+An operand of a clause that is no port is not read yet. Where a relation links a primitive that
+no deployed definition links, the claims' package is over a larger vocabulary than the root's,
+and the two are not compared.
 [Source charge lookup](Written/Charge.lean) · [Goal selection](Written/Selection.lean)
 
 ## Previous frontend

@@ -231,7 +231,37 @@ def elaborateProtocol (inst : InstanceId) (description name : String) (env : Env
   return (← checkedProtocol definition body, body, elaborated.resolved)
 
 /-- What the deciding clauses of the contract of a protocol instance apply, typed at values of
-the instance's specification-only parameters (`Elab.elabClauses`).
+the instance's specification-only parameters (`Elab.elabClauses`): each typed application with
+the place of its clause in the contract. The instances of relations that it asks for enter the
+state in which it runs. A clause that waits for a later layer is left out when `lenient`, and
+makes the typing wait otherwise. -/
+def typedClauses (inst : InstanceId) (specification : Array Nat)
+    (typeBody : InstanceId → Span → CompileM Unit)
+    (resolutions : Std.HashMap Typing.ResolvedPlace ParameterRef := {}) (lenient : Bool := true) :
+    CompileM (Array (Nat × Typed.Expr)) := do
+  let state ← get
+  let some entry := state.table.entries[inst]? | throw .abandoned
+  let modules ← getModules
+  let some contract := modules.indexes.contracts[entry.key.declaration]? | return #[]
+  let some clauses := modules.lowered? contract | return #[]
+  let .contract node := clauses.content | return #[]
+  if clauses.refused || (Elab.decidingApplications node.clauses).isEmpty then return #[]
+  let some lowered := modules.lowered? entry.key.declaration | return #[]
+  let .protocol head _ _ := lowered.content | return #[]
+  let found ← declaration entry.key.declaration
+  let description ← describeInstance entry.key.declaration entry.key.arguments specification
+    entry.key.owner
+  let env := instanceEnv state.program found entry.key.arguments specification
+  let context : Elab.Context :=
+    { env, «instance» := inst, name := description, typeBody, specification := true
+      resolutions, roster := some head.roster, protocolBody := calleeBody typeBody }
+  let signature ← Elab.protocolSignatureIn head env
+  let (typed, _) ← Elab.runElab context clauses.locals
+    (Elab.elabClauses signature head node.clauses lenient)
+  return typed
+
+/-- The check of what the deciding clauses of a contract apply, at values of the instance's
+specification-only parameters.
 
 The elaboration runs aside, on a copy of the state, and only its diagnostics are kept. The
 instances of relations that it asks for must not enter the program: deployed definitions are
@@ -241,25 +271,7 @@ def typeClauses (inst : InstanceId) (specification : Array Nat)
     (typeBody : InstanceId → Span → CompileM Unit)
     (resolutions : Std.HashMap Typing.ResolvedPlace ParameterRef := {}) : CompileM Unit := do
   let state ← get
-  let some entry := state.table.entries[inst]? | throw .abandoned
-  let modules ← getModules
-  let some contract := modules.indexes.contracts[entry.key.declaration]? | return
-  let some clauses := modules.lowered? contract | return
-  let .contract node := clauses.content | return
-  if clauses.refused || (Elab.decidingApplications node.clauses).isEmpty then return
-  let some lowered := modules.lowered? entry.key.declaration | return
-  let .protocol head _ _ := lowered.content | return
-  let found ← declaration entry.key.declaration
-  let description ← describeInstance entry.key.declaration entry.key.arguments specification
-    entry.key.owner
-  let env := instanceEnv state.program found entry.key.arguments specification
-  let context : Elab.Context :=
-    { env, «instance» := inst, name := description, typeBody, specification := true
-      resolutions, roster := some head.roster, protocolBody := calleeBody typeBody }
-  let attempt : CompileM Unit := do
-    let signature ← Elab.protocolSignatureIn head env
-    discard <| Elab.runElab context clauses.locals (Elab.elabClauses signature head node.clauses)
-  let (result, after) := attempt.run (← read) state
+  let (result, after) := (typedClauses inst specification typeBody resolutions).run (← read) state
   if let .error failure := result then
     modify fun s => { s with log := after.log }
     throw failure

@@ -593,17 +593,21 @@ def pairArguments (name : String) (parameters : Array String) (arguments : Array
   | .ok values => return values.map Arg.written
   | .error (span, message) => refuseHere "FN6" span message
 
-/-- Pairs the arguments of an application of a relation: the statement before `;`, the witness
-after it, each side as many as the definition has (SX3). -/
+/-- Pairs the arguments of an application of a relation with its statement and its witness
+parameters (SX3): as many on each side as the definition. At the top of a clause (`atTop`) the
+short application, without `;` and the witnesses, pairs the statement alone: it says that some
+witness exists, and whoever states the clause introduces the quantifier. -/
 def pairRelationArguments (name : String) (statement witness : Array String)
-    (arguments : Array Lowered.Argument) (witnesses : Option (Array Lowered.Argument)) (place : Span) :
-    ElabM (Array Arg) := do
+    (arguments : Array Lowered.Argument) (witnesses : Option (Array Lowered.Argument)) (place : Span)
+    (atTop : Bool := false) : ElabM (Array Arg) := do
+  let short := atTop && witnesses.isNone
   let given := witnesses.getD #[]
   let count (n : Nat) (word : String) := if n == 1 then s!"1 {word} argument" else s!"{n} {word} arguments"
-  unless arguments.size == statement.size && given.size == witness.size do
+  unless arguments.size == statement.size && (short || given.size == witness.size) do
     refuseHere "SX3" place
       s!"`{name}` takes {count statement.size "statement"} and {count witness.size "witness"}"
   let statementArgs ← pairArguments name statement arguments none place
+  if short then return statementArgs
   let witnessArgs ← pairArguments name witness given none place
   return statementArgs ++ witnessArgs
 
