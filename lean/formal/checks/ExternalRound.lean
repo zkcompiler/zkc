@@ -1,7 +1,18 @@
 import Zkc.Tests.Formal.ExternalRound
+import Zkc.Tests.Frontend.PrintedPackageSupport
 
 #eval show IO Unit from do
-  Zkc.Tests.Formal.ExternalRound.run ((← IO.currentDir) / ".." / "..")
+  let root := (← IO.currentDir) / ".." / ".."
+  Zkc.Tests.Formal.ExternalRound.run root
+  let text ← Zkc.Tests.Formal.ExternalRound.statement root
+  IO.FS.withTempDir fun work => do
+    let checks := "\nnamespace CoefficientStatement\n" ++
+      "example : soundCaps.counted stored rootKey = true := by decide +kernel\n" ++
+      "example : soundCaps.budget = 1 / Zkc.Vocabulary.Field.bls12381Fr.order := by decide +kernel\n" ++
+      "#check soundGoal\nend CoefficientStatement\n"
+    let task ← Zkc.Tests.Frontend.PrintedPackageSupport.startLakeLean work "CoefficientStatement" (text ++ checks)
+    let (ok, output) ← Zkc.Tests.Frontend.PrintedPackageSupport.finishLean task
+    unless ok do throw (IO.userError output)
 
 open Zkc.Core Zkc.Frontend.Written Zkc.Tools.Formal Zkc.Formal.Interactive.Sumcheck
 open Zkc.Formal.Written Zkc.Formal.FiniteService Zkc.Formal.ProbabilisticProcess OracleComp

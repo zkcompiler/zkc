@@ -97,9 +97,20 @@ private def check (c : AdmittedRoot) (n : Nat) (order : List Bool) (expected : L
     | .ok (), some wanted => throw (IO.userError s!"expected refusal for {wanted}")
   IO.println s!"rounds={n}, encodings={order}, uses={goal.caps.uses.length}, budget={goal.caps.ratio}"
 
+/-- Exercise the common statement generator on the same source as the separate numeric consumer. -/
+def statement (root : System.FilePath) : IO String := do
+  let c ← client root 1 [true]
+  let claims ← IO.ofExcept (goalClaims c ["sound"])
+  let chosen : Statements := { claims }
+  IO.ofExcept (chosen.statementsModule scalarFieldModelText "CoefficientStatement")
+
 def run (root : System.FilePath) : IO Unit := do
   for order in [[false,true],[true,false],[true,true],[false,false]] do
     check (← client root 2 order) 2 order [none,none]
+  let endpoint ← client root 1 [false]
+  let endpointRows := sourceRows endpoint.emission.bindings
+  let _ ← IO.ofExcept (singleRoundGoal endpoint 1 "sound" "challenge" endpointLine
+    (endpointRows.endpointCompanion endpointRows.evaluationReadback [endpointRows.affineReadback]))
   for n in [0,1,4,10] do
     let c ← client root n [true]
     check c n [true] [none]
