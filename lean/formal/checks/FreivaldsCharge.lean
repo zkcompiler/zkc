@@ -147,7 +147,7 @@ def proofModule (name : String) (s : Subject) (model : ModelText) (template : St
   refuseUnchecked name template
   let stated := s.statements
   let claims ← IO.ofExcept (stated.claimTexts model)
-  return packageHeader ["Zkc.Formal.Walk", "Zkc.Formal.OracleProcess",
+  return packageHeader ["Zkc.Formal.Walk", "Zkc.Formal.OracleProcess", "Zkc.Formal.ReturnExperiment",
       "Zkc.Formal.Written.LawSamplers", "Zkc.Formal.Written.SiteAllowance",
       "Zkc.Formal.Written.FunctionMeaning", "Zkc.Formal.Written.ArithmeticDraws",
       "Zkc.Formal.Written.FixedSequences", "Zkc.Formal.Written.ScalarField",
@@ -182,14 +182,14 @@ def shadowing (s : Subject) (model : ModelText) (template : String) : IO String 
   if established == template then
     throw (IO.userError "the text does not prove the claim under its name")
   -- what the text concludes from the claim, it concludes from the claim as it was stated
-  let renamed := established.replace "  sound_installed (F := Scalars)" "  sound_established (F := Scalars)"
+  let renamed := established.replace "  (sound_installed (F := Scalars)" "  (sound_established (F := Scalars)"
   if renamed == established then
     throw (IO.userError "the text does not use the claim at its witness")
   return renamed ++ "\n" ++
     "noncomputable def total (_ : DrawCharge) : ℝ≥0∞ := ⊤\n\n" ++
     s!"theorem sound_installed :\n  {anew} := by\n" ++
-    "  intro F G _ _ _ _ _ _ _ path large a va b vb c vc σ service follows permitted s rejected\n" ++
-    "  exact (sound_established path large a va b vb c vc service follows permitted s rejected).trans le_top\n"
+    "  intro F G _ _ _ _ _ _ _ path large a va b vb c vc rejected\n" ++
+    "  exact (sound_established path large a va b vb c vc rejected).mono le_top\n"
 
 /-- A control is refused where it is meant to be: Lean's output has the line. -/
 def expectReason (title : String) (task : Task (Except IO.Error (Bool × String)))

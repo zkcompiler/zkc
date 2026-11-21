@@ -25,11 +25,12 @@ library and from the model that the check names:
 - `claimTexts`: for each goal, the propositions that are stated before any proof. The claim
   about a program (`<goal>ClaimOf`, and `<goal>Claim` about the installed one): on valid inputs
   of the deciding role, where the relation of the goal's clause returns false at its operands
-  (for every valid witness, when the relation has witness parameters), the simulation of the
-  deciding role returns with probability at most the total of the goal's charge, against every
-  service that is no more likely to answer a coin within a set of replies than the sampler of
-  the coin's law is to draw one there (it may also not answer) and that answers only what is
-  permitted. The goal for every admitted program (`<goal>Goal`), the result with the coverage
+  (for every valid witness, when the relation has witness parameters), the deciding role
+  returns within the total of the goal's charge, in the experiment that the formal library
+  defines (`ReturnsWithin`, `Zkc/Formal/ReturnExperiment.lean`): against every service that is
+  no more likely to answer a coin within a set of replies than the sampler of the coin's law
+  is to draw one there (it may also not answer) and that answers only what is permitted. The
+  generator writes the process, the samplers and the bound, and not what the probability is of. The goal for every admitted program (`<goal>Goal`), the result with the coverage
   (`<goal>Result`), and that the hypotheses of the claim are met together (`<goal>Witnessed`);
 - `closings`: for each goal, the theorems `<goal>_sound : <goal>Goal`,
   `<goal>_result : <goal>Result` and `<goal>_met : <goal>Witnessed`, from the theorems
@@ -421,25 +422,19 @@ def ceilings (s : Statements) : Except String String := do
       s!"  total_le_div {name}Charge {ceiling.num.toNat} {ceiling.den} (by decide) (by decide) (by decide)\n\n"
   return text
 
-/-- The probability that the simulation of the deciding role of a program returns, as text. -/
-def returns (model : ModelText) (program root inputs : String) : String :=
-  s!"Pr\{let out ← (simulateQ (handlerOf service) (embed\n" ++
-  s!"          (roleMeaning {model.model} {program} {root} verifierRole path {inputs}))).run.run s}[\n" ++
-  "        ∃ results, out.1 = some (.inl results)]"
+/-- The experiment of a goal, as text: the deciding role of a program on its inputs returns with
+probability at most a bound, against the services that the formal library's experiment is
+about (`ReturnsWithin`: they draw within the samplers of the model and answer only what is
+permitted). The generator names the process, the samplers and the bound; what the probability
+is of is the library's definition. The event of a deciding protocol is that the role returns. -/
+def returnsWithin (model : ModelText) (program root inputs bound : String) : String :=
+  s!"ReturnsWithin (roleMeaning {model.model} {program} {root} verifierRole path {inputs})\n" ++
+  s!"        {model.samplers} (Permitted {model.model}) (fun _ => True) ({bound})"
 
-/-- The same service as the quantifiers of a proposition. -/
-def serviceQuantified (model : ModelText) : String :=
-  s!"    ∀ \{σ : Type} (service : Service (RSig {model.model}) σ), service.Follows {model.samplers} →\n" ++
-  s!"    (∀ op s reply t, (some reply, t) ∈ support (service op s) → Permitted {model.model} op reply) →\n" ++
-  s!"    ∀ (s : σ),\n"
-
-/-- The binders of a service that draws by the samplers of the model and answers what is
-permitted, with a state. -/
-def serviceBinders (model : ModelText) : String :=
-  s!"    \{σ : Type} (service : Service (RSig {model.model}) σ)\n" ++
-  s!"    (follows : service.Follows {model.samplers})\n" ++
-  s!"    (permitted : ∀ op s reply t, (some reply, t) ∈ support (service op s) →\n" ++
-  s!"      Permitted {model.model} op reply) (s : σ)"
+/-- That the experiment of a model is not about nothing, as text: some service with a state
+draws within the samplers and answers only what is permitted (`Served`). -/
+def served (model : ModelText) : String :=
+  s!"Served {model.samplers} (Permitted {model.model})"
 
 /-- The theorem `covered`: the model covers the stored program of the package, decided by the
 kernel. A statement over a model is issued with it, so that the statement is about this program
@@ -451,16 +446,15 @@ def coverage (model : ModelText) : String :=
 
 /-- What a goal claims of a program with its root and the relation of the goal's clause, as the
 text of a proposition: on valid inputs of the deciding role on which the relation returns false,
-the simulation of that role returns with probability at most the total of the goal's charge,
-against every service that is no more likely to answer a coin within a set of replies than the
-sampler of the coin's law is to draw one there, and that answers only what is permitted. -/
+that role returns within the total of the goal's charge, in the experiment of the formal
+library (`ReturnsWithin`). -/
 def claimAt (s : Statements) (model : ModelText) (goal : StatedGoal)
     (program root relation : String) : Except String String := do
   let parts ← s.parts model goal
   return s!"∀ {model.binders} (path : List Frame),\n" ++
-    model.assumed ++ parts.quantified ++ serviceQuantified model ++
+    model.assumed ++ parts.quantified ++
     s!"    {parts.premise program relation} →\n" ++
-    s!"      {returns model program root parts.inputs} ≤ total {goal.claimed.goal}Charge"
+    s!"      {returnsWithin model program root parts.inputs s!"total {goal.claimed.goal}Charge"}"
 
 /-- For each goal, what is stated before any proof is written, so that no name defined by the
 text of a proof can change it:
@@ -481,10 +475,9 @@ def claimTexts (s : Statements) (model : ModelText) : Except String String := do
     let parts ← s.parts model goal
     text := text ++
       s!"/-- What the goal `{name}` claims of a program with its root and the relation of the goal's\n" ++
-      "clause: on valid inputs of the deciding role on which the relation returns false, the\n" ++
-      "simulation of that role returns with probability at most the total of the goal's charge,\n" ++
-      "against every service that is no more likely to answer a coin within a set of replies than\n" ++
-      "the sampler of the coin's law is to draw one there, and that answers only what is permitted. -/\n" ++
+      "clause: on valid inputs of the deciding role on which the relation returns false, that role\n" ++
+      "returns with probability at most the total of the goal's charge, against every service that\n" ++
+      "draws within the samplers of the model and answers only what is permitted (`ReturnsWithin`). -/\n" ++
       s!"def {name}ClaimOf (p : Typed V) (root : Member p.headers.protocols rootHeader)\n" ++
       s!"    (relation : Member p.headers.fns {name}Header) : Prop :=\n  " ++
       (← s.claimAt model goal "p" "root" "relation") ++ "\n\n" ++
@@ -503,12 +496,10 @@ def claimTexts (s : Statements) (model : ModelText) : Except String String := do
       s!"def {name}Result : Prop := {model.covers} stored = true ∧ {name}Goal\n\n" ++
       s!"/-- The hypotheses of the claim of `{name}` are met together: some model with what the claim\n" ++
       "assumes of it, valid inputs on which the relation returns false, and a service with a state\n" ++
-      "that draws within the samplers and answers only what is permitted. -/\n" ++
+      "that draws within the samplers and answers only what is permitted (`Served`). -/\n" ++
       s!"def {name}Witnessed : Prop :=\n  ∃ {model.existential},\n" ++
       model.assumedConjuncts ++ parts.existential ++
-      s!"    ∃ (σ : Type) (service : Service (RSig {model.model}) σ), Nonempty σ ∧\n" ++
-      s!"      service.Follows {model.samplers} ∧\n" ++
-      s!"      (∀ op s reply t, (some reply, t) ∈ support (service op s) → Permitted {model.model} op reply) ∧\n" ++
+      s!"    {served model} ∧\n" ++
       s!"      {parts.premise "installed" s!"{name}Member"}\n\n"
   return text
 

@@ -40,8 +40,10 @@ Then Lean is run on two more modules. Both have a consumer that a reader of the 
 without the generator: a theorem that names none of the generated propositions, has the
 verifier as its place in the roster, and says, of every admitted program, that this role of the
 protocol with the inputs `flag = false` and `other = true` returns with probability at most zero when the relation is false of `false`,
-under the service that draws by the laws. Its proof is the published theorem of the goal at
-those inputs.
+under the service that draws by the laws. It writes the probability of the simulation out, and
+does not use the library's name for the experiment (`ReturnsWithin`): its proof is the
+published theorem of the goal at those inputs and that service, so it also checks that the
+experiment of the statement is the one that a reader would write.
 
 - In the first module the source has a `spec` port in front of `flag` and its clause is
   `proves @V IsSet(flag)`. The published theorem and the consumer are proved.
@@ -142,22 +144,26 @@ def proofText (guarded : String) : String :=
   "open Zkc.Formal.Written.StandardModel\n" ++
   "open Zkc.Formal.Written.FiniteModel (data)\n\n" ++
   "theorem sound_installed : soundClaim := by\n" ++
-  "  intro F G D _ _ path flag _ other _ σ service follows permitted state premise\n" ++
+  "  intro F G D _ _ path flag _ other _ premise σ service conforms state\n" ++
   s!"  have declined : {guarded} = false := by\n" ++
   "    have computed : functionResult (t := .bool)\n" ++
   s!"        (fnMeaning (model D) installed soundMember (.cons {guarded} .nil)) = some {guarded} := by\n" ++
   "      kernel_rfl\n" ++
   "    rw [computed] at premise\n    exact Option.some.inj premise\n" ++
   "  subst declined\n" ++
-  "  rw [prEvent_simulation_returns]\n" ++
   "  have rejected : roleMeaning (model D) installed rootMember verifierRole path\n" ++
   s!"      (.cons {first} (.cons {second} .nil)) = .halt (.declared .reject ⟨path, ⟨0⟩⟩) := by\n" ++
   "    kernel_rfl\n" ++
-  "  rw [rejected]\n  simp [run, Process.interpret]\n\n" ++
+  "  have never : Pr{let out ← (simulateQ (handlerOf service) (embed\n" ++
+  "      (roleMeaning (model D) installed rootMember verifierRole path\n" ++
+  s!"        (.cons {first} (.cons {second} .nil))))).run.run state}[\n" ++
+  "      ∃ results, out.1 = some (.inl results)] ≤ total soundCharge := by\n" ++
+  "    rw [prEvent_simulation_returns, rejected]\n    simp [run, Process.interpret]\n" ++
+  "  simpa using never\n\n" ++
   "theorem sound_witnessed : soundWitnessed :=\n" ++
-  "  ⟨_, _, data, inferInstance, inferInstance, false, trivial, false, trivial, Unit,\n" ++
-  "    serveLaws (model data) (draws data), ⟨()⟩, serveLaws_follows _ _,\n" ++
-  "    serveLaws_permitted _ _ (StandardModel.draws_permitted data), by kernel_rfl⟩\n\n" ++
+  "  ⟨_, _, data, inferInstance, inferInstance, false, trivial, false, trivial,\n" ++
+  "    ⟨Unit, serveLaws (model data) (draws data), ⟨()⟩, serveLaws_follows _ _,\n" ++
+  "      serveLaws_permitted _ _ (StandardModel.draws_permitted data)⟩, by kernel_rfl⟩\n\n" ++
   "end\n"
 
 def consumer : String :=
@@ -179,9 +185,8 @@ def consumer : String :=
   "  obtain ⟨root, found, relation, foundRelation, claim⟩ := sound_sound admitted\n" ++
   "  refine ⟨root, found, relation, foundRelation, fun rejected => ?_⟩\n" ++
   "  rw [← free]\n" ++
-  "  exact claim data [] false trivial true trivial (serveLaws (model data) (draws data))\n" ++
-  "    (serveLaws_follows _ _) (serveLaws_permitted _ _ (StandardModel.draws_permitted data)) ()\n" ++
-  "    rejected\n\n" ++
+  "  simpa using claim data [] false trivial true trivial rejected _ (serveLaws (model data) (draws data))\n" ++
+  "    ⟨serveLaws_follows _ _, serveLaws_permitted _ _ (StandardModel.draws_permitted data)⟩ ()\n\n" ++
   "end\n"
 
 /-- The theorems of a proof module, whose axioms the check reads. -/
@@ -193,7 +198,7 @@ def theorems : List String :=
 the proofs, the proofs and the consumer. -/
 def proofModule (name text guarded : String) : IO String := do
   let s ← IO.ofExcept (statementsOf text ["sound"] "z")
-  return packageHeader ["Zkc.Formal.OracleProcess", "Zkc.Formal.Written.LawSamplers",
+  return packageHeader ["Zkc.Formal.OracleProcess", "Zkc.Formal.ReturnExperiment", "Zkc.Formal.Written.LawSamplers",
       "Zkc.Formal.Written.FunctionMeaning", "Zkc.Formal.Written.StandardModel",
       "Zkc.Formal.Written.FiniteModel", "Zkc.Formal.Written.Ceiling"] ++
     s!"namespace {name}\n" ++ (Written.package s.package).text ++ Statements.opens ++ s.facts ++ "\n" ++
@@ -306,7 +311,7 @@ def run (work : System.FilePath) : IO Unit := do
   let (_, refusal) ← finishLean control
   expect s!"the consumer of the control was refused for another reason\n{refusal}"
     (refusal.contains "The argument\n  rejected\nhas type" &&
-      refusal.contains "(HList.cons true HList.nil)) = some false\nin the application\n  claim data")
+      refusal.contains "(HList.cons true HList.nil)) = some false\nin the application")
   IO.println ("The statement of a goal reads its operands in the deployed header, its deciding role " ++
     "in the goal's scheme and its event in the clause: a spec port that nothing uses leaves the " ++
     "claim as it is, another operand changes it, and a consumer written apart uses the published " ++
