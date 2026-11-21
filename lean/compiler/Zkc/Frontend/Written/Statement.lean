@@ -19,7 +19,7 @@ library and from the model that the check names:
 - `counts`: for each goal, that the counts of its table are those of the stored program and
   that its budget is the number that the frontend computed, both decided by the kernel;
 - `coverage`: the theorem `covered`, that the model of the statement covers the stored program;
-- `sites`: the key of each charged draw of the root under the name of its site in the source
+- `sites`: the key of each named draw of the root under the name of its site in the source
   (`site_<name>`), and for each goal the cap that its table gives the draw
   (`<goal>_cap_<name>`), decided by the kernel;
 - `entries`: where the walks of the module start: for the deciding role, each named function
@@ -579,25 +579,31 @@ def claimTexts (s : Statements) (model : ModelText) : Except String String := do
       s!"      {parts.premise "installed" s!"{name}Member"}\n\n"
   return text
 
-/-- The name of a charged draw of the root in a module: the name of its site in the source, with
+/-- The name of a draw of the root in a module: the name of its site in the source, with
 its place among the draws that realize the site where a stepped loop gives several. -/
 def siteLabel (site : String) (index count : Nat) : String :=
   if count == 1 then site else s!"{site}_{index}"
 
-/-- The charged draws of a goal's root, each with the name of its site in the source, its name
+/-- The named draws of a goal's root, each with the name of its site in the source, its name
 in a module and its key. The name in a module is the site's (`siteLabel`) where that is a plain
-name, and `key<number>` of the draw where it is not. A name that two draws would share (a site
-`r_0` beside the first draw of a stepped loop over `r`) is followed by the key of each. -/
+name, and `key<number>` of the draw where it is not. A name that two charged draws would share
+(a site `r_0` beside the first draw of a stepped loop over `r`) is followed by the key of each.
+The name of a charged draw does not depend on the draws that the contract does not charge: a
+draw without a charge whose name another draw has is the one that is followed by its key. -/
 def _root_.Zkc.Frontend.Written.ClaimedGoal.siteLabels (goal : ClaimedGoal) :
     List (String × String × Core.Key) :=
+  let capped := (goal.caps.uses.getLast?.map (·.draws)).getD []
+  let charged (key : Core.Key) : Bool := capped.any (·.key == key)
   let draws := goal.sites.flatMap fun (site, keys) =>
     keys.zipIdx.map fun (key, index) =>
       (site, if plainName site then siteLabel site index keys.length else s!"key{key.number}", key)
   draws.map fun (site, label, key) =>
-    if (draws.filter (·.2.1 == label)).length > 1 then (site, s!"{label}_key{key.number}", key)
-    else (site, label, key)
+    let sharing := draws.filter fun other => other.2.1 == label && other.2.2 != key
+    let shared :=
+      if charged key then sharing.any fun other => charged other.2.2 else !sharing.isEmpty
+    if shared then (site, s!"{label}_key{key.number}", key) else (site, label, key)
 
-/-- The charged draws of a goal's root that its table of caps gives a cap, each with its name
+/-- The draws of a goal's root that its table of caps gives a cap, each with its name
 in a module and that cap. -/
 def _root_.Zkc.Frontend.Written.ClaimedGoal.siteCaps (goal : ClaimedGoal) :
     List (String × DrawCap) :=
@@ -605,19 +611,21 @@ def _root_.Zkc.Frontend.Written.ClaimedGoal.siteCaps (goal : ClaimedGoal) :
   goal.siteLabels.filterMap fun (_, label, key) =>
     (capped.find? (·.key == key)).map fun cap => (label, cap)
 
-/-- The charged draws of the root under the names of their sites: the key of each
+/-- The draws of the root under the names of their sites: the key of each
 (`site_<name>`, and `site_<name>_<index>` for each block of a stepped loop), once for the
 package, and for each goal the cap that its table gives the draw (`<goal>_cap_<name>`), decided
-by the kernel. A text can name a draw as the source does. -/
+by the kernel. A text can name a draw as the source does, and where it pays a fee at such a
+draw the fee is compared with the cap stated here (the label `walk_cap`), so that a fee that is
+not within it is refused with the name of the site. -/
 def sites (s : Statements) : String :=
   let named := (s.claims.goals.flatMap (·.siteLabels)).eraseDups
   String.join (named.map fun (site, label, key) =>
-    s!"/-- A charged draw of the root: `sites.{site}` of the source. -/\n" ++
+    s!"/-- A draw of the root: `sites.{site}` of the source. -/\n" ++
     s!"abbrev site_{label} : Key := ⟨{key.number}⟩\n\n") ++
   String.join (s.claims.goals.map fun goal =>
     String.join (goal.siteCaps.map fun (label, cap) =>
       s!"/-- The cap that the table of `{goal.goal}` gives the draw `{label}`. -/\n" ++
-      s!"theorem {goal.goal}_cap_{label} :\n" ++
+      s!"@[walk_cap]\ntheorem {goal.goal}_cap_{label} :\n" ++
       s!"    {goal.goal}Caps.capFrom {goal.goal}Caps.root [] site_{label} = " ++
       s!"{cap.numerator} / {cap.denominator} := by\n  decide +kernel\n\n"))
 
@@ -726,7 +734,7 @@ def ceilingNames (s : Statements) : List String :=
 the library that the generated statements name, and the model's. A text that walks the program
 has the walk and the equations where it starts; `walks` says whether the module is for one. -/
 def imports (model : ModelText) (walks : Bool) : List String :=
-  packageImports ++ (if walks then ["Zkc.Formal.Walk"] else []) ++
+  packageImports ++ (if walks then ["Zkc.Formal.Walk", "Zkc.Formal.Written.WalkFees"] else []) ++
     ["Zkc.Formal.OracleProcess", "Zkc.Formal.ReturnExperiment", "Zkc.Formal.Written.LawSamplers",
       "Zkc.Formal.Written.SiteCaps", "Zkc.Formal.Written.FunctionMeaning",
       "Zkc.Formal.Written.ClaimIntro", "Zkc.Formal.Written.Published"] ++ model.imports
@@ -753,7 +761,7 @@ def footer (name : String) (theorems : List String) : String :=
   String.join (theorems.map (s!"#print axioms {·}\n")) ++ s!"end {name}\n"
 
 /-- **The module of the goals of one scheme**: the package of the claims; what is generated
-before any proof (the facts, the coverage, the counts, the names of the charged draws, where
+before any proof (the facts, the coverage, the counts, the names of the draws, where
 the walks start, the transfers, the propositions of each goal and, for a text of the method of
 fees, the judgment of each goal with what follows from it, and the comparisons with the
 ceilings); the author's text; the claim of each goal from the text's judgment, for that method;

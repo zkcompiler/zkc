@@ -111,7 +111,7 @@ theorem six_effects (M : Model V) (path : List Frame) (claim : Bool) :
   walk_loop (fun i (_ : Bool) count => count = 2 * i) using counting_monotone _
   case first => rfl
   case step =>
-    subst invariant9
+    subst invariant_i
     -- the message, and the position that it brings
     walk_step
     intro got
@@ -124,14 +124,16 @@ theorem six_effects (M : Model V) (path : List Frame) (claim : Bool) :
     walk_step
     walk_step
     walk_step
-    guard_hyp h10 :ₛ x10 = Nat.beq drawn got
+    -- the value of a step has an equation in a form to read, under no name of the walk's
+    rename_i same said
+    guard_hyp said :ₛ same = Nat.beq drawn got
     walk_step
     walk_step
     walk_step
-    show 2 * i9 + 1 + 1 = 2 * (i9 + 1)
+    show 2 * i + 1 + 1 = 2 * (i + 1)
     omega
   case after =>
-    subst invariant9
+    subst invariant_i
     walk_step
     -- the guard waits on whether the claim holds or a round hit
     walk_step
@@ -172,6 +174,55 @@ theorem judged_free (M : Model V) (path : List Frame) (claim : Bool)
     · trivial
     · walk_step
       trivial
+
+/-- The same judgment by the walk to the places where a text has something to say: the two
+effects of a round are met at no fee, and the guard after the loop is a fork whose sides both
+end, which the text names. -/
+theorem judged_free_walked (M : Model V) (path : List Frame) (claim : Bool)
+    (allowed : ∀ op, (RSig M).Reply op → Prop) (samplers : Samplers (RSig M)) (budget : ℚ≥0) :
+    (roleMeaning M installed Member.head verifier path (inputs M claim)).interpret
+      (.charged allowed (paysBy samplers)) (fun _ _ => True) (fun _ _ => True) budget := by
+  walk
+  walk_loop fun _ (_ : Bool) _ => True
+  case first => trivial
+  case step =>
+    walk
+    refine ⟨0, fun _ => False, zero_le, Or.inl ⟨rfl, fun _ excluded => excluded⟩,
+      fun got _ _ => ?_⟩
+    walk
+    refine ⟨0, fun _ => False, zero_le, Or.inl ⟨rfl, fun _ excluded => excluded⟩,
+      fun drawn _ _ => ?_⟩
+    walk
+  case after =>
+    walk as held
+
+/-- A name for which the walk meets no fork is an error: here the one fork is named, both its
+sides end, and a second name names nothing. -/
+theorem second_name_names_nothing (M : Model V) (path : List Frame) (claim : Bool)
+    (allowed : ∀ op, (RSig M).Reply op → Prop) (samplers : Samplers (RSig M)) (budget : ℚ≥0) :
+    (roleMeaning M installed Member.head verifier path (inputs M claim)).interpret
+      (.charged allowed (paysBy samplers)) (fun _ _ => True) (fun _ _ => True) budget := by
+  walk
+  walk_loop fun _ (_ : Bool) _ => True
+  case first => trivial
+  case step =>
+    walk
+    refine ⟨0, fun _ => False, zero_le, Or.inl ⟨rfl, fun _ excluded => excluded⟩,
+      fun got _ _ => ?_⟩
+    walk
+    refine ⟨0, fun _ => False, zero_le, Or.inl ⟨rfl, fun _ excluded => excluded⟩,
+      fun drawn _ _ => ?_⟩
+    walk
+  case after =>
+    fail_if_success walk as held, further
+    fail_if_success walk as ⟨part, held⟩, further
+    walk
+
+/-- A goal that judges no process is not walked, with or without the reading of calls. -/
+example : True := by
+  fail_if_success walk
+  fail_if_success walk!
+  trivial
 
 end
 

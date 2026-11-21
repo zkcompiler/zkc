@@ -105,8 +105,8 @@ structure ClaimedGoal where
   /-- The table of caps of the root at the goal's proof arguments (SX8): every charge that the
   root reaches, by use. The bound of the goal's statement is its total. -/
   caps : CapTable
-  /-- The charged draws of the root by the names of their sites, each with the keys of the draws
-  that realize it. -/
+  /-- The draws of the root by the names of their sites, each with the keys of the draws that
+  realize it: every named draw that is emitted, charged or not. -/
   sites : SiteKeys
 
 /-- What written soundness goals of one scheme claim, as one package. It is made by

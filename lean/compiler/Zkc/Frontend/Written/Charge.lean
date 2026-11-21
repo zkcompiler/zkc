@@ -88,8 +88,8 @@ def namesDraw (s : Compile.State) (owner : InstanceId) (name : String) : ExportM
     | throw s!"expected one source event named {name}"
   return source.audience matches .transfer _ (some _)
 
-/-- The charged draws of a use by the names of their sites: each name with the keys of the
-draws that realize it (one, or one for each block of a stepped loop). -/
+/-- Draws by the names of their sites: each name with the keys of the draws that realize it
+(one, or one for each block of a stepped loop). -/
 abbrev SiteKeys := List (String × List Core.Key)
 
 /-- The use of a definition at its proof arguments, in a table under construction: its place.
@@ -142,14 +142,38 @@ partial def capsOfUse (c : AdmittedRoot) (subject : ProofSubject) :
   modify (·.push (subject, ⟨⟨subject.protocol⟩, draws.toList, calls.toList⟩, sites))
   return (← get).size - 1
 
+/-- The draws of the root by the names that the source gives them, each with the keys of the
+draws that realize it (one, or one for each block of a stepped loop): every draw that has a
+name and is emitted, whether the contract charges it or not. A draw of a loop that does not
+run is realized by no instruction and has no name here; nor has a draw of which a realization
+is not found by its address (two instructions at one coordinate). A name is a convenience of a
+text: a goal is not refused for a draw that has none, and a charge on such a draw is refused
+where the charge is read (`drawCharge`). -/
+def drawSites (c : AdmittedRoot) : ExportM SiteKeys := do
+  let s := c.state
+  let some entry := s.table.entries[c.id]? | throw "missing root instance"
+  let some {content := .protocol head .., ..} := s.env.modules.lowered? entry.key.declaration
+    | throw "expected a resolved protocol"
+  let some (.protocol code) := s.results.body? c.id | throw "missing elaborated root"
+  let some addresses := Emit.SiteAddresses.forProtocol c.evidence.admitted.program ⟨c.id⟩
+    | throw "missing admitted root"
+  let mut sites : SiteKeys := []
+  for (source, event) in head.events.zipIdx do
+    let some name := source.name | continue
+    let .transfer _ (some _) := source.audience | continue
+    let occurrences := Typing.SiteEntry.realizations code.sites event "value"
+    let some draws := occurrences.toList.mapM addresses.resolve | continue
+    unless draws.isEmpty do sites := sites ++ [(name, draws.map (·.2))]
+  return sites
+
 /-- **The table of caps of a goal's root** (SX8): the uses that the root reaches at the goal's
 proof arguments, callees first and the root's last, each with the caps that the contract of its
 definition gives its charged draws at the proof arguments of that use. No caller names a draw:
-the table is of every charge that the root reaches. With it, the charged draws of the root by
-the names of their sites, for a text that names a draw as the source does. -/
+the table is of every charge that the root reaches. With it, the draws of the root by the names
+of their sites (`drawSites`), for a text that names a draw as the source does. -/
 def goalCaps (c : AdmittedRoot) (specification : Array Nat) : ExportM (CapTable × SiteKeys) := do
   let (_, uses) ← (capsOfUse c ⟨c.id, specification⟩).run #[]
-  return (⟨uses.toList.map (·.2.1)⟩, (uses.back?.map (·.2.2)).getD [])
+  return (⟨uses.toList.map (·.2.1)⟩, ← drawSites c)
 
 /-- The named request selects the deployed root even in an assembly with several schemes. -/
 def admitSoundnessGoal (assembly : Assembly) (name : String) : ExportM AdmittedRoot := do

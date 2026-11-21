@@ -37,7 +37,7 @@ The check reads the source with the frontend and writes modules on which Lean is
   module over it for the type of group points (`scalarFieldModelText`). The text proves the
   judgment and gives the witness. It says what `apply` and `Product` compute, each loop taken by an
   invariant (`walk_loop`); the verifier is walked with its three calls taken by the law of
-  `apply` (`walk_compute`), once for the judgment and once on a hypothesis for its converse,
+  `apply` (`walk_law`), once for the judgment and once on a hypothesis for its converse,
   and is judged never to return within the budget of the goal's table (`soundCaps`: the root
   with the cap of its draw, once, and its three calls of `apply`, which has no charge) on
   matrices whose product differs; against every service that is no more likely to answer a coin
@@ -50,21 +50,31 @@ The check reads the source with the frontend and writes modules on which Lean is
   and the association that Lean reads from the package are those that the frontend gives to
   admission for the claims.
 
+The text follows the mathematics of the program and not its instructions. The same text,
+character for character, is accepted on a source whose `apply` computes each product another
+way: the vector read before the matrix, and a term added that cancels
+(`v[k] * m[i][k] + (v[k] - v[k])`), which reads the vector twice more and changes the numbers
+that the compiler gives the values of `apply`. A walk reads each entry by the bounds of the loops, in
+whatever order the program reads, and what is left of a step is an equation in the field,
+which `ring` proves. On a source whose `apply` adds where it should multiply
+(`v[k] + m[i][k]`) the same text is refused at one place, that equation, and nothing that
+rests on the law of `apply` is proved.
+
 What the source says and the proof module takes as given is asserted here against the source:
 the clause that the goal reads and the ports that the relation is applied to. The operands of a
 claim are inputs of the deployed header, which has no `spec` port: the same source with a
 `spec` port that nothing uses in front of the matrices gives the same proof module, character
 for character.
 
-Five controls are refused by Lean, each for the theorems that depend on what it changes and at
-the line that the check names: the operands of the relation exchanged in the clause
+Six controls are refused by Lean, each for the theorems that depend on what it changes and at
+the line that the check names: the sum for the product, above; the operands of the relation exchanged in the clause
 (`Product(b, a, c)`: the claim is then about another product; the text is refused where it
 takes from the premise that the product of `a` and `b` differs); a charge of half the source's, written in the source (refused where the cap of the draw
 is compared with what a uniform scalar pays for); the hypothesis on the size of the field
 weakened to one element or more (refused where that comparison is used); and the coverage of
 the package by the standard model, which has no sampler for a sequence of scalars (decided
-false by the kernel). The first three show that the text does not prove the altered claim;
-none of them refutes it. The fifth is a text and not a claim: one that defines again, in its
+false by the kernel). The three after the first show that the text does not prove the
+altered claim; none of them refutes it. The sixth is a text and not a claim: one that defines again, in its
 own scope, a name that the judgment of the goal uses (the fees within allowances `paysWithin`,
 as a policy under which every fee pays for every set of replies) and proves the judgment
 written anew under it. Every statement of the module is a proposition defined before the text,
@@ -85,13 +95,15 @@ open Zkc.Tests.Frontend Zkc.Tests.Frontend.PrintedPackageSupport
 
 namespace FreivaldsCharge
 
-/-- The source, with a clause, and with ports written in front of the three matrices. -/
-def source (clause : String) (front : String := "") : String :=
+/-- The source, with a clause, with ports written in front of the three matrices, and with the
+product of an entry and a coordinate that `apply` adds up. -/
+def source (clause : String) (front : String := "") (product : String := "m[i][k] * v[k]") :
+    String :=
   "module t\n" ++
   "use zkc::security::{soundness}\n" ++
   "type F = primitive(\"bls12-381.fr\")\n" ++
   "section <n: nat>:\n" ++
-  "    def apply(m: [[F; n]; n], v: [F; n]) -> [F; n]: [∑ k ∈ 0..n, m[i][k] * v[k] for i in 0..n]\n" ++
+  s!"    def apply(m: [[F; n]; n], v: [F; n]) -> [F; n]: [∑ k ∈ 0..n, {product} for i in 0..n]\n" ++
   "    relation Product(a: [[F; n]; n], b: [[F; n]; n], c: [[F; n]; n]):\n" ++
   "        ∀ i ∈ 0..n, ∀ j ∈ 0..n, (∑ k ∈ 0..n, a[i][k] * b[k][j]) == c[i][j]\n" ++
   s!"    protocol Freivalds roles(P, V)({front}a: [[F; n]; n] @(P, V), b: [[F; n]; n] @(P, V), c: [[F; n]; n] @(P, V)):\n" ++
@@ -141,6 +153,12 @@ def ofText : List String := [
   "walked_within", "walked_excludes", "returns_possible", "large_covers",
   "sound_judged", "Witness.rejected", "Witness.sound_at_corner", "Witness.returns_at_corner",
   "sound_witnessed"]
+
+/-- The law of `apply` and what rests on it: the verifier is walked by that law. -/
+def ofApply : List String :=
+  ["apply_law", "returns_on_product", "walked_within", "walked_excludes", "returns_possible",
+    "sound_judged", "sound_installed", "Witness.sound_at_corner", "Witness.returns_at_corner",
+    "sound_sound", "sound_result"]
 
 /-- The claim and what rests on it. -/
 def ofClaim : List String :=
@@ -230,13 +248,31 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
 
   -- A charge of half the source's, in the source: the program is what it was, and the cap of
   -- the draw is half.
-  let halved ← read ((source "Product(a, b, c)").replace "charge sites.r <= 1 / F::Order"
+  let halved ← read (← replaceOnce (source "Product(a, b, c)") "charge sites.r <= 1 / F::Order"
     "charge sites.r <= 1 / (2 * F::Order)") ["a", "b", "c"]
   unless halved.package == written.package &&
       (halved.statements.claims.goals.map (·.caps)) == [⟨[⟨⟨1⟩, [⟨⟨0⟩, 1, 2 * order, 1⟩], []⟩]⟩] do
     throw (IO.userError "the halved charge changed the package, or is not half at the draw")
 
+  -- The product computed another way: the vector is read before the matrix, and a term is
+  -- added that cancels. The deployed function is another, and what the goal claims is the same.
+  let rewritten ← read (source "Product(a, b, c)" (product := "v[k] * m[i][k] + (v[k] - v[k])"))
+    ["a", "b", "c"]
+  -- A sum where the product stands: another function, which is not the product of a matrix
+  -- and a vector.
+  let summed ← read (source "Product(a, b, c)" (product := "v[k] + m[i][k]")) ["a", "b", "c"]
+  for (title, altered) in [("computed another way", rewritten), ("replaced by a sum", summed)] do
+    if altered.package == written.package then
+      throw (IO.userError s!"the product {title}: the package is what it was")
+    unless (altered.statements.claims.goals.map fun goal => (goal.statement, goal.caps)) ==
+        [(goal.statement, goal.caps)] do
+      throw (IO.userError s!"the product {title}: the goal claims something else")
+
   let proof ← startLakeLean work "Freivalds" module.text
+  let rewrittenProof ← startLakeLean work "FreivaldsRewritten"
+    (← proofModule "FreivaldsRewritten" rewritten scalarFieldModelText template).text
+  let summedProof ← startLakeLean work "ProductControl"
+    (← proofModule "ProductControl" summed scalarFieldModelText template).text
   let comparison ← startLakeLean work "FreivaldsSource" (comparisonModule "FreivaldsSource" written.text ["sound"] written.package)
   let exchangedProof ← startLakeLean work "OperandsControl"
     (← proofModule "OperandsControl" exchanged scalarFieldModelText template).text
@@ -266,6 +302,16 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
       (template ++ "set_option debug.skipKernelTC true in\n")))
   let (ok, output) ← finishLean comparison
   acceptedOutput "FreivaldsSource" ok output []
+  -- The same text on the product computed another way: every theorem is proved.
+  let (ok, output) ← finishLean rewrittenProof
+  acceptedOutput "FreivaldsRewritten" ok output theorems allowed
+  -- The same text on a sum: the equation of one step of `apply` is not one of the field, and
+  -- nothing that rests on the law of `apply` is proved. The law of the relation, which does
+  -- not call `apply`, stands.
+  expectUnproved "a sum for the product" "ProductControl" theorems summedProof ofApply
+  expectPlaces "a sum for the product" summedProof ["unsolved goals"]
+  expectReason "a sum for the product" summedProof
+    "M ⟨i, early_i⟩ ⟨k, early_k⟩ * w ⟨k, early_k⟩ = "
   -- The claim is about `b * a`: its premise is not the one from which the text gets that the
   -- product of `a` and `b` differs. The laws of the two functions and the theorems about the
   -- verifier stand.
@@ -298,7 +344,8 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
     throw (IO.userError s!"the coverage control was refused for another reason\n{output}")
   IO.println (s!"Freivalds<2> is judged within the table of caps of its goal (the draw at 1/{order}), on the matrices on " ++
     "which the admitted relation returns false, over every field of at least that order; " ++
-    "5 of 5 controls refused, each at its line.")
+    "the same text is accepted on a source that computes the product another way; " ++
+    "6 of 6 controls refused, each at its line.")
 
 end FreivaldsCharge
 

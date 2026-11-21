@@ -26,9 +26,9 @@ The check reads the source with the frontend and writes modules on which Lean is
   method of fees has to establish (`guessingJudged`), with the theorem that the claim follows
   from it; the text proves that judgment and the witness, and states neither the claim nor
   where the walk starts. It walks the verifier's loop by an invariant (no round has hit yet;
-  `(3 - i) / 8` of the budget is left), meets the message for free and pays at the draw, named
-  as the source names its site (`site_r`), within the cap that the generated theorem
-  `guessing_cap_r` gives it. After the generated theorems stands a consumer that names no
+  `(3 - i) / 8` of the budget is left), meets the message for free (`walk_free`) and pays one
+  eighth at the draw (`walk_pay`), which is compared with the cap that the generated theorem
+  `guessing_cap_r` states for the site `site_r`; the text names neither. After the generated theorems stands a consumer that names no
   generated proposition, writes the verifier as its place in the roster and the bound as the
   number `3 / 8`, and proves it from the published theorem.
 - The comparison module has the same printed package and the frontend.
@@ -173,23 +173,19 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
       [(⟨[⟨⟨0⟩, [⟨⟨3⟩, 1, 8, 4⟩], []⟩]⟩, 1 / 2)] do
     throw (IO.userError "with four rounds the draw is not counted four times")
   -- An invariant that leaves one fee too few.
-  let short := template.replace "((3 - i : ℕ) : ℚ≥0) * (1 / 8) ≤ budget" "((2 - i : ℕ) : ℚ≥0) * (1 / 8) ≤ budget"
-    |>.replace "have split : (3 - i9 : ℕ) = (3 - (i9 + 1)) + 1 := by omega"
-      "have split : (2 - i9 : ℕ) = (2 - (i9 + 1)) + 1 := by omega"
-  if short == template then throw (IO.userError "the text has not the invariant that the control alters")
+  let short ← replaceOnce template "((3 - i : ℕ) : ℚ≥0) * (1 / 8) ≤ budget"
+    "((2 - i : ℕ) : ℚ≥0) * (1 / 8) ≤ budget"
+  let short ← replaceOnce short "have split : (3 - i : ℕ) = (3 - (i + 1)) + 1 := by omega"
+    "have split : (2 - i : ℕ) = (2 - (i + 1)) + 1 := by omega"
 
   -- A text that proves nothing of the judgment: after its last `end` it declares the judgment
   -- as an instance variable of the module's scope, with the two linters that would report that
   -- switched off, and takes the judgment from the variable.
-  let assumed := (template.replace "theorem guessing_judged : guessingJudged := by"
+  let assumed := (← replaceOnce template "theorem guessing_judged : guessingJudged := by"
       "theorem guessing_established : guessingJudged := by") ++
     "\nset_option linter.unusedSectionVars false\nset_option linter.concreteInstances false\n" ++
     "variable [assumed : Fact guessingJudged]\n" ++
     "theorem guessing_judged : guessingJudged := assumed.out\n"
-  if assumed == template ++ "\nset_option linter.unusedSectionVars false\nset_option linter.concreteInstances false\n" ++
-      "variable [assumed : Fact guessingJudged]\n" ++
-      "theorem guessing_judged : guessingJudged := assumed.out\n" then
-    throw (IO.userError "the text does not prove the judgment under its name")
 
   let module ← proofModule "Guess" written template
   let theorems := module.theorems
@@ -209,11 +205,12 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
   acceptedOutput "GuessSource" ok output []
   -- The cap of the draw is one sixteenth: the invariant does not start within the budget of
   -- three sixteenths, the fee of one eighth that the text pays is not within the cap that the
-  -- module states for the draw, and the consumer's number is not the budget.
+  -- module states for the draw, which the refusal names as the source does, and the consumer's
+  -- number is not the budget.
   expectUnproved "the charge halved" "CapControl" theorems halvedProof ofWalk
   expectPlaces "the charge halved" halvedProof
     ["↑(3 - 0) * (1 / 8) ≤ guessingCaps.budget",
-      "1 / 16 ≤ guessingCaps.capFrom guessingCaps.root [] site_r",
+      "the fee is not within the cap that the table gives the draw `site_r`\n  1 / 8 ≤ 1 / 16",
       "toProbability (↑3 / ↑16) = 3 / 8"]
   -- Four rounds: the invariant of the text pays three, and the body at the fourth round has
   -- nothing left to pay with; the consumer's number is not the budget of one half.

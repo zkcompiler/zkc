@@ -33,8 +33,8 @@ abbrev strictTolerance : ℕ := strictArgument0
 noncomputable section
 
 /-- The cap of the draw of the position in a table of caps: what the root's use allows the draw
-at key 0. -/
-abbrev drawCap (caps : CapTable) : ℚ≥0 := caps.capFrom caps.root [] ⟨0⟩
+of the source's `z`. -/
+abbrev drawCap (caps : CapTable) : ℚ≥0 := caps.capFrom caps.root [] site_z
 
 /-- The cap of `loose` at the draw is the bound at its tolerance: of eight positions, all but
 `tolerance + 1` can be zero in a table outside the relation. The kernel reads it from the table. -/
@@ -64,7 +64,7 @@ def coinAt (at_ : Occurrence) : InputPort V :=
   .own (.coin (.uniform (.fin 8))) [proverRole] at_ (.fin 8)
 
 /-- The draw of the position in a run that starts at `path`. -/
-abbrev coin (path : List Frame) : InputPort V := coinAt ⟨path, ⟨0⟩⟩
+abbrev coin (path : List Frame) : InputPort V := coinAt ⟨path, site_z⟩
 
 /-- The samplers of the statement: at each coin, the sampler of its law in the model. -/
 abbrev samplers : Samplers (RSig (model D)) := lawSamplers (model D) (StandardModel.draws D)
@@ -87,11 +87,10 @@ theorem walked_within (path : List Frame) (xs : List F) (tolerance : ℕ) (caps 
     (covers : ((7 - tolerance : ℕ) : ℚ≥0) / (8 : ℕ) ≤ drawCap caps) :
     (process D path xs).interpret (.charged (Permitted (model D)) (fees D caps path))
       (fun _ _ => False) (fun _ _ => True) caps.budget := by
-  walk_step
-  refine ⟨drawCap caps, fun z : ℕ => xs[z]? = some D.zero, ?_,
-    ⟨Or.inr ⟨drawPosition 7, rfl, ?_⟩, ?_⟩, fun z allowedZ kept => ?_⟩
-  · exact within
-  · rw [prEvent_drawPosition_entry xs 7 length]
+  walk
+  walk_pay (drawCap caps) excluding (fun z : ℕ => xs[z]? = some D.zero) as z kept
+  case weight =>
+    rw [prEvent_drawPosition_entry xs 7 length]
     refine le_trans ?_ (toProbability_mono covers)
     rw [toProbability_natCast_div _ 8 (by norm_num)]
     have all := count_add_countP_ne xs D.zero
@@ -100,25 +99,10 @@ theorem walked_within (path : List Frame) (xs : List F) (tolerance : ℕ) (caps 
     have eight : ((7 : ℕ) : ℝ≥0∞) + 1 = ((8 : ℕ) : ℝ≥0∞) := by norm_num
     rw [eight]
     exact ENNReal.div_le_div_right counted _
-  · exact (CapTable.allowanceFrom_at (model D) caps caps.root path [] ⟨0⟩ _
-      (by simp [ROp.occurrence])).ge
-  walk_step
-  walk_step
-  walk_step
-  · trivial
-  · walk_step
-    walk_step
-    walk_step
-    · trivial
-    · walk_step
-      -- what the walk has said of the run that returns
-      guard_hyp at2 :~ xs[z]? = some x3
-      guard_hyp h4 : x4 = decide (x3 ≠ D.zero)
-      guard_hyp h5 : x5 = !x4
-      guard_hyp at5 : x5 = true
-      subst h5 h4
-      have zero : x3 = D.zero := by simpa using at5
-      exact kept (at2.trans (congrArg some zero))
+  -- the entry at the position drawn, and the guard that it is zero
+  walk as ⟨entry, found⟩, passed
+  have zero : entry = D.zero := by simpa using passed
+  exact kept (found.trans (congrArg some zero))
 
 /-- What every judgment of the verifier that lets no run return pays for: a fee at the coin, for
 every position at which the table is zero. -/
@@ -129,24 +113,15 @@ theorem walked_excludes (allowed : ∀ op, (RSig (model D)).Reply op → Prop)
       (fun _ _ => True) within) :
     ∃ fee excluded, fee ≤ within ∧ pays ((coin path).operation (model D)) fee excluded ∧
       ∀ z : ℕ, allowed ((coin path).operation (model D)) z → xs[z]? = some D.zero → excluded z := by
-  walk_step at judged
+  walk at judged
   obtain ⟨fee, excluded, least, paid, rest⟩ := judged
   refine ⟨fee, excluded, least, paid, fun z allowedZ zero => ?_⟩
   by_contra kept
   have after := rest z allowedZ kept
   clear rest
-  walk_step at after
-  walk_step at after
-  walk_step at after
-  · exact absurd (at2.symm.trans zero) (by simp)
-  · walk_step at after
-    walk_step at after
-    walk_step at after
-    · subst h5 h4
-      have same : x3 = D.zero := Option.some.inj (at2.symm.trans zero)
-      simp [same] at at5
-    · walk_step at after
-      exact after
+  -- the read finds the zero entry: the guard passes, and the run returns
+  walk as failed at after
+  simp at failed
 
 /-- The verifier's program in the environment of a run: what the kernel runs where a run is
 computed. -/
@@ -178,7 +153,7 @@ theorem walk_reads_any_key (key : Key) (allowed : ∀ op, (RSig (model D)).Reply
       (.charged allowed pays) (fun _ _ => False) (fun _ _ => True) within) :
     ∃ fee excluded, fee ≤ within ∧
       pays ((coinAt ⟨path, key⟩).operation (model D)) fee excluded := by
-  walk_step at judged
+  walk at judged
   obtain ⟨fee, excluded, least, paid, _⟩ := judged
   exact ⟨fee, excluded, least, paid⟩
 
@@ -202,11 +177,11 @@ def countTo (xs : List F) (i : ℕ) : ℕ := (xs.take i).countP (· ≠ D.zero)
 
 omit [DecidableEq G] in
 /-- One more entry: the count grows by one when the entry is not zero. -/
-theorem countTo_succ (xs : List F) (i : ℕ) (x : F) (at_ : xs[i]? = some x) :
-    countTo D xs (i + 1) = countTo D xs i + (if x ≠ D.zero then 1 else 0) := by
+theorem countTo_succ (xs : List F) (i : ℕ) (below : i < xs.length) :
+    countTo D xs (i + 1) = countTo D xs i + (if xs[i] ≠ D.zero then 1 else 0) := by
   unfold countTo
-  rw [List.take_add_one, at_, List.countP_append]
-  by_cases zero : x = D.zero <;> simp [zero]
+  rw [List.take_add_one, List.getElem?_eq_getElem below, List.countP_append]
+  by_cases zero : xs[i] = D.zero <;> simp [zero]
 
 omit [DecidableEq G] in
 /-- The count over every entry. -/
@@ -218,44 +193,28 @@ theorem countTo_all (xs : List F) (n : ℕ) (length : xs.length = n) :
 set_option hygiene false in
 /-- The body of the relation at a tolerance, walked: the count is one loop, taken by the
 invariant that the carried value is the count of the entries before the iteration; the body is
-walked once, at any iteration; after the loop the count is compared with the tolerance. It
-reads, by name, the table `xs` and its `length`. -/
+walked once, at any iteration, where the read of the entry is decided by the length of the
+table; after the loop the count is compared with the tolerance. It reads, by name, the table
+`xs` and its `length`. -/
 macro "count_relation_walk" : tactic => `(tactic| (
   refine functionResult_of_judged ?_
-  walk_step
+  walk
   walk_loop fun i (count : ℕ) _ => count = countTo D xs i
   case first => rfl
   case step =>
-    walk_step
-    · have none : xs[i8]? = none := at1
-      rw [List.getElem?_eq_none_iff] at none
-      omega
-    walk_step
-    walk_step
-    walk_step
+    have below : i < xs.length := by omega
+    walk as entry
     · -- the entry is not zero: the choice gives 1
-      walk_step
-      walk_step
-      have nonzero : x4 ≠ D.zero := by
-        subst h6 h5
-        simpa using at6
-      rw [countTo_succ D xs i8 x4 at1, h10, invariant8]
+      have nonzero : xs[i] ≠ D.zero := by simpa using entry
+      rw [countTo_succ D xs i below, invariant_i]
       simp [nonzero]
     · -- the entry is zero: the choice gives 0
-      walk_step
-      walk_step
-      have zero : x4 = D.zero := by
-        subst h6 h5
-        simpa using at6
-      rw [countTo_succ D xs i8 x4 at1, invariant8]
+      have zero : xs[i] = D.zero := by simpa using entry
+      rw [countTo_succ D xs i below, invariant_i]
       simp [zero]
   case after =>
-    walk_step
-    walk_step
-    walk_step
-    walk_step
-    subst h14 h13
-    rw [not_blt, invariant8, countTo_all D xs 8 length]
+    walk
+    rw [not_blt, invariant_i, countTo_all D xs 8 length]
     rfl))
 
 /-- **What the relation of `loose` computes.** The function that the package has for
@@ -556,7 +515,7 @@ theorem unallowed_judges_nothing (caps : CapTable) (path : List Frame)
 def misplaced : CapTable := ⟨[⟨rootKey, [⟨⟨5⟩, 3, 8, 1⟩], []⟩]⟩
 
 /-- The table of `loose` as the table of another definition, with a draw at the same key. -/
-def foreign : CapTable := ⟨[⟨⟨rootKey.number + 1⟩, [⟨⟨0⟩, 3, 8, 1⟩], []⟩]⟩
+def foreign : CapTable := ⟨[⟨⟨rootKey.number + 1⟩, [⟨site_z, 3, 8, 1⟩], []⟩]⟩
 
 /-- **The fee is paid at the draw.** A table whose cap is on another instruction allows the draw
 nothing, and judges the verifier at no budget. -/
@@ -569,7 +528,7 @@ theorem misplaced_judges_nothing {a : Admitted V} (admitted : admit stored assoc
         (.charged (Permitted (model data)) (fees data misplaced path)) (fun _ _ => False)
         (fun _ _ => True) any :=
   unallowed_judges_nothing misplaced path
-    ((CapTable.allowanceFrom_at (model data) misplaced misplaced.root path [] ⟨0⟩ _
+    ((CapTable.allowanceFrom_at (model data) misplaced misplaced.root path [] site_z _
       (by simp [ROp.occurrence, coin, coinAt, InputPort.operation])).trans (by decide +kernel))
     admitted any
 

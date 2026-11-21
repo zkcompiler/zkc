@@ -4,29 +4,65 @@ public import Zkc.Formal.ProcessJudgment
 public import Zkc.Formal.RoleRules
 public import Zkc.Core.Meaning.Role
 public import Zkc.Core.Meaning.Program
+public import Zkc.Formal.WalkLabels
 public meta import Lean
 
 public meta section
 
 /-!
-The walk of a role's program under a judgment, one step at a time.
+The walk of a role's program under a judgment.
 
 A goal is a judgment of a process: `Process.interpret J done halt P …`, where `P` is the
 denotation of a term in an environment, or what is left of an instruction after an effect.
-`walk_step` asks the kernel for the head normal form of what the next instruction denotes, and
-states the goal that follows:
 
-- for values, the rest of the term in the environment extended by them. A value that is a
-  variable, a literal or a truth value is used as it is; any other gets a local variable with
-  the equation that says what it is, in a form to read;
+## What a text writes
+
+`walk` goes to the next place where a text has something to say: an effect, where the text says
+what the judgment asks of it (for the judgment with fees, `walk_free` and `walk_pay` of
+`Zkc/Formal/Written/WalkFees.lean`); a loop, which the text takes by an invariant
+(`walk_loop`); a call of a function, which it takes by the function's law (`walk_law`); or the
+end of the program, where what is left is what the judgment asks of the end. `walk … at h`
+walks a hypothesis that judges a process: what a judgment of the process gives, as the walk of
+a goal says what a judgment of it needs.
+
+A text follows the mathematics of a program, not its instructions.
+
+- **Nothing that an instruction binds has a name.** A value of a step that is no variable, no
+  literal and no truth value gets a variable and the equation that says what it is, both under
+  names that a text cannot write. While the process goes on, the variable stands for the value
+  in it, so that the kernel computes on the value only what the program does. Where the walk
+  stops with the process going on, the hypotheses are restated of the values. Where no process
+  goes on (the end, and a goal that a rule leaves beside the walk), the variables are replaced
+  by the values, and the operations of a model are read as the library says they are
+  (`walk_value`: the addition of the arithmetic model over a field is the field's). What a
+  text has left to prove at the end is stated in the inputs, the replies and its own names.
+- **A text names what it speaks of.** A reply has the name that the text gives it at the
+  effect. Where a step waits on a value (the condition of a guard, an element of a sequence
+  whose position is not known to be in it), there is a goal for each form of the value; a side
+  that is closed as it stands is closed, and the walk goes on in every other. `walk as h`
+  names the hypothesis that says which form the value is, `walk as ⟨x, h⟩` also the parts of
+  the form, and `walk as ⟨x, h⟩, g` the forks on the way in order. A name for which no fork is
+  met is an error. The arguments of an invariant have the names that the text gave them.
+- **A read that the context decides is no fork.** Where a step waits on a read of a sequence
+  and the context decides what the read finds, the step goes on with it. The context decides a
+  read by a hypothesis that says what it finds, by a law of reads (a theorem with the label
+  `walk_read`, as the entry of the list of a function at a position below its size) whose
+  premises are hypotheses or follow from them by arithmetic, or by the length of the list and
+  a bound of the position. A text that reads a sequence in another order, or once more, says
+  nothing new.
+
+## One step
+
+`walk_step` is one step of the walk. It asks the kernel for the head normal form of what the
+next instruction denotes, and states the goal that follows:
+
+- for values, the rest of the term in the environment extended by them;
 - for a stop, what the judgment asks of a stop;
 - for an effect, the judgment at the effect, with the rest after its reply;
-- where the step waits on a value (the element of a sequence at a position, the condition of a
-  guard), a goal for each form of that value, with the equation that says which form it is; each
-  of these goals then takes the step that its form makes possible.
+- where the step waits on a value, a goal for each form of that value, with the equation that
+  says which form it is; each of these goals then takes the step that its form makes possible.
 
-`walk_step at h` takes the same step on a hypothesis that judges a process: what a judgment of
-the process gives, as the walk of a goal says what a judgment of it needs.
+`walk_step at h` takes the same step on a hypothesis that judges a process.
 
 Nothing is unified. A step passes from the goal to the next along an equation of processes:
 the term is its first instruction and then the rest (`Term.denote_step`), what the instruction
@@ -48,6 +84,8 @@ is stated open, so that it can be met, and what follows the reply is sealed.
 Two instructions are taken by a rule and not by what they denote. The goal passes to the rule
 along the equation between the term and the step that the rule is about:
 
+- `walk_law law` takes a computation of a role by a law that the text gives, as a theorem of
+  what a function of the program computes: the value is what the law says.
 - `walk_compute value` takes a computation of a role by its law. The law, that the operation
   gives `value` on the operands, is left as the goal `law`; the body of a function that the
   operation calls is not read, and the law of a call is stated of the meaning of the function
@@ -57,8 +95,10 @@ along the equation between the term and the step that the rule is about:
   so far for each collected type, latest first, and of what the judgment carries along a path.
   It leaves the goals `first` (the invariant before the first iteration), `step` (the body at
   any iteration, from the invariant to the invariant at the next) and `after` (the rest, from
-  the invariant after the last). In `step` and `after` the carried values and what was
-  collected are variables, `x<name>` and `collected<name>` after the names that the loop binds.
+  the invariant after the last). In `step` and `after` the iteration number, the carried
+  values, what was collected and what the judgment carries are variables with the names that
+  the text gave the arguments of the invariant; the invariant is the hypothesis
+  `invariant_<index>`, and that the iteration is one of the loop's is `early_<index>`.
 
 `walk_step` on a computation that calls a function reads the function's body; on a loop it has
 no step. A block and an application wait for their first subject.
@@ -282,27 +322,34 @@ private def Judged.ending (j : Judged) (goal : MVarId) (ended equation : Expr) (
     (j.goal (mkAppN asked j.extra)) (← mkCongrArg motive asks) next)
   return next.mvarId!
 
-/-- The numbers of a list of names, when they are written. -/
-private partial def nameNumbers (names : Expr) : MetaM (Array Nat) := do
-  let (cells, _) ← spine names
-  cells.mapM fun (_, n) => do
-    let n ← kernelWhnf n
-    return (n.rawNatLit?.orElse fun _ => n.nat?).getD 0
+/-- The name of the equations by which the walk says what the values of its steps are. A walk
+gives such an equation, and the variable that it is about, a name that a text cannot write: a
+text names what it gave a name (a reply, a fork, the arguments of an invariant), and nothing
+that the program's instructions bind. -/
+private def equationBase : Lean.Name := `walked
+
+/-- Whether a hypothesis is an equation by which the walk says what a value of a step is. -/
+private def isWalkEquation (decl : LocalDecl) : Bool :=
+  decl.userName.hasMacroScopes && decl.userName.eraseMacroScopes == equationBase
 
 /-- The goal after values. Each value is settled. A value that settles to a local variable, a
-literal or a truth value is used as it is; any other gets a new local variable `x<name>`, at
-its computed type, with the equation `h<name>` that says what it is. The goal is then the rest
-on these. The result is the list of the settled values, the proof of the judgment of the rest on
-that list, sealed, which is the new goal at the values themselves, and the new goal. -/
-private def bindValues (goal : MVarId) (j : Judged) (values : Expr) (rest : Expr) (numbers : Array Nat) :
+literal or a truth value is used as it is; any other gets a new local variable, at its computed
+type, with the equation that says what it is, both under names that a text cannot write. The
+variable stands for the value in the process that goes on, where the kernel computes on it only
+what the program does; the equation is used where the walk stops (`readThrough`,
+`useEquations`). The result is the list of the settled values, the proof of the judgment of the
+rest on that list, sealed, which is the new goal at the values themselves, and the new goal. -/
+private def bindValues (goal : MVarId) (j : Judged) (values : Expr) (rest : Expr) :
     MetaM (Expr × Expr × MVarId) := goal.withContext do
   let (cells, nil) ← spine values
   -- a value that is what was read, under what a role holds of it, is that variable
   let settled ← cells.mapM fun (_, value) => readValue value
   let named := (List.range cells.size).toArray.filter fun i => !isPlain settled[i]!
+  let variables ← named.mapM fun _ => Lean.Core.mkFreshUserName `value
+  let equations ← named.mapM fun _ => Lean.Core.mkFreshUserName equationBase
   let mut decls := #[]
-  for i in named do
-    decls := decls.push (Name.mkSimple s!"x{numbers.getD i i}", ← readType (← inferType settled[i]!))
+  for k in [0:named.size] do
+    decls := decls.push (variables[k]!, ← readType (← inferType settled[named[k]!]!))
   let newType ← withLocalDeclsDND decls fun xs => do
     let mut elems := settled
     for k in [0:named.size] do
@@ -310,16 +357,13 @@ private def bindValues (goal : MVarId) (j : Judged) (values : Expr) (rest : Expr
     let mut body := j.of (mkApp rest (rebuild cells nil elems)).headBeta
     for k in (List.range named.size).reverse do
       let i := named[k]!
-      body := mkForall (Name.mkSimple s!"h{numbers.getD i i}") .default
-        (← computedTypes (← mkEq xs[k]! settled[i]!)) body
+      body := mkForall equations[k]! .default (← computedTypes (← mkEq xs[k]! settled[i]!)) body
     mkForallFVars xs body
   let next ← mkFreshExprSyntheticOpaqueMVar newType
   let mut proof := mkAppN next (named.map (settled[·]!))
   for i in named do
     proof := mkApp proof (← mkEqRefl settled[i]!)
-  let names := (named.map fun i => Name.mkSimple s!"x{numbers.getD i i}").toList ++
-    (named.map fun i => Name.mkSimple s!"h{numbers.getD i i}").toList
-  let (_, introduced) ← next.mvarId!.introN (2 * named.size) names
+  let (_, introduced) ← next.mvarId!.introN (2 * named.size) (variables.toList ++ equations.toList)
   return (rebuild cells nil settled, proof, introduced)
 
 /-- Where a stuck term waits: the first major premise, going inwards, that is not itself a
@@ -363,19 +407,74 @@ private def withLeft (bound form : Expr) : MetaM (Expr × Expr) := do
     mkLambdaFVars #[x] (mkAppN bound.getAppFn (b.set! 4 x))
   return (mkAppN bound.getAppFn (b.set! 4 form), ← mkCongrArg motive (← byComputation b[4]! form))
 
+/-- A premise of a law of a read, proved: by a hypothesis that states it, or by arithmetic on
+the hypotheses (the position below a bound, the length of the sequence). -/
+private def readPremise : Simp.Discharge := fun premise => do
+  if let some hypothesis ← findLocalDeclWithType? premise then return some (mkFVar hypothesis)
+  let goal ← mkFreshExprSyntheticOpaqueMVar premise
+  try
+    let (left, _) ← Lean.Elab.runTactic goal.mvarId! (← `(tactic| omega))
+    if left.isEmpty then return some (← instantiateMVars goal) else return none
+  catch _ => return none
+
+/-- A read of a sequence that the context decides: the value that the read is (`some value`, or
+`none`), with the proof that the read is it. The read is rewritten by the hypotheses that say
+what a variable is or what a read finds and by the laws of reads (`walk_read`), then, where
+those do not decide it, by the entry of a list at a position below its length. A term that is
+no read, and a read that is not decided, give nothing. -/
+private def knownRead (waited : Expr) : MetaM (Option (Expr × Expr)) := do
+  let read ← computedTypes waited
+  unless read.isAppOf ``GetElem?.getElem? do return none
+  let mut laws : SimpTheorems := {}
+  for name in ← Lean.labelled `walk_read do
+    laws ← laws.addConst name
+  for decl in ← getLCtx do
+    if decl.isImplementationDetail then continue
+    let some (_, lhs, _) := (← instantiateMVars decl.type).eq? | continue
+    if lhs.isFVar || lhs.isAppOf ``GetElem?.getElem? then
+      laws ← laws.add (.fvar decl.fvarId) #[] decl.toExpr
+  let attempt (laws : SimpTheorems) : MetaM (Option (Expr × Expr)) := do
+    -- a search that does not end within its bound, or that fails in any way, decides nothing:
+    -- the read is then a fork, as before
+    let found ← tryCatchRuntimeEx
+      (do
+        let context ← Simp.mkContext (config := { maxSteps := 2000 }) (simpTheorems := #[laws])
+          (congrTheorems := ← getSimpCongrTheorems)
+        let (result, _) ← Meta.simp read context (discharge? := some readPremise)
+        pure (some result))
+      (fun _ => pure none)
+    let some result := found | return none
+    let some proof := result.proof? | return none
+    unless result.expr.isAppOf ``Option.some || result.expr.isAppOf ``Option.none do return none
+    return some (result.expr, ← mkExpectedTypeHint proof (← mkEq waited result.expr))
+  if let some known ← attempt laws then return some known
+  attempt (← laws.addConst ``List.getElem?_eq_getElem)
+
 /-- A step that waits on a value: a goal for every form of the value. Each has the equation
-`at<key>` between what the step waits on, in a form to read, and the form; a part of the form
-is a variable at its computed type, named `x<name>` after what the step binds when the form has
-as many parts as the step has results. `bound` is what is left of the instruction and then the
-rest, `why` the equation between the process of the goal and it, and `stuck` the head normal
-form of what is left. -/
-private def splitStuck (goal : MVarId) (j : Judged) (bound why stuck : Expr) (key : Option Nat)
-    (numbers : Array Nat) : MetaM (List MVarId) := goal.withContext do
+between what the step waits on, in a form to read, and the form, under the name `fork` that the
+text gave or under one that a text cannot write; a part of the form is a variable at its
+computed type, under the name that the text gave it (`named`) or one that it cannot write.
+`bound` is what is left of the instruction and then the rest, `why` the equation between the
+process of the goal and it, and `stuck` the head normal form of what is left. -/
+private def splitStuck (goal : MVarId) (j : Judged) (bound why stuck : Expr)
+    (fork : Option Lean.Name := none) (named : Array Lean.Name := #[]) :
+    MetaM (List MVarId × Bool) := goal.withContext do
   let b := bound.getAppArgs
   let (waited, put) ← waitsOn stuck
   let waited ← settle waited
   let waitedType ← kernelWhnf (← inferType waited)
-  let equation := Name.mkSimple (match key with | some k => s!"at{k}" | none => "at_")
+  -- a read that the context decides is no fork: the step goes on with what it finds
+  if let some (found, isFound) ← knownRead waited then
+    let motive ← withLocalDeclD `waited waitedType fun form =>
+      mkLambdaFVars #[form] (j.of (mkAppN bound.getAppFn (b.set! 4 (put form))))
+    let next ← mkFreshExprSyntheticOpaqueMVar (mkApp motive found).headBeta
+    let (waiting, toWaiting) ← withLeft bound (put waited)
+    j.passSealed goal waiting (← mkEqTrans why toWaiting)
+      (← mkEqMPR (← mkCongrArg motive isFound) next)
+    return ([next.mvarId!], false)
+  let equation ← match fork with
+    | some name => pure name
+    | none => Lean.Core.mkFreshUserName `fork
   let newType ← withLocalDeclD `waited waitedType fun form => do
     let body := j.of (mkAppN bound.getAppFn (b.set! 4 (put form)))
     mkForallFVars #[form] (mkForall equation .default (← computedTypes (← mkEq waited form)) body)
@@ -385,25 +484,28 @@ private def splitStuck (goal : MVarId) (j : Judged) (bound why stuck : Expr) (ke
   let (form, afterForm) ← next.mvarId!.intro `waited
   let (_, afterEquation) ← afterForm.intro equation
   let cases ← afterEquation.cases form
-  cases.toList.mapM fun case => case.mvarId.withContext do
+  let sides ← cases.toList.mapM fun case => case.mvarId.withContext do
     let mut current := case.mvarId
     let parts := case.fields.filterMap fun field => if field.isFVar then some field.fvarId! else none
     for part in parts, i in [0:parts.size] do
       let type ← current.withContext do readType (← inferType (.fvar part))
       current ← current.replaceLocalDeclDefEq part type
-      if parts.size == numbers.size then
-        current ← current.rename part (Name.mkSimple s!"x{numbers[i]!}")
+      current ← current.rename part (← match named[i]? with
+        | some name => pure name
+        | none => Lean.Core.mkFreshUserName `part)
     return current
+  return (sides, true)
 
 /-- One step on what is left of an instruction and then the rest: `bound` is that process,
 `left.bind rest`, and `why` is the equation between the process of the goal and it. -/
-private def advance (goal : MVarId) (j : Judged) (bound why : Expr) (key : Option Nat)
-    (numbers : Array Nat) : MetaM (List MVarId) := goal.withContext do
+private def advance (goal : MVarId) (j : Judged) (bound why : Expr)
+    (fork : Option Lean.Name := none) (named : Array Lean.Name := #[]) :
+    MetaM (List MVarId × Bool) := goal.withContext do
   let b := bound.getAppArgs
   let rest := b[5]!
   let w ← kernelWhnf b[4]!
   if w.isAppOfArity ``Zkc.Core.Process.done 4 then
-    let (list, proof, introduced) ← bindValues goal j (w.getArg! 3) rest numbers
+    let (list, proof, introduced) ← bindValues goal j (w.getArg! 3) rest
     let (returned, toReturned) ← withLeft bound
       (mkApp4 (mkConst ``Zkc.Core.Process.done) b[0]! b[1]! b[2]! list)
     let after := (mkApp rest list).headBeta
@@ -411,7 +513,7 @@ private def advance (goal : MVarId) (j : Judged) (bound why : Expr) (key : Optio
       (mkAppN (mkConst ``Zkc.Core.Process.done_bind) #[b[0]!, b[1]!, b[2]!, b[3]!, list, rest])
       (← mkEq returned after)
     j.passSealed goal after (← mkEqTrans why (← mkEqTrans toReturned toAfter)) proof
-    return [introduced]
+    return ([introduced], false)
   else if w.isAppOfArity ``Zkc.Core.Process.halt 4 then
     let payload := w.getArg! 3
     let (_, toHalted) ← withLeft bound
@@ -419,7 +521,8 @@ private def advance (goal : MVarId) (j : Judged) (bound why : Expr) (key : Optio
     let rule := mkAppN (mkConst ``Zkc.Core.Process.halt_bind)
       #[b[0]!, b[1]!, b[2]!, b[3]!, payload, rest]
     let stopped := (← inferType rule).appArg!
-    return [← j.ending goal stopped (← mkEqTrans why (← mkEqTrans toHalted rule)) false payload]
+    return ([← j.ending goal stopped (← mkEqTrans why (← mkEqTrans toHalted rule)) false payload],
+      false)
   else if w.isAppOfArity ``Zkc.Core.Process.call 5 then
     -- the judgment at the effect, with the rest after its reply
     let op := w.getArg! 3
@@ -436,8 +539,8 @@ private def advance (goal : MVarId) (j : Judged) (bound why : Expr) (key : Optio
       (← mkEq called effect)
     let next ← mkFreshExprSyntheticOpaqueMVar (j.atEffect effect)
     j.pass goal effect (← mkEqTrans why (← mkEqTrans toCalled toEffect)) next
-    return [next.mvarId!]
-  else splitStuck goal j bound why w key numbers
+    return ([next.mvarId!], false)
+  else splitStuck goal j bound why w fork named
 
 /-- Where a walk starts: an equation between the meaning of a role or of a function in a program
 and the sealed denotation of its body. A module that states such equations for its program gives
@@ -511,15 +614,6 @@ private def readGoal (goal : MVarId) (hypothesis : Bool) : MetaM Judged := goal.
     read ← throughSeal read
   return { j with process := read.1, opened := read.2, conclusion }
 
-/-- The number of a key, for the names of what a step states; a key that is no literal gives
-none. -/
-private def keyNumber (key : Expr) : MetaM (Option Nat) := do
-  let key ← kernelWhnf key
-  if key.isAppOfArity ``Zkc.Core.Key.mk 1 then
-    let number ← kernelWhnf key.appArg!
-    return number.rawNatLit?.orElse fun _ => number.nat?
-  else return none
-
 /-- The rest of a term after a step, as a function of the values of the step. -/
 private def restAfter (a : Array Expr) (names rest : Expr) : MetaM Expr := do
   let (D, sem, path, env) := (a[0]!, a[1]!, a[5]!, a[6]!)
@@ -535,12 +629,13 @@ private def restAfter (a : Array Expr) (names rest : Expr) : MetaM Expr := do
 
 /-- One step of the walk on a goal: on the judgment that the goal is, or, with `hypothesis`, on
 the judgment from which the goal concludes. -/
-private def step (goal : MVarId) (hypothesis := false) : MetaM (List MVarId) := goal.withContext do
+private def stepOrFork (goal : MVarId) (hypothesis := false) (fork : Option Lean.Name := none)
+    (named : Array Lean.Name := #[]) : MetaM (List MVarId × Bool) := goal.withContext do
   let j ← readGoal goal hypothesis
   let p := j.process
   if p.isAppOfArity ``Zkc.Core.Process.bind 6 then
     -- what is left of an instruction after an effect or a split
-    advance goal j p (← mkEqRefl p) none #[]
+    advance goal j p (← mkEqRefl p) fork named
   else if p.isAppOfArity ``Zkc.Core.Term.denote 7 then
     let a := p.getAppArgs
     let (D, sem, Γ, outs, path, env) := (a[0]!, a[1]!, a[2]!, a[3]!, a[5]!, a[6]!)
@@ -554,7 +649,7 @@ private def step (goal : MVarId) (hypothesis := false) : MetaM (List MVarId) := 
       let stated := (← inferType rule).appArg!
       let bound := mkAppN stated.getAppFn (stated.getAppArgs.set! 5 (← restAfter a names rest))
       let why ← mkExpectedTypeHint rule (← mkEq p bound)
-      advance goal j bound why (← keyNumber key) (← nameNumbers names)
+      advance goal j bound why fork named
     else if term.isAppOfArity ``Zkc.Core.Term.ret 4 then
       -- the term returns the values of its names
       let exit := term.getArg! 3
@@ -564,9 +659,224 @@ private def step (goal : MVarId) (hypothesis := false) : MetaM (List MVarId) := 
       let elems ← cells.mapM fun (_, e) => kernelWhnf e
       let list := rebuild cells nil elems
       let ended := mkApp returned.appFn! list
-      return [← j.ending goal ended (← mkExpectedTypeHint rule (← mkEq p ended)) true list]
+      return ([← j.ending goal ended (← mkExpectedTypeHint rule (← mkEq p ended)) true list], false)
     else throwError "walk: the term is neither a step nor a return{indentExpr term}"
   else throwError "walk: the process is not a term in an environment{indentExpr p}"
+
+/-- One step of the walk on a goal: the goals that follow. -/
+private def step (goal : MVarId) (hypothesis := false) : MetaM (List MVarId) :=
+  return (← stepOrFork goal hypothesis).1
+
+/-- What stands next at a goal of the walk. -/
+private inductive Ahead where
+  /-- The goal judges no process: the program has ended, and the goal is what the judgment asks
+  of the end. -/
+  | ended
+  /-- The goal is the judgment at an effect, stated open. -/
+  | effect
+  /-- The next instruction is a loop, which is taken by an invariant. -/
+  | loop
+  /-- The next instruction is a computation of a role that calls a function, which a text may
+  take by the function's law. -/
+  | call
+  /-- Anything else: a step that the kernel computes. -/
+  | step
+
+/-- Whether an operation is a computation of a role that calls a function of the program: the
+call that a text can take by the function's law. A call inside the body of a function is no
+such computation; the rule of a law has no form for it yet, and a walk reads the body of the
+function that it calls. -/
+private def callsFunction (op : Expr) : MetaM Bool := do
+  let op ← kernelWhnf op
+  if op.isAppOfArity ``Zkc.Core.RoleOp.compute 11 then
+    return (← kernelWhnf (op.getArg! 6)).isAppOfArity ``Zkc.Core.LocalOp.call 4
+  return false
+
+/-- What stands next at a goal. -/
+private def ahead (goal : MVarId) (hypothesis : Bool) : MetaM Ahead := goal.withContext do
+  let target := (← instantiateMVars (← goal.getType)).consumeMData.headBeta
+  let judgment ← do
+    if hypothesis then
+      let .forallE _ judgment _ _ := target | return .ended
+      pure judgment.consumeMData.headBeta
+    else pure target
+  unless judgment.getAppFn.isConstOf ``Zkc.Core.Process.interpret && judgment.getAppNumArgs ≥ 8 do
+    return .ended
+  let j ← readGoal goal hypothesis
+  let p := j.process
+  if p.isAppOfArity ``Zkc.Core.Process.call 5 then return .effect
+  unless p.isAppOfArity ``Zkc.Core.Term.denote 7 do return .step
+  let term ← kernelWhnf p.getAppArgs[4]!
+  unless term.isAppOfArity ``Zkc.Core.Term.step 8 do return .step
+  let instr ← kernelWhnf (term.getArg! 5)
+  if instr.isAppOfArity ``Zkc.Core.Instr.loop 10 then return .loop
+  if instr.isAppOfArity ``Zkc.Core.Instr.op 6 then
+    if ← callsFunction (instr.getArg! 4) then return .call
+  return .step
+
+/-- The equations of the walk, used where no process goes on: every variable that stands for a
+value of a step is replaced by the value, so that what is left is stated in the replies, the
+inputs and the names of the text, and nothing in it is the walk's. This is for a goal that
+judges no process: the end of a program, and a goal that a rule leaves beside the walk (the
+weight of an excluded set, the law of a computation, the invariant before a loop). In a process
+that goes on the variables stay, since the kernel would compute on a value put in their place
+what the program does not ask. -/
+partial def useEquations (goal : MVarId) : MetaM MVarId := goal.withContext do
+  for decl in ← getLCtx do
+    unless isWalkEquation decl do continue
+    if let some next ← observing? (subst goal decl.fvarId) then
+      return ← useEquations next
+  return goal
+
+/-- The values of a goal that judges no process, in the terms of the mathematics: the goal and
+its hypotheses are rewritten by the equations that say what the operations of a model are
+(`walk_value`). A goal that this makes true as it stands is closed. -/
+def readValues (goal : MVarId) : MetaM (Option MVarId) := goal.withContext do
+  let names ← Lean.labelled `walk_value
+  if names.isEmpty then return some goal
+  let mut laws : SimpTheorems := {}
+  for name in names do
+    laws ← laws.addConst name
+  let context ← Simp.mkContext (config := { failIfUnchanged := false, instances := true })
+    (simpTheorems := #[laws]) (congrTheorems := ← getSimpCongrTheorems)
+  let hypotheses ← (← getLCtx).foldlM (init := #[]) fun found decl => do
+    if decl.isImplementationDetail then return found
+    if ← isProp (← instantiateMVars decl.type) then return found.push decl.fvarId
+    return found
+  -- the equations that hold by definition are read everywhere, also in an instance that a
+  -- statement carries: a decision about `x + y` is then one that a lemma about the field finds
+  let (result, _) ← dsimpGoal goal context (fvarIdsToSimp := hypotheses)
+  let some goal := result | return none
+  -- the others (what a literal is) are read as rewriting reads them
+  goal.withContext do
+    let hypotheses ← (← getLCtx).foldlM (init := #[]) fun found decl => do
+      if decl.isImplementationDetail then return found
+      if ← isProp (← instantiateMVars decl.type) then return found.push decl.fvarId
+      return found
+    let (result, _) ← simpGoal goal context (fvarIdsToSimp := hypotheses)
+    return result.map (·.2)
+
+/-- What a walk leaves where no process goes on, stated for the text: the equations of the walk
+are used, an equation between two lists of one returned value is the equation between the two
+values at the type of the mathematics, and the operations of a model are read
+(`readValues`). -/
+def stateForText (goal : MVarId) : MetaM (Option MVarId) := do
+  let goal ← useEquations goal
+  let goal ← goal.withContext do
+    let target := (← instantiateMVars (← goal.getType)).consumeMData
+    let some (_, lhs, rhs) := target.eq? | return goal
+    unless lhs.isAppOfArity ``Zkc.Core.HList.cons 6 && rhs.isAppOfArity ``Zkc.Core.HList.cons 6 do
+      return goal
+    let (l, r) := (lhs.getAppArgs, rhs.getAppArgs)
+    unless l[5]!.isAppOf ``Zkc.Core.HList.nil && r[5]!.isAppOf ``Zkc.Core.HList.nil do return goal
+    unless ← isDefEq l[5]! r[5]! do return goal
+    let elementType ← readType (← inferType l[4]!)
+    let level ← getLevel elementType
+    let values ← mkFreshExprSyntheticOpaqueMVar
+      (← computedTypes (mkApp3 (mkConst ``Eq [level]) elementType l[4]! r[4]!)) (← goal.getTag)
+    let motive ← withLocalDeclD `value (← inferType l[4]!) fun value =>
+      mkLambdaFVars #[value] (mkAppN lhs.getAppFn (l.set! 4 value))
+    goal.assign (← mkCongrArg motive values)
+    return values.mvarId!
+  readValues goal
+
+/-- The equations of the walk, read into the hypotheses of a goal whose process goes on: a
+hypothesis that speaks of a variable of the walk (a guard that passed, what a read found) is
+restated of the value. Left as they are: the equations; a hypothesis that judges a process
+(the one that a walk of a hypothesis goes on with), since the variables stay in a process; a
+hypothesis that something else depends on (another hypothesis or the goal names its proof),
+which cannot be replaced; and one whose statement is not a statement any more with the value
+in the variable's place. One hypothesis is restated at a time, and the context is read again
+after each, since restating a hypothesis gives those after it other identities; a hypothesis
+that is still there after it was restated is not restated again. -/
+private partial def readThrough (goal : MVarId) (kept : Array FVarId := #[]) : MetaM MVarId :=
+  goal.withContext do
+    let context ← getLCtx
+    let target ← instantiateMVars (← goal.getType)
+    for equation in context do
+      unless isWalkEquation equation do continue
+      let some (_, .fvar standing, value) := (← instantiateMVars equation.type).eq? | continue
+      for decl in context do
+        if decl.isImplementationDetail || isWalkEquation decl || decl.fvarId == standing then continue
+        if kept.contains decl.fvarId then continue
+        let type ← instantiateMVars decl.type
+        if type.consumeMData.getAppFn.isConstOf ``Zkc.Core.Process.interpret then continue
+        unless type.containsFVar standing && (← isProp type) do continue
+        -- its proof is named elsewhere: it stays
+        let named ← context.anyM fun other => do
+          if other.fvarId == decl.fvarId then return false
+          return (← instantiateMVars other.type).containsFVar decl.fvarId
+        if named || target.containsFVar decl.fvarId then continue
+        let motive ← mkLambdaFVars #[.fvar standing] type
+        unless ← Meta.isTypeCorrect motive do continue
+        let result ← goal.replaceLocalDecl decl.fvarId (type.replaceFVar (.fvar standing) value)
+          (← mkCongrArg motive equation.toExpr)
+        let stays ← result.mvarId.withContext do return (← getLCtx).contains decl.fvarId
+        return ← readThrough result.mvarId (if stays then kept.push decl.fvarId else kept)
+    return goal
+
+/-- A goal that holds as it stands: it is `True`, a hypothesis, an equation of a term with
+itself, or its hypotheses contradict one another (`contradiction`, which also decides a
+hypothesis that has no variable). The goal itself is not decided or computed.
+With `hypothesis`, the goal concludes from a judgment, which is introduced under that name
+first. -/
+private def closes (goal : MVarId) (hypothesis : Option Lean.Name := none) : TacticM Bool := do
+  let saved ← saveState
+  let goals ← getGoals
+  try
+    let goal ← match hypothesis with
+      | some name => pure (← goal.intro name).2
+      | none => pure goal
+    setGoals [goal]
+    evalTactic (← `(tactic| first | exact True.intro | assumption | contradiction | with_reducible rfl))
+    if (← getGoals).isEmpty then
+      setGoals goals
+      return true
+    saved.restore
+    return false
+  catch _ =>
+    saved.restore
+    return false
+
+/-- The walk from a goal to the next places where a text has something to say: an effect, a
+loop, a call of a function (unless `calls`, which reads the function's body as a step does), or
+the end. At a fork each side takes the step that its form makes possible; a side that is closed
+as it stands is closed, and the walk goes on in every other, so that a fork of which several
+sides are open leaves a goal for each. `names` are the names that the text gave the forks on
+the way, in order: for each, the parts of the form that an open side is, and the hypothesis
+that says which form it is. Along every path that is left open each name has to name a fork,
+so that a text does not name what the program no longer does. The result is the open goals,
+each with whether the program has ended there, and whether along some path every name named a
+fork (a path that is closed needs none of the names that are left for it). -/
+private partial def walkFrom (goal : MVarId) (calls : Bool)
+    (names : List (Array Lean.Name × Lean.Name)) (hypothesis : Option Lean.Name) :
+    TacticM (List (MVarId × Bool) × Bool) := do
+  -- a place where the walk stops with the goal open: every name has to have named a fork
+  let stop (stopped : String) (ended : Bool) : TacticM (List (MVarId × Bool) × Bool) := do
+    if let (_, name) :: _ := names then
+      throwError "walk: {stopped} before a value that the run waits on, and `{name}` names nothing"
+    return ([(goal, ended)], true)
+  let take : TacticM (List (MVarId × Bool) × Bool) := do
+    let (parts, name) ← match names with
+      | head :: _ => pure (head.1, some head.2)
+      | [] => pure (#[], none)
+    let (next, forked) ← stepOrFork goal hypothesis.isSome (fork := name) (named := parts)
+    -- a fork takes the first name, whatever the number of its sides; each side goes on with
+    -- the names that are left
+    let left := if forked then names.tail else names
+    -- a fork of a value that has no form leaves nothing to walk and nothing to name
+    if next.isEmpty then return ([], left.isEmpty)
+    let reached ← next.mapM fun side => walkFrom side calls left hypothesis
+    return (reached.flatMap (·.1), reached.any (·.2))
+  match ← ahead goal hypothesis.isSome with
+  | .step => take
+  | .call => if calls then take else stop "the walk stops at a call" false
+  | .ended =>
+    -- a side that is closed as it stands is closed, with or without names left for it
+    if ← closes goal hypothesis then return ([], names.isEmpty)
+    stop "the program ends" true
+  | .effect => stop "the walk stops at an effect" false
+  | .loop => stop "the walk stops at a loop" false
 
 /-- A goal whose process is a term in an environment that begins with a step: the judgment, the
 arguments of the denotation (dialect, semantics, context, outputs, term, path, environment) and
@@ -586,8 +896,10 @@ private def readTermStep (goal : MVarId) (hypothesis : Bool) :
 
 /-- A computation of a role, taken by its law: the goal `law`, that the operation gives the
 value on the operands in a form to read, and the rest on the value. For a call of a function of
-a program the law is about the meaning of the function there. -/
-private def compute (goal : MVarId) (value : Syntax) (hypothesis := false) :
+a program the law is about the meaning of the function there. With `byLaw` the text gave the
+proof of the law and not the value: the value is what the law says, and no goal is left for the
+law. -/
+private def compute (goal : MVarId) (written : Syntax) (hypothesis := false) (byLaw := false) :
     TacticM (List MVarId) := goal.withContext do
   let (j, a, t) ← readTermStep goal hypothesis
   let (sem, Γ, outs, path, env) := (a[1]!, a[2]!, a[3]!, a[5]!, a[6]!)
@@ -606,37 +918,66 @@ private def compute (goal : MVarId) (value : Syntax) (hypothesis := false) :
     s[4]!, s[5]!, Γ, outs, o[3]!, o[4]!, key, o[5]!, o[6]!, o[7]!, o[8]!, o[9]!, o[10]!,
     instr.getArg! 5, names, rest, path, env]
   let valueType := (← inferType rule).bindingDomain!
-  let value ← instantiateMVars (← Tactic.elabTermEnsuringType value valueType)
+  -- the law at a value, with the operands in a form to read
+  let lawAt (value : Expr) : MetaM Expr := do
+    let lawType := (← inferType (mkApp rule value)).bindingDomain!
+    let sides := lawType.getAppArgs
+    let (cells, nil) ← spine sides[1]!.appArg!
+    let operands ← cells.mapM fun (_, operand) => readValue operand
+    -- a call of a function of a program is stated as the meaning of the function there, which
+    -- is the form that a law of the function has
+    let read := rebuild cells nil operands
+    let operation ← kernelWhnf o[6]!
+    let table := s[4]!
+    let computed :=
+      if operation.isAppOfArity ``Zkc.Core.LocalOp.call 4 && table.isAppOfArity ``Zkc.Core.Defs.fnTable 4
+          && (table.getArg! 3).isAppOfArity ``Zkc.Core.Typed.defs 2 then
+        mkAppN (mkConst ``Zkc.Core.fnMeaning) #[s[0]!, s[1]!, (table.getArg! 3).appArg!,
+          operation.getArg! 2, operation.getArg! 3, read]
+      else mkApp sides[1]!.appFn! read
+    return mkAppN lawType.getAppFn #[sides[0]!, computed, sides[2]!]
+  let (value, law, lawGoals) ← do
+    if byLaw then
+      -- the value is what the law that the text gave says of the operands. The text states its
+      -- law of what the operands are, and not of the variables that stand for them in the
+      -- process: the law is elaborated at the values, and carried back along the equations.
+      let stated ← mkFreshExprMVar valueType
+      let law ← lawAt stated
+      let equations := (← getLCtx).foldl (init := #[]) fun found decl =>
+        if isWalkEquation decl then found.push decl else found
+      -- `forms[k]` is the law with the variables of the equations from `k` on replaced
+      let mut latestFirst := #[law]
+      for equation in equations.reverse do
+        let some (_, .fvar standing, value) := (← instantiateMVars equation.type).eq?
+          | throwError "walk: an equation of the walk is not of a variable{indentExpr equation.type}"
+        latestFirst := latestFirst.push (latestFirst.back!.replaceFVar (.fvar standing) value)
+      let forms := latestFirst.reverse
+      let mut proof ← Tactic.elabTermEnsuringType written forms[0]!
+      Term.synthesizeSyntheticMVarsNoPostponing
+      let value ← instantiateMVars stated
+      if value.hasExprMVar then
+        throwError "walk_law: the law does not say what the computation gives{indentExpr (← inferType proof)}"
+      for equation in equations, k in [0:equations.size] do
+        let some (_, .fvar standing, _) := (← instantiateMVars equation.type).eq? | continue
+        let motive ← mkLambdaFVars #[.fvar standing] (← instantiateMVars forms[k + 1]!)
+        proof ← mkEqMPR (← mkCongrArg motive equation.toExpr) proof
+      pure (value, ← instantiateMVars proof, [])
+    else
+      let value ← instantiateMVars (← Tactic.elabTermEnsuringType written valueType)
+      let law ← mkFreshExprSyntheticOpaqueMVar (tag := `law) (← lawAt value)
+      pure (value, law, (← readValues (← useEquations law.mvarId!)).toList)
   let withValue := mkApp rule value
-  -- the law, with the operands in a form to read
-  let lawType := (← inferType withValue).bindingDomain!
-  let sides := lawType.getAppArgs
-  let (cells, nil) ← spine sides[1]!.appArg!
-  let operands ← cells.mapM fun (_, operand) => readValue operand
-  -- a call of a function of a program is stated as the meaning of the function there, which is
-  -- the form that a law of the function has
-  let read := rebuild cells nil operands
-  let operation ← kernelWhnf o[6]!
-  let table := s[4]!
-  let computed :=
-    if operation.isAppOfArity ``Zkc.Core.LocalOp.call 4 && table.isAppOfArity ``Zkc.Core.Defs.fnTable 4
-        && (table.getArg! 3).isAppOfArity ``Zkc.Core.Typed.defs 2 then
-      mkAppN (mkConst ``Zkc.Core.fnMeaning) #[s[0]!, s[1]!, (table.getArg! 3).appArg!,
-        operation.getArg! 2, operation.getArg! 3, read]
-    else mkApp sides[1]!.appFn! read
-  let law ← mkFreshExprSyntheticOpaqueMVar (tag := `law)
-    (mkAppN lawType.getAppFn #[sides[0]!, computed, sides[2]!])
   -- the step is the rest on the value: the term is the step of the rule, and the rule gives
   -- the rest on what the role holds of the value
   let equation := mkApp withValue law
   let equationType ← inferType equation
-  let (computing, given) := (equationType.appFn!.appArg!, equationType.appArg!)
+  let (computing, held) := (equationType.appFn!.appArg!, equationType.appArg!)
   let restOn ← restAfter a names rest
-  let (list, proof, introduced) ← bindValues goal j given.appArg!.appArg! restOn (← nameNumbers names)
+  let (list, proof, introduced) ← bindValues goal j held.appArg!.appArg! restOn
   let after := (mkApp restOn list).headBeta
   j.passSealed goal after (← mkEqTrans (← byComputation j.process computing)
-    (← mkEqTrans equation (← byComputation given after))) proof
-  return [law.mvarId!, introduced]
+    (← mkEqTrans equation (← byComputation held after))) proof
+  return lawGoals ++ [introduced]
 
 /-- A statement that concludes a judgment, with the process of the judgment sealed. -/
 private partial def sealConclusion (type : Expr) : Expr :=
@@ -737,13 +1078,42 @@ private def loop (goal : MVarId) (invariant : Syntax) (monotone? : Option Syntax
   let looping := hypotheses.bindingBody!.bindingBody!.bindingBody!.getAppArgs[7]!
   j.pass goal looping (← byComputation j.process looping)
     (mkAppN withInvariant #[first, stepProof, afterProof])
-  -- the names: after the key of the loop, and after the names that the loop binds
-  let suffix := ((← keyNumber key).map toString).getD ""
-  let named (base : String) : Lean.Name := Name.mkSimple (base ++ suffix)
-  let inputs ← nameNumbers l[8]!
-  let results ← nameNumbers names
-  let carried := (inputs.extract 1 inputs.size).map fun n => Name.mkSimple s!"x{n}"
-  let collected := (results.extract carried.size results.size).map fun n => Name.mkSimple s!"collected{n}"
+  let hidden (base : Lean.Name) : MetaM Lean.Name := Lean.Core.mkFreshUserName base
+  let inputs := (← spine l[8]!).1
+  let results := (← spine names).1
+  -- where the text wrote the invariant as a function with a name for each of its arguments,
+  -- the goals of the loop have those names: the iteration number, each carried value, what was
+  -- collected for each collected type, and what the judgment carries along a path. What the
+  -- text left without a name (`_`) has one that a text cannot write, as all have for an
+  -- invariant that is not written as such a function.
+  let rec binders (e : Expr) (found : Array Lean.Name) : Array Lean.Name :=
+    match e with
+    | .lam name _ body _ => binders body (found.push name)
+    | .mdata _ inner => binders inner found
+    | _ => found
+  let written := binders invariant #[]
+  let carriedCount := inputs.size - 1
+  let collectedCount := results.size - carriedCount
+  let arguments := carriedCount + collectedCount + 2
+  let chosen (position : Nat) : Option Lean.Name :=
+    if written.size == arguments then
+      (written[position]?).filter fun name => !name.hasMacroScopes && !name.isAnonymous
+    else none
+  let named (position : Nat) (base : Lean.Name) : MetaM Lean.Name :=
+    match chosen position with
+    | some name => pure name
+    | none => hidden base
+  let carried ← (List.range carriedCount).toArray.mapM fun k => named (1 + k) `carried
+  let collected ← (List.range collectedCount).toArray.mapM fun k =>
+    named (1 + carriedCount + k) `collected
+  let index ← named 0 `index
+  let along ← named (arguments - 1) `along
+  let earlyName ← match chosen 0 with
+    | some name => pure (Name.mkSimple s!"early_{name}")
+    | none => hidden `early
+  let holdsName ← match chosen 0 with
+    | some name => pure (Name.mkSimple s!"invariant_{name}")
+    | none => hidden `invariant
   -- how often the loop runs, in a form to read
   let count := stepType.bindingBody!.bindingBody!.bindingBody!.bindingDomain!.appArg!
   let countRead ← do
@@ -754,12 +1124,12 @@ private def loop (goal : MVarId) (invariant : Syntax) (monotone? : Option Syntax
   -- before the first iteration
   let firstGoal ← first.mvarId!.replaceTargetDefEq (← applied firstType)
   -- the body, at any iteration
-  let (_, stepGoal) ← step.intro (named "i")
+  let (_, stepGoal) ← step.intro index
   let (state, stepGoal) ← stepGoal.intro `state
   let (stepGoal, _, _) ← openState stepGoal state carried collected
-  let (_, stepGoal) ← stepGoal.intro (named "t")
-  let (early, stepGoal) ← stepGoal.intro (named "early")
-  let (holds, stepGoal) ← stepGoal.intro (named "invariant")
+  let (_, stepGoal) ← stepGoal.intro along
+  let (early, stepGoal) ← stepGoal.intro earlyName
+  let (holds, stepGoal) ← stepGoal.intro holdsName
   let stepGoal ← stepGoal.withContext do
     let earlyType ← inferType (.fvar early)
     let stepGoal ← stepGoal.replaceLocalDeclDefEq early (atCount earlyType)
@@ -767,22 +1137,24 @@ private def loop (goal : MVarId) (invariant : Syntax) (monotone? : Option Syntax
   -- the rest, after the last iteration
   let (state, afterGoal) ← after.intro `state
   let (afterGoal, _, _) ← openState afterGoal state carried collected
-  let (_, afterGoal) ← afterGoal.intro (named "t")
-  let (holds, afterGoal) ← afterGoal.intro (named "invariant")
+  let (_, afterGoal) ← afterGoal.intro along
+  let (holds, afterGoal) ← afterGoal.intro holdsName
   let afterGoal ← afterGoal.withContext do
     afterGoal.replaceLocalDeclDefEq holds (← applied (atCount (← inferType (.fvar holds))))
   let afterGoal ← afterGoal.withContext do
     let judgedAfter ← readGoal afterGoal false
     let restOn ← restAfter a names rest
     let (list, proof, introduced) ←
-      bindValues afterGoal judgedAfter judgedAfter.process.appArg!.appArg! restOn results
+      bindValues afterGoal judgedAfter judgedAfter.process.appArg!.appArg! restOn
     let next := (mkApp restOn list).headBeta
     judgedAfter.passSealed afterGoal next (← byComputation judgedAfter.process next) proof
     pure introduced
-  firstGoal.setTag `first
+  -- before the first iteration no process goes on: the goal is stated as an end is
+  let firstGoal ← readValues (← useEquations firstGoal)
+  if let some firstGoal := firstGoal then firstGoal.setTag `first
   stepGoal.setTag `step
   afterGoal.setTag `after
-  return [firstGoal, stepGoal, afterGoal]
+  return firstGoal.toList ++ [stepGoal, afterGoal]
 
 /-- One step of the walk on the main goal, or, with `at h`, on a hypothesis that judges a
 process. Where the step waits on a value, the goal is split by the forms of the value, and each
@@ -804,11 +1176,82 @@ elab_rules : tactic
     let next ← if next.length ≤ 1 then pure next else next.flatMapM fun case => step case true
     replaceMainGoal (← next.mapM fun case => return (← case.intro name).2)
 
+/-- Walk to where the text has something to say. Steps are taken as `walk_step` takes them,
+until the goal is the judgment at an effect, the next instruction is a loop or calls a function,
+or the program has ended. At a fork a side that is closed as it stands is closed, and the walk
+goes on in every other: a fork of which several sides are open leaves a goal for each, in the
+order of the forms. What the judgment asks of an end is closed where it holds as it stands. The
+equations by which the steps named their values are then used: what is left is stated in the
+replies, the inputs and the variables of the text.
+
+`walk!` reads the body of a function that a role calls as a step does, and does not stop at the
+call. `walk as h` names the hypothesis of the first fork on the way (a guard that passed, a
+value in one of its forms) `h`; `walk as ⟨x, h⟩` also names the parts of the form that the open
+side is (the entry that a read of a sequence found); `walk as ⟨x, h⟩, g` names the forks on the
+way in order. `walk … at h` walks a hypothesis that judges a process: what a judgment of the
+process gives. A goal that judges no process is not walked. -/
+syntax (name := walkTo) "walk" (" as " (ident <|> ("⟨" ident,+ "⟩")),+)? (" at " ident)? : tactic
+
+@[inherit_doc walkTo]
+syntax (name := walkThroughCalls)
+  "walk!" (" as " (ident <|> ("⟨" ident,+ "⟩")),+)? (" at " ident)? : tactic
+
+/-- The names in a piece of syntax, in the order written. -/
+private partial def writtenNames (name : Syntax) : Array Lean.Name :=
+  if name.isIdent then #[name.getId] else name.getArgs.flatMap writtenNames
+
+/-- The walk of the main goal, or of a hypothesis of it. `names` are, for each fork that the
+text names, the parts of its form and then its hypothesis. -/
+private def walkTactic (calls : Bool) (names : List (Array Lean.Name × Lean.Name))
+    (at_ : Option (TSyntax `ident)) : TacticM Unit := withMainContext do
+  let main ← getMainGoal
+  let walked (goal : MVarId) (hypothesis : Option Lean.Name) : TacticM (List (MVarId × Bool)) := do
+    if (← ahead goal hypothesis.isSome) matches .ended then
+      throwError "walk: the goal judges no process{indentExpr (← goal.getType)}"
+    let (reached, named) ← walkFrom goal calls names hypothesis
+    unless named do
+      throwError "walk: every side was closed before each name had named a value that the run waits on"
+    return reached
+  match at_ with
+  | none =>
+    let reached ← walked main none
+    replaceMainGoal (← reached.filterMapM fun (goal, ended) => do
+      if ended then stateForText goal else return some (← readThrough goal))
+  | some h =>
+    let hypothesis ← getFVarId h
+    let name ← hypothesis.getUserName
+    let (reverted, goal) ← main.revert #[hypothesis]
+    unless reverted.size == 1 do
+      throwError "walk: other hypotheses depend on {h}"
+    let reached ← walked goal (some name)
+    replaceMainGoal (← reached.filterMapM fun (goal, ended) => do
+      let (_, goal) ← goal.intro name
+      if ended then stateForText goal else return some (← readThrough goal))
+
+/-- The names that a text gave the forks of a walk: for each, the parts and then the name. -/
+private def forkNames (names : Array Syntax) : List (Array Lean.Name × Lean.Name) :=
+  (names.map fun name =>
+    let parts := writtenNames name
+    (parts.pop, parts.back!)).toList
+
+elab_rules : tactic
+  | `(tactic| walk $[as $names,*]? $[at $h:ident]?) =>
+    walkTactic false (forkNames (((names.map (·.getElems)).getD #[]).map (·.raw))) h
+  | `(tactic| walk! $[as $names,*]? $[at $h:ident]?) =>
+    walkTactic true (forkNames (((names.map (·.getElems)).getD #[]).map (·.raw))) h
+
 /-- Take the computation of a role that is the next instruction by its law: the operation gives
 `value` on the operands. The law is left as the goal `law`, with the operands in a form to
 read; the main goal is the rest on the value. With `at h`, on a hypothesis that judges a
 process. -/
 syntax "walk_compute " term (" at " ident)? : tactic
+
+/-- Take the computation of a role that is the next instruction by a law that the text gives:
+a proof that the operation gives a value on the operands, as a theorem of what a function of
+the program computes. The value is what the law says; the main goal is the rest on it. A hole
+in the law (`_`) for an operand is the operand of the computation. With `at h`, on a hypothesis
+that judges a process. -/
+syntax "walk_law " term (" at " ident)? : tactic
 
 /-- Take the loop that is the next instruction by an invariant: a function of the iteration
 number, of each carried value, of what was collected so far for each collected type, latest
@@ -817,17 +1260,24 @@ first, and of what the judgment carries along a path. The goals are `first`, `st
 proof. -/
 syntax "walk_loop " term (" using " term)? : tactic
 
-elab_rules : tactic
-  | `(tactic| walk_compute $value:term) => do
-    replaceMainGoal (← compute (← getMainGoal) value)
-  | `(tactic| walk_compute $value:term at $h:ident) => withMainContext do
+/-- A computation taken by its law on the main goal or on a hypothesis of it. -/
+private def computeTactic (written : Syntax) (byLaw : Bool) (at_ : Option (TSyntax `ident)) :
+    TacticM Unit := withMainContext do
+  let main ← getMainGoal
+  match at_ with
+  | none => replaceMainGoal (← compute main written false byLaw)
+  | some h =>
     let hypothesis ← getFVarId h
     let name ← hypothesis.getUserName
-    let (reverted, goal) ← (← getMainGoal).revert #[hypothesis]
+    let (reverted, goal) ← main.revert #[hypothesis]
     unless reverted.size == 1 do
       throwError "walk: other hypotheses depend on {h}"
-    let next ← compute goal value true
-    replaceMainGoal [next[0]!, (← next[1]!.intro name).2]
+    let next ← compute goal written true byLaw
+    replaceMainGoal (next.dropLast ++ [(← next.getLast!.intro name).2])
+
+elab_rules : tactic
+  | `(tactic| walk_compute $value:term $[at $h:ident]?) => computeTactic value false h
+  | `(tactic| walk_law $law:term $[at $h:ident]?) => computeTactic law true h
   | `(tactic| walk_loop $invariant:term) => do
     replaceMainGoal (← loop (← getMainGoal) invariant none)
   | `(tactic| walk_loop $invariant:term using $monotone:term) => do

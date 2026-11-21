@@ -1,6 +1,7 @@
 module
 
 public import Mathlib.Data.List.OfFn
+public import Zkc.Formal.WalkLabels
 
 @[expose] public section
 
@@ -22,7 +23,9 @@ theorem List.exists_ofFn_of_length {α : Type} (xs : List α) (n : ℕ) (length 
   subst length
   exact ⟨xs.get, (List.ofFn_get xs).symm⟩
 
-/-- The entry of the list of a function at a position below its size. -/
+/-- The entry of the list of a function at a position below its size. A walk reads it by
+itself where a hypothesis says that the position is below the size. -/
+@[walk_read]
 theorem List.getElem?_ofFn_of_lt {α : Type} {n : ℕ} (f : Fin n → α) (i : ℕ) (below : i < n) :
     (List.ofFn f)[i]? = some (f ⟨i, below⟩) := by
   simp [below]
