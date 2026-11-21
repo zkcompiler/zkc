@@ -9,6 +9,7 @@ Read `AGENTS.local.md` if present.
 
 ## Code navigation
 
+- For text searches, use rg.
 - For structural searches, use ast-grep.
 - For symbol navigation in C++, Rust, and Python, use LSP.
 - For Lean work, use Lean Beam. Follow the `lean-beam` skill for tooling.
