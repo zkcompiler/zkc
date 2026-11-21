@@ -54,9 +54,11 @@ functions before it that the text names and of each goal's relation, the roles, 
 proof arguments and charge), that the model covers the package, where the walks of the module
 start (the meaning of the deciding role, of each named function and of each goal's relation as
 the sealed denotation of its body), the transfers of a statement from the installed program to
-every admitted one, the claim of each goal about the installed
-program, the goal for every admitted program from a proof of that claim, and the comparison of
-a goal's total with its ceiling. A statement names the model through a `ModelText`: the model,
+every admitted one, and for each goal four propositions that are defined before any proof: the
+claim about the installed program, the goal for every admitted program, the result (the model
+covers the package, and the goal), and that the hypotheses of the claim are met together.
+After the text of the proofs it writes the theorems of the last three from a proof of the
+claim and a witness, and the comparison of a goal's total with its ceiling. A statement names the model through a `ModelText`: the model,
 its samplers, its coverage, and what the statement assumes of it (`scalarFieldModelText` is
 the arithmetic model on a field with at least the order of the source's scalar field). It is
 written for one charge on a draw of the root; a goal whose ceiling is below the total of its
