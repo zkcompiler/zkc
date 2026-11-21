@@ -36,6 +36,10 @@ The check reads the source with the frontend and writes modules on which Lean is
 proof module (the printed package, what `Written.Statements` writes, and the text of
 `EitherCharge.lean.in` between), and the comparison module of the package with the frontend.
 
+A second, small module is of a root with a stepped loop (`Steps`: a draw whose type depends on
+the iteration, so that the loop is emitted as one block for each iteration). The walk goes
+into each block as it goes into an arm. Its text is in this check.
+
 One control is refused by Lean, at the place that the check names and at no other: the two
 charges exchanged in the source. The program and the budget are what they were; the cap of
 the draw of the second arm is one eighth, and the fee of one quarter that the text pays there
@@ -89,6 +93,39 @@ def read (text : String) : IO Subject := do
     throw (IO.userError "the verifier and the prover of the scheme are not the roles V and P")
   return ⟨text, ⟨claims, claims.functionsBeforeRoot⟩⟩
 
+/-- A root with a stepped loop: three draws of positions of two, three and four, and a guard on
+the claim. Each draw is charged one half, which the text does not need: on a false claim the
+guard stops the run. -/
+def steppedSource : String :=
+  "module t\nuse zkc::security::{soundness}\n" ++
+  "relation Holds(claim: bool): claim\n" ++
+  "protocol Steps roles(P, V)(claim: bool @(P, V)):\n" ++
+  "    for i in 0..3:\n        r <- draw index<i + 2> from V to P\n    guard @V claim\n" ++
+  "spec for Steps:\n    proves @V Holds(claim)\n    charge sites.r <= 1 / 2\n" ++
+  "scheme Checked = Steps:\n    prover P\n    construction interactive\n" ++
+  "goal stepped = soundness(Checked, stage = written)\n"
+
+/-- The text of the stepped loop: the walk goes into each block, meets its draw at no fee, and
+ends at the guard, which a false claim does not pass. -/
+def steppedText : String :=
+  "noncomputable section\n\n" ++
+  "theorem stepped_relation {F G : Type} (D : StandardModel.Data F G) [DecidableEq F]\n" ++
+  "    [DecidableEq G] (claim : Bool) :\n" ++
+  "    functionResult (t := .bool)\n" ++
+  "      (fnMeaning (StandardModel.model D) installed steppedMember (.cons claim .nil)) =\n" ++
+  "        some claim := by\n  kernel_rfl\n\n" ++
+  "theorem stepped_judged : steppedJudged := by\n" ++
+  "  claim_intro\n" ++
+  "  obtain rfl : input_claim = false :=\n" ++
+  "    Option.some.inj ((stepped_relation D input_claim).symm.trans rejected)\n" ++
+  "  walk\n  walk_free as first\n" ++
+  "  walk\n  walk_free as second\n" ++
+  "  walk\n  walk_free as third\n" ++
+  "  walk\n\n" ++
+  "theorem stepped_witnessed : steppedWitnessed :=\n" ++
+  "  stepped_witnessed_of Zkc.Formal.Written.FiniteModel.data false trivial\n" ++
+  "    (stepped_relation _ false)\n\nend\n"
+
 /-- The theorems of the text of the proofs. -/
 def ofText : List String :=
   ["either_relation", "either_judged", "either_judged_forked", "either_witnessed"]
@@ -126,12 +163,23 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
     (comparisonModule "EitherSource" written.text ["either"] written.package)
   let exchangedProof ← startLakeLean work "CapControl"
     (← proofModule "CapControl" exchanged template).text
+  -- The stepped loop: three blocks, each with its draw.
+  let steppedRoot ← IO.ofExcept (goalRoot steppedSource "stepped")
+  let steppedClaims ← IO.ofExcept (goalClaims steppedRoot ["stepped"])
+  let steppedStatements : Statements := ⟨steppedClaims, steppedClaims.functionsBeforeRoot⟩
+  unless (steppedClaims.goals.map fun goal => goal.siteLabels.map (·.2.1)) == [["r_0", "r_1", "r_2"]] do
+    throw (IO.userError "the stepped loop has not a draw in each of three blocks")
+  let steppedModule ← IO.ofExcept (steppedStatements.module standardModelText "Steps"
+    { text := steppedText, theorems := ["stepped_relation", "stepped_judged", "stepped_witnessed"] })
+  let steppedProof ← startLakeLean work "Steps" steppedModule.text
 
   let allowed := ["propext", "Classical.choice", "Quot.sound"]
   let (ok, output) ← finishLean proof
   acceptedOutput "Either" ok output theorems allowed
   let (ok, output) ← finishLean comparison
   acceptedOutput "EitherSource" ok output []
+  let (ok, output) ← finishLean steppedProof
+  acceptedOutput "Steps" ok output steppedModule.theorems allowed
   -- The fee of one quarter at the draw of the second arm is over its cap of one eighth.
   expectUnproved "the charges exchanged" "CapControl" theorems exchangedProof ofWalk
   expectPlaces "the charges exchanged" exchangedProof
@@ -139,6 +187,7 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
       "the fee is not within the cap that the table gives the draw `site_y`\n  1 / 4 ≤ 1 / 8"]
   IO.println ("Either is judged within the table of caps of its goal (the draws of its two arms " ++
     "at 1/8 and 1/4: 3/8), with a guard inside each arm and a guard before the draw; " ++
+    "the blocks of a stepped loop are walked; " ++
     "1 of 1 control refused, at the place that the check names and at no other.")
 
 end EitherCharge

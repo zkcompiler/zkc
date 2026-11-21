@@ -100,8 +100,18 @@ along the equation between the term and the step that the rule is about:
   the text gave the arguments of the invariant; the invariant is the hypothesis
   `invariant_<index>`, and that the iteration is one of the loop's is `early_<index>`.
 
+A region is walked as a program is. An instruction that runs a region (a choice, which runs
+the arm that its condition chooses; a block, which runs its body under its frame) is not
+computed as one instruction: the goal passes to the judgment of the region, whose condition at
+the end is the judgment of what follows it (`Process.interpret_bind`). Inside the region every
+rule is as outside, so the values of an arm have variables, its effects, loops and calls are
+met, and a fork inside it is named; at its end the goal is the judgment of the rest. Where the
+kernel computes the condition of a choice, the walk goes into the arm chosen; where the
+condition is not known, the choice is a fork on the condition, which a text names, and each
+side goes into its arm. A case analysis on a variant is still computed as one instruction.
+
 `walk_step` on a computation that calls a function reads the function's body; on a loop it has
-no step. A block and an application wait for their first subject.
+no step. An application waits for its first subject.
 
 A walk enters by itself. The meaning of a role or of a function in a program (`roleMeaning`,
 `fnMeaning`) is closed to Lean's own reduction, and the equation between it and the sealed
