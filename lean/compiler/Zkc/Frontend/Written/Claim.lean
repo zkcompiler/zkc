@@ -65,19 +65,21 @@ def schemeParties (c : AdmittedRoot) (scheme : SchemeEntry) : ExportM (Nat × Na
 def schemeVerifier (c : AdmittedRoot) (scheme : SchemeEntry) : ExportM Nat :=
   (·.2) <$> schemeParties c scheme
 
+def Selection.decidingFor (selected : Selection) (c : AdmittedRoot) (verifier : Nat) : ExportM DecidingClause := do
+  unless selected.scheme.protocol == c.id do throw "GL3: goal selects a different protocol"
+  let some key := c.state.results.key? c.id | throw "missing the instance of the scheme's protocol"
+  let place := (selected.goal.map (·.span)).getD selected.scheme.span
+  let clause ← decidingClause c.state key.declaration selected.clause place
+  unless clause.role == some verifier do
+    refuse clause.span "GL3" "the deciding role of the clause is the verifier of the scheme"
+  return clause
+
 /-- The clause from which a written soundness goal forms its claim (GL3): the deciding clause
 that the goal names, or the only one of the contract, whose deciding role is the verifier of
 the scheme. -/
 def goalClause (c : AdmittedRoot) (goal : String) : ExportM DecidingClause := do
   let (selected, _) ← selectNamedGoal c.state goal .soundness
-  unless selected.scheme.protocol == c.id do throw "GL3: goal selects a different protocol"
-  let some key := c.state.results.key? c.id | throw "missing the instance of the scheme's protocol"
-  let place := (selected.goal.map (·.span)).getD selected.scheme.span
-  let clause ← decidingClause c.state key.declaration selected.clause place
-  let verifier ← schemeVerifier c selected.scheme
-  unless clause.role == some verifier do
-    refuse clause.span "GL3" "the deciding role of the clause is the verifier of the scheme"
-  return clause
+  selected.decidingFor c (← schemeVerifier c selected.scheme)
 
 /-- What one written soundness goal claims, in the package of its claims. It is made by
 `goalClaims` alone. -/
@@ -105,6 +107,22 @@ structure ClaimedGoal where
   /-- The table of caps of the root at the goal's proof arguments (SX8): every charge that the
   root reaches, by use. The bound of the goal's statement is its total. -/
   caps : CapTable
+
+/-- A return from a verifier proving a relation and a return from a reduction have different
+postconditions. Consumers of the former require this evidence. -/
+def ClaimedGoal.proving (goal : ClaimedGoal) : Except String (PLift (goal.clause.kind = .proves)) :=
+  if h : goal.clause.kind = .proves then .ok ⟨h⟩
+  else .error (s!"{goal.goal}: the goal reads a `reduces` clause. The statement of a reduction " ++
+    "is about a return on which the reduced statement is true, and is not issued yet")
+
+/-- The total of the selected goal's source caps, used by the GL4 ceiling comparison. -/
+def ClaimedGoal.total (goal : ClaimedGoal) : Rat := goal.caps.ratio
+
+def ClaimedGoal.checkCeiling (goal : ClaimedGoal) : Except String Unit := do
+  let some ceiling := goal.ceiling | return ()
+  unless goal.total ≤ ceiling do
+    throw (s!"GL4: the goal `{goal.goal}` states the ceiling {ceiling}, and the total of its " ++
+      s!"charges is {goal.total}")
 
 /-- What written soundness goals of one scheme claim, as one package. It is made by
 `goalClaims` alone. -/
@@ -160,15 +178,14 @@ the scheme that the goal names. -/
 @[no_expose] def claimedGoal (c : AdmittedRoot) (state : Compile.State) (goal : String) :
     ExportM (ClaimedGoal × SchemeEntry × Compile.State) := do
   let (selected, _) ← selectNamedGoal c.state goal .soundness
-  unless selected.scheme.protocol == c.id do throw "GL3: goal selects a different protocol"
-  let clause ← goalClause c goal
+  let parties ← schemeParties c selected.scheme
+  let clause ← selected.decidingFor c parties.2
   let some application := clause.application
     | refuse clause.span "WK-CLAUSE" "the clause applies no relation"
   let some checked := c.state.results.checked? c.id
     | throw "missing the checked protocol of the scheme"
   let .protocol body := checked.definition.body
     | throw "the root of the scheme is no protocol"
-  let parties ← schemeParties c selected.scheme
   let (typed, state) ← evaluate state clause.span
     (Typing.typedClauses c.id selected.specification (only := some clause.place))
   let some (_, tree) := typed.find? (·.1 == clause.place)

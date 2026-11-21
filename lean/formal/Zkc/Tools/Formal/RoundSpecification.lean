@@ -4,14 +4,11 @@ import Zkc.Formal.Interactive.EndpointExpression
 namespace Zkc.Tools.Formal.RoundSpecification
 open Zkc.Frontend Zkc.Formal.Interactive.Sumcheck
 
-/-- The instance IDs below are local to the compilation that produced the typed laws. -/
+/-- The executable references selected by the typed laws and the decoded source expression.
+The installer resolves the references in the admitted callee. -/
 structure Selected where
-  owner : InstanceId
-  ends : InstanceId
-  atPoint : InstanceId
   boundary : InstanceId
   evaluate : InstanceId
-  polynomial : InstanceId
   expression : LineExpression
   deriving DecidableEq
 
@@ -83,7 +80,7 @@ private def readBodies (s : Compile.State) (field : StaticValue) (owner ends atP
     let some (.definition decl) := (members.find? (·.1 == name)).map Prod.snd | none
     let key ← s.results.key? id
     guard (key.declaration == decl && key.arguments == moduleKey.arguments)
-  return ⟨owner, ends, atPoint, boundary, evaluate, p, ⟨← component field wire.id u, ← component field wire.id v⟩⟩
+  return ⟨boundary, evaluate, ⟨← component field wire.id u, ← component field wire.id v⟩⟩
 
 /-- Read the two verifier laws under Self at the actual module argument of this reduction.
 The expressions retain resolved member instances, field rows, external symbols and operands. -/
@@ -91,19 +88,28 @@ def read (state : Compile.State) (reduction : InstanceId) : Except String Select
   let some call := state.table.entries[reduction]? | throw "missing reduction instance"
   let #[field, .module owner, .natural _, .natural _, .natural _] := call.key.arguments
     | throw "expected a field, a round implementation and three dimensions"
-  let (_, laws) ← Written.evaluate state default (Instances.moduleLaws owner)
-  let law (name : String) : Option InstanceId := do
-    let [id] := (List.range laws.table.entries.size).filter (fun i =>
-      let key := laws.table.entries[i]!.key
-      key.owner == some owner && laws.program.nameOf key.declaration == name) | none
-    return id
-  let some ends := law "ends" | throw "expected one ends obligation at the selected module"
-  let some atPoint := law "at_point" | throw "expected one at_point obligation at the selected module"
+  let (some #[ends, atPoint], laws) ← Written.evaluate state default
+      (Instances.boundLaws reduction 1 #["ends", "at_point"])
+    | throw "expected verifier laws on the reduction's round interface"
   let (_, typed) ← Written.evaluate laws default do
     Typing.typeBody ends default
     Typing.typeBody atPoint default
   let some result := readBodies typed field owner ends atPoint
     | throw "the typed verifier laws or polynomial interpretation did not match"
   return result
+
+/-- The meaning read from the source laws agrees with the companion's decoder. -/
+structure ForExpression (state : Compile.State) (reduction : InstanceId) (expression : LineExpression) where
+  selected : Selected
+  source : read state reduction = .ok selected
+  polynomial : selected.expression = expression
+
+def readAs (state : Compile.State) (reduction : InstanceId) (expression : LineExpression) :
+    Except String (ForExpression state reduction expression) := do
+  match source : read state reduction with
+  | .error why => throw why
+  | .ok selected =>
+    if polynomial : selected.expression = expression then return ⟨selected,source,polynomial⟩
+    else throw "the selected source polynomial differs from the companion"
 
 end Zkc.Tools.Formal.RoundSpecification

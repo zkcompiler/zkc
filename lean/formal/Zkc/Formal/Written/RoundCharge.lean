@@ -46,7 +46,7 @@ variable {rows : ScalarRows V} {vectors : (d : Nat) → TableRestriction.Rows ro
     {root red eval : Key} {ev : Events rows.scalarTy} {width : Nat} {σ : Type}
 
 /-- Written bound for acceptance by the admitted Sumcheck verifier on a false public sum. -/
-theorem sumcheck (cert : TableVerifier.Certified rows vectors p root red eval n ev)
+theorem sumcheck {decode : ScalarRows.PairEncoding} (cert : TableVerifier.Certified rows vectors p root red eval n ev decode)
     (M : Model V) [Lean.Grind.Field (rows.F M)] [DecidableEq (rows.F M)] (math : rows.Arithmetic M)
     (vectorMath : ∀ d, d < n → TableRestriction.Arithmetic (vectors d) M)
     (equality : ScalarEquality.Law rows.scalarTy ev.equal ev.equalType M)

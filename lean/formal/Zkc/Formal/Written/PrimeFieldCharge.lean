@@ -17,7 +17,7 @@ and VCVio samples every element. The source theorem needs only primality, the fa
 claim and the checked binding. All arithmetic and table-evaluation laws are discharged. -/
 theorem primeSumcheck {width n : Nat} [Fact (Nat.Prime (width+1))]
     {p : Core.Typed Standard} {root red eval : Key}
-    (cert : TableVerifier.Certified ArithmeticModel.scalarRows ArithmeticModel.vectors p root red eval n ArithmeticModel.events)
+    {decode : ScalarRows.PairEncoding} (cert : TableVerifier.Certified ArithmeticModel.scalarRows ArithmeticModel.vectors p root red eval n ArithmeticModel.events decode)
     {σ : Type} (advance : Occurrence → ZMod (width+1) → σ → σ)
     (other : Slots (RSig (ArithmeticModel.model (ZMod (width+1)) (ZMod (width+1)))) σ)
     (charge : Frontend.Written.DrawCharge) (binding : Matches charge cert.linked 1 (width+1))

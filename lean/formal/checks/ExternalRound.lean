@@ -4,19 +4,31 @@ import Zkc.Tests.Frontend.PrintedPackageSupport
 #eval show IO Unit from do
   let root := (← IO.currentDir) / ".." / ".."
   Zkc.Tests.Formal.ExternalRound.run root
-  let text ← Zkc.Tests.Formal.ExternalRound.statement root
-  IO.FS.withTempDir fun work => do
-    let checks := "\nnamespace CoefficientStatement\n" ++
-      "example : soundCaps.counted stored rootKey = true := by decide +kernel\n" ++
-      "example : soundCaps.budget = 1 / Zkc.Vocabulary.Field.bls12381Fr.order := by decide +kernel\n" ++
-      "#check soundGoal\nend CoefficientStatement\n"
-    let task ← Zkc.Tests.Frontend.PrintedPackageSupport.startLakeLean work "CoefficientStatement" (text ++ checks)
-    let (ok, output) ← Zkc.Tests.Frontend.PrintedPackageSupport.finishLean task
-    unless ok do throw (IO.userError output)
+  for (coeff, name) in [(false, "EndpointStatement"), (true, "CoefficientStatement")] do
+    let text ← Zkc.Tests.Formal.ExternalRound.statement root coeff name
+    IO.FS.withTempDir fun work => do
+      let checks := s!"\nnamespace {name}\n" ++
+        "example : soundCaps.counted stored rootKey = true := by decide +kernel\n" ++
+        "example : soundCaps.budget = 1 / Zkc.Vocabulary.Field.bls12381Fr.order := by decide +kernel\n" ++
+        s!"#check soundGoal\nend {name}\n"
+      let task ← Zkc.Tests.Frontend.PrintedPackageSupport.startLakeLean work name (text ++ checks)
+      let (ok, output) ← Zkc.Tests.Frontend.PrintedPackageSupport.finishLean task
+      unless ok do throw (IO.userError output)
 
 open Zkc.Core Zkc.Frontend.Written Zkc.Tools.Formal Zkc.Formal.Interactive.Sumcheck
 open Zkc.Formal.Written Zkc.Formal.FiniteService Zkc.Formal.ProbabilisticProcess OracleComp
 open scoped ENNReal
+
+-- The source interpretation is an index of the installed laws even when both encodings
+-- use the same wire type and have the same numerical collision bound.
+example {c : AdmittedRoot} {n : Nat} (g : SingleRoundGoal c n "sound" "challenge" Coefficients.expression) :
+    g.checked.verifier.linked.rounds.AllMembers (fun ops =>
+      ReductionRound.PairLaws _ g.checked.verifier.linked.entry.definitions ops Coefficients.expression.decode) := by
+  fail_if_success
+    have _ : g.checked.verifier.linked.rounds.AllMembers (fun ops =>
+      ReductionRound.PairLaws _ g.checked.verifier.linked.entry.definitions ops ScalarRows.endpointEncoding) :=
+        g.checked.verifier.roundLaws
+  exact g.checked.verifier.roundLaws
 
 /-- A client of the compiled API states the false-sum experiment and the numerical ceiling. -/
 theorem coefficientVerifierBound {c : AdmittedRoot} {n : Nat}

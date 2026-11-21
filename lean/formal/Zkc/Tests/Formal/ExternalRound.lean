@@ -18,8 +18,8 @@ private def firstCall := "    first <- Reduce<Pairs, rounds = n>(values, [], cla
 /-- Compile the written example with the selected round encodings and source controls. -/
 private def client (root : System.FilePath) (n : Nat) (order : List Bool)
     (edit : Option (String × String) := none) (permuted prefixPoint : Bool := false)
-    (libraryEdit : Option (String × String × String) := none)
-    (rootEdit : Option (String × String) := none) : IO AdmittedRoot := do
+    (libraryEdits : List (String × String × String) := [])
+    (rootEdits : List (String × String) := []) : IO AdmittedRoot := do
   let path := root / "examples/mixed_rounds.zkc"
   let mut text ← replaceOne (← IO.FS.readFile path) "Checked = Client<2>" s!"Checked = Client<{n}>"
   let impl (coeff : Bool) := if coeff then "Coefficients" else "Pairs"
@@ -36,16 +36,20 @@ private def client (root : System.FilePath) (n : Nat) (order : List Bool)
     text ← replaceOne text "second <- Reduce" "full = values ++ values\n    second <- Reduce"
     text ← replaceOne text "(values, [], claim, spec p = extension(values))" "(values, [claim], claim, spec p = extension(full))"
     text ← replaceOne text "evaluate(values, second.point)" "evaluate(full, second.point)"
-  if let some (old,replacement) := rootEdit then text ← replaceOne text old replacement
+  for (old,replacement) in rootEdits do text ← replaceOne text old replacement
   let entry : SourceInput := ⟨path.toString,Syntax.parseString path.toString text⟩
   let loader (parts : Array String) : IO (Option SourceInput) := do
     if let some (old, replacement) := edit then
       if parts == #["rounds","coefficients"] then
         return some (← SourceProtocolRoots.replaceOnce (root / "examples/support/rounds/coefficients.zkc") old replacement)
-    if let some (file,old,replacement) := libraryEdit then
-      if parts.back? == some file then
+    if let some file := parts.back? then
+      let edits := libraryEdits.filter (·.1 == file)
+      unless edits.isEmpty do
         let base := if file == "sumcheck" then root / "examples" else root / "libraries/zkc"
-        return some (← SourceProtocolRoots.replaceOnce (base / (file ++ ".zkc")) old replacement)
+        let path := base / (file ++ ".zkc")
+        let mut source ← IO.FS.readFile path
+        for (_,old,replacement) in edits do source ← replaceOne source old replacement
+        return some ⟨path.toString,Syntax.parseString path.toString source⟩
     SourcePairReadback.loadModule root .original parts
   IO.ofExcept (admitSoundnessGoal (← assemble #[entry] loader) "sound")
 
@@ -73,7 +77,7 @@ private def check (c : AdmittedRoot) (n : Nat) (order : List Bool) (expected : L
   let calls := steps.zipIdx.filterMap fun (step,i) => match step with
     | .op site _ (.apply red roster) args => some (site,red,roster,args,i)
     | _ => none
-  unless calls.length == order.length && rootUse.calls.length == order.length &&
+  unless expected.length == order.length && calls.length == order.length && rootUse.calls.length == order.length &&
       goal.caps.ratio == (order.length * n : Nat) / (Zkc.Vocabulary.Field.bls12381Fr.order : Rat) do
     throw (IO.userError s!"unexpected applications or goal budget {goal.caps.ratio}")
   for ((((site,red,roster,args,i),cap),coeff),failure) in calls.zip rootUse.calls |>.zip order |>.zip expected do
@@ -98,32 +102,73 @@ private def check (c : AdmittedRoot) (n : Nat) (order : List Bool) (expected : L
   IO.println s!"rounds={n}, encodings={order}, uses={goal.caps.uses.length}, budget={goal.caps.ratio}"
 
 /-- Exercise the common statement generator on the same source as the separate numeric consumer. -/
-def statement (root : System.FilePath) : IO String := do
-  let c ← client root 1 [true]
+def statement (root : System.FilePath) (coeff : Bool) (moduleName : String) : IO String := do
+  let c ← client root 1 [coeff]
   let claims ← IO.ofExcept (goalClaims c ["sound"])
   let chosen : Statements := { claims }
-  IO.ofExcept (chosen.statementsModule scalarFieldModelText "CoefficientStatement")
+  IO.ofExcept (chosen.statementsModule scalarFieldModelText moduleName)
 
 def run (root : System.FilePath) : IO Unit := do
   for order in [[false,true],[true,false],[true,true],[false,false]] do
     check (← client root 2 order) 2 order [none,none]
-  let endpoint ← client root 1 [false]
-  let endpointRows := sourceRows endpoint.emission.bindings
-  let _ ← IO.ofExcept (singleRoundGoal endpoint 1 "sound" "challenge" endpointLine
-    (endpointRows.endpointCompanion endpointRows.evaluationReadback [endpointRows.affineReadback]))
   for n in [0,1,4,10] do
-    let c ← client root n [true]
-    check c n [true] [none]
+    for coeff in [false,true] do
+      let c ← client root n [coeff]
+      check c n [coeff] [none]
+      let rows := sourceRows c.emission.bindings
+      let certify (expression : LineExpression) (proof : rows.Companion expression.decode) : IO Unit := do
+        let g ← IO.ofExcept (singleRoundGoal c n "sound" "challenge" expression proof)
+        let some caller := g.goal.caps.uses.getLast? | throw (IO.userError "missing root")
+        let [call] := caller.calls | throw (IO.userError "missing call")
+        let moved := {caller with calls := [{call with key := ⟨call.key.number + 1⟩}]}
+        let elsewhere : CapTable := ⟨g.goal.caps.uses.dropLast ++ [moved]⟩
+        unless elsewhere.ratio == g.goal.caps.ratio &&
+            !paysSingleCall elsewhere ⟨c.id⟩ g.checked.keys.site g.checked.issued.charge do
+          throw (IO.userError "moving the same fee to a different application did not distinguish the certificates")
+        unless g.checked.issued.charge.numerator == 1 && g.checked.issued.charge.denominator == Zkc.Vocabulary.Field.bls12381Fr.order do
+          throw (IO.userError "expected the exact degree-one fee")
+      if coeff then
+        certify Coefficients.expression (Coefficients.companion rows)
+        unless n == 0 || !(chargeSumcheck c n "challenge").isOk do throw (IO.userError "endpoint evidence certified coefficients")
+      else
+        certify endpointLine (rows.endpointCompanion rows.evaluationReadback [rows.affineReadback])
+  let sum := "Sum(values, claim)"
+  let clause := "proves @V " ++ sum
+  for (second, suffix, failure) in [
+      ("proves @V second: " ++ sum, ", clause = second)", none),
+      ("reduces @V second: " ++ sum ++ " to " ++ sum, ", clause = second)", some "`reduces` clause"),
+      ("proves @V second: " ++ sum, ", clause = second) <= 0", some "GL4")] do
+    let c ← client root 1 [true] (rootEdits := [(clause,"proves @V first: " ++ sum ++ "\n    " ++ second),
+      ("stage = written)", "stage = written" ++ suffix)])
     let rows := sourceRows c.emission.bindings
-    let g ← IO.ofExcept (singleRoundGoal c n "sound" "challenge" Coefficients.expression (Coefficients.companion rows))
-    if n > 0 then
-      let elsewhere := applicationCharges ⟨g.checked.keys.site.number + 1⟩ g.checked.issued.charge
-      if elsewhere == g.goal.caps.sites then throw (IO.userError "the same fees paid at a different application matched")
-    unless g.checked.issued.charge.numerator == 1 && g.checked.issued.charge.denominator == Zkc.Vocabulary.Field.bls12381Fr.order do
-      throw (IO.userError "expected the exact degree-one fee")
-    unless n == 0 || !(chargeSumcheck c n "challenge").isOk do throw (IO.userError "endpoint evidence certified coefficients")
+    let statements : Statements := { claims := ← IO.ofExcept (goalClaims c ["sound"]) }
+    match statements.statementsModule scalarFieldModelText "Selected", failure with
+    | .ok _, none => pure ()
+    | .error why, some wanted => unless why.contains wanted do throw (IO.userError why)
+    | .error why, none => throw (IO.userError why)
+    | .ok _, some wanted => throw (IO.userError s!"generator should refuse {wanted}")
+    match singleRoundGoal c 1 "sound" "challenge" Coefficients.expression (Coefficients.companion rows), failure with
+    | .ok _, none => pure ()
+    | .error why, some wanted => unless why.contains wanted do throw (IO.userError why)
+    | .error why, none => throw (IO.userError why)
+    | .ok _, some wanted => throw (IO.userError s!"expected refusal for {wanted}")
+  let extra := ( "pub module Coefficients: Round:",
+    "interface Extra:\n    law ends(): true\n\npub module Coefficients: Round + Extra:")
+  check (← client root 1 [true] (some extra)) 1 [true] [none]
+  let source := [("Client<n: nat> roles", "Client<n: nat, spec e: nat> roles"),
+    ("(values: Table<n>", "(spec ghost: Fr, values: Table<n>"),
+    ("Reduce<Coefficients, rounds = n>", "Reduce<Coefficients, rounds = n, spec fee = e>"),
+    ("stage = written)", "stage = written, spec e = 2) <= 2 / Fr::Order")]
+  let reduction := [("sumcheck", "k: nat, rounds: nat> roles", "k: nat, rounds: nat, spec fee: nat> roles"),
+    ("sumcheck", "charge sites.challenge <= R::Degree", "charge sites.challenge <= fee"),
+    ("sumcheck", "Reduce<Pairs, rounds = n>", "Reduce<Pairs, rounds = n, spec fee = 1>")]
+  let withProofArgument ← client root 1 [true] (libraryEdits := reduction) (rootEdits := source)
+  let rows := sourceRows withProofArgument.emission.bindings
+  let paid ← IO.ofExcept (singleRoundGoal withProofArgument 1 "sound" "challenge" Coefficients.expression (Coefficients.companion rows))
+  unless paid.subject.specification == #[2] && paid.checked.issued.charge.numerator == 2 do
+    throw (IO.userError "the verifier did not use the named goal's proof argument at the charged call")
   for change in [("second.value ==", "claim =="), ("second.value ==", "second.value !=")] do
-    let c ← client root 2 [true] (rootEdit := some change)
+    let c ← client root 2 [true] (rootEdits := [change])
     let rows := sourceRows c.emission.bindings
     match singleRoundGoal c 2 "sound" "challenge" Coefficients.expression (Coefficients.companion rows) with
     | .ok _ => throw (IO.userError "an altered final guard acquired the original bound")
@@ -131,7 +176,7 @@ def run (root : System.FilePath) : IO Unit := do
   check (← client root 2 [true] none true true) 2 [true] [none] [1,0] 1
   for edit in [("sumcheck", "value(polynomial(m), r)", "value(polynomial(m), 1)"),
       ("polynomial", "external(\"Zkc.Polynomial.line\")", "external(\"Other.line\")")] do
-    check (← client root 2 [true] none false false (some edit)) 2 [true] [some "typed verifier laws"]
+    check (← client root 2 [true] none false false [edit]) 2 [true] [some "typed verifier laws"]
   let evaluator := "def evaluate(m, r): m.0 + r * m.1"
   for (edit,why) in [(some (evaluator,"def evaluate(m, r): m.0"),"installed boundary or evaluation"),
       (some ("line(m.0, m.0 + m.1)", "line(m.0, m.1)"),"source polynomial")] do

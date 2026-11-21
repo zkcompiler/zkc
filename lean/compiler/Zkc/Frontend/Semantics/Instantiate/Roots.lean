@@ -565,6 +565,36 @@ def lawInstances (lawId : DeclarationId) (fixed : StaticEnvironment) (owner : Op
         | .skipped | .waiting _ | .staticIndex _ | .abandoned | .exhausted _ => pure ()
         | .defect _ => throw failure
 
+/-- Instantiate laws named together on a bound of the selected module parameter, with the
+arguments of that interface and the actual module as Self. A law with its own static
+parameters needs its arguments and is outside this query. -/
+def boundLaws (instanceId : InstanceId) (parameter : Nat) (names : Array String) :
+    CompileM (Option (Array InstanceId)) := do
+  let state ← get
+  let some key := state.results.key? instanceId | return none
+  let some decl := state.program.declarations[key.declaration]? | return none
+  let some (.module owner) := key.arguments[parameter]? | return none
+  let some (ref, _) := (deployedParameters state.program decl)[parameter]? | return none
+  let some scope := state.env.modules.loweredScope? ref.scope | return none
+  let some (some bound) := scope.bounds[ref.index]? | return none
+  let env := instanceEnv state.program decl key.arguments
+  let env := {env with file := (state.program.scopes[ref.scope]?).map (·.file) |>.getD env.file}
+  let mut candidates := #[]
+  for sort in bound.sorts do
+    let .reference reference := sort | continue
+    let (interface, args) ← evalInterface env reference
+    let some ns := (state.program.declarations[interface]?).bind (·.inner) | continue
+    let some members := state.program.namespaces[ns]? | continue
+    let some laws := names.mapM (fun name => do
+      let .declaration id ← members.names[name]? | none
+      let law ← state.program.declarations[id]?
+      guard (law.kind == DeclarationKind.lawMember && (deployedParameters state.program law).size == args.size &&
+        (specificationParameters state.program law).isEmpty)
+      pure id) | continue
+    candidates := candidates.push (args, laws)
+  let #[(args, laws)] := candidates | return none
+  return some (← laws.mapM fun law => instantiate law args ⟨state.program.nameOf law, bound.span⟩ (owner := some owner))
+
 /-- The laws typed at a module instance (SP7 item 7, SP10): every law of the interfaces it
 implements, with `Self` the instance, and every law of its own, at its values. -/
 def moduleLaws (inst : InstanceId) : CompileM Unit := do

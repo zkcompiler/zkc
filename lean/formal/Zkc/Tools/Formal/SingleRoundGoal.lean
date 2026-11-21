@@ -8,62 +8,64 @@ open Zkc.Core Zkc.Frontend Zkc.Frontend.Written Zkc.Formal.Interactive.Sumcheck
 open Zkc.Formal.Written Zkc.Formal.FiniteService Zkc.Formal.ProbabilisticProcess OracleComp
 open scoped NNRat NNReal ENNReal
 
-/-- Each paid occurrence must belong to the sole application under this verifier. -/
-def applicationCharges (site : Key) (charge : DrawCharge) : List (Site × Nat × Nat × Nat) :=
-  charge.draws.map fun (_,draw) => (⟨[site],draw⟩,charge.numerator,charge.denominator,1)
+/-- Check the single call and its draws in the shared table of uses, including a zero-round
+callee whose list of draws is empty. -/
+def paysSingleCall (caps : CapTable) (root site : Key) (charge : DrawCharge) : Bool := Id.run do
+  let some caller := caps.uses.getLast? | return false
+  let [call] := caller.calls | return false
+  let some child := caps.uses[call.callee]? | return false
+  return caller.definition == root && caller.draws.isEmpty && call.key == site && call.count == 1 &&
+    child.definition == charge.owner && child.calls.isEmpty &&
+    child.draws == charge.draws.map (fun (_, key) => ⟨key, charge.numerator, charge.denominator, 1⟩)
 
-/-- A consumer of a single-call table verifier and the cap data of its named written goal. -/
 structure SingleRoundGoal (c : AdmittedRoot) (n : Nat) (name draw : String) (expression : LineExpression) where
-  checked : ChargedSumcheck c n draw
-  selected : RoundSpecification.Selected
-  source : RoundSpecification.read c.state checked.keys.reduction.number = .ok selected
-  polynomial : selected.expression = expression
   claims : GoalClaims
   fromSource : goalClaims c [name] = .ok claims
   goal : ClaimedGoal
   chosen : claims.goals = [goal]
-  relation : (claims.state.results.key? goal.relation).map (·.declaration) = some checked.relation
-  operands : goal.statement = #[0,1]
+  proves : goal.clause.kind = .proves
+  relation : isTableSumRelation claims.state goal.relation = true
+  operands : goal.statement = #[0,1] ∧ goal.witness = some #[]
   observer : claims.verifier = 1
-  sites : goal.caps.sites = applicationCharges checked.keys.site checked.issued.charge
-  denominator : 0 < checked.issued.charge.denominator
+  ceiling : goal.checkCeiling = .ok ()
+  subject : ProofSubject
+  checked : ChargedSumcheck c n draw expression.decode subject.specification
+  atCall : (ProofSubject.mk c.id goal.specification).child c checked.keys.site = .ok subject
+  callee : subject.protocol = checked.keys.reduction.number
+  specification : RoundSpecification.ForExpression c.state checked.keys.reduction.number expression
+  sites : paysSingleCall goal.caps ⟨c.id⟩ checked.keys.site checked.issued.charge = true
   budget : goal.caps.budget = ((checked.issued.charge.draws.length * checked.issued.charge.numerator : Nat) : ℚ≥0) /
     checked.issued.charge.denominator
 
 def singleRoundGoal (c : AdmittedRoot) (n : Nat) (name draw : String) (expression : LineExpression)
     (companion : (Zkc.Formal.Written.SumcheckRows.sourceRows c.emission.bindings).Companion expression.decode) :
     Except String (SingleRoundGoal c n name draw expression) := do
-  match located : sumcheckCallKeys c.emission ⟨c.id⟩ with
-  | none => throw "expected a single reduction"
-  | some keys =>
-    match read : RoundSpecification.read c.state keys.reduction.number with
-    | .error why => throw why
-    | .ok selected =>
-      if polynomial : selected.expression = expression then do
-        let checked ← chargeSumcheckAt c n draw keys located (selectedMembers _ selected companion)
-        have same := Option.some.inj (checked.located.symm.trans located)
-        match fromSource : goalClaims c [name] with
-        | .error why => throw why
-        | .ok claims =>
-          match chosen : claims.goals with
-          | [goal] =>
-            let charge := checked.issued.charge
-            if ok : (claims.state.results.key? goal.relation).map (·.declaration) = some checked.relation ∧
-                goal.statement = #[0,1] ∧ claims.verifier = 1 ∧
-                goal.caps.sites = applicationCharges checked.keys.site charge ∧ 0 < charge.denominator ∧
-                goal.caps.budget = ((charge.draws.length * charge.numerator : Nat) : ℚ≥0) / charge.denominator then
-              return by
-                obtain ⟨relation,operands,observer,sites,denominator,budget⟩ := ok
-                exact ⟨checked,selected,same.symm ▸ read,polynomial,claims,fromSource,goal,chosen,
-                  relation,operands,observer,sites,denominator,budget⟩
-            else throw "the selected goal does not pay for the verifier at its checked call"
-          | _ => throw "expected one written goal"
-      else throw "the source polynomial differs from the companion"
+  let ⟨claims,fromSource⟩ ← MonadAttach.attach (goalClaims c [name])
+  match chosen : claims.goals with
+  | [goal] =>
+    let ⟨(),ceiling⟩ ← MonadAttach.attach goal.checkCeiling
+    let ⟨proves⟩ ← goal.proving
+    if suitable : isTableSumRelation claims.state goal.relation = true ∧
+        (goal.statement = #[0,1] ∧ goal.witness = some #[]) ∧ claims.verifier = 1 then
+      let some ⟨keys,located⟩ := (sumcheckCallKeys c.emission ⟨c.id⟩).attach | throw "expected a single reduction"
+      let ⟨subject,atCall⟩ ← MonadAttach.attach ((ProofSubject.mk c.id goal.specification).child c keys.site)
+      let specification ← RoundSpecification.readAs c.state keys.reduction.number expression
+      let checked ← chargeSumcheckAt c n draw keys located (selectedMembers _ specification.selected companion)
+        subject.specification
+      have same := Option.some.inj (checked.located.symm.trans located)
+      let charge := checked.issued.charge
+      if ok : subject.protocol = keys.reduction.number ∧ paysSingleCall goal.caps ⟨c.id⟩ checked.keys.site charge = true ∧
+          goal.caps.budget = ((charge.draws.length * charge.numerator : Nat) : ℚ≥0) / charge.denominator then
+        return ⟨claims,fromSource,goal,chosen,proves,suitable.1,suitable.2.1,suitable.2.2,ceiling,
+          subject,checked,same.symm ▸ atCall,same.symm ▸ ok.1,same.symm ▸ specification,ok.2.1,ok.2.2⟩
+      else throw "the selected goal does not pay for the verifier at its checked call"
+    else throw "expected the selected clause to prove the verifier's public table sum"
+  | _ => throw "expected one written goal"
 
 theorem SingleRoundGoal.total_eq {c : AdmittedRoot} {n : Nat} {name draw : String} {expression : LineExpression} (g : SingleRoundGoal c n name draw expression) :
     total g.checked.issued.charge = g.goal.caps.total := by
   unfold CapTable.total
-  rw [g.budget, toProbability_natCast_div _ _ g.denominator]
+  rw [g.budget, toProbability_natCast_div _ _ g.checked.issued.binding.2.2.2.1]
   simp [total, mul_div_assoc]
 
 /-- The counted source budget is exactly one full-field challenge fee per executed round. -/

@@ -32,24 +32,18 @@ def selectedMembers {V : Zkc.Core.Vocabulary} (scalar : ScalarRows V) (selected 
 executed round belong to the same admitted application. -/
 structure InstalledRound (call : MappedReduction (p := c.evidence.admitted.program) root red site state (sourceRows c.emission.bindings).scalarTy residual
   k n (sourceEvents c.emission.bindings) observer roles args route) (expression : LineExpression) where
-  selected : RoundSpecification.Selected
-  source : RoundSpecification.read c.state red.number = .ok selected
-  polynomial : selected.expression = expression
+  specification : RoundSpecification.ForExpression c.state red.number expression
   members : call.linked.rounds.AllMembers (fun ops => PairLaws rows call.linked.entry.definitions ops expression.decode)
 
 def installRound (call : MappedReduction (p := c.evidence.admitted.program) root red site state (sourceRows c.emission.bindings).scalarTy residual
   k n (sourceEvents c.emission.bindings) observer roles args route) (expression : LineExpression) (companion : (rows).Companion expression.decode) :
     Except String (InstalledRound call expression) := do
-  match source : RoundSpecification.read c.state red.number with
-  | .error why => throw why
-  | .ok selected =>
-    if polynomial : selected.expression = expression then
-      let entry := call.linked.entry
-      let unique := (List.nodup_append.mp entry.distinct).1
-      let some ⟨members⟩ := selectedMembers rows selected companion entry.definitions unique call.linked.rounds
-        | throw "an installed boundary or evaluation failed its source law"
-      return ⟨selected,source,polynomial,members⟩
-    else throw "the selected source polynomial differs from the companion"
+  let specification ← RoundSpecification.readAs c.state red.number expression
+  let entry := call.linked.entry
+  let unique := (List.nodup_append.mp entry.distinct).1
+  let some ⟨members⟩ := selectedMembers rows specification.selected companion entry.definitions unique call.linked.rounds
+    | throw "an installed boundary or evaluation failed its source law"
+  return ⟨specification,members⟩
 
 open Zkc.Formal.Interactive
 

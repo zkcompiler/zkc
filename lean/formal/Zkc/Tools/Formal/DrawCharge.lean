@@ -16,15 +16,15 @@ variable {V : Zkc.Core.Vocabulary} {p : Zkc.Core.Typed V} {owner : Key}
 /-- Retain the successful source read and the independently checked operand of the bound.
 The source lookup and semantic readback use the same definition in the admitted program. -/
 structure IssuedCharge (s : Compile.State) (name : String)
-    (linked : Linked p owner state t residual prefixSize rounds events) (degree order : Nat) where
+    (linked : Linked p owner state t residual prefixSize rounds events) (degree order : Nat) (specification : Array Nat := #[]) where
   charge : DrawCharge
-  written : drawCharge s p owner name = .ok charge
+  written : drawCharge s p owner name specification = .ok charge
   binding : Matches charge linked degree order
 
 def issueCharge (s : Compile.State) (name : String)
-    (linked : Linked p owner state t residual prefixSize rounds events) (degree order : Nat) :
-    Except String (IssuedCharge s name linked degree order) :=
-  match written : drawCharge s p owner name with
+    (linked : Linked p owner state t residual prefixSize rounds events) (degree order : Nat) (specification : Array Nat := #[]) :
+    Except String (IssuedCharge s name linked degree order specification) :=
+  match written : drawCharge s p owner name specification with
   | .error why => .error why
   | .ok charge =>
     if binding : Matches charge linked degree order then .ok ⟨charge,written,binding⟩
@@ -32,37 +32,46 @@ def issueCharge (s : Compile.State) (name : String)
 
 open Zkc.Formal.Interactive.Sumcheck Zkc.Formal.Written.SumcheckRows
 
-structure ChargedSumcheck (c : AdmittedRoot) (n : Nat) (name : String) where
-  relation : DeclarationId
-  selected : tableSumClaim? c = some relation
-  extension : hasSourceExtension c = true
+structure ChargedSumcheck (c : AdmittedRoot) (n : Nat) (name : String)
+    (decode : ScalarRows.PairEncoding) (specification : Array Nat) where
   keys : CallerKeys
   located : sumcheckCallKeys c.emission ⟨c.id⟩ = some keys
+  extension : hasSourceExtensionAt c keys = true
   verifier : TableVerifier.Certified (sourceRows c.emission.bindings) (vectorRows c.emission.bindings)
-    c.evidence.admitted.program ⟨c.id⟩ keys.reduction keys.evaluator n (sourceEvents c.emission.bindings)
-  issued : IssuedCharge c.state name verifier.linked 1 Zkc.Vocabulary.Field.bls12381Fr.order
+    c.evidence.admitted.program ⟨c.id⟩ keys.reduction keys.evaluator n (sourceEvents c.emission.bindings) decode
+  issued : IssuedCharge c.state name verifier.linked 1 Zkc.Vocabulary.Field.bls12381Fr.order specification
 
 def chargeSumcheckAt (c : AdmittedRoot) (n : Nat) (name : String) (keys : CallerKeys)
     (located : sumcheckCallKeys c.emission ⟨c.id⟩ = some keys) {decode : ScalarRows.PairEncoding}
-    (install : SequenceInstaller (sourceRows c.emission.bindings) decode) : Except String (ChargedSumcheck c n name) := do
+    (install : SequenceInstaller (sourceRows c.emission.bindings) decode) (specification : Array Nat) :
+    Except String (ChargedSumcheck c n name decode specification) := do
   let b := c.emission.bindings
   let rows := sourceRows b
   let some cert := TableVerifier.certifyUsing rows (vectorRows b) c.evidence.admitted.program ⟨c.id⟩
     keys.reduction keys.evaluator n (sourceEvents b) install
     | throw "uncertified Sumcheck verifier"
-  match selected : tableSumClaim? c with
-  | none => throw "expected the verifier's written sum relation on its public table and claim"
-  | some relation =>
-    if extension : hasSourceExtension c = true then
-      return ⟨relation,selected,extension,keys,located,cert,← issueCharge c.state name cert.linked 1 Zkc.Vocabulary.Field.bls12381Fr.order⟩
-    else throw "the selected reduction requires the extension of the verifier's public table"
+  if extension : hasSourceExtensionAt c keys = true then
+    return ⟨keys,located,extension,cert,← issueCharge c.state name cert.linked 1 Zkc.Vocabulary.Field.bls12381Fr.order specification⟩
+  else throw "the selected reduction requires the extension of the verifier's public table"
 
-def chargeSumcheck (c : AdmittedRoot) (n : Nat) (name : String) : Except String (ChargedSumcheck c n name) := do
+/-- The unnamed endpoint consumer selects the sole written sum clause. Named goals obtain
+their clause and operands from the common statement frontend. -/
+structure SourceChargedSumcheck (c : AdmittedRoot) (n : Nat) (name : String)
+    extends ChargedSumcheck c n name ScalarRows.endpointEncoding #[] where
+  relation : DeclarationId
+  selected : tableSumClaim? c = some relation
+
+def chargeSumcheck (c : AdmittedRoot) (n : Nat) (name : String) : Except String (SourceChargedSumcheck c n name) := do
   let rows := sourceRows c.emission.bindings
   match located : sumcheckCallKeys c.emission ⟨c.id⟩ with
   | none => throw "missing Sumcheck caller"
   | some keys =>
-    chargeSumcheckAt c n name keys located (checkEncoding rows (rows.endpointCompanion rows.evaluationReadback [rows.affineReadback]))
+    match selected : tableSumClaim? c with
+    | none => throw "expected the verifier's written sum relation on its public table and claim"
+    | some relation =>
+      let checked ← chargeSumcheckAt c n name keys located
+        (checkEncoding rows (rows.endpointCompanion rows.evaluationReadback [rows.affineReadback])) #[]
+      return ⟨checked,relation,selected⟩
 
 section Layer
 variable {c : AdmittedRoot} {hdr : ProtocolHeader c.emission.bindings.vocabulary}
@@ -131,17 +140,19 @@ private theorem emptyBindings (b : Zkc.Vocabulary.Project.Bindings) (plain : b.r
 /-- Transport both dependent witnesses along the equality of vocabularies. The program in
 the result is the same admitted program under the standard interpretation. -/
 private def standardReadback {b : Zkc.Vocabulary.Project.Bindings} {p : Zkc.Core.Typed b.vocabulary}
-    {root red eval : Key} {n : Nat} (cert : TableVerifier.Certified (sourceRows b) (vectorRows b) p root red eval n (sourceEvents b))
+    {root red eval : Key} {n : Nat} {decode : ScalarRows.PairEncoding}
+    (cert : TableVerifier.Certified (sourceRows b) (vectorRows b) p root red eval n (sourceEvents b) decode)
     {charge : DrawCharge} (binding : Matches charge cert.linked 1 Zkc.Vocabulary.Field.bls12381Fr.order)
     (same : b = {}) :
     (checked : TableVerifier.Certified ArithmeticModel.scalarRows ArithmeticModel.vectors
       (cast (congrArg (fun vocabulary : Zkc.Vocabulary.Project.Bindings => Zkc.Core.Typed vocabulary.vocabulary) same) p)
-      root red eval n ArithmeticModel.events) × PLift (Matches charge checked.linked 1 Zkc.Vocabulary.Field.bls12381Fr.order) := by
+      root red eval n ArithmeticModel.events decode) × PLift (Matches charge checked.linked 1 Zkc.Vocabulary.Field.bls12381Fr.order) := by
   subst b
   exact ⟨cert,⟨binding⟩⟩
 
 def ChargedSumcheck.standardVerifier {c : AdmittedRoot} {n : Nat} {name : String}
-    (checked : ChargedSumcheck c n name) (plain : c.emission.bindings.rows = []) :=
+    {decode : ScalarRows.PairEncoding} {specification : Array Nat}
+    (checked : ChargedSumcheck c n name decode specification) (plain : c.emission.bindings.rows = []) :=
   standardReadback checked.verifier checked.issued.binding (emptyBindings _ plain)
 
 abbrev Scalar := ZMod Zkc.Vocabulary.Field.bls12381Fr.order
@@ -150,7 +161,8 @@ abbrev scalarModel := ArithmeticModel.model Scalar Scalar
 /-- The external probability of accepting a false claim at the root that owns this
 certificate, using the source field and an answering service for its uniform challenge. -/
 theorem ChargedSumcheck.primeBound {c : AdmittedRoot} {n : Nat} {name : String}
-    (checked : ChargedSumcheck c n name) (plain : c.emission.bindings.rows = [])
+    {decode : ScalarRows.PairEncoding} {specification : Array Nat}
+    (checked : ChargedSumcheck c n name decode specification) (plain : c.emission.bindings.rows = [])
     {σ : Type} (advance : Occurrence → Scalar → σ → σ) (other : Slots (RSig scalarModel) σ)
     (path : List Zkc.Core.Frame) (s : σ) (x : Cube Scalar n) (claim : Scalar) (wrong : claim ≠ Cube.sum n x) :
     let cert := (checked.standardVerifier plain).1
@@ -161,6 +173,6 @@ theorem ChargedSumcheck.primeBound {c : AdmittedRoot} {n : Nat} {name : String}
       total checked.issued.charge := by
   let readback := checked.standardVerifier plain
   exact @primeSumcheck (Zkc.Vocabulary.Field.bls12381Fr.order - 1) n
-    ⟨scalarOrder_prime⟩ _ _ _ _ readback.1 σ advance other checked.issued.charge readback.2.down path s x claim wrong
+    ⟨scalarOrder_prime⟩ _ _ _ _ _ readback.1 σ advance other checked.issued.charge readback.2.down path s x claim wrong
 
 end Zkc.Tools.Formal

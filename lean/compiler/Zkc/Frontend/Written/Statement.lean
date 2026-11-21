@@ -372,9 +372,7 @@ def inputNames (s : Statements) : List String :=
     if plain name && (names.filter (· == name)).length == 1 then s!"input_{name}" else s!"port{index}"
 
 def parts (s : Statements) (model : ModelText) (goal : ClaimedGoal) : Except String Parts := do
-  unless goal.clause.kind == .proves do
-    throw (s!"{goal.goal}: the goal reads a `reduces` clause. The statement of a reduction " ++
-      "is about a return on which the reduced statement is true, and is not issued yet")
+  let _ ← goal.proving
   let ports ← s.ports
   let named := s.inputNames
   unless named.length == ports.length do
@@ -409,18 +407,9 @@ def parts (s : Statements) (model : ModelText) (goal : ClaimedGoal) : Except Str
       s!"(∀ {bound}, {valid}{returns (cons (statement ++ witnesses))})"
   return { binders, quantified, existential, names, inputs, premise }
 
-/-- The total of a goal's table of caps, as the frontend computes it. -/
-def _root_.Zkc.Frontend.Written.ClaimedGoal.total (goal : ClaimedGoal) : Rat := goal.caps.ratio
-
-/-- The ceilings of the goals (GL4): a goal that states a ceiling is issued a statement only when
-the total of its table of caps is within it. A source whose charges add up to more than its goal
-promises gets no statement, and is told the two numbers. -/
-def checkCeilings (s : Statements) : Except String Unit := do
-  for goal in s.claims.goals do
-    let some ceiling := goal.ceiling | continue
-    unless goal.total ≤ ceiling do
-      throw (s!"GL4: the goal `{goal.goal}` states the ceiling {ceiling}, and the total of its " ++
-        s!"charges is {goal.total}")
+/-- Check the source ceiling of every statement before issuing the module. -/
+def checkCeilings (s : Statements) : Except String Unit :=
+  s.claims.goals.forM ClaimedGoal.checkCeiling
 
 /-- For each goal, what the module states of its table before any proof: the counts of the table
 are those of the stored program (`<goal>_counted`), and its budget is the number that the
@@ -609,6 +598,7 @@ def module (s : Statements) (model : ModelText) (name : String) (proof : ProofTe
 facts, the transfers and the propositions. Lean elaborates the statements. -/
 def statementsModule (s : Statements) (model : ModelText) (name : String) :
     Except String String := do
+  s.checkCeilings
   return header (imports model false) ++ s!"namespace {name}\n" ++
     (Written.package s.package).text ++ opens ++ s.facts ++ "\n" ++ s.transfers ++
     (← s.claimTexts model) ++ s!"end {name}\n"

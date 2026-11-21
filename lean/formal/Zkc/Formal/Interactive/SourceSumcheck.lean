@@ -12,12 +12,13 @@ unseal Zkc.Core.fnMeaning Zkc.Core.roleMeaning Zkc.Core.protocolMeaning
 
 variable {V : Vocabulary} (rows : ScalarRows V) (vectors : (d : Nat) → TableRestriction.Rows rows.scalarTy d)
 
-structure Certified (p : Core.Typed V) (rootKey red eval : Key) (n : Nat) (events : Events rows.scalarTy) where
+structure Certified (p : Core.Typed V) (rootKey red eval : Key) (n : Nat) (events : Events rows.scalarTy)
+    (decode : ScalarRows.PairEncoding := ScalarRows.endpointEncoding) where
   shape : Shape V
   root : Member p.headers.protocols (header rows.scalarTy n rootKey shape)
   entry : ProtocolEntry p.defs root
   linked : Linked (earlier entry) red (table rows.scalarTy n) rows.scalarTy (table rows.scalarTy 0) 0 n events
-  roundLaws : ∃ decode : ScalarRows.PairEncoding, linked.rounds.AllMembers (fun ops => PairLaws rows linked.entry.definitions ops decode)
+  roundLaws : linked.rounds.AllMembers (fun ops => PairLaws rows linked.entry.definitions ops decode)
   evaluate : Member entry.earlier.fns (TableEvaluation.header rows.scalarTy eval n (0+n))
   tableLaw : TableEvaluation.Law vectors eval n (0+n) (fun M => Defs.fnTable M entry.definitions _ evaluate)
   meaning : ∀ M path inputs, roleMeaning M p root 1 path inputs =
@@ -25,7 +26,7 @@ structure Certified (p : Core.Typed V) (rootKey red eval : Key) (n : Nat) (event
 
 def certifyUsing (p : Core.Typed V) (rootKey red eval : Key) (n : Nat) (events : Events rows.scalarTy)
     {decode : ScalarRows.PairEncoding} (install : SequenceInstaller rows decode) :
-    Option (Certified rows vectors p rootKey red eval n events) := do
+    Option (Certified rows vectors p rootKey red eval n events decode) := do
   let t := rows.scalarTy
   let ⟨shape,root⟩ ← ProtocolEntry.locatePorts p.headers rootKey 2 [shared (table t n),shared t] []
   let entry := p.defs.protocolEntry p.distinct (show Member _ (header t n rootKey shape) from root)
@@ -35,7 +36,7 @@ def certifyUsing (p : Core.Typed V) (rootKey red eval : Key) (n : Nat) (events :
   let target := witness events linked.ref evaluate rootKey shape
   let ⟨meaning⟩ ← entry.recognize 1 target (fun run => ∀ M path inputs, run M path inputs = target.meaning entry.definitions 1 M path inputs)
     (fun _ _ _ => rfl)
-  return ⟨shape,root,entry,linked,⟨decode,members⟩,evaluate,tableLaw,meaning⟩
+  return ⟨shape,root,entry,linked,members,evaluate,tableLaw,meaning⟩
 
 def certify (p : Core.Typed V) (rootKey red eval : Key) (n : Nat) (events : Events rows.scalarTy)
     (roundProof : ∀ key, FunctionReadback _ (rows.EvaluationLaw key))
@@ -56,7 +57,7 @@ private theorem evaluate_of_length {F : Type} (q : Claims F) (n : Nat) (x : q.St
 
 variable {p : Core.Typed V} {rootKey red eval : Key} {n : Nat} {events : Events rows.scalarTy}
 
-abbrev Certified.FreshFrom (cert : Certified rows vectors p rootKey red eval n events) (M : Model V)
+abbrev Certified.FreshFrom {decode : ScalarRows.PairEncoding} (cert : Certified rows vectors p rootKey red eval n events decode) (M : Model V)
     {σ : Type} (K : Experiment (RSig M) σ) (points : List (rows.F M)) (positive : 0 < points.length)
     (path : List Frame) (s : σ) (claim : rows.F M) : Prop :=
   let t := rows.scalarTy
@@ -66,7 +67,7 @@ abbrev Certified.FreshFrom (cert : Certified rows vectors p rootKey red eval n e
     (K.renamePeers peerMap.to) points positive (path ++ [Frame.application ⟨1⟩]) env s
 
 /-- Acceptance of the actual source verifier on an incorrect sum over its public Boolean-cube table. -/
-theorem Certified.soundFrom (cert : Certified rows vectors p rootKey red eval n events) (M : Model V)
+theorem Certified.soundFrom {decode : ScalarRows.PairEncoding} (cert : Certified rows vectors p rootKey red eval n events decode) (M : Model V)
     [Lean.Grind.Field (rows.F M)] [DecidableEq (rows.F M)] (math : rows.Arithmetic M)
     (vectorMath : ∀ d, d < n → TableRestriction.Arithmetic (vectors d) M)
     (equality : ScalarEquality.Law rows.scalarTy events.equal events.equalType M)
@@ -87,8 +88,7 @@ theorem Certified.soundFrom (cert : Certified rows vectors p rootKey red eval n 
   rw [Experiment.expect_bind,Experiment.expect_mapR]
   rw [relation]
   simp only [Process.map_eq_bind,Experiment.expect_bind,Experiment.expect_done]
-  obtain ⟨decode,members⟩ := cert.roundLaws
-  have bounds := cert.linked.rounds.boundsFromMembers _ members M _ _ Cube.claims points positive 1
+  have bounds := cert.linked.rounds.boundsFromMembers _ cert.roundLaws M _ _ Cube.claims points positive 1
     (fun _ law => (PairLaws.interpret rows law M math points distinct collisions).reindex Fin.val) equality (K.renamePeers peerMap.to) inner env s x fresh
   have bounded := cert.linked.rounds.soundFrom M _ _ (K.renamePeers peerMap.to) Cube.claims (roundCost 1 points) inner
     (Mass.mul_nonneg Mass.natCast_nonneg (Mass.le_of_lt (Mass.inv_pos.mpr (Mass.natCast_pos.mpr positive)))) env s x bounds wrong
@@ -106,7 +106,7 @@ theorem Certified.soundFrom (cert : Certified rows vectors p rootKey red eval n 
   · simp [equal,Ne.symm equal,good]
 
 /-- Public boundary for a Core-valid flat table and a false claim about its sum. -/
-theorem Certified.soundValid (cert : Certified rows vectors p rootKey red eval n events) (M : Model V)
+theorem Certified.soundValid {decode : ScalarRows.PairEncoding} (cert : Certified rows vectors p rootKey red eval n events decode) (M : Model V)
     [Lean.Grind.Field (rows.F M)] [DecidableEq (rows.F M)] (math : rows.Arithmetic M)
     (vectorMath : ∀ d, d < n → TableRestriction.Arithmetic (vectors d) M)
     (equality : ScalarEquality.Law rows.scalarTy events.equal events.equalType M)
@@ -121,7 +121,7 @@ theorem Certified.soundValid (cert : Certified rows vectors p rootKey red eval n
   exact cert.soundFrom rows vectors M math vectorMath equality K points distinct positive path s x claim wrong fresh
 
 /-- Acceptance of the actual source verifier on an incorrect sum over its public Boolean-cube table. -/
-theorem Certified.sound (cert : Certified rows vectors p rootKey red eval n events) (M : Model V)
+theorem Certified.sound {decode : ScalarRows.PairEncoding} (cert : Certified rows vectors p rootKey red eval n events decode) (M : Model V)
     [Lean.Grind.Field (rows.F M)] [DecidableEq (rows.F M)] (math : rows.Arithmetic M)
     (vectorMath : ∀ d, TableRestriction.Arithmetic (vectors d) M)
     (equality : ScalarEquality.Law rows.scalarTy events.equal events.equalType M)

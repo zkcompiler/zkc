@@ -67,7 +67,7 @@ def sumcheck (c : SourceProtocolRoots.ReadbackFixture) (affine : Bool) (offset :
   let target := TableVerifier.witness (events b) trace.ref eval ⟨c.id⟩ shape
   let ⟨meaning⟩ ← entry.recognize 1 target (fun run => ∀ M path inputs, run M path inputs = target.meaning entry.definitions 1 M path inputs)
     (fun _ _ _ => rfl)
-  return ⟨shape,root,entry,trace,⟨ScalarRows.endpointEncoding,members⟩,eval,tableLaw,meaning⟩
+  return ⟨shape,root,entry,trace,members,eval,tableLaw,meaning⟩
 
 def gkr (c : SourceProtocolRoots.CheckedRoot) (args : List Name) (loopKey : Key) :
     Option (GateEndpoint c.emission.bindings c.evidence.admitted.program ⟨c.id⟩ ⟨17⟩ ⟨11⟩ loopKey args) := do
