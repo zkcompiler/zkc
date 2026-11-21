@@ -19,9 +19,12 @@ library and from the model that the check names:
 - `counts`: for each goal, that the counts of its table are those of the stored program and
   that its budget is the number that the frontend computed, both decided by the kernel;
 - `coverage`: the theorem `covered`, that the model of the statement covers the stored program;
+- `sites`: the key of each charged draw of the root under the name of its site in the source
+  (`site_<name>`), and for each goal the cap that its table gives the draw
+  (`<goal>_cap_<name>`), decided by the kernel;
 - `entries`: where the walks of the module start: for the deciding role, each named function
   and each goal's relation, the meaning in the installed program as the sealed denotation of
-  the body;
+  the body, each with the label at which a walk enters;
 - `transfers`: that what holds of the root and of a relation in the installed program holds of
   them in every program that admission gives, each found by its key;
 - `claimTexts`: for each goal, the propositions that are stated before any proof. The claim
@@ -34,16 +37,24 @@ library and from the model that the check names:
   is to draw one there (it may also not answer) and that answers only what is permitted. The
   generator writes the process, the samplers and the bound, and not what the probability is of. The goal for every admitted program (`<goal>Goal`), the result with the coverage
   and the counts of the table (`<goal>Result`), and that the hypotheses of the claim are met together (`<goal>Witnessed`);
+- `judgments`, for a text that establishes its claims by the judgment with fees
+  (`Method.fees`): for each goal the proposition `<goal>Judged` that the text has to prove
+  (`judgedAt`), the theorem `<goal>_claim_of_judged` that the claim follows from it, and the
+  theorem `<goal>_witnessed_of` that the hypotheses of the claim are met at any valid inputs
+  on which the relation returns false;
+- `conclusions`, for such a text and after it: `<goal>_installed : <goal>Claim` from the
+  theorem `<goal>_judged : <goal>Judged` of the text. A text of another method
+  (`Method.direct`) proves `<goal>_installed` itself;
 - `closings`: for each goal, the theorems `<goal>_sound : <goal>Goal`,
   `<goal>_result : <goal>Result` and `<goal>_met : <goal>Witnessed`, from the theorems
-  `<goal>_installed : <goal>Claim` and `<goal>_witnessed : <goal>Witnessed` that the text
-  between has to prove;
+  `<goal>_installed : <goal>Claim` and `<goal>_witnessed : <goal>Witnessed`;
 - `ceilings`: for each goal that states a ceiling, the theorem `<goal>_ceiling` that the total
   of its table of caps is within it. A goal whose ceiling is below that total is refused here (GL4),
   before any module is written.
 
-So a proof module is: the package, `opens`, `facts`, `coverage`, `counts`, `entries`,
-`transfers`, `claimTexts`, the proofs written for the protocol, `closings`, `ceilings`.
+So a proof module is: the package, `opens`, `facts`, `coverage`, `counts`, `sites`, `entries`,
+`transfers`, `claimTexts`, `judgments`, the proofs written for the protocol, `conclusions`,
+`closings`, `ceilings`.
 `Statements.module` assembles it, with its imports and with the names of the theorems whose
 axioms it asks for; a caller gives the model, the text of the proofs with what that text
 imports and the names of its theorems, and what it adds after the closing theorems. Every
@@ -593,6 +604,23 @@ def siteNames (s : Statements) : List String :=
     goal.sites.flatMap fun (site, keys) =>
       keys.zipIdx.map fun (_, index) => s!"{goal.goal}_cap_{siteLabel site index keys.length}"
 
+/-- What the method of fees has to establish for a goal, as the text of a proposition: on valid
+inputs of the deciding role on which the relation returns false, the role's process in the
+installed program is judged never to return within the budget of the goal's table of caps, each
+fee within what the table allows the effect that pays it. The binders are named: what the model
+is built from, `path`, the hypotheses of the model, each input with its validity, `rejected`. -/
+def judgedAt (s : Statements) (model : ModelText) (goal : ClaimedGoal) : Except String String := do
+  let name := goal.goal
+  let parts ← s.parts model goal
+  let premise := parts.premise "installed" s!"{name}Member"
+  return s!"∀ {model.binders} (path : List Frame)\n" ++
+    model.assumedBinders ++ parts.binders ++
+    s!"    (rejected : {premise}),\n" ++
+    s!"    (roleMeaning {model.model} installed rootMember verifierRole path {parts.inputs}).interpret\n" ++
+    s!"      (.charged (Permitted {model.model})\n" ++
+    s!"        (paysWithin {model.samplers} ({name}Caps.allowance {model.model} path)))\n" ++
+    s!"      (fun _ _ => False) (fun _ _ => True) {name}Caps.budget"
+
 /-- For each goal, what the method of fees has to establish, stated before any proof, and what
 follows from it:
 
@@ -618,14 +646,7 @@ def judgments (s : Statements) (model : ModelText) : Except String String := do
       "role on which the relation returns false, the role is judged never to return within the\n" ++
       "budget of the goal's table of caps, each fee within what the table allows the effect that\n" ++
       "pays it. -/\n" ++
-      s!"def {name}Judged : Prop :=\n" ++
-      s!"  ∀ {model.binders} (path : List Frame)\n" ++
-      model.assumedBinders ++ parts.binders ++
-      s!"    (rejected : {premise}),\n" ++
-      s!"    (roleMeaning {model.model} installed rootMember verifierRole path {parts.inputs}).interpret\n" ++
-      s!"      (.charged (Permitted {model.model})\n" ++
-      s!"        (paysWithin {model.samplers} ({name}Caps.allowance {model.model} path)))\n" ++
-      s!"      (fun _ _ => False) (fun _ _ => True) {name}Caps.budget\n\n" ++
+      s!"def {name}Judged : Prop :=\n  " ++ (← s.judgedAt model goal) ++ "\n\n" ++
       s!"/-- The claim of `{name}` follows from the judgment. -/\n" ++
       s!"theorem {name}_claim_of_judged (judged : {name}Judged) : {name}Claim := by\n" ++
       "  claim_intro\n" ++

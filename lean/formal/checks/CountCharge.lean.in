@@ -11,11 +11,14 @@ standard model covers the package (`covered`), that the counts of each goal's ta
 the program's and what its budget is (`loose_counted`, `loose_budget`), where the walks start (`verifierProgram` with
 `verifier_meaning`, `loose_meaning`, `strict_meaning`), the transfers `at_root`, `at_loose` and
 `at_strict`, and for each goal the propositions `looseClaim`, `looseGoal`, `looseResult` and
-`looseWitnessed`. After this
-text it writes the theorems of the propositions that were stated before it: the goals
-`loose_sound` and `strict_sound` from `loose_installed` and `strict_installed`, the results
-`loose_result` and `strict_result` with the coverage, and `loose_met` and `strict_met` from
-`loose_witnessed` and `strict_witnessed`. This text proves the four that are asked of it.
+`looseWitnessed`, with the judgment that the method of fees establishes (`looseJudged`), the
+theorem that the claim follows from it and the theorem that its hypotheses are met at a table
+on which the relation returns false (`loose_witnessed_of`). After this text it writes the
+claims `loose_installed` and `strict_installed` from `loose_judged` and `strict_judged`, and
+the theorems of the propositions that were stated before it: the goals `loose_sound` and
+`strict_sound`, the results `loose_result` and `strict_result` with the coverage, and
+`loose_met` and `strict_met` from `loose_witnessed` and `strict_witnessed`. This text proves
+the two judgments and gives the two tables.
 
 Nothing of the statement is written here. The source says
 `NearZero(xs): (∑ i ∈ 0..n, if xs[i] == 0 then 0 else 1) <= e`; the package has it as a function
@@ -84,7 +87,6 @@ theorem walked_within (path : List Frame) (xs : List F) (tolerance : ℕ) (caps 
     (covers : ((7 - tolerance : ℕ) : ℚ≥0) / (8 : ℕ) ≤ drawCap caps) :
     (process D path xs).interpret (.charged (Permitted (model D)) (fees D caps path))
       (fun _ _ => False) (fun _ _ => True) caps.budget := by
-  rw [process, verifier_meaning]
   walk_step
   refine ⟨drawCap caps, fun z : ℕ => xs[z]? = some D.zero, ?_,
     ⟨Or.inr ⟨drawPosition 7, rfl, ?_⟩, ?_⟩, fun z allowedZ kept => ?_⟩
@@ -127,7 +129,6 @@ theorem walked_excludes (allowed : ∀ op, (RSig (model D)).Reply op → Prop)
       (fun _ _ => True) within) :
     ∃ fee excluded, fee ≤ within ∧ pays ((coin path).operation (model D)) fee excluded ∧
       ∀ z : ℕ, allowed ((coin path).operation (model D)) z → xs[z]? = some D.zero → excluded z := by
-  rw [process, verifier_meaning] at judged
   walk_step at judged
   obtain ⟨fee, excluded, least, paid, rest⟩ := judged
   refine ⟨fee, excluded, least, paid, fun z allowedZ zero => ?_⟩
@@ -263,14 +264,12 @@ that many of them are not zero. -/
 theorem loose_relation (xs : List F) (length : xs.length = 8) :
     functionResult (t := .bool) (fnMeaning (model D) installed looseMember (.cons xs .nil)) =
       some (decide (xs.countP (· ≠ D.zero) ≤ looseTolerance)) := by
-  rw [loose_meaning (model D) (.cons xs .nil)]
   count_relation_walk
 
 /-- **What the relation of `strict` computes.** -/
 theorem strict_relation (xs : List F) (length : xs.length = 8) :
     functionResult (t := .bool) (fnMeaning (model D) installed strictMember (.cons xs .nil)) =
       some (decide (xs.countP (· ≠ D.zero) ≤ strictTolerance)) := by
-  rw [strict_meaning (model D) (.cons xs .nil)]
   count_relation_walk
 
 /-- A table on which the relation of `loose` returns false has more than its tolerance of
@@ -295,53 +294,6 @@ end
 section
 variable {F G : Type} (D : StandardModel.Data F G) [DecidableEq F] [DecidableEq G]
 
-/-- **Within the caps.** In every admitted program, on a table of eight entries of which more
-than `tolerance` are not zero, the verifier is judged never to return within the budget of a
-table of caps whose cap of the draw of the position is at least `(7 - tolerance) / 8`, each fee
-within what the table allows the effect that pays it. -/
-theorem judged_within (caps : CapTable) (tolerance : ℕ)
-    (within : drawCap caps ≤ caps.budget)
-    (covers : ((7 - tolerance : ℕ) : ℚ≥0) / (8 : ℕ) ≤ drawCap caps)
-    {a : Admitted V} (admitted : admit stored association = .ok a)
-    (path : List Frame) (xs : List F) (length : xs.length = 8)
-    (far : tolerance < xs.countP (· ≠ D.zero)) :
-    ∃ root : Member a.program.headers.protocols rootHeader,
-      a.program.findProtocol rootKey = some ⟨rootHeader, root⟩ ∧
-      (roleMeaning (model D) a.program root verifierRole path (inputs D xs)).interpret
-        (.charged (Permitted (model D)) (fees D caps path)) (fun _ _ => False)
-        (fun _ _ => True) caps.budget :=
-  at_root admitted
-    (fun p root => (roleMeaning (model D) p root verifierRole path (inputs D xs)).interpret
-      (.charged (Permitted (model D)) (fees D caps path)) (fun _ _ => False)
-      (fun _ _ => True) caps.budget)
-    (walked_within D path xs tolerance caps length far within covers)
-
-/-- **The probability.** Against every service that draws the position uniformly and answers
-only what is permitted, the simulation of the verifier by the service's handler returns with
-probability at most the total of the table of caps. A service is any handler of the verifier's effects
-with a state (`handlerOf_serviceOf`). -/
-theorem returns_within (caps : CapTable) (tolerance : ℕ)
-    (within : drawCap caps ≤ caps.budget)
-    (covers : ((7 - tolerance : ℕ) : ℚ≥0) / (8 : ℕ) ≤ drawCap caps)
-    {a : Admitted V} (admitted : admit stored association = .ok a)
-    (path : List Frame) (xs : List F) (length : xs.length = 8)
-    (far : tolerance < xs.countP (· ≠ D.zero))
-    {σ : Type} (service : Service (RSig (model D)) σ)
-    (follows : service.Follows (samplers D))
-    (permitted : ∀ op s reply t, (some reply, t) ∈ support (service op s) →
-      Permitted (model D) op reply) (s : σ) :
-    ∃ root : Member a.program.headers.protocols rootHeader,
-      a.program.findProtocol rootKey = some ⟨rootHeader, root⟩ ∧
-      Pr{let out ← (simulateQ (handlerOf service) (embed
-          (roleMeaning (model D) a.program root verifierRole path (inputs D xs)))).run.run s}[
-        ∃ results, out.1 = some (.inl results)] ≤ caps.total := by
-  obtain ⟨root, found, judged⟩ :=
-    judged_within D caps tolerance within covers admitted path xs length far
-  refine ⟨root, found, ?_⟩
-  rw [prEvent_simulation_returns, CapTable.total]
-  exact allowed_bounds_return service _ (caps.allowance (model D) path)
-    (Permitted (model D)) permitted follows _ caps.budget s judged
-
 /-- The probability, at the root of the installed program. -/
 theorem returns_installed (caps : CapTable) (tolerance : ℕ)
     (within : drawCap caps ≤ caps.budget)
@@ -365,22 +317,20 @@ end
 
 /-! ## The two goals -/
 
-/-- The claim of `loose`: the validity of the table gives its length, and the relation of the
+/-- The judgment of `loose`: the validity of the table gives its length, and the relation of the
 goal says how many of its entries are not zero. -/
-theorem loose_installed : looseClaim := by
-  intro F G D _ _ path xs valid rejected
-  have length : (xs : List F).length = 8 := valid.2 8 rfl
-  exact returnsWithin_of_returns _ _ _ _ fun service follows permitted s =>
-    returns_installed D looseCaps looseTolerance loose_within loose_exact.ge
-      path xs length (loose_far D xs length rejected) service follows permitted s
+theorem loose_judged : looseJudged := by
+  claim_intro
+  have length : (input_xs : List F).length = 8 := valid_input_xs.2 8 rfl
+  exact walked_within D path input_xs looseTolerance looseCaps length
+    (loose_far D input_xs length rejected) loose_within loose_exact.ge
 
-/-- The claim of `strict`, as `loose`. -/
-theorem strict_installed : strictClaim := by
-  intro F G D _ _ path xs valid rejected
-  have length : (xs : List F).length = 8 := valid.2 8 rfl
-  exact returnsWithin_of_returns _ _ _ _ fun service follows permitted s =>
-    returns_installed D strictCaps strictTolerance strict_within strict_exact.ge
-      path xs length (strict_far D xs length rejected) service follows permitted s
+/-- The judgment of `strict`, as `loose`. -/
+theorem strict_judged : strictJudged := by
+  claim_intro
+  have length : (input_xs : List F).length = 8 := valid_input_xs.2 8 rfl
+  exact walked_within D path input_xs strictTolerance strictCaps length
+    (strict_far D input_xs length rejected) strict_within strict_exact.ge
 
 /-! ## The hypotheses are met, and the bound is reached -/
 
@@ -661,15 +611,11 @@ end Witness
 table is valid, the relation returns false on it, and the service of the laws draws within the
 samplers and answers what is permitted. -/
 theorem loose_witnessed : looseWitnessed :=
-  ⟨Bool, Bool, Zkc.Formal.Written.FiniteModel.data, inferInstance, inferInstance,
-    Witness.looseTable, Witness.loose_valid,
-    ⟨Unit, Witness.service, ⟨()⟩, serveLaws_follows _ _, Witness.service_permitted⟩,
-    (loose_relation _ Witness.looseTable rfl).trans (by decide)⟩
+  loose_witnessed_of Zkc.Formal.Written.FiniteModel.data Witness.looseTable Witness.loose_valid
+    ((loose_relation _ Witness.looseTable rfl).trans (by decide))
 
 /-- **The hypotheses of the claim of `strict` are met.** -/
 theorem strict_witnessed : strictWitnessed :=
-  ⟨Bool, Bool, Zkc.Formal.Written.FiniteModel.data, inferInstance, inferInstance,
-    Witness.strictTable, Witness.strict_valid,
-    ⟨Unit, Witness.service, ⟨()⟩, serveLaws_follows _ _, Witness.service_permitted⟩,
-    (strict_relation _ Witness.strictTable rfl).trans (by decide)⟩
+  strict_witnessed_of Zkc.Formal.Written.FiniteModel.data Witness.strictTable Witness.strict_valid
+    ((strict_relation _ Witness.strictTable rfl).trans (by decide))
 end

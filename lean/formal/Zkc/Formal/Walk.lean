@@ -63,6 +63,12 @@ along the equation between the term and the step that the rule is about:
 `walk_step` on a computation that calls a function reads the function's body; on a loop it has
 no step. A block and an application wait for their first subject.
 
+A walk enters by itself. The meaning of a role or of a function in a program (`roleMeaning`,
+`fnMeaning`) is closed to Lean's own reduction, and the equation between it and the sealed
+denotation of the body is stated once, where the program is, and checked by the kernel there.
+Such an equation has the label `walk_entry`. On a goal that judges such a meaning, every tactic
+of the walk first passes along the labelled equation that fits; a text names no equation.
+
 The module gives the tactic and nothing else: how a goal is read and how a term is taken apart
 are private to it.
 -/

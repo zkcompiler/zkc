@@ -10,10 +10,14 @@ the function that the root calls `applyKey`, `applyHeader`, `applyNames`, `apply
 `soundNames`, `soundBody`, `soundBefore` and `soundMember`), that the arithmetic model covers
 the package (`covered`), where the walks start (`verifierProgram` with `verifier_meaning`,
 `apply_meaning`, `sound_meaning`), the transfers `at_root` and `at_sound`, and the propositions
-`soundClaim`, `soundGoal`, `soundResult` and `soundWitnessed`.
-After this text it writes the theorems of the propositions that were stated before it: the goal
-`sound_sound` from `sound_installed`, the result `sound_result` with the coverage, and
-`sound_met` from `sound_witnessed`. This text proves the two that are asked of it.
+`soundClaim`, `soundGoal`, `soundResult` and `soundWitnessed`, with the judgment that the
+method of fees establishes (`soundJudged`), the theorem that the claim follows from it
+(`sound_claim_of_judged`) and the theorem that its hypotheses are met at matrices on which the
+relation returns false (`sound_witnessed_of`).
+After this text it writes the claim `sound_installed` from `sound_judged`, and the theorems of
+the propositions that were stated before it: the goal `sound_sound`, the result `sound_result`
+with the coverage, and `sound_met` from `sound_witnessed`. This text proves the judgment and
+gives the matrices.
 
 Nothing of the statement is written here. The source says
 `Product(a, b, c): ∀ i ∈ 0..n, ∀ j ∈ 0..n, (∑ k ∈ 0..n, a[i][k] * b[k][j]) == c[i][j]` and
@@ -71,7 +75,6 @@ theorem apply_law (m : List (List F)) (v : List F) (M : Matrix (Fin 2) (Fin 2) F
     (hm : m = rows M) (hv : v = List.ofFn w) :
     fnMeaning (model F G) calleeProgram applyMember (.cons m (.cons v .nil)) =
       .done (.cons (List.ofFn (M.mulVec w)) .nil) := by
-  rw [apply_meaning (model F G) (.cons m (.cons v .nil))]
   refine done_of_judged ?_
   walk_loop fun i (collected : List F) _ => collected.reverse = (List.ofFn (M.mulVec w)).take i
   case first => rfl
@@ -125,7 +128,6 @@ theorem sound_relation (a b c : List (List F)) (A B C : Matrix (Fin 2) (Fin 2) F
     functionResult (t := .bool)
         (fnMeaning (model F G) installed soundMember (.cons a (.cons b (.cons c .nil)))) =
       some (decide (A * B = C)) := by
-  rw [sound_meaning (model F G) (.cons a (.cons b (.cons c .nil)))]
   refine functionResult_of_judged ?_
   walk_step
   walk_loop fun i (holds : Bool) _ => (holds = true ↔ ∀ p : Fin 2, p.val < i → (A * B) p = C p)
@@ -248,7 +250,6 @@ theorem returns_on_product (path : List Frame) (a b c : List (List F))
     (same : A * B = C) :
     (process G path a b c).interpret (.every (Permitted (model F G))) (fun _ => True)
       (fun _ => False) := by
-  rw [process, verifier_meaning]
   walk_step
   intro r allowedR
   have length : (r : List F).length = 2 := allowedR.1.2 2 rfl
@@ -282,7 +283,6 @@ theorem walked_excludes (allowed : ∀ op, (RSig (model F G)).Reply op → Prop)
       ∀ (r : List F) (w : Fin 2 → F), r = List.ofFn w →
         allowed ((coin path).operation (model F G)) r →
         A.mulVec (B.mulVec w) = C.mulVec w → excluded r := by
-  rw [process, verifier_meaning] at judged
   walk_step at judged
   obtain ⟨fee, excluded, least, paid, rest⟩ := judged
   refine ⟨fee, excluded, least, paid, fun r w hw allowedR passes => ?_⟩
@@ -352,7 +352,6 @@ theorem walked_within (path : List Frame) (a b c : List (List F))
     (process G path a b c).interpret
       (.charged (Permitted (model F G)) (fees F G caps path))
       (fun _ _ => False) (fun _ _ => True) caps.budget := by
-  rw [process, verifier_meaning]
   walk_step
   refine ⟨drawCap caps,
     fun r : List F => ∃ w : Fin 2 → F, r = List.ofFn w ∧ A.mulVec (B.mulVec w) = C.mulVec w, ?_,
@@ -398,7 +397,6 @@ theorem returns_possible (path : List Frame) (a b c : List (List F))
       (.possible fun op v => (some v, ()) ∈ support
         (serveLaws (model F G) (ArithmeticModel.draws F G) op ()))
       (fun _ => True) (fun _ => False) := by
-  rw [process, verifier_meaning]
   walk_step
   refine ⟨List.ofFn (fun _ : Fin 2 => (0 : F)), ?_, ?_⟩
   · show (some _, ()) ∈ support ((fun answer => (some answer, ())) <$> drawVector F 2)
@@ -421,43 +419,21 @@ theorem returns_possible (path : List Frame) (a b c : List (List F))
   · walk_step
     trivial
 
-/-- The probability, at the root of the installed program: against every service that draws the
-vector uniformly and answers only what is permitted, the simulation of the verifier returns with
-probability at most the total of the table of caps. -/
-theorem returns_installed (path : List Frame) (a b c : List (List F))
-    (A B C : Matrix (Fin 2) (Fin 2) F) (ha : a = rows A) (hb : b = rows B) (hc : c = rows C)
-    (caps : CapTable) (differ : A * B ≠ C)
-    (within : drawCap caps ≤ caps.budget)
-    (covers : (1 : ℝ≥0∞) / (Fintype.card F : ℝ≥0∞) ≤ toProbability (drawCap caps))
-    {σ : Type} (service : Service (RSig (model F G)) σ)
-    (follows : service.Follows (samplers F G))
-    (permitted : ∀ op s reply t, (some reply, t) ∈ support (service op s) →
-      Permitted (model F G) op reply) (s : σ) :
-    Pr{let out ← (simulateQ (handlerOf service) (embed
-        (roleMeaning (model F G) installed (Member.head : Member installed.headers.protocols rootHeader)
-          verifierRole path (inputs G a b c)))).run.run s}[
-      ∃ results, out.1 = some (.inl results)] ≤ caps.total := by
-  rw [prEvent_simulation_returns, CapTable.total]
-  refine allowed_bounds_return service _ (caps.allowance (model F G) path)
-    (Permitted (model F G)) permitted follows _ caps.budget s ?_
-  exact walked_within path a b c A B C ha hb hc caps differ within covers
-
 end
 
 /-! ## The goal -/
 
-/-- The claim of `sound`: the validity of each matrix gives its rows, the relation of the goal
-says that the product differs, and the field of the model has at least the order that the
+/-- The judgment of `sound`: the validity of each matrix gives its rows, the relation of the
+goal says that the product differs, and the field of the model has at least the order that the
 charge is written with. -/
-theorem sound_installed : soundClaim := by
-  intro F G _ _ _ _ _ _ _ path large a validA b validB c validC rejected
-  obtain ⟨A, ha⟩ := rows_of_valid G a validA
-  obtain ⟨B, hb⟩ := rows_of_valid G b validB
-  obtain ⟨C, hc⟩ := rows_of_valid G c validC
-  exact returnsWithin_of_returns _ _ _ _ fun service follows permitted s =>
-    returns_installed (F := F) (G := G) path a b c A B C ha hb hc soundCaps
-      (sound_far (F := F) G a b c A B C ha hb hc rejected) sound_within
-      (large_covers large) service follows permitted s
+theorem sound_judged : soundJudged := by
+  claim_intro
+  obtain ⟨A, ha⟩ := rows_of_valid G input_a valid_input_a
+  obtain ⟨B, hb⟩ := rows_of_valid G input_b valid_input_b
+  obtain ⟨C, hc⟩ := rows_of_valid G input_c valid_input_c
+  exact walked_within (F := F) (G := G) path input_a input_b input_c A B C ha hb hc soundCaps
+    (sound_far (F := F) G input_a input_b input_c A B C ha hb hc rejected) sound_within
+    (large_covers large)
 
 
 /-! ## The hypotheses are met -/
@@ -513,7 +489,7 @@ theorem sound_at_corner (path : List Frame) :
         (roleMeaning (model Scalars Scalars) installed rootMember verifierRole path
           (.cons (rows none) (.cons (rows none) (.cons (rows corner) .nil)))))).run.run ()}[
       ∃ results, out.1 = some (.inl results)] ≤ soundCaps.total :=
-  (sound_installed (F := Scalars) (G := Scalars) path large (rows none) (rows_valid none)
+  (sound_claim_of_judged sound_judged (F := Scalars) (G := Scalars) path large (rows none) (rows_valid none)
     (rows none) (rows_valid none) (rows corner) (rows_valid corner) rejected).returns
     (serveLaws (model Scalars Scalars) (ArithmeticModel.draws Scalars Scalars))
     ⟨serveLaws_follows _ _,
@@ -540,13 +516,9 @@ matrices and the matrix with a corner are valid, the relation returns false on t
 has the order of the charge, and the service of the laws draws within the samplers and answers
 what is permitted. -/
 theorem sound_witnessed : soundWitnessed :=
-  ⟨Witness.Scalars, Witness.Scalars, inferInstance, inferInstance, inferInstance, inferInstance,
-    inferInstance, inferInstance, inferInstance, Witness.large,
-    rows Witness.none, Witness.rows_valid Witness.none, rows Witness.none,
-    Witness.rows_valid Witness.none, rows Witness.corner, Witness.rows_valid Witness.corner,
-    ⟨Unit, serveLaws (model Witness.Scalars Witness.Scalars)
-      (ArithmeticModel.draws Witness.Scalars Witness.Scalars), ⟨()⟩, serveLaws_follows _ _,
-      serveLaws_permitted _ _ (ArithmeticModel.draws_permitted Witness.Scalars Witness.Scalars)⟩,
-    Witness.rejected⟩
+  sound_witnessed_of (F := Witness.Scalars) (G := Witness.Scalars) Witness.large
+    (rows Witness.none) (Witness.rows_valid Witness.none) (rows Witness.none)
+    (Witness.rows_valid Witness.none) (rows Witness.corner) (Witness.rows_valid Witness.corner)
+    Witness.rejected
 
 end

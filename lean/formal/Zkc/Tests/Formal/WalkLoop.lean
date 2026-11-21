@@ -30,6 +30,9 @@ an invariant, a guard that waits on a value, a return and a stop.
 - Under the judgment with fees, it is judged within any budget when nothing is asked of how a
   run ends: every effect is met at no fee (`judged_free`).
 
+The first walk names the equation at which it starts. The second names none: the equation has
+the label `walk_entry`, and the walk passes along it by itself.
+
 The second walk also keeps the cost of a walk in check. Each step is an equation about one
 instruction, which the kernel checks there. When a step instead left the kernel to find the
 goal before it and the goal after it equal, the first step of the second walk did not pass the
@@ -77,7 +80,8 @@ kernel_normal verifierProgram :
   project verifier body
 
 /-- The process of the verifier in a run of the installed program is the denotation of its
-program. -/
+program. The label makes it the equation at which a walk of that process starts. -/
+@[walk_entry]
 theorem verifier_meaning (M : Model V) (path : List Frame)
     (inputs : HList (RV M verifier) header.ins) :
     roleMeaning M installed Member.head verifier path inputs =
@@ -141,7 +145,7 @@ theorem judged_free (M : Model V) (path : List Frame) (claim : Bool)
     (allowed : ∀ op, (RSig M).Reply op → Prop) (samplers : Samplers (RSig M)) (budget : ℚ≥0) :
     (roleMeaning M installed Member.head verifier path (inputs M claim)).interpret
       (.charged allowed (paysBy samplers)) (fun _ _ => True) (fun _ _ => True) budget := by
-  rw [verifier_meaning]
+  -- the walk enters at the labelled equation of the verifier's meaning
   walk_step
   walk_step
   walk_loop fun _ (_ : Bool) _ => True
