@@ -303,7 +303,8 @@ consumer. -/
 def proofModule (name text guarded : String) : IO Module := do
   let s ← IO.ofExcept (statementsOf text ["sound"])
   IO.ofExcept (s.module standardModelText name
-    { text := proofText guarded, theorems := ["sound_installed", "sound_witnessed"] }
+    { text := proofText guarded, theorems := ["sound_installed", "sound_witnessed"]
+      method := .direct }
     (walks := false) (after := { text := consumer, theorems := ["consumer"] }))
 
 def run (work : System.FilePath) : IO Unit := do

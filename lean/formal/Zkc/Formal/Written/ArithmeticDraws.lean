@@ -104,6 +104,10 @@ theorem draws_permitted (op : ROp (model F G))
     Permitted (model F G) op v :=
   uniformDraws_permitted _ _ (uniformDraw_allowed F G) op sampler has v drawn
 
+/-- The arithmetic model has a service of its laws. -/
+theorem served : Served (lawSamplers (model F G) (draws F G)) (Permitted (model F G)) :=
+  served_of_draws _ _ (draws_permitted F G)
+
 /-- **The arithmetic model covers a program**: it interprets every row of the vocabulary that
 the program links, and has a sampler for the law of every coin that the program draws. -/
 def covers (p : NamedProgram Standard) : Bool := StandardModel.coveredBy sampled p

@@ -105,6 +105,9 @@ structure ClaimedGoal where
   /-- The table of caps of the root at the goal's proof arguments (SX8): every charge that the
   root reaches, by use. The bound of the goal's statement is its total. -/
   caps : CapTable
+  /-- The charged draws of the root by the names of their sites, each with the keys of the draws
+  that realize it. -/
+  sites : SiteKeys
 
 /-- What written soundness goals of one scheme claim, as one package. It is made by
 `goalClaims` alone. -/
@@ -183,9 +186,9 @@ the scheme that the goal names. -/
     if (node.witness.getD #[]).isEmpty then pure (some #[])
     else if application.witness.isEmpty then pure none
     else some <$> application.witness.mapM (operandPlace body none)
-  let caps ← goalCaps c selected.specification
+  let (caps, sites) ← goalCaps c selected.specification
   return ({ goal, clause, relation, statement, witness, specification := selected.specification,
-            ceiling := selected.ceiling, caps }, selected.scheme, state)
+            ceiling := selected.ceiling, caps, sites }, selected.scheme, state)
 
 /-- What written soundness goals of one scheme claim (GL3), as one package: for each goal its
 clause, the relation that the clause applies as a definition at the proof values of the goal,

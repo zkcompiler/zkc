@@ -137,7 +137,7 @@ def consumer : String :=
 /-- The proof module, as the generator assembles it: the package of the claims and what is
 generated around the proofs written for the protocol, then the consumer. -/
 def proofModule (name : String) (s : Subject) (template : String) : IO Module :=
-  IO.ofExcept (s.statements.module standardModelText name { text := template, theorems := ofText }
+  IO.ofExcept (s.statements.module standardModelText name { text := template, theorems := ofText, method := .direct }
     (after := { text := consumer, theorems := ["consumer"] }))
 
 /-- A control is refused at the places that are named and at no other: Lean's output has as many

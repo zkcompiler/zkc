@@ -145,7 +145,7 @@ sequences of the library and Mathlib's matrices. -/
 def proofModule (name : String) (s : Subject) (model : ModelText) (template : String) :
     IO Module :=
   IO.ofExcept (s.statements.module model name
-    { text := template, theorems := ofText
+    { text := template, theorems := ofText, method := .direct
       imports := ["Zkc.Formal.Written.FixedSequences", "Mathlib.Data.Matrix.Mul"] })
 
 /-- A text that defines again, in its own scope, a name of the library that the statement of
