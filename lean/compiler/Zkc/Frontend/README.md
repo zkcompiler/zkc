@@ -104,8 +104,10 @@ statement names the inputs of the root as the source names its ports (`input_fla
 reader sees which inputs the relation is applied to and which the deciding role is run on. A goal
 whose clause is a `reduces` gets no statement yet: the statement of a reduction is about a
 return on which the reduced statement is true. The `requires` of a contract are not hypotheses
-of a statement, which is then the stronger one. `lean/formal/checks/CountCharge.lean` and
-`lean/formal/checks/FreivaldsCharge.lean` are its users, and
+of a statement, which is then the stronger one. The checks of the four subjects
+(`lean/formal/checks/CountCharge.lean`, `FreivaldsCharge.lean`, `GuessCharge.lean`,
+`EitherCharge.lean`, on the library `Zkc/Tests/Frontend/WrittenSubject.lean`) are its users;
+[the page for authors](../../../../docs/written-soundness.md) says how a subject is written.
 `lean/formal/checks/GoalClaim.lean` has Lean elaborate the statement of a goal whose relation
 has a witness.
 [Source charge lookup](Written/Charge.lean) · [Goal selection](Written/Selection.lean)
