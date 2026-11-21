@@ -1,0 +1,19 @@
+// A degree-one Sumcheck round whose message is (constant, slope).
+module rounds::coefficients<F: Field>
+
+use sumcheck<F>::{Round, Table, sums}
+use zkc::multilinear::{fix_first}
+use zkc::polynomial::{extension, line}
+
+pub module Coefficients: Round:
+    nat Degree = 1
+    type State<v: nat> = Table<v>
+    type Message = (F, F)
+    def message(state):
+        endpoints = sums(state)
+        return (endpoints.0, endpoints.1 - endpoints.0)
+    def bind(state, r): fix_first(state, r)
+    def boundary(m): m.0 + (m.0 + m.1)
+    def evaluate(m, r): m.0 + r * m.1
+    spec def table(state): extension(state)
+    spec def polynomial(m): line(m.0, m.0 + m.1)
