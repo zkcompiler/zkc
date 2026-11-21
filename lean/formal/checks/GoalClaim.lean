@@ -95,17 +95,11 @@ def edit (text before after : String) : IO String := do
 def expect (title : String) (holds : Bool) : IO Unit :=
   unless holds do throw (IO.userError title)
 
-def imports (others : List String) : String :=
-  String.join ((Written.packageImports ++ others).map (s!"import {·}\n")) ++ "\nopen Zkc.Core\n"
+def imports (others : List String) : String := Statements.header (Written.packageImports ++ others)
 
 /-- The theorems of the proof module, whose axioms the check reads. -/
 def theorems : List String :=
   ["deployed_first", "same_header", "prover_same", "verifier_same", "members"]
-
-/-- The member of a list of headers that is `depth` places after its head. -/
-def memberAt : Nat → String
-  | 0 => "Member.head"
-  | depth + 1 => s!"(Member.tail {memberAt depth})"
 
 /-- The proof module: the deployed package in a namespace of its own, the claims' package, and
 what relates them. `relations` are the keys of the relations in the order of the package; no
@@ -138,30 +132,6 @@ def proofModule (name : String) (deployed claims : SourcePackage) (root : Nat)
   "  have same := readback admitted\n  generalize a.program = p at same\n  subst same\n" ++
   s!"  exact ⟨⟨Member.head, by kernel_rfl⟩, {", ".intercalate (found.map (·.2))}⟩\n" ++
   "end\n" ++ String.join (theorems.map (s!"#print axioms {·}\n")) ++ s!"end {name}\n"
-
-/-- A module with the package of claims and the statements that `Written.Statements` writes for
-them, with no proof: the facts, the transfers to an admitted program and the claim of each
-goal. Lean elaborates the statements. -/
-def statementModule (name : String) (stated : Statements) : IO String := do
-  let claims ← IO.ofExcept (stated.claimTexts standardModelText)
-  return imports ["Zkc.Formal.OracleProcess", "Zkc.Formal.ReturnExperiment", "Zkc.Formal.Written.LawSamplers",
-      "Zkc.Formal.Written.SiteCaps",
-      "Zkc.Formal.Written.FunctionMeaning", "Zkc.Formal.Written.StandardModel"] ++
-    s!"namespace {name}\n" ++ (Written.package stated.package).text ++ Statements.opens ++
-    stated.facts ++ "\n" ++ stated.transfers ++ claims ++ s!"end {name}\n"
-
-def comparisonModule (name text : String) (goals : List String) (claims : SourcePackage) : String :=
-  imports ["Zkc.Tests.Frontend.PrintedPackageSupport"] ++ s!"namespace {name}\n" ++
-  (Written.package claims).text ++
-  s!"#eval Zkc.Tests.Frontend.PrintedPackageSupport.expectGoalClaims {literal text} {reprStr goals} " ++
-  s!"({Written.associationTerm noAssociation}) stored association\nend {name}\n"
-
-/-- Lean on a module, in the formal package, as a task. -/
-def start (work : System.FilePath) (name text : String) :
-    IO (Task (Except IO.Error (Bool × String))) := do
-  let path := work / s!"{name}.lean"
-  IO.FS.writeFile path text
-  IO.asTask (runLakeLean path)
 
 def run (corpus : System.FilePath) (work : System.FilePath) : IO Unit := do
   let blocks := readBlocks (← IO.FS.readFile corpus)
@@ -275,10 +245,10 @@ def run (corpus : System.FilePath) (work : System.FilePath) : IO Unit := do
   let deployed := root.emission.package noAssociation
   let relations := [loose.relation, strict.relation]
   let negated ← IO.ofExcept (goalRoot (← edit count "guard @V xs[z] == 0" "guard @V xs[z] != 0") "loose")
-  let proof ← start work "Claims" (proofModule "Claims" deployed (packageOf both) root.id relations)
-  let comparison ← start work "ClaimsSource"
-    (comparisonModule "ClaimsSource" count ["loose", "strict"] (packageOf both))
-  let control ← start work "ClaimsControl"
+  let proof ← startLakeLean work "Claims" (proofModule "Claims" deployed (packageOf both) root.id relations)
+  let comparison ← startLakeLean work "ClaimsSource"
+    (comparisonModule "ClaimsSource" count ["loose", "strict"] (Written.package (packageOf both)).text)
+  let control ← startLakeLean work "ClaimsControl"
     (proofModule "ClaimsControl" (negated.emission.package noAssociation) (packageOf both) root.id relations)
   -- The statement of a goal whose relation has a witness: the premise is that the relation
   -- returns false at the statement for every valid witness. The promise pair has no charge, so
@@ -289,7 +259,8 @@ def run (corpus : System.FilePath) (work : System.FilePath) : IO Unit := do
   -- The premise stands in the claim and in the statement that its hypotheses are met.
   expect "the statement of a relation with a witness does not quantify the witness"
     ((pairText.splitOn "∀ (witness0 : ").length == 3)
-  let stated ← start work "ClaimsWitness" (← statementModule "ClaimsWitness" pairStated)
+  let stated ← startLakeLean work "ClaimsWitness"
+    (← IO.ofExcept (pairStated.statementsModule standardModelText "ClaimsWitness"))
   let (ok, output) ← IO.ofExcept proof.get
   acceptedOutput "Claims" ok output theorems
   let (ok, output) ← IO.ofExcept stated.get

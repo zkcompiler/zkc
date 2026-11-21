@@ -132,17 +132,15 @@ def read (text : String) : IO Subject := do
   let deployed := own.named.definitions.map fun d => (d.key.number, storedDefinition (b := own.bindings) d)
   return ⟨text, ⟨claims, []⟩, deployed⟩
 
-/-- The theorems of the proof module, whose axioms the check reads. -/
-def theorems : List String := [
-  "admitted_exists", "covered", "verifierProgram.eq", "verifier_meaning", "loose_meaning",
-  "strict_meaning", "loose_relation", "strict_relation", "walked_within", "walked_excludes",
-  "walk_reads_any_key", "judged_within", "returns_within", "loose_installed", "strict_installed",
-  "Witness.loose_at_table", "Witness.strict_at_table", "Witness.loose_attained",
-  "Witness.strict_attained", "Witness.misplaced_judges_nothing", "Witness.misplaced_not_counted",
-  "Witness.foreign_not_counted", "Witness.fixed_position_does_not_follow", "loose_counted",
-  "loose_budget", "strict_counted", "strict_budget", "loose_exact", "strict_exact", "loose_within",
-  "strict_within", "loose_witnessed", "strict_witnessed",
-  "loose_sound", "loose_result", "loose_met", "strict_sound", "strict_result", "strict_met"]
+/-- The theorems of the text of the proofs. -/
+def ofText : List String := [
+  "loose_exact", "strict_exact", "loose_within", "strict_within", "walked_within",
+  "walked_excludes", "walk_reads_any_key", "loose_relation", "strict_relation", "judged_within",
+  "returns_within", "loose_installed", "strict_installed", "Witness.loose_at_table",
+  "Witness.strict_at_table", "Witness.loose_attained", "Witness.strict_attained",
+  "Witness.misplaced_judges_nothing", "Witness.misplaced_not_counted",
+  "Witness.foreign_not_counted", "Witness.fixed_position_does_not_follow", "loose_witnessed",
+  "strict_witnessed"]
 
 /-- The theorems that say what the relations compute, and those that rest on them. -/
 def ofRelation : List String :=
@@ -156,46 +154,10 @@ def ofCharge : List String :=
     "Witness.loose_attained", "Witness.strict_attained", "loose_exact", "strict_exact",
     "loose_sound", "loose_result", "strict_sound", "strict_result"]
 
-/-- The proof module: the package of the claims; what the frontend read, the transfers to an
-admitted program and the claims of the goals, all generated; the proofs written for the
-protocol; and the goals for every admitted program, generated. -/
-def proofModule (name : String) (s : Subject) (template : String) : IO String := do
-  refuseUnchecked name template
-  let stated := s.statements
-  let claims ← IO.ofExcept (stated.claimTexts standardModelText)
-  let closings := stated.closings
-  let ceilings ← IO.ofExcept stated.ceilings
-  return packageHeader ["Zkc.Formal.Walk", "Zkc.Formal.OracleProcess", "Zkc.Formal.ReturnExperiment", "Zkc.Formal.Written.PortSamplers",
-      "Zkc.Formal.Written.LawSamplers", "Zkc.Formal.Written.SiteCaps",
-      "Zkc.Formal.Written.FunctionMeaning", "Zkc.Formal.Written.StandardModel",
-      "Zkc.Formal.Written.FiniteModel"] ++
-    s!"namespace {name}\n" ++ s.package ++ Statements.opens ++ stated.facts ++ "\n" ++
-    Statements.coverage standardModelText ++ stated.counts ++ stated.entries ++ stated.transfers ++
-    claims ++
-    template ++ "\n" ++
-    closings ++ ceilings ++
-    String.join (theorems.map (s!"#print axioms {·}\n")) ++ s!"end {name}\n"
-
-/-- A module with the package of a subject, its facts, and the comparison of each goal's total
-with its ceiling. -/
-def ceilingModule (name : String) (s : Subject) : IO String := do
-  let ceilings ← IO.ofExcept s.statements.ceilings
-  return packageHeader ["Zkc.Formal.Written.SiteCaps"] ++ s!"namespace {name}\n" ++ s.package ++
-    Statements.opens ++ s.statements.facts ++ "\n" ++ ceilings ++
-    s!"#print axioms loose_ceiling\nend {name}\n"
-
-/-- A module with the package of a subject and the one theorem that the standard model covers
-it. -/
-def coverageModule (name : String) (s : Subject) : String :=
-  packageHeader ["Zkc.Formal.Written.LawSamplers"] ++ s!"namespace {name}\n" ++ s.package ++
-  "open Zkc.Formal.Written\n" ++ Statements.coverage standardModelText ++
-  s!"#print axioms covered\nend {name}\n"
-
-def comparisonModule (name : String) (s : Subject) : String :=
-  packageHeader ["Zkc.Tests.Frontend.PrintedPackageSupport"] ++ s!"namespace {name}\n" ++ s.package ++
-  s!"#eval Zkc.Tests.Frontend.PrintedPackageSupport.expectGoalClaims {literal s.text} " ++
-  s!"{reprStr (s.goals.map (·.1))} " ++
-  s!"({Written.associationTerm noAssociation}) stored association\nend {name}\n"
+/-- The proof module, as the generator assembles it: the package of the claims and what is
+generated around the proofs written for the protocol. -/
+def proofModule (name : String) (s : Subject) (template : String) : IO Module :=
+  IO.ofExcept (s.statements.module standardModelText name { text := template, theorems := ofText })
 
 def run (corpus template : System.FilePath) (work : System.FilePath) : IO Unit := do
   let blocks := readBlocks (← IO.FS.readFile corpus)
@@ -205,9 +167,6 @@ def run (corpus template : System.FilePath) (work : System.FilePath) : IO Unit :
   let written ← read source
   unless written.places == (1, 1, 0) do
     throw (IO.userError "the root and the roles of the source are not where they were")
-  unless (written.statements.entryNames ++ written.statements.countNames ++
-      written.statements.closingNames).all theorems.contains do
-    throw (IO.userError "a generated theorem is not among the theorems read")
   -- The tables of caps, as the frontend read them: the one draw of the root, once, at the
   -- charge of each goal's tolerance.
   unless written.goals.map (·.2.2) ==
@@ -245,7 +204,8 @@ def run (corpus template : System.FilePath) (work : System.FilePath) : IO Unit :
   -- comparison, which the kernel decides; below it no statement is issued (GL4).
   let goalLine := "goal loose = soundness(Checked, spec e = 4)"
   let atTotal ← read (← edit source goalLine (goalLine ++ " <= 3/8"))
-  let ceilingProof ← startLakeLean work "CeilingAtTotal" (← ceilingModule "CeilingAtTotal" atTotal)
+  let ceilingProof ← startLakeLean work "CeilingAtTotal"
+    (← IO.ofExcept (atTotal.statements.ceilingModule "CeilingAtTotal")).text
   let below ← read (← edit source goalLine (goalLine ++ " <= 1/4"))
   match below.statements.ceilings with
   | .ok _ => throw (IO.userError "a goal whose ceiling is below the total of its table was issued a statement")
@@ -292,16 +252,19 @@ def run (corpus template : System.FilePath) (work : System.FilePath) : IO Unit :
   -- A row outside the table of the model, inside the loop of the relation: the power of a field
   -- element, which the standard model gives a constant.
   let uncovered ← read (← edit source "if xs[i] == 0 then 0 else 1" "if xs[i] ^ 2 == 0 then 0 else 1")
-  let uncoveredProof ← startLakeLean work "CoverageControl" (coverageModule "CoverageControl" uncovered)
-  let changedProof ← startLakeLean work "RelationControl" (← proofModule "RelationControl" changed template)
+  let uncoveredProof ← startLakeLean work "CoverageControl"
+    (uncovered.statements.coverageModule standardModelText "CoverageControl").text
+  let changedProof ← startLakeLean work "RelationControl" (← proofModule "RelationControl" changed template).text
 
-  let proof ← startLakeLean work "Count" (← proofModule "Count" written template)
-  let comparison ← startLakeLean work "CountSource" (comparisonModule "CountSource" written)
-  let turnedProof ← startLakeLean work "CountTurned" (← proofModule "CountTurned" turned template)
-  let turnedComparison ← startLakeLean work "CountTurnedSource" (comparisonModule "CountTurnedSource" turned)
-  let smallProof ← startLakeLean work "BoundControl" (← proofModule "BoundControl" small template)
-  let elsewhereProof ← startLakeLean work "SiteControl" (← proofModule "SiteControl" elsewhere template)
-  let foreignProof ← startLakeLean work "OwnerControl" (← proofModule "OwnerControl" foreign template)
+  let module ← proofModule "Count" written template
+  let theorems := module.theorems
+  let proof ← startLakeLean work "Count" module.text
+  let comparison ← startLakeLean work "CountSource" (comparisonModule "CountSource" written.text (written.goals.map (·.1)) written.package)
+  let turnedProof ← startLakeLean work "CountTurned" (← proofModule "CountTurned" turned template).text
+  let turnedComparison ← startLakeLean work "CountTurnedSource" (comparisonModule "CountTurnedSource" turned.text (turned.goals.map (·.1)) turned.package)
+  let smallProof ← startLakeLean work "BoundControl" (← proofModule "BoundControl" small template).text
+  let elsewhereProof ← startLakeLean work "SiteControl" (← proofModule "SiteControl" elsewhere template).text
+  let foreignProof ← startLakeLean work "OwnerControl" (← proofModule "OwnerControl" foreign template).text
 
   let allowed := ["propext", "Classical.choice", "Quot.sound"]
   for (name, task) in [("Count", proof), ("CountTurned", turnedProof)] do

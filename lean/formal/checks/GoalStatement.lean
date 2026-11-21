@@ -297,23 +297,14 @@ def consumer : String :=
   "    ⟨serveLaws_follows _ _, serveLaws_permitted _ _ (StandardModel.draws_permitted data)⟩ ()\n\n" ++
   "end\n"
 
-/-- The theorems of a proof module, whose axioms the check reads. -/
-def theorems : List String :=
-  ["admitted_exists", "covered", "sound_counted", "sound_budget", "sound_installed",
-    "sound_witnessed", "sound_sound", "sound_result", "sound_met", "consumer"]
-
-/-- The proof module of a source: the package of its claims, what the generator writes around
-the proofs, the proofs and the consumer. -/
-def proofModule (name text guarded : String) : IO String := do
+/-- The proof module of a source, as the generator assembles it for a text that does not walk:
+the package of its claims, what the generator writes around the proofs, the proofs and the
+consumer. -/
+def proofModule (name text guarded : String) : IO Module := do
   let s ← IO.ofExcept (statementsOf text ["sound"])
-  return packageHeader ["Zkc.Formal.OracleProcess", "Zkc.Formal.ReturnExperiment", "Zkc.Formal.Written.LawSamplers",
-      "Zkc.Formal.Written.SiteCaps",
-      "Zkc.Formal.Written.FunctionMeaning", "Zkc.Formal.Written.StandardModel",
-      "Zkc.Formal.Written.FiniteModel"] ++
-    s!"namespace {name}\n" ++ (Written.package s.package).text ++ Statements.opens ++ s.facts ++ "\n" ++
-    Statements.coverage standardModelText ++ s.counts ++ s.transfers ++
-    (← IO.ofExcept (s.claimTexts standardModelText)) ++ proofText guarded ++ "\n" ++ s.closings ++
-    consumer ++ String.join (theorems.map (s!"#print axioms {·}\n")) ++ s!"end {name}\n"
+  IO.ofExcept (s.module standardModelText name
+    { text := proofText guarded, theorems := ["sound_installed", "sound_witnessed"] }
+    (walks := false) (after := { text := consumer, theorems := ["consumer"] }))
 
 def run (work : System.FilePath) : IO Unit := do
   -- The operands: a `spec` port that nothing uses changes neither the input nor the claim, and
@@ -443,8 +434,11 @@ def run (work : System.FilePath) : IO Unit := do
   -- Lean: the published theorem at the inputs of the source, by a consumer written apart.
   let fronted := decided ("spec note: bool, " ++ both) "flag" "proves @V IsSet(flag)"
   let aboutOther := decided ("spec note: bool, " ++ both) "other" "proves @V IsSet(other)"
-  let proof ← startLakeLean work "Operands" (← proofModule "Operands" fronted "flag")
-  let control ← startLakeLean work "OperandsControl" (← proofModule "OperandsControl" aboutOther "other")
+  let module ← proofModule "Operands" fronted "flag"
+  let theorems := module.theorems
+  let proof ← startLakeLean work "Operands" module.text
+  let control ← startLakeLean work "OperandsControl"
+    (← proofModule "OperandsControl" aboutOther "other").text
   let (ok, output) ← finishLean closed
   expect s!"the records of a goal were altered outside the reader\n{output}"
     (!ok && output.contains "constructor for `ClaimedGoal` is marked as private" &&

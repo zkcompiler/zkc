@@ -96,12 +96,9 @@ def read (text : String) : IO Subject := do
     throw (IO.userError "the verifier and the prover of the scheme are not the roles V and P")
   return ⟨text, ⟨claims, claims.functionsBeforeRoot⟩⟩
 
-/-- The theorems of the proof module, whose axioms the check reads. -/
-def theorems : List String := [
-  "admitted_exists", "covered", "guessing_counted", "guessing_budget", "verifierProgram.eq",
-  "verifier_meaning", "guessing_meaning", "guessing_relation", "cap_of_draw", "walked_within",
-  "guessing_installed", "guessing_witnessed", "guessing_sound", "guessing_result", "guessing_met",
-  "consumer"]
+/-- The theorems of the text of the proofs. -/
+def ofText : List String :=
+  ["guessing_relation", "cap_of_draw", "walked_within", "guessing_installed", "guessing_witnessed"]
 
 /-- What rests on the walk of the verifier. -/
 def ofWalk : List String :=
@@ -137,26 +134,11 @@ def consumer : String :=
   "    ⟨serveLaws_follows _ _, serveLaws_permitted _ _ (StandardModel.draws_permitted data)⟩ ()\n\n" ++
   "end\n"
 
-/-- The proof module: the package of the claims; what the frontend read, the coverage, the
-counts, the entries, the transfers and the claim, all generated; the proofs written for the
-protocol; the goal for every admitted program, generated; and the consumer. -/
-def proofModule (name : String) (s : Subject) (template : String) : IO String := do
-  refuseUnchecked name template
-  let stated := s.statements
-  let claims ← IO.ofExcept (stated.claimTexts standardModelText)
-  return packageHeader ["Zkc.Formal.Walk", "Zkc.Formal.OracleProcess", "Zkc.Formal.ReturnExperiment",
-      "Zkc.Formal.Written.PortSamplers", "Zkc.Formal.Written.LawSamplers",
-      "Zkc.Formal.Written.SiteCaps", "Zkc.Formal.Written.FunctionMeaning",
-      "Zkc.Formal.Written.StandardModel", "Zkc.Formal.Written.FiniteModel"] ++
-    s!"namespace {name}\n" ++ s.package ++ Statements.opens ++ stated.facts ++ "\n" ++
-    Statements.coverage standardModelText ++ stated.counts ++ stated.entries ++ stated.transfers ++
-    claims ++ template ++ "\n" ++ stated.closings ++ consumer ++
-    String.join (theorems.map (s!"#print axioms {·}\n")) ++ s!"end {name}\n"
-
-def comparisonModule (name : String) (s : Subject) : String :=
-  packageHeader ["Zkc.Tests.Frontend.PrintedPackageSupport"] ++ s!"namespace {name}\n" ++ s.package ++
-  s!"#eval Zkc.Tests.Frontend.PrintedPackageSupport.expectGoalClaims {literal s.text} " ++
-  s!"[\"guessing\"] ({Written.associationTerm noAssociation}) stored association\nend {name}\n"
+/-- The proof module, as the generator assembles it: the package of the claims and what is
+generated around the proofs written for the protocol, then the consumer. -/
+def proofModule (name : String) (s : Subject) (template : String) : IO Module :=
+  IO.ofExcept (s.statements.module standardModelText name { text := template, theorems := ofText }
+    (after := { text := consumer, theorems := ["consumer"] }))
 
 /-- A control is refused at the places that are named and at no other: Lean's output has as many
 errors as there are places, and the text of each. -/
@@ -177,8 +159,6 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
   let [goal] := stated.claims.goals | throw (IO.userError "the statements are not of one goal")
   unless stated.claims.root == 0 && (stated.claims.verifier, stated.claims.prover) == (1, 0) do
     throw (IO.userError "the root and the roles of the source are not where they were")
-  unless (stated.entryNames ++ stated.countNames ++ stated.closingNames).all theorems.contains do
-    throw (IO.userError "a generated theorem is not among the theorems read")
   -- The table of caps, as the frontend read it: the draw of the loop's body, at one eighth,
   -- three times.
   unless goal.caps == ⟨[⟨⟨0⟩, [⟨⟨3⟩, 1, 8, 3⟩], []⟩]⟩ && goal.total == 3 / 8 do
@@ -200,11 +180,14 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
       "have split : (2 - i9 : ℕ) = (2 - (i9 + 1)) + 1 := by omega"
   if short == template then throw (IO.userError "the text has not the invariant that the control alters")
 
-  let proof ← startLakeLean work "Guess" (← proofModule "Guess" written template)
-  let comparison ← startLakeLean work "GuessSource" (comparisonModule "GuessSource" written)
-  let halvedProof ← startLakeLean work "CapControl" (← proofModule "CapControl" halved template)
-  let fourProof ← startLakeLean work "RoundsControl" (← proofModule "RoundsControl" four template)
-  let shortProof ← startLakeLean work "InvariantControl" (← proofModule "InvariantControl" written short)
+  let module ← proofModule "Guess" written template
+  let theorems := module.theorems
+  let proof ← startLakeLean work "Guess" module.text
+  let comparison ← startLakeLean work "GuessSource" (comparisonModule "GuessSource" written.text ["guessing"] written.package)
+  let halvedProof ← startLakeLean work "CapControl" (← proofModule "CapControl" halved template).text
+  let fourProof ← startLakeLean work "RoundsControl" (← proofModule "RoundsControl" four template).text
+  let shortProof ← startLakeLean work "InvariantControl"
+    (← proofModule "InvariantControl" written short).text
 
   let allowed := ["propext", "Classical.choice", "Quot.sound"]
   let (ok, output) ← finishLean proof
