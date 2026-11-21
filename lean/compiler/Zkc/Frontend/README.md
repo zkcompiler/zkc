@@ -69,8 +69,10 @@ and the two are not compared.
 
 ## The statements of goals
 
-`Written.Statements` (`Written/Statement.lean`) writes the text that stands around a proof in a
-module with the claims' package: the facts (keys, headers and places of the root, of the
+`Written.Statements` (`Written/Statement.lean`) writes the module of the goals of a scheme
+(`Statements.module`: its imports, the order of its parts and the names of the theorems whose
+axioms it asks for are decided there, and a check gives the model and the text of the proofs).
+Around the proofs stands, with the claims' package: the facts (keys, headers and places of the root, of the
 functions before it that the text names and of each goal's relation, the verifier and the prover
 of the claims' scheme, each goal's proof arguments and charge), that the model covers the package, where the walks of the module
 start (the meaning of the deciding role, of each named function and of each goal's relation as

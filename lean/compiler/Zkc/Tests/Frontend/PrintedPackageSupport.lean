@@ -137,15 +137,6 @@ def axiomReports (theorem_ output : String) : Nat :=
   ((output.splitOn s!"'{theorem_}' does not depend on any axioms").length - 1) +
     ((output.splitOn s!"'{theorem_}' depends on axioms: [").length - 1)
 
-/-- A text of proofs is refused before Lean is run on it when it sets an option for debugging:
-one of them has the kernel not check a declaration, and a check reads Lean's acceptance as the
-kernel's. This guards against an accident. A check is no defence against a text written to
-deceive it: it trusts that the text prints nothing that reads as Lean's report of axioms twice,
-and declares no syntax that changes what a later statement means. -/
-def refuseUnchecked (name text : String) : IO Unit := do
-  if text.contains "debug." then
-    throw (IO.userError s!"{name}: the text sets an option for debugging")
-
 /-- What is expected of an accepted module: Lean ends without an error, nothing in it is left
 to `sorry`, and each of the theorems is reported once and rests on the allowed axioms at
 most. -/
@@ -178,6 +169,15 @@ package is read in. -/
 def packageHeader (others : List String) : String :=
   String.join ((Written.packageImports ++ others).map (s!"import {·}\n")) ++ "\nopen Zkc.Core\n"
 
+/-- The module in which Lean reads the source of a subject again: the printed package of what
+its goals claim, and the frontend run on the source, whose program by names and whose
+association are compared with those that the package states. -/
+def comparisonModule (name source : String) (goals : List String) (package : String) : String :=
+  packageHeader ["Zkc.Tests.Frontend.PrintedPackageSupport"] ++ s!"namespace {name}\n" ++ package ++
+  s!"#eval Zkc.Tests.Frontend.PrintedPackageSupport.expectGoalClaims {literal source} " ++
+  s!"{reprStr goals} ({Written.associationTerm ⟨[], [], [], [], []⟩}) stored association\n" ++
+  s!"end {name}\n"
+
 /-- Lean on a module in the package of the working directory, as a task. -/
 def startLakeLean (work : System.FilePath) (name text : String) :
     IO (Task (Except IO.Error (Bool × String))) := do
@@ -200,7 +200,7 @@ def expectUnproved (title name : String) (theorems : List String)
       throw (IO.userError s!"{title}: the axioms of {theorem_} are reported more than once")
   let unproved := theorems.filter fun theorem_ =>
     ((axiomsOf s!"{name}.{theorem_}" output).getD ["sorryAx"]).contains "sorryAx"
-  unless unproved == expected do
+  unless unproved.all expected.contains && expected.all unproved.contains do
     throw (IO.userError s!"{title}: unproved are {unproved}, expected {expected}\n{output}")
 
 /-- Lean accepts the module, and each of its theorems rests on the allowed axioms at most. -/

@@ -128,48 +128,25 @@ def read (text : String) (operands : List String) (front : Array String := #[]) 
     throw (IO.userError "the verifier and the prover of the scheme are not the roles V and P")
   return ⟨text, ⟨claims, claims.functionsBeforeRoot⟩⟩
 
-/-- The theorems of the proof module, whose axioms the check reads. -/
-def theorems : List String := [
-  "admitted_exists", "covered", "verifierProgram.eq", "verifier_meaning", "apply_meaning",
-  "sound_meaning", "sound_counted", "sound_budget", "sound_within", "apply_law", "sound_relation",
-  "sound_far", "returns_on_product",
+/-- The theorems of the text of the proofs. -/
+def ofText : List String := [
+  "sound_within", "apply_law", "sound_relation", "sound_far", "returns_on_product",
   "walked_within", "walked_excludes", "returns_possible", "returns_installed", "large_covers",
   "sound_installed", "Witness.rejected", "Witness.sound_at_corner", "Witness.returns_at_corner",
-  "sound_witnessed", "sound_sound", "sound_result", "sound_met"]
+  "sound_witnessed"]
 
 /-- The claim and what rests on it. -/
 def ofClaim : List String :=
   ["sound_installed", "Witness.sound_at_corner", "sound_sound", "sound_result"]
 
-/-- The proof module over a model: the package of the claims; what the frontend read, the
-coverage, the transfers and the claim, all generated; the proofs written for the protocol; and
-the goal for every admitted program, generated. -/
+/-- The proof module over a model, as the generator assembles it: the package of the claims
+and what is generated around the proofs written for the protocol, which use the fixed
+sequences of the library and Mathlib's matrices. -/
 def proofModule (name : String) (s : Subject) (model : ModelText) (template : String) :
-    IO String := do
-  refuseUnchecked name template
-  let stated := s.statements
-  let claims ← IO.ofExcept (stated.claimTexts model)
-  return packageHeader ["Zkc.Formal.Walk", "Zkc.Formal.OracleProcess", "Zkc.Formal.ReturnExperiment",
-      "Zkc.Formal.Written.LawSamplers", "Zkc.Formal.Written.SiteCaps",
-      "Zkc.Formal.Written.FunctionMeaning", "Zkc.Formal.Written.ArithmeticDraws",
-      "Zkc.Formal.Written.FixedSequences", "Zkc.Formal.Written.ScalarField",
-      "Mathlib.Data.Matrix.Mul"] ++
-    s!"namespace {name}\n" ++ s.package ++ Statements.opens ++ stated.facts ++ "\n" ++
-    Statements.coverage model ++ stated.counts ++ stated.entries ++ stated.transfers ++ claims ++
-    template ++
-    "\n" ++ stated.closings ++
-    String.join (theorems.map (s!"#print axioms {·}\n")) ++ s!"end {name}\n"
-
-/-- A module with the package of a subject and the one theorem that a model covers it. -/
-def coverageModule (name : String) (s : Subject) (model : ModelText) : String :=
-  packageHeader ["Zkc.Formal.Written.ArithmeticDraws"] ++ s!"namespace {name}\n" ++ s.package ++
-  "open Zkc.Formal.Written\n" ++ Statements.coverage model ++
-  s!"#print axioms covered\nend {name}\n"
-
-def comparisonModule (name : String) (s : Subject) : String :=
-  packageHeader ["Zkc.Tests.Frontend.PrintedPackageSupport"] ++ s!"namespace {name}\n" ++ s.package ++
-  s!"#eval Zkc.Tests.Frontend.PrintedPackageSupport.expectGoalClaims {literal s.text} " ++
-  s!"[\"sound\"] ({Written.associationTerm noAssociation}) stored association\nend {name}\n"
+    IO Module :=
+  IO.ofExcept (s.statements.module model name
+    { text := template, theorems := ofText
+      imports := ["Zkc.Formal.Written.FixedSequences", "Mathlib.Data.Matrix.Mul"] })
 
 /-- A text that defines again, in its own scope, a name of the library that the statement of
 the goal uses, and proves the claim written anew under that name: the experiment of a bound on
@@ -214,8 +191,6 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
   let [goal] := stated.claims.goals | throw (IO.userError "the statements are not of one goal")
   unless stated.claims.root == 1 && (stated.claims.verifier, stated.claims.prover) == (1, 0) do
     throw (IO.userError "the root and the roles of the source are not where they were")
-  unless (stated.entryNames ++ stated.countNames ++ stated.closingNames).all theorems.contains do
-    throw (IO.userError "a generated theorem is not among the theorems read")
   unless stated.functions == [("apply", 2)] do
     throw (IO.userError s!"the root calls other functions than `apply`: {stated.functions}")
   unless goal.statement == #[0, 1, 2] do
@@ -237,8 +212,9 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
   let fronted ← read (source "Product(a, b, c)" "spec note: bool, ") ["a", "b", "c"] #["note"]
   unless (fronted.statements.claims.goals.map (·.statement)) == [#[0, 1, 2]] do
     throw (IO.userError "with a spec port in front the relation is applied to other inputs")
-  unless (← proofModule "Freivalds" fronted scalarFieldModelText template) ==
-      (← proofModule "Freivalds" written scalarFieldModelText template) do
+  let module ← proofModule "Freivalds" written scalarFieldModelText template
+  let theorems := module.theorems
+  unless (← proofModule "Freivalds" fronted scalarFieldModelText template).text == module.text do
     throw (IO.userError "a spec port in front of the matrices changed the proof module")
 
   -- A charge of half the source's, in the source: the program is what it was, and the cap of
@@ -249,22 +225,22 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
       (halved.statements.claims.goals.map (·.caps)) == [⟨[⟨⟨1⟩, [⟨⟨0⟩, 1, 2 * order, 1⟩], []⟩]⟩] do
     throw (IO.userError "the halved charge changed the package, or is not half at the draw")
 
-  let proof ← startLakeLean work "Freivalds" (← proofModule "Freivalds" written scalarFieldModelText template)
-  let comparison ← startLakeLean work "FreivaldsSource" (comparisonModule "FreivaldsSource" written)
+  let proof ← startLakeLean work "Freivalds" module.text
+  let comparison ← startLakeLean work "FreivaldsSource" (comparisonModule "FreivaldsSource" written.text ["sound"] written.package)
   let exchangedProof ← startLakeLean work "OperandsControl"
-    (← proofModule "OperandsControl" exchanged scalarFieldModelText template)
+    (← proofModule "OperandsControl" exchanged scalarFieldModelText template).text
   let halvedProof ← startLakeLean work "BoundControl"
-    (← proofModule "BoundControl" halved scalarFieldModelText template)
+    (← proofModule "BoundControl" halved scalarFieldModelText template).text
   -- The hypothesis on the field weakened to a field of one element or more.
   let anyField : ModelText :=
-    { arithmeticModelText with hypotheses := [("large", "1 ≤ Fintype.card F")] }
+    { scalarFieldModelText with hypotheses := [("large", "1 ≤ Fintype.card F")] }
   let unassumedProof ← startLakeLean work "FieldControl"
-    (← proofModule "FieldControl" written anyField template)
+    (← proofModule "FieldControl" written anyField template).text
   let uncoveredProof ← startLakeLean work "CoverageControl"
-    (coverageModule "CoverageControl" written standardModelText)
+    (written.statements.coverageModule standardModelText "CoverageControl").text
   let shadowedProof ← startLakeLean work "ShadowControl"
     (← proofModule "ShadowControl" written scalarFieldModelText
-      (← shadowing written scalarFieldModelText template))
+      (← shadowing written scalarFieldModelText template)).text
 
   let allowed := ["propext", "Classical.choice", "Quot.sound"]
   let (ok, output) ← finishLean proof
@@ -275,7 +251,8 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
     (acceptedOutput "Freivalds" ok
       (output ++ "'Freivalds.sound_sound' does not depend on any axioms\n") theorems allowed)
   refuses "a text with an option for debugging"
-    (refuseUnchecked "Freivalds" (template ++ "set_option debug.skipKernelTC true in\n"))
+    (discard (proofModule "Freivalds" written scalarFieldModelText
+      (template ++ "set_option debug.skipKernelTC true in\n")))
   let (ok, output) ← finishLean comparison
   acceptedOutput "FreivaldsSource" ok output []
   -- The claim is about `b * a`: its premise is not the one from which the text gets that the

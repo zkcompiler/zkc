@@ -43,9 +43,12 @@ library and from the model that the check names:
   before any module is written.
 
 So a proof module is: the package, `opens`, `facts`, `coverage`, `counts`, `entries`,
-`transfers`, `claimTexts`, the proofs written for the protocol, `closings`. Every statement
-that the module publishes is a proposition defined before the text of the proofs; a name that the text defines
-afterwards cannot change what it says. The subject, the premise, the experiment, the samplers
+`transfers`, `claimTexts`, the proofs written for the protocol, `closings`, `ceilings`.
+`Statements.module` assembles it, with its imports and with the names of the theorems whose
+axioms it asks for; a caller gives the model, the text of the proofs with what that text
+imports and the names of its theorems, and what it adds after the closing theorems. Every
+statement that the module publishes is a proposition defined before the text of the proofs; a
+name that the text defines afterwards cannot change what it says. The subject, the premise, the experiment, the samplers
 and the bound are written here.
 
 What a statement says of its goal is read from the claims (`goalClaims`) and from nothing that
@@ -86,6 +89,9 @@ structure ModelText where
   and its proposition over the binders. A hypothesis is part of the claim; the proof gets it
   after the path. -/
   hypotheses : List (String × String) := []
+  /-- The modules of the model, of its samplers and of the instance at which a witness meets
+  the hypotheses, beside those that every module of statements imports. -/
+  imports : List String := []
 
 /-- The standard model built from an algebra, with the samplers of its laws. -/
 def standardModelText : ModelText where
@@ -95,6 +101,7 @@ def standardModelText : ModelText where
   model := "(StandardModel.model D)"
   samplers := "(lawSamplers (StandardModel.model D) (StandardModel.draws D))"
   covers := "StandardModel.covers"
+  imports := ["Zkc.Formal.Written.FiniteModel"]
 
 /-- The arithmetic model over a field that can be sampled, with the samplers of its laws: a
 scalar and a sequence of scalars are drawn uniformly. -/
@@ -107,13 +114,15 @@ def arithmeticModelText : ModelText where
   model := "(ArithmeticModel.model F G)"
   samplers := "(lawSamplers (ArithmeticModel.model F G) (ArithmeticModel.draws F G))"
   covers := "ArithmeticModel.covers"
+  imports := ["Zkc.Formal.Written.ArithmeticDraws"]
 
 /-- The arithmetic model over a field with at least as many elements as the scalar field of the
 source. A charge that the source writes with the order of its scalar field then bounds what a
 uniform scalar of the model pays for; the scalar field itself is such a field. -/
 def scalarFieldModelText : ModelText :=
   { arithmeticModelText with
-    hypotheses := [("large", "Zkc.Vocabulary.Field.bls12381Fr.order ≤ Fintype.card F")] }
+    hypotheses := [("large", "Zkc.Vocabulary.Field.bls12381Fr.order ≤ Fintype.card F")]
+    imports := ["Zkc.Formal.Written.ArithmeticDraws", "Zkc.Formal.Written.ScalarField"] }
 
 /-- The hypotheses of a model as the antecedents of a proposition. -/
 def ModelText.assumed (model : ModelText) : String :=
@@ -140,6 +149,20 @@ structure Statements where
   /-- The functions of the package before the root that the text names, each with the label of
   its name (`apply` gives `applyMember`): what the root may call. -/
   functions : List (String × Nat) := []
+
+/-- The proofs that an author writes for a protocol: their text, the modules that they use
+beside those of the generator and of the model, and the names of their theorems, whose axioms
+the module asks Lean to report. -/
+structure ProofText where
+  text : String := ""
+  imports : List String := []
+  theorems : List String := []
+
+/-- A module as Lean reads it, and the theorems whose axioms it asks for, in the order in which
+the module states them. -/
+structure Module where
+  text : String
+  theorems : List String
 
 /-- A table of caps as a term. -/
 def capsTerm (table : CapTable) : String :=
@@ -535,6 +558,76 @@ def closings (s : Statements) : String :=
 def closingNames (s : Statements) : List String :=
   s.claims.goals.flatMap fun goal =>
     [s!"{goal.goal}_sound", s!"{goal.goal}_result", s!"{goal.goal}_met"]
+
+/-- The names of the theorems that `ceilings` writes. -/
+def ceilingNames (s : Statements) : List String :=
+  s.claims.goals.filterMap fun goal => goal.ceiling.map fun _ => s!"{goal.goal}_ceiling"
+
+/-- The modules that a module of statements imports: those of the printed package, those of
+the library that the generated statements name, and the model's. A text that walks the program
+has the walk and the equations where it starts; `walks` says whether the module is for one. -/
+def imports (model : ModelText) (walks : Bool) : List String :=
+  packageImports ++ (if walks then ["Zkc.Formal.Walk"] else []) ++
+    ["Zkc.Formal.OracleProcess", "Zkc.Formal.ReturnExperiment", "Zkc.Formal.Written.LawSamplers",
+      "Zkc.Formal.Written.SiteCaps", "Zkc.Formal.Written.FunctionMeaning"] ++ model.imports
+
+/-- The lines that open a module: its imports, and the namespace of the core. -/
+def header (modules : List String) : String :=
+  String.join (modules.map (s!"import {·}\n")) ++ "\nopen Zkc.Core\n"
+
+/-- The requests for the axioms of theorems, and the end of the module's namespace. -/
+def footer (name : String) (theorems : List String) : String :=
+  String.join (theorems.map (s!"#print axioms {·}\n")) ++ s!"end {name}\n"
+
+/-- **The module of the goals of one scheme**: the package of the claims; what is generated
+before any proof (the facts, the coverage, the counts, where the walks start, the transfers and
+the propositions of each goal); the author's text; the closing theorems and the comparisons
+with the ceilings; what a check writes after them (`after`: a consumer of the published
+theorems); and a request for the axioms of every theorem. The order of the parts, the imports
+and the names of the generated theorems are decided here and by no caller. A text that sets an
+option for debugging is refused before Lean reads it: one of those options has the kernel not
+check a declaration, and a check reads Lean's acceptance as the kernel's. That guards against
+an accident. It is no defence against a text written to deceive a check, which trusts that the
+text prints nothing that reads as Lean's report of axioms a second time and declares no syntax
+that changes what a later statement means. -/
+def module (s : Statements) (model : ModelText) (name : String) (proof : ProofText)
+    (walks := true) (after : ProofText := {}) : Except String Module := do
+  if (proof.text ++ after.text).contains "debug." then
+    throw s!"{name}: the text sets an option for debugging"
+  let claims ← s.claimTexts model
+  let ceilings ← s.ceilings
+  let theorems := ["admitted_exists", "covered"] ++ s.countNames ++
+    (if walks then s.entryNames else []) ++ proof.theorems ++ s.closingNames ++ s.ceilingNames ++
+    after.theorems
+  let text := header (imports model walks ++ proof.imports ++ after.imports) ++
+    s!"namespace {name}\n" ++ (Written.package s.package).text ++ opens ++ s.facts ++ "\n" ++
+    coverage model ++ s.counts ++ (if walks then s.entries else "") ++ s.transfers ++ claims ++
+    proof.text ++ "\n" ++ s.closings ++ ceilings ++ after.text ++ footer name theorems
+  return { text, theorems }
+
+/-- A module with the package of the claims and the statements of the goals, with no proof: the
+facts, the transfers and the propositions. Lean elaborates the statements. -/
+def statementsModule (s : Statements) (model : ModelText) (name : String) :
+    Except String String := do
+  return header (imports model false) ++ s!"namespace {name}\n" ++
+    (Written.package s.package).text ++ opens ++ s.facts ++ "\n" ++ s.transfers ++
+    (← s.claimTexts model) ++ s!"end {name}\n"
+
+/-- A module with the package of the claims and the one theorem that a model covers it. -/
+def coverageModule (s : Statements) (model : ModelText) (name : String) : Module :=
+  let text := header (packageImports ++ ["Zkc.Formal.Written.LawSamplers"] ++ model.imports) ++
+    s!"namespace {name}\n" ++ (Written.package s.package).text ++ "open Zkc.Formal.Written\n" ++
+    coverage model ++ footer name ["covered"]
+  { text, theorems := ["covered"] }
+
+/-- A module with the package of the claims, its facts, and the comparison of each goal's total
+with the ceiling that it states. A goal whose ceiling is below its total gives no module. -/
+def ceilingModule (s : Statements) (name : String) : Except String Module := do
+  let ceilings ← s.ceilings
+  let text := header (packageImports ++ ["Zkc.Formal.Written.SiteCaps"]) ++
+    s!"namespace {name}\n" ++ (Written.package s.package).text ++ opens ++ s.facts ++ "\n" ++
+    ceilings ++ footer name s.ceilingNames
+  return { text, theorems := s.ceilingNames }
 
 end Statements
 
