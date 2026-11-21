@@ -17,26 +17,31 @@ structure Certified (p : Core.Typed V) (rootKey red eval : Key) (n : Nat) (event
   root : Member p.headers.protocols (header rows.scalarTy n rootKey shape)
   entry : ProtocolEntry p.defs root
   linked : Linked (earlier entry) red (table rows.scalarTy n) rows.scalarTy (table rows.scalarTy 0) 0 n events
-  roundLaws : linked.rounds.AllMembers (fun ops => PairLaws rows linked.entry.definitions ops)
+  roundLaws : ∃ decode : ScalarRows.PairEncoding, linked.rounds.AllMembers (fun ops => PairLaws rows linked.entry.definitions ops decode)
   evaluate : Member entry.earlier.fns (TableEvaluation.header rows.scalarTy eval n (0+n))
   tableLaw : TableEvaluation.Law vectors eval n (0+n) (fun M => Defs.fnTable M entry.definitions _ evaluate)
   meaning : ∀ M path inputs, roleMeaning M p root 1 path inputs =
     (witness events linked.ref evaluate rootKey shape).meaning entry.definitions 1 M path inputs
 
-def certify (p : Core.Typed V) (rootKey red eval : Key) (n : Nat) (events : Events rows.scalarTy)
-    (roundProof : ∀ key, FunctionReadback _ (rows.EvaluationLaw key))
-    (alternatives : List (∀ key, FunctionReadback _ (rows.EvaluationLaw key)) := []) :
+def certifyUsing (p : Core.Typed V) (rootKey red eval : Key) (n : Nat) (events : Events rows.scalarTy)
+    {decode : ScalarRows.PairEncoding} (install : SequenceInstaller rows decode) :
     Option (Certified rows vectors p rootKey red eval n events) := do
   let t := rows.scalarTy
   let ⟨shape,root⟩ ← ProtocolEntry.locatePorts p.headers rootKey 2 [shared (table t n),shared t] []
   let entry := p.defs.protocolEntry p.distinct (show Member _ (header t n rootKey shape) from root)
   let linked ← link (earlier entry) red (table t n) t (table t 0) 0 n events
-  let ⟨members⟩ ← checkPairSequence rows linked.entry.definitions (List.nodup_append.mp linked.entry.distinct).1 roundProof linked.rounds alternatives
+  let ⟨members⟩ ← install linked.entry.definitions (List.nodup_append.mp linked.entry.distinct).1 linked.rounds
   let ⟨evaluate,tableLaw⟩ ← TableEvaluation.check (V := V) (t := rows.scalarTy) rows.free vectors entry.definitions (List.nodup_append.mp entry.distinct).1 eval n (0+n)
   let target := witness events linked.ref evaluate rootKey shape
   let ⟨meaning⟩ ← entry.recognize 1 target (fun run => ∀ M path inputs, run M path inputs = target.meaning entry.definitions 1 M path inputs)
     (fun _ _ _ => rfl)
-  return ⟨shape,root,entry,linked,members,evaluate,tableLaw,meaning⟩
+  return ⟨shape,root,entry,linked,⟨decode,members⟩,evaluate,tableLaw,meaning⟩
+
+def certify (p : Core.Typed V) (rootKey red eval : Key) (n : Nat) (events : Events rows.scalarTy)
+    (roundProof : ∀ key, FunctionReadback _ (rows.EvaluationLaw key))
+    (alternatives : List (∀ key, FunctionReadback _ (rows.EvaluationLaw key)) := []) :
+    Option (Certified rows vectors p rootKey red eval n events) :=
+  certifyUsing rows vectors p rootKey red eval n events (checkEncoding rows (rows.endpointCompanion roundProof alternatives))
 
 private theorem evaluate_of_length {F : Type} (q : Claims F) (n : Nat) (x : q.State n) (rs : List F)
     (length : rs.length = n) : ∃ v, q.evaluate n x rs = some v := by
@@ -82,7 +87,8 @@ theorem Certified.soundFrom (cert : Certified rows vectors p rootKey red eval n 
   rw [Experiment.expect_bind,Experiment.expect_mapR]
   rw [relation]
   simp only [Process.map_eq_bind,Experiment.expect_bind,Experiment.expect_done]
-  have bounds := cert.linked.rounds.boundsFromMembers _ cert.roundLaws M _ _ Cube.claims points positive 1
+  obtain ⟨decode,members⟩ := cert.roundLaws
+  have bounds := cert.linked.rounds.boundsFromMembers _ members M _ _ Cube.claims points positive 1
     (fun _ law => (PairLaws.interpret rows law M math points distinct collisions).reindex Fin.val) equality (K.renamePeers peerMap.to) inner env s x fresh
   have bounded := cert.linked.rounds.soundFrom M _ _ (K.renamePeers peerMap.to) Cube.claims (roundCost 1 points) inner
     (Mass.mul_nonneg Mass.natCast_nonneg (Mass.le_of_lt (Mass.inv_pos.mpr (Mass.natCast_pos.mpr positive)))) env s x bounds wrong

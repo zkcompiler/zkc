@@ -1,0 +1,24 @@
+// Apply the same reduction twice, with different meanings for the same wire type.
+module mixed_rounds
+
+use zkc::curves::bls12_381::{Fr}
+use zkc::security::{soundness}
+use zkc::polynomial::{extension}
+use zkc::multilinear::{evaluate}
+use sumcheck<Fr>::{Table, Reduce, Pairs, Sum}
+use rounds::coefficients<Fr>::{Coefficients}
+
+protocol Client<n: nat> roles(P, V)(values: Table<n> @(P, V), claim: Fr @(P, V)):
+    first <- Reduce<Pairs, rounds = n>(values, [], claim, spec p = extension(values))
+    guard @V first.value == evaluate(values, first.point)
+    second <- Reduce<Coefficients, rounds = n>(values, [], claim, spec p = extension(values))
+    guard @V second.value == evaluate(values, second.point)
+
+spec for Client:
+    proves @V Sum(values, claim)
+
+scheme Checked = Client<2>:
+    prover P
+    construction interactive
+
+goal sound = soundness(Checked, stage = written)

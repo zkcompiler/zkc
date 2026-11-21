@@ -82,7 +82,7 @@ structure Arithmetic : Prop where
     some (.cons (x * y) .nil)
 
 omit [Lean.Grind.Field (rows.F M)] in
-private theorem binary_value {fns} (table : FnTable M fns) (key : V.RowKey)
+theorem binary_value {fns} (table : FnTable M fns) (key : V.RowKey)
     (present : V.row key = some rows.signature) (f : rows.F M → rows.F M → rows.F M)
     (law : ∀ x y, M.apply key rows.signature present (.cons x (.cons y .nil)) = some (.cons (f x y) .nil))
     (x y : rows.F M) :

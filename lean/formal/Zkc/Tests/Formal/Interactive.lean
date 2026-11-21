@@ -130,6 +130,25 @@ theorem unused_biased_draw : ¬ Fresh biasedWithoutMessage [(0 : Int),1] (by dec
       (FiniteLaw.uniform [(0 : Int),1] (by decide)).expect fun r => if event r then 1 else 0) := by decide +kernel
   exact impossible (h event)
 
+/-- An earlier public bit is already in the service state. Returning it again gives its
+singleton conditional probability one on either history. -/
+def replayChallenge : Experiment signature Bool where
+  answer
+    | .challenge, old => FiniteLaw.certain ((if old then 1 else 0 : Int),old)
+    | .message, old => FiniteLaw.certain (((0,0) : Int × Int),old)
+    | .missing, _ => ⟨[], by decide⟩
+
+theorem replayedChallenge_not_fresh (old : Bool) : ¬ Fresh replayChallenge [(0 : Int),1] (by decide) draw old := by
+  intro fresh
+  let repeated : Int → Bool
+    | .ofNat 0 => !old
+    | .ofNat 1 => old
+    | _ => false
+  have impossible : ¬ (replayChallenge.probability draw old (fun r _ => repeated r) ≤
+      (FiniteLaw.uniform [(0 : Int),1] (by decide)).expect fun r => if repeated r then 1 else 0) := by
+    cases old <;> decide +kernel
+  exact impossible (fresh repeated)
+
 theorem abort_before_biased_draw :
     biasedWithoutMessage.probability (verifier.checkTable 1 (0,0) 1) () (fun _ _ => true) = 0 := by
   decide +kernel

@@ -66,13 +66,11 @@ def check (key : V.RowKey) (bound : V.row key = some (signature rows)) {hs : Hea
         let .call b := ops.boundary.print | none
         let ⟨ends⟩ ← (boundaryReadback rows b).atOperation defs unique ops.boundary
         let wanted := LocalOp.row (fns := hs.fns) key (signature rows) bound
-        if found : ops.evaluate.print = wanted.print then
-          have equal : ops.evaluate = wanted := eq_of_heq (Sigma.mk.inj (LocalOp.print_injective unique _ _ found)).2
-          return ⟨rfl,ends,by
-            intro M _ model m r
-            rw [equal]
-            simp [wanted,localOp,model.apply,triple]⟩
-        else none
+        let ⟨equal⟩ ← ops.evaluate.same? wanted unique
+        return ⟨rfl,ends,by
+          intro M _ model m r
+          rw [equal]
+          simp [wanted,localOp,model.apply,triple]⟩
   else none
 
 variable {hs : Headers V} {ds : Defs V hs} {msg st residual} {ops : Members hs rows.scalarTy msg st residual}

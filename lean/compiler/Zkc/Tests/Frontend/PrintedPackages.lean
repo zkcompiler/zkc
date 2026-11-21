@@ -41,6 +41,7 @@ def subjects : List Subject := [
   ⟨"ChaumPedersen", "chaum_pedersen.zkc", [], 1, 0⟩,
   ⟨"Sumcheck", "sumcheck_example.zkc", [("Proof = Sumcheck<10>", "Proof = Sumcheck<2>")], 1, 0⟩,
   ⟨"SumcheckTen", "sumcheck_example.zkc", [], 1, 0⟩,
+  ⟨"MixedRounds", "mixed_rounds.zkc", [], 1, 0⟩,
   ⟨"Gkr", "gkr_example.zkc", [], 1, 0⟩,
   ⟨"InnerProduct", "inner_product.zkc", [], 2, 0⟩,
   ⟨"Variants", "variants_example.zkc", [], 1, 1⟩,

@@ -37,23 +37,32 @@ structure ChargedSumcheck (c : AdmittedRoot) (n : Nat) (name : String) where
   selected : tableSumClaim? c = some relation
   extension : hasSourceExtension c = true
   keys : CallerKeys
+  located : sumcheckCallKeys c.emission ⟨c.id⟩ = some keys
   verifier : TableVerifier.Certified (sourceRows c.emission.bindings) (vectorRows c.emission.bindings)
     c.evidence.admitted.program ⟨c.id⟩ keys.reduction keys.evaluator n (sourceEvents c.emission.bindings)
   issued : IssuedCharge c.state name verifier.linked 1 Zkc.Vocabulary.Field.bls12381Fr.order
 
-def chargeSumcheck (c : AdmittedRoot) (n : Nat) (name : String) : Except String (ChargedSumcheck c n name) := do
-  let some keys := sumcheckCallKeys c.emission ⟨c.id⟩ | throw "missing Sumcheck caller"
+def chargeSumcheckAt (c : AdmittedRoot) (n : Nat) (name : String) (keys : CallerKeys)
+    (located : sumcheckCallKeys c.emission ⟨c.id⟩ = some keys) {decode : ScalarRows.PairEncoding}
+    (install : SequenceInstaller (sourceRows c.emission.bindings) decode) : Except String (ChargedSumcheck c n name) := do
   let b := c.emission.bindings
   let rows := sourceRows b
-  let some cert := TableVerifier.certify rows (vectorRows b) c.evidence.admitted.program ⟨c.id⟩
-    keys.reduction keys.evaluator n (sourceEvents b) rows.evaluationReadback [rows.affineReadback]
+  let some cert := TableVerifier.certifyUsing rows (vectorRows b) c.evidence.admitted.program ⟨c.id⟩
+    keys.reduction keys.evaluator n (sourceEvents b) install
     | throw "uncertified Sumcheck verifier"
   match selected : tableSumClaim? c with
   | none => throw "expected the verifier's written sum relation on its public table and claim"
   | some relation =>
     if extension : hasSourceExtension c = true then
-      return ⟨relation,selected,extension,keys,cert,← issueCharge c.state name cert.linked 1 Zkc.Vocabulary.Field.bls12381Fr.order⟩
+      return ⟨relation,selected,extension,keys,located,cert,← issueCharge c.state name cert.linked 1 Zkc.Vocabulary.Field.bls12381Fr.order⟩
     else throw "the selected reduction requires the extension of the verifier's public table"
+
+def chargeSumcheck (c : AdmittedRoot) (n : Nat) (name : String) : Except String (ChargedSumcheck c n name) := do
+  let rows := sourceRows c.emission.bindings
+  match located : sumcheckCallKeys c.emission ⟨c.id⟩ with
+  | none => throw "missing Sumcheck caller"
+  | some keys =>
+    chargeSumcheckAt c n name keys located (checkEncoding rows (rows.endpointCompanion rows.evaluationReadback [rows.affineReadback]))
 
 section Layer
 variable {c : AdmittedRoot} {hdr : ProtocolHeader c.emission.bindings.vocabulary}

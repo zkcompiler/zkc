@@ -20,3 +20,4 @@ public import Zkc.Formal.Written.ReductionModel
 public import Zkc.Formal.Written.UniformChallenge
 public import Zkc.Formal.Written.ScalarField
 public import Zkc.Formal.Written.PrimeFieldCharge
+public import Zkc.Formal.Written.CoefficientPolynomial

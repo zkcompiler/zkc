@@ -1,8 +1,6 @@
 module
 
-public import Zkc.Core.Evidence.OperationSite
-public import Zkc.Formal.Interactive.Application
-public import Zkc.Formal.Interactive.LinkedReduction
+public import Zkc.Formal.Interactive.MappedReduction
 public import Zkc.Formal.Interactive.GateSequence
 
 @[expose] public section
@@ -64,9 +62,6 @@ theorem Linked.applied_sound (linked : Linked p key state t residual k n events)
       (publicArgs M hidden point claim)) s (fun vs _ => correctReturn M q x point.length vs) ≤ (n : Mass) * cost := by
   exact linked.applied_soundFrom M q cost nonneg K site path s hidden point claim x wrong (bounds _ s x)
 
-abbrev earlier {p : Core.Typed V} {hdr : ProtocolHeader V} {member : Member p.headers.protocols hdr}
-    (entry : ProtocolEntry p.defs member) : Core.Typed V := ⟨entry.earlier,entry.definitions,entry.distinct⟩
-
 structure AtSite (p : Core.Typed V) {hdr : ProtocolHeader V} (root : Member p.headers.protocols hdr)
     (key site : Key) (state t residual : V.Ty) (k n : Nat) (events : Events t) (args : List Name) (moves : List OperationSite.Move) where
   callerEntry : ProtocolEntry p.defs root
@@ -76,11 +71,13 @@ structure AtSite (p : Core.Typed V) {hdr : ProtocolHeader V} (root : Member p.he
 def atSite (p : Core.Typed V) {hdr : ProtocolHeader V} (root : Member p.headers.protocols hdr)
     (key site : Key) (state t residual : V.Ty) (k n : Nat) (events : Events t) (args : List Name) (moves : List OperationSite.Move) :
     Option (AtSite p root key site state t residual k n events args moves) := do
-  let entry := p.defs.protocolEntry p.distinct root
-  let linked ← link (earlier entry) key state t residual k n events
-  let ⟨found⟩ ← OperationSite.read (BodyAnalysis.roleChecks 1) (BodyAnalysis.roleChecks_lawful (List.nodup_append.mp entry.distinct).1)
-    site linked.application args moves (project 1 entry.body)
-  return ⟨entry,linked,found⟩
+  let ⟨caller,linked,operands,_,_,_,_,found⟩ ← mappedReduction root key site state t residual k n events
+    1 [0,1] args moves
+  return ← show Option _ from by
+    if same : operands = inputs state (.seq t (some k)) t then
+      subst operands
+      exact some ⟨caller,linked,found⟩
+    else exact none
 
 def loopRoute (before : Nat) (loopKey : Key) (count inside : Nat) : List OperationSite.Move :=
   List.replicate before .next ++ .fixedLoop loopKey count :: List.replicate inside .next

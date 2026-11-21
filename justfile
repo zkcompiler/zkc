@@ -18,8 +18,9 @@ test:
 # Check source verifier certificates and replay the interactive formal library through the kernel.
 test-interactive:
     cd lean/compiler && lake build Zkc.Tools.Audit
-    cd lean/formal && lake build Zkc.Formal.Interactive Zkc.Tests.Formal.Interactive Zkc.Tests.Formal.Reuse.Controls Zkc.Tests.Formal.SourceHonestSumcheck
+    cd lean/formal && lake build Zkc.Formal.Interactive Zkc.Tests.Formal.Interactive Zkc.Tests.Formal.Reuse.Controls Zkc.Tests.Formal.SourceHonestSumcheck Zkc.Tests.Formal.ExternalRound
     cd lean/formal && lake lean checks/SourceProtocols.lean
+    cd lean/formal && lake lean checks/ExternalRound.lean
     cd lean/formal && lake lean checks/OracleNames.lean
     cd lean/formal && lake lean checks/WorldObservation.lean
     cd lean/formal && lake env lean --run checks/AuditInteractive.lean

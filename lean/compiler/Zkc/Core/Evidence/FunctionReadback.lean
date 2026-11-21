@@ -12,6 +12,11 @@ deriving instance DecidableEq for FnHeader
 abbrev FunctionMeaning {V : Vocabulary} (header : FnHeader V) :=
   (M : Model V) → HList M.Val header.ins → Local (HList M.Val header.outs)
 
+/-- Recognize two operations with the same typed interface in one installed function table. -/
+def LocalOp.same? {V : Vocabulary} {fns : List (FnHeader V)} {ins outs : List V.Ty}
+    (a b : LocalOp V fns ins outs) (unique : (fns.map (·.key)).Nodup) : Option (PLift (a = b)) :=
+  if h : a.print = b.print then some ⟨eq_of_heq (Sigma.mk.inj (LocalOp.print_injective unique a b h)).2⟩ else none
+
 /-- A proved body that may be linked after any table of earlier functions. The law can
 restrict the models it covers, and can refer to the values of the inputs and results. -/
 structure FunctionReadback {V : Vocabulary} (header : FnHeader V) (law : FunctionMeaning header → Prop) where
@@ -78,12 +83,8 @@ def atOperation {hs : Headers V} (proof : FunctionReadback header law) (defs : D
     (unique : (hs.fns.map (·.key)).Nodup) (op : LocalOp V hs.fns header.ins header.outs) :
     Option (PLift (law (fun M => localOp M (Defs.fnTable M defs) op))) := do
   let ⟨actual,holds⟩ ← proof.locate defs unique
-  let call := LocalOp.call actual
-  if same : op.print = call.print then
-    have packed := LocalOp.print_injective unique op call same
-    have equal : op = call := eq_of_heq (Sigma.mk.inj packed).2
-    return ⟨equal.symm ▸ holds⟩
-  else none
+  let ⟨equal⟩ ← op.same? (.call actual) unique
+  return ⟨equal.symm ▸ holds⟩
 
 end FunctionReadback
 end Zkc.Core
