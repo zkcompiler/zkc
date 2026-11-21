@@ -153,6 +153,27 @@ def steppedDraws : String := charged
     "spec for Steps:\n    proves @V Holds(claim)\n    charge sites.r <= 1 / 2\n")
   "Steps"
 
+/-- A charged draw in each arm of a choice. -/
+def chargedArms : String := charged
+  ("protocol Arms roles(P, V)(claim: bool @(P, V)):\n" ++
+    "    if claim:\n        x <- draw index<8> from V to P\n" ++
+    "    else:\n        y <- draw index<4> from V to P\n    guard @V claim\n" ++
+    "spec for Arms:\n    proves @V Holds(claim)\n    charge sites.x <= 1 / 8\n    charge sites.y <= 1 / 4\n")
+  "Arms"
+
+/-- A callee that the root reaches by three ways: through `A`, which applies it twice in a kept
+loop, through `B`, and through `A` again in a kept loop of five. -/
+def sharedCallee : String := charged
+  ("protocol Once roles(P, V)(claim: bool @(P, V)):\n" ++
+    "    z <- draw index<8> from V to P\n" ++
+    "spec for Once:\n    charge sites.z <= 1 / 8\n" ++
+    "protocol A roles(P, V)(claim: bool @(P, V)):\n    for i in 0..2:\n        Once(claim)\n" ++
+    "protocol B roles(P, V)(claim: bool @(P, V)):\n    Once(claim)\n" ++
+    "protocol Caller roles(P, V)(claim: bool @(P, V)):\n    A(claim)\n    B(claim)\n" ++
+    "    for i in 0..5:\n        A(claim)\n    guard @V claim\n" ++
+    "spec for Caller:\n    proves @V Holds(claim)\n")
+  "Caller"
+
 /-- A charge on an application. -/
 def chargedCall : String := charged
   ("protocol Once roles(P, V)(claim: bool @(P, V)):\n" ++
@@ -371,6 +392,15 @@ def run (work : System.FilePath) : IO Unit := do
       ⟨⟨2⟩, [⟨⟨3⟩, 1, 4, 1⟩], [⟨⟨0⟩, 1, 0⟩, ⟨⟨1⟩, 3, 0⟩]⟩]⟩, 3 / 4))
   expect "the blocks of a stepped loop do not each have a draw"
     (tableOf steppedDraws == some (⟨[⟨⟨1⟩, [⟨⟨0⟩, 1, 2, 1⟩, ⟨⟨2⟩, 1, 2, 1⟩, ⟨⟨4⟩, 1, 2, 1⟩], []⟩]⟩, 3 / 2))
+  -- The arms of a choice are added, though one of them runs: the total is no smaller than what
+  -- a run can cost.
+  expect "the charged draws of the two arms of a choice are not both in the table"
+    (tableOf chargedArms == some (⟨[⟨⟨1⟩, [⟨⟨0⟩, 1, 8, 1⟩, ⟨⟨1⟩, 1, 4, 1⟩], []⟩]⟩, 3 / 8))
+  -- A callee reached by three ways is one use, and its draw is counted thirteen times: twice
+  -- through `A`, once through `B`, and five times twice through `A` in the loop.
+  expect "a callee reached by three ways is not one use with the counts of the ways"
+    (tableOf sharedCallee == some (⟨[⟨⟨1⟩, [⟨⟨0⟩, 1, 8, 1⟩], []⟩, ⟨⟨2⟩, [], [⟨⟨0⟩, 2, 0⟩]⟩,
+      ⟨⟨3⟩, [], [⟨⟨0⟩, 1, 0⟩]⟩, ⟨⟨4⟩, [], [⟨⟨0⟩, 1, 1⟩, ⟨⟨1⟩, 1, 2⟩, ⟨⟨2⟩, 5, 1⟩]⟩]⟩, 13 / 8))
   -- What has no table yet is refused with the reason, and no claim is read.
   for (title, text, reason) in [
       ("a charge on an application", chargedCall, "`sites.first` is no draw"),
