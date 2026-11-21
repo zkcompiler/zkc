@@ -12,6 +12,21 @@ open scoped NNReal ENNReal
 noncomputable def total (charge : DrawCharge) : ℝ≥0∞ :=
   charge.draws.length * ((charge.numerator : ℝ≥0∞) / charge.denominator)
 
+/-- The total of a charge is within a ceiling given as a fraction, when the comparison of the two
+fractions holds over the naturals: what a module states of a goal that has a ceiling, the
+comparison being decided by the kernel. -/
+theorem total_le_div (charge : DrawCharge) (p q : ℕ) (positive : 0 < q)
+    (denPositive : 0 < charge.denominator)
+    (cross : charge.draws.length * charge.numerator * q ≤ p * charge.denominator) :
+    total charge ≤ (p : ℝ≥0∞) / q := by
+  have hq : (q : ℝ≥0∞) ≠ 0 := by exact_mod_cast positive.ne'
+  have hd : (charge.denominator : ℝ≥0∞) ≠ 0 := by exact_mod_cast denPositive.ne'
+  unfold total
+  rw [← mul_div_assoc, ENNReal.div_le_iff hd (ENNReal.natCast_ne_top _),
+    ← ENNReal.mul_div_right_comm,
+    ENNReal.le_div_iff_mul_le (Or.inl hq) (Or.inl (ENNReal.natCast_ne_top _))]
+  exact_mod_cast cross
+
 /-- Transfer an already established finite-process bound to a written per-occurrence
 ceiling. The family supplies its event, its finite lemma and the occurrence count.
 A closed execution with zero occurrences needs no unit ceiling comparison. -/

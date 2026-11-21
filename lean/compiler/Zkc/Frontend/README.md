@@ -45,6 +45,19 @@ and what it says of the protocol is said of the deployed one.
 An operand of a clause that is no port is not read yet. Where a relation links a primitive that
 no deployed definition links, the claims' package is over a larger vocabulary than the root's,
 and the two are not compared.
+
+## The statements of goals
+
+`Written.Statements` (`Written/Statement.lean`) writes the text that stands around a proof in a
+module with the claims' package: the facts (keys, headers and places of the root and of each
+goal's relation, the roles, each goal's proof arguments and charge), the transfers of a
+statement from the installed program to every admitted one, the claim of each goal about the
+installed program, the goal for every admitted program from a proof of that claim, and the
+comparison of a goal's total with its ceiling. A statement names the model through a
+`ModelText`. It is written for one charge on a draw of the root; a goal whose ceiling is below
+the total of its charge is refused (GL4). `lean/formal/checks/CountCharge.lean` is its first
+user, and `lean/formal/checks/GoalClaim.lean` has Lean elaborate the statement of a goal whose
+relation has a witness.
 [Source charge lookup](Written/Charge.lean) · [Goal selection](Written/Selection.lean)
 
 ## Previous frontend

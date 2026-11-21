@@ -1,5 +1,6 @@
 import Zkc.Frontend.Written.Claim
 import Zkc.Frontend.Written.Package
+import Zkc.Frontend.Written.Statement
 import Zkc.Tests.Frontend.SyntaxHarness
 import Zkc.Tests.Frontend.PrintedPackageSupport
 
@@ -43,6 +44,10 @@ Then Lean is run on three modules for the two goals of the reference case `N-GL2
   those of the root's own package.
 - The control has, as the deployed package, the root of the same source with the guard of the
   verifier negated. Lean refuses it where it states that the deployed definitions come first.
+
+A fourth module has the claims of a goal whose relation has a witness, with the statements that
+`Written.Statements` writes for it and no proof: its premise quantifies the witness, and Lean
+elaborates it.
 -/
 
 open Zkc.Core Zkc.Frontend Zkc.Frontend.Written
@@ -133,6 +138,17 @@ def proofModule (name : String) (deployed claims : SourcePackage) (root : Nat)
   "  have same := readback admitted\n  generalize a.program = p at same\n  subst same\n" ++
   s!"  exact ⟨⟨Member.head, by kernel_rfl⟩, {", ".intercalate (found.map (·.2))}⟩\n" ++
   "end\n" ++ String.join (theorems.map (s!"#print axioms {·}\n")) ++ s!"end {name}\n"
+
+/-- A module with the package of claims and the statements that `Written.Statements` writes for
+them, with no proof: the facts, the transfers to an admitted program and the claim of each
+goal. Lean elaborates the statements. -/
+def statementModule (name : String) (stated : Statements) : IO String := do
+  let claims ← IO.ofExcept (stated.claimTexts standardModelText)
+  return imports ["Zkc.Formal.OracleProcess", "Zkc.Formal.Written.LawSamplers",
+      "Zkc.Formal.Written.FunctionMeaning", "Zkc.Formal.Written.StandardModel",
+      "Zkc.Formal.Written.Ceiling"] ++
+    s!"namespace {name}\n" ++ (Written.package stated.package).text ++ Statements.opens ++
+    stated.facts ++ "\n" ++ stated.transfers ++ claims ++ s!"end {name}\n"
 
 def comparisonModule (name text : String) (goals : List String) (claims : SourcePackage) : String :=
   imports ["Zkc.Tests.Frontend.PrintedPackageSupport"] ++ s!"namespace {name}\n" ++
@@ -264,8 +280,22 @@ def run (corpus : System.FilePath) (work : System.FilePath) : IO Unit := do
     (comparisonModule "ClaimsSource" count ["loose", "strict"] (packageOf both))
   let control ← start work "ClaimsControl"
     (proofModule "ClaimsControl" (negated.emission.package noAssociation) (packageOf both) root.id relations)
+  -- The statement of a goal whose relation has a witness: the premise is that the relation
+  -- returns false at the statement for every valid witness. The promise pair has no charge, so
+  -- the bound of its statement is zero; Lean elaborates the statement.
+  let (pairAdmitted, pairClaims) ← read pair ["sound"]
+  let pairStated : Statements :=
+    { claims := pairClaims, roles := [("verifier", 1), ("prover", 0)]
+      goals := pairClaims.goals.map fun claimed =>
+        { claimed, specification := #[], charge := ⟨⟨pairAdmitted.id⟩, 0, 1, []⟩, ceiling := none } }
+  let pairText ← IO.ofExcept (pairStated.claimTexts standardModelText)
+  expect "the statement of a relation with a witness does not quantify the witness"
+    ((pairText.splitOn "∀ (witness0 : ").length == 2)
+  let stated ← start work "ClaimsWitness" (← statementModule "ClaimsWitness" pairStated)
   let (ok, output) ← IO.ofExcept proof.get
   acceptedOutput "Claims" ok output theorems
+  let (ok, output) ← IO.ofExcept stated.get
+  acceptedOutput "ClaimsWitness" ok output []
   let (ok, output) ← IO.ofExcept comparison.get
   acceptedOutput "ClaimsSource" ok output []
   let (ok, output) ← IO.ofExcept control.get
