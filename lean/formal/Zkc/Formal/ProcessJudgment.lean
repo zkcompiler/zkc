@@ -113,6 +113,41 @@ theorem Process.sealed_eq (p : Process S H A) : p.sealed = p := by
   unfold Process.sealed
   rfl
 
+/-! ## The equations of a step
+
+The walk of a program passes from a goal to the next along an equation of processes. What is
+left of an instruction, followed by the rest of the program, is the rest on the values, a stop,
+or an effect with the rest after its reply; and a judgment of a process that has ended is what
+the judgment asks of the end. Each equation is about one instruction. The kernel checks it
+there, and never compares the processes of two points of a program. -/
+
+/-- Values, then the rest, are the rest on the values. -/
+theorem Process.done_bind (a : A) (rest : A → Process S H B) :
+    (Process.done a).bind rest = rest a :=
+  rfl
+
+/-- A stop, then the rest, is the stop. -/
+theorem Process.halt_bind (payload : H) (rest : A → Process S H B) :
+    (Process.halt payload : Process S H A).bind rest = .halt payload :=
+  rfl
+
+/-- An effect, then the rest, is the effect with the rest after its reply. What follows the reply
+is sealed: it is what is left of the program. -/
+theorem Process.call_bind_sealed (op : S.Op) (k : S.Reply op → Process S H A)
+    (rest : A → Process S H B) :
+    (Process.call op k).bind rest = .call op fun reply => ((k reply).bind rest).sealed :=
+  congrArg (Process.call op) (funext fun reply => (Process.sealed_eq ((k reply).bind rest)).symm)
+
+/-- The judgment of values returned is what it asks of them. -/
+theorem Process.interpret_done (j : ProcessJudgment S L) (done : A → L) (halt : H → L) (a : A) :
+    (Process.done a).interpret j done halt = done a :=
+  rfl
+
+/-- The judgment of a stop is what it asks of the stop. -/
+theorem Process.interpret_halt (j : ProcessJudgment S L) (done : A → L) (halt : H → L)
+    (payload : H) : (Process.halt payload : Process S H A).interpret j done halt = halt payload :=
+  rfl
+
 /-- A function of the values of a list, taken one at a time: the form in which an invariant of
 a loop reads what the loop carries and what it has collected. -/
 def HList.Curried {α : Type} (V : α → Type) : List α → Type → Type

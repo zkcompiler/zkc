@@ -28,16 +28,25 @@ states the goal that follows:
 `walk_step at h` takes the same step on a hypothesis that judges a process: what a judgment of
 the process gives, as the walk of a goal says what a judgment of it needs.
 
-Nothing is unified and no lemma about an instruction is applied: each new goal is definitionally
-the old one at the values themselves, and the kernel checks that when the proof is closed. Lean's
-own reduction is not asked to evaluate an environment, whose cost on a long region grows with
-every instruction. For the same reason a goal that the walk states judges a sealed process
+Nothing is unified. A step passes from the goal to the next along an equation of processes:
+the term is its first instruction and then the rest (`Term.denote_step`), what the instruction
+denotes is its head normal form, and values, a stop or an effect followed by the rest are the
+rest on the values, the stop, or the effect with the rest after its reply (`Process.done_bind`,
+`Process.halt_bind`, `Process.call_bind_sealed`). The kernel checks each equation where it is
+stated, on one instruction: it computes what the instruction denotes and compares the values.
+It is never asked whether the goal before a step and the goal after it are one. The two judge
+the processes of two points of the program. Left with that question on the first step of a
+program whose rest is a loop with effects, under the judgment with fees, the kernel did not end
+within its limit (`Zkc/Tests/Formal/WalkLoop.lean` keeps that walk).
+
+Lean's own reduction is not asked to evaluate an environment, whose cost on a long region grows
+with every instruction. For the same reason a goal that the walk states judges a sealed process
 (`Process.sealed`): a tactic that normalizes its goal, to take a hypothesis apart or to close
 it, stops at the name and does not run what is left of the program. The judgment at an effect
 is stated open, so that it can be met, and what follows the reply is sealed.
 
-Two instructions are taken by a rule and not by what they denote, and the kernel checks the
-rule as it checks a step:
+Two instructions are taken by a rule and not by what they denote. The goal passes to the rule
+along the equation between the term and the step that the rule is about:
 
 - `walk_compute value` takes a computation of a role by its law. The law, that the operation
   gives `value` on the operands, is left as the goal `law`; the body of a function that the
@@ -116,12 +125,16 @@ private partial def settle (e : Expr) : MetaM Expr := do
   | .mdata _ inner => settle inner
   | _ => return e
 
-/-- A judgment of a process: the judgment applied to all but the process, the process, and what
-follows it (a budget). It is the goal, or a hypothesis from which the goal concludes
-`conclusion`. -/
+/-- A judgment of a process: the judgment applied to all but the process, the process as the
+goal states it, the process in the form that the walk reads (the denotation of a term, or what
+is left of an instruction and then the rest), the proof that the two are one
+(`stated = process`), and what follows the process (a budget). It is the goal, or a hypothesis
+from which the goal concludes `conclusion`. -/
 private structure Judged where
   fn : Expr
+  stated : Expr
   process : Expr
+  opened : Expr
   extra : Array Expr
   conclusion : Option Expr := none
 
@@ -131,7 +144,9 @@ private def readJudged (target : Expr) : MetaM Judged := do
     throwError "walk: the goal does not judge a process{indentExpr target}"
   return {
     fn := mkAppN target.getAppFn (args.extract 0 7)
+    stated := args[7]!
     process := args[7]!
+    opened := ← mkEqRefl args[7]!
     extra := args.extract 8 args.size }
 
 /-- The goal that states a judgment: the judgment, or what is concluded from it. -/
@@ -145,15 +160,39 @@ private def Judged.seal (j : Judged) (p : Expr) : Expr :=
   let a := j.fn.getAppArgs
   mkApp4 (mkConst ``Zkc.Core.Process.sealed) a[0]! a[1]! a[2]! p
 
-/-- The process under the name, or the process. -/
-private def unsealed (p : Expr) : Expr :=
-  if p.isAppOfArity ``Zkc.Core.Process.sealed 4 then p.appArg! else p
-
 /-- The goal that judges a process as it is: the judgment at an effect, to be met. -/
 private def Judged.atEffect (j : Judged) (p : Expr) : Expr := j.goal (mkAppN (mkApp j.fn p) j.extra)
 
 /-- The goal that judges what is left of a program: the judgment of the sealed process. -/
 private def Judged.of (j : Judged) (p : Expr) : Expr := j.atEffect (j.seal p)
+
+/-- The type of the processes that the judgment judges. -/
+private def Judged.processType (j : Judged) : Expr :=
+  let a := j.fn.getAppArgs
+  mkApp3 (mkConst ``Zkc.Core.Process) a[0]! a[1]! a[2]!
+
+/-- An equation that the kernel checks by computing its two sides. The walk states it between
+two forms of one instruction, of one list of values or of one name: either one side is the head
+normal form of the other, or the two share their head and differ in arguments of that kind. It
+is never stated between the processes of two points of a program, which the kernel would
+compare by running both. -/
+private def byComputation (lhs rhs : Expr) : MetaM Expr := do
+  if lhs == rhs then mkEqRefl lhs else mkExpectedTypeHint (← mkEqRefl rhs) (← mkEq lhs rhs)
+
+/-- Close a goal by a proof of the judgment of another process, given the equation between the
+process that the walk read and that process: the judgment passes along the equation. -/
+private def Judged.pass (j : Judged) (goal : MVarId) (next equation proof : Expr) : MetaM Unit := do
+  let whole ← mkEqTrans j.opened equation
+  let motive ← withLocalDeclD `p j.processType fun p => mkLambdaFVars #[p] (j.atEffect p)
+  goal.assign (mkApp4 (mkConst ``Eq.mpr [Level.zero]) (j.atEffect j.stated) (j.atEffect next)
+    (← mkCongrArg motive whole) proof)
+
+/-- Close a goal by a proof of the judgment of what is left of the program, sealed. -/
+private def Judged.passSealed (j : Judged) (goal : MVarId) (next equation proof : Expr) :
+    MetaM Unit := do
+  let a := j.fn.getAppArgs
+  let sealing ← mkEqSymm (mkApp4 (mkConst ``Zkc.Core.Process.sealed_eq) a[0]! a[1]! a[2]! next)
+  j.pass goal (j.seal next) (← mkEqTrans equation sealing) proof
 
 /-- The cells of a list of values: the implicit arguments of each `cons`, and its element. -/
 private partial def spine (e : Expr) (acc : Array (Array Expr × Expr) := #[]) :
@@ -218,6 +257,25 @@ private partial def applied (e : Expr) : MetaM Expr := do
 private def Judged.ask (j : Judged) (position : Nat) (value : Expr) : MetaM Expr :=
   return j.goal (← applied (mkAppN (mkApp (j.fn.getAppArgs[position]!) value) j.extra))
 
+/-- Close a goal whose process has ended, by the goal that states what the judgment asks of the
+end: of the values returned, or of the payload of a stop. `equation` is between the process that
+the walk read and `ended`, the end on `value`. -/
+private def Judged.ending (j : Judged) (goal : MVarId) (ended equation : Expr) (returned : Bool)
+    (value : Expr) : MetaM MVarId := do
+  let a := j.fn.getAppArgs
+  let position := if returned then 5 else 6
+  let rule := mkAppN
+    (mkConst (if returned then ``Zkc.Core.Process.interpret_done else ``Zkc.Core.Process.interpret_halt))
+    (a.push value)
+  let judged := mkApp j.fn ended
+  let asked := mkApp a[position]! value
+  let asks ← mkExpectedTypeHint rule (← mkEq judged asked)
+  let motive ← withLocalDeclD `judged a[3]! fun l => mkLambdaFVars #[l] (j.goal (mkAppN l j.extra))
+  let next ← mkFreshExprSyntheticOpaqueMVar (← j.ask position value)
+  j.pass goal ended equation (mkApp4 (mkConst ``Eq.mpr [Level.zero]) (j.goal (mkAppN judged j.extra))
+    (j.goal (mkAppN asked j.extra)) (← mkCongrArg motive asks) next)
+  return next.mvarId!
+
 /-- The numbers of a list of names, when they are written. -/
 private partial def nameNumbers (names : Expr) : MetaM (Array Nat) := do
   let (cells, _) ← spine names
@@ -227,11 +285,11 @@ private partial def nameNumbers (names : Expr) : MetaM (Array Nat) := do
 
 /-- The goal after values. Each value is settled. A value that settles to a local variable, a
 literal or a truth value is used as it is; any other gets a new local variable `x<name>`, at
-its computed type,
-with the equation `h<name>` that says what it is. The goal is then the rest on these. The old
-goal is closed by the new one at the values themselves. -/
+its computed type, with the equation `h<name>` that says what it is. The goal is then the rest
+on these. The result is the list of the settled values, the proof of the judgment of the rest on
+that list, sealed, which is the new goal at the values themselves, and the new goal. -/
 private def bindValues (goal : MVarId) (j : Judged) (values : Expr) (rest : Expr) (numbers : Array Nat) :
-    MetaM MVarId := goal.withContext do
+    MetaM (Expr × Expr × MVarId) := goal.withContext do
   let (cells, nil) ← spine values
   -- a value that is what was read, under what a role holds of it, is that variable
   let settled ← cells.mapM fun (_, value) => readValue value
@@ -253,11 +311,10 @@ private def bindValues (goal : MVarId) (j : Judged) (values : Expr) (rest : Expr
   let mut proof := mkAppN next (named.map (settled[·]!))
   for i in named do
     proof := mkApp proof (← mkEqRefl settled[i]!)
-  goal.assign proof
   let names := (named.map fun i => Name.mkSimple s!"x{numbers.getD i i}").toList ++
     (named.map fun i => Name.mkSimple s!"h{numbers.getD i i}").toList
   let (_, introduced) ← next.mvarId!.introN (2 * named.size) names
-  return introduced
+  return (rebuild cells nil settled, proof, introduced)
 
 /-- Where a stuck term waits: the first major premise, going inwards, that is not itself a
 process, and the term again as a function of what stands there. Definitions on the way are
@@ -291,21 +348,34 @@ private partial def waitsOn (e : Expr) : MetaM (Expr × (Expr → Expr)) := do
       | some unfolded => waitsOn unfolded
       | none => throwError "walk: the step is stuck at{indentExpr e}"
 
+/-- What is left of an instruction, then the rest, with what is left in another form: the
+process, and the equation between `bound` and it. The kernel computes what is left. -/
+private def withLeft (bound form : Expr) : MetaM (Expr × Expr) := do
+  let b := bound.getAppArgs
+  let leftType := mkApp3 (mkConst ``Zkc.Core.Process) b[0]! b[1]! b[2]!
+  let motive ← withLocalDeclD `left leftType fun x =>
+    mkLambdaFVars #[x] (mkAppN bound.getAppFn (b.set! 4 x))
+  return (mkAppN bound.getAppFn (b.set! 4 form), ← mkCongrArg motive (← byComputation b[4]! form))
+
 /-- A step that waits on a value: a goal for every form of the value. Each has the equation
 `at<key>` between what the step waits on, in a form to read, and the form; a part of the form
 is a variable at its computed type, named `x<name>` after what the step binds when the form has
-as many parts as the step has results. -/
-private def splitStuck (goal : MVarId) (j : Judged) (stuck rest : Expr) (key : Option Nat)
+as many parts as the step has results. `bound` is what is left of the instruction and then the
+rest, `why` the equation between the process of the goal and it, and `stuck` the head normal
+form of what is left. -/
+private def splitStuck (goal : MVarId) (j : Judged) (bound why stuck : Expr) (key : Option Nat)
     (numbers : Array Nat) : MetaM (List MVarId) := goal.withContext do
+  let b := bound.getAppArgs
   let (waited, put) ← waitsOn stuck
   let waited ← settle waited
   let waitedType ← kernelWhnf (← inferType waited)
   let equation := Name.mkSimple (match key with | some k => s!"at{k}" | none => "at_")
   let newType ← withLocalDeclD `waited waitedType fun form => do
-    let body := j.of (← mkAppM ``Zkc.Core.Process.bind #[put form, rest])
+    let body := j.of (mkAppN bound.getAppFn (b.set! 4 (put form)))
     mkForallFVars #[form] (mkForall equation .default (← computedTypes (← mkEq waited form)) body)
   let next ← mkFreshExprSyntheticOpaqueMVar newType
-  goal.assign (mkApp2 next waited (← mkEqRefl waited))
+  let (waiting, toWaiting) ← withLeft bound (put waited)
+  j.passSealed goal waiting (← mkEqTrans why toWaiting) (mkApp2 next waited (← mkEqRefl waited))
   let (form, afterForm) ← next.mvarId!.intro `waited
   let (_, afterEquation) ← afterForm.intro equation
   let cases ← afterEquation.cases form
@@ -319,29 +389,49 @@ private def splitStuck (goal : MVarId) (j : Judged) (stuck rest : Expr) (key : O
         current ← current.rename part (Name.mkSimple s!"x{numbers[i]!}")
     return current
 
-/-- One step on what is left of an instruction: a process and the rest on its values. -/
-private def advance (goal : MVarId) (j : Judged) (p rest : Expr) (key : Option Nat) (numbers : Array Nat) :
-    MetaM (List MVarId) := goal.withContext do
-  let w ← kernelWhnf p
+/-- One step on what is left of an instruction and then the rest: `bound` is that process,
+`left.bind rest`, and `why` is the equation between the process of the goal and it. -/
+private def advance (goal : MVarId) (j : Judged) (bound why : Expr) (key : Option Nat)
+    (numbers : Array Nat) : MetaM (List MVarId) := goal.withContext do
+  let b := bound.getAppArgs
+  let rest := b[5]!
+  let w ← kernelWhnf b[4]!
   if w.isAppOfArity ``Zkc.Core.Process.done 4 then
-    return [← bindValues goal j (w.getArg! 3) rest numbers]
+    let (list, proof, introduced) ← bindValues goal j (w.getArg! 3) rest numbers
+    let (returned, toReturned) ← withLeft bound
+      (mkApp4 (mkConst ``Zkc.Core.Process.done) b[0]! b[1]! b[2]! list)
+    let after := (mkApp rest list).headBeta
+    let toAfter ← mkExpectedTypeHint
+      (mkAppN (mkConst ``Zkc.Core.Process.done_bind) #[b[0]!, b[1]!, b[2]!, b[3]!, list, rest])
+      (← mkEq returned after)
+    j.passSealed goal after (← mkEqTrans why (← mkEqTrans toReturned toAfter)) proof
+    return [introduced]
   else if w.isAppOfArity ``Zkc.Core.Process.halt 4 then
-    let next ← mkFreshExprSyntheticOpaqueMVar (← j.ask 6 (w.getArg! 3))
-    goal.assign next
-    return [next.mvarId!]
+    let payload := w.getArg! 3
+    let (_, toHalted) ← withLeft bound
+      (mkApp4 (mkConst ``Zkc.Core.Process.halt) b[0]! b[1]! b[2]! payload)
+    let rule := mkAppN (mkConst ``Zkc.Core.Process.halt_bind)
+      #[b[0]!, b[1]!, b[2]!, b[3]!, payload, rest]
+    let stopped := (← inferType rule).appArg!
+    return [← j.ending goal stopped (← mkEqTrans why (← mkEqTrans toHalted rule)) false payload]
   else if w.isAppOfArity ``Zkc.Core.Process.call 5 then
     -- the judgment at the effect, with the rest after its reply
     let op := w.getArg! 3
     let k := w.getArg! 4
+    let (called, toCalled) ← withLeft bound
+      (mkApp5 (mkConst ``Zkc.Core.Process.call) b[0]! b[1]! b[2]! op k)
     let replyType := (← whnf (← inferType k)).bindingDomain!
-    let after ← withLocalDeclD `reply replyType fun x => do
-      mkLambdaFVars #[x] (j.seal (← mkAppM ``Zkc.Core.Process.bind #[(mkApp k x).headBeta, rest]))
-    let args := (← inferType j.process).getAppArgs
-    let call := mkAppN (mkConst ``Zkc.Core.Process.call) #[args[0]!, args[1]!, args[2]!, op, after]
-    let next ← mkFreshExprSyntheticOpaqueMVar (j.atEffect call)
-    goal.assign next
+    let afterReply ← withLocalDeclD `reply replyType fun x => do
+      mkLambdaFVars #[x] (mkApp4 (mkConst ``Zkc.Core.Process.sealed) b[0]! b[1]! b[3]!
+        (mkAppN bound.getAppFn (b.set! 4 (mkApp k x).headBeta)))
+    let effect := mkApp5 (mkConst ``Zkc.Core.Process.call) b[0]! b[1]! b[3]! op afterReply
+    let toEffect ← mkExpectedTypeHint
+      (mkAppN (mkConst ``Zkc.Core.Process.call_bind_sealed) #[b[0]!, b[1]!, b[2]!, b[3]!, op, k, rest])
+      (← mkEq called effect)
+    let next ← mkFreshExprSyntheticOpaqueMVar (j.atEffect effect)
+    j.pass goal effect (← mkEqTrans why (← mkEqTrans toCalled toEffect)) next
     return [next.mvarId!]
-  else splitStuck goal j w rest key numbers
+  else splitStuck goal j bound why w key numbers
 
 /-- The judgment that a goal is, or, with `hypothesis`, the judgment from which it concludes. -/
 private def readGoal (goal : MVarId) (hypothesis : Bool) : MetaM Judged := goal.withContext do
@@ -356,11 +446,25 @@ private def readGoal (goal : MVarId) (hypothesis : Bool) : MetaM Judged := goal.
       pure (judgment.consumeMData.headBeta, some conclusion)
     else pure (target, none)
   let j ← readJudged judgment
-  -- a process under a reducible name is the process
   let known (p : Expr) := p.isAppOfArity ``Zkc.Core.Process.bind 6 || p.isAppOfArity ``Zkc.Core.Term.denote 7
-  let p := unsealed j.process.headBeta
-  let p ← if known p then pure p else pure (unsealed (← whnfR p))
-  return { j with process := p, conclusion }
+  -- the process in another form, with the equation so far extended to it
+  let reduced (at_ : Expr × Expr) (form : Expr) : MetaM (Expr × Expr) := do
+    if form == at_.1 then return at_
+    else return (form, ← mkEqTrans at_.2 (← byComputation at_.1 form))
+  let throughSeal (at_ : Expr × Expr) : MetaM (Expr × Expr) := do
+    if at_.1.isAppOfArity ``Zkc.Core.Process.sealed 4 then
+      return (at_.1.appArg!, ← mkEqTrans at_.2
+        (mkAppN (mkConst ``Zkc.Core.Process.sealed_eq) at_.1.getAppArgs))
+    else return at_
+  let mut read := (j.stated, j.opened)
+  read ← reduced read read.1.headBeta
+  read ← throughSeal read
+  read ← reduced read read.1.headBeta
+  -- a process under a reducible name is the process
+  unless known read.1 do
+    read ← reduced read (← whnfR read.1)
+    read ← throughSeal read
+  return { j with process := read.1, opened := read.2, conclusion }
 
 /-- The number of a key, for the names of what a step states; a key that is no literal gives
 none. -/
@@ -371,6 +475,19 @@ private def keyNumber (key : Expr) : MetaM (Option Nat) := do
     return number.rawNatLit?.orElse fun _ => number.nat?
   else return none
 
+/-- The rest of a term after a step, as a function of the values of the step. -/
+private def restAfter (a : Array Expr) (names rest : Expr) : MetaM Expr := do
+  let (D, sem, path, env) := (a[0]!, a[1]!, a[5]!, a[6]!)
+  let restType ← inferType rest
+  let mid ← do
+    let namesType ← whnfR (← inferType names)
+    pure namesType.appArg!
+  let valuesType ← mkAppM ``Zkc.Core.HList #[← mkAppM ``Zkc.Core.Semantics.Val #[sem], mid]
+  withLocalDeclD `values valuesType fun vs => do
+    let extended ← mkAppM ``Zkc.Core.Env.extend #[env, names, vs]
+    let newΓ := restType.getAppArgs[1]!
+    mkLambdaFVars #[vs] (mkAppN (mkConst ``Zkc.Core.Term.denote) #[D, sem, newΓ, a[3]!, rest, path, extended])
+
 /-- One step of the walk on a goal: on the judgment that the goal is, or, with `hypothesis`, on
 the judgment from which the goal concludes. -/
 private def step (goal : MVarId) (hypothesis := false) : MetaM (List MVarId) := goal.withContext do
@@ -378,29 +495,31 @@ private def step (goal : MVarId) (hypothesis := false) : MetaM (List MVarId) := 
   let p := j.process
   if p.isAppOfArity ``Zkc.Core.Process.bind 6 then
     -- what is left of an instruction after an effect or a split
-    advance goal j (p.getArg! 4) (p.getArg! 5) none #[]
+    advance goal j p (← mkEqRefl p) none #[]
   else if p.isAppOfArity ``Zkc.Core.Term.denote 7 then
     let a := p.getAppArgs
-    let (D, sem, Γ, path, env) := (a[0]!, a[1]!, a[2]!, a[5]!, a[6]!)
+    let (D, sem, Γ, outs, path, env) := (a[0]!, a[1]!, a[2]!, a[3]!, a[5]!, a[6]!)
     let term ← kernelWhnf a[4]!
     if term.isAppOfArity ``Zkc.Core.Term.step 8 then
       let t := term.getAppArgs
       let (mid, key, i, names, rest) := (t[3]!, t[4]!, t[5]!, t[6]!, t[7]!)
-      let stepExpr := mkAppN (mkConst ``Zkc.Core.Instr.denote) #[D, sem, key, Γ, mid, i, path, env]
-      let valuesType := (← inferType stepExpr).getAppArgs[2]!
-      let after ← withLocalDeclD `values valuesType fun vs => do
-        let extended ← mkAppM ``Zkc.Core.Env.extend #[env, names, vs]
-        let newΓ := (← inferType rest).getAppArgs[1]!
-        mkLambdaFVars #[vs] (mkAppN (mkConst ``Zkc.Core.Term.denote) #[D, sem, newΓ, a[3]!, rest, path, extended])
-      advance goal j stepExpr after (← keyNumber key) (← nameNumbers names)
+      -- the term is its first instruction, then the rest on the values
+      let rule := mkAppN (mkConst ``Zkc.Core.Term.denote_step)
+        #[D, sem, Γ, outs, mid, key, i, names, rest, path, env]
+      let stated := (← inferType rule).appArg!
+      let bound := mkAppN stated.getAppFn (stated.getAppArgs.set! 5 (← restAfter a names rest))
+      let why ← mkExpectedTypeHint rule (← mkEq p bound)
+      advance goal j bound why (← keyNumber key) (← nameNumbers names)
     else if term.isAppOfArity ``Zkc.Core.Term.ret 4 then
+      -- the term returns the values of its names
       let exit := term.getArg! 3
-      let all ← mkAppM ``Zkc.Core.Env.all #[env, exit]
-      let (cells, nil) ← spine all
+      let rule := mkAppN (mkConst ``Zkc.Core.Term.denote_ret) #[D, sem, Γ, outs, exit, path, env]
+      let returned := (← inferType rule).appArg!
+      let (cells, nil) ← spine returned.appArg!
       let elems ← cells.mapM fun (_, e) => kernelWhnf e
-      let next ← mkFreshExprSyntheticOpaqueMVar (← j.ask 5 (rebuild cells nil elems))
-      goal.assign next
-      return [next.mvarId!]
+      let list := rebuild cells nil elems
+      let ended := mkApp returned.appFn! list
+      return [← j.ending goal ended (← mkExpectedTypeHint rule (← mkEq p ended)) true list]
     else throwError "walk: the term is neither a step nor a return{indentExpr term}"
   else throwError "walk: the process is not a term in an environment{indentExpr p}"
 
@@ -419,19 +538,6 @@ private def readTermStep (goal : MVarId) (hypothesis : Bool) :
   unless term.isAppOfArity ``Zkc.Core.Term.step 8 do
     throwError "walk: the term does not begin with a step{indentExpr term}"
   return (j, a, term.getAppArgs)
-
-/-- The rest of a term after a step, as a function of the values of the step. -/
-private def restAfter (a : Array Expr) (names rest : Expr) : MetaM Expr := do
-  let (D, sem, path, env) := (a[0]!, a[1]!, a[5]!, a[6]!)
-  let restType ← inferType rest
-  let mid ← do
-    let namesType ← whnfR (← inferType names)
-    pure namesType.appArg!
-  let valuesType ← mkAppM ``Zkc.Core.HList #[← mkAppM ``Zkc.Core.Semantics.Val #[sem], mid]
-  withLocalDeclD `values valuesType fun vs => do
-    let extended ← mkAppM ``Zkc.Core.Env.extend #[env, names, vs]
-    let newΓ := restType.getAppArgs[1]!
-    mkLambdaFVars #[vs] (mkAppN (mkConst ``Zkc.Core.Term.denote) #[D, sem, newΓ, a[3]!, rest, path, extended])
 
 /-- A computation of a role, taken by its law: the goal `law`, that the operation gives the
 value on the operands in a form to read, and the rest on the value. For a call of a function of
@@ -475,15 +581,16 @@ private def compute (goal : MVarId) (value : Syntax) (hypothesis := false) :
     else mkApp sides[1]!.appFn! read
   let law ← mkFreshExprSyntheticOpaqueMVar (tag := `law)
     (mkAppN lawType.getAppFn #[sides[0]!, computed, sides[2]!])
-  -- the step is the rest on the value: the judgment of the one is the judgment of the other
+  -- the step is the rest on the value: the term is the step of the rule, and the rule gives
+  -- the rest on what the role holds of the value
   let equation := mkApp withValue law
   let equationType ← inferType equation
-  let after := equationType.appArg!
-  let motive ← withLocalDeclD `p (← inferType after) fun x => mkLambdaFVars #[x] (j.of x)
-  let next ← mkFreshExprSyntheticOpaqueMVar (j.of after)
-  goal.assign (← mkEqMPR (← mkCongrArg motive equation) next)
-  let introduced ← bindValues next.mvarId! j after.appArg!.appArg! (← restAfter a names rest)
-    (← nameNumbers names)
+  let (computing, given) := (equationType.appFn!.appArg!, equationType.appArg!)
+  let restOn ← restAfter a names rest
+  let (list, proof, introduced) ← bindValues goal j given.appArg!.appArg! restOn (← nameNumbers names)
+  let after := (mkApp restOn list).headBeta
+  j.passSealed goal after (← mkEqTrans (← byComputation j.process computing)
+    (← mkEqTrans equation (← byComputation given after))) proof
   return [law.mvarId!, introduced]
 
 /-- A statement that concludes a judgment, with the process of the judgment sealed. -/
@@ -496,6 +603,24 @@ private partial def sealConclusion (type : Expr) : Expr :=
       mkAppN type.getAppFn (args.set! 7
         (mkApp4 (mkConst ``Zkc.Core.Process.sealed) args[0]! args[1]! args[2]! args[7]!))
     else type
+
+/-- A goal for a hypothesis of a rule that concludes a judgment, stated with the process of the
+judgment sealed, and the proof of the hypothesis from that goal. -/
+private def sealedGoal (type : Expr) (tag : Lean.Name) : MetaM (Expr × MVarId) := do
+  let goal ← mkFreshExprSyntheticOpaqueMVar (sealConclusion type) (tag := tag)
+  let proof ← forallTelescope type fun xs judgment => do
+    let args := judgment.getAppArgs
+    unless judgment.getAppFn.isConstOf ``Zkc.Core.Process.interpret && args.size ≥ 8 do
+      throwError "walk: a hypothesis of the rule concludes no judgment{indentExpr judgment}"
+    let (S, H, A) := (args[0]!, args[1]!, args[2]!)
+    let motive ← withLocalDeclD `p (mkApp3 (mkConst ``Zkc.Core.Process) S H A) fun p =>
+      mkLambdaFVars #[p] (mkAppN judgment.getAppFn (args.set! 7 p))
+    let sealedJudgment := mkAppN judgment.getAppFn
+      (args.set! 7 (mkApp4 (mkConst ``Zkc.Core.Process.sealed) S H A args[7]!))
+    let sealing := mkApp4 (mkConst ``Zkc.Core.Process.sealed_eq) S H A args[7]!
+    mkLambdaFVars xs (mkApp4 (mkConst ``Eq.mp [Level.zero]) sealedJudgment judgment
+      (← mkCongrArg motive sealing) (mkAppN goal xs))
+  return (proof, goal.mvarId!)
 
 /-- A variable that is a list of values, opened: a variable for each value. The other variables
 are followed through the substitutions. -/
@@ -542,7 +667,9 @@ private def loop (goal : MVarId) (invariant : Syntax) (monotone? : Option Syntax
   let (judgment, done, halt) := (judged[4]!, judged[5]!, judged[6]!)
   let along ← inferType carriedAlong
   let monotone ← match monotone? with
-    | some proof => Tactic.elabTerm proof none
+    | some proof => do
+      let expected ← mkAppM ``Zkc.Core.ProcessJudgment.Monotone #[judgment]
+      instantiateMVars (← Tactic.elabTermEnsuringType proof expected)
     | none =>
       if judgment.isAppOf ``Zkc.Core.ProcessJudgment.silent then
         pure (mkConst ``Zkc.Core.ProcessJudgment.silent_monotone)
@@ -559,9 +686,12 @@ private def loop (goal : MVarId) (invariant : Syntax) (monotone? : Option Syntax
   let (firstType, stepType, afterType) := (hypotheses.bindingDomain!,
     hypotheses.bindingBody!.bindingDomain!, hypotheses.bindingBody!.bindingBody!.bindingDomain!)
   let first ← mkFreshExprSyntheticOpaqueMVar firstType (tag := `first)
-  let step ← mkFreshExprSyntheticOpaqueMVar (sealConclusion stepType) (tag := `step)
-  let after ← mkFreshExprSyntheticOpaqueMVar (sealConclusion afterType) (tag := `after)
-  goal.assign (mkAppN withInvariant #[first, step, after])
+  let (stepProof, step) ← sealedGoal stepType `step
+  let (afterProof, after) ← sealedGoal afterType `after
+  -- the term is the loop of the rule
+  let looping := hypotheses.bindingBody!.bindingBody!.bindingBody!.getAppArgs[7]!
+  j.pass goal looping (← byComputation j.process looping)
+    (mkAppN withInvariant #[first, stepProof, afterProof])
   -- the names: after the key of the loop, and after the names that the loop binds
   let suffix := ((← keyNumber key).map toString).getD ""
   let named (base : String) : Lean.Name := Name.mkSimple (base ++ suffix)
@@ -579,7 +709,7 @@ private def loop (goal : MVarId) (invariant : Syntax) (monotone? : Option Syntax
   -- before the first iteration
   let firstGoal ← first.mvarId!.replaceTargetDefEq (← applied firstType)
   -- the body, at any iteration
-  let (_, stepGoal) ← step.mvarId!.intro (named "i")
+  let (_, stepGoal) ← step.intro (named "i")
   let (state, stepGoal) ← stepGoal.intro `state
   let (stepGoal, _, _) ← openState stepGoal state carried collected
   let (_, stepGoal) ← stepGoal.intro (named "t")
@@ -590,17 +720,20 @@ private def loop (goal : MVarId) (invariant : Syntax) (monotone? : Option Syntax
     let stepGoal ← stepGoal.replaceLocalDeclDefEq early (atCount earlyType)
     stepGoal.replaceLocalDeclDefEq holds (← applied (← inferType (.fvar holds)))
   -- the rest, after the last iteration
-  let (state, afterGoal) ← after.mvarId!.intro `state
+  let (state, afterGoal) ← after.intro `state
   let (afterGoal, _, _) ← openState afterGoal state carried collected
-  let (along, afterGoal) ← afterGoal.intro (named "t")
+  let (_, afterGoal) ← afterGoal.intro (named "t")
   let (holds, afterGoal) ← afterGoal.intro (named "invariant")
   let afterGoal ← afterGoal.withContext do
     afterGoal.replaceLocalDeclDefEq holds (← applied (atCount (← inferType (.fvar holds))))
   let afterGoal ← afterGoal.withContext do
-    let target := (← instantiateMVars (← afterGoal.getType)).consumeMData.headBeta
-    let judgedAfter ← readJudged target
-    let values := (unsealed judgedAfter.process).appArg!.appArg!
-    bindValues afterGoal { j with extra := #[.fvar along] } values (← restAfter a names rest) results
+    let judgedAfter ← readGoal afterGoal false
+    let restOn ← restAfter a names rest
+    let (list, proof, introduced) ←
+      bindValues afterGoal judgedAfter judgedAfter.process.appArg!.appArg! restOn results
+    let next := (mkApp restOn list).headBeta
+    judgedAfter.passSealed afterGoal next (← byComputation judgedAfter.process next) proof
+    pure introduced
   firstGoal.setTag `first
   stepGoal.setTag `step
   afterGoal.setTag `after
