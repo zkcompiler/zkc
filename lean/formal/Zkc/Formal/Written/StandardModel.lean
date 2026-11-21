@@ -122,62 +122,70 @@ local macro "binary_row " f:term : term => `(by
   intro sig known args permitted; cases known; cases args; rename_i x tail; cases tail; rename_i y tail; cases tail
   exact ⟨.cons ($f x y) .nil, fun _ ↦ ⟨trivial, trivial⟩⟩)
 
-/-- Meaning at semantic row keys. Typed dispatch transports arguments and results together. -/
-def row : (k : Standard.RowKey) → Row D k
-  | .inl (.group .scale (.group .g1)) => binary_row D.scale
-  | .inl (.group .add (.group .g1)) => binary_row D.add
-  | .inl (.group .equal (.group .g1)) => binary_row (fun (p q : G) ↦ decide (p = q))
-  | .inl (.field .add .bls12381Fr .all) => binary_row D.scalarAdd
-  | .inl (.field .sub .bls12381Fr .all) => binary_row D.sub
-  | .inl (.field .mul .bls12381Fr .all) => binary_row D.mul
-  | .inl (.field .neg .bls12381Fr .all) => unary_row (fun (x : F) ↦ D.sub D.zero x)
-  | .inl (.field .equal .bls12381Fr .all) => binary_row (fun (x y : F) ↦ decide (x = y))
-  | .inl (.field .nonzero .bls12381Fr .all) => by
+/-- The rows that the model interprets, each with its meaning; none for every other row of the
+vocabulary. This is the one table of the interpreted rows: the meaning of a row (`row`) and
+whether a row is interpreted (`interprets`) are both read from it. Typed dispatch transports
+arguments and results together. -/
+def arm : (k : Standard.RowKey) → Option (Row D k)
+  | .inl (.group .scale (.group .g1)) => some (binary_row D.scale)
+  | .inl (.group .add (.group .g1)) => some (binary_row D.add)
+  | .inl (.group .equal (.group .g1)) => some (binary_row (fun (p q : G) ↦ decide (p = q)))
+  | .inl (.field .add .bls12381Fr .all) => some (binary_row D.scalarAdd)
+  | .inl (.field .sub .bls12381Fr .all) => some (binary_row D.sub)
+  | .inl (.field .mul .bls12381Fr .all) => some (binary_row D.mul)
+  | .inl (.field .neg .bls12381Fr .all) => some (unary_row (fun (x : F) ↦ D.sub D.zero x))
+  | .inl (.field .equal .bls12381Fr .all) => some (binary_row (fun (x y : F) ↦ decide (x = y)))
+  | .inl (.field .nonzero .bls12381Fr .all) => some (by
     intro sig known args permitted
     cases known; cases args; rename_i x tail; cases tail
     change F at x
     have nz : x ≠ D.zero := of_decide_eq_true permitted
-    exact ⟨.cons ⟨x,nz⟩ .nil, fun _ ↦ ⟨trivial, trivial⟩⟩
-  | .inl (.field .isNonzero .bls12381Fr .all) => unary_row (fun (x : F) ↦ decide (x ≠ D.zero))
-  | .inl (.field .inverse .bls12381Fr .nonzero) =>
-    unary_row (fun (x : {x : F // x ≠ D.zero}) ↦ (⟨D.inv x.val, D.invNonzero x.val x.property⟩ : {x : F // x ≠ D.zero}))
-  | .inl (.field .fromNonzero .bls12381Fr .nonzero) => unary_row (fun (x : {x : F // x ≠ D.zero}) ↦ x.val)
-  | .inl (.seq .add (.atom (.field .bls12381Fr)) (some n)) => vectorBinary D D.scalarAdd n rfl
-  | .inl (.seq .sub (.atom (.field .bls12381Fr)) (some n)) => vectorBinary D D.sub n rfl
-  | .inl (.seq .scale (.atom (.field .bls12381Fr)) (some n)) => vectorScale D n
-  | .inl (.seq .sum (.atom (.field .bls12381Fr)) n) => vectorSum D n
-  | .inl (.seq .equal (.atom (.field .bls12381Fr)) n) => vectorEqual D n
-  | k => defaultRow D k
+    exact ⟨.cons ⟨x,nz⟩ .nil, fun _ ↦ ⟨trivial, trivial⟩⟩)
+  | .inl (.field .isNonzero .bls12381Fr .all) => some (unary_row (fun (x : F) ↦ decide (x ≠ D.zero)))
+  | .inl (.field .inverse .bls12381Fr .nonzero) => some
+    (unary_row (fun (x : {x : F // x ≠ D.zero}) ↦ (⟨D.inv x.val, D.invNonzero x.val x.property⟩ : {x : F // x ≠ D.zero})))
+  | .inl (.field .fromNonzero .bls12381Fr .nonzero) => some (unary_row (fun (x : {x : F // x ≠ D.zero}) ↦ x.val))
+  | .inl (.seq .add (.atom (.field .bls12381Fr)) (some n)) => some (vectorBinary D D.scalarAdd n rfl)
+  | .inl (.seq .sub (.atom (.field .bls12381Fr)) (some n)) => some (vectorBinary D D.sub n rfl)
+  | .inl (.seq .scale (.atom (.field .bls12381Fr)) (some n)) => some (vectorScale D n)
+  | .inl (.seq .sum (.atom (.field .bls12381Fr)) n) => some (vectorSum D n)
+  | .inl (.seq .equal (.atom (.field .bls12381Fr)) n) => some (vectorEqual D n)
+  | _ => none
 
-/-- The rows that the model interprets: those that `row` has an arm for. Every other row of the
-vocabulary is given a constant (`defaultRow`), which is a meaning and not the intended one; a
-result over this model is about a program whose rows are all in this table. -/
-def interprets : Standard.RowKey → Bool
-  | .inl (.group .scale (.group .g1)) => true
-  | .inl (.group .add (.group .g1)) => true
-  | .inl (.group .equal (.group .g1)) => true
-  | .inl (.field .add .bls12381Fr .all) => true
-  | .inl (.field .sub .bls12381Fr .all) => true
-  | .inl (.field .mul .bls12381Fr .all) => true
-  | .inl (.field .neg .bls12381Fr .all) => true
-  | .inl (.field .equal .bls12381Fr .all) => true
-  | .inl (.field .nonzero .bls12381Fr .all) => true
-  | .inl (.field .isNonzero .bls12381Fr .all) => true
-  | .inl (.field .inverse .bls12381Fr .nonzero) => true
-  | .inl (.field .fromNonzero .bls12381Fr .nonzero) => true
-  | .inl (.seq .add (.atom (.field .bls12381Fr)) (some _)) => true
-  | .inl (.seq .sub (.atom (.field .bls12381Fr)) (some _)) => true
-  | .inl (.seq .scale (.atom (.field .bls12381Fr)) (some _)) => true
-  | .inl (.seq .sum (.atom (.field .bls12381Fr)) _) => true
-  | .inl (.seq .equal (.atom (.field .bls12381Fr)) _) => true
-  | _ => false
+/-- Meaning at semantic row keys: the arm of the table, and for a row that the table does not
+have, a constant (`defaultRow`), which is a meaning and not the intended one. -/
+def row (k : Standard.RowKey) : Row D k := (arm D k).getD (defaultRow D k)
 
-/-- A row outside the table is given the default, and no other row is: the table has exactly
-the arms of `row`. -/
-theorem row_eq_default (k : Standard.RowKey) (outside : interprets k = false) :
+/-- A row outside the table is given the default. -/
+theorem row_eq_default (k : Standard.RowKey) (outside : arm D k = none) :
     row D k = defaultRow D k := by
-  unfold row
-  split <;> first | rfl | (simp [interprets] at outside)
+  simp [row, outside]
+
+/-- The algebra of two elements, at which the table is read: whether a row has an arm does not
+depend on the algebra. -/
+def tableData : Data Bool Bool where
+  zero := false
+  sub := xor
+  mul := and
+  inv := id
+  add := xor
+  scale := and
+  scalarAdd := xor
+  zeroPoint := false
+  unit := ⟨true, by decide⟩
+  literal n := n % 2 == 1
+  literalZero := rfl
+  invNonzero := by intro x h; exact h
+
+/-- The rows that the standard model interprets: those that the table (`arm`) has. A result
+over the model is about a program whose rows are all interpreted. -/
+def interprets (k : Standard.RowKey) : Bool := (arm tableData k).isSome
+
+/-- **The table is one.** For every algebra, a row has an arm in the model exactly when it is
+interpreted: an entry of the table is an arm of the model, and an arm is an entry. -/
+theorem interprets_iff_arm (k : Standard.RowKey) : interprets k = (arm D k).isSome := by
+  unfold interprets arm
+  split <;> rfl
 
 def model : Model Standard := {
   carriers D with
