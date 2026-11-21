@@ -601,7 +601,7 @@ mutual
           depth := frame.depth + 1, reached := frame.reached ++ own, body, roles := checked.roles }
       -- each argument, by each mapped holder of its port, in the order written (HO4)
       let mut envs : Envs := body.roster.map fun _ => {}
-      let ports := body.ports.filter (!·.specification)
+      let ports := body.deployedPorts
       for position in order do
         let (some port, some argument) := (ports[position]?, arguments[position]?) | continue
         for holder in port.holders.toArray do
@@ -635,8 +635,7 @@ def read (context : Context) (root : InstanceId) (data : List Datum) (fuel : Nat
   -- the inputs: one datum per port and holder
   let mut envs : Envs := body.roster.map fun _ => {}
   let mut rest := data
-  for port in body.ports do
-    if port.specification then continue
+  for port in body.deployedPorts do
     for holder in port.holders.toArray do
       match rest with
       | datum :: more =>

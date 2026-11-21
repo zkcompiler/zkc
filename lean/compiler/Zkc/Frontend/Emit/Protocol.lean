@@ -129,20 +129,18 @@ def protocolSummary (description : String) (head : Lowered.ProtocolHead) (checke
     (body : Typed.ProtocolBody) (origin : DefinitionOrigin)
     (resolved : Array (Typing.ResolvedPlace × ParameterRef)) (waiting : Option String) :
     CompileM ProtocolCode := do
-  -- one input per holder of each port that is not `spec`, one output per holder of each result
+  -- one input per holder of each deployed port, numbered by its place among the deployed ports
+  -- (`Typed.ProtocolBody.deployedPorts`); one output per holder of each result
   let mut inputs : Array (ClosedType × Nat) := #[]
   let mut inputPorts : Array Nat := #[]
   let mut agreements : Array (Bool × Array Nat) := #[]
-  let mut number := 0
-  for port in body.ports do
-    if port.specification then continue
+  for (port, number) in body.deployedPorts.zipIdx do
     let holders := port.holders.toArray
     if holders.size > 1 then
       agreements := agreements.push (false, (Array.range holders.size).map (inputs.size + ·))
     for holder in holders do
       inputs := inputs.push (port.binder.type, holder)
       inputPorts := inputPorts.push number
-    number := number + 1
   let mut outputs : Array (ClosedType × Nat) := #[]
   for result in body.results do
     let holders := result.holders.toArray
