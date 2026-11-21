@@ -140,7 +140,10 @@ def replayChallenge : Experiment signature Bool where
 
 theorem replayedChallenge_not_fresh (old : Bool) : ¬ Fresh replayChallenge [(0 : Int),1] (by decide) draw old := by
   intro fresh
-  let repeated := fun r : Int => r == (if old then 1 else 0 : Int)
+  let repeated : Int → Bool
+    | .ofNat 0 => !old
+    | .ofNat 1 => old
+    | _ => false
   have impossible : ¬ (replayChallenge.probability draw old (fun r _ => repeated r) ≤
       (FiniteLaw.uniform [(0 : Int),1] (by decide)).expect fun r => if repeated r then 1 else 0) := by
     cases old <;> decide +kernel
