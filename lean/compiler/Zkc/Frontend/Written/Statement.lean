@@ -43,8 +43,8 @@ library and from the model that the check names:
   before any module is written.
 
 So a proof module is: the package, `opens`, `facts`, `coverage`, `counts`, `entries`,
-`transfers`, `claimTexts`, the proofs written for the protocol, `closings`. Every statement that the module
-publishes is a proposition defined before the text of the proofs; a name that the text defines
+`transfers`, `claimTexts`, the proofs written for the protocol, `closings`. Every statement
+that the module publishes is a proposition defined before the text of the proofs; a name that the text defines
 afterwards cannot change what it says. The subject, the premise, the experiment, the samplers
 and the bound are written here.
 
@@ -52,9 +52,9 @@ What a statement says of its goal is read from the claims (`goalClaims`) and fro
 a caller gives beside them: the deciding role is the verifier of the claims' scheme, the
 operands are the inputs of the deployed header at the places that the claims give, and the
 proof arguments, the ceiling and the table of caps are the goal's. A caller gives the model and
-the labels of the functions that the text names. A goal whose clause is a `reduces` gets no statement: the statement of a
-reduction is about a return on which the reduced statement is true, and a bound on every return
-is another claim.
+the labels of the functions that the text names. A goal whose clause is a `reduces` gets no
+statement: the statement of a reduction is about a return on which the reduced statement is
+true, and a bound on every return is another claim.
 
 The model is named by a `ModelText`: the binders of what it is built from, the model, its
 samplers and its coverage as terms over them, and what the statement assumes of it. It is

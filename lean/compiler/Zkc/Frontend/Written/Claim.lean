@@ -18,8 +18,9 @@ reader can compare it with the source.
 
 A goal is read by one function, and what its statement says is in what that function returns:
 the scheme with its prover and its verifier, the clause, the relation, the operands, the proof
-arguments, the ceiling and the table of caps of the root at the goal's proof arguments. The records are made here and nowhere else, so a consumer cannot
-pair a goal with another goal's role or operands.
+arguments, the ceiling and the table of caps of the root at the goal's proof arguments. The
+records are made here and nowhere else, so a consumer cannot pair a goal with another goal's
+role, operands or table.
 
 An operand of the clause is an input of the deployed header, by its place there. The ports of
 the source and the inputs of the header are two lists: a `spec` port is in the first and not in

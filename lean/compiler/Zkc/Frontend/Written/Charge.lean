@@ -67,15 +67,17 @@ def ProofSubject.child (parent : ProofSubject) (c : AdmittedRoot) (site : Core.K
   return ⟨call.callee, values⟩
 
 /-- The names of the sites that the contract of an instance's declaration charges, each with
-the place of its clause. -/
-def chargedSites (s : Compile.State) (owner : InstanceId) : ExportM (Array (Array String × Syntax.Span)) := do
+the place of its clause, and the name and the place of the declaration. -/
+def chargedSites (s : Compile.State) (owner : InstanceId) :
+    ExportM (Array (Array String × Syntax.Span) × String × Syntax.Span) := do
   let some entry := s.table.entries[owner]? | throw "missing charge instance"
   let some declaration := s.program.declarations[entry.key.declaration]?
     | throw "missing charge declaration"
   let place := (declaration.name.map (·.span)).getD default
-  return (← contractOf s entry.key.declaration place).filterMap fun
+  let charged := (← contractOf s entry.key.declaration place).filterMap fun
     | .charge span site _ => some (site.names.map (·.text), span)
     | _ => none
+  return (charged, s.program.nameOf entry.key.declaration, place)
 
 /-- The use of a definition at its proof arguments, in a table under construction: its place.
 A use that the table has is found again, so two applications that give a callee the same proof
@@ -91,18 +93,25 @@ partial def capsOfUse (c : AdmittedRoot) (subject : ProofSubject) :
   let some (.protocol _ _ _ _ body) := named.definitions.find? (·.key.number == subject.protocol)
     | throw "WK-CHARGE: a use of the table is of no protocol of the package"
   let found := body.counted (some 1)
-  let some entry := c.state.table.entries[subject.protocol]? | throw "missing charge instance"
-  let name := c.state.program.nameOf entry.key.declaration
+  let (charged, name, place) ← chargedSites c.state subject.protocol
   let mut calls : Array CallCap := #[]
   for (key, operation, count) in found do
     let .apply _ _ := operation | continue
     let some count := count
-      | throw (s!"WK-CHARGE: the application at instruction {key.number} of `{name}` is under a loop " ++
-          "whose count is read at run time, or in an attempt: it has no count in a table of caps yet")
+      | refuse place "WK-CHARGE" (s!"an application in `{name}` is under a loop whose count is read " ++
+          s!"at run time, or in an attempt (instruction {key.number}): it has no count in a table " ++
+          "of caps yet")
     let child ← subject.child c key
     calls := calls.push ⟨key, count, ← capsOfUse c child⟩
+  -- a site has one cap: a second charge on it is refused before any charge is read
+  let mut capped : Array (Array String) := #[]
+  for (names, span) in charged do
+    if capped.contains names then
+      refuse span "WK-CHARGE"
+        s!"a second charge on `sites.{".".intercalate names.toList}`: a site has one cap"
+    capped := capped.push names
   let mut draws : Array DrawCap := #[]
-  for (names, span) in ← chargedSites c.state subject.protocol do
+  for (names, span) in charged do
     let #[site] := names
       | refuse span "WK-CHARGE" "a charge on a site of a callee is not in a table of caps yet"
     let charge ← match drawCharge c.state c.evidence.admitted.program ⟨subject.protocol⟩ site

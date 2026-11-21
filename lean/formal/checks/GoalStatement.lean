@@ -178,11 +178,18 @@ def runtimeDraws (charge : String) : String := charged
     "spec for Runs:\n    proves @V Holds(claim)\n" ++ charge)
   "Runs"
 
-/-- An application under a loop whose count is read at run time. -/
-def runtimeCalls : String := charged
+/-- Two charges on one draw. -/
+def chargedTwice : String := charged
+  ("protocol Two roles(P, V)(claim: bool @(P, V)):\n" ++
+    "    z <- draw index<8> from V to P\n    guard @V claim\n" ++
+    "spec for Two:\n    proves @V Holds(claim)\n    charge sites.z <= 1 / 8\n    charge sites.z <= 1 / 2\n")
+  "Two"
+
+/-- An application under a loop whose count is read at run time, of a callee with the given
+contract. -/
+def runtimeCalls (contract : String) : String := charged
   ("protocol Once roles(P, V)(claim: bool @(P, V)):\n" ++
-    "    z <- draw index<8> from V to P\n" ++
-    "spec for Once:\n    charge sites.z <= 1 / 8\n" ++
+    "    z <- draw index<8> from V to P\n" ++ contract ++
     "protocol Caller roles(P, V)(claim: bool @(P, V), n: index<4> @(P, V)):\n" ++
     "    for i in 0..n:\n        Once(claim)\n    guard @V claim\n" ++
     "spec for Caller:\n    proves @V Holds(claim)\n")
@@ -370,8 +377,12 @@ def run (work : System.FilePath) : IO Unit := do
       ("a charge on a site of a callee", calleeSite, "a charge on a site of a callee"),
       ("a charged draw under a loop of a run-time count",
         runtimeDraws "    charge sites.z <= 1 / 8\n", "the draw `z` of `Runs` is under a loop whose count is read at run time"),
-      ("an application under a loop of a run-time count", runtimeCalls,
-        "the application at instruction 1 of `Caller` is under a loop whose count is read at run time")] do
+      ("two charges on one draw", chargedTwice, "a second charge on `sites.z`"),
+      ("an application under a loop of a run-time count",
+        runtimeCalls "spec for Once:\n    charge sites.z <= 1 / 8\n",
+        "an application in `Caller` is under a loop whose count is read at run time"),
+      ("an application of a callee without a charge under a loop of a run-time count",
+        runtimeCalls "", "an application in `Caller` is under a loop whose count is read at run time")] do
     match statementsOf text ["sound"] with
     | .ok _ => throw (IO.userError s!"{title} was read into a table")
     | .error why =>

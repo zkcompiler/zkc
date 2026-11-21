@@ -33,13 +33,20 @@ The check reads the source with the frontend and writes modules on which Lean is
 What the source says and the proof module takes as given is asserted here against the source:
 the ports, the clause, the operand and the table of caps, as literals.
 
-Three controls are refused by Lean, each at the line that the check names.
+Three controls are refused by Lean, each at the places that the check names and at no other.
 
-- The charge of the source halved (`1 / 16`): the program is what it was and the cap of the
-  draw is another; the text is refused where it reads the cap from the table.
+- The charge of the source halved (`1 / 16`): the program is what it was, the cap of the draw
+  is another and so is the budget, three sixteenths. The module is refused at three places:
+  where the text reads the cap of the draw from the table, where the invariant starts with
+  three fees of one eighth within the budget, and where the consumer states the bound as
+  `3 / 8`. A source cannot lower the cap of this draw and keep the budget, since the draw is
+  the only charged one, so no control of this subject separates the cap from the budget; the
+  text of `Count<8>` proves that separation (`misplaced_judges_nothing`: a table with the same
+  budget whose cap is on another instruction judges the verifier at no budget).
 - Four rounds for three (`Guess<4>`): the count of the draw and the budget are other numbers
-  (four, and one half); the invariant of the text pays three rounds, and the text is refused in
-  the goal of the loop's body, at the fourth.
+  (four, and one half). The module is refused at two places: in the goal of the loop's body,
+  where the invariant of the text has paid three rounds and has nothing for the fourth, and
+  where the consumer states the bound as `3 / 8`.
 - An invariant that leaves one fee too few (`(2 - i) / 8` for `(3 - i) / 8`), which is the
   negative test of the walk's loop rule: the rule is applied and its first goal is met, and the
   text is refused at one place, in the goal of the body, where the fee of the third round is
@@ -151,12 +158,17 @@ def comparisonModule (name : String) (s : Subject) : String :=
   s!"#eval Zkc.Tests.Frontend.PrintedPackageSupport.expectGoalClaims {literal s.text} " ++
   s!"[\"guessing\"] ({Written.associationTerm noAssociation}) stored association\nend {name}\n"
 
-/-- A control is refused where it is meant to be: Lean's output has the line. -/
-def expectReason (title : String) (task : Task (Except IO.Error (Bool × String)))
-    (line : String) : IO Unit := do
+/-- A control is refused at the places that are named and at no other: Lean's output has as many
+errors as there are places, and the text of each. -/
+def expectPlaces (title : String) (task : Task (Except IO.Error (Bool × String)))
+    (places : List String) : IO Unit := do
   let (_, output) ← finishLean task
-  unless output.contains line do
-    throw (IO.userError s!"{title}: refused for another reason than `{line}`\n{output}")
+  let errors := (output.splitOn "error:").length - 1
+  unless errors == places.length do
+    throw (IO.userError s!"{title}: refused at {errors} places, not at {places.length}\n{output}")
+  for place in places do
+    unless output.contains place do
+      throw (IO.userError s!"{title}: not refused at `{place}`\n{output}")
 
 def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
   let template ← IO.FS.readFile template
@@ -200,24 +212,24 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
   let (ok, output) ← finishLean comparison
   acceptedOutput "GuessSource" ok output []
   -- The cap of the draw is one sixteenth: the text reads another cap from the table than the
-  -- one that it pays, and the budget is not three eighths.
+  -- one that it pays, the invariant does not start within the budget of three sixteenths, and
+  -- the consumer's number is not the budget.
   expectUnproved "the charge halved" "CapControl" theorems halvedProof ("cap_of_draw" :: ofWalk)
-  expectReason "the charge halved" halvedProof
-    "guessingCaps.capFrom guessingCaps.root [] { number := 3 } = 1 / 8"
+  expectPlaces "the charge halved" halvedProof
+    ["guessingCaps.capFrom guessingCaps.root [] { number := 3 } = 1 / 8",
+      "↑(3 - 0) * (1 / 8) ≤ guessingCaps.budget", "toProbability (↑3 / ↑16) = 3 / 8"]
   -- Four rounds: the invariant of the text pays three, and the body at the fourth round has
-  -- nothing left to pay with.
+  -- nothing left to pay with; the consumer's number is not the budget of one half.
   expectUnproved "four rounds" "RoundsControl" theorems fourProof ofWalk
-  expectReason "four rounds" fourProof "omega could not prove the goal"
+  expectPlaces "four rounds" fourProof
+    ["omega could not prove the goal", "toProbability (↑1 / ↑2) = 3 / 8"]
   -- An invariant that leaves one fee too few: the loop rule is applied and its first goal is
   -- met; in the goal of the body the fee of the third round is not within what is left.
   expectUnproved "an invariant one fee short" "InvariantControl" theorems shortProof ofWalk
-  expectReason "an invariant one fee short" shortProof "omega could not prove the goal"
-  let (_, shortOutput) ← finishLean shortProof
-  unless (shortOutput.splitOn "error:").length == 2 do
-    throw (IO.userError s!"an invariant one fee short: refused at more than one place\n{shortOutput}")
+  expectPlaces "an invariant one fee short" shortProof ["omega could not prove the goal"]
   IO.println ("Guess<3> is judged within the table of caps of its goal (the draw at 1/8, three " ++
     "times: 3/8), a fee at every round of the loop; a consumer written apart states the bound " ++
-    "as 3/8; 3 of 3 controls refused, each at its line.")
+    "as 3/8; 3 of 3 controls refused, each at the places that the check names and at no other.")
 
 end GuessCharge
 
