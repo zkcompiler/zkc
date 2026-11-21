@@ -35,21 +35,36 @@ namespace Zkc.Frontend.Elab
 open Syntax
 open Static
 
+/-- What a deciding clause of a contract states at the ports alone. -/
+def decidingApplication? : Lowered.Clause → Option Lowered.Expr
+  | .proves _ _ _ relation => some relation
+  | .reduces _ _ _ source _ => some source
+  | _ => none
+
 /-- What the deciding clauses of a contract state at the ports alone. -/
 def decidingApplications (clauses : Array Lowered.Clause) : Array Lowered.Expr :=
-  clauses.filterMap fun
-    | .proves _ _ _ relation => some relation
-    | .reduces _ _ _ source _ => some source
-    | _ => none
+  clauses.filterMap decidingApplication?
 
-/-- One application of a relation in a clause. An expression that applies no relation
-declaration is left as it is. -/
-def elabClauseApplication (expr : Lowered.Expr) : ElabM Unit := do
-  let .call span callee arguments witnesses := expr | return
-  let .declaration steps scopes ← calleeOf callee | return
-  let some (id, _) := steps.back? | return
+/-- A step of the typing of a clause that may wait for a later layer of the language. A reader
+of contracts leaves such a clause as it is (`none`); a consumer that needs the typed clause
+is told why it waits. -/
+def unlessWaiting {α : Type} (lenient : Bool) (step : ElabM α) : ElabM (Option α) := do
+  try pure (some (← step))
+  catch
+    | failure@(.waiting _) | failure@(.staticIndex _) => if lenient then pure none else throw failure
+    | other => throw other
+
+/-- One application of a relation in a clause, typed: the call of the instance of the relation
+on the operands, which are the statement operands alone where the clause is written short.
+None for an expression that applies no relation declaration, and for a clause that waits when
+`lenient`. -/
+def elabClauseApplication (expr : Lowered.Expr) (lenient : Bool := true) :
+    ElabM (Option Typed.Expr) := do
+  let .call span callee arguments witnesses := expr | return none
+  let .declaration steps scopes ← calleeOf callee | return none
+  let some (id, _) := steps.back? | return none
   let found ← liftM (declaration id : CompileM Declaration)
-  let .relation node := found.node | return
+  let .relation node := found.node | return none
   -- every specification-only parameter of the relation is given by a specification argument,
   -- or is the protocol's own where they share a scope (SP11)
   let proofArguments ← callProofArguments steps found span
@@ -59,14 +74,13 @@ def elabClauseApplication (expr : Lowered.Expr) : ElabM Unit := do
   let assigned ← liftM (assignArguments env steps scopes span : CompileM _)
   let (parameters, result) ← signatureOf id
   let name ← liftM (Static.nameOf id : CompileM String)
+  -- the short application says that some witness exists (SX3): its statement is paired and
+  -- typed, and the typed application then has the statement operands alone
   let paired ← pairRelationArguments name (node.statement.map (·.name.text))
-    ((node.witness.getD #[]).map (·.name.text)) arguments witnesses span
-  let inferred ← try
-      pure (some (← inferArguments id assigned found.file parameters result paired (some .bool) span))
-    catch
-      | .waiting _ | .staticIndex _ => pure none
-      | other => throw other
-  let some (values, _) := inferred | return
+    ((node.witness.getD #[]).map (·.name.text)) arguments witnesses span (atTop := true)
+  let some (values, _) ← unlessWaiting lenient
+      (inferArguments id assigned found.file parameters result paired (some .bool) span)
+    | return none
   -- the instance of the relation, whose `where` holds at the deployed values (SP4); a condition
   -- that cannot be evaluated is not taken to hold
   let description ← liftM (describeInstance id values : CompileM String)
@@ -78,26 +92,30 @@ def elabClauseApplication (expr : Lowered.Expr) : ElabM Unit := do
   -- `where` holds there, and its body is typed there, where an index, a size or a condition
   -- can depend on a proof argument. A body that waits for a later layer leaves the clause as
   -- it is
-  try discard <| callDeclaration id assigned paired (some .bool) span proofArguments
-  catch
-    | .waiting _ | .staticIndex _ => pure ()
-    | other => throw other
+  unlessWaiting lenient (callDeclaration id assigned paired (some .bool) span proofArguments)
 
-/-- The relation applications of the deciding clauses, at the ports of an instance. Every
-refused clause is reported, and one refused clause refuses them all. -/
+/-- The relation applications of the deciding clauses, at the ports of an instance: each typed
+application with the place of its clause in the contract. Every refused clause is reported,
+and one refused clause refuses them all. -/
 def elabClauses (signature : Typed.ProtocolSignature) (head : Lowered.ProtocolHead)
-    (clauses : Array Lowered.Clause) : ElabM Unit := do
+    (clauses : Array Lowered.Clause) (lenient : Bool := true) :
+    ElabM (Array (Nat × Typed.Expr)) := do
   for (port, closed) in head.ports.zip signature.ports do
     discard <| bindLocal port.binder closed.type
     if port.specification then
       modify fun state => { state with
         specificationPorts := state.specificationPorts.insert port.binder.id }
   let mut refused := false
-  for expr in decidingApplications clauses do
-    try elabClauseApplication expr
+  let mut typed := #[]
+  for (clause, place) in clauses.zipIdx do
+    let some expr := decidingApplication? clause | continue
+    try
+      if let some application ← elabClauseApplication expr lenient then
+        typed := typed.push (place, application)
     catch
       | .abandoned => refused := true
       | other => throw other
   if refused then throw .abandoned
+  return typed
 
 end Zkc.Frontend.Elab

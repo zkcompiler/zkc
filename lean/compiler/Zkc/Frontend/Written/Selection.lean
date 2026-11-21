@@ -144,6 +144,8 @@ of the protocol, which mean the same in every state of one compilation; it names
 whose number is of the state that made it. -/
 structure DecidingClause where
   span : Span
+  /-- Its place among the clauses of the contract. -/
+  place : Nat
   kind : DecidingKind
   label : Option String
   /-- The deciding role, by its place in the roster of the protocol. -/
@@ -166,8 +168,8 @@ names, or the only one. -/
 def decidingClause (s : Compile.State) (root : DeclarationId) (selected : Option String)
     (place : Span) : ExportM DecidingClause := do
   let name := s.program.nameOf root
-  let clause ← match chooseClause (← contractOf s root place) decides selected with
-    | .ok (_, clause) => pure clause
+  let (index, clause) ← match chooseClause (← contractOf s root place) decides selected with
+    | .ok found => pure found
     | .error (.duplicate second label) => refuse second "GL3" s!"two clauses of `{name}` are labelled `{label}`"
     | .error .absent =>
       refuse place "GL3" s!"`{name}` has no `proves` or `reduces` clause; add one to `spec for {name}`"
@@ -196,8 +198,8 @@ def decidingClause (s : Compile.State) (root : DeclarationId) (selected : Option
         | none => pure #[]
       pure (some { relation := id, reference, statement, witness })
     | _ => pure none
-  return { span := clause.span, kind, label := label.map (·.name.text), role, proposition, application
-           target }
+  return { span := clause.span, place := index, kind, label := label.map (·.name.text), role
+           proposition, application, target }
 
 /-- An imported scheme is also a root when an entry goal selects it. Reuse ordinary SC1
 instantiation in the defining file and retain the resulting table for body elaboration. -/

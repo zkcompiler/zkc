@@ -397,6 +397,24 @@ section <n: nat>:
 scheme Checked = Count<8>:
     prover P
     construction interactive
+=== N-SX3d | accept | the short application of a relation with a witness, at the top of `proves`, says that some witness exists
+module t
+type G = primitive("bls12-381.g1")
+relation DLog(base: G, point: G; scalar: G::Scalar): point == base * scalar
+protocol X roles(P, V)(base: G @(P, V), point: G @(P, V), scalar: G::Scalar @P):
+    y <- send base * scalar from P to V
+    guard @V y == point
+spec for X:
+    proves @V DLog(base, point)
+=== N-SX3e | refuse SX3 | the short application gives every statement argument
+module t
+type G = primitive("bls12-381.g1")
+relation DLog(base: G, point: G; scalar: G::Scalar): point == base * scalar
+protocol X roles(P, V)(base: G @(P, V), point: G @(P, V), scalar: G::Scalar @P):
+    y <- send base * scalar from P to V
+    guard @V y == point
+spec for X:
+    proves @V DLog(base)
 === N-GL3a | refuse GL3 | a goal that names neither of two `proves` clauses
 module t
 use zkc::security::{completeness}

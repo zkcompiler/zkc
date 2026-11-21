@@ -75,8 +75,11 @@ structure RootEmission where
 def RootEmission.package (e : RootEmission) (association : Core.Association) : SourcePackage :=
   ⟨e.bindings,e.named,association⟩
 
-def emitReachable (root : InstanceId) : EmitM RootEmission := do
-  let found ← visit root [] {}
+/-- The definitions that roots reach, in one package: what the first root reaches in the order
+of its own package, then what each later root adds. A definition that two roots reach is there
+once, and the bindings are those that any of them links. -/
+def emitReachableFrom (roots : List InstanceId) : EmitM RootEmission := do
+  let found ← roots.foldlM (fun found root => visit root [] found) {}
   let context ← bodyContext found.bindings
   let mut definitions := #[]
   let mut origins := #[]
@@ -92,6 +95,8 @@ def emitReachable (root : InstanceId) : EmitM RootEmission := do
     definitions := definitions.push definition
     origins := origins.push ⟨key,nodes,specification,dynamicLoops⟩
   return ⟨found.bindings,⟨definitions.toList⟩,origins⟩
+
+def emitReachable (root : InstanceId) : EmitM RootEmission := emitReachableFrom [root]
 
 /-- Physical block paths from one typed definition. The source records static iteration
 numbers and an instruction key. Two candidates at that coordinate make resolution fail. -/
@@ -122,5 +127,10 @@ namespace Zkc.Frontend.Typing
 
 def emitRoot (state : Compile.State) (root : InstanceId) : Except EmitFailure Emit.RootEmission :=
   (Emit.emitReachable root).run state
+
+/-- The package of several roots of one state (`Emit.emitReachableFrom`). -/
+def emitRoots (state : Compile.State) (roots : List InstanceId) :
+    Except EmitFailure Emit.RootEmission :=
+  (Emit.emitReachableFrom roots).run state
 
 end Zkc.Frontend.Typing

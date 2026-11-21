@@ -1,4 +1,5 @@
 import Zkc.Frontend.Written.Charge
+import Zkc.Frontend.Written.Claim
 import Zkc.Frontend.Driver.Files
 
 /-!
@@ -75,6 +76,27 @@ def expectGoalRoot (text goal : String) (expected : Association)
     (association : Association) : IO Unit := do
   let admitted ← IO.ofExcept (goalRoot text goal)
   expectEmission s!"goal {goal}" admitted.emission expected stored association
+
+/-- The comparison for the package of what soundness goals of one scheme of a source claim: the
+printed program is the one that the frontend emits for the claims, and its first definitions
+are, one for one, those of the package of the goals' root alone. So what a module states of
+the deployed definitions of the claims' package is stated of the deployed package. -/
+def expectGoalClaims (text : String) (goals : List String) (expected : Association)
+    {rows : List (Zkc.Vocabulary.Project.PrimitiveName × Zkc.Vocabulary.Project.PrimitiveSignature)}
+    {distinct : (rows.map Prod.fst).Nodup}
+    (stored : NamedProgram (Zkc.Vocabulary.Project.Bindings.mk rows distinct).vocabulary)
+    (association : Association) : IO Unit := do
+  let some first := goals.head? | throw (IO.userError "no goal")
+  let admitted ← IO.ofExcept (goalRoot text first)
+  let claims ← IO.ofExcept (Written.goalClaims admitted goals)
+  expectEmission s!"the claims of {goals}" claims.emission expected stored association
+  if same : admitted.emission.bindings.rows = rows then
+    let deployed := (atRows (distinct := distinct) same admitted.emission.named).definitions
+    unless decide (stored.definitions.take deployed.length = deployed) do
+      throw (IO.userError s!"the claims of {goals}: their first definitions are not the deployed ones")
+  else
+    throw (IO.userError (s!"the claims of {goals} link a primitive that the deployed definitions " ++
+      "do not: the two packages are over two vocabularies, and they are not compared yet"))
 
 /-! ## Lean on a module -/
 

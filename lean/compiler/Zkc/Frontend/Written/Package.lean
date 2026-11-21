@@ -216,8 +216,9 @@ definitions. -/
 structure PrintedPackage where
   /-- The declarations, for a namespace that the caller opens. -/
   text : String
-  /-- The key of each definition in order, and whether it is a protocol. The root of a
-  package is its last definition. What is stated of the definition with key `k` is named with
+  /-- The key of each definition in order, and whether it is a protocol. The root of the
+  package of one root is its last definition; in the package of a claim the root is followed
+  by what the relations of its clauses add (`goalClaims`). What is stated of the definition with key `k` is named with
   that number: `stored<k>`, `elaborated<k>`, `header<k>`, `names<k>`, `body<k>`, and
   `program<k>` for the program through it. -/
   definitions : List (Key × Bool)
