@@ -42,7 +42,7 @@ theorem guessing_judged : guessingJudged := by
   walk_loop fun i (hit : Bool) budget => hit = false ∧ ((3 - i : ℕ) : ℚ≥0) * (1 / 8) ≤ budget
   case first => exact ⟨rfl, by decide +kernel⟩
   case step =>
-    obtain ⟨rfl, enough⟩ := invariant
+    obtain ⟨rfl, enough⟩ := invariant_i
     have split : (3 - i : ℕ) = (3 - (i + 1)) + 1 := by omega
     rw [split, Nat.cast_add, Nat.cast_one, add_mul, one_mul] at enough
     -- the message: nothing is excluded
@@ -57,7 +57,7 @@ theorem guessing_judged : guessingJudged := by
     refine ⟨?_, le_tsub_of_add_le_right enough⟩
     exact Bool.eq_false_iff.mpr fun same => differs (Nat.eq_of_beq_eq_true same)
   case after =>
-    obtain ⟨rfl, _⟩ := invariant
+    obtain ⟨rfl, _⟩ := invariant_i
     walk
 
 /-- **The hypotheses of the claim are met**: over the field of two elements, on the false claim,

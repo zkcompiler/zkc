@@ -203,6 +203,13 @@ def expectUnproved (title name : String) (theorems : List String)
   unless unproved.all expected.contains && expected.all unproved.contains do
     throw (IO.userError s!"{title}: unproved are {unproved}, expected {expected}\n{output}")
 
+/-- A text with its one occurrence of `before` replaced. A control alters a text at a place; an
+alteration that no longer finds its place is an error, and not a control that alters nothing. -/
+def replaceOnce (text before after : String) : IO String := do
+  unless (text.splitOn before).length == 2 do
+    throw (IO.userError s!"expected one occurrence of `{before}`")
+  return text.replace before after
+
 /-- A control is refused at the places that are named and at no other: Lean's output has as many
 errors as there are places, and the text of each. -/
 def expectPlaces (title : String) (task : Task (Except IO.Error (Bool × String)))

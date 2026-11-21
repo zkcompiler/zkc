@@ -608,7 +608,9 @@ def _root_.Zkc.Frontend.Written.ClaimedGoal.siteCaps (goal : ClaimedGoal) :
 /-- The charged draws of the root under the names of their sites: the key of each
 (`site_<name>`, and `site_<name>_<index>` for each block of a stepped loop), once for the
 package, and for each goal the cap that its table gives the draw (`<goal>_cap_<name>`), decided
-by the kernel. A text can name a draw as the source does. -/
+by the kernel. A text can name a draw as the source does, and where it pays a fee at such a
+draw the fee is compared with the cap stated here (the label `walk_cap`), so that a fee that is
+not within it is refused with the name of the site. -/
 def sites (s : Statements) : String :=
   let named := (s.claims.goals.flatMap (·.siteLabels)).eraseDups
   String.join (named.map fun (site, label, key) =>
@@ -617,7 +619,7 @@ def sites (s : Statements) : String :=
   String.join (s.claims.goals.map fun goal =>
     String.join (goal.siteCaps.map fun (label, cap) =>
       s!"/-- The cap that the table of `{goal.goal}` gives the draw `{label}`. -/\n" ++
-      s!"theorem {goal.goal}_cap_{label} :\n" ++
+      s!"@[walk_cap]\ntheorem {goal.goal}_cap_{label} :\n" ++
       s!"    {goal.goal}Caps.capFrom {goal.goal}Caps.root [] site_{label} = " ++
       s!"{cap.numerator} / {cap.denominator} := by\n  decide +kernel\n\n"))
 

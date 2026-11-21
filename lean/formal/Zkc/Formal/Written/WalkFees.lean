@@ -74,12 +74,18 @@ elab "walk_pay " fee:term:max " excluding " set:term:max " as " reply:ident kept
   let goal ← getMainGoal
   let (args, op) ← atEffect goal "walk_pay"
   -- the table, the use at which the run started and its path, from the judgment
-  let judgment := args[4]!
-  let pays := judgment.appArg!
-  unless judgment.isAppOf ``Zkc.Core.ProcessJudgment.charged &&
-      pays.isAppOf ``Zkc.Formal.ProbabilisticProcess.paysWithin do
-    throwError "walk_pay: the judgment is not the one with fees within allowances{indentExpr judgment}"
+  let judgment ← whnfR args[4]!
+  unless judgment.isAppOf ``Zkc.Core.ProcessJudgment.charged do
+    throwError "walk_pay: the judgment is not the one with fees{indentExpr judgment}"
+  -- a text may have its own name for the fees of a table: names that only abbreviate are read
+  let pays ← whnfR judgment.appArg!
+  unless pays.isAppOf ``Zkc.Formal.ProbabilisticProcess.paysWithin do
+    throwError "walk_pay: the fees are not those within allowances{indentExpr pays}"
   let allowance := pays.appArg!
+  let allowance ← do
+    if allowance.isAppOf ``Zkc.Frontend.Written.CapTable.allowance ||
+        allowance.isAppOf ``Zkc.Frontend.Written.CapTable.allowanceFrom then pure allowance
+    else whnfR allowance
   let a := allowance.getAppArgs
   let (model, table, place, start) ←
     if allowance.isAppOfArity ``Zkc.Frontend.Written.CapTable.allowance 4 then
@@ -125,15 +131,38 @@ elab "walk_pay " fee:term:max " excluding " set:term:max " as " reply:ident kept
     let computed ← Meta.reduce applications (skipTypes := true) (skipProofs := true)
     let stated := stated.replace fun e => if e == applications then some computed else none
     let cap ← cap.replaceTargetDefEq stated
-    let saved ← saveState
-    try
-      setGoals [cap]
-      evalTactic (← `(tactic| decide +kernel))
-      pure []
-    catch _ =>
-      saved.restore
-      if stated.hasFVar then pure [cap]
-      else throwError "walk_pay: the fee is not within the cap that the table gives this draw{indentExpr stated}"
+    -- where the module states the cap of this site, the fee is compared with what it states,
+    -- and the site has its name
+    let mut cap := cap
+    let mut stated := stated
+    let mut site := m!"this draw"
+    for name in ← Lean.labelled `walk_cap do
+      let some (_, lhs, value) := (← inferType (mkConst name)).eq? | continue
+      unless ← withReducible (isDefEq lhs stated.appArg!) do continue
+      let narrowed := mkApp stated.appFn! value
+      let next ← mkFreshExprSyntheticOpaqueMVar narrowed (← cap.getTag)
+      cap.assign (← mkAppM ``LE.le.trans_eq #[next, ← mkEqSymm (mkConst name)])
+      cap := next.mvarId!
+      stated := narrowed
+      site := m!"the draw `{lhs.appArg!}`"
+      break
+    let closedBy (goal : MVarId) (tactic : TSyntax `tactic) : TacticM Bool := do
+      let saved ← saveState
+      try
+        setGoals [goal]
+        evalTactic tactic
+        if (← getGoals).isEmpty then pure true else saved.restore; pure false
+      catch _ =>
+        saved.restore
+        pure false
+    if ← closedBy cap (← `(tactic| first | exact le_rfl | decide +kernel)) then pure []
+    else
+      -- refused where the kernel decides that the fee is over the cap; left to the text where
+      -- it decides neither
+      let over ← mkFreshExprSyntheticOpaqueMVar (mkNot stated)
+      if ← closedBy over.mvarId! (← `(tactic| decide +kernel)) then
+        throwError "walk_pay: the fee is not within the cap that the table gives {site}{indentExpr stated}"
+      pure [cap]
   setGoals ([weight] ++ withinLeft ++ capLeft ++ [after])
 
 end Zkc.Formal.Written
