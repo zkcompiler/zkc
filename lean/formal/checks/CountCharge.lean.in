@@ -1,17 +1,20 @@
 /-!
 The verifier of `Count<8>` within the charges of its two goals.
 
-Before this text the check writes the printed package of the root and what it read from the
-source: the key of the root (`rootKey`, with `rootHeader`, `rootNames`, `rootBody` and
+Before this text the check writes the printed package of what the two goals claim (the protocol
+of the scheme, then the relation of the clause at the value of each goal) and what it read from
+the source: the key of the root (`rootKey`, with `rootHeader`, `rootNames`, `rootBody` and
 `calleeProgram`, the program before the root), the roles (`verifierRole`, `proverRole`), and
-for each goal the value of its proof argument and its charge on the draw (`looseTolerance`,
-`looseCharge`, `strictTolerance`, `strictCharge`).
+for each goal the value of its proof argument, its charge on the draw and its relation
+(`looseTolerance`, `looseCharge`, `looseKey` with `looseHeader`, `looseNames`, `looseBody`,
+`looseBefore`, the program before the relation, and `looseMember`, its place among the
+functions; the same for `strict`).
 
-One thing is bound here by hand: the relation. The source says
-`NearZero(xs): (∑ i ∈ 0..n, if xs[i] == 0 then 0 else 1) <= e`, and a table is outside it when
-more than `e` of its entries are not zero: `e < xs.countP (· ≠ D.zero)`. The check compares the
-line of the source with the line it was read from, and no theorem here says that the two mean
-the same.
+Nothing of the relation is bound by hand. The source says
+`NearZero(xs): (∑ i ∈ 0..n, if xs[i] == 0 then 0 else 1) <= e`; the package has it as a function
+at each goal's value, and `loose_relation` and `strict_relation` say what that function
+computes: whether at most the tolerance of the entries are not zero. The goals take as their
+premise that the admitted function returns false on the table.
 -/
 
 open Zkc.Formal Zkc.Formal.ProbabilisticProcess Zkc.Formal.Written OracleComp ProbComp
@@ -161,6 +164,152 @@ theorem walk_reads_any_key (key : Key) (allowed : ∀ op, (RSig (model D)).Reply
 
 end
 
+/-! ## The relation of each goal, as the function that admission gives -/
+
+/-- "Not less", as the comparison the other way. -/
+theorem not_blt (a b : ℕ) : (!Nat.blt a b) = decide (b ≤ a) := by
+  cases h : Nat.blt a b
+  · have : ¬ a < b := by rw [← Nat.blt_eq]; simp [h]
+    simp; omega
+  · have : a < b := by rw [← Nat.blt_eq]; exact h
+    simp; omega
+
+section
+variable {F G : Type} (D : StandardModel.Data F G) [DecidableEq F] [DecidableEq G]
+
+/-- How many of the first `i` entries are not zero. -/
+def countTo (xs : List F) (i : ℕ) : ℕ := (xs.take i).countP (· ≠ D.zero)
+
+omit [DecidableEq G] in
+/-- One more entry: the count grows by one when the entry is not zero. -/
+theorem countTo_succ (xs : List F) (i : ℕ) (x : F) (at_ : xs[i]? = some x) :
+    countTo D xs (i + 1) = countTo D xs i + (if x ≠ D.zero then 1 else 0) := by
+  unfold countTo
+  rw [List.take_add_one, at_, List.countP_append]
+  by_cases zero : x = D.zero <;> simp [zero]
+
+omit [DecidableEq G] in
+/-- The count over every entry. -/
+theorem countTo_all (xs : List F) (n : ℕ) (length : xs.length = n) :
+    countTo D xs n = xs.countP (· ≠ D.zero) := by
+  unfold countTo
+  rw [List.take_of_length_le (by omega)]
+
+/-- A natural as the one value that the loop of the relation carries. -/
+def carriedNat (n : ℕ) : HList (model D).Val [.nat] := .cons n .nil
+
+/-- The value of a carried list of one natural. -/
+def carriedValue : HList (model D).Val [.nat] → ℕ
+  | .cons v _ => v
+
+set_option hygiene false in
+/-- The body of the relation at a tolerance, walked: the count is one loop, entered by its rule
+with the invariant that the carried value is the count of the entries before the iteration; the
+body is walked once, at any iteration; after the loop the count is compared with the tolerance.
+It reads, by name, the table `xs` and its `length`; `before` is the program before the
+relation. -/
+macro "count_relation_walk " before:ident : tactic => `(tactic| (
+  refine functionResult_of_judged ?_
+  walk_step
+  refine (congrFun (Term.interpret_loop (localSem _ _ _) _ _ _ _ _ _ _ _ _ _ _ _ _ _) ()).mpr ?_
+  refine Process.interpret_mono ProcessJudgment.silent_monotone
+    (p := fun (state : (localSem (model D) ($before).headers.fns
+        (Defs.fnTable (model D) ($before).defs)).LoopState [.nat] []) _ =>
+      state.1 = carriedNat D (countTo D xs 8)) ?after (fun _ _ h => h) _ _
+    (Process.interpret_iterate ProcessJudgment.silent_monotone _
+      (fun i (state : (localSem (model D) ($before).headers.fns
+          (Defs.fnTable (model D) ($before).defs)).LoopState [.nat] []) _ =>
+        state.1 = carriedNat D (countTo D xs i)) _ 8 ?body 8 0 _ _ (by simp) ?initial)
+  case initial => rfl
+  case body =>
+    intro i state t early inv
+    rcases state with ⟨⟨⟩, collected⟩
+    rename_i c rest
+    cases rest
+    cases collected
+    have known : c = countTo D xs i := congrArg (carriedValue D) inv
+    refine (congrFun (Semantics.interpret_loopStep (localSem _ _ _) _ _ _ _ _ _ _ _ _ _ _) t).mpr ?_
+    walk_step
+    · have none : xs[i]? = none := at1
+      rw [List.getElem?_eq_none_iff] at none
+      omega
+    walk_step
+    walk_step
+    walk_step
+    · -- the entry is not zero: the choice gives 1
+      walk_step
+      walk_step
+      have nonzero : x4 ≠ D.zero := by
+        subst h6 h5
+        simpa using at6
+      show (HList.cons x10 HList.nil : HList (model D).Val [.nat]) = carriedNat D (countTo D xs (i + 1))
+      rw [countTo_succ D xs i x4 at1, h10, known]
+      simp [nonzero, carriedNat]
+    · -- the entry is zero: the choice gives 0
+      walk_step
+      walk_step
+      have zero : x4 = D.zero := by
+        subst h6 h5
+        simpa using at6
+      show (HList.cons c HList.nil : HList (model D).Val [.nat]) = carriedNat D (countTo D xs (i + 1))
+      rw [countTo_succ D xs i x4 at1, known]
+      simp [zero, carriedNat]
+  case after =>
+    intro a t counted
+    rcases a with ⟨⟨⟩, collected⟩
+    rename_i c rest
+    cases rest
+    cases collected
+    walk_step
+    walk_step
+    walk_step
+    walk_step
+    have known : c = countTo D xs 8 := congrArg (carriedValue D) counted
+    subst h14 h13
+    rw [not_blt, known, countTo_all D xs 8 length]
+    rfl))
+
+/-- **What the relation of `loose` computes.** The function that the package has for
+`NearZero` at the tolerance of `loose` returns, on a table of eight entries, whether at most
+that many of them are not zero. -/
+theorem loose_relation (xs : List F) (length : xs.length = 8) :
+    functionResult (t := .bool) (fnMeaning (model D) installed looseMember (.cons xs .nil)) =
+      some (decide (xs.countP (· ≠ D.zero) ≤ looseTolerance)) := by
+  rw [show fnMeaning (model D) installed looseMember (.cons xs .nil) =
+    looseBody.denote (localSem (model D) looseBefore.headers.fns (Defs.fnTable (model D) looseBefore.defs)) []
+      (Env.empty.extend looseNames (.cons xs .nil)) from by kernel_rfl]
+  delta looseBody
+  count_relation_walk looseBefore
+
+/-- **What the relation of `strict` computes.** -/
+theorem strict_relation (xs : List F) (length : xs.length = 8) :
+    functionResult (t := .bool) (fnMeaning (model D) installed strictMember (.cons xs .nil)) =
+      some (decide (xs.countP (· ≠ D.zero) ≤ strictTolerance)) := by
+  rw [show fnMeaning (model D) installed strictMember (.cons xs .nil) =
+    strictBody.denote (localSem (model D) strictBefore.headers.fns (Defs.fnTable (model D) strictBefore.defs)) []
+      (Env.empty.extend strictNames (.cons xs .nil)) from by kernel_rfl]
+  delta strictBody
+  count_relation_walk strictBefore
+
+/-- A table on which the relation of `loose` returns false has more than its tolerance of
+entries that are not zero. -/
+theorem loose_far (xs : List F) (length : xs.length = 8)
+    (rejected : functionResult (t := .bool)
+      (fnMeaning (model D) installed looseMember (.cons xs .nil)) = some false) :
+    looseTolerance < xs.countP (· ≠ D.zero) := by
+  rw [loose_relation D xs length] at rejected
+  simpa using rejected
+
+/-- The same for `strict`. -/
+theorem strict_far (xs : List F) (length : xs.length = 8)
+    (rejected : functionResult (t := .bool)
+      (fnMeaning (model D) installed strictMember (.cons xs .nil)) = some false) :
+    strictTolerance < xs.countP (· ≠ D.zero) := by
+  rw [strict_relation D xs length] at rejected
+  simpa using rejected
+
+end
+
 /-- What holds of the root of the installed program holds of the root of every admitted
 program. -/
 theorem at_root {a : Admitted V} (admitted : admit stored association = .ok a)
@@ -172,6 +321,33 @@ theorem at_root {a : Admitted V} (admitted : admit stored association = .ok a)
   generalize a.program = p at same
   subst same
   exact ⟨Member.head, by kernel_rfl, holds⟩
+
+/-- What holds of the root and of the relation of `loose` in the installed program holds of them
+in every admitted program, each found by its key. -/
+theorem at_loose {a : Admitted V} (admitted : admit stored association = .ok a)
+    (P : (p : Typed V) → Member p.headers.protocols rootHeader → Member p.headers.fns looseHeader → Prop)
+    (holds : P installed Member.head looseMember) :
+    ∃ root : Member a.program.headers.protocols rootHeader,
+      a.program.findProtocol rootKey = some ⟨rootHeader, root⟩ ∧
+      ∃ relation : Member a.program.headers.fns looseHeader,
+        a.program.find looseKey = some (.fn relation) ∧ P a.program root relation := by
+  have same := readback admitted
+  generalize a.program = p at same
+  subst same
+  exact ⟨Member.head, by kernel_rfl, looseMember, by kernel_rfl, holds⟩
+
+/-- The same for the relation of `strict`. -/
+theorem at_strict {a : Admitted V} (admitted : admit stored association = .ok a)
+    (P : (p : Typed V) → Member p.headers.protocols rootHeader → Member p.headers.fns strictHeader → Prop)
+    (holds : P installed Member.head strictMember) :
+    ∃ root : Member a.program.headers.protocols rootHeader,
+      a.program.findProtocol rootKey = some ⟨rootHeader, root⟩ ∧
+      ∃ relation : Member a.program.headers.fns strictHeader,
+        a.program.find strictKey = some (.fn relation) ∧ P a.program root relation := by
+  have same := readback admitted
+  generalize a.program = p at same
+  subst same
+  exact ⟨Member.head, by kernel_rfl, strictMember, by kernel_rfl, holds⟩
 
 section
 variable {F G : Type} (D : StandardModel.Data F G) [DecidableEq F] [DecidableEq G]
@@ -226,40 +402,81 @@ theorem returns_within (charge : DrawCharge) (tolerance : ℕ)
   exact allowed_bounds_return service _ (allowance (model D) charge rootKey path)
     (Permitted (model D)) permitted follows _ (budget charge) s judged
 
+/-- The probability, at the root of the installed program. -/
+theorem returns_installed (charge : DrawCharge) (tolerance : ℕ)
+    (owned : charge.owner = rootKey) (site : charge.draws = [([], ⟨0⟩)])
+    (covers : ((7 - tolerance : ℕ) : ℚ≥0) / (8 : ℕ) ≤ ceiling charge)
+    (positive : 0 < charge.denominator) (path : List Frame) (xs : List F) (length : xs.length = 8)
+    (far : tolerance < xs.countP (· ≠ D.zero))
+    {σ : Type} (service : Service (RSig (model D)) σ)
+    (follows : service.Follows (portSamplers (model D) (coin path) (drawPosition 7)))
+    (permitted : ∀ op s reply t, (some reply, t) ∈ support (service op s) →
+      Permitted (model D) op reply) (s : σ) :
+    Pr{let out ← (simulateQ (handlerOf service) (embed
+        (roleMeaning (model D) installed (Member.head : Member installed.headers.protocols rootHeader)
+          verifierRole path (inputs D xs)))).run.run s}[
+      ∃ results, out.1 = some (.inl results)] ≤ total charge := by
+  rw [prEvent_simulation_returns, ← toProbability_budget charge positive]
+  refine allowed_bounds_return service _ (allowance (model D) charge rootKey path)
+    (Permitted (model D)) permitted follows _ (budget charge) s ?_
+  rw [meaning_walked]
+  exact walked_within D path xs tolerance charge length far owned site covers
+
 /-! ## The two goals -/
 
-/-- The goal `loose`: on a table of which more than its tolerance of entries are not zero, the
-verifier returns with probability at most the total of its charge. -/
+/-- The goal `loose`. In every admitted program the protocol and the relation of the goal are
+found by their keys, and on a table of eight entries on which that relation returns false the
+verifier returns with probability at most the total of the goal's charge. -/
 theorem loose_sound {a : Admitted V} (admitted : admit stored association = .ok a)
     (path : List Frame) (xs : List F) (length : xs.length = 8)
-    (far : looseTolerance < xs.countP (· ≠ D.zero))
     {σ : Type} (service : Service (RSig (model D)) σ)
     (follows : service.Follows (portSamplers (model D) (coin path) (drawPosition 7)))
     (permitted : ∀ op s reply t, (some reply, t) ∈ support (service op s) →
       Permitted (model D) op reply) (s : σ) :
     ∃ root : Member a.program.headers.protocols rootHeader,
       a.program.findProtocol rootKey = some ⟨rootHeader, root⟩ ∧
-      Pr{let out ← (simulateQ (handlerOf service) (embed
-          (roleMeaning (model D) a.program root verifierRole path (inputs D xs)))).run.run s}[
-        ∃ results, out.1 = some (.inl results)] ≤ total looseCharge :=
-  returns_within D looseCharge looseTolerance (by decide) (by decide) loose_exact.ge (by decide)
-    admitted path xs length far service follows permitted s
+      ∃ relation : Member a.program.headers.fns looseHeader,
+        a.program.find looseKey = some (.fn relation) ∧
+        (functionResult (t := .bool)
+            (fnMeaning (model D) a.program relation (.cons xs .nil)) = some false →
+          Pr{let out ← (simulateQ (handlerOf service) (embed
+              (roleMeaning (model D) a.program root verifierRole path (inputs D xs)))).run.run s}[
+            ∃ results, out.1 = some (.inl results)] ≤ total looseCharge) :=
+  at_loose admitted
+    (fun p root relation =>
+      functionResult (t := .bool) (fnMeaning (model D) p relation (.cons xs .nil)) = some false →
+        Pr{let out ← (simulateQ (handlerOf service) (embed
+            (roleMeaning (model D) p root verifierRole path (inputs D xs)))).run.run s}[
+          ∃ results, out.1 = some (.inl results)] ≤ total looseCharge)
+    (fun rejected => returns_installed D looseCharge looseTolerance (by decide) (by decide)
+      loose_exact.ge (by decide) path xs length (loose_far D xs length rejected) service follows
+      permitted s)
 
 /-- The goal `strict`, as `loose`. -/
 theorem strict_sound {a : Admitted V} (admitted : admit stored association = .ok a)
     (path : List Frame) (xs : List F) (length : xs.length = 8)
-    (far : strictTolerance < xs.countP (· ≠ D.zero))
     {σ : Type} (service : Service (RSig (model D)) σ)
     (follows : service.Follows (portSamplers (model D) (coin path) (drawPosition 7)))
     (permitted : ∀ op s reply t, (some reply, t) ∈ support (service op s) →
       Permitted (model D) op reply) (s : σ) :
     ∃ root : Member a.program.headers.protocols rootHeader,
       a.program.findProtocol rootKey = some ⟨rootHeader, root⟩ ∧
-      Pr{let out ← (simulateQ (handlerOf service) (embed
-          (roleMeaning (model D) a.program root verifierRole path (inputs D xs)))).run.run s}[
-        ∃ results, out.1 = some (.inl results)] ≤ total strictCharge :=
-  returns_within D strictCharge strictTolerance (by decide) (by decide) strict_exact.ge (by decide)
-    admitted path xs length far service follows permitted s
+      ∃ relation : Member a.program.headers.fns strictHeader,
+        a.program.find strictKey = some (.fn relation) ∧
+        (functionResult (t := .bool)
+            (fnMeaning (model D) a.program relation (.cons xs .nil)) = some false →
+          Pr{let out ← (simulateQ (handlerOf service) (embed
+              (roleMeaning (model D) a.program root verifierRole path (inputs D xs)))).run.run s}[
+            ∃ results, out.1 = some (.inl results)] ≤ total strictCharge) :=
+  at_strict admitted
+    (fun p root relation =>
+      functionResult (t := .bool) (fnMeaning (model D) p relation (.cons xs .nil)) = some false →
+        Pr{let out ← (simulateQ (handlerOf service) (embed
+            (roleMeaning (model D) p root verifierRole path (inputs D xs)))).run.run s}[
+          ∃ results, out.1 = some (.inl results)] ≤ total strictCharge)
+    (fun rejected => returns_installed D strictCharge strictTolerance (by decide) (by decide)
+      strict_exact.ge (by decide) path xs length (strict_far D xs length rejected) service follows
+      permitted s)
 
 end
 
@@ -299,24 +516,49 @@ abbrev returnsAt (p : Typed V) (root : Member p.headers.protocols rootHeader) (p
       (roleMeaning (model data) p root verifierRole path (inputs data xs)))).run.run ()}[
     ∃ results, out.1 = some (.inl results)]
 
-/-- The goal `loose` at its table, with nothing left to assume: the service draws as the
-samplers do and answers what is permitted, and the table is outside the relation. -/
+/-- The goal `loose` at its table, with nothing left to assume: the relation of the goal
+returns false on the table, the service draws as the samplers do and answers what is
+permitted, and the verifier returns within the total of the charge. -/
 theorem loose_at_table {a : Admitted V} (admitted : admit stored association = .ok a)
     (path : List Frame) :
     ∃ root : Member a.program.headers.protocols rootHeader,
       a.program.findProtocol rootKey = some ⟨rootHeader, root⟩ ∧
-      returnsAt a.program root path looseTable ≤ total looseCharge :=
-  loose_sound data admitted path looseTable rfl (by decide) (service path)
-    (serveAt_follows _ _ _) (service_permitted path) ()
+      ∃ relation : Member a.program.headers.fns looseHeader,
+        a.program.find looseKey = some (.fn relation) ∧
+        functionResult (t := .bool)
+          (fnMeaning (model data) a.program relation (.cons looseTable .nil)) = some false ∧
+        returnsAt a.program root path looseTable ≤ total looseCharge :=
+  at_loose admitted
+    (fun p root relation =>
+      functionResult (t := .bool) (fnMeaning (model data) p relation (.cons looseTable .nil)) = some false ∧
+        returnsAt p root path looseTable ≤ total looseCharge)
+    (have rejected : functionResult (t := .bool)
+        (fnMeaning (model data) installed looseMember (.cons looseTable .nil)) = some false :=
+      (loose_relation data looseTable rfl).trans (by decide)
+    ⟨rejected, returns_installed data looseCharge looseTolerance (by decide) (by decide)
+      loose_exact.ge (by decide) path looseTable rfl (loose_far data looseTable rfl rejected)
+      (service path) (serveAt_follows _ _ _) (service_permitted path) ()⟩)
 
 /-- The goal `strict` at its table, with nothing left to assume. -/
 theorem strict_at_table {a : Admitted V} (admitted : admit stored association = .ok a)
     (path : List Frame) :
     ∃ root : Member a.program.headers.protocols rootHeader,
       a.program.findProtocol rootKey = some ⟨rootHeader, root⟩ ∧
-      returnsAt a.program root path strictTable ≤ total strictCharge :=
-  strict_sound data admitted path strictTable rfl (by decide) (service path)
-    (serveAt_follows _ _ _) (service_permitted path) ()
+      ∃ relation : Member a.program.headers.fns strictHeader,
+        a.program.find strictKey = some (.fn relation) ∧
+        functionResult (t := .bool)
+          (fnMeaning (model data) a.program relation (.cons strictTable .nil)) = some false ∧
+        returnsAt a.program root path strictTable ≤ total strictCharge :=
+  at_strict admitted
+    (fun p root relation =>
+      functionResult (t := .bool) (fnMeaning (model data) p relation (.cons strictTable .nil)) = some false ∧
+        returnsAt p root path strictTable ≤ total strictCharge)
+    (have rejected : functionResult (t := .bool)
+        (fnMeaning (model data) installed strictMember (.cons strictTable .nil)) = some false :=
+      (strict_relation data strictTable rfl).trans (by decide)
+    ⟨rejected, returns_installed data strictCharge strictTolerance (by decide) (by decide)
+      strict_exact.ge (by decide) path strictTable rfl (strict_far data strictTable rfl rejected)
+      (service path) (serveAt_follows _ _ _) (service_permitted path) ()⟩)
 
 /-! ### The probability at the tables -/
 

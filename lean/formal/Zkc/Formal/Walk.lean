@@ -258,14 +258,15 @@ private def advance (goal : MVarId) (j : Judged) (p rest : Expr) (key : Option N
 /-- One step of the walk on a goal: on the judgment that the goal is, or, with `hypothesis`, on
 the judgment from which the goal concludes. -/
 private def step (goal : MVarId) (hypothesis := false) : MetaM (List MVarId) := goal.withContext do
-  let target := (← instantiateMVars (← goal.getType)).headBeta
+  -- a goal is read through the annotations that `have` and `show` leave on it
+  let target := (← instantiateMVars (← goal.getType)).consumeMData.headBeta
   let (judgment, conclusion) ← do
     if hypothesis then
       let .forallE _ judgment conclusion _ := target
         | throwError "walk: the goal concludes from no judgment{indentExpr target}"
       if conclusion.hasLooseBVars then
         throwError "walk: what the goal concludes depends on the judgment{indentExpr target}"
-      pure (judgment.headBeta, some conclusion)
+      pure (judgment.consumeMData.headBeta, some conclusion)
     else pure (target, none)
   let j ← readJudged judgment
   -- a process under a reducible name is the process
