@@ -74,7 +74,10 @@ place, as a mismatch of types.
 The check trusts the text in two ways that it does not test: that it prints nothing that reads
 as Lean's report of the axioms of a theorem (a report is read only where there is exactly
 one), and that it declares no syntax that changes what the closing theorems mean. It refuses a
-text that sets an option for debugging, one of which has the kernel skip a declaration.
+text that sets an option for debugging, one of which has the kernel skip a declaration. That
+the theorems after the text state their propositions, and not those under a hypothesis that
+the text declared for its scope, is read from what Lean stored (`published`); the check of
+`Guess<3>` has the control.
 -/
 
 open Zkc.Core Zkc.Frontend Zkc.Frontend.Written
@@ -285,9 +288,8 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
     ["sound_installed", "sound_sound", "sound_result"]
   expectReason "a name of the statement defined again" shadowedProof
     "Type mismatch\n  sound_judged\nhas type"
-  let (_, shadowed) ← finishLean shadowedProof
-  unless (shadowed.splitOn "error:").length - 1 == 1 do
-    throw (IO.userError s!"a name of the statement defined again: refused at more than one place\n{shadowed}")
+  expectPlaces "a name of the statement defined again" shadowedProof
+    ["Type mismatch\n  sound_judged\nhas type"]
   -- The standard model has no sampler for a sequence of scalars: the kernel decides that it
   -- does not cover the package.
   let (ok, output) ← finishLean uncoveredProof

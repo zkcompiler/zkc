@@ -36,7 +36,14 @@ The check reads the source with the frontend and writes modules on which Lean is
 What the source says and the proof module takes as given is asserted here against the source:
 the ports, the clause, the operand and the table of caps, as literals.
 
-Three controls are refused by Lean, each at the places that the check names and at no other.
+Four controls are refused by Lean, each at the places that the check names and at no other.
+
+- A text that proves nothing of the judgment: after its last `end` it declares the judgment as
+  an instance variable of the module's scope, with the two linters that would report that
+  switched off, and takes the judgment from the variable. Every theorem that the generator
+  writes after the text takes the variable as a hypothesis; Lean proves each and reports no
+  axiom for it beyond the allowed. The module is refused at the four places where the stored
+  statements of those theorems are read (`published`): none states its proposition.
 
 - The charge of the source halved (`1 / 16`): the program is what it was, the cap of the draw
   is another and so is the budget, three sixteenths. The module is refused at three places:
@@ -143,18 +150,6 @@ def proofModule (name : String) (s : Subject) (template : String) : IO Module :=
   IO.ofExcept (s.statements.module standardModelText name { text := template, theorems := ofText }
     (after := { text := consumer, theorems := ["consumer"] }))
 
-/-- A control is refused at the places that are named and at no other: Lean's output has as many
-errors as there are places, and the text of each. -/
-def expectPlaces (title : String) (task : Task (Except IO.Error (Bool × String)))
-    (places : List String) : IO Unit := do
-  let (_, output) ← finishLean task
-  let errors := (output.splitOn "error:").length - 1
-  unless errors == places.length do
-    throw (IO.userError s!"{title}: refused at {errors} places, not at {places.length}\n{output}")
-  for place in places do
-    unless output.contains place do
-      throw (IO.userError s!"{title}: not refused at `{place}`\n{output}")
-
 def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
   let template ← IO.FS.readFile template
   let written ← read (source "3" "1 / 8")
@@ -183,6 +178,19 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
       "have split : (2 - i9 : ℕ) = (2 - (i9 + 1)) + 1 := by omega"
   if short == template then throw (IO.userError "the text has not the invariant that the control alters")
 
+  -- A text that proves nothing of the judgment: after its last `end` it declares the judgment
+  -- as an instance variable of the module's scope, with the two linters that would report that
+  -- switched off, and takes the judgment from the variable.
+  let assumed := (template.replace "theorem guessing_judged : guessingJudged := by"
+      "theorem guessing_established : guessingJudged := by") ++
+    "\nset_option linter.unusedSectionVars false\nset_option linter.concreteInstances false\n" ++
+    "variable [assumed : Fact guessingJudged]\n" ++
+    "theorem guessing_judged : guessingJudged := assumed.out\n"
+  if assumed == template ++ "\nset_option linter.unusedSectionVars false\nset_option linter.concreteInstances false\n" ++
+      "variable [assumed : Fact guessingJudged]\n" ++
+      "theorem guessing_judged : guessingJudged := assumed.out\n" then
+    throw (IO.userError "the text does not prove the judgment under its name")
+
   let module ← proofModule "Guess" written template
   let theorems := module.theorems
   let proof ← startLakeLean work "Guess" module.text
@@ -191,6 +199,8 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
   let fourProof ← startLakeLean work "RoundsControl" (← proofModule "RoundsControl" four template).text
   let shortProof ← startLakeLean work "InvariantControl"
     (← proofModule "InvariantControl" written short).text
+  let assumedProof ← startLakeLean work "AssumedControl"
+    (← proofModule "AssumedControl" written assumed).text
 
   let allowed := ["propext", "Classical.choice", "Quot.sound"]
   let (ok, output) ← finishLean proof
@@ -214,9 +224,18 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
   -- met; in the goal of the body the fee of the third round is not within what is left.
   expectUnproved "an invariant one fee short" "InvariantControl" theorems shortProof ofWalk
   expectPlaces "an invariant one fee short" shortProof ["omega could not prove the goal"]
+  -- The judgment taken as a hypothesis: every theorem that the generator writes after the text
+  -- takes the variable, so Lean proves each and reports no axiom beyond the allowed; none states
+  -- its proposition, and the module is refused where the stored statements are read.
+  expectUnproved "a judgment taken as a hypothesis" "AssumedControl" theorems assumedProof []
+  expectPlaces "a judgment taken as a hypothesis" assumedProof
+    ["`AssumedControl.guessing_installed` does not state `AssumedControl.guessingClaim`",
+      "`AssumedControl.guessing_sound` does not state `AssumedControl.guessingGoal`",
+      "`AssumedControl.guessing_result` does not state `AssumedControl.guessingResult`",
+      "`AssumedControl.guessing_met` does not state `AssumedControl.guessingWitnessed`"]
   IO.println ("Guess<3> is judged within the table of caps of its goal (the draw at 1/8, three " ++
     "times: 3/8), a fee at every round of the loop; a consumer written apart states the bound " ++
-    "as 3/8; 3 of 3 controls refused, each at the places that the check names and at no other.")
+    "as 3/8; 4 of 4 controls refused, each at the places that the check names and at no other.")
 
 end GuessCharge
 
