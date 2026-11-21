@@ -71,7 +71,7 @@ and the two are not compared.
 
 `Written.Statements` (`Written/Statement.lean`) writes the module of the goals of a scheme
 (`Statements.module`: its imports, the order of its parts and the names of the theorems whose
-axioms it asks for are decided there, and a check gives the model and the text of the proofs).
+axioms it asks for and the class of models, read from the package by `Statements.chosenModel`, are decided there, and a check gives the text of the proofs).
 Around the proofs stands, with the claims' package: the facts (keys, headers and places of the root, of the
 functions before it that the text names and of each goal's relation, the verifier and the prover
 of the claims' scheme, each goal's proof arguments and charge), that the model covers the package, where the walks of the module
@@ -87,8 +87,8 @@ the bound is against or which event it is of.
 For a text that establishes its claims by the judgment with fees it also writes, before the
 text, the judgment of each goal (`<goal>Judged`, with named binders), the theorem that the claim
 follows from it and the theorem that the hypotheses of the claim are met at inputs on which the
-relation returns false, and the key of each charged draw of the root under the name of its site
-(`site_<name>`) with its cap; the text proves the judgment, and the claim is concluded after it.
+relation returns false, and the key of each named draw of the root under the name of its site
+(`site_<name>`), with its cap where the contract charges it; the text proves the judgment, and the claim is concluded after it.
 After the text of the proofs it writes the theorems of the last three from the claim and a
 witness, and the comparison of a goal's total with its ceiling. A statement names the model through a `ModelText`: the model,
 its samplers, its coverage, and what the statement assumes of it (`scalarFieldModelText` is

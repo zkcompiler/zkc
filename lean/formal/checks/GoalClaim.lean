@@ -260,7 +260,7 @@ def run (corpus : System.FilePath) (work : System.FilePath) : IO Unit := do
   expect "the statement of a relation with a witness does not quantify the witness"
     ((pairText.splitOn "∀ (witness0 : ").length == 3)
   let stated ← startLakeLean work "ClaimsWitness"
-    (← IO.ofExcept (pairStated.statementsModule standardModelText "ClaimsWitness"))
+    (← IO.ofExcept (pairStated.statementsModule "ClaimsWitness"))
   let (ok, output) ← IO.ofExcept proof.get
   acceptedOutput "Claims" ok output theorems
   let (ok, output) ← IO.ofExcept stated.get

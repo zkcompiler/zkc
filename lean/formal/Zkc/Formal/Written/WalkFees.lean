@@ -11,7 +11,9 @@ open Lean Meta Elab Tactic
 What a text says at an effect, under the judgment with fees.
 
 A walk stops where the goal is the judgment at an effect. Under the judgment with fees within
-the allowances of a table of caps, a text says one of two things there.
+the allowances of a table of caps, a text says one of two things there. Each of the two first
+walks to the next effect where the goal is not at one, so a text writes no `walk` before them;
+it writes `walk as …` where it names a fork on the way.
 
 - `walk_free as v`: nothing is excluded and no fee is paid. The reply is `v`, and
   `permitted_v` says that it is a permitted reply. A message got or a value heard has no
@@ -32,14 +34,25 @@ nothing else: what they leave is what the rule asks.
 
 namespace Zkc.Formal.Written
 
-/-- The judgment at an effect that a goal is: the arguments of the judgment and the effect. -/
-private def atEffect (goal : MVarId) (who : String) : MetaM (Array Expr × Expr) := goal.withContext do
+/-- Whether a goal is the judgment at an effect. -/
+private def isAtEffect (goal : MVarId) : MetaM Bool := goal.withContext do
   let target := (← instantiateMVars (← goal.getType)).consumeMData.headBeta
   let args := target.getAppArgs
-  unless target.getAppFn.isConstOf ``Zkc.Core.Process.interpret && args.size ≥ 9 &&
-      args[7]!.isAppOfArity ``Zkc.Core.Process.call 5 do
-    throwError "{who}: the goal is not the judgment at an effect; walk to one first{indentExpr target}"
-  return (args, args[7]!.getArg! 3)
+  return target.getAppFn.isConstOf ``Zkc.Core.Process.interpret && args.size ≥ 9 &&
+    args[7]!.isAppOfArity ``Zkc.Core.Process.call 5
+
+/-- The judgment at an effect that the main goal is, walked to where it is not at one: the
+arguments of the judgment and the effect. -/
+private def atEffect (who : String) : TacticM (Array Expr × Expr) := do
+  unless ← isAtEffect (← getMainGoal) do
+    evalTactic (← `(tactic| walk))
+  let goal ← getMainGoal
+  goal.withContext do
+    let target := (← instantiateMVars (← goal.getType)).consumeMData.headBeta
+    unless ← isAtEffect goal do
+      throwError "{who}: the walk does not stop at an effect{indentExpr target}"
+    let args := target.getAppArgs
+    return (args, args[7]!.getArg! 3)
 
 /-- The reply that a tactic introduced, at its computed type, so that a text reads it as a
 value. -/
@@ -54,7 +67,7 @@ private def permittedName (reply : TSyntax `ident) : TSyntax `ident :=
 /-- At an effect, nothing is excluded and no fee is paid: the reply is `v`, and `permitted_v`
 says that it is permitted. -/
 elab "walk_free" " as " reply:ident : tactic => do
-  let _ ← atEffect (← getMainGoal) "walk_free"
+  let _ ← atEffect "walk_free"
   let permitted := permittedName reply
   evalTactic (← `(tactic|
     refine Zkc.Formal.Written.charged_free _ _ _ _ _ _ fun $reply $permitted => ?_))
@@ -70,9 +83,9 @@ private partial def afterStart (path start : Expr) : MetaM (Option (List Expr)) 
 
 /-- At a coin, pay `fee` for the replies in `set`: see the header of this module. -/
 elab "walk_pay " fee:term:max " excluding " set:term:max " as " reply:ident kept:ident : tactic =>
-    withMainContext do
-  let goal ← getMainGoal
-  let (args, op) ← atEffect goal "walk_pay"
+    do
+  let (args, op) ← atEffect "walk_pay"
+  withMainContext do
   -- the table, the use at which the run started and its path, from the judgment
   let judgment ← whnfR args[4]!
   unless judgment.isAppOf ``Zkc.Core.ProcessJudgment.charged do

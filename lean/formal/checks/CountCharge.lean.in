@@ -87,7 +87,6 @@ theorem walked_within (path : List Frame) (xs : List F) (tolerance : ℕ) (caps 
     (covers : ((7 - tolerance : ℕ) : ℚ≥0) / (8 : ℕ) ≤ drawCap caps) :
     (process D path xs).interpret (.charged (Permitted (model D)) (fees D caps path))
       (fun _ _ => False) (fun _ _ => True) caps.budget := by
-  walk
   walk_pay (drawCap caps) excluding (fun z : ℕ => xs[z]? = some D.zero) as z kept
   case weight =>
     rw [prEvent_drawPosition_entry xs 7 length]

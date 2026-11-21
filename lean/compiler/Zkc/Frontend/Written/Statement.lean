@@ -10,8 +10,8 @@ public import Zkc.Frontend.Written.Package
 The statements of written soundness goals, as the text of a module.
 
 A module about what goals claim holds the printed package of the claims (`goalClaims`). This
-file writes what stands around a proof in such a module, from what the frontend read, from the
-library and from the model that the check names:
+file writes what stands around a proof in such a module, from what the frontend read and from
+the library, about the class of models that it reads from the package (`chosenModel`):
 
 - `facts`: the keys, headers and places of the root, of the functions before it that the text
   names and of each goal's relation, the verifier and the prover of the scheme, and each goal's
@@ -58,8 +58,8 @@ So a proof module is: the package, `opens`, `facts`, `coverage`, `counts`, `site
 `transfers`, `claimTexts`, `judgments`, `ceilings`, the proofs written for the protocol,
 `conclusions`, `closings`, what a check adds, `publications`.
 `Statements.module` assembles it, with its imports and with the names of the theorems whose
-axioms it asks for; a caller gives the model, the text of the proofs with what that text
-imports and the names of its theorems, and what it adds after the closing theorems. Every
+axioms it asks for; a caller gives the text of the proofs with what that text imports and the
+names of its theorems, and what it adds after the closing theorems. Every
 statement that the module publishes is a proposition defined before the text of the proofs; a
 name that the text defines afterwards cannot change what it says. The subject, the premise, the experiment, the samplers
 and the bound are written here.
@@ -67,14 +67,18 @@ and the bound are written here.
 What a statement says of its goal is read from the claims (`goalClaims`) and from nothing that
 a caller gives beside them: the deciding role is the verifier of the claims' scheme, the
 operands are the inputs of the deployed header at the places that the claims give, and the
-proof arguments, the ceiling and the table of caps are the goal's. A caller gives the model and
-the labels of the functions that the text names. A goal whose clause is a `reduces` gets no
+proof arguments, the ceiling and the table of caps are the goal's. A caller gives the labels of
+the functions that the text names. A goal whose clause is a `reduces` gets no
 statement: the statement of a reduction is about a return on which the reduced statement is
 true, and a bound on every return is another claim.
 
 The model is named by a `ModelText`: the binders of what it is built from, the model, its
-samplers and its coverage as terms over them, and what the statement assumes of it. It is
-chosen by the check that writes the module and is part of the claim, not of the proof. The
+samplers and its coverage as terms over them, and what the statement assumes of it. It is part
+of the claim, not of the proof, and no caller chooses it: `Statements.chosenModel` reads it
+from the package (the laws of the coins that the stored program draws). The choice is not
+trusted: every proof module states that its model covers the package (`covered`), and the
+kernel decides that. A module of statements without proofs and the module of a ceiling state no
+coverage. The
 bound of a statement is the total of the goal's table of caps (`<goal>Caps.total`): every
 charge that the root reaches at the goal's proof arguments, by use, read by `goalClaims`.
 -/
@@ -217,6 +221,29 @@ namespace Statements
 
 /-- The package of the claims. -/
 def package (s : Statements) : SourcePackage := s.claims.emission.package ⟨[], [], [], [], []⟩
+
+/-- **The class of models that the statements are about**, read from the package: the least of
+the descriptions whose samplers the package needs.
+
+- A package whose coins are all positions (`index<n>`) is about the standard model over any
+  data: nothing is assumed of a field.
+- A package that draws anything else is about the arithmetic model over a field with at least
+  as many elements as the scalar field of the source: a uniform scalar of the source is one of
+  that many, and a charge that the source writes with that order bounds what a uniform scalar
+  of the model pays for only in such a field. That model has samplers for a position, a scalar
+  of that field and a sequence of such scalars. A package that draws something else again (a
+  truth value, a group element, a scalar of another field) gets this class too, and its module
+  is refused where the coverage is stated: no class has a sampler for it yet.
+
+No caller chooses the class. A class that covers too little is refused by the kernel where the
+module states the coverage; one that assumes more than a subject needs shows as a hypothesis of
+the statement. -/
+def chosenModel (s : Statements) : ModelText :=
+  let positions := s.package.named.laws.all fun (law, _) =>
+    match law with
+    | .uniform (.fin _) => true
+    | _ => false
+  if positions then standardModelText else scalarFieldModelText
 
 /-- The keys of the definitions of the package in order, and whether each is a protocol. -/
 def definitions (s : Statements) : List (Nat × Bool) :=
@@ -768,7 +795,9 @@ ceilings); the author's text; the claim of each goal from the text's judgment, f
 the closing theorems; what a check writes after them (`after`: a consumer of the published
 theorems); the check that each theorem written after the text states exactly its proposition
 (`publications`); and a request for the axioms of every theorem. The order of the parts, the
-imports and the names of the generated theorems are decided here and by no caller.
+imports, the names of the generated theorems and the class of models (`chosenModel`) are
+decided here and by no caller; a control that states a claim about another class gives its
+own description (`model`).
 
 What the generator states of a goal stands before the text, so that nothing which the text
 declares takes part in it; what it proves after the text is checked to be of those statements.
@@ -780,8 +809,9 @@ axioms a second time; that it declares no syntax that changes what a later line 
 for a statement that a check itself writes after the text (a consumer, with its numerals and
 notations), that the text declares no instance or notation under which that statement means
 something else. -/
-def module (s : Statements) (model : ModelText) (name : String) (proof : ProofText)
-    (walks := true) (after : ProofText := {}) : Except String Module := do
+def module (s : Statements) (name : String) (proof : ProofText)
+    (walks := true) (after : ProofText := {}) (model : ModelText := s.chosenModel) :
+    Except String Module := do
   if (proof.text ++ after.text).contains "debug." then
     throw s!"{name}: the text sets an option for debugging"
   let claims ← s.claimTexts model
@@ -802,14 +832,14 @@ def module (s : Statements) (model : ModelText) (name : String) (proof : ProofTe
 
 /-- A module with the package of the claims and the statements of the goals, with no proof: the
 facts, the transfers and the propositions. Lean elaborates the statements. -/
-def statementsModule (s : Statements) (model : ModelText) (name : String) :
+def statementsModule (s : Statements) (name : String) (model : ModelText := s.chosenModel) :
     Except String String := do
   return header (imports model false) ++ s!"namespace {name}\n" ++
     (Written.package s.package).text ++ opens ++ s.facts ++ "\n" ++ s.transfers ++
     (← s.claimTexts model) ++ s!"end {name}\n"
 
 /-- A module with the package of the claims and the one theorem that a model covers it. -/
-def coverageModule (s : Statements) (model : ModelText) (name : String) : Module :=
+def coverageModule (s : Statements) (name : String) (model : ModelText := s.chosenModel) : Module :=
   let text := header (packageImports ++ ["Zkc.Formal.Written.LawSamplers"] ++ model.imports) ++
     s!"namespace {name}\n" ++ (Written.package s.package).text ++ "open Zkc.Formal.Written\n" ++
     coverage model ++ footer name ["covered"]

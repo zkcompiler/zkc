@@ -339,7 +339,7 @@ def proofModule (name text guarded : String)
     (alter : Statements → String → Except String String := fun _ proof => pure proof) :
     IO Module := do
   let s ← IO.ofExcept (statementsOf text ["sound"])
-  IO.ofExcept (s.module standardModelText name
+  IO.ofExcept (s.module name
     { text := ← IO.ofExcept (alter s (proofText guarded))
       theorems := ["sound_installed", "sound_witnessed"]
       method := .direct }
