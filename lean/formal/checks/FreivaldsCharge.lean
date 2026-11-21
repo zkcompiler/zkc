@@ -166,6 +166,8 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
   let [goal] := stated.goals | throw (IO.userError "the statements are not of one goal")
   unless stated.claims.root == 1 && stated.roles == [("verifier", 1), ("prover", 0)] do
     throw (IO.userError "the root and the roles of the source are not where they were")
+  unless stated.entryNames.all theorems.contains do
+    throw (IO.userError s!"an entry of a walk is not among the theorems read: {stated.entryNames}")
   unless stated.functions == [("apply", 2)] do
     throw (IO.userError s!"the root calls other functions than `apply`: {stated.functions}")
   unless goal.claimed.statement == #[0, 1, 2] do

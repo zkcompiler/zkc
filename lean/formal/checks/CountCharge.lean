@@ -189,6 +189,8 @@ def run (corpus template : System.FilePath) (work : System.FilePath) : IO Unit :
   let written ← read source
   unless written.places == (1, 1, 0) do
     throw (IO.userError "the root and the roles of the source are not where they were")
+  unless written.statements.entryNames.all theorems.contains do
+    throw (IO.userError s!"an entry of a walk is not among the theorems read: {written.statements.entryNames}")
 
   -- The roster reversed: the verifier is the first role, and the key of the root is as it was.
   let turned ← read (← edit source "protocol Count roles(P, V)" "protocol Count roles(V, P)")
