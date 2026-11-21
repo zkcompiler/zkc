@@ -86,8 +86,9 @@ theorem apply_law (m : List (List F)) (v : List F) (M : Matrix (Fin 2) (Fin 2) F
     case first => rfl
     case step =>
       walk
-      refine List.collected_next _ _ _ _ invariant_k ?_
-      rw [List.getElem?_ofFn_of_lt _ k early_k]
+      refine List.collected_next _ _ _ _ invariant_k
+        ((List.getElem?_ofFn_of_lt _ k early_k).trans (congrArg some ?_))
+      ring
     case after =>
       walk
       refine List.collected_next _ _ _ _ invariant_i ?_
@@ -121,8 +122,9 @@ theorem sound_relation (a b c : List (List F)) (A B C : Matrix (Fin 2) (Fin 2) F
       case first => rfl
       case step =>
         walk
-        refine List.collected_next _ _ _ _ invariant_k ?_
-        rw [List.getElem?_ofFn_of_lt _ k early_k]
+        refine List.collected_next _ _ _ _ invariant_k
+          ((List.getElem?_ofFn_of_lt _ k early_k).trans (congrArg some ?_))
+        ring
       case after =>
         walk
         have entry : (A * B) ⟨i, early_i⟩ ⟨j, early_j⟩ =

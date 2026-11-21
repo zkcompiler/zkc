@@ -700,10 +700,18 @@ def readValues (goal : MVarId) : MetaM (Option MVarId) := goal.withContext do
     if decl.isImplementationDetail then return found
     if ← isProp (← instantiateMVars decl.type) then return found.push decl.fvarId
     return found
-  -- the equations hold by definition, and are read everywhere, also in an instance that a
-  -- statement carries: a statement about `x + y` then decides by the field's own instance
+  -- the equations that hold by definition are read everywhere, also in an instance that a
+  -- statement carries: a decision about `x + y` is then one that a lemma about the field finds
   let (result, _) ← dsimpGoal goal context (fvarIdsToSimp := hypotheses)
-  return result
+  let some goal := result | return none
+  -- the others (what a literal is) are read as rewriting reads them
+  goal.withContext do
+    let hypotheses ← (← getLCtx).foldlM (init := #[]) fun found decl => do
+      if decl.isImplementationDetail then return found
+      if ← isProp (← instantiateMVars decl.type) then return found.push decl.fvarId
+      return found
+    let (result, _) ← simpGoal goal context (fvarIdsToSimp := hypotheses)
+    return result.map (·.2)
 
 /-- What a walk leaves where no process goes on, stated for the text: the equations of the walk
 are used, an equation between two lists of one returned value is the equation between the two

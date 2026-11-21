@@ -67,4 +67,23 @@ prove is stated with the operations of the field. -/
 @[walk_value] theorem data_sum_zero (xs : List F) :
     List.foldr (data F G).scalarAdd 0 xs = xs.sum := rfl
 
+/-- A literal of the scalar type is its number in the field. -/
+@[walk_value] theorem readLiteral_scalar [DecidableEq F] [DecidableEq G] (n : ℕ) (reads) :
+    Core.Ty.readLiteral (model F G)
+        (.nominal (.inl (Zkc.Vocabulary.TypeKey.field Zkc.Vocabulary.Field.bls12381Fr))) [n] reads =
+      (n : F) := by
+  have read := Core.Ty.read_readLiteral (model F G)
+    (.nominal (.inl (Zkc.Vocabulary.TypeKey.field Zkc.Vocabulary.Field.bls12381Fr))) [n] reads
+  unfold Core.Ty.read at read
+  split at read
+  · next readable =>
+      have literal : (model F G).literal
+          (.inl (Zkc.Vocabulary.TypeKey.field Zkc.Vocabulary.Field.bls12381Fr)) n = some (n : F) :=
+        ite_eq_left readable
+      rw [literal] at read
+      exact (Prod.mk.inj (Option.some.inj read)).1.symm
+  · cases read
+
+attribute [walk_value] Nat.cast_zero Nat.cast_one Nat.cast_ofNat
+
 end Zkc.Formal.Written.ArithmeticModel
