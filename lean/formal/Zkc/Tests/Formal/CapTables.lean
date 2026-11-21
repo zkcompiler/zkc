@@ -3,6 +3,7 @@ import Zkc.Kernel
 import Zkc.Vocabulary.Project
 import Zkc.Formal.Walk
 import Zkc.Formal.Written.SiteCaps
+import Zkc.Formal.Written.WalkFees
 import Zkc.Formal.Written.LawSamplers
 import Zkc.Formal.Written.PortSamplers
 import Zkc.Formal.Written.StandardModel
@@ -283,16 +284,17 @@ def inputs (claim : Bool) : HList (RV (model D) verifier) header.ins := .cons cl
 
 abbrev samplers : Samplers (RSig (model D)) := lawSamplers (model D) (StandardModel.draws D)
 
-/-- The cap of the draw, read from the table by the kernel. -/
-theorem cap_of_draw : nestedCaps.capFrom nestedCaps.root [] ⟨4⟩ = 1 / 8 := by decide +kernel
-
+/-- A draw two kept loops deep is paid at every iteration of both, by the tactics of a text:
+the walk stops at each effect, the message is met for free, and the draw pays one eighth for
+the position that was sent. The occurrence of the draw, with the frames of both loops, the
+sampler of its law and its cap in the table are read from the goal; the kernel decides the
+cap. -/
 theorem judged (path : List Frame) :
     (roleMeaning (model D) installed Member.head verifier path (inputs D false)).interpret
       (.charged (Permitted (model D)) (paysWithin (samplers D) (nestedCaps.allowance (model D) path)))
       (fun _ _ => False) (fun _ _ => True) nestedCaps.budget := by
   rw [verifier_meaning]
-  walk_step
-  walk_step
+  walk
   walk_loop fun i (hit : Bool) budget => hit = false ∧ ((2 - i : ℕ) : ℚ≥0) * (3 / 8) ≤ budget
   case first =>
     refine ⟨rfl, le_of_eq ?_⟩
@@ -300,49 +302,35 @@ theorem judged (path : List Frame) :
     rw [total]
     norm_num
   case step =>
-    obtain ⟨rfl, enough⟩ := invariant12
-    have split : (2 - i12 : ℕ) = (2 - (i12 + 1)) + 1 := by omega
+    obtain ⟨rfl, enough⟩ := invariant
+    have split : (2 - i : ℕ) = (2 - (i + 1)) + 1 := by omega
     rw [split, Nat.cast_add, Nat.cast_one, add_mul, one_mul] at enough
-    walk_step
+    walk
     walk_loop fun j (hit : Bool) budget =>
-      hit = false ∧ ((2 - (i12 + 1) : ℕ) : ℚ≥0) * (3 / 8) + ((3 - j : ℕ) : ℚ≥0) * (1 / 8) ≤ budget
+      hit = false ∧ ((2 - (i + 1) : ℕ) : ℚ≥0) * (3 / 8) + ((3 - j : ℕ) : ℚ≥0) * (1 / 8) ≤ budget
     case first =>
       refine ⟨rfl, le_trans (le_of_eq ?_) enough⟩
       norm_num
     case step =>
-      obtain ⟨rfl, left⟩ := invariant10
-      have inner : (3 - i10 : ℕ) = (3 - (i10 + 1)) + 1 := by omega
+      obtain ⟨rfl, left⟩ := invariant
+      have inner : (3 - j : ℕ) = (3 - (j + 1)) + 1 := by omega
       rw [inner, Nat.cast_add, Nat.cast_one, add_mul, one_mul, ← add_assoc] at left
-      walk_step
-      refine charged_free _ _ _ _ _ _ fun g _ => ?_
-      walk_step
-      walk_step
-      refine charged_pay_at (model D) (samplers D) nestedCaps nestedCaps.root
-        (rest := [.iteration ⟨12⟩ i12, .iteration ⟨10⟩ i10]) (key := ⟨4⟩) _ _ _ t10 (1 / 8)
-        (fun r : ℕ => r = g) (drawPosition 7) (by simp [ROp.occurrence]) rfl ?_
-        (le_trans le_add_self left) ?_ fun r _ differs => ?_
-      · simpa using prEvent_drawPosition_eq_le 7 g
-      · exact cap_of_draw.ge
-      walk_step
-      walk_step
-      walk_step
-      walk_step
-      walk_step
-      walk_step
-      walk_step
+      walk
+      walk_free as got
+      walk
+      walk_pay (1 / 8) excluding (fun drawn : ℕ => drawn = got) as drawn differs
+      case weight => simpa using prEvent_drawPosition_eq_le 7 got
+      case within => exact le_trans le_add_self left
+      walk
       refine ⟨?_, le_tsub_of_add_le_right left⟩
-      rw [h13]
       exact Bool.eq_false_iff.mpr fun same => differs (Nat.eq_of_beq_eq_true same)
     case after =>
-      obtain ⟨rfl, left⟩ := invariant10
-      walk_step
-      walk_step
+      obtain ⟨rfl, left⟩ := invariant
+      walk
       exact ⟨rfl, by simpa using left⟩
   case after =>
-    obtain ⟨rfl, _⟩ := invariant12
-    walk_step
-    walk_step
-    trivial
+    obtain ⟨rfl, _⟩ := invariant
+    walk
 
 end
 

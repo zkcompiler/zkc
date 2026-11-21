@@ -111,7 +111,7 @@ theorem six_effects (M : Model V) (path : List Frame) (claim : Bool) :
   walk_loop (fun i (_ : Bool) count => count = 2 * i) using counting_monotone _
   case first => rfl
   case step =>
-    subst invariant9
+    subst invariant
     -- the message, and the position that it brings
     walk_step
     intro got
@@ -128,10 +128,10 @@ theorem six_effects (M : Model V) (path : List Frame) (claim : Bool) :
     walk_step
     walk_step
     walk_step
-    show 2 * i9 + 1 + 1 = 2 * (i9 + 1)
+    show 2 * i + 1 + 1 = 2 * (i + 1)
     omega
   case after =>
-    subst invariant9
+    subst invariant
     walk_step
     -- the guard waits on whether the claim holds or a round hit
     walk_step

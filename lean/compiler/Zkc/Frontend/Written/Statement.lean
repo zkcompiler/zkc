@@ -726,7 +726,7 @@ def ceilingNames (s : Statements) : List String :=
 the library that the generated statements name, and the model's. A text that walks the program
 has the walk and the equations where it starts; `walks` says whether the module is for one. -/
 def imports (model : ModelText) (walks : Bool) : List String :=
-  packageImports ++ (if walks then ["Zkc.Formal.Walk"] else []) ++
+  packageImports ++ (if walks then ["Zkc.Formal.Walk", "Zkc.Formal.Written.WalkFees"] else []) ++
     ["Zkc.Formal.OracleProcess", "Zkc.Formal.ReturnExperiment", "Zkc.Formal.Written.LawSamplers",
       "Zkc.Formal.Written.SiteCaps", "Zkc.Formal.Written.FunctionMeaning",
       "Zkc.Formal.Written.ClaimIntro", "Zkc.Formal.Written.Published"] ++ model.imports

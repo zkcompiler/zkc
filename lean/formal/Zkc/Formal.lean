@@ -11,6 +11,7 @@ public import Zkc.Formal.RoleRules
 public import Zkc.Formal.Walk
 public import Zkc.Formal.Written.ClaimIntro
 public import Zkc.Formal.Written.Published
+public import Zkc.Formal.Written.WalkFees
 public import Zkc.Formal.Written.PortSamplers
 public import Zkc.Formal.Written.LawSamplers
 public import Zkc.Formal.Written.UniformVector
