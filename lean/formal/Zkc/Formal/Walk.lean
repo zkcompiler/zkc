@@ -108,7 +108,8 @@ rule is as outside, so the values of an arm have variables, its effects, loops a
 met, and a fork inside it is named; at its end the goal is the judgment of the rest. Where the
 kernel computes the condition of a choice, the walk goes into the arm chosen; where the
 condition is not known, the choice is a fork on the condition, which a text names, and each
-side goes into its arm. A case analysis on a variant is still computed as one instruction.
+side goes into its arm. A case analysis on a variant and an attempt are still computed as one
+instruction: the values inside them have no variables, and no check walks one.
 
 `walk_step` on a computation that calls a function reads the function's body; on a loop it has
 no step. An application waits for its first subject.
@@ -310,8 +311,9 @@ private partial def applied (e : Expr) : MetaM Expr := do
   else computedTypes e
 
 /-- What the judgment asks at the end, of `done` or of `halt` (argument 5 or 6). Where that is
-the judgment of a process (the end of a region, after which the program goes on), it is stated
-as it is; where it is a statement of the values, it is in a form to read. -/
+the judgment of a process (the end of a region, after which the program goes on, sealed since
+the walk went into the region), it is stated as it is; where it is a statement of the values,
+it is in a form to read. -/
 private def Judged.ask (j : Judged) (position : Nat) (value : Expr) : MetaM Expr := do
   let asked := (mkAppN (mkApp (j.fn.getAppArgs[position]!) value) j.extra).headBeta
   if asked.getAppFn.isConstOf ``Zkc.Core.Process.interpret && asked.getAppNumArgs ≥ 8 then
@@ -398,11 +400,13 @@ private partial def waitsOn (e : Expr) : MetaM (Expr × (Expr → Expr)) := do
   | .proj typeName idx struct => inner struct fun x => .proj typeName idx x
   | _ =>
     let args := e.getAppArgs
-    -- a part of a structure, applied: what is left of an instruction inside an instruction
-    -- (an arm of a choice after its effect) is the first part of the pair that structural
-    -- recursion builds, applied to the rest; the step waits inside the structure
+    -- a part of the pair that structural recursion builds, applied: what is left of a region
+    -- that the kernel computes as one instruction (an arm of a case analysis, the body of an
+    -- attempt) after an effect inside it; the step waits inside the pair. A choice and a
+    -- block are not met here: the walk goes into them.
     if let .proj typeName idx struct := e.getAppFn then
-      return ← inner struct fun x => mkAppN (.proj typeName idx x) args
+      if (← whnf (← inferType struct)).isAppOf ``PProd then
+        return ← inner struct fun x => mkAppN (.proj typeName idx x) args
     let .const name _ := e.getAppFn
       | throwError "walk: the step is stuck at a term that is not an application of a constant{indentExpr e}"
     let position ← do
@@ -535,10 +539,12 @@ private def enterRegion (goal : MVarId) (j : Judged) (bound why region isRegion 
     mkLambdaFVars #[left] (mkAppN bound.getAppFn (b.set! 4 left))
   let regionThenRest := mkAppN bound.getAppFn (b.set! 4 region)
   let toRegion ← mkEqTrans why (← mkCongrArg motive isRegion)
-  -- the judgment of the region: at its end, the judgment of the rest
+  -- the judgment of the region: at its end, the judgment of the rest, which stays sealed, as
+  -- every process that a goal of the walk judges: a tactic of the text that reduces its goal
+  -- does not run what follows the region
   let valuesType := (← whnf (← inferType rest)).bindingDomain!
   let after ← withLocalDeclD `values valuesType fun values =>
-    mkLambdaFVars #[values] (mkApp j.fn (mkApp rest values).headBeta)
+    mkLambdaFVars #[values] (mkApp j.fn (j.seal (mkApp rest values).headBeta))
   let inside := { j with fn := ← mkAppM ``Zkc.Core.Process.interpret #[judgment, after, halt] }
   let next ← mkFreshExprSyntheticOpaqueMVar (inside.of region)
   -- `interpret (region.bind rest) = interpret region` with that condition, at what follows
@@ -578,7 +584,8 @@ private def regionOf (left instr sem key path env : Expr) : MetaM (Option (Expr 
     let c := chosen.getAppArgs
     let value ← kernelWhnf c[1]!
     let decided (literal : Bool) : MetaM (Option (Expr × Expr)) := do
-      let (lemma, region) := if literal then (``cond_true, c[2]!) else (``cond_false, c[3]!)
+      let (lemma, region) :=
+        if literal then (``Bool.cond_true, c[2]!) else (``Bool.cond_false, c[3]!)
       let motive ← withLocalDeclD `condition (mkConst ``Bool) fun condition =>
         mkLambdaFVars #[condition] (mkAppN chosen.getAppFn (c.set! 1 condition))
       let toLiteral ← mkCongrArg motive (← byComputation c[1]! value)
@@ -728,7 +735,9 @@ private def stepOrFork (goal : MVarId) (hypothesis := false) (fork : Option Lean
   let p := j.process
   if p.isAppOfArity ``Zkc.Core.Process.bind 6 then
     -- what is left is a region (the side of a choice whose condition is now known): the walk
-    -- goes into it. Lean's core reduction finds it without unfolding anything.
+    -- goes into it. Lean's core reduction finds it: the choice on a known condition is one of
+    -- its arms, and the arm is not unfolded. The kernel checks the equation, which costs it at
+    -- most the first instruction of the arm.
     let left := p.getAppArgs[4]!
     let reduced ← whnfCore left
     if reduced.isAppOfArity ``Zkc.Core.Term.denote 7 then

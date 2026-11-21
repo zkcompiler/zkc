@@ -37,7 +37,8 @@ theorem either_judged : eitherJudged := by
   walk_free as sent
   -- the guard on the message: where it does not pass the run stops
   walk as allowed
-  have notLast : sent ≠ 3 := Nat.ne_of_beq_eq_false (by simpa using allowed)
+  -- it is stated of the position sent, with no name of the walk's, while the process goes on
+  guard_hyp allowed : (!sent.beq 3) = true
   -- the draw: one quarter pays for the position that was sent
   walk_pay (1 / 4) excluding (fun drawn : ℕ => drawn = sent) as drawn differs
   case weight => simpa using prEvent_drawPosition_eq_le 3 sent

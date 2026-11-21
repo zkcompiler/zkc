@@ -29,16 +29,18 @@ a written soundness goal, and differs from the others in the shape of its progra
   it went into the arms of a choice;
 - **a guard on a computed value before an effect.** The text names the guard (`walk as`), and
   the process goes on to the draw: the hypothesis that the guard passed is restated of the
-  position sent, where the walk stops at the draw, and the text uses it there. This is the
-  one check in which the walk restates a hypothesis while a process goes on.
+  position sent, where the walk stops at the draw, and the text asserts its statement there.
+  This is the one check in which the walk restates a hypothesis while a process goes on.
 
 The check reads the source with the frontend and writes modules on which Lean is run: the
 proof module (the printed package, what `Written.Statements` writes, and the text of
 `EitherCharge.lean.in` between), and the comparison module of the package with the frontend.
 
 A second, small module is of a root with a stepped loop (`Steps`: a draw whose type depends on
-the iteration, so that the loop is emitted as one block for each iteration). The walk goes
-into each block as it goes into an arm. Its text is in this check.
+the iteration, so that the loop is emitted as one block for each iteration, with a guard on
+the draw in each). The walk goes into each block as it goes into an arm: the guard after the
+draw of a block is where a walk that computed a block as one instruction was stuck. Its text
+is in this check.
 
 One control is refused by Lean, at the place that the check names and at no other: the two
 charges exchanged in the source. The program and the budget are what they were; the cap of
@@ -93,20 +95,23 @@ def read (text : String) : IO Subject := do
     throw (IO.userError "the verifier and the prover of the scheme are not the roles V and P")
   return ⟨text, ⟨claims, claims.functionsBeforeRoot⟩⟩
 
-/-- A root with a stepped loop: three draws of positions of two, three and four, and a guard on
-the claim. Each draw is charged one half, which the text does not need: on a false claim the
-guard stops the run. -/
+/-- A root with a stepped loop: three draws of positions of two, three and four, each followed
+by a guard that it is not the first position, and then a guard on the claim. Each draw is
+charged one half, which the text does not need: on a false claim the last guard stops the
+run. -/
 def steppedSource : String :=
   "module t\nuse zkc::security::{soundness}\n" ++
   "relation Holds(claim: bool): claim\n" ++
   "protocol Steps roles(P, V)(claim: bool @(P, V)):\n" ++
-  "    for i in 0..3:\n        r <- draw index<i + 2> from V to P\n    guard @V claim\n" ++
+  "    for i in 0..3:\n        r <- draw index<i + 2> from V to P\n        guard @V r != 0\n" ++
+  "    guard @V claim\n" ++
   "spec for Steps:\n    proves @V Holds(claim)\n    charge sites.r <= 1 / 2\n" ++
   "scheme Checked = Steps:\n    prover P\n    construction interactive\n" ++
   "goal stepped = soundness(Checked, stage = written)\n"
 
-/-- The text of the stepped loop: the walk goes into each block, meets its draw at no fee, and
-ends at the guard, which a false claim does not pass. -/
+/-- The text of the stepped loop: the walk goes into each block, meets its draw at no fee,
+names the guard on the draw, and ends at the guard on the claim, which a false claim does not
+pass. -/
 def steppedText : String :=
   "noncomputable section\n\n" ++
   "theorem stepped_relation {F G : Type} (D : StandardModel.Data F G) [DecidableEq F]\n" ++
@@ -119,9 +124,12 @@ def steppedText : String :=
   "  obtain rfl : input_claim = false :=\n" ++
   "    Option.some.inj ((stepped_relation D input_claim).symm.trans rejected)\n" ++
   "  walk\n  walk_free as first\n" ++
-  "  walk\n  walk_free as second\n" ++
-  "  walk\n  walk_free as third\n" ++
-  "  walk\n\n" ++
+  "  walk as firstKept\n" ++
+  "  -- inside a block as outside, a value of a step has a variable: the guard is stated of the draw\n" ++
+  "  guard_hyp firstKept : (!first.beq 0) = true\n" ++
+  "  walk_free as second\n" ++
+  "  walk as secondKept\n  walk_free as third\n" ++
+  "  walk as thirdKept\n\n" ++
   "theorem stepped_witnessed : steppedWitnessed :=\n" ++
   "  stepped_witnessed_of Zkc.Formal.Written.FiniteModel.data false trivial\n" ++
   "    (stepped_relation _ false)\n\nend\n"
@@ -182,9 +190,12 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
   acceptedOutput "Steps" ok output steppedModule.theorems allowed
   -- The fee of one quarter at the draw of the second arm is over its cap of one eighth.
   expectUnproved "the charges exchanged" "CapControl" theorems exchangedProof ofWalk
-  expectPlaces "the charges exchanged" exchangedProof
-    ["the fee is not within the cap that the table gives the draw `site_y`\n  1 / 4 ≤ 1 / 8",
-      "the fee is not within the cap that the table gives the draw `site_y`\n  1 / 4 ≤ 1 / 8"]
+  -- at two places and no other, one in each proof of the judgment
+  let refusal := "the fee is not within the cap that the table gives the draw `site_y`\n  1 / 4 ≤ 1 / 8"
+  expectPlaces "the charges exchanged" exchangedProof [refusal, refusal]
+  let (_, output) ← finishLean exchangedProof
+  unless (output.splitOn refusal).length == 3 do
+    throw (IO.userError s!"the charges exchanged: the fee is not refused twice at `site_y`\n{output}")
   IO.println ("Either is judged within the table of caps of its goal (the draws of its two arms " ++
     "at 1/8 and 1/4: 3/8), with a guard inside each arm and a guard before the draw; " ++
     "the blocks of a stepped loop are walked; " ++
