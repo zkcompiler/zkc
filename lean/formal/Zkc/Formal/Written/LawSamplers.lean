@@ -2,6 +2,7 @@ module
 
 public import Zkc.Formal.Written.PortSamplers
 public import Zkc.Formal.Written.StandardModel
+public import Zkc.Formal.ReturnExperiment
 public import Zkc.Core.Program.Links
 
 @[expose] public section
@@ -178,6 +179,15 @@ theorem StandardModel.uniformDraw_allowed {F G : Type} [DecidableEq F] [Decidabl
     · exact absurd has (by simp)
   · exact absurd has (by simp)
 
+/-- **The experiment is not about nothing**: the service of the laws, with a state of one
+value, draws within the samplers and answers only what is permitted, when what each sampler
+draws is permitted. It is the service of a witness of a claim's hypotheses. -/
+theorem served_of_draws {V : Vocabulary} (M : Model V) (draws : LawDraws M)
+    (allowed : ∀ (op : ROp M) (sampler : ProbComp ((RSig M).Reply op)),
+      lawSamplers M draws op = some sampler → ∀ v, v ∈ support sampler → Permitted M op v) :
+    Served (lawSamplers M draws) (Permitted M) :=
+  ⟨Unit, serveLaws M draws, ⟨()⟩, serveLaws_follows M draws, serveLaws_permitted M draws allowed⟩
+
 /-- What the standard samplers draw is permitted: a position below the bound of its type. -/
 theorem StandardModel.draws_permitted {F G : Type} [DecidableEq F] [DecidableEq G]
     (D : StandardModel.Data F G) (op : ROp (StandardModel.model D))
@@ -186,6 +196,13 @@ theorem StandardModel.draws_permitted {F G : Type} [DecidableEq F] [DecidableEq 
     (v : (RSig (StandardModel.model D)).Reply op) (drawn : v ∈ support sampler) :
     Permitted (StandardModel.model D) op v :=
   uniformDraws_permitted _ _ (StandardModel.uniformDraw_allowed D) op sampler has v drawn
+
+/-- The standard model has a service of its laws. -/
+theorem StandardModel.served {F G : Type} [DecidableEq F] [DecidableEq G]
+    (D : StandardModel.Data F G) :
+    Served (lawSamplers (StandardModel.model D) (StandardModel.draws D))
+      (Permitted (StandardModel.model D)) :=
+  served_of_draws _ _ (StandardModel.draws_permitted D)
 
 /-- Whether the standard draws have a sampler for the uniform law of a type at a type of
 reply. -/

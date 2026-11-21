@@ -29,11 +29,13 @@ The check reads the source with the frontend and writes modules on which Lean is
   model covers the package; where the walks start; the transfers; and four propositions, the
   claim about the installed program (`soundClaim`), the goal for every admitted program
   (`soundGoal`), the result with the coverage (`soundResult`), and that the hypotheses of the
-  claim are met together (`soundWitnessed`). After the text: the theorems of the last three.
+  claim are met together (`soundWitnessed`); and the judgment that establishes the claim
+  (`soundJudged`) with the theorem that the claim follows from it. After the text: the claim
+  from the judgment that the text proved, and the theorems of the last three.
   The claim is over the arithmetic model on every finite field with a decidable equality that
   can be sampled and has at least as many elements as the scalar field of the source, with any
   module over it for the type of group points (`scalarFieldModelText`). The text proves the
-  claim and the witness. It says what `apply` and `Product` compute, each loop taken by an
+  judgment and gives the witness. It says what `apply` and `Product` compute, each loop taken by an
   invariant (`walk_loop`); the verifier is walked with its three calls taken by the law of
   `apply` (`walk_compute`), once for the judgment and once on a hypothesis for its converse,
   and is judged never to return within the budget of the goal's table (`soundCaps`: the root
@@ -63,9 +65,11 @@ weakened to one element or more (refused where that comparison is used); and the
 the package by the standard model, which has no sampler for a sequence of scalars (decided
 false by the kernel). The first three show that the text does not prove the altered claim;
 none of them refutes it. The fifth is a text and not a claim: one that defines again, in its
-own scope, a name that the statement of the goal uses (the experiment `ReturnsWithin`, as a
-proposition that always holds) and proves the claim written anew under it. Every statement of the module is a proposition defined before the
-text, so the goal is not concluded from that proof.
+own scope, a name that the judgment of the goal uses (the fees within allowances `paysWithin`,
+as a policy under which every fee pays for every set of replies) and proves the judgment
+written anew under it. Every statement of the module is a proposition defined before the text,
+so the claim is not concluded from that proof: Lean refuses the generated conclusion at one
+place, as a mismatch of types.
 
 The check trusts the text in two ways that it does not test: that it prints nothing that reads
 as Lean's report of the axioms of a theorem (a report is read only where there is exactly
@@ -131,13 +135,13 @@ def read (text : String) (operands : List String) (front : Array String := #[]) 
 /-- The theorems of the text of the proofs. -/
 def ofText : List String := [
   "sound_within", "apply_law", "sound_relation", "sound_far", "returns_on_product",
-  "walked_within", "walked_excludes", "returns_possible", "returns_installed", "large_covers",
-  "sound_installed", "Witness.rejected", "Witness.sound_at_corner", "Witness.returns_at_corner",
+  "walked_within", "walked_excludes", "returns_possible", "large_covers",
+  "sound_judged", "Witness.rejected", "Witness.sound_at_corner", "Witness.returns_at_corner",
   "sound_witnessed"]
 
 /-- The claim and what rests on it. -/
 def ofClaim : List String :=
-  ["sound_installed", "Witness.sound_at_corner", "sound_sound", "sound_result"]
+  ["sound_judged", "sound_installed", "Witness.sound_at_corner", "sound_sound", "sound_result"]
 
 /-- The proof module over a model, as the generator assembles it: the package of the claims
 and what is generated around the proofs written for the protocol, which use the fixed
@@ -149,28 +153,32 @@ def proofModule (name : String) (s : Subject) (model : ModelText) (template : St
       imports := ["Zkc.Formal.Written.FixedSequences", "Mathlib.Data.Matrix.Mul"] })
 
 /-- A text that defines again, in its own scope, a name of the library that the statement of
-the goal uses, and proves the claim written anew under that name: the experiment of a bound on
-returns, as a proposition that holds of everything. Before the statements of a module were
-propositions defined ahead of the text, the goal that such a text published was the claim under
-the text's own name, and every check passed (found by an audit, with the total of a charge as
-the name). The claim written anew is not the claim that was stated, so the text is refused
-where the goal is concluded from it. -/
+the goal's judgment uses, and proves the judgment written anew under that name: the fees within
+allowances, as a policy under which every fee pays for every set of replies. Under it the
+verifier is judged at its first effect, with no fee and every reply excluded. The judgment
+written anew is not the judgment that was stated before the text, so the text is refused where
+the claim is concluded from it. (An audit found the same of the claim: before the statements of
+a module were propositions defined ahead of the text, a text that defined the total of a charge
+again published a goal under its own name, and every check passed.) -/
 def shadowing (s : Subject) (model : ModelText) (template : String) : IO String := do
   let [goal] := s.statements.claims.goals | throw (IO.userError "the statements are not of one goal")
-  let anew ← IO.ofExcept (s.statements.claimAt model goal "installed" "rootMember" "soundMember")
-  let established := template.replace "theorem sound_installed : soundClaim := by"
-    "theorem sound_established : soundClaim := by"
+  let anew ← IO.ofExcept (s.statements.judgedAt model goal)
+  let established := template.replace "theorem sound_judged : soundJudged := by"
+    "theorem sound_established : soundJudged := by"
   if established == template then
-    throw (IO.userError "the text does not prove the claim under its name")
-  -- what the text concludes from the claim, it concludes from the claim as it was stated
-  let renamed := established.replace "  (sound_installed (F := Scalars)" "  (sound_established (F := Scalars)"
+    throw (IO.userError "the text does not prove the judgment under its name")
+  -- what the text concludes from the judgment, it concludes from the judgment as it was stated
+  let renamed := established.replace "  (sound_claim_of_judged sound_judged (F := Scalars)"
+    "  (sound_claim_of_judged sound_established (F := Scalars)"
   if renamed == established then
     throw (IO.userError "the text does not use the claim at its witness")
   return renamed ++ "\n" ++
-    "def ReturnsWithin {S : Sig} {H A : Type} (_ : Process S H A) (_ : Samplers S)\n" ++
-    "    (_ : ∀ op, S.Reply op → Prop) (_ : A → Prop) (_ : ℝ≥0∞) : Prop := True\n\n" ++
-    s!"theorem sound_installed :\n  {anew} := by\n" ++
-    "  intros\n  trivial\n"
+    "def paysWithin {S : Sig} (_ : Samplers S) (_ : S.Op → ℚ≥0) :\n" ++
+    "    (op : S.Op) → ℚ≥0 → (S.Reply op → Prop) → Prop := fun _ _ _ => True\n\n" ++
+    "set_option linter.unusedVariables false in\n" ++
+    s!"theorem sound_judged :\n  {anew} := by\n" ++
+    "  intros\n  walk_step\n" ++
+    "  exact ⟨0, fun _ => True, zero_le, trivial, fun _ _ kept => (kept trivial).elim⟩\n"
 
 /-- A control is refused where it is meant to be: Lean's output has the line. -/
 def expectReason (title : String) (task : Task (Except IO.Error (Bool × String)))
@@ -259,7 +267,7 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
   -- product of `a` and `b` differs. The laws of the two functions and the theorems about the
   -- verifier stand.
   expectUnproved "the operands exchanged" "OperandsControl" theorems exchangedProof ofClaim
-  expectReason "the operands exchanged" exchangedProof "sound_far G a b c A B C ha hb hc rejected"
+  expectReason "the operands exchanged" exchangedProof "sound_far G input_a input_b input_c A B C ha hb hc rejected"
   -- The ceiling of half the charge is not one over the order: the comparison with what a
   -- uniform scalar pays for is not proved.
   expectUnproved "a charge of half" "BoundControl" theorems halvedProof ("large_covers" :: ofClaim)
@@ -268,14 +276,18 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
   -- comparison of the ceiling is not available where the claim needs it.
   -- The witness of the text is of the hypothesis that was stated, so it is not a witness here.
   expectUnproved "a weaker hypothesis on the field" "FieldControl" theorems unassumedProof
-    ["sound_installed", "Witness.sound_at_corner", "sound_witnessed", "sound_sound",
-      "sound_result", "sound_met"]
+    ["sound_judged", "sound_installed", "Witness.sound_at_corner", "sound_witnessed",
+      "sound_sound", "sound_result", "sound_met"]
   expectReason "a weaker hypothesis on the field" unassumedProof "large_covers large"
   -- A name of the library defined again by the text: the claim that the text then proves is not
   -- the claim that was stated before it, and the goal is not concluded from it.
   expectUnproved "a name of the statement defined again" "ShadowControl" theorems shadowedProof
-    ["sound_sound", "sound_result"]
-  expectReason "a name of the statement defined again" shadowedProof "sound_installed"
+    ["sound_installed", "sound_sound", "sound_result"]
+  expectReason "a name of the statement defined again" shadowedProof
+    "Type mismatch\n  sound_judged\nhas type"
+  let (_, shadowed) ← finishLean shadowedProof
+  unless (shadowed.splitOn "error:").length - 1 == 1 do
+    throw (IO.userError s!"a name of the statement defined again: refused at more than one place\n{shadowed}")
   -- The standard model has no sampler for a sequence of scalars: the kernel decides that it
   -- does not cover the package.
   let (ok, output) ← finishLean uncoveredProof

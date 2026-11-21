@@ -22,10 +22,13 @@ the count three, and its total is three eighths.
 The check reads the source with the frontend and writes modules on which Lean is run.
 
 - The proof module has the printed package of what the goal claims and, around the text of
-  `GuessCharge.lean.in`, what `Written.Statements` writes. The text walks the verifier's loop by
-  an invariant (no round has hit yet; `(3 - i) / 8` of the budget is left), meets the message
-  for free and pays at the draw with its occurrence read from the effect and its cap read from
-  the table by the kernel. After the generated theorems stands a consumer that names no
+  `GuessCharge.lean.in`, what `Written.Statements` writes. Among it is the judgment that the
+  method of fees has to establish (`guessingJudged`), with the theorem that the claim follows
+  from it; the text proves that judgment and the witness, and states neither the claim nor
+  where the walk starts. It walks the verifier's loop by an invariant (no round has hit yet;
+  `(3 - i) / 8` of the budget is left), meets the message for free and pays at the draw, named
+  as the source names its site (`site_r`), within the cap that the generated theorem
+  `guessing_cap_r` gives it. After the generated theorems stands a consumer that names no
   generated proposition, writes the verifier as its place in the roster and the bound as the
   number `3 / 8`, and proves it from the published theorem.
 - The comparison module has the same printed package and the frontend.
@@ -37,9 +40,9 @@ Three controls are refused by Lean, each at the places that the check names and 
 
 - The charge of the source halved (`1 / 16`): the program is what it was, the cap of the draw
   is another and so is the budget, three sixteenths. The module is refused at three places:
-  where the text reads the cap of the draw from the table, where the invariant starts with
-  three fees of one eighth within the budget, and where the consumer states the bound as
-  `3 / 8`. A source cannot lower the cap of this draw and keep the budget, since the draw is
+  where the invariant starts with three fees of one eighth within the budget, where the text
+  pays one eighth at the draw and the generated cap of the draw is one sixteenth, and where
+  the consumer states the bound as `3 / 8`. A source cannot lower the cap of this draw and keep the budget, since the draw is
   the only charged one, so no control of this subject separates the cap from the budget; the
   text of `Count<8>` proves that separation (`misplaced_judges_nothing`: a table with the same
   budget whose cap is on another instruction judges the verifier at no budget).
@@ -98,11 +101,11 @@ def read (text : String) : IO Subject := do
 
 /-- The theorems of the text of the proofs. -/
 def ofText : List String :=
-  ["guessing_relation", "cap_of_draw", "walked_within", "guessing_installed", "guessing_witnessed"]
+  ["guessing_relation", "guessing_judged", "guessing_witnessed"]
 
 /-- What rests on the walk of the verifier. -/
 def ofWalk : List String :=
-  ["walked_within", "guessing_installed", "guessing_sound", "guessing_result", "consumer"]
+  ["guessing_judged", "guessing_installed", "guessing_sound", "guessing_result", "consumer"]
 
 /-- A reader's statement of the goal, with no generated proposition, the verifier as its place
 in the roster and the bound as a number: in every admitted program with the protocol and the
@@ -194,13 +197,14 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
   acceptedOutput "Guess" ok output theorems allowed
   let (ok, output) ← finishLean comparison
   acceptedOutput "GuessSource" ok output []
-  -- The cap of the draw is one sixteenth: the text reads another cap from the table than the
-  -- one that it pays, the invariant does not start within the budget of three sixteenths, and
-  -- the consumer's number is not the budget.
-  expectUnproved "the charge halved" "CapControl" theorems halvedProof ("cap_of_draw" :: ofWalk)
+  -- The cap of the draw is one sixteenth: the invariant does not start within the budget of
+  -- three sixteenths, the fee of one eighth that the text pays is not within the cap that the
+  -- module states for the draw, and the consumer's number is not the budget.
+  expectUnproved "the charge halved" "CapControl" theorems halvedProof ofWalk
   expectPlaces "the charge halved" halvedProof
-    ["guessingCaps.capFrom guessingCaps.root [] { number := 3 } = 1 / 8",
-      "↑(3 - 0) * (1 / 8) ≤ guessingCaps.budget", "toProbability (↑3 / ↑16) = 3 / 8"]
+    ["↑(3 - 0) * (1 / 8) ≤ guessingCaps.budget",
+      "1 / 16 ≤ guessingCaps.capFrom guessingCaps.root [] site_r",
+      "toProbability (↑3 / ↑16) = 3 / 8"]
   -- Four rounds: the invariant of the text pays three, and the body at the fourth round has
   -- nothing left to pay with; the consumer's number is not the budget of one half.
   expectUnproved "four rounds" "RoundsControl" theorems fourProof ofWalk

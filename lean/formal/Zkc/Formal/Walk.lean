@@ -63,6 +63,12 @@ along the equation between the term and the step that the rule is about:
 `walk_step` on a computation that calls a function reads the function's body; on a loop it has
 no step. A block and an application wait for their first subject.
 
+A walk enters by itself. The meaning of a role or of a function in a program (`roleMeaning`,
+`fnMeaning`) is closed to Lean's own reduction, and the equation between it and the sealed
+denotation of the body is stated once, where the program is, and checked by the kernel there.
+Such an equation has the label `walk_entry`. On a goal that judges such a meaning, every tactic
+of the walk first passes along the labelled equation that fits; a text names no equation.
+
 The module gives the tactic and nothing else: how a goal is read and how a term is taken apart
 are private to it.
 -/
@@ -433,6 +439,41 @@ private def advance (goal : MVarId) (j : Judged) (bound why : Expr) (key : Optio
     return [next.mvarId!]
   else splitStuck goal j bound why w key numbers
 
+/-- Where a walk starts: an equation between the meaning of a role or of a function in a program
+and the sealed denotation of its body. A module that states such equations for its program gives
+them this label, and a walk on a goal that judges such a meaning passes along the one that
+fits, so that no text names the equation. -/
+register_label_attr walk_entry
+
+/-- A process that is the meaning of a role or of a function in a program, entered: the right
+side of the labelled equation whose left side it is, with the equation so far extended to it.
+What the equation fixes (the program, the member, the role) is compared as it is written, under
+reducible names only. Lean is asked to unify only what the equation leaves open (the model, the
+path, the inputs), whose types it compares by unfolding the header of the member. A process
+that no labelled equation fits is returned as it is. -/
+private def entered (at_ : Expr × Expr) : MetaM (Expr × Expr) := do
+  let p := at_.1
+  let .const head _ := p.getAppFn | return at_
+  let given := p.getAppArgs
+  for name in ← Lean.labelled `walk_entry do
+    let found ← withNewMCtxDepth do
+      let entry ← mkConstWithFreshMVarLevels name
+      let (args, _, statement) ← forallMetaTelescope (← inferType entry)
+      let some (_, lhs, rhs) := statement.eq? | return none
+      let stated := lhs.getAppArgs
+      unless lhs.getAppFn.isConstOf head && stated.size == given.size do return none
+      let fixed ← (stated.zip given).allM fun (s, g) => do
+        if s.hasExprMVar then pure true else withReducible (isDefEq s g)
+      unless fixed do return none
+      unless ← isDefEq lhs p do return none
+      -- an equation with a binder that its left side does not fix is not one to pass along
+      let equation ← instantiateMVars (mkAppN entry args)
+      if equation.hasExprMVar then return none
+      return some (← instantiateMVars rhs, equation)
+    if let some (form, equation) := found then
+      return (form, ← mkEqTrans at_.2 equation)
+  return at_
+
 /-- The judgment that a goal is, or, with `hypothesis`, the judgment from which it concludes. -/
 private def readGoal (goal : MVarId) (hypothesis : Bool) : MetaM Judged := goal.withContext do
   -- a goal is read through the annotations that `have` and `show` leave on it
@@ -463,6 +504,10 @@ private def readGoal (goal : MVarId) (hypothesis : Bool) : MetaM Judged := goal.
   -- a process under a reducible name is the process
   unless known read.1 do
     read ← reduced read (← whnfR read.1)
+    read ← throughSeal read
+  -- the meaning of a role or of a function in a program is the denotation of its body
+  unless known read.1 do
+    read ← entered read
     read ← throughSeal read
   return { j with process := read.1, opened := read.2, conclusion }
 

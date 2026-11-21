@@ -19,9 +19,12 @@ library and from the model that the check names:
 - `counts`: for each goal, that the counts of its table are those of the stored program and
   that its budget is the number that the frontend computed, both decided by the kernel;
 - `coverage`: the theorem `covered`, that the model of the statement covers the stored program;
+- `sites`: the key of each charged draw of the root under the name of its site in the source
+  (`site_<name>`), and for each goal the cap that its table gives the draw
+  (`<goal>_cap_<name>`), decided by the kernel;
 - `entries`: where the walks of the module start: for the deciding role, each named function
   and each goal's relation, the meaning in the installed program as the sealed denotation of
-  the body;
+  the body, each with the label at which a walk enters;
 - `transfers`: that what holds of the root and of a relation in the installed program holds of
   them in every program that admission gives, each found by its key;
 - `claimTexts`: for each goal, the propositions that are stated before any proof. The claim
@@ -34,16 +37,24 @@ library and from the model that the check names:
   is to draw one there (it may also not answer) and that answers only what is permitted. The
   generator writes the process, the samplers and the bound, and not what the probability is of. The goal for every admitted program (`<goal>Goal`), the result with the coverage
   and the counts of the table (`<goal>Result`), and that the hypotheses of the claim are met together (`<goal>Witnessed`);
+- `judgments`, for a text that establishes its claims by the judgment with fees
+  (`Method.fees`): for each goal the proposition `<goal>Judged` that the text has to prove
+  (`judgedAt`), the theorem `<goal>_claim_of_judged` that the claim follows from it, and the
+  theorem `<goal>_witnessed_of` that the hypotheses of the claim are met at any valid inputs
+  on which the relation returns false;
+- `conclusions`, for such a text and after it: `<goal>_installed : <goal>Claim` from the
+  theorem `<goal>_judged : <goal>Judged` of the text. A text of another method
+  (`Method.direct`) proves `<goal>_installed` itself;
 - `closings`: for each goal, the theorems `<goal>_sound : <goal>Goal`,
   `<goal>_result : <goal>Result` and `<goal>_met : <goal>Witnessed`, from the theorems
-  `<goal>_installed : <goal>Claim` and `<goal>_witnessed : <goal>Witnessed` that the text
-  between has to prove;
+  `<goal>_installed : <goal>Claim` and `<goal>_witnessed : <goal>Witnessed`;
 - `ceilings`: for each goal that states a ceiling, the theorem `<goal>_ceiling` that the total
   of its table of caps is within it. A goal whose ceiling is below that total is refused here (GL4),
   before any module is written.
 
-So a proof module is: the package, `opens`, `facts`, `coverage`, `counts`, `entries`,
-`transfers`, `claimTexts`, the proofs written for the protocol, `closings`, `ceilings`.
+So a proof module is: the package, `opens`, `facts`, `coverage`, `counts`, `sites`, `entries`,
+`transfers`, `claimTexts`, `judgments`, the proofs written for the protocol, `conclusions`,
+`closings`, `ceilings`.
 `Statements.module` assembles it, with its imports and with the names of the theorems whose
 axioms it asks for; a caller gives the model, the text of the proofs with what that text
 imports and the names of its theorems, and what it adds after the closing theorems. Every
@@ -92,6 +103,12 @@ structure ModelText where
   /-- The modules of the model, of its samplers and of the instance at which a witness meets
   the hypotheses, beside those that every module of statements imports. -/
   imports : List String := []
+  /-- What a witness gives for the bound variables of `existential`, as terms over the binders
+  and separated by commas: an instance is found by Lean. -/
+  witnesses : String
+  /-- That the experiment of the model is not about nothing, as a term over the binders: a
+  service of the laws with a state. -/
+  served : String
 
 /-- The standard model built from an algebra, with the samplers of its laws. -/
 def standardModelText : ModelText where
@@ -102,6 +119,8 @@ def standardModelText : ModelText where
   samplers := "(lawSamplers (StandardModel.model D) (StandardModel.draws D))"
   covers := "StandardModel.covers"
   imports := ["Zkc.Formal.Written.FiniteModel"]
+  witnesses := "F, G, D, inferInstance, inferInstance"
+  served := "(StandardModel.served D)"
 
 /-- The arithmetic model over a field that can be sampled, with the samplers of its laws: a
 scalar and a sequence of scalars are drawn uniformly. -/
@@ -115,6 +134,9 @@ def arithmeticModelText : ModelText where
   samplers := "(lawSamplers (ArithmeticModel.model F G) (ArithmeticModel.draws F G))"
   covers := "ArithmeticModel.covers"
   imports := ["Zkc.Formal.Written.ArithmeticDraws"]
+  witnesses := "F, G, inferInstance, inferInstance, inferInstance, inferInstance, " ++
+    "inferInstance, inferInstance, inferInstance"
+  served := "(ArithmeticModel.served F G)"
 
 /-- The arithmetic model over a field with at least as many elements as the scalar field of the
 source. A charge that the source writes with the order of its scalar field then bounds what a
@@ -150,6 +172,15 @@ structure Statements where
   its name (`apply` gives `applyMember`): what the root may call. -/
   functions : List (String × Nat) := []
 
+/-- How the text of a module establishes the claim of a goal. -/
+inductive Method where
+  /-- By the judgment with fees: the text proves `<goal>_judged : <goal>Judged`, and the claim
+  is concluded from it by a theorem that is generated. -/
+  | fees
+  /-- The text proves `<goal>_installed : <goal>Claim` itself. -/
+  | direct
+  deriving DecidableEq
+
 /-- The proofs that an author writes for a protocol: their text, the modules that they use
 beside those of the generator and of the model, and the names of their theorems, whose axioms
 the module asks Lean to report. -/
@@ -157,6 +188,8 @@ structure ProofText where
   text : String := ""
   imports : List String := []
   theorems : List String := []
+  /-- How the text establishes the claim of each goal. -/
+  method : Method := .fees
 
 /-- A module as Lean reads it, and the theorems whose axioms it asks for, in the order in which
 the module states them. -/
@@ -210,7 +243,7 @@ def _root_.Zkc.Frontend.Written.GoalClaims.functionsBeforeRoot (claims : GoalCla
       | some entry => claims.state.program.nameOf entry.key.declaration
       | none => ""
     (if name.isEmpty then "function" else name, key.number)
-  let taken := claims.goals.map (·.goal) ++ ["root", "callee", "verifier", "prover"]
+  let taken := claims.goals.map (·.goal) ++ ["root", "callee", "verifier", "prover", "site"]
   named.map fun (name, key) =>
     if taken.contains name || (named.filter (·.1 == name)).length > 1 then (s!"{name}{key}", key)
     else (name, key)
@@ -284,12 +317,13 @@ reduction, and a walk reads a term in an environment; so for the deciding role o
 each function before the root that the text names and for each goal's relation, the meaning in
 the installed program is stated to be the sealed denotation of the body, which the kernel
 checks. The program of the role is `<role>Program`, in the kernel's normal form; the equations
-are `<role>_meaning`, `<function>_meaning` and `<goal>_meaning`, for every model. A walk
-starts by rewriting with one of them. -/
+are `<role>_meaning`, `<function>_meaning` and `<goal>_meaning`, for every model. Each has the
+label `walk_entry`: a walk on a goal that judges such a meaning passes along the equation that
+fits, and a text names none of them. -/
 def entries (s : Statements) : String :=
   let function (label member program : String) :=
     s!"/-- The function of `{label}` in its program is the denotation of its body. -/\n" ++
-    s!"theorem {label}_meaning (M : Model V) (inputs : HList M.Val {label}Header.ins) :\n" ++
+    s!"@[walk_entry]\ntheorem {label}_meaning (M : Model V) (inputs : HList M.Val {label}Header.ins) :\n" ++
     s!"    fnMeaning M {program} {member} inputs =\n" ++
     s!"      ({label}Body.denote (localSem M {label}Before.headers.fns (Defs.fnTable M {label}Before.defs)) []\n" ++
     s!"        (Env.empty.extend {label}Names inputs)).sealed := by\n  kernel_rfl\n\n"
@@ -301,7 +335,7 @@ def entries (s : Statements) : String :=
       s!"  project {label}Role rootBody\n\n" ++
       s!"/-- The process of the {label} in a run of the installed program is the denotation of its\n" ++
       "program. -/\n" ++
-      s!"theorem {label}_meaning (M : Model V) (path : List Frame)\n" ++
+      s!"@[walk_entry]\ntheorem {label}_meaning (M : Model V) (path : List Frame)\n" ++
       s!"    (inputs : HList (RV M {label}Role) rootHeader.ins) :\n" ++
       s!"    roleMeaning M installed rootMember {label}Role path inputs =\n" ++
       s!"      ({label}Program.denote (roleSem M {label}Role (Defs.fnTable M calleeProgram.defs)\n" ++
@@ -360,16 +394,20 @@ structure Parts where
   inputs : String
   premise : String → String → String
 
+/-- Whether a name of the source can stand in a generated name as it is: letters of the basic
+alphabet, digits and underscores, not beginning with a digit. A name of the source may be any
+identifier of Unicode, of which Lean reads some as other tokens. -/
+def plainName (name : String) : Bool :=
+  !name.isEmpty && name.all (fun c => c.isAlphanum || c == '_') && !name.front.isDigit
+
 /-- The names of the inputs of the root in a statement: the name that the source gives the port,
 after `input_`, so that a reader of a statement sees which inputs the relation is applied to and
 which the deciding role is run on. An input whose name in the source is no plain identifier, or
 is the name of another input, is named by its place. -/
 def inputNames (s : Statements) : List String :=
-  let plain (name : String) := !name.isEmpty && name.all (fun c => c.isAlphanum || c == '_') &&
-    !(name.front.isDigit)
   let names := s.claims.inputs.toList
   names.zipIdx.map fun (name, index) =>
-    if plain name && (names.filter (· == name)).length == 1 then s!"input_{name}" else s!"port{index}"
+    if plainName name && (names.filter (· == name)).length == 1 then s!"input_{name}" else s!"port{index}"
 
 def parts (s : Statements) (model : ModelText) (goal : ClaimedGoal) : Except String Parts := do
   unless goal.clause.kind == .proves do
@@ -539,10 +577,129 @@ def claimTexts (s : Statements) (model : ModelText) : Except String String := do
       s!"      {parts.premise "installed" s!"{name}Member"}\n\n"
   return text
 
+/-- The name of a charged draw of the root in a module: the name of its site in the source, with
+its place among the draws that realize the site where a stepped loop gives several. -/
+def siteLabel (site : String) (index count : Nat) : String :=
+  if count == 1 then site else s!"{site}_{index}"
+
+/-- The charged draws of a goal's root, each with the name of its site in the source, its name
+in a module and its key. The name in a module is the site's (`siteLabel`) where that is a plain
+name, and `key<number>` of the draw where it is not. A name that two draws would share (a site
+`r_0` beside the first draw of a stepped loop over `r`) is followed by the key of each. -/
+def _root_.Zkc.Frontend.Written.ClaimedGoal.siteLabels (goal : ClaimedGoal) :
+    List (String × String × Core.Key) :=
+  let draws := goal.sites.flatMap fun (site, keys) =>
+    keys.zipIdx.map fun (key, index) =>
+      (site, if plainName site then siteLabel site index keys.length else s!"key{key.number}", key)
+  draws.map fun (site, label, key) =>
+    if (draws.filter (·.2.1 == label)).length > 1 then (site, s!"{label}_key{key.number}", key)
+    else (site, label, key)
+
+/-- The charged draws of a goal's root that its table of caps gives a cap, each with its name
+in a module and that cap. -/
+def _root_.Zkc.Frontend.Written.ClaimedGoal.siteCaps (goal : ClaimedGoal) :
+    List (String × DrawCap) :=
+  let capped := (goal.caps.uses.getLast?.map (·.draws)).getD []
+  goal.siteLabels.filterMap fun (_, label, key) =>
+    (capped.find? (·.key == key)).map fun cap => (label, cap)
+
+/-- The charged draws of the root under the names of their sites: the key of each
+(`site_<name>`, and `site_<name>_<index>` for each block of a stepped loop), once for the
+package, and for each goal the cap that its table gives the draw (`<goal>_cap_<name>`), decided
+by the kernel. A text can name a draw as the source does. -/
+def sites (s : Statements) : String :=
+  let named := (s.claims.goals.flatMap (·.siteLabels)).eraseDups
+  String.join (named.map fun (site, label, key) =>
+    s!"/-- A charged draw of the root: `sites.{site}` of the source. -/\n" ++
+    s!"abbrev site_{label} : Key := ⟨{key.number}⟩\n\n") ++
+  String.join (s.claims.goals.map fun goal =>
+    String.join (goal.siteCaps.map fun (label, cap) =>
+      s!"/-- The cap that the table of `{goal.goal}` gives the draw `{label}`. -/\n" ++
+      s!"theorem {goal.goal}_cap_{label} :\n" ++
+      s!"    {goal.goal}Caps.capFrom {goal.goal}Caps.root [] site_{label} = " ++
+      s!"{cap.numerator} / {cap.denominator} := by\n  decide +kernel\n\n"))
+
+/-- The names of the theorems that `sites` writes. -/
+def siteNames (s : Statements) : List String :=
+  s.claims.goals.flatMap fun goal => goal.siteCaps.map fun (label, _) => s!"{goal.goal}_cap_{label}"
+
+/-- What the method of fees has to establish for a goal, as the text of a proposition: on valid
+inputs of the deciding role on which the relation returns false, the role's process in the
+installed program is judged never to return within the budget of the goal's table of caps, each
+fee within what the table allows the effect that pays it. The binders are named: what the model
+is built from, `path`, the hypotheses of the model, each input with its validity, `rejected`. -/
+def judgedAt (s : Statements) (model : ModelText) (goal : ClaimedGoal) : Except String String := do
+  let name := goal.goal
+  let parts ← s.parts model goal
+  let premise := parts.premise "installed" s!"{name}Member"
+  return s!"∀ {model.binders} (path : List Frame)\n" ++
+    model.assumedBinders ++ parts.binders ++
+    s!"    (rejected : {premise}),\n" ++
+    s!"    (roleMeaning {model.model} installed rootMember verifierRole path {parts.inputs}).interpret\n" ++
+    s!"      (.charged (Permitted {model.model})\n" ++
+    s!"        (paysWithin {model.samplers} ({name}Caps.allowance {model.model} path)))\n" ++
+    s!"      (fun _ _ => False) (fun _ _ => True) {name}Caps.budget"
+
+/-- For each goal, what the method of fees has to establish, stated before any proof, and what
+follows from it:
+
+- `<goal>Judged`: on valid inputs of the deciding role on which the relation returns false, the
+  role's process in the installed program is judged never to return within the budget of the
+  goal's table of caps, each fee within what the table allows the effect that pays it. Its
+  binders are named (what the model is built from, `path`, each input with its validity,
+  `rejected`), and `claim_intro` introduces them under those names;
+- `<goal>_claim_of_judged : <goal>Judged → <goal>Claim`, by the library's bridge from the
+  judgment to the experiment;
+- `<goal>_witnessed_of`: the hypotheses of the claim are met at any valid inputs on which the
+  relation returns false, with the service of the model's laws. -/
+def judgments (s : Statements) (model : ModelText) : Except String String := do
+  let mut text := ""
+  for goal in s.claims.goals do
+    let name := goal.goal
+    let parts ← s.parts model goal
+    let premise := parts.premise "installed" s!"{name}Member"
+    let given := model.hypotheses.map (·.1) ++ (parts.names.splitOn " ").filter (!·.isEmpty)
+    text := text ++
+      "set_option linter.unusedVariables false in\n" ++
+      s!"/-- **What the judgment with fees establishes for `{name}`**: on valid inputs of the deciding\n" ++
+      "role on which the relation returns false, the role is judged never to return within the\n" ++
+      "budget of the goal's table of caps, each fee within what the table allows the effect that\n" ++
+      "pays it. -/\n" ++
+      s!"def {name}Judged : Prop :=\n  " ++ (← s.judgedAt model goal) ++ "\n\n" ++
+      s!"/-- The claim of `{name}` follows from the judgment. -/\n" ++
+      s!"theorem {name}_claim_of_judged (judged : {name}Judged) : {name}Claim := by\n" ++
+      "  claim_intro\n" ++
+      "  exact returnsWithin_of_never _ _ _ _ _ (by apply judged <;> assumption)\n\n" ++
+      s!"/-- The hypotheses of the claim of `{name}` are met at valid inputs on which the relation\n" ++
+      "returns false, with the service of the model's laws. -/\n" ++
+      s!"theorem {name}_witnessed_of {model.binders}\n" ++
+      model.assumedBinders ++ parts.binders ++
+      s!"    (rejected : {premise}) :\n    {name}Witnessed :=\n" ++
+      s!"  ⟨{", ".intercalate ([model.witnesses] ++ given ++ [model.served, "rejected"])}⟩\n\n"
+  return text
+
+/-- The names of the theorems that `judgments` writes. -/
+def judgmentNames (s : Statements) : List String :=
+  s.claims.goals.flatMap fun goal =>
+    [s!"{goal.goal}_claim_of_judged", s!"{goal.goal}_witnessed_of"]
+
+/-- For each goal whose claim the text established by the judgment with fees, the claim about
+the installed program, from the theorem `<goal>_judged` of the text. -/
+def conclusions (s : Statements) : String :=
+  String.join (s.claims.goals.map fun goal =>
+    s!"/-- The claim of `{goal.goal}`, from the judgment that the text established. -/\n" ++
+    s!"theorem {goal.goal}_installed : {goal.goal}Claim :=\n" ++
+    s!"  {goal.goal}_claim_of_judged {goal.goal}_judged\n\n")
+
+/-- The names of the theorems that `conclusions` writes. -/
+def conclusionNames (s : Statements) : List String :=
+  s.claims.goals.map fun goal => s!"{goal.goal}_installed"
+
 /-- For each goal, after the text of the proofs: the theorems `<goal>_sound : <goal>Goal`,
 `<goal>_result : <goal>Result` and `<goal>_met : <goal>Witnessed`, from the theorems
-`<goal>_installed : <goal>Claim` and `<goal>_witnessed : <goal>Witnessed` that the text has to
-prove. The statements were fixed before the text; only their proofs are written here. -/
+`<goal>_installed : <goal>Claim` (the text's, or the one that `conclusions` writes from the
+text's judgment) and `<goal>_witnessed : <goal>Witnessed` of the text. The statements were
+fixed before the text; only their proofs are written here. -/
 def closings (s : Statements) : String :=
   String.join (s.claims.goals.map fun goal =>
     let name := goal.goal
@@ -569,7 +726,8 @@ has the walk and the equations where it starts; `walks` says whether the module 
 def imports (model : ModelText) (walks : Bool) : List String :=
   packageImports ++ (if walks then ["Zkc.Formal.Walk"] else []) ++
     ["Zkc.Formal.OracleProcess", "Zkc.Formal.ReturnExperiment", "Zkc.Formal.Written.LawSamplers",
-      "Zkc.Formal.Written.SiteCaps", "Zkc.Formal.Written.FunctionMeaning"] ++ model.imports
+      "Zkc.Formal.Written.SiteCaps", "Zkc.Formal.Written.FunctionMeaning",
+      "Zkc.Formal.Written.ClaimIntro"] ++ model.imports
 
 /-- The lines that open a module: its imports, and the namespace of the core. -/
 def header (modules : List String) : String :=
@@ -580,8 +738,10 @@ def footer (name : String) (theorems : List String) : String :=
   String.join (theorems.map (s!"#print axioms {·}\n")) ++ s!"end {name}\n"
 
 /-- **The module of the goals of one scheme**: the package of the claims; what is generated
-before any proof (the facts, the coverage, the counts, where the walks start, the transfers and
-the propositions of each goal); the author's text; the closing theorems and the comparisons
+before any proof (the facts, the coverage, the counts, the names of the charged draws, where
+the walks start, the transfers, the propositions of each goal and, for a text of the method of
+fees, the judgment of each goal with what follows from it); the author's text; the claim of
+each goal from the text's judgment, for that method; the closing theorems and the comparisons
 with the ceilings; what a check writes after them (`after`: a consumer of the published
 theorems); and a request for the axioms of every theorem. The order of the parts, the imports
 and the names of the generated theorems are decided here and by no caller. A text that sets an
@@ -596,13 +756,17 @@ def module (s : Statements) (model : ModelText) (name : String) (proof : ProofTe
     throw s!"{name}: the text sets an option for debugging"
   let claims ← s.claimTexts model
   let ceilings ← s.ceilings
-  let theorems := ["admitted_exists", "covered"] ++ s.countNames ++
-    (if walks then s.entryNames else []) ++ proof.theorems ++ s.closingNames ++ s.ceilingNames ++
-    after.theorems
+  let fees := proof.method == .fees
+  let judgments ← if fees then s.judgments model else pure ""
+  let theorems := ["admitted_exists", "covered"] ++ s.countNames ++ s.siteNames ++
+    (if walks then s.entryNames else []) ++ (if fees then s.judgmentNames else []) ++
+    proof.theorems ++ (if fees then s.conclusionNames else []) ++ s.closingNames ++
+    s.ceilingNames ++ after.theorems
   let text := header (imports model walks ++ proof.imports ++ after.imports) ++
     s!"namespace {name}\n" ++ (Written.package s.package).text ++ opens ++ s.facts ++ "\n" ++
-    coverage model ++ s.counts ++ (if walks then s.entries else "") ++ s.transfers ++ claims ++
-    proof.text ++ "\n" ++ s.closings ++ ceilings ++ after.text ++ footer name theorems
+    coverage model ++ s.counts ++ s.sites ++ (if walks then s.entries else "") ++ s.transfers ++
+    claims ++ judgments ++ proof.text ++ "\n" ++ (if fees then s.conclusions else "") ++
+    s.closings ++ ceilings ++ after.text ++ footer name theorems
   return { text, theorems }
 
 /-- A module with the package of the claims and the statements of the goals, with no proof: the

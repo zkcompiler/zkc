@@ -32,8 +32,11 @@ The check reads the source with the frontend and writes two modules, on which Le
   claim of each goal about the installed program (`looseClaim`, `strictClaim`) with its goal
   for every admitted program, its result with the coverage and the statement that its
   hypotheses are met, all as propositions defined before the text; and after the text the
-  theorems of those (`loose_sound`, `loose_result`, `loose_met`, and the same for `strict`). The text of the check proves the
-  claims (`loose_installed`, `strict_installed`) and chooses nothing of them. The module
+  theorems of those (`loose_sound`, `loose_result`, `loose_met`, and the same for `strict`).
+  Before the text stands also the judgment that establishes each claim (`looseJudged`,
+  `strictJudged`) with the theorem that the claim follows from it. The text of the check proves
+  the judgments (`loose_judged`, `strict_judged`) and chooses nothing of them; it states neither
+  a claim nor where a walk starts. The module
   imports nothing of the frontend but the records of a table of caps. Its theorems are about every
   program that admission gives for the stored program of the package. The function of each
   relation returns whether at most the goal's tolerance of the entries are not zero. On a table
@@ -135,8 +138,8 @@ def read (text : String) : IO Subject := do
 /-- The theorems of the text of the proofs. -/
 def ofText : List String := [
   "loose_exact", "strict_exact", "loose_within", "strict_within", "walked_within",
-  "walked_excludes", "walk_reads_any_key", "loose_relation", "strict_relation", "judged_within",
-  "returns_within", "loose_installed", "strict_installed", "Witness.loose_at_table",
+  "walked_excludes", "walk_reads_any_key", "loose_relation", "strict_relation",
+  "returns_installed", "loose_judged", "strict_judged", "Witness.loose_at_table",
   "Witness.strict_at_table", "Witness.loose_attained", "Witness.strict_attained",
   "Witness.misplaced_judges_nothing", "Witness.misplaced_not_counted",
   "Witness.foreign_not_counted", "Witness.fixed_position_does_not_follow", "loose_witnessed",
@@ -144,13 +147,15 @@ def ofText : List String := [
 
 /-- The theorems that say what the relations compute, and those that rest on them. -/
 def ofRelation : List String :=
-  ["loose_relation", "strict_relation", "loose_installed", "strict_installed",
+  ["loose_relation", "strict_relation", "loose_judged", "strict_judged", "loose_installed",
+    "strict_installed",
     "Witness.loose_at_table", "Witness.strict_at_table", "loose_witnessed", "strict_witnessed",
     "loose_sound", "loose_result", "loose_met", "strict_sound", "strict_result", "strict_met"]
 
 /-- What the text says of the caps of the two goals, and what rests on it. -/
 def ofCharge : List String :=
-  ["loose_installed", "strict_installed", "Witness.loose_at_table", "Witness.strict_at_table",
+  ["loose_judged", "strict_judged", "loose_installed", "strict_installed",
+    "Witness.loose_at_table", "Witness.strict_at_table",
     "Witness.loose_attained", "Witness.strict_attained", "loose_exact", "strict_exact",
     "loose_sound", "loose_result", "strict_sound", "strict_result"]
 
@@ -286,8 +291,10 @@ def run (corpus template : System.FilePath) (work : System.FilePath) : IO Unit :
   -- The caps of both goals are below the bounds of their tolerances: the text reads another
   -- cap from each table than the bound, and what rests on it is not proved.
   expectUnproved "a charge below the bound" "BoundControl" theorems smallProof ofCharge
-  expectUnproved "a charge on a loop that does not run" "SiteControl" theorems elsewhereProof ofCharge
-  expectUnproved "a charge of another protocol" "OwnerControl" theorems foreignProof ofCharge
+  -- In these two the root has no charged draw, so the module has no theorem of a draw's cap.
+  let uncapped := theorems.filter fun name => !written.statements.siteNames.contains name
+  expectUnproved "a charge on a loop that does not run" "SiteControl" uncapped elsewhereProof ofCharge
+  expectUnproved "a charge of another protocol" "OwnerControl" uncapped foreignProof ofCharge
   -- Each is refused where the text reads the cap of the draw from the table.
   for (title, task) in [("below the bound", smallProof), ("on a loop that does not run", elsewhereProof),
       ("of another protocol", foreignProof)] do

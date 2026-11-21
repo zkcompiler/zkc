@@ -84,8 +84,13 @@ claim applies the experiment of the formal library (`ReturnsWithin`,
 `lean/formal/Zkc/Formal/ReturnExperiment.lean`) to the process of the deciding role on its
 inputs, the samplers of the model and the bound; the generator does not write which services
 the bound is against or which event it is of.
-After the text of the proofs it writes the theorems of the last three from a proof of the
-claim and a witness, and the comparison of a goal's total with its ceiling. A statement names the model through a `ModelText`: the model,
+For a text that establishes its claims by the judgment with fees it also writes, before the
+text, the judgment of each goal (`<goal>Judged`, with named binders), the theorem that the claim
+follows from it and the theorem that the hypotheses of the claim are met at inputs on which the
+relation returns false, and the key of each charged draw of the root under the name of its site
+(`site_<name>`) with its cap; the text proves the judgment, and the claim is concluded after it.
+After the text of the proofs it writes the theorems of the last three from the claim and a
+witness, and the comparison of a goal's total with its ceiling. A statement names the model through a `ModelText`: the model,
 its samplers, its coverage, and what the statement assumes of it (`scalarFieldModelText` is
 the arithmetic model on a field with at least the order of the source's scalar field). It is
 bounded by the total of the goal's table of caps (`<goal>Caps.total`), which `goalClaims` reads
