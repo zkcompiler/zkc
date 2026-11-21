@@ -9,9 +9,12 @@ each goal `looseArgument0`, `looseCharge`, `looseKey` with `looseHeader`, `loose
 `looseBody`, `looseBefore`, the program before the relation, and `looseMember`), that the
 standard model covers the package (`covered`), where the walks start (`verifierProgram` with
 `verifier_meaning`, `loose_meaning`, `strict_meaning`), the transfers `at_root`, `at_loose` and
-`at_strict`, and the claims `looseClaim` and `strictClaim`. After this
-text it writes the goals `loose_sound` and `strict_sound` from `loose_installed` and
-`strict_installed`, which this text proves.
+`at_strict`, and for each goal the propositions `looseClaim`, `looseGoal`, `looseResult` and
+`looseWitnessed`. After this
+text it writes the theorems of the propositions that were stated before it: the goals
+`loose_sound` and `strict_sound` from `loose_installed` and `strict_installed`, the results
+`loose_result` and `strict_result` with the coverage, and `loose_met` and `strict_met` from
+`loose_witnessed` and `strict_witnessed`. This text proves the four that are asked of it.
 
 Nothing of the statement is written here. The source says
 `NearZero(xs): (∑ i ∈ 0..n, if xs[i] == 0 then 0 else 1) <= e`; the package has it as a function
@@ -446,6 +449,14 @@ theorem strict_at_table {a : Admitted V} (admitted : admit stored association = 
       strict_exact.ge (by decide) path strictTable rfl (strict_far data strictTable rfl rejected)
       service (serveLaws_follows _ _) service_permitted ()⟩)
 
+/-- The table of `loose` is a valid value of the type of the port. -/
+theorem loose_valid : (model data).Valid (.seq scalarTy (some 8)) looseTable :=
+  ⟨fun _ _ => trivial, fun n size => by cases size; rfl⟩
+
+/-- The table of `strict` is a valid value of the type of the port. -/
+theorem strict_valid : (model data).Valid (.seq scalarTy (some 8)) strictTable :=
+  ⟨fun _ _ => trivial, fun n size => by cases size; rfl⟩
+
 /-! ### The probability at the tables -/
 
 /-- What follows the draw of a position. -/
@@ -640,4 +651,20 @@ theorem fixed_position_does_not_follow (path : List Frame) :
   norm_num at bound
 
 end Witness
+
+/-- **The hypotheses of the claim of `loose` are met** over the field of two elements: its
+table is valid, the relation returns false on it, and the service of the laws draws within the
+samplers and answers what is permitted. -/
+theorem loose_witnessed : looseWitnessed :=
+  ⟨Bool, Bool, Zkc.Formal.Written.FiniteModel.data, inferInstance, inferInstance,
+    Witness.looseTable, Witness.loose_valid, Unit, Witness.service, ⟨()⟩,
+    serveLaws_follows _ _, Witness.service_permitted,
+    (loose_relation _ Witness.looseTable rfl).trans (by decide)⟩
+
+/-- **The hypotheses of the claim of `strict` are met.** -/
+theorem strict_witnessed : strictWitnessed :=
+  ⟨Bool, Bool, Zkc.Formal.Written.FiniteModel.data, inferInstance, inferInstance,
+    Witness.strictTable, Witness.strict_valid, Unit, Witness.service, ⟨()⟩,
+    serveLaws_follows _ _, Witness.service_permitted,
+    (strict_relation _ Witness.strictTable rfl).trans (by decide)⟩
 end

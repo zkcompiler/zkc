@@ -195,4 +195,35 @@ theorem allowed_bounds_return (service : Service S σ) (samplers : Samplers S)
     permitted follows p budget s (by simpa using judged)
   simpa using bound
 
+/-- A process that can return along replies that a service without a state can give returns, in
+its run against that service, with an outcome that the run can have. -/
+theorem returns_of_possible (service : Service S Unit) (p : Process S H A)
+    (possible : p.interpret (.possible fun op v => (some v, ()) ∈ support (service op ()))
+      (fun _ => True) (fun _ => False)) :
+    ∃ a, (Outcome.returned a, ()) ∈ support (run service p ()) := by
+  induction p with
+  | done a =>
+    refine ⟨a, ?_⟩
+    show (Outcome.returned a, ()) ∈ support (pure (Outcome.returned a, ()) : ProbComp _)
+    simp
+  | halt e => exact possible.elim
+  | call op next ih =>
+    obtain ⟨v, inSupport, rest⟩ := possible
+    obtain ⟨a, reached⟩ := ih v rest
+    refine ⟨a, ?_⟩
+    rw [run_call, mem_support_bind_iff]
+    exact ⟨(some v, ()), inSupport, reached⟩
+
+/-- **A process that can return does return with positive probability**: where some replies that
+a service without a state can give lead the process to return, its run against that service
+returns with a probability that is not zero. A bound on the probability of a return is then not
+a bound on an event that cannot happen. -/
+theorem returns_pos_of_possible (service : Service S Unit) (p : Process S H A)
+    (possible : p.interpret (.possible fun op v => (some v, ()) ∈ support (service op ()))
+      (fun _ => True) (fun _ => False)) :
+    0 < Pr{let out ← run service p ()}[∃ a, out.1 = .returned a] := by
+  rw [prEvent_pos_iff]
+  obtain ⟨a, reached⟩ := returns_of_possible service p possible
+  exact ⟨_, reached, a, rfl⟩
+
 end Zkc.Formal.ProbabilisticProcess

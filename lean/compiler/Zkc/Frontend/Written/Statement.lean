@@ -10,8 +10,8 @@ public import Zkc.Frontend.Written.Package
 The statements of written soundness goals, as the text of a module.
 
 A module about what goals claim holds the printed package of the claims (`goalClaims`). This
-file writes what stands around a proof in such a module, from what the frontend read and from
-nothing else:
+file writes what stands around a proof in such a module, from what the frontend read, from the
+library and from the model that the check names:
 
 - `facts`: the keys, headers and places of the root, of the functions before it that the text
   names and of each goal's relation, the roles, and each goal's proof arguments and charge, as
@@ -22,24 +22,34 @@ nothing else:
   the body;
 - `transfers`: that what holds of the root and of a relation in the installed program holds of
   them in every program that admission gives, each found by its key;
-- `claimTexts`: for each goal, the proposition `<goal>Claim` about the installed program. On valid
-  inputs of the deciding role, where the relation of the goal's clause returns false at its
-  operands (for every valid witness, when the relation has witness parameters), the simulation
-  of the deciding role by every service that draws each coin by the sampler of its law and
-  answers what is permitted returns with probability at most the total of the goal's charge;
-- `closings`: for each goal, the theorem `<goal>_sound` for every admitted program, from a
-  theorem `<goal>_installed : <goal>Claim` that the text between has to prove;
+- `claimTexts`: for each goal, the propositions that are stated before any proof. The claim
+  about a program (`<goal>ClaimOf`, and `<goal>Claim` about the installed one): on valid inputs
+  of the deciding role, where the relation of the goal's clause returns false at its operands
+  (for every valid witness, when the relation has witness parameters), the simulation of the
+  deciding role returns with probability at most the total of the goal's charge, against every
+  service that is no more likely to answer a coin within a set of replies than the sampler of
+  the coin's law is to draw one there (it may also not answer) and that answers only what is
+  permitted. The goal for every admitted program (`<goal>Goal`), the result with the coverage
+  (`<goal>Result`), and that the hypotheses of the claim are met together (`<goal>Witnessed`);
+- `closings`: for each goal, the theorems `<goal>_sound : <goal>Goal`,
+  `<goal>_result : <goal>Result` and `<goal>_met : <goal>Witnessed`, from the theorems
+  `<goal>_installed : <goal>Claim` and `<goal>_witnessed : <goal>Witnessed` that the text
+  between has to prove;
 - `ceilings`: for each goal that states a ceiling, the theorem `<goal>_ceiling` that the total
   of its charge is within it. A goal whose ceiling is below that total is refused here (GL4),
   before any module is written.
 
 So a proof module is: the package, `opens`, `facts`, `coverage`, `entries`, `transfers`,
-`claimTexts`, the proofs written for the protocol, `closings`. The proofs choose nothing of the statement: the
-subject, the premise, the experiment, the samplers and the bound are written here.
+`claimTexts`, the proofs written for the protocol, `closings`. Every statement that the module
+publishes is a proposition defined before the text of the proofs; a name that the text defines
+afterwards cannot change what it says. The subject, the premise, the experiment, the samplers
+and the bound are written here.
 
 The model is named by a `ModelText`: the binders of what it is built from, the model, its
-samplers and its coverage as terms over them, and what the statement assumes of it. The statement is for one charge on a draw of the root; a root with
-charges at several sites or under applications waits for the table of caps by site.
+samplers and its coverage as terms over them, and what the statement assumes of it. It is
+chosen by the check that writes the module and is part of the claim, not of the proof. The
+statement is for one charge on a draw of the root; a root with charges at several sites or
+under applications waits for the table of caps by site.
 -/
 
 namespace Zkc.Frontend.Written
@@ -49,6 +59,9 @@ open Core
 structure ModelText where
   /-- The binders of what the model is built from. -/
   binders : String
+  /-- The same, as the bound variables of an existential statement, an instance as an anonymous
+  variable: what a witness of the statement's hypotheses gives. -/
+  existential : String
   /-- What a use of a statement passes for the binders that are explicit. -/
   arguments : String
   /-- The model, as a term over the binders. -/
@@ -66,6 +79,7 @@ structure ModelText where
 /-- The standard model built from an algebra, with the samplers of its laws. -/
 def standardModelText : ModelText where
   binders := "{F G : Type} (D : StandardModel.Data F G) [DecidableEq F] [DecidableEq G]"
+  existential := "(F G : Type) (D : StandardModel.Data F G) (_ : DecidableEq F) (_ : DecidableEq G)"
   arguments := "D"
   model := "(StandardModel.model D)"
   samplers := "(lawSamplers (StandardModel.model D) (StandardModel.draws D))"
@@ -76,6 +90,8 @@ scalar and a sequence of scalars are drawn uniformly. -/
 def arithmeticModelText : ModelText where
   binders := "{F G : Type} [Field F] [Fintype F] [DecidableEq F] [SampleableType F] " ++
     "[AddCommGroup G] [Module F G] [DecidableEq G]"
+  existential := "(F G : Type) (_ : Field F) (_ : Fintype F) (_ : DecidableEq F) " ++
+    "(_ : SampleableType F) (_ : AddCommGroup G) (_ : Module F G) (_ : DecidableEq G)"
   arguments := ""
   model := "(ArithmeticModel.model F G)"
   samplers := "(lawSamplers (ArithmeticModel.model F G) (ArithmeticModel.draws F G))"
@@ -95,6 +111,10 @@ def ModelText.assumed (model : ModelText) : String :=
 /-- The hypotheses of a model as the binders of a theorem. -/
 def ModelText.assumedBinders (model : ModelText) : String :=
   String.join (model.hypotheses.map fun (name, proposition) => s!"    ({name} : {proposition})\n")
+
+/-- The hypotheses of a model as the conjuncts of a statement. -/
+def ModelText.assumedConjuncts (model : ModelText) : String :=
+  String.join (model.hypotheses.map fun (_, proposition) => s!"    {proposition} ∧\n")
 
 /-- The names of the hypotheses of a model, as arguments. -/
 def ModelText.assumedNames (model : ModelText) : String :=
@@ -308,6 +328,9 @@ structure Parts where
   binders : String
   /-- As the quantifiers of a proposition: each value, then its validity as a hypothesis. -/
   quantified : String
+  /-- As the bound variables of an existential statement: each value, then its validity as a
+  conjunct. -/
+  existential : String
   names : String
   inputs : String
   premise : String → String → String
@@ -319,6 +342,8 @@ def parts (s : Statements) (model : ModelText) (goal : StatedGoal) : Except Stri
     s!"    (port{index} : {model.model}.Val {type}) (valid{index} : {model.model}.Valid {type} port{index})\n")
   let quantified := String.join (held.map fun ((type, _), index) =>
     s!"    ∀ (port{index} : {model.model}.Val {type}), {model.model}.Valid {type} port{index} →\n")
+  let existential := String.join (held.map fun ((type, _), index) =>
+    s!"    ∃ (port{index} : {model.model}.Val {type}), {model.model}.Valid {type} port{index} ∧\n")
   let names := " ".intercalate (held.map fun (_, index) => s!"port{index} valid{index}")
   let cons (items : List String) := items.foldr (fun item rest => s!"(.cons {item} {rest})") ".nil"
   let inputs := cons (ports.zipIdx.map fun ((_, holds), index) => if holds then s!"port{index}" else "()")
@@ -339,7 +364,7 @@ def parts (s : Statements) (model : ModelText) (goal : StatedGoal) : Except Stri
       let valid := String.join (witnessTypes.zipIdx.map fun (type, index) =>
         s!"{model.model}.Valid {type} witness{index} → ")
       s!"(∀ {bound}, {valid}{returns (cons (statement ++ witnesses))})"
-  return { binders, quantified, names, inputs, premise }
+  return { binders, quantified, existential, names, inputs, premise }
 
 /-- The total of a goal's charge: the charge at each of its draws. -/
 def _root_.Zkc.Frontend.Written.StatedGoal.total (goal : StatedGoal) : Rat :=
@@ -398,51 +423,88 @@ def coverage (model : ModelText) : String :=
   "package links and has a sampler for the law of every coin that the package draws. -/\n" ++
   s!"theorem covered : {model.covers} stored = true := by decide +kernel\n\n"
 
-/-- For each goal, the proposition `<goal>Claim` about the installed program. -/
+/-- What a goal claims of a program with its root and the relation of the goal's clause, as the
+text of a proposition: on valid inputs of the deciding role on which the relation returns false,
+the simulation of that role returns with probability at most the total of the goal's charge,
+against every service that is no more likely to answer a coin within a set of replies than the
+sampler of the coin's law is to draw one there, and that answers only what is permitted. -/
+def claimAt (s : Statements) (model : ModelText) (goal : StatedGoal)
+    (program root relation : String) : Except String String := do
+  let parts ← s.parts model goal
+  return s!"∀ {model.binders} (path : List Frame),\n" ++
+    model.assumed ++ parts.quantified ++ serviceQuantified model ++
+    s!"    {parts.premise program relation} →\n" ++
+    s!"      {s.returns model program root parts.inputs} ≤ total {goal.claimed.goal}Charge"
+
+/-- For each goal, what is stated before any proof is written, so that no name defined by the
+text of a proof can change it:
+
+- `<goal>ClaimOf p root relation`, the claim about a program with its root and the relation of
+  the goal's clause, and `<goal>Claim`, the claim about the installed program, which the text
+  proves;
+- `<goal>Goal`: in every program that admission gives for the package, the root and the
+  relation are found by their keys and the claim holds of them;
+- `<goal>Result`: the model covers the package, and the goal holds;
+- `<goal>Witnessed`: the hypotheses of the claim are met together by some model, valid inputs
+  and a service with a state, with the relation returning false there. The text proves it, so
+  that the claim is not about nothing. -/
 def claimTexts (s : Statements) (model : ModelText) : Except String String := do
   let mut text := ""
   for goal in s.goals do
     let name := goal.claimed.goal
     let parts ← s.parts model goal
     text := text ++
-      s!"/-- The claim of the goal `{name}` about the installed program: on valid inputs of the deciding\n" ++
-      "role on which the relation of the goal's clause returns false, the simulation of that role by\n" ++
-      "every service that draws each coin by the sampler of its law and answers what is permitted\n" ++
-      "returns with probability at most the total of the goal's charge. -/\n" ++
-      s!"def {name}Claim : Prop :=\n  ∀ {model.binders} (path : List Frame),\n" ++
-      model.assumed ++ parts.quantified ++ serviceQuantified model ++
-      s!"    {parts.premise "installed" s!"{name}Member"} →\n" ++
-      s!"      {s.returns model "installed" "rootMember" parts.inputs} ≤ total {name}Charge\n\n"
-  return text
-
-/-- For each goal, the theorem `<goal>_sound` for every admitted program, from the theorem
-`<goal>_installed : <goal>Claim`. -/
-def closings (s : Statements) (model : ModelText) : Except String String := do
-  let mut text := ""
-  for goal in s.goals do
-    let name := goal.claimed.goal
-    let parts ← s.parts model goal
-    text := text ++
-      s!"/-- **The goal `{name}`.** In every program that admission gives for the package, the protocol and\n" ++
-      "the relation of the goal's clause are found by their keys; and on valid inputs of the deciding\n" ++
-      "role on which that relation returns false, the simulation of the role by every service that\n" ++
-      "draws each coin by the sampler of its law and answers what is permitted returns with\n" ++
-      "probability at most the total of the goal's charge. -/\n" ++
-      s!"theorem {name}_sound " ++ "{a : Admitted V} (admitted : admit stored association = .ok a)\n" ++
-      s!"    {model.binders} (path : List Frame)\n" ++
-      model.assumedBinders ++ parts.binders ++ serviceBinders model ++ " :\n" ++
+      s!"/-- What the goal `{name}` claims of a program with its root and the relation of the goal's\n" ++
+      "clause: on valid inputs of the deciding role on which the relation returns false, the\n" ++
+      "simulation of that role returns with probability at most the total of the goal's charge,\n" ++
+      "against every service that is no more likely to answer a coin within a set of replies than\n" ++
+      "the sampler of the coin's law is to draw one there, and that answers only what is permitted. -/\n" ++
+      s!"def {name}ClaimOf (p : Typed V) (root : Member p.headers.protocols rootHeader)\n" ++
+      s!"    (relation : Member p.headers.fns {name}Header) : Prop :=\n  " ++
+      (← s.claimAt model goal "p" "root" "relation") ++ "\n\n" ++
+      s!"/-- The claim of the goal `{name}` about the installed program. -/\n" ++
+      s!"def {name}Claim : Prop := {name}ClaimOf installed rootMember {name}Member\n\n" ++
+      s!"/-- **The goal `{name}`.** In every program that admission gives for the package, the protocol\n" ++
+      "and the relation of the goal's clause are found by their keys, and the claim holds of them. -/\n" ++
+      s!"def {name}Goal : Prop :=\n" ++
+      "  ∀ {a : Admitted V}, admit stored association = .ok a →\n" ++
       "    ∃ root : Member a.program.headers.protocols rootHeader,\n" ++
       "      a.program.findProtocol rootKey = some ⟨rootHeader, root⟩ ∧\n" ++
       s!"      ∃ relation : Member a.program.headers.fns {name}Header,\n" ++
-      s!"        a.program.find {name}Key = some (.fn relation) ∧\n" ++
-      s!"        ({parts.premise "a.program" "relation"} →\n" ++
-      s!"          {s.returns model "a.program" "root" parts.inputs} ≤ total {name}Charge) :=\n" ++
-      s!"  at_{name} admitted\n" ++
-      s!"    (fun p root relation => {parts.premise "p" "relation"} →\n" ++
-      s!"      {s.returns model "p" "root" parts.inputs} ≤ total {name}Charge)\n" ++
-      s!"    ({name}_installed {model.arguments} path {model.assumedNames} {parts.names} " ++
-        "service follows permitted s)\n\n"
+      s!"        a.program.find {name}Key = some (.fn relation) ∧ {name}ClaimOf a.program root relation\n\n" ++
+      s!"/-- **The result of the goal `{name}`**: the model covers the package, and the goal holds. A\n" ++
+      "result over a model is about the program only where the model covers it. -/\n" ++
+      s!"def {name}Result : Prop := {model.covers} stored = true ∧ {name}Goal\n\n" ++
+      s!"/-- The hypotheses of the claim of `{name}` are met together: some model with what the claim\n" ++
+      "assumes of it, valid inputs on which the relation returns false, and a service with a state\n" ++
+      "that draws within the samplers and answers only what is permitted. -/\n" ++
+      s!"def {name}Witnessed : Prop :=\n  ∃ {model.existential},\n" ++
+      model.assumedConjuncts ++ parts.existential ++
+      s!"    ∃ (σ : Type) (service : Service (RSig {model.model}) σ), Nonempty σ ∧\n" ++
+      s!"      service.Follows {model.samplers} ∧\n" ++
+      s!"      (∀ op s reply t, (some reply, t) ∈ support (service op s) → Permitted {model.model} op reply) ∧\n" ++
+      s!"      {parts.premise "installed" s!"{name}Member"}\n\n"
   return text
+
+/-- For each goal, after the text of the proofs: the theorems `<goal>_sound : <goal>Goal`,
+`<goal>_result : <goal>Result` and `<goal>_met : <goal>Witnessed`, from the theorems
+`<goal>_installed : <goal>Claim` and `<goal>_witnessed : <goal>Witnessed` that the text has to
+prove. The statements were fixed before the text; only their proofs are written here. -/
+def closings (s : Statements) : String :=
+  String.join (s.goals.map fun goal =>
+    let name := goal.claimed.goal
+    s!"/-- The goal `{name}`, for every admitted program. -/\n" ++
+    s!"theorem {name}_sound : {name}Goal :=\n" ++
+    s!"  fun admitted => at_{name} admitted {name}ClaimOf ({name}_installed : {name}Claim)\n\n" ++
+    s!"/-- The result of the goal `{name}`. -/\n" ++
+    s!"theorem {name}_result : {name}Result := ⟨covered, {name}_sound⟩\n\n" ++
+    s!"/-- The hypotheses of the claim of `{name}` are met. -/\n" ++
+    s!"theorem {name}_met : {name}Witnessed := {name}_witnessed\n\n")
+
+/-- The names of the theorems that `closings` writes. -/
+def closingNames (s : Statements) : List String :=
+  s.goals.flatMap fun goal =>
+    [s!"{goal.claimed.goal}_sound", s!"{goal.claimed.goal}_result", s!"{goal.claimed.goal}_met"]
 
 end Statements
 

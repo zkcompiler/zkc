@@ -16,10 +16,10 @@ a function on `Fin n`, read as a list. The probability of a set of sequences und
 probability of the functions whose list is in the set, which is a count.
 
 A linear form with a coefficient that is not zero vanishes on a uniform vector with probability
-at most `1 / |F|` (`prEvent_drawVector_linear_form_zero`): the zeros of the form, each with any
-value at the coordinate of that coefficient, are different vectors. This is the weight that a
-check by a random linear combination pays for: Freivalds' check of a product, a batched
-equality.
+at most `1 / |F|` (`prEvent_linear_form_zero`, and `prEvent_drawVector_le_of_linear_form` for
+the sequence that `drawVector` gives): the zeros of the form, each with any value at the
+coordinate of that coefficient, are different vectors. This is the weight that a check by a
+random linear combination pays for: Freivalds' check of a product, a batched equality.
 -/
 
 namespace Zkc.Formal.Written
