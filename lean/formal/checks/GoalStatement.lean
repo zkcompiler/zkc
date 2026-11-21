@@ -42,7 +42,7 @@ of the goal changes the statement or is refused.
   that alters the operands or the table of caps of a claimed goal, or the verifier of a
   package: the two records are made by the reader alone.
 
-Then Lean is run on two more modules. Both have a consumer that a reader of the source could write
+Then Lean is run on four more modules. All have a consumer that a reader of the source could write
 without the generator: a theorem that names none of the generated propositions, has the
 verifier as its place in the roster, and says, of every admitted program, that this role of the
 protocol with the inputs `flag = false` and `other = true` returns with probability at most zero when the relation is false of `false`,
@@ -56,6 +56,14 @@ experiment of the statement is the one that a reader would write.
 - In the control the clause is `proves @V IsSet(other)`, with a verifier that guards `other`.
   The published theorem is proved, and it is about the other input: the consumer is refused,
   where it gives the published theorem its premise.
+- Two controls are of the text of the proofs, on the first source. Their text proves its claim
+  itself (the other method than the judgment with fees). In one, the text takes its claim as a
+  hypothesis of the module's scope: every theorem after the text takes that hypothesis, Lean
+  proves each and reports no axiom for it, and the module is refused at the four places where
+  the stored statements are read (`published`). In the other, the text defines a name of the
+  claim again (the experiment, as a proposition that always holds) and proves the claim written
+  anew: the goal is not concluded from it, and the theorem that has the claim's name does not
+  state the claim.
 -/
 
 open Zkc.Core Zkc.Frontend Zkc.Frontend.Written
@@ -317,12 +325,47 @@ def consumer : String :=
 /-- The proof module of a source, as the generator assembles it for a text that does not walk:
 the package of its claims, what the generator writes around the proofs, the proofs and the
 consumer. -/
-def proofModule (name text guarded : String) : IO Module := do
+def proofModule (name text guarded : String)
+    (alter : Statements → String → Except String String := fun _ proof => pure proof) :
+    IO Module := do
   let s ← IO.ofExcept (statementsOf text ["sound"])
   IO.ofExcept (s.module standardModelText name
-    { text := proofText guarded, theorems := ["sound_installed", "sound_witnessed"]
+    { text := ← IO.ofExcept (alter s (proofText guarded))
+      theorems := ["sound_installed", "sound_witnessed"]
       method := .direct }
     (walks := false) (after := { text := consumer, theorems := ["consumer"] }))
+
+/-- The proof of the claim under another name, so that a control can state `sound_installed`
+itself. -/
+def established (proof : String) : Except String String := do
+  let renamed := proof.replace "theorem sound_installed : soundClaim := by"
+    "theorem sound_established : soundClaim := by"
+  if renamed == proof then throw "the text does not prove the claim under its name"
+  return renamed
+
+/-- A text that proves nothing of its claim: after its last `end` it declares the claim as an
+instance variable of the module's scope, with the two linters that would report that switched
+off, and takes the claim from the variable. Every theorem that the generator writes after the
+text then has the variable as a hypothesis: Lean accepts each and reports no axiom for it, and
+none is a theorem of its proposition. -/
+def assuming (_ : Statements) (proof : String) : Except String String := do
+  return (← established proof) ++
+    "\nset_option linter.unusedSectionVars false\nset_option linter.concreteInstances false\n" ++
+    "variable [assumed : Fact soundClaim]\n" ++
+    "theorem sound_installed : soundClaim := assumed.out\n"
+
+/-- A text that defines again, in its own scope, a name of the library that the claim uses (the
+experiment of a bound on returns, as a proposition that holds of everything) and proves the
+claim written anew under it. The claim written anew is not the claim that was stated before the
+text. -/
+def shadowing (s : Statements) (proof : String) : Except String String := do
+  let [goal] := s.claims.goals | throw "the statements are not of one goal"
+  let anew ← s.claimAt standardModelText goal "installed" "rootMember" "soundMember"
+  return (← established proof) ++ "\n" ++
+    "def ReturnsWithin {S : Sig} {H A : Type} (_ : Process S H A) (_ : Samplers S)\n" ++
+    "    (_ : ∀ op, S.Reply op → Prop) (_ : A → Prop) (_ : ℝ≥0∞) : Prop := True\n\n" ++
+    s!"theorem sound_installed :\n  {anew} := by\n" ++
+    "  intros\n  trivial\n"
 
 def run (work : System.FilePath) : IO Unit := do
   -- The operands: a `spec` port that nothing uses changes neither the input nor the claim, and
@@ -474,6 +517,10 @@ def run (work : System.FilePath) : IO Unit := do
   let proof ← startLakeLean work "Operands" module.text
   let control ← startLakeLean work "OperandsControl"
     (← proofModule "OperandsControl" aboutOther "other").text
+  let assumedProof ← startLakeLean work "AssumedControl"
+    (← proofModule "AssumedControl" fronted "flag" assuming).text
+  let shadowedProof ← startLakeLean work "ShadowControl"
+    (← proofModule "ShadowControl" fronted "flag" shadowing).text
   let (ok, output) ← finishLean closed
   expect s!"the records of a goal were altered outside the reader\n{output}"
     (!ok && output.contains "constructor for `ClaimedGoal` is marked as private" &&
@@ -489,10 +536,27 @@ def run (work : System.FilePath) : IO Unit := do
   expect s!"the consumer of the control was refused for another reason\n{refusal}"
     (refusal.contains "The argument\n  rejected\nhas type" &&
       refusal.contains "(HList.cons true HList.nil)) = some false\nin the application")
+  -- The claim taken as a hypothesis of the module's scope: every theorem that the generator
+  -- writes after the text takes the variable, so Lean proves each and reports no axiom beyond
+  -- the allowed; none states its proposition, and the module is refused where the stored
+  -- statements are read, at four places and no other.
+  expectUnproved "a claim taken as a hypothesis" "AssumedControl" theorems assumedProof []
+  expectPlaces "a claim taken as a hypothesis" assumedProof
+    ["`AssumedControl.sound_installed` does not state `AssumedControl.soundClaim`",
+      "`AssumedControl.sound_sound` does not state `AssumedControl.soundGoal`",
+      "`AssumedControl.sound_result` does not state `AssumedControl.soundResult`",
+      "`AssumedControl.sound_met` does not state `AssumedControl.soundWitnessed`"]
+  -- A name of the claim defined again by the text: the claim written anew is not the claim that
+  -- was stated before the text. The goal is not concluded from it, and the theorem that the
+  -- text gave the name of the claim's does not state the claim.
+  expectUnproved "a name of the claim defined again" "ShadowControl" theorems shadowedProof
+    ["sound_sound", "sound_result", "consumer"]
+  expectPlaces "a name of the claim defined again" shadowedProof
+    ["Type mismatch", "`ShadowControl.sound_installed` does not state `ShadowControl.soundClaim`"]
   IO.println ("The statement of a goal reads its operands in the deployed header, its deciding role " ++
     "in the goal's scheme and its event in the clause: a spec port that nothing uses leaves the " ++
     "claim as it is, another operand changes it, and a consumer written apart uses the published " ++
-    "theorem at the inputs of the source; 2 of 2 controls refused.")
+    "theorem at the inputs of the source; 4 of 4 controls refused.")
 
 end GoalStatementCheck
 

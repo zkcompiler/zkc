@@ -49,12 +49,14 @@ library and from the model that the check names:
   `<goal>_result : <goal>Result` and `<goal>_met : <goal>Witnessed`, from the theorems
   `<goal>_installed : <goal>Claim` and `<goal>_witnessed : <goal>Witnessed`;
 - `ceilings`: for each goal that states a ceiling, the theorem `<goal>_ceiling` that the total
-  of its table of caps is within it. A goal whose ceiling is below that total is refused here (GL4),
-  before any module is written.
+  of its table of caps is within it, stated and proved before the text. A goal whose ceiling is
+  below that total is refused here (GL4), before any module is written;
+- `publications`: after everything else, the check that each theorem written after the text
+  states exactly the proposition that was defined for it before the text.
 
 So a proof module is: the package, `opens`, `facts`, `coverage`, `counts`, `sites`, `entries`,
-`transfers`, `claimTexts`, `judgments`, the proofs written for the protocol, `conclusions`,
-`closings`, `ceilings`.
+`transfers`, `claimTexts`, `judgments`, `ceilings`, the proofs written for the protocol,
+`conclusions`, `closings`, what a check adds, `publications`.
 `Statements.module` assembles it, with its imports and with the names of the theorems whose
 axioms it asks for; a caller gives the model, the text of the proofs with what that text
 imports and the names of its theorems, and what it adds after the closing theorems. Every
@@ -727,11 +729,24 @@ def imports (model : ModelText) (walks : Bool) : List String :=
   packageImports ++ (if walks then ["Zkc.Formal.Walk"] else []) ++
     ["Zkc.Formal.OracleProcess", "Zkc.Formal.ReturnExperiment", "Zkc.Formal.Written.LawSamplers",
       "Zkc.Formal.Written.SiteCaps", "Zkc.Formal.Written.FunctionMeaning",
-      "Zkc.Formal.Written.ClaimIntro"] ++ model.imports
+      "Zkc.Formal.Written.ClaimIntro", "Zkc.Formal.Written.Published"] ++ model.imports
 
 /-- The lines that open a module: its imports, and the namespace of the core. -/
 def header (modules : List String) : String :=
   String.join (modules.map (s!"import {·}\n")) ++ "\nopen Zkc.Core\n"
+
+/-- For each goal, the check that the theorems written after the text of the proofs state
+exactly the propositions that were defined before it (`published`,
+`Zkc/Formal/Written/Published.lean`). Those theorems are elaborated in the scope that the text
+leaves: a variable that the text declared there is a hypothesis of each of them that can use
+it, and then the theorem is not of its proposition, though Lean accepts it and reports no axiom
+for it. The check reads the type that Lean stored for the theorem, under its full name. -/
+def publications (s : Statements) (name : String) : String :=
+  String.join (s.claims.goals.map fun goal =>
+    let stated (theorem_ proposition : String) :=
+      s!"published {name}.{goal.goal}{theorem_} : {name}.{goal.goal}{proposition}\n"
+    stated "_installed" "Claim" ++ stated "_sound" "Goal" ++ stated "_result" "Result" ++
+      stated "_met" "Witnessed")
 
 /-- The requests for the axioms of theorems, and the end of the module's namespace. -/
 def footer (name : String) (theorems : List String) : String :=
@@ -740,16 +755,23 @@ def footer (name : String) (theorems : List String) : String :=
 /-- **The module of the goals of one scheme**: the package of the claims; what is generated
 before any proof (the facts, the coverage, the counts, the names of the charged draws, where
 the walks start, the transfers, the propositions of each goal and, for a text of the method of
-fees, the judgment of each goal with what follows from it); the author's text; the claim of
-each goal from the text's judgment, for that method; the closing theorems and the comparisons
-with the ceilings; what a check writes after them (`after`: a consumer of the published
-theorems); and a request for the axioms of every theorem. The order of the parts, the imports
-and the names of the generated theorems are decided here and by no caller. A text that sets an
-option for debugging is refused before Lean reads it: one of those options has the kernel not
-check a declaration, and a check reads Lean's acceptance as the kernel's. That guards against
-an accident. It is no defence against a text written to deceive a check, which trusts that the
-text prints nothing that reads as Lean's report of axioms a second time and declares no syntax
-that changes what a later statement means. -/
+fees, the judgment of each goal with what follows from it, and the comparisons with the
+ceilings); the author's text; the claim of each goal from the text's judgment, for that method;
+the closing theorems; what a check writes after them (`after`: a consumer of the published
+theorems); the check that each theorem written after the text states exactly its proposition
+(`publications`); and a request for the axioms of every theorem. The order of the parts, the
+imports and the names of the generated theorems are decided here and by no caller.
+
+What the generator states of a goal stands before the text, so that nothing which the text
+declares takes part in it; what it proves after the text is checked to be of those statements.
+A text that sets an option for debugging is refused before Lean reads it: one of those options
+has the kernel not check a declaration, and a check reads Lean's acceptance as the kernel's.
+That guards against an accident. Three things are still trusted of a text, and are no defence
+against one written to deceive a check: that it prints nothing that reads as Lean's report of
+axioms a second time; that it declares no syntax that changes what a later line means; and,
+for a statement that a check itself writes after the text (a consumer, with its numerals and
+notations), that the text declares no instance or notation under which that statement means
+something else. -/
 def module (s : Statements) (model : ModelText) (name : String) (proof : ProofText)
     (walks := true) (after : ProofText := {}) : Except String Module := do
   if (proof.text ++ after.text).contains "debug." then
@@ -760,13 +782,14 @@ def module (s : Statements) (model : ModelText) (name : String) (proof : ProofTe
   let judgments ← if fees then s.judgments model else pure ""
   let theorems := ["admitted_exists", "covered"] ++ s.countNames ++ s.siteNames ++
     (if walks then s.entryNames else []) ++ (if fees then s.judgmentNames else []) ++
-    proof.theorems ++ (if fees then s.conclusionNames else []) ++ s.closingNames ++
-    s.ceilingNames ++ after.theorems
+    s.ceilingNames ++ proof.theorems ++ (if fees then s.conclusionNames else []) ++
+    s.closingNames ++ after.theorems
   let text := header (imports model walks ++ proof.imports ++ after.imports) ++
     s!"namespace {name}\n" ++ (Written.package s.package).text ++ opens ++ s.facts ++ "\n" ++
     coverage model ++ s.counts ++ s.sites ++ (if walks then s.entries else "") ++ s.transfers ++
-    claims ++ judgments ++ proof.text ++ "\n" ++ (if fees then s.conclusions else "") ++
-    s.closings ++ ceilings ++ after.text ++ footer name theorems
+    claims ++ judgments ++ ceilings ++ proof.text ++ "\n" ++
+    (if fees then s.conclusions else "") ++ s.closings ++ after.text ++ s.publications name ++
+    footer name theorems
   return { text, theorems }
 
 /-- A module with the package of the claims and the statements of the goals, with no proof: the

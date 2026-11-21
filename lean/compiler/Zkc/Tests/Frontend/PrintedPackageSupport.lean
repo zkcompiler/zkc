@@ -203,6 +203,18 @@ def expectUnproved (title name : String) (theorems : List String)
   unless unproved.all expected.contains && expected.all unproved.contains do
     throw (IO.userError s!"{title}: unproved are {unproved}, expected {expected}\n{output}")
 
+/-- A control is refused at the places that are named and at no other: Lean's output has as many
+errors as there are places, and the text of each. -/
+def expectPlaces (title : String) (task : Task (Except IO.Error (Bool × String)))
+    (places : List String) : IO Unit := do
+  let (_, output) ← finishLean task
+  let errors := (output.splitOn "error:").length - 1
+  unless errors == places.length do
+    throw (IO.userError s!"{title}: refused at {errors} places, not at {places.length}\n{output}")
+  for place in places do
+    unless output.contains place do
+      throw (IO.userError s!"{title}: not refused at `{place}`\n{output}")
+
 /-- Lean accepts the module, and each of its theorems rests on the allowed axioms at most. -/
 def expectAccepted (name : String) (path : System.FilePath) (theorems : List String)
     (allowed : List String := ["propext", "Quot.sound"]) : IO Unit := do
