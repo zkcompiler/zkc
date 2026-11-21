@@ -15,7 +15,9 @@ library and from the model that the check names:
 
 - `facts`: the keys, headers and places of the root, of the functions before it that the text
   names and of each goal's relation, the verifier and the prover of the scheme, and each goal's
-  proof arguments and charge, as terms;
+  proof arguments and table of caps, as terms;
+- `counts`: for each goal, that the counts of its table are those of the stored program and
+  that its budget is the number that the frontend computed, both decided by the kernel;
 - `coverage`: the theorem `covered`, that the model of the statement covers the stored program;
 - `entries`: where the walks of the module start: for the deciding role, each named function
   and each goal's relation, the meaning in the installed program as the sealed denotation of
@@ -26,40 +28,39 @@ library and from the model that the check names:
   about a program (`<goal>ClaimOf`, and `<goal>Claim` about the installed one): on valid inputs
   of the deciding role, where the relation of the goal's clause returns false at its operands
   (for every valid witness, when the relation has witness parameters), the deciding role
-  returns within the total of the goal's charge, in the experiment that the formal library
+  returns within the total of the goal's table of caps, in the experiment that the formal library
   defines (`ReturnsWithin`, `Zkc/Formal/ReturnExperiment.lean`): against every service that is
   no more likely to answer a coin within a set of replies than the sampler of the coin's law
   is to draw one there (it may also not answer) and that answers only what is permitted. The
   generator writes the process, the samplers and the bound, and not what the probability is of. The goal for every admitted program (`<goal>Goal`), the result with the coverage
-  (`<goal>Result`), and that the hypotheses of the claim are met together (`<goal>Witnessed`);
+  and the counts of the table (`<goal>Result`), and that the hypotheses of the claim are met together (`<goal>Witnessed`);
 - `closings`: for each goal, the theorems `<goal>_sound : <goal>Goal`,
   `<goal>_result : <goal>Result` and `<goal>_met : <goal>Witnessed`, from the theorems
   `<goal>_installed : <goal>Claim` and `<goal>_witnessed : <goal>Witnessed` that the text
   between has to prove;
 - `ceilings`: for each goal that states a ceiling, the theorem `<goal>_ceiling` that the total
-  of its charge is within it. A goal whose ceiling is below that total is refused here (GL4),
+  of its table of caps is within it. A goal whose ceiling is below that total is refused here (GL4),
   before any module is written.
 
-So a proof module is: the package, `opens`, `facts`, `coverage`, `entries`, `transfers`,
-`claimTexts`, the proofs written for the protocol, `closings`. Every statement that the module
-publishes is a proposition defined before the text of the proofs; a name that the text defines
+So a proof module is: the package, `opens`, `facts`, `coverage`, `counts`, `entries`,
+`transfers`, `claimTexts`, the proofs written for the protocol, `closings`. Every statement
+that the module publishes is a proposition defined before the text of the proofs; a name that the text defines
 afterwards cannot change what it says. The subject, the premise, the experiment, the samplers
 and the bound are written here.
 
 What a statement says of its goal is read from the claims (`goalClaims`) and from nothing that
 a caller gives beside them: the deciding role is the verifier of the claims' scheme, the
 operands are the inputs of the deployed header at the places that the claims give, and the
-proof arguments and the ceiling are the goal's. A caller gives the model, the labels of the
-functions that the text names, and, until the budget of a goal is the table of its root, the
-charge of one draw. A goal whose clause is a `reduces` gets no statement: the statement of a
-reduction is about a return on which the reduced statement is true, and a bound on every return
-is another claim.
+proof arguments, the ceiling and the table of caps are the goal's. A caller gives the model and
+the labels of the functions that the text names. A goal whose clause is a `reduces` gets no
+statement: the statement of a reduction is about a return on which the reduced statement is
+true, and a bound on every return is another claim.
 
 The model is named by a `ModelText`: the binders of what it is built from, the model, its
 samplers and its coverage as terms over them, and what the statement assumes of it. It is
 chosen by the check that writes the module and is part of the claim, not of the proof. The
-statement is for one charge on a draw of the root; a root with charges at several sites or
-under applications waits for the table of caps by site.
+bound of a statement is the total of the goal's table of caps (`<goal>Caps.total`): every
+charge that the root reaches at the goal's proof arguments, by use, read by `goalClaims`.
 -/
 
 namespace Zkc.Frontend.Written
@@ -130,28 +131,24 @@ def ModelText.assumedConjuncts (model : ModelText) : String :=
 def ModelText.assumedNames (model : ModelText) : String :=
   " ".intercalate (model.hypotheses.map (·.1))
 
-/-- A goal of the claims with its charge on a draw of the root. -/
-structure StatedGoal where
-  claimed : ClaimedGoal
-  charge : DrawCharge
-
-/-- The claims of goals of one scheme, with what their statements need. The deciding role is
-the verifier of the claims' scheme; the text names it `verifierRole` and the prover
-`proverRole`. -/
+/-- The claims of goals of one scheme, with what their statements need beside them: the labels
+of the functions that the text names. The deciding role is the verifier of the claims' scheme;
+the text names it `verifierRole` and the prover `proverRole`. The goals of the statements are
+those of the claims. -/
 structure Statements where
   claims : GoalClaims
-  goals : List StatedGoal
   /-- The functions of the package before the root that the text names, each with the label of
   its name (`apply` gives `applyMember`): what the root may call. -/
   functions : List (String × Nat) := []
 
-/-- A charge as a term. -/
-def chargeTerm (charge : DrawCharge) : String :=
-  let draw (blocks : List (Key × Nat)) (key : Key) :=
-    let around := ", ".intercalate (blocks.map fun (block, number) => s!"(⟨{block.number}⟩, {number})")
-    s!"([{around}], ⟨{key.number}⟩)"
-  let draws := ", ".intercalate (charge.draws.map fun (blocks, key) => draw blocks key)
-  s!"⟨⟨{charge.owner.number}⟩, {charge.numerator}, {charge.denominator}, [{draws}]⟩"
+/-- A table of caps as a term. -/
+def capsTerm (table : CapTable) : String :=
+  let draw (d : DrawCap) := s!"⟨⟨{d.key.number}⟩, {d.numerator}, {d.denominator}, {d.count}⟩"
+  let call (c : CallCap) := s!"⟨⟨{c.key.number}⟩, {c.count}, {c.callee}⟩"
+  let use (u : UseCaps) :=
+    s!"⟨⟨{u.definition.number}⟩, [{", ".intercalate (u.draws.map draw)}], " ++
+    s!"[{", ".intercalate (u.calls.map call)}]⟩"
+  s!"⟨[{", ".intercalate (table.uses.map use)}]⟩"
 
 /-- The member of a list of headers that is `depth` places after its head. -/
 def memberAt : Nat → String
@@ -211,20 +208,21 @@ def ports (s : Statements) : Except String (List (String × Bool)) := do
   return ins.map fun port => (ty (b := s.package.bindings) port.ty, port.holders.contains deciding)
 
 /-- The types of the parameters of a goal's relation, as terms. -/
-def relationInputs (s : Statements) (goal : StatedGoal) : Except String (List String) := do
-  let some relation := s.package.named.definitions.find? (·.key.number == goal.claimed.relation)
-    | throw s!"the package of the claims does not have the relation of {goal.claimed.goal}"
-  let .fn _ ins _ _ _ _ _ _ := relation | throw s!"the relation of {goal.claimed.goal} is no function"
+def relationInputs (s : Statements) (goal : ClaimedGoal) : Except String (List String) := do
+  let some relation := s.package.named.definitions.find? (·.key.number == goal.relation)
+    | throw s!"the package of the claims does not have the relation of {goal.goal}"
+  let .fn _ ins _ _ _ _ _ _ := relation | throw s!"the relation of {goal.goal} is no function"
   return ins.map (ty (b := s.package.bindings))
 
 /-- The names that the text after this one may use. -/
 def opens : String :=
   "open Zkc.Formal Zkc.Formal.ProbabilisticProcess Zkc.Formal.Written OracleComp ProbComp\n" ++
-  "open Zkc.Frontend.Written (DrawCharge)\n" ++
+  "open Zkc.Frontend.Written (CapTable UseCaps DrawCap CallCap)\n" ++
   "open scoped NNRat ENNReal\n"
 
 /-- What was read from the source, as terms: the root, the roles, the functions before the root
-that the text names, and for each goal its proof arguments, its charge and its relation. -/
+that the text names, and for each goal its proof arguments, its table of caps and its
+relation. -/
 def facts (s : Statements) : String :=
   let root := s.claims.root
   s!"abbrev rootKey : Key := ⟨{root}⟩\n" ++
@@ -244,11 +242,11 @@ def facts (s : Statements) : String :=
     s!"noncomputable abbrev {label}Before : Typed V := {s.programBefore key}\n" ++
     s!"noncomputable abbrev {label}Member : Member calleeProgram.headers.fns header{key} :=\n" ++
     s!"  {s.calleeMember key}\n") ++
-  String.join (s.goals.map fun goal =>
-    let name := goal.claimed.goal
-    let relation := goal.claimed.relation
-    s!"def {name}Charge : Zkc.Frontend.Written.DrawCharge := {chargeTerm goal.charge}\n" ++
-    String.join (goal.claimed.specification.toList.zipIdx.map fun (value, index) =>
+  String.join (s.claims.goals.map fun goal =>
+    let name := goal.goal
+    let relation := goal.relation
+    s!"def {name}Caps : Zkc.Frontend.Written.CapTable := {capsTerm goal.caps}\n" ++
+    String.join (goal.specification.toList.zipIdx.map fun (value, index) =>
       s!"def {name}Argument{index} : Nat := {value}\n") ++
     s!"abbrev {name}Key : Key := ⟨{relation}⟩\n" ++
     s!"noncomputable abbrev {name}Header := header{relation}\n" ++
@@ -288,14 +286,14 @@ def entries (s : Statements) : String :=
       "  kernel_rfl\n\n"
   "noncomputable section\n\n" ++ role ++
   String.join (s.functions.map fun (label, _) => function label s!"{label}Member" "calleeProgram") ++
-  String.join (s.goals.map fun goal =>
-    function goal.claimed.goal s!"{goal.claimed.goal}Member" "installed") ++
+  String.join (s.claims.goals.map fun goal =>
+    function goal.goal s!"{goal.goal}Member" "installed") ++
   "end\n\n"
 
 /-- The names of the theorems that `entries` writes. -/
 def entryNames (s : Statements) : List String :=
   ["verifierProgram.eq", "verifier_meaning"] ++
-  s.functions.map (s!"{·.1}_meaning") ++ s.goals.map (s!"{·.claimed.goal}_meaning")
+  s.functions.map (s!"{·.1}_meaning") ++ s.claims.goals.map (s!"{·.goal}_meaning")
 
 /-- That what holds of the root, and of the root with a goal's relation, in the installed
 program holds of them in every admitted program, each found by its key. -/
@@ -311,8 +309,8 @@ def transfers (s : Statements) : String :=
   found "P a.program root := by\n" ++
   "  have same := readback admitted\n  generalize a.program = p at same\n  subst same\n" ++
   "  exact ⟨rootMember, by kernel_rfl, holds⟩\n\n" ++
-  String.join (s.goals.map fun goal =>
-    let name := goal.claimed.goal
+  String.join (s.claims.goals.map fun goal =>
+    let name := goal.goal
     s!"/-- What holds of the root and of the relation of `{name}` in the installed program holds of\n" ++
     "them in every admitted program, each found by its key. -/\n" ++
     s!"theorem at_{name} " ++ "{a : Admitted V} (admitted : admit stored association = .ok a)\n" ++
@@ -350,20 +348,14 @@ def inputNames (s : Statements) : List String :=
   names.zipIdx.map fun (name, index) =>
     if plain name && (names.filter (· == name)).length == 1 then s!"input_{name}" else s!"port{index}"
 
-def parts (s : Statements) (model : ModelText) (goal : StatedGoal) : Except String Parts := do
-  -- a goal of these statements is one of their claims, and not the claim of another package
-  unless s.claims.goals.any (fun own => own.goal == goal.claimed.goal &&
-      own.relation == goal.claimed.relation && own.statement == goal.claimed.statement &&
-      own.witness == goal.claimed.witness && own.specification == goal.claimed.specification &&
-      own.ceiling == goal.claimed.ceiling) do
-    throw s!"{goal.claimed.goal}: the goal is not one of the claims that these statements are of"
-  unless goal.claimed.clause.kind == .proves do
-    throw (s!"{goal.claimed.goal}: the goal reads a `reduces` clause. The statement of a reduction " ++
+def parts (s : Statements) (model : ModelText) (goal : ClaimedGoal) : Except String Parts := do
+  unless goal.clause.kind == .proves do
+    throw (s!"{goal.goal}: the goal reads a `reduces` clause. The statement of a reduction " ++
       "is about a return on which the reduced statement is true, and is not issued yet")
   let ports ← s.ports
   let named := s.inputNames
   unless named.length == ports.length do
-    throw s!"{goal.claimed.goal}: the inputs of the deployed header are not those that the claims name"
+    throw s!"{goal.goal}: the inputs of the deployed header are not those that the claims name"
   let name (index : Nat) := named.getD index s!"port{index}"
   let held := ports.zipIdx.filter (·.1.2)
   let binders := String.join (held.map fun ((type, _), index) =>
@@ -375,10 +367,10 @@ def parts (s : Statements) (model : ModelText) (goal : StatedGoal) : Except Stri
   let names := " ".intercalate (held.map fun (_, index) => s!"{name index} valid_{name index}")
   let cons (items : List String) := items.foldr (fun item rest => s!"(.cons {item} {rest})") ".nil"
   let inputs := cons (ports.zipIdx.map fun ((_, holds), index) => if holds then name index else "()")
-  for position in goal.claimed.statement do
+  for position in goal.statement do
     unless (ports[position]?.map (·.2)) == some true do
-      throw s!"{goal.claimed.goal}: the deciding role does not hold the input at {position} of the deployed header"
-  let statement := goal.claimed.statement.toList.map name
+      throw s!"{goal.goal}: the deciding role does not hold the input at {position} of the deployed header"
+  let statement := goal.statement.toList.map name
   let types ← s.relationInputs goal
   let witnessTypes := types.drop statement.length
   let premise (program relation : String) : String :=
@@ -394,32 +386,49 @@ def parts (s : Statements) (model : ModelText) (goal : StatedGoal) : Except Stri
       s!"(∀ {bound}, {valid}{returns (cons (statement ++ witnesses))})"
   return { binders, quantified, existential, names, inputs, premise }
 
-/-- The total of a goal's charge: the charge at each of its draws. -/
-def _root_.Zkc.Frontend.Written.StatedGoal.total (goal : StatedGoal) : Rat :=
-  goal.charge.draws.length * ((goal.charge.numerator : Rat) / goal.charge.denominator)
+/-- The total of a goal's table of caps, as the frontend computes it. -/
+def _root_.Zkc.Frontend.Written.ClaimedGoal.total (goal : ClaimedGoal) : Rat := goal.caps.ratio
 
 /-- The ceilings of the goals (GL4): a goal that states a ceiling is issued a statement only when
-the total of its charge is within it. A source whose charges add up to more than its goal
+the total of its table of caps is within it. A source whose charges add up to more than its goal
 promises gets no statement, and is told the two numbers. -/
 def checkCeilings (s : Statements) : Except String Unit := do
-  for goal in s.goals do
-    let some ceiling := goal.claimed.ceiling | continue
+  for goal in s.claims.goals do
+    let some ceiling := goal.ceiling | continue
     unless goal.total ≤ ceiling do
-      throw (s!"GL4: the goal `{goal.claimed.goal}` states the ceiling {ceiling}, and the total of its " ++
-        s!"charge is {goal.total}")
+      throw (s!"GL4: the goal `{goal.goal}` states the ceiling {ceiling}, and the total of its " ++
+        s!"charges is {goal.total}")
 
-/-- For each goal with a ceiling, the theorem `<goal>_ceiling`: the total of the goal's charge
-is within the ceiling, the comparison decided by the kernel. -/
+/-- For each goal, what the module states of its table before any proof: the counts of the table
+are those of the stored program (`<goal>_counted`), and its budget is the number that the
+frontend computed (`<goal>_budget`), both decided by the kernel. The second ties the total of a
+statement to the number that GL4 compares with a ceiling and that a reader can write down. -/
+def counts (s : Statements) : String :=
+  String.join (s.claims.goals.map fun goal =>
+    let name := goal.goal
+    let total := goal.total
+    s!"/-- The counts of the table of caps of `{name}` are those of the stored program. -/\n" ++
+    s!"theorem {name}_counted : {name}Caps.counted stored rootKey = true := by decide +kernel\n\n" ++
+    s!"/-- The budget of the table of caps of `{name}`: the number that the frontend computed. -/\n" ++
+    s!"theorem {name}_budget : {name}Caps.budget = (({total.num.toNat} : ℕ) : ℚ≥0) / ({total.den} : ℕ) := by\n" ++
+    "  decide +kernel\n\n")
+
+/-- The names of the theorems that `counts` writes. -/
+def countNames (s : Statements) : List String :=
+  s.claims.goals.flatMap fun goal => [s!"{goal.goal}_counted", s!"{goal.goal}_budget"]
+
+/-- For each goal with a ceiling, the theorem `<goal>_ceiling`: the total of the goal's table is
+within the ceiling, the comparison decided by the kernel. -/
 def ceilings (s : Statements) : Except String String := do
   s.checkCeilings
   let mut text := ""
-  for goal in s.goals do
-    let some ceiling := goal.claimed.ceiling | continue
-    let name := goal.claimed.goal
+  for goal in s.claims.goals do
+    let some ceiling := goal.ceiling | continue
+    let name := goal.goal
     text := text ++
-      s!"/-- The total of the charge of `{name}` is within the ceiling that the goal states. -/\n" ++
-      s!"theorem {name}_ceiling : total {name}Charge ≤ (({ceiling.num.toNat} : ℕ) : ℝ≥0∞) / ({ceiling.den} : ℕ) :=\n" ++
-      s!"  total_le_div {name}Charge {ceiling.num.toNat} {ceiling.den} (by decide) (by decide) (by decide)\n\n"
+      s!"/-- The total of the charges of `{name}` is within the ceiling that the goal states. -/\n" ++
+      s!"theorem {name}_ceiling : {name}Caps.total ≤ (({ceiling.num.toNat} : ℕ) : ℝ≥0∞) / ({ceiling.den} : ℕ) :=\n" ++
+      s!"  {name}Caps.total_le_div {ceiling.num.toNat} {ceiling.den} (by decide) (by decide +kernel)\n\n"
   return text
 
 /-- The experiment of a goal, as text: the deciding role of a program on its inputs returns with
@@ -446,15 +455,15 @@ def coverage (model : ModelText) : String :=
 
 /-- What a goal claims of a program with its root and the relation of the goal's clause, as the
 text of a proposition: on valid inputs of the deciding role on which the relation returns false,
-that role returns within the total of the goal's charge, in the experiment of the formal
+that role returns within the total of the goal's table of caps, in the experiment of the formal
 library (`ReturnsWithin`). -/
-def claimAt (s : Statements) (model : ModelText) (goal : StatedGoal)
+def claimAt (s : Statements) (model : ModelText) (goal : ClaimedGoal)
     (program root relation : String) : Except String String := do
   let parts ← s.parts model goal
   return s!"∀ {model.binders} (path : List Frame),\n" ++
     model.assumed ++ parts.quantified ++
     s!"    {parts.premise program relation} →\n" ++
-    s!"      {returnsWithin model program root parts.inputs s!"total {goal.claimed.goal}Charge"}"
+    s!"      {returnsWithin model program root parts.inputs s!"{goal.goal}Caps.total"}"
 
 /-- For each goal, what is stated before any proof is written, so that no name defined by the
 text of a proof can change it:
@@ -464,19 +473,20 @@ text of a proof can change it:
   proves;
 - `<goal>Goal`: in every program that admission gives for the package, the root and the
   relation are found by their keys and the claim holds of them;
-- `<goal>Result`: the model covers the package, and the goal holds;
+- `<goal>Result`: the model covers the package, the counts of the goal's table of caps are those
+  of the stored program, and the goal holds;
 - `<goal>Witnessed`: the hypotheses of the claim are met together by some model, valid inputs
   and a service with a state, with the relation returning false there. The text proves it, so
   that the claim is not about nothing. -/
 def claimTexts (s : Statements) (model : ModelText) : Except String String := do
   let mut text := ""
-  for goal in s.goals do
-    let name := goal.claimed.goal
+  for goal in s.claims.goals do
+    let name := goal.goal
     let parts ← s.parts model goal
     text := text ++
       s!"/-- What the goal `{name}` claims of a program with its root and the relation of the goal's\n" ++
       "clause: on valid inputs of the deciding role on which the relation returns false, that role\n" ++
-      "returns with probability at most the total of the goal's charge, against every service that\n" ++
+      "returns with probability at most the total of the goal's table of caps, against every service that\n" ++
       "draws within the samplers of the model and answers only what is permitted (`ReturnsWithin`). -/\n" ++
       s!"def {name}ClaimOf (p : Typed V) (root : Member p.headers.protocols rootHeader)\n" ++
       s!"    (relation : Member p.headers.fns {name}Header) : Prop :=\n  " ++
@@ -491,9 +501,12 @@ def claimTexts (s : Statements) (model : ModelText) : Except String String := do
       "      a.program.findProtocol rootKey = some ⟨rootHeader, root⟩ ∧\n" ++
       s!"      ∃ relation : Member a.program.headers.fns {name}Header,\n" ++
       s!"        a.program.find {name}Key = some (.fn relation) ∧ {name}ClaimOf a.program root relation\n\n" ++
-      s!"/-- **The result of the goal `{name}`**: the model covers the package, and the goal holds. A\n" ++
-      "result over a model is about the program only where the model covers it. -/\n" ++
-      s!"def {name}Result : Prop := {model.covers} stored = true ∧ {name}Goal\n\n" ++
+      s!"/-- **The result of the goal `{name}`**: the model covers the package, the counts of the goal's\n" ++
+      "table of caps are those of the stored program, and the goal holds. A result over a model is\n" ++
+      "about the program only where the model covers it, and a bound by a table is about the program\n" ++
+      "only where the table has its counts. -/\n" ++
+      s!"def {name}Result : Prop :=\n" ++
+      s!"  {model.covers} stored = true ∧ {name}Caps.counted stored rootKey = true ∧ {name}Goal\n\n" ++
       s!"/-- The hypotheses of the claim of `{name}` are met together: some model with what the claim\n" ++
       "assumes of it, valid inputs on which the relation returns false, and a service with a state\n" ++
       "that draws within the samplers and answers only what is permitted (`Served`). -/\n" ++
@@ -508,20 +521,20 @@ def claimTexts (s : Statements) (model : ModelText) : Except String String := do
 `<goal>_installed : <goal>Claim` and `<goal>_witnessed : <goal>Witnessed` that the text has to
 prove. The statements were fixed before the text; only their proofs are written here. -/
 def closings (s : Statements) : String :=
-  String.join (s.goals.map fun goal =>
-    let name := goal.claimed.goal
+  String.join (s.claims.goals.map fun goal =>
+    let name := goal.goal
     s!"/-- The goal `{name}`, for every admitted program. -/\n" ++
     s!"theorem {name}_sound : {name}Goal :=\n" ++
     s!"  fun admitted => at_{name} admitted {name}ClaimOf ({name}_installed : {name}Claim)\n\n" ++
     s!"/-- The result of the goal `{name}`. -/\n" ++
-    s!"theorem {name}_result : {name}Result := ⟨covered, {name}_sound⟩\n\n" ++
+    s!"theorem {name}_result : {name}Result := ⟨covered, {name}_counted, {name}_sound⟩\n\n" ++
     s!"/-- The hypotheses of the claim of `{name}` are met. -/\n" ++
     s!"theorem {name}_met : {name}Witnessed := {name}_witnessed\n\n")
 
 /-- The names of the theorems that `closings` writes. -/
 def closingNames (s : Statements) : List String :=
-  s.goals.flatMap fun goal =>
-    [s!"{goal.claimed.goal}_sound", s!"{goal.claimed.goal}_result", s!"{goal.claimed.goal}_met"]
+  s.claims.goals.flatMap fun goal =>
+    [s!"{goal.goal}_sound", s!"{goal.goal}_result", s!"{goal.goal}_met"]
 
 end Statements
 

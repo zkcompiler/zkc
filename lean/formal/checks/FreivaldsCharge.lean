@@ -10,7 +10,8 @@ import Zkc.Kernel
 import Zkc.Vocabulary.Project
 
 /-!
-Freivalds' check of a matrix product, judged within the charge that its source declares.
+Freivalds' check of a matrix product, judged within the table of caps that the frontend reads
+for its goal from the charge of its source.
 
 The subject is `Freivalds<2>`: the verifier draws a vector `r` of two scalars and returns when
 `apply(a, apply(b, r)) == apply(c, r)`, where `apply` is the product of a matrix and a vector;
@@ -35,10 +36,11 @@ The check reads the source with the frontend and writes modules on which Lean is
   claim and the witness. It says what `apply` and `Product` compute, each loop taken by an
   invariant (`walk_loop`); the verifier is walked with its three calls taken by the law of
   `apply` (`walk_compute`), once for the judgment and once on a hypothesis for its converse,
-  and is judged never to return within the budget of the charge on matrices whose product
-  differs; against every service that is no more likely to answer a coin within a set of
-  replies than the sampler of the coin's law is to draw one there, it returns with probability
-  at most the total of the charge. On matrices whose product holds every permitted vector
+  and is judged never to return within the budget of the goal's table (`soundCaps`: the root
+  with the cap of its draw, once, and its three calls of `apply`, which has no charge) on
+  matrices whose product differs; against every service that is no more likely to answer a coin
+  within a set of replies than the sampler of the coin's law is to draw one there, it returns
+  with probability at most the total of the table. On matrices whose product holds every permitted vector
   leads it to return. The hypotheses are met over the scalar field of the source, on the zero
   matrices and a matrix with one entry, and there it returns with a probability that is not
   zero.
@@ -55,14 +57,14 @@ for character.
 Five controls are refused by Lean, each for the theorems that depend on what it changes and at
 the line that the check names: the operands of the relation exchanged in the clause
 (`Product(b, a, c)`: the claim is then about another product; the text is refused where it
-takes from the premise that the product of `a` and `b` differs); a charge of half the source's (refused where the ceiling
+takes from the premise that the product of `a` and `b` differs); a charge of half the source's, written in the source (refused where the cap of the draw
 is compared with what a uniform scalar pays for); the hypothesis on the size of the field
 weakened to one element or more (refused where that comparison is used); and the coverage of
 the package by the standard model, which has no sampler for a sequence of scalars (decided
 false by the kernel). The first three show that the text does not prove the altered claim;
 none of them refutes it. The fifth is a text and not a claim: one that defines again, in its
-own scope, a name that the statement of the goal uses (the total of a charge) and proves the
-claim written anew under it. Every statement of the module is a proposition defined before the
+own scope, a name that the statement of the goal uses (the experiment `ReturnsWithin`, as a
+proposition that always holds) and proves the claim written anew under it. Every statement of the module is a proposition defined before the
 text, so the goal is not concluded from that proof.
 
 The check trusts the text in two ways that it does not test: that it prints nothing that reads
@@ -106,8 +108,8 @@ def noAssociation : Association := ⟨[], [], [], [], []⟩
 
 /-- A source read: the goal selects the root; it reads the clause `proves @V Product(…)` with
 the given operands, decided by the verifier of the scheme, on the ports of the protocol, which
-are the three matrices after those written in front; it gives no proof argument; and it has a
-charge on the draw `r`. -/
+are the three matrices after those written in front; and it gives no proof argument. The table
+of caps of the goal is read with its claim. -/
 def read (text : String) (operands : List String) (front : Array String := #[]) : IO Subject := do
   let c ← IO.ofExcept (goalRoot text "sound")
   let head ← IO.ofExcept (SourceClause.rootHead c)
@@ -124,13 +126,13 @@ def read (text : String) (operands : List String) (front : Array String := #[]) 
     throw (IO.userError "the goal gives proof arguments")
   unless (head.roster[claims.verifier]?, head.roster[claims.prover]?) == (some "V", some "P") do
     throw (IO.userError "the verifier and the prover of the scheme are not the roles V and P")
-  let charge ← IO.ofExcept (goalDrawCharge c "sound" [] "r")
-  return ⟨text, ⟨claims, [{ claimed, charge }], claims.functionsBeforeRoot⟩⟩
+  return ⟨text, ⟨claims, claims.functionsBeforeRoot⟩⟩
 
 /-- The theorems of the proof module, whose axioms the check reads. -/
 def theorems : List String := [
   "admitted_exists", "covered", "verifierProgram.eq", "verifier_meaning", "apply_meaning",
-  "sound_meaning", "apply_law", "sound_relation", "sound_far", "returns_on_product",
+  "sound_meaning", "sound_counted", "sound_budget", "sound_within", "apply_law", "sound_relation",
+  "sound_far", "returns_on_product",
   "walked_within", "walked_excludes", "returns_possible", "returns_installed", "large_covers",
   "sound_installed", "Witness.rejected", "Witness.sound_at_corner", "Witness.returns_at_corner",
   "sound_witnessed", "sound_sound", "sound_result", "sound_met"]
@@ -148,12 +150,13 @@ def proofModule (name : String) (s : Subject) (model : ModelText) (template : St
   let stated := s.statements
   let claims ← IO.ofExcept (stated.claimTexts model)
   return packageHeader ["Zkc.Formal.Walk", "Zkc.Formal.OracleProcess", "Zkc.Formal.ReturnExperiment",
-      "Zkc.Formal.Written.LawSamplers", "Zkc.Formal.Written.SiteAllowance",
+      "Zkc.Formal.Written.LawSamplers", "Zkc.Formal.Written.SiteCaps",
       "Zkc.Formal.Written.FunctionMeaning", "Zkc.Formal.Written.ArithmeticDraws",
       "Zkc.Formal.Written.FixedSequences", "Zkc.Formal.Written.ScalarField",
       "Mathlib.Data.Matrix.Mul"] ++
     s!"namespace {name}\n" ++ s.package ++ Statements.opens ++ stated.facts ++ "\n" ++
-    Statements.coverage model ++ stated.entries ++ stated.transfers ++ claims ++ template ++
+    Statements.coverage model ++ stated.counts ++ stated.entries ++ stated.transfers ++ claims ++
+    template ++
     "\n" ++ stated.closings ++
     String.join (theorems.map (s!"#print axioms {·}\n")) ++ s!"end {name}\n"
 
@@ -169,13 +172,14 @@ def comparisonModule (name : String) (s : Subject) : String :=
   s!"[\"sound\"] ({Written.associationTerm noAssociation}) stored association\nend {name}\n"
 
 /-- A text that defines again, in its own scope, a name of the library that the statement of
-the goal uses, and proves the claim written anew under that name: the total of a charge as the
-largest probability. Before the statements of a module were propositions defined ahead of the
-text, the goal that such a text published had that total for its bound, and every check passed
-(found by an audit). The claim written anew is not the claim that was stated, so the text is
-now refused where the goal is concluded from it. -/
+the goal uses, and proves the claim written anew under that name: the experiment of a bound on
+returns, as a proposition that holds of everything. Before the statements of a module were
+propositions defined ahead of the text, the goal that such a text published was the claim under
+the text's own name, and every check passed (found by an audit, with the total of a charge as
+the name). The claim written anew is not the claim that was stated, so the text is refused
+where the goal is concluded from it. -/
 def shadowing (s : Subject) (model : ModelText) (template : String) : IO String := do
-  let [goal] := s.statements.goals | throw (IO.userError "the statements are not of one goal")
+  let [goal] := s.statements.claims.goals | throw (IO.userError "the statements are not of one goal")
   let anew ← IO.ofExcept (s.statements.claimAt model goal "installed" "rootMember" "soundMember")
   let established := template.replace "theorem sound_installed : soundClaim := by"
     "theorem sound_established : soundClaim := by"
@@ -186,10 +190,10 @@ def shadowing (s : Subject) (model : ModelText) (template : String) : IO String 
   if renamed == established then
     throw (IO.userError "the text does not use the claim at its witness")
   return renamed ++ "\n" ++
-    "noncomputable def total (_ : DrawCharge) : ℝ≥0∞ := ⊤\n\n" ++
+    "def ReturnsWithin {S : Sig} {H A : Type} (_ : Process S H A) (_ : Samplers S)\n" ++
+    "    (_ : ∀ op, S.Reply op → Prop) (_ : A → Prop) (_ : ℝ≥0∞) : Prop := True\n\n" ++
     s!"theorem sound_installed :\n  {anew} := by\n" ++
-    "  intro F G _ _ _ _ _ _ _ path large a va b vb c vc rejected\n" ++
-    "  exact (sound_established path large a va b vb c vc rejected).mono le_top\n"
+    "  intros\n  trivial\n"
 
 /-- A control is refused where it is meant to be: Lean's output has the line. -/
 def expectReason (title : String) (task : Task (Except IO.Error (Bool × String)))
@@ -207,40 +211,43 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
   let template ← IO.FS.readFile template
   let written ← read (source "Product(a, b, c)") ["a", "b", "c"]
   let stated := written.statements
-  let [goal] := stated.goals | throw (IO.userError "the statements are not of one goal")
+  let [goal] := stated.claims.goals | throw (IO.userError "the statements are not of one goal")
   unless stated.claims.root == 1 && (stated.claims.verifier, stated.claims.prover) == (1, 0) do
     throw (IO.userError "the root and the roles of the source are not where they were")
-  unless (stated.entryNames ++ stated.closingNames).all theorems.contains do
+  unless (stated.entryNames ++ stated.countNames ++ stated.closingNames).all theorems.contains do
     throw (IO.userError "a generated theorem is not among the theorems read")
   unless stated.functions == [("apply", 2)] do
     throw (IO.userError s!"the root calls other functions than `apply`: {stated.functions}")
-  unless goal.claimed.statement == #[0, 1, 2] do
+  unless goal.statement == #[0, 1, 2] do
     throw (IO.userError "the relation is applied to other ports than the three matrices in order")
   let order := Zkc.Vocabulary.Field.bls12381Fr.order
-  unless (goal.charge.owner.number, goal.charge.numerator, goal.charge.denominator) == (1, 1, order) &&
-      goal.charge.draws == [([], ⟨0⟩)] do
-    throw (IO.userError "the charge is not one over the order of the scalar field, on the draw of the root")
+  unless goal.caps == ⟨[⟨⟨1⟩, [⟨⟨0⟩, 1, order, 1⟩], []⟩]⟩ do
+    throw (IO.userError "the table of caps is not one over the order of the scalar field, on the draw of the root, once")
 
   -- The operands exchanged: the package and the charge are what they were, and the relation is
   -- applied to the ports in another order.
   let exchanged ← read (source "Product(b, a, c)") ["b", "a", "c"]
   unless exchanged.package == written.package do
     throw (IO.userError "exchanging the operands of the clause changed the package of the claims")
-  unless (exchanged.statements.goals.map (·.claimed.statement)) == [#[1, 0, 2]] do
+  unless (exchanged.statements.claims.goals.map (·.statement)) == [#[1, 0, 2]] do
     throw (IO.userError "with the operands exchanged the relation is not applied to the ports exchanged")
 
   -- A `spec` port in front of the matrices, which nothing uses: the operands are the same
   -- inputs of the deployed header, and the proof module is the same text.
   let fronted ← read (source "Product(a, b, c)" "spec note: bool, ") ["a", "b", "c"] #["note"]
-  unless (fronted.statements.goals.map (·.claimed.statement)) == [#[0, 1, 2]] do
+  unless (fronted.statements.claims.goals.map (·.statement)) == [#[0, 1, 2]] do
     throw (IO.userError "with a spec port in front the relation is applied to other inputs")
   unless (← proofModule "Freivalds" fronted scalarFieldModelText template) ==
       (← proofModule "Freivalds" written scalarFieldModelText template) do
     throw (IO.userError "a spec port in front of the matrices changed the proof module")
 
-  -- A charge of half the source's.
-  let halved : Subject := { written with statements := { stated with
-    goals := [{ goal with charge := { goal.charge with denominator := 2 * goal.charge.denominator } }] } }
+  -- A charge of half the source's, in the source: the program is what it was, and the cap of
+  -- the draw is half.
+  let halved ← read ((source "Product(a, b, c)").replace "charge sites.r <= 1 / F::Order"
+    "charge sites.r <= 1 / (2 * F::Order)") ["a", "b", "c"]
+  unless halved.package == written.package &&
+      (halved.statements.claims.goals.map (·.caps)) == [⟨[⟨⟨1⟩, [⟨⟨0⟩, 1, 2 * order, 1⟩], []⟩]⟩] do
+    throw (IO.userError "the halved charge changed the package, or is not half at the draw")
 
   let proof ← startLakeLean work "Freivalds" (← proofModule "Freivalds" written scalarFieldModelText template)
   let comparison ← startLakeLean work "FreivaldsSource" (comparisonModule "FreivaldsSource" written)
@@ -279,7 +286,7 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
   -- The ceiling of half the charge is not one over the order: the comparison with what a
   -- uniform scalar pays for is not proved.
   expectUnproved "a charge of half" "BoundControl" theorems halvedProof ("large_covers" :: ofClaim)
-  expectReason "a charge of half" halvedProof "ceiling soundCharge ="
+  expectReason "a charge of half" halvedProof "drawCap soundCaps ="
   -- A field of one element or more is not a field of the source's order or more: the
   -- comparison of the ceiling is not available where the claim needs it.
   -- The witness of the text is of the hypothesis that was stated, so it is not a witness here.
@@ -298,7 +305,7 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
   if ok then throw (IO.userError "Lean accepted that the standard model covers the package")
   unless output.contains "StandardModel.covers stored = true" && output.contains "is false" do
     throw (IO.userError s!"the coverage control was refused for another reason\n{output}")
-  IO.println (s!"Freivalds<2> is judged within the charge of its goal (1/{order}), on the matrices on " ++
+  IO.println (s!"Freivalds<2> is judged within the table of caps of its goal (the draw at 1/{order}), on the matrices on " ++
     "which the admitted relation returns false, over every field of at least that order; " ++
     "5 of 5 controls refused, each at its line.")
 
