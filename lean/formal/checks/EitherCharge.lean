@@ -45,8 +45,8 @@ draw of a block is where a walk that computed a block as one instruction was stu
 is in this check.
 
 Every module that the check accepts is also read outside the file (`startModule`): its object
-is replayed by the kernel and its published theorems are compared with the module that the
-generator writes without the text. One control is of that reading: a text that turns the
+is replayed by the kernel on the module of its statements, which was compiled with no text, and
+its published theorems are of the propositions of that module. One control is of that reading: a text that turns the
 kernel's check off and proves a false bound, on a source whose charges are too low. Lean
 accepts it, with the allowed axioms for every theorem, and the reading outside refuses it at
 the false equation.
@@ -129,9 +129,7 @@ def steppedText : String :=
   "    (stepped_relation _ false)\n\nend\n"
 
 /-- A text that turns the kernel's check off and proves the judgment from a false equation.
-The option is spelled so that the generator's search for it does not find it. Lean accepts the
-module and reports the allowed axioms for every theorem; the kernel, asked outside the file,
-refuses the equation. -/
+Lean accepts the module; the kernel, asked outside the file, refuses the equation. -/
 def uncheckedText : String :=
   "noncomputable section\n\n" ++
   "theorem either_relation {F G : Type} (D : StandardModel.Data F G) [DecidableEq F]\n" ++
@@ -139,7 +137,7 @@ def uncheckedText : String :=
   "    functionResult (t := .bool)\n" ++
   "      (fnMeaning (StandardModel.model D) installed eitherMember (.cons claim .nil)) =\n" ++
   "        some claim := by\n  kernel_rfl\n\n" ++
-  "set_option «debug».skipKernelTC true in\n" ++
+  "set_option debug.skipKernelTC true in\n" ++
   "theorem either_judged : eitherJudged := by\n" ++
   "  claim_intro\n" ++
   "  have h : (0 : Nat) = 1 := by decide +kernel\n" ++
@@ -203,8 +201,8 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
 
   let _ ← check work "Either" written { text := template, theorems := ofText }
     [exchangedControl]
-  let (ok, output) ← finishLean steppedProof
-  acceptedOutput "Steps" ok output steppedModule.theorems allowed
+  -- the task ends when the two modules are accepted, the proof module outside the file too
+  let _ ← finishLean steppedProof
   refusedOutside work "the kernel's check turned off by the text" "Unchecked" unchecked
     ["the kernel refuses a declaration of the candidate on replay", "Unchecked.either_judged"]
   IO.println ("Either is judged within the table of caps of its goal (the draws of its two arms " ++

@@ -183,7 +183,7 @@ the other behaviour: the failed theorem is unknown, and what uses it rests on `s
 
 **The module is elaborated in a sandbox.** A module of a check can hold an author's text, and a
 text is code that runs while Lean elaborates it: unconfined, one line of it could rewrite a
-file that the check reads afterwards (the program that reads a module's object, a reference,
+file that the check reads afterwards (the program that reads a module's object, the statements,
 another module of the check). So Lean runs in the sandbox of `confined`, in which it can write
 the folder of the module and nothing else. The folder has to be the module's own; what Lean
 and Lake write for the module (an object, Lake's temporary file) goes there. -/
@@ -195,6 +195,19 @@ def runLakeLean (path : System.FilePath) (options : Array String := #[]) : IO (B
     | throw (IO.userError s!"no module to elaborate at {path}")
   let out ← confined folder
     (#["lake", "-q", "lean", (folder / file).toString, "--", "-DElab.async=false"] ++ options)
+  return (out.exitCode == 0, out.stdout ++ out.stderr)
+
+/-- Lean on one module of a pair (`Written.Module`), compiled to an object, in the sandbox of
+`confined`. The module is not one of the workspace, and the proof module imports an object that
+the check compiled, so Lean is given a setup that names the object of every import (`--setup`)
+and `lake lean` is not asked. The module can write its own folder, where its object goes, and
+nothing else: the setup and the object of the statements stand outside it. -/
+def runSetupLean (setup source object : System.FilePath) : IO (Bool × String) := do
+  let some folder := source.parent
+    | throw (IO.userError s!"a module to elaborate has no folder of its own: {source}")
+  let folder ← IO.FS.realPath folder
+  let out ← confined folder #["lake", "env", "lean", "--setup", setup.toString,
+    "-DElab.async=false", "-R", folder.toString, "-o", object.toString, source.toString]
   return (out.exitCode == 0, out.stdout ++ out.stderr)
 
 /-- The axioms that Lean's output says a theorem rests on, when the output has them. -/
@@ -217,8 +230,12 @@ most. -/
 def acceptedOutput (name : String) (ok : Bool) (output : String) (theorems : List String)
     (allowed : List String := ["propext", "Quot.sound"]) : IO Unit := do
   unless ok do throw (IO.userError s!"{name}: Lean refused the module\n{output}")
-  if output.contains "sorry" then throw (IO.userError s!"{name}: the module uses sorry")
-  if output.contains "PANIC" then throw (IO.userError s!"{name}: Lean panicked on the module\n{output}")
+  -- Lean's own words for the two, and not a search for `sorry`: a name of a source or of a
+  -- text may contain it, and what Lean prints of such a name is no placeholder
+  if output.contains "declaration uses `sorry`" then
+    throw (IO.userError s!"{name}: the module uses sorry")
+  if output.contains "PANIC at " then
+    throw (IO.userError s!"{name}: Lean panicked on the module\n{output}")
   for theorem_ in theorems do
     unless axiomReports s!"{name}.{theorem_}" output ≤ 1 do
       throw (IO.userError s!"{name}: the axioms of {theorem_} are reported more than once")
@@ -265,11 +282,10 @@ def startLakeLean (work : System.FilePath) (name text : String) :
 def finishLean (task : Task (Except IO.Error (Bool × String))) : IO (Bool × String) :=
   IO.ofExcept task.get
 
-/-- A control: Lean refuses the module, and of `theorems` those that are left unproved, itself
-or by what they use, are the expected ones. -/
-def expectUnproved (title name : String) (theorems : List String)
-    (task : Task (Except IO.Error (Bool × String))) (expected : List String) : IO Unit := do
-  let (ok, output) ← finishLean task
+/-- A control: Lean refused the module, and of `theorems` those that are left unproved, itself
+or by what they use, are the expected ones. `name` is the name space of the theorems. -/
+def expectUnprovedIn (title name : String) (theorems : List String)
+    (ok : Bool) (output : String) (expected : List String) : IO Unit := do
   if ok then throw (IO.userError s!"{title}: Lean accepted a control that must be refused")
   for theorem_ in theorems do
     unless axiomReports s!"{name}.{theorem_}" output ≤ 1 do
@@ -278,6 +294,12 @@ def expectUnproved (title name : String) (theorems : List String)
     ((axiomsOf s!"{name}.{theorem_}" output).getD ["sorryAx"]).contains "sorryAx"
   unless unproved.all expected.contains && expected.all unproved.contains do
     throw (IO.userError s!"{title}: unproved are {unproved}, expected {expected}\n{output}")
+
+/-- `expectUnprovedIn`, of a module that Lean is reading as a task. -/
+def expectUnproved (title name : String) (theorems : List String)
+    (task : Task (Except IO.Error (Bool × String))) (expected : List String) : IO Unit := do
+  let (ok, output) ← finishLean task
+  expectUnprovedIn title name theorems ok output expected
 
 /-- A text with its one occurrence of `before` replaced. A control alters a text at a place; an
 alteration that no longer finds its place is an error, and not a control that alters nothing. -/
@@ -288,15 +310,18 @@ def replaceOnce (text before after : String) : IO String := do
 
 /-- A control is refused at the places that are named and at no other: Lean's output has as many
 errors as there are places, and the text of each. -/
-def expectPlaces (title : String) (task : Task (Except IO.Error (Bool × String)))
-    (places : List String) : IO Unit := do
-  let (_, output) ← finishLean task
+def expectPlacesIn (title output : String) (places : List String) : IO Unit := do
   let errors := (output.splitOn "error:").length - 1
   unless errors == places.length do
     throw (IO.userError s!"{title}: refused at {errors} places, not at {places.length}\n{output}")
   for place in places do
     unless output.contains place do
       throw (IO.userError s!"{title}: not refused at `{place}`\n{output}")
+
+/-- `expectPlacesIn`, of a module that Lean is reading as a task. -/
+def expectPlaces (title : String) (task : Task (Except IO.Error (Bool × String)))
+    (places : List String) : IO Unit := do
+  expectPlacesIn title (← finishLean task).2 places
 
 /-- Lean accepts the module, and each of its theorems rests on the allowed axioms at most. -/
 def expectAccepted (name : String) (path : System.FilePath) (theorems : List String)

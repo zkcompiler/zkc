@@ -5,35 +5,45 @@ import Lean.Replay
 The check of a generated proof module outside the file.
 
 A check of a subject runs Lean on a module that contains an author's text, and a text is
-arbitrary Lean: it can turn off the kernel's check of its declarations, and Lean then accepts a
-false theorem and reports no axiom for it. This program does not read what Lean printed. It
-reads two objects that Lean compiled: the proof module (the candidate), and the module that the
-generator writes without the text (the reference: the package and the propositions of the
-goals, under the imports that the generator's statements need and none that a text asked for).
-Then:
+arbitrary Lean: it can turn off the kernel's check of its declarations, or write into the
+kernel's environment, and Lean then accepts a false theorem and reports no axiom for it. This
+program does not read what Lean printed. It reads the object that Lean compiled from the proof
+module (the candidate). The propositions that the candidate has to prove are not in it: they
+are declarations of the module of the statements, which the generator wrote with no text, which
+the check compiled before the proof module, and which the candidate imports. Then:
 
-- the kernel **replays** the declarations of the candidate on the imports, so a declaration
-  that the file's elaboration left unchecked is checked here, and refused if it does not hold.
-  Lean's replay leaves out what the kernel never checks: a declaration marked `unsafe`, and the
-  compiled body of a `partial` definition. Those are code; no theorem can use them, and the
-  constant that a `partial` definition gives to proofs is replayed;
-- each published theorem is read from the result of that replay, and is of its proposition
-  under its full name, with no parameter of a universe;
-- each such proposition, and every declaration of the module that it uses, is in the replayed
-  candidate **the declaration that the reference has**: the text cannot have given the
-  proposition, or a definition under it, another meaning;
-- the axioms of each published theorem are read from the replayed proofs, and are among the
-  allowed ones.
+- the candidate imports the module of the statements, and declares no name that an import has:
+  a text cannot put another declaration under a name of the statements or of the library;
+- the kernel **replays** the declarations of the candidate on its imports, so a declaration that
+  the file's elaboration left unchecked is checked here, against the imports as they were
+  compiled, and refused if it does not hold. Lean's replay leaves out what the kernel never
+  checks: a declaration marked `unsafe`, and the compiled body of a `partial` definition. Those
+  are code; no theorem can use them, and the constant that a `partial` definition gives to
+  proofs is replayed;
+- each published theorem is read from the result of that replay: it is a theorem of the
+  candidate, with no parameter of a universe, whose stored type is the constant of its
+  proposition, and the proposition is a closed proposition that **the module of the statements
+  declares** (the module that owns the name among the imports). Every pair that fails is named;
+- the axioms of each published theorem, and then of every declaration of the candidate that
+  the kernel checks, are read from the replayed proofs, and are among the allowed ones. Code
+  that the replay leaves out (an `unsafe` definition, the compiled body of a `partial` one) is
+  not walked: no theorem can use it, and a text may have it.
 
-The imports are trusted: they are loaded as compiled, through the artifacts that Lake names for
-the candidate's header, and are not replayed. The candidate imports what the reference imports,
-and may import more (what a text asked for); it must declare no name that an import has. A
-proposition that an import of the text made mean something else is then not the reference's
-declaration, and is refused.
+The imports are trusted: they are loaded as compiled, through the artifacts that the setup
+names, and are not replayed. The setup is the one that the proof module was compiled with: what
+Lake names for the imports of the generator and of the text, and for the name of the module of
+the statements the object that the check compiled. The check writes it, and the manifest, where
+a text cannot write.
 
-Arguments: the setup of the candidate as Lake prints it (`lake setup-file`), the object of the
-reference, the object of the candidate, the allowed axioms separated by commas, and then each
-published theorem with its proposition as `theorem=proposition`.
+- each theorem that the check lists for the proof module (those of the text, and what a check
+  writes after the closing theorems) is a theorem of the candidate after the replay. A text can
+  make a later command of the module elaborate nothing; the theorem that the command would have
+  stated is then missing from the object, and Lean says nothing.
+
+Arguments: the setup of the proof module, the manifest, and the object of the proof module. The
+manifest is a JSON object: `statements`, the name of the module of the statements; `allowed`,
+the allowed axioms; `pairs`, each published theorem with its proposition; `theorems`, the
+theorems that the proof module has to have. A name is the list of its components.
 -/
 
 open Lean
@@ -65,38 +75,7 @@ def dependencies (ci : ConstantInfo) : List Name :=
     v.rules.foldl (init := used) fun acc r => r.ctor :: r.rhs.getUsedConstantsAsSet.toList ++ acc
   | _ => used
 
-/-- Each of `roots`, and every declaration of the reference that it uses, is in the replayed
-candidate the declaration that the reference has. A name that the reference does not declare is
-one of the imports, which both modules share. -/
-partial def sameAsReference (reference : Declarations) (base checked : Kernel.Environment)
-    (roots : List Name) (seen : NameSet := {}) : IO Unit := do
-  let n :: rest := roots | return
-  if seen.contains n then return ← sameAsReference reference base checked rest seen
-  let seen := seen.insert n
-  let some expected := reference[n]? | do
-    unless (base.find? n).isSome do
-      throw <| IO.userError s!"the reference uses a name that nothing declares: {n}"
-    return ← sameAsReference reference base checked rest seen
-  let some actual := checked.find? n
-    | throw <| IO.userError s!"the candidate does not declare `{n}`, which the reference does"
-  unless actual == expected do
-    let differs :=
-      if actual.type != expected.type then "its type differs"
-      else if actual.levelParams != expected.levelParams then "its universe parameters differ"
-      else match actual, expected with
-        | .defnInfo a, .defnInfo e => if a.value != e.value then "its value differs" else "its hints or safety differ"
-        | .thmInfo _, .thmInfo _ => "its proof differs"
-        | .opaqueInfo _, .opaqueInfo _ => "its value differs"
-        | .inductInfo _, .inductInfo _ => "its family, parameters or constructors differ"
-        | .ctorInfo _, .ctorInfo _ => "its place in its type differs"
-        | .recInfo _, .recInfo _ => "its rules differ"
-        | .axiomInfo _, .axiomInfo _ => "its safety differs"
-        | .quotInfo _, .quotInfo _ => "its kind differs"
-        | _, _ => "it is a declaration of another kind"
-    throw <| IO.userError s!"`{n}` is not the declaration that the reference has: {differs}"
-  sameAsReference reference base checked (dependencies expected ++ rest) seen
-
-/-- The axioms that a declaration rests on, read from the replayed declarations. -/
+/-- The axioms that declarations rest on, read from the replayed declarations. -/
 partial def axiomsOf (env : Kernel.Environment) (todo : List Name)
     (seen axioms : NameSet := {}) : IO (Array Name) := do
   let n :: rest := todo | return axioms.toArray.qsort Name.lt
@@ -105,59 +84,105 @@ partial def axiomsOf (env : Kernel.Environment) (todo : List Name)
   let axioms := if ci matches .axiomInfo _ then axioms.insert n else axioms
   axiomsOf env (dependencies ci ++ rest) (seen.insert n) axioms
 
-/-- The published theorems are of their propositions, the propositions are the reference's, and
-the theorems rest on the allowed axioms. -/
-def publications (reference candidate : Declarations) (base checked : Kernel.Environment)
-    (allowed : List Name) (pairs : List (Name × Name)) : IO Unit := do
-  if pairs.isEmpty then throw <| IO.userError "no published theorem was named"
-  for (theorem_, proposition) in pairs do
-    let some (.defnInfo stated) := reference[proposition]?
-      | throw <| IO.userError s!"the reference does not define the proposition `{proposition}`"
-    unless stated.levelParams.isEmpty && stated.type == mkSort .zero do
-      throw <| IO.userError s!"`{proposition}` of the reference is no closed proposition"
-    unless candidate.contains theorem_ do
-      throw <| IO.userError s!"the candidate does not declare the theorem `{theorem_}`"
-    let some (.thmInfo proved) := checked.find? theorem_
-      | throw <| IO.userError s!"`{theorem_}` is no theorem after the replay"
-    unless proved.levelParams.isEmpty && proved.type == mkConst proposition do
-      throw <| IO.userError s!"`{theorem_}` is not of the proposition `{proposition}`"
-  sameAsReference reference base checked (pairs.map (·.2))
+/-- What a check asks of a proof module. -/
+structure Manifest where
+  /-- The name of the module of the statements. -/
+  statements : Name
+  /-- The axioms beyond which nothing of the proof module may rest. -/
+  allowed : List Name
+  /-- Each published theorem with its proposition. -/
+  pairs : List (Name × Name)
+  /-- The theorems that the proof module has to have, the published ones among them or not. -/
+  theorems : List Name
+
+/-- A name from the list of its components. -/
+def nameOf (json : Json) : Except String Name := do
+  (← json.getArr?).foldlM (fun name part => return .str name (← part.getStr?)) .anonymous
+
+def Manifest.read (path : System.FilePath) : IO Manifest := do
+  let json ← IO.ofExcept (Json.parse (← IO.FS.readFile path))
+  IO.ofExcept do
+    let statements ← nameOf (← json.getObjVal? "statements")
+    let allowed ← (← (← json.getObjVal? "allowed").getArr?).toList.mapM nameOf
+    let pairs ← (← (← json.getObjVal? "pairs").getArr?).toList.mapM fun pair => do
+      let #[theorem_, proposition] ← pair.getArr?
+        | throw "a pair of the manifest is a theorem and its proposition"
+      return (← nameOf theorem_, ← nameOf proposition)
+    let theorems ← (← (← json.getObjVal? "theorems").getArr?).toList.mapM nameOf
+    return { statements, allowed, pairs, theorems }
+
+/-- Why a published theorem is not of its proposition, where it is not: the proposition is a
+closed proposition that the module of the statements declares, and the theorem is a theorem of
+the candidate whose stored type, after the replay, is the constant of the proposition. -/
+def unpublished (manifest : Manifest) (candidate : Declarations) (imports : Environment)
+    (checked : Kernel.Environment) (theorem_ proposition : Name) : Option String :=
+  let owner := (imports.getModuleIdxFor? proposition).bind (imports.header.moduleNames[·.toNat]?)
+  if owner != some manifest.statements then
+    some s!"`{proposition}` is not declared by `{manifest.statements}`"
+  else match imports.toKernelEnv.find? proposition with
+    | some (.defnInfo stated) =>
+      if !(stated.levelParams.isEmpty && stated.type == mkSort .zero) then
+        some s!"`{proposition}` is no closed proposition"
+      else if !candidate.contains theorem_ then
+        some s!"the candidate does not declare the theorem `{theorem_}`"
+      else match checked.find? theorem_ with
+        | some (.thmInfo proved) =>
+          if proved.levelParams.isEmpty && proved.type == mkConst proposition then none
+          else some s!"`{theorem_}` is not of the proposition `{proposition}`"
+        | _ => some s!"`{theorem_}` is no theorem after the replay"
+    | _ => some s!"`{proposition}` is no definition of `{manifest.statements}`"
+
+/-- The published theorems are of their propositions, which the module of the statements
+declares, and the theorems, with every declaration of the candidate, rest on the allowed
+axioms. -/
+def publications (manifest : Manifest) (candidate : Declarations) (imports : Environment)
+    (checked : Kernel.Environment) : IO Unit := do
+  if manifest.pairs.isEmpty then throw <| IO.userError "no published theorem was named"
+  let failures := (manifest.pairs.filterMap fun (theorem_, proposition) =>
+    unpublished manifest candidate imports checked theorem_ proposition) ++
+    manifest.theorems.filterMap fun theorem_ =>
+      if candidate.contains theorem_ && (checked.find? theorem_ matches some (.thmInfo _)) then none
+      else some s!"the candidate does not have the theorem `{theorem_}`, which the check lists"
+  unless failures.isEmpty do throw <| IO.userError ("\n".intercalate failures)
+  let base := imports.toKernelEnv
   let within (axioms : Array Name) : Bool :=
-    axioms.all fun a => allowed.contains a && (base.find? a matches some (.axiomInfo _))
+    axioms.all fun a => manifest.allowed.contains a && (base.find? a matches some (.axiomInfo _))
   -- one walk for all the published theorems, which share most of what they use; where it
   -- finds an axiom beyond the allowed ones, each theorem is walked to say which rests on it
-  let axioms ← axiomsOf checked (pairs.map (·.1))
+  let axioms ← axiomsOf checked (manifest.pairs.map (·.1))
   unless within axioms do
-    for (theorem_, _) in pairs do
+    for (theorem_, _) in manifest.pairs do
       let own ← axiomsOf checked [theorem_]
       unless within own do
-        throw <| IO.userError s!"`{theorem_}` rests on {own}, beyond {allowed}"
-    throw <| IO.userError s!"the published theorems rest on {axioms}, beyond {allowed}"
-  for (theorem_, proposition) in pairs do
+        throw <| IO.userError s!"`{theorem_}` rests on {own}, beyond {manifest.allowed}"
+    throw <| IO.userError s!"the published theorems rest on {axioms}, beyond {manifest.allowed}"
+  -- and nothing else that the candidate declares rests on another axiom: every declaration
+  -- of it that the replay checked (the replay leaves out `unsafe` and `partial` ones)
+  let whole ← axiomsOf checked
+    (candidate.toList.filterMap fun (n, c) => if c.isUnsafe || c.isPartial then none else some n)
+  unless within whole do
+    throw <| IO.userError s!"the candidate rests on {whole}, beyond {manifest.allowed}"
+  for (theorem_, proposition) in manifest.pairs do
     IO.println s!"replayed {theorem_} : {proposition}"
-  IO.println s!"axioms of the published theorems: {axioms}"
+  IO.println s!"axioms of the candidate: {whole}"
 
 def run (args : List String) : IO Unit := do
-  let setupPath :: referencePath :: candidatePath :: allowed :: pairs := args
-    | throw <| IO.userError "expected: the candidate's setup, reference object, candidate object, allowed axioms, theorem=proposition …"
-  let pairs ← pairs.mapM fun pair => match pair.splitOn "=" with
-    | [theorem_, proposition] => pure (theorem_.toName, proposition.toName)
-    | _ => throw <| IO.userError s!"not `theorem=proposition`: {pair}"
-  let allowed := (allowed.splitOn ",").filter (· ≠ "") |>.map String.toName
+  let [setupPath, manifestPath, candidatePath] := args
+    | throw <| IO.userError "expected: the setup of the proof module, the manifest, the object of the proof module"
+  let manifest ← Manifest.read manifestPath
   let setup ← ModuleSetup.load setupPath
   initSearchPath (← findSysroot)
-  let (referenceData, _) ← readModuleData referencePath
+  unless (setup.importArts.find? manifest.statements).isSome do
+    throw <| IO.userError s!"the setup names no object for `{manifest.statements}`, the module of the statements"
   let (candidateData, _) ← readModuleData candidatePath
-  let reference ← declarations referenceData
   let candidate ← declarations candidateData
-  for needed in referenceData.imports do
-    unless candidateData.imports.contains needed do
-      throw <| IO.userError s!"the candidate does not import `{needed.module}`, which the reference imports"
+  unless candidateData.imports.any (·.module == manifest.statements) do
+    throw <| IO.userError s!"the candidate does not import `{manifest.statements}`, the module of the statements"
   -- the candidate's imports, as compiled: both parts of the `Zkc` namespace through Lake's
-  -- artifacts
+  -- artifacts, and the module of the statements as the check compiled it
   let (_, state) ← importModulesCore candidateData.imports (arts := setup.importArts) |>.run
-  let base :=
-    (← finalizeImport state candidateData.imports {} 0 false false (isModule := true)).toKernelEnv
+  let imports ← finalizeImport state candidateData.imports {} 0 false false (isModule := true)
+  let base := imports.toKernelEnv
   for (n, _) in candidate do
     if (base.find? n).isSome then
       throw <| IO.userError s!"the candidate declares `{n}`, which an import has"
@@ -167,7 +192,7 @@ def run (args : List String) : IO Unit := do
     try base.replay candidate
     catch refusal =>
       throw <| IO.userError s!"the kernel refuses a declaration of the candidate on replay\n{refusal}"
-  publications reference candidate base checked allowed pairs
+  publications manifest candidate imports checked
 
 end Zkc.Tools.Formal.VerifyPublication
 

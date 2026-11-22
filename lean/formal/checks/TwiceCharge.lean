@@ -570,10 +570,7 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
   let foreignText ← replaceOnce template "  walk_law same_law D one first\n"
     "  walk_law Side.same_law D one first\n"
   let foreignModule ← written.module "Foreign" { text := foreignText, theorems := ofText "twice" }
-  let [_, foreignBody] := foreignModule.text.splitOn "namespace Foreign\n"
-    | throw (IO.userError "the module of `Twice` does not open its name space once")
-  let foreign ← startLakeLean work "ForeignLaw"
-    (sideModule.text ++ "\nnamespace Foreign\n" ++ foreignBody)
+  let foreign ← startLakeLean work "ForeignLaw" (asOne [sideModule, foreignModule])
 
   -- The nested root: one application in the root, two in the protocol that it applies.
   let nested ← read nestedSource (reading "nested")
@@ -581,14 +578,16 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
   unless nestedGoal.total == 1 / 2 && shape nestedGoal.caps ==
       [([(1, 4, 1)], []), ([], [(0, 1), (0, 1)]), ([], [(1, 1)])] do
     throw (IO.userError s!"the table of the nested root is not one application of two: {repr nestedGoal.caps}")
-  let nestedModule ← nested.module "Nested"
+  -- A control of it, the same with the callee's number for the peer: refused where the
+  -- statement is concluded.
+  let nestedPeer : Control :=
+    { title := "the callee's number for the peer of an effect under a renamed judgment",
+      name := "NestedPeer", subject := nested,
+      text := template.replace "twice" "nested" ++ nestedTracedText 0,
+      unproved := ["nested_first_effect"], places := ["Application type mismatch"], only := true }
+  let nestedCheck ← start work "Nested" nested
     { text := template.replace "twice" "nested" ++ nestedTracedText 1,
-      theorems := ofText "nested" ++ ["nested_first_effect"] }
-  let nestedProof ← startModule work "Nested" nestedModule
-  -- The same with the callee's number for the peer: refused where the statement is concluded.
-  let nestedPeer ← nested.module "NestedPeer"
-    { text := template.replace "twice" "nested" ++ nestedTracedText 0, theorems := ofText "nested" }
-  let nestedPeerRun ← startLakeLean work "NestedPeer" nestedPeer.text
+      theorems := ofText "nested" ++ ["nested_first_effect"] } [nestedPeer]
 
   -- The looped root: one application in the body of a loop of three iterations.
   let looped ← read loopedSource (reading "looped" #["claim", "guess"])
@@ -605,7 +604,7 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
   unless asideGoal.total == 1 / 4 do
     throw (IO.userError s!"the table of the root beside a protocol is not one draw: {repr asideGoal.caps}")
   let asideModule ← aside.module "Aside" { text := asideText, theorems := ofText "aside" }
-  unless (asideModule.text.splitOn "(Member.tail Member.head)").length > 1 do
+  unless (asideModule.statements.splitOn "(Member.tail Member.head)").length > 1 do
     throw (IO.userError "the protocol that the root applies first is the last before the root")
   let asideProof ← startModule work "Aside" asideModule
   -- The same module after the module of another program that has the same function `same`
@@ -616,10 +615,7 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
     { text := template ++ converseText,
       theorems := ofText "twice" ++
         ["twice_pays_first", "twice_returns", "twice_first_effect", "twice_recorded"] }
-  let [_, asideBody] := asideModule.text.splitOn "namespace Aside\n"
-    | throw (IO.userError "the module of `Aside` does not open its name space once")
-  let twoPrograms ← startLakeLean work "TwoPrograms"
-    (earlier.text ++ "\nnamespace Aside\n" ++ asideBody)
+  let twoPrograms ← startLakeLean work "TwoPrograms" (asOne [earlier, asideModule])
 
   let _ ← check work "Twice" written
     { text := template ++ converseText,
@@ -629,17 +625,13 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
   let (ok, output) ← finishLean foreign
   refusedOutput "a call taken by the law of a function of another program" ok output
     ["walk_law: the law is about a function that this call does not read"] (only := true)
-  let (ok, output) ← finishLean nestedProof
-  acceptedOutput "Nested" ok output nestedModule.theorems allowed
-  let (ok, output) ← finishLean nestedPeerRun
-  refusedOutput "the callee's number for the peer of an effect under a renamed judgment" ok output
-    ["Application type mismatch"] (only := true)
-  let (ok, output) ← finishLean loopedProof
-  acceptedOutput "Looped" ok output loopedModule.theorems allowed
-  let (ok, output) ← finishLean asideProof
-  acceptedOutput "Aside" ok output asideModule.theorems allowed
+  -- each of these tasks ends when its two modules are accepted, the proof module outside the
+  -- file as well
+  let _ ← nestedCheck.finish
+  let _ ← finishLean loopedProof
+  let _ ← finishLean asideProof
   let (ok, output) ← finishLean twoPrograms
-  acceptedOutput "Aside" ok output asideModule.theorems allowed
+  acceptedOutput "Aside" ok output (asideModule.stated ++ asideModule.proved) allowed
 
   -- The root whose callees fork, after the modules above (each is a run of Lean of its own):
   -- the draw of `Gate`, the draws of both arms of `Pick`, and one application of each.
