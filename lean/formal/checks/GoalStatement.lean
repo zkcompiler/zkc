@@ -4,6 +4,7 @@ import Zkc.Frontend.Written.Package
 import Zkc.Frontend.Written.Statement
 import Zkc.Tests.Frontend.SyntaxHarness
 import Zkc.Tests.Frontend.PrintedPackageSupport
+import Zkc.Tests.Frontend.WrittenSubject
 
 /-!
 The statement of a written soundness goal is about the goal of the source.
@@ -526,7 +527,7 @@ def run (work : System.FilePath) : IO Unit := do
   let aboutOther := decided ("spec note: bool, " ++ both) "other" "proves @V IsSet(other)"
   let module ← proofModule "Operands" fronted "flag"
   let theorems := module.theorems
-  let proof ← startLakeLean work "Operands" module.text
+  let proof ← Zkc.Tests.Frontend.WrittenSubject.startModule work "Operands" module
   let control ← startLakeLean work "OperandsControl"
     (← proofModule "OperandsControl" aboutOther "other").text
   let assumedProof ← startLakeLean work "AssumedControl"

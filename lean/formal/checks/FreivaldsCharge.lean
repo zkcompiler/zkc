@@ -82,13 +82,15 @@ written anew under it. Every statement of the module is a proposition defined be
 so the claim is not concluded from that proof: Lean refuses the generated conclusion at one
 place, as a mismatch of types.
 
-The check trusts the text in two ways that it does not test: that it prints nothing that reads
-as Lean's report of the axioms of a theorem (a report is read only where there is exactly
-one), and that it declares no syntax that changes what the closing theorems mean. It refuses a
-text that sets an option for debugging, one of which has the kernel skip a declaration. That
-the theorems after the text state their propositions, and not those under a hypothesis that
-the text declared for its scope, is read from what Lean stored (`published`); the check of
-`Guess<3>` has the control.
+The check does not rest on Lean's acceptance of the proof module: the module is compiled to an
+object, in a sandbox, and read outside the file, where the kernel replays its declarations and
+the published theorems are compared with the module that the generator writes without the text
+(`WrittenSubject.startModule`; `checks/OutsideReading.lean` has the controls of that reading,
+and the check of `Either` one on a real subject). Lean's report of the axioms is still read
+for the theorems of the text, where there is exactly one report of each. That the theorems
+after the text state their propositions, and not those under a hypothesis that the text
+declared for its scope, is also read inside the file from what Lean stored (`published`); the
+check of `Guess<3>` has the control.
 -/
 
 open Zkc.Core Zkc.Frontend Zkc.Frontend.Written

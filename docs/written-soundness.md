@@ -173,6 +173,8 @@ A control is a module that Lean must refuse: the subject with its source or its 
   only := true }
 ```
 
+A check does not rest on Lean's acceptance of the proof module. Every module of a check is elaborated in a sandbox (`bwrap`, which the host must have: the module can write only its own folder). `check` and `startModule` compile each accepted module to an object there and have it read outside the file: the kernel replays its declarations, and its published theorems are compared with the module that the generator writes without the text and without the text's imports (`Module.reference`). A text that turns the kernel's check off is accepted by Lean and refused there; `refusedOutside` states such a control (the check of `Either` has one). A module that a check starts itself goes through `startModule`, not `startLakeLean`, which is for controls and for modules that publish nothing.
+
 A control of a charge is a source: no caller gives a statement its table. A text is altered with `replaceOnce`, which fails when the place that it alters is gone. Where two proofs of one module meet the same refusal, `occurrences` says how often its text occurs, since a text twice among the places says only that it occurs. A control is worth what it would catch: run the check once with the control given the unaltered subject, and see that the check fails ("Lean accepted a control that must be refused").
 
 ## What a text cannot do yet
