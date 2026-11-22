@@ -202,6 +202,14 @@ the module states them. -/
 structure Module where
   text : String
   theorems : List String
+  /-- The module without the text of the proofs and without anything that is proved: the same
+  imports, the package, the facts, the transfers and the propositions of the goals. It is what
+  the generator states, written with no word of an author, and the check outside the file
+  compares the published theorems of `text` with the propositions that this module defines. A
+  module that publishes nothing has none. -/
+  reference : String := ""
+  /-- The published theorems of `text`, each with its proposition, under their full names. -/
+  published : List (String × String) := []
 
 /-- A table of caps as a term. -/
 def capsTerm (table : CapTable) : String :=
@@ -881,6 +889,17 @@ def imports (model : ModelText) (walks : Bool) : List String :=
 def header (modules : List String) : String :=
   String.join (modules.map (s!"import {·}\n")) ++ "\nopen Zkc.Core\n"
 
+/-- The published theorems of the goals, each with the proposition that it states, under their
+full names in the module `name`: for a goal, `<goal>_installed : <goal>Claim`,
+`<goal>_sound : <goal>Goal`, `<goal>_result : <goal>Result`, `<goal>_met : <goal>Witnessed`.
+The names are written here and nowhere else: the check inside a module (`publications`) and the
+check outside it (`Zkc/Tools/Formal/VerifyPublication.lean`) are both given this list. -/
+def publicationPairs (s : Statements) (name : String) : List (String × String) :=
+  s.claims.goals.flatMap fun goal =>
+    [("_installed", "Claim"), ("_sound", "Goal"), ("_result", "Result"), ("_met", "Witnessed")].map
+      fun (theorem_, proposition) =>
+        (s!"{name}.{goal.goal}{theorem_}", s!"{name}.{goal.goal}{proposition}")
+
 /-- For each goal, the check that the theorems written after the text of the proofs state
 exactly the propositions that were defined before it (`published`,
 `Zkc/Formal/Written/Published.lean`). Those theorems are elaborated in the scope that the text
@@ -888,11 +907,8 @@ leaves: a variable that the text declared there is a hypothesis of each of them 
 it, and then the theorem is not of its proposition, though Lean accepts it and reports no axiom
 for it. The check reads the type that Lean stored for the theorem, under its full name. -/
 def publications (s : Statements) (name : String) : String :=
-  String.join (s.claims.goals.map fun goal =>
-    let stated (theorem_ proposition : String) :=
-      s!"published {name}.{goal.goal}{theorem_} : {name}.{goal.goal}{proposition}\n"
-    stated "_installed" "Claim" ++ stated "_sound" "Goal" ++ stated "_result" "Result" ++
-      stated "_met" "Witnessed")
+  String.join ((s.publicationPairs name).map fun (theorem_, proposition) =>
+    s!"published {theorem_} : {proposition}\n")
 
 /-- The requests for the axioms of theorems, and the end of the module's namespace. -/
 def footer (name : String) (theorems : List String) : String :=
@@ -913,13 +929,18 @@ own description (`model`).
 What the generator states of a goal stands before the text, so that nothing which the text
 declares takes part in it; what it proves after the text is checked to be of those statements.
 A text that sets an option for debugging is refused before Lean reads it: one of those options
-has the kernel not check a declaration, and a check reads Lean's acceptance as the kernel's.
-That guards against an accident. Three things are still trusted of a text, and are no defence
-against one written to deceive a check: that it prints nothing that reads as Lean's report of
-axioms a second time; that it declares no syntax that changes what a later line means; and,
-for a statement that a check itself writes after the text (a consumer, with its numerals and
-notations), that the text declares no instance or notation under which that statement means
-something else. -/
+has the kernel not check a declaration. That guards against an accident, and it is a search for
+a string: a text can spell the option otherwise, or set it by a command of its own, and Lean
+then accepts a false theorem and reports no axiom for it. So Lean's acceptance of this module
+is not what a check of a subject rests on. The check compiles the module to an object and has
+it read outside the file (`Zkc/Tools/Formal/VerifyPublication.lean`): the kernel replays every
+declaration of the object on the imports, the published theorems are read from the result of
+that replay, each is of its proposition as a module generated without the text defines it
+(`statementsModule`, with the definitions that the proposition uses), and the axioms are read
+from the replayed proofs. What is trusted is then the toolchain, the imports, this generator
+and that program; of a text, only that it does not write files or run programs while Lean
+elaborates it. A statement that a check itself writes after the text (a consumer, with its
+numerals and notations) is still read in the scope that the text leaves. -/
 def module (s : Statements) (name : String) (proof : ProofText)
     (walks := true) (after : ProofText := {}) (model : ModelText := s.chosenModel) :
     Except String Module := do
@@ -933,13 +954,15 @@ def module (s : Statements) (name : String) (proof : ProofText)
     (if walks then s.entryNames else []) ++ (if fees then s.judgmentNames else []) ++
     s.ceilingNames ++ proof.theorems ++ (if fees then s.conclusionNames else []) ++
     s.closingNames ++ after.theorems
-  let text := header (imports model walks ++ proof.imports ++ after.imports) ++
-    s!"namespace {name}\n" ++ (Written.package s.package).text ++ opens ++ s.facts ++ "\n" ++
+  let opening := header (imports model walks ++ proof.imports ++ after.imports) ++
+    s!"namespace {name}\n" ++ (Written.package s.package).text ++ opens ++ s.facts ++ "\n"
+  let text := opening ++
     coverage model ++ s.counts ++ s.sites ++ (if walks then s.entries else "") ++ s.transfers ++
     claims ++ judgments ++ ceilings ++ proof.text ++ "\n" ++
     (if fees then s.conclusions else "") ++ s.closings ++ after.text ++ s.publications name ++
     footer name theorems
-  return { text, theorems }
+  let reference := opening ++ s.transfers ++ claims ++ s!"end {name}\n"
+  return { text, theorems, reference, published := s.publicationPairs name }
 
 /-- A module with the package of the claims and the statements of the goals, with no proof: the
 facts, the transfers and the propositions. Lean elaborates the statements. -/

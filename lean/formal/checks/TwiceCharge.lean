@@ -298,7 +298,7 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
     throw (IO.userError s!"the table of the nested root is not one application of two: {repr nestedGoal.caps}")
   let nestedModule ← nested.module "Nested"
     { text := template.replace "twice" "nested", theorems := ofText "nested" }
-  let nestedProof ← startLakeLean work "Nested" nestedModule.text
+  let nestedProof ← startModule work "Nested" nestedModule
 
   -- The looped root: one application in the body of a loop of three iterations.
   let looped ← read loopedSource (reading "looped" #["claim", "guess"])
@@ -306,7 +306,7 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
   unless loopedGoal.total == 3 / 4 && shape loopedGoal.caps == [([(1, 4, 1)], []), ([], [(0, 3)])] do
     throw (IO.userError s!"the table of the looped root is not three applications: {repr loopedGoal.caps}")
   let loopedModule ← looped.module "Looped" { text := loopedText, theorems := ofText "looped" }
-  let loopedProof ← startLakeLean work "Looped" loopedModule.text
+  let loopedProof ← startModule work "Looped" loopedModule
 
   -- The root beside a protocol of the prover alone: one application of `Round`, which is the
   -- second protocol before the root, and one in which the verifier takes no part.
@@ -317,7 +317,7 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
   let asideModule ← aside.module "Aside" { text := asideText, theorems := ofText "aside" }
   unless (asideModule.text.splitOn "(Member.tail Member.head)").length > 1 do
     throw (IO.userError "the protocol that the root applies first is the last before the root")
-  let asideProof ← startLakeLean work "Aside" asideModule.text
+  let asideProof ← startModule work "Aside" asideModule
 
   let _ ← check work "Twice" written
     { text := template ++ converseText,

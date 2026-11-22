@@ -118,9 +118,9 @@ concurrently, a theorem whose proof ends in an exception (a timeout) is left as 
 a body: Lean then prints that it depends on no axioms, and that what uses it depends on itself.
 A check reads which theorems are unproved from what Lean prints of their axioms, so it needs
 the other behaviour: the failed theorem is unknown, and what uses it rests on `sorryAx`. -/
-def runLakeLean (path : System.FilePath) : IO (Bool × String) := do
+def runLakeLean (path : System.FilePath) (options : Array String := #[]) : IO (Bool × String) := do
   let out ← IO.Process.output
-    { cmd := "lake", args := #["-q", "lean", path.toString, "--", "-DElab.async=false"] }
+    { cmd := "lake", args := #["-q", "lean", path.toString, "--", "-DElab.async=false"] ++ options }
   return (out.exitCode == 0, out.stdout ++ out.stderr)
 
 /-- The axioms that Lean's output says a theorem rests on, when the output has them. -/

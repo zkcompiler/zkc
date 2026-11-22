@@ -43,6 +43,13 @@ the draw in each). The walk goes into each block as it goes into an arm: the gua
 draw of a block is where a walk that computed a block as one instruction was stuck. Its text
 is in this check.
 
+Every module that the check accepts is also read outside the file (`startModule`): its object
+is replayed by the kernel and its published theorems are compared with the module that the
+generator writes without the text. One control is of that reading: a text that turns the
+kernel's check off and proves a false bound, on a source whose charges are too low. Lean
+accepts it, with the allowed axioms for every theorem, and the reading outside refuses it at
+the false equation.
+
 One control is refused by Lean, at the place that the check names and at no other: the two
 charges exchanged in the source. The program and the budget are what they were; the cap of
 the draw of the second arm is one eighth, and the fee of one quarter that the text pays there
@@ -120,6 +127,27 @@ def steppedText : String :=
   "  stepped_witnessed_of Zkc.Formal.Written.FiniteModel.data false trivial\n" ++
   "    (stepped_relation _ false)\n\nend\n"
 
+/-- A text that turns the kernel's check off and proves the judgment from a false equation.
+The option is spelled so that the generator's search for it does not find it. Lean accepts the
+module and reports the allowed axioms for every theorem; the kernel, asked outside the file,
+refuses the equation. -/
+def uncheckedText : String :=
+  "noncomputable section\n\n" ++
+  "theorem either_relation {F G : Type} (D : StandardModel.Data F G) [DecidableEq F]\n" ++
+  "    [DecidableEq G] (claim : Bool) :\n" ++
+  "    functionResult (t := .bool)\n" ++
+  "      (fnMeaning (StandardModel.model D) installed eitherMember (.cons claim .nil)) =\n" ++
+  "        some claim := by\n  kernel_rfl\n\n" ++
+  "set_option «debug».skipKernelTC true in\n" ++
+  "theorem either_judged : eitherJudged := by\n" ++
+  "  claim_intro\n" ++
+  "  have h : (0 : Nat) = 1 := by decide +kernel\n" ++
+  "  exact absurd h (by decide)\n\n" ++
+  "theorem either_judged_forked : eitherJudged := either_judged\n\n" ++
+  "theorem either_witnessed : eitherWitnessed :=\n" ++
+  "  either_witnessed_of Zkc.Formal.Written.FiniteModel.data false trivial\n" ++
+  "    (either_relation _ false)\n\nend\n"
+
 /-- The theorems of the text of the proofs. -/
 def ofText : List String :=
   ["either_relation", "either_judged", "either_judged_forked", "either_witnessed"]
@@ -159,16 +187,28 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
     throw (IO.userError "the stepped loop has not a draw in each of three blocks")
   let steppedModule ← stepped.module "Steps"
     { text := steppedText, theorems := ["stepped_relation", "stepped_judged", "stepped_witnessed"] }
-  let steppedProof ← startLakeLean work "Steps" steppedModule.text
+  let steppedProof ← startModule work "Steps" steppedModule
+
+  -- The kernel's check turned off by the text, on a source whose charges are too low for the
+  -- protocol (one sixteenth each: the table's total is one eighth, and a false claim is
+  -- accepted with probability one quarter). Lean accepts the module; outside the file the
+  -- kernel refuses the false equation that the judgment was proved from.
+  let low ← read (source "1 / 16" "1 / 16") reading
+  unless (low.goals.map (·.total)) == [1 / 8] do
+    throw (IO.userError "the low charges do not give a total of one eighth")
+  let unchecked ← low.module "Unchecked" { text := uncheckedText, theorems := ofText }
 
   let _ ← check work "Either" written { text := template, theorems := ofText }
     [exchangedControl]
   let (ok, output) ← finishLean steppedProof
   acceptedOutput "Steps" ok output steppedModule.theorems allowed
+  refusedOutside work "the kernel's check turned off by the text" "Unchecked" unchecked
+    "while replaying declaration 'Unchecked.either_judged"
   IO.println ("Either is judged within the table of caps of its goal (the draws of its two arms " ++
     "at 1/8 and 1/4: 3/8), with a guard inside each arm and a guard before the draw; " ++
     "the blocks of a stepped loop are walked; " ++
-    "1 of 1 control refused, at the place that the check names and at no other.")
+    "1 of 1 control refused, at the place that the check names and at no other; a text that " ++
+    "turns the kernel's check off is accepted by Lean and refused outside the file.")
 
 end EitherCharge
 
