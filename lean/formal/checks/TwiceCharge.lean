@@ -60,7 +60,7 @@ other chooses by an input and has a draw and a guard in each arm. The text of th
 the forks: the guard is a hypothesis of the walk, and the choice gives one goal for each arm.
 The table has the draws of both arms, and its total is three quarters.
 
-Four controls are refused by Lean, each at the place that the check names and at no other:
+Five controls are refused by Lean, each at the place that the check names and at no other:
 
 - the charge of the draw halved in the source. The program is what it was; the cap that the
   table gives the draw through the application is one eighth, and the fee of one quarter that
@@ -70,6 +70,11 @@ Four controls are refused by Lean, each at the place that the check names and at
   refused, and nothing else is: the walks take the call by the law;
 - a walk under the judgment that records the effects of a run, of which nothing says that it
   reads no peer of an effect: refused at the application, with the judgment;
+- a call of the callee's function taken by a true law of another function of the same types:
+  refused at that line, since the header of a function has its key and the law is of another
+  type than the call. (A law about a function of the same header in another program is refused
+  by the equation that the kernel checks at that line; a text has one package, and no check
+  gives it such a law.)
 - the comparison of one arm of the forking callee turned. The walk is what it was, and the text
   is refused at the end of that arm.
 -/
@@ -284,6 +289,25 @@ def forkedText : String :=
   "  forked_witnessed_of Zkc.Formal.Written.FiniteModel.data false trivial true trivial\n" ++
   "    (forked_relation _ false)\n\nend\n"
 
+/-- The source of `Twice` with a second function of the same types, `other`, which a protocol of
+the prover alone calls, so that the package has it; the root applies that protocol after the two
+rounds, and the verifier takes no part in it. -/
+def otherSource : String :=
+  let same := "def same(a: index<4>, b: index<4>) -> bool: a == b\n"
+  ((source "1 / 4").replace same (same ++
+    "def other(a: index<4>, b: index<4>) -> bool: a != b\n" ++
+    "protocol Spare roles(P)(x: index<4> @P) -> y: bool @P:\n    return other(x, x)\n")).replace
+    "    b <- Round(second)\n" "    b <- Round(second)\n    k <- Spare(first)\n"
+
+/-- The law of `other`, which is true of it, for a text that takes a call of `same` by it. -/
+def otherLaw : String :=
+  "/-- What `other` computes: a true law of another function of the same types. -/\n" ++
+  "theorem other_law {F G : Type} (D : StandardModel.Data F G) [DecidableEq F] [DecidableEq G]\n" ++
+  "    (a b : ℕ) :\n" ++
+  "    fnMeaning (StandardModel.model D) calleeProgram otherMember (.cons a (.cons b .nil)) =\n" ++
+  "      .done (.cons (!a.beq b) .nil) := by\n" ++
+  "  refine done_of_judged ?_\n  repeat walk_step\n  subst_vars\n  rfl\n\n"
+
 /-- A walk of the verifier of `Twice` under the judgment that records the effects of a run.
 Nothing says that it reads no peer of an effect, and it does read them: the walk does not enter
 the application under it. -/
@@ -409,8 +433,21 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
     { title := "a walk under a judgment that reads the peers", name := "BlindControl",
       subject := written, text := template ++ converseText ++ tracedText, unproved := [],
       places := ["walk: at instruction 0 (apply):\n  walk: the instruction applies a protocol in " ++
-        "which the role plays a role, and nothing says that the judgment reads no peer of an effect"],
+        "which the role plays a role, and nothing says that the judgment reads no peer of an effect " ++
+        "(a theorem with the label `walk_blind`, or a hypothesis `Blind ρ judgment` of the goal): " ++
+        "the application is not entered\n    ProcessJudgment.trace (RSig (StandardModel.model D))"],
       only := true }
+  -- A true law of another function of the same types, used at the first call of `same`: the
+  -- header of a function has its key, so the law is of another type than the call, and the
+  -- text is refused at that line.
+  let other ← read otherSource (reading "twice")
+  let beforeJudged := "/-- **Within the table.**"
+  let otherText ← replaceOnce (← replaceOnce template beforeJudged (otherLaw ++ beforeJudged))
+    "  walk_law same_law D one first\n" "  walk_law other_law D one first\n"
+  let otherControl : Control :=
+    { title := "a call taken by the law of another function", name := "OtherControl",
+      subject := other, text := otherText ++ converseText, unproved := ofWalk,
+      places := ["Type mismatch\n  other_law D one first"], only := true }
 
   -- The nested root: one application in the root, two in the protocol that it applies.
   let nested ← read nestedSource (reading "nested")
@@ -444,7 +481,7 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
   let _ ← check work "Twice" written
     { text := template ++ converseText,
       theorems := ofText "twice" ++ ["twice_pays_first", "twice_returns"] }
-    [halvedControl, turnedControl, tracedControl]
+    [halvedControl, turnedControl, tracedControl, otherControl]
   let (ok, output) ← finishLean nestedProof
   acceptedOutput "Nested" ok output nestedModule.theorems allowed
   let (ok, output) ← finishLean loopedProof
@@ -477,7 +514,7 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
     "that applies it in the body of a loop by an invariant, and a root that applies it and " ++
     "then a protocol of the prover alone, and a root whose callees have a guard after a draw " ++
     "and a choice, with the forks named by the root's text; " ++
-    "4 of 4 controls refused, at the places that the check names and at no other.")
+    "5 of 5 controls refused, at the places that the check names and at no other.")
 
 end TwiceCharge
 
