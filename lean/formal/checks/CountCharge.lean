@@ -194,7 +194,7 @@ def run (corpus template : System.FilePath) (work : System.FilePath) : IO Unit :
   let goalLine := "goal loose = soundness(Checked, spec e = 4)"
   let atTotal ← read (← edit source goalLine (goalLine ++ " <= 3/8"))
   let ceilingProof ← startLakeLean work "CeilingAtTotal"
-    (← IO.ofExcept (atTotal.statements.ceilingModule "CeilingAtTotal")).text
+    (← IO.ofExcept (atTotal.statements.ceilingModule "CeilingAtTotal")).text (text := false)
   let below ← read (← edit source goalLine (goalLine ++ " <= 1/4"))
   match below.statements.ceilings with
   | .ok _ => throw (IO.userError "a goal whose ceiling is below the total of its table was issued a statement")

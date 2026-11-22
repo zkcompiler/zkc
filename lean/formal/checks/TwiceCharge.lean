@@ -649,8 +649,8 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
   let (ok, output) ← finishLean foreign
   refusedOutput "a call taken by the law of a function of another program" ok output
     ["walk_law: the law is about a function that this call does not read"] (only := true)
-  -- each of these tasks ends when its two modules are accepted, the proof module outside the
-  -- file as well
+  -- each of these tasks ends when its two modules are accepted, the proof module by the
+  -- judgment as well
   let _ ← nestedCheck.finish
   let _ ← finishLean loopedProof
   let _ ← finishLean asideProof

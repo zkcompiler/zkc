@@ -203,7 +203,8 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
   let either ← start work "Either" written { text := template, theorems := ofText }
     [exchangedControl]
   let uncheckedRefused ← refusedOutside work "the kernel's check turned off by the text" "Unchecked" unchecked
-    ["Lean default kernel rejected the solution"]
+    -- the checker ended with 1, as on a declaration that it refuses, and was not killed
+    ["Lean default kernel rejected the solution", "Lean default exited with 1"]
   let _ ← either.finish
   -- accepted when its two modules are, the proof module by the judgment too
   let _ ← finishLean steppedProof

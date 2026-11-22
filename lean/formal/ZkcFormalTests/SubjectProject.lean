@@ -30,7 +30,8 @@ temporary folders covered, has no network and no other process, and can write th
 
 What a text can reach is therefore the objects of step 2 and the solution's export, which are
 what the comparator judges. What Lean said of a module in step 2 is read from Lake's log, which
-a text can write into; nothing is accepted on it (`result`).
+a text can write into; no proof module is accepted on it (`result`), and a module of a check
+that holds no text is built in step 1.
 
 A module is added, and a judgment expected, before the first asking; afterwards both are
 errors, since a challenge exported after a text was read would rest on objects that the text
@@ -50,7 +51,7 @@ def formalPackage : IO System.FilePath := do
   return directory
 
 /-- What a module of a project is. The statements and the challenges hold no text and are built
-first; a challenge is read with a theorem without a proof as no error. Every other module (a
+first, as is a module of a check that holds none and is given the kind of the statements; a challenge is read with a theorem without a proof as no error. Every other module (a
 proof module, a control, a module of a check) may hold a text. -/
 inductive Kind where
   | statements
@@ -92,6 +93,7 @@ def lakefile (formal : Option System.FilePath) (modules : Array (Kind × Name)) 
   let library (name options : String) (roots : Array String) : String :=
     if roots.isEmpty then "" else
       s!"\n[[lean_lib]]\nname = {quoted name}\nroots = [{", ".intercalate roots.toList}]\n" ++
+      s!"globs = [{", ".intercalate roots.toList}]\n" ++
       s!"leanOptions = \{{options}}\nmoreLeanArgs = [\"-DElab.async=false\"]\n"
   s!"name = \"subjects\"\nversion = \"0.0.0\"\n" ++
   (match formal with
@@ -99,7 +101,8 @@ def lakefile (formal : Option System.FilePath) (modules : Array (Kind × Name)) 
       s!"packagesDir = {quoted (formal / ".lake" / "packages").toString}\n" ++
       s!"\n[[require]]\nname = \"zkc_formal\"\npath = {quoted formal.toString}\n"
     | none => "") ++
-  -- a module under two roots (`Guess.Challenge` under `Guess`) is of the library declared last
+  -- each library is of its modules alone (`globs`), so that `Guess.Challenge` is not also of
+  -- the library with the root `Guess`
   library "Subjects" "autoImplicit = false, warningAsError = true" (names .module) ++
   library "Stated" "autoImplicit = false, warningAsError = true" (names .statements) ++
   library "Challenges" "autoImplicit = false" (names .challenge)
@@ -316,7 +319,9 @@ def objectOf (project : System.FilePath) (module : Name) : System.FilePath :=
 
 /-- The names that the comparator has exported beside the theorems of a judgment: the
 constants that the kernel knows by name, the allowed axioms, and with `Quot.sound` the
-quotient's own. It compares them on the two sides. -/
+quotient's own. It compares them on the two sides. The list is the comparator's
+(`primitiveTargets` and `builtinTargets` of `Lake/CLI/Check.lean`, which are not public); if
+the two came apart, the comparator would miss a name and refuse. -/
 def exported (expected : Expected) : Array String :=
   (if expected.axioms.contains "Quot.sound" then #["Quot", "Quot.mk", "Quot.lift", "Quot.ind"] else #[]) ++
     expected.theorems ++ expected.axioms ++
@@ -328,11 +333,13 @@ def exported (expected : Expected) : Array String :=
 /-- One side of a judgment exported by the toolchain's `leanexport`, confined and with nothing
 to write: the export is what the exporter printed, written here to `file`. On a failure the
 result is what the exporter said. -/
-def export_ (project : System.FilePath) (modules names : Array String) (file : System.FilePath) :
-    IO (Option String) := do
+def export_ (project : System.FilePath) (modules names : Array String) (file : System.FilePath)
+    (solution := false) : IO (Option String) := do
   -- the exporter by its path in the toolchain: `lake env` puts the project's own programs on the path
   let exporter := ((← findSysroot) / "bin" / "leanexport").toString
-  let out ← lake project false (#["env", exporter] ++ modules ++ #["--"] ++ names)
+  -- a name that a solution lacks is left out, and the comparator says that it is missing
+  let out ← lake project false (#["env", exporter] ++ (if solution then #["--ignore-missing"] else #[]) ++
+    modules ++ #["--"] ++ names)
   if out.exitCode == 0 then
     IO.FS.writeFile file out.stdout
     return none
@@ -369,7 +376,7 @@ def settle (project : System.FilePath) : IO Unit := do
   while !waiting.isEmpty do
     let now := waiting.take 3
     waiting := waiting.drop 3
-    let running ← now.mapM fun judgment => IO.asTask do
+    let running ← now.mapM fun judgment => IO.asTask (prio := .dedicated) do
       match judgment.challenges.find? (!built.contains ·) with
       | some missing =>
         let said := ((parts stated).filter (·.1 == missing)).map (·.2.2)
@@ -408,10 +415,11 @@ def result (project : System.FilePath) (module : Name) : IO (Bool × String) := 
   let built := ((← IO.FS.readFile (project / "stated.built")).splitOn "\n").contains module.toString
   return (!failed && built, output)
 
-/-- What a judgment gave. `refused`: the comparator judged the pair and refuses it, or the
-solution does not have a theorem that the judgment is of. `failed`: there was no judgment (the
+/-- What a judgment gave. `refused`: the comparator ended with a refusal, which it does on a
+pair that it judged and refuses and also on an export that it cannot read or a kernel that did
+not end, so that a control names what the comparator said. `failed`: there was no judgment (the
 challenge was not built or exported, the solution could not be exported, the comparator could
-not start); a failure is an error of the check and never a refusal. -/
+not start); a failure is an error of the check. Only `accepted` accepts. -/
 inductive Verdict where
   | accepted
   | refused
@@ -450,11 +458,8 @@ def judge (project : System.FilePath) (label : String) (paranoid := false) :
   if ← failed.pathExists then
     return ← keep .failed s!"the challenge was not exported: {← IO.FS.readFile failed}"
   let solution := exportOf project label "solution"
-  if let some failure ← export_ project expected.solutions (exported expected) solution then
-    -- the exporter ends so on a name that the solution does not have
-    let missing := expected.theorems.any fun name =>
-      (failure.splitOn s!"Constant {name} not found in environment").length > 1
-    return ← keep (if missing then .refused else .failed) s!"the solution was not exported: {failure}"
+  if let some failure ← export_ project expected.solutions (exported expected) solution (solution := true) then
+    return ← keep .failed s!"the solution was not exported: {failure}"
   let config := project / s!"{label}.comparator.json"
   IO.FS.writeFile config (Json.mkObj [
     ("challenge_module", Json.str (expected.challenges[0]?.getD "")),

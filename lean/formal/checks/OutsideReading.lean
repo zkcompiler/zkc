@@ -54,10 +54,14 @@ def pair (name text : String) (proposition := "mark = mark") : Module where
   textLines := (text.splitOn "\n").length
   published := [(.str (.str .anonymous name) "g_sound", .str (.str .anonymous name) "gGoal")]
 
+/-- What the comparator says where the kernel ended with a refusal: the checker ends with 1 on
+a declaration that it refuses, and otherwise when it is killed or stops on a panic. -/
+def kernelRefused : String := "Lean default exited with 1"
+
 /-- A pair that the judgment must refuse, saying `reason`; Lean accepts its two modules. -/
-def refused (work : System.FilePath) (name text reason : String) (proposition := "mark = mark") :
-    IO (IO Unit) :=
-  refusedOutside work name name (pair name text proposition) [reason]
+def refused (work : System.FilePath) (name text reason : String) (proposition := "mark = mark")
+    (also : List String := []) : IO (IO Unit) :=
+  refusedOutside work name name (pair name text proposition) (reason :: also)
 
 /-- A text that proves its proposition from an axiom and tries each write that would have the
 pair accepted: `targets`, each a file and what to write there. It says how many failed. -/
@@ -110,16 +114,14 @@ def run (work : System.FilePath) : IO Unit := do
   let honest ← startModule work "Honest" (pair "Honest" "theorem g_sound : gGoal := rfl")
   let proposition ← refused work "Proposition" "theorem g_sound : mark = mark := rfl"
     "Challenge and solution theorem statement do not match: 'Proposition.g_sound'"
-  -- the solution is exported by the names that the judgment is of: the exporter does not
-  -- find the name
   let missing ← refused work "Missing" "theorem other : gGoal := rfl"
-    "Constant Missing.g_sound not found in environment"
+    "Const not found in solution: 'Missing.g_sound'"
   let axiom_ ← refused work "Axiom"
     "axiom extra : True\ntheorem helper : True := extra\ntheorem g_sound : gGoal := (fun _ : True => rfl) helper"
     "Illegal axiom detected: 'Axiom.extra'"
   let unchecked ← refused work "Unchecked"
     "set_option «debug».skipKernelTC true in\ntheorem g_sound : gGoal := by\n  show (0 : Nat) = 1\n  decide +kernel"
-    "kernel rejected the solution" (proposition := "(0 : Nat) = 1")
+    "kernel rejected the solution" (proposition := "(0 : Nat) = 1") (also := [kernelRefused])
   -- what the writer writes over: its statements and its challenge, the exported challenge,
   -- the verdict and the mark of a settled project, the list of the pairs to judge, and under a
   -- recipe the statements of another pair in the recipe's folder
@@ -138,7 +140,7 @@ def run (work : System.FilePath) : IO Unit := do
   let forging ← readOutside work "Forged" forgedPair
   let forgerLean ← startLakeLean work "Forger" forger
   let consuming ← refusedOutside work "a false consumer after a text that turns the kernel's check off"
-    "Consumed" consumed ["kernel rejected the solution"]
+    "Consumed" consumed ["kernel rejected the solution", kernelRefused]
 
   let honestPair := pair "Honest" "theorem g_sound : gGoal := rfl"
   let notedBefore ← IO.FS.readFile noted

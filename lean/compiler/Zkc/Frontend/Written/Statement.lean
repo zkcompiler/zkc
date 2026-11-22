@@ -207,7 +207,9 @@ def opens : String :=
 the published theorems, as a reader of the source could write it. It is given in parts, so
 that its statement can stand in the challenge with no proof (`Module.challenge`): the lines
 before it (a section and its variables), its signature from `theorem` up to the `:=`, its
-proof, and the lines after it. -/
+proof, and the lines after it. The statement is elaborated on both sides and compared as
+terms, so it should make no auxiliary declaration (a `match`, a nested proof): a text with a
+declaration of the same shape would have Lean reuse its own, and the pair would be refused. -/
 structure Consumer where
   name : String
   before : String := ""
@@ -254,8 +256,8 @@ structure Module where
   textLine : Nat
   textLines : Nat
   /-- The published theorems of the proof module, each with its proposition, under their full
-  names: a name is its components, so that a name of the source that is no identifier of Lean
-  is not written and read again. -/
+  names. A check writes them as Lean prints a name and reads them again (`String.toName`
+  reads the quotation of a component that is no identifier). -/
   published : List (Lean.Name × Lean.Name) := []
   /-- The consumers that a check wrote after the closing theorems, which are judged with the
   published theorems. -/

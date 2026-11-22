@@ -113,10 +113,8 @@ of the statements where it is not `<name>.Stated`. -/
 def Subject.module (s : Subject) (name : String) (proof : Proof) (text : String := proof.text)
     (model : Option ModelText := none) (statements : Option Lean.Name := none) : IO Module :=
   let written : ProofText := { text, theorems := proof.theorems, imports := proof.imports }
-  IO.ofExcept (match model with
-    | some model =>
-      s.statements.module name written (after := proof.after) (model := model) (statements := statements)
-    | none => s.statements.module name written (after := proof.after) (statements := statements))
+  IO.ofExcept (s.statements.module name written (after := proof.after)
+    (model := model.getD s.statements.chosenModel) (statements := statements))
 
 
 /-- The axioms beyond which no theorem of a subject may rest. -/
@@ -186,9 +184,12 @@ def leanOn (work : System.FilePath) (module : Lean.Name) : Pending := do
   settle work
   SubjectProject.result (projectOf work) module
 
-/-- A module of one source, added to the check's project under the name `name`. -/
-def startLakeLean (work : System.FilePath) (name text : String) : IO Pending := do
-  discard <| SubjectProject.add (projectOf work) name.toName text
+/-- A module of one source, added to the check's project under the name `name`. With
+`text := false` the module holds no text of an author and imports no module that does: it is
+built with the statements, before any text is read, so that what Lean says of it is what is
+so. -/
+def startLakeLean (work : System.FilePath) (name source : String) (text := true) : IO Pending := do
+  discard <| SubjectProject.add (projectOf work) name.toName source (if text then .module else .statements)
   return leanOn work name.toName
 
 /-- `expectUnprovedIn`, of a module that the check added. -/
@@ -519,6 +520,7 @@ def start (work : System.FilePath) (name : String) (subject : Subject) (proof : 
     return lean
   let comparison ← startLakeLean work s!"{name}Source"
     (comparisonModule s!"{name}Source" subject.text (subject.goals.map (·.goal)) subject.package)
+    (text := false)
   return ⟨name, work, honest, comparison, ← controls.mapM (·.start work name proof module stated)⟩
 
 /-- A subject judged: Lean accepts the module of its statements, with every theorem on the
