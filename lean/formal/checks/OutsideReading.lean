@@ -33,7 +33,9 @@ elaborated: a text that writes a file outside its own folder (the program that r
 object, the reference and the imports all stand outside it). It is given both ways in which a
 check starts a module: as a proof module that is read outside, and as a control. Two more
 texts try to leave the sandbox by a socket: one asks the user's service manager to write the
-file, and one makes a socket. Neither can: a module of a check makes no socket.
+file, and one makes a socket. Neither can: a module of a check makes no socket. A last text
+leaves a link in its own folder to a folder outside; the check's removal of its work folder
+removes the link and leaves what it points to.
 
 The reference imports nothing, so the program's own steps are what is run: the replay, the
 comparison with the reference, and the walk of the proofs for axioms. A text's own imports are
@@ -142,6 +144,26 @@ def askedOutside (work : System.FilePath) : IO Unit := do
   unless (← IO.FS.readFile beside) == "as the check wrote it\n" do
     throw (IO.userError s!"a text had a process outside the sandbox write a file\n{said}")
 
+/-- A text that leaves, in its own folder, a link to a folder beside the work folder. A check
+removes its work folder when it ends; the removal takes the link away and not what it points
+to. -/
+def linkedOutside (work : System.FilePath) : IO Unit := do
+  IO.FS.createDirAll (work / "kept")
+  let kept ← IO.FS.realPath (work / "kept")
+  IO.FS.writeFile (kept / "file.txt") "as the check wrote it\n"
+  let linked ← IO.FS.withTempDir fun inner => do
+    let (_, said) ← finishLean (← startLakeLean inner "Linker"
+      ("#eval show IO Unit from do\n" ++
+        "  let some folder ← IO.getEnv \"TMPDIR\" | throw (IO.userError \"no folder\")\n" ++
+        "  let out ← IO.Process.output { cmd := \"ln\", args := #[\"-s\", " ++ reprStr kept.toString ++
+        ", folder ++ \"/link\"] }\n" ++
+        "  IO.println s!\"linked {out.exitCode}\"\n"))
+    unless ← (inner / "Linker" / "link" / "file.txt").pathExists do
+      throw (IO.userError s!"the text left no link in its folder\n{said}")
+    pure (inner / "Linker" / "link")
+  unless !(← linked.pathExists) && (← IO.FS.readFile (kept / "file.txt")) == "as the check wrote it\n" do
+    throw (IO.userError "the removal of a work folder followed a link that a text left in it")
+
 /-- A module of a check can make no socket: the call fails where the text makes one. -/
 def socketMade (work : System.FilePath) : IO Unit := do
   let (_, said) ← finishLean (← startLakeLean (work / "socket") "Socket"
@@ -197,7 +219,8 @@ def run (work : System.FilePath) : IO Unit := do
     writtenOutside work,
     writtenByControl work,
     askedOutside work,
-    socketMade work]
+    socketMade work,
+    linkedOutside work]
   -- at once: each case has a folder of its own
   let started ← cases.mapM fun case => IO.asTask case
   for task in started do
