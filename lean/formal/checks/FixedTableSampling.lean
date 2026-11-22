@@ -1,9 +1,9 @@
 import Zkc.Frontend.Written.Charge
-import Zkc.Tests.Formal.SourceProtocolRoots
+import ZkcFormalTests.SourceProtocolRoots
 import VCVio.OracleComp.ProbComp.IndepProductEvents
 
 namespace FixedTableSampling
-open Zkc.Frontend Zkc.Tests.Formal MeasureTheory
+open Zkc.Frontend ZkcFormalTests MeasureTheory
 open scoped ENNReal
 
 /-- A frozen table fixes the set of matching rows before the independent indices are drawn. -/

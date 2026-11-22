@@ -1,8 +1,8 @@
 import Zkc.Kernel
-import Zkc.Formal.Interactive.RoundFamily
-import Zkc.Formal.Written.FiniteModel
-open Zkc.Core Zkc.Formal.Written Zkc.Formal.Written.FiniteModel
-open Zkc.Formal.Interactive.Sumcheck Zkc.Formal.Interactive.Sumcheck.ReductionRound
+import ZkcFormal.Interactive.RoundFamily
+import ZkcFormal.Written.FiniteModel
+open Zkc.Core ZkcFormal.Written ZkcFormal.Written.FiniteModel
+open ZkcFormal.Interactive.Sumcheck ZkcFormal.Interactive.Sumcheck.ReductionRound
 namespace OccurrenceDepth
 
 set_option maxRecDepth 10000

@@ -1,6 +1,6 @@
 @[expose] public section
 
-open Zkc.Core Zkc.Formal.Written Zkc.Formal.Written.FiniteModel
+open Zkc.Core ZkcFormal.Written ZkcFormal.Written.FiniteModel
 
 -- These checks compute the meaning of small programs by Lean's own reduction.
 unseal Zkc.Core.fnMeaning Zkc.Core.roleMeaning Zkc.Core.protocolMeaning
@@ -22,7 +22,7 @@ theorem right_returns : Baseline.accepts model statement [] commitment right :=
 
 theorem permitted_fork (b : Branch (model.Val scalarTy)) :
     ∀ e ∈ (Baseline.observed model [] commitment b).map Input.entry, Permitted model e.1 e.2 := by
-  apply Zkc.Formal.Written.permitted_fork
+  apply ZkcFormal.Written.permitted_fork
   · trivial
   · exact ⟨trivial, ⟨[], scalarTy⟩, rfl, rfl, rfl, trivial⟩
   · trivial
@@ -116,7 +116,7 @@ theorem permitted_counterexample : ∀ leaf ∈ [left, right],
     rcases mem with rfl | rfl
     · exact missing_left
     · exact missing_right
-  · apply Zkc.Formal.Written.permitted_fork
+  · apply ZkcFormal.Written.permitted_fork
     · exact ⟨trivial, trivial, trivial⟩
     · exact ⟨trivial, ⟨[], scalarTy⟩, rfl, rfl, rfl, trivial⟩
     · trivial

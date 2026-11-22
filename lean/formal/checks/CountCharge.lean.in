@@ -293,7 +293,7 @@ theorem strict_judged : strictJudged := by
 /-! ## The hypotheses are met, and the bound is reached -/
 
 namespace Witness
-open Zkc.Formal.Written.FiniteModel (data)
+open ZkcFormal.Written.FiniteModel (data)
 
 /-- A table over the field of two elements, outside the relation at the tolerance of `loose`:
 five entries are not zero, three are. -/
@@ -569,11 +569,11 @@ end Witness
 table is valid, the relation returns false on it, and the service of the laws draws within the
 samplers and answers what is permitted. -/
 theorem loose_witnessed : looseWitnessed :=
-  loose_witnessed_of Zkc.Formal.Written.FiniteModel.data Witness.looseTable Witness.loose_valid
+  loose_witnessed_of ZkcFormal.Written.FiniteModel.data Witness.looseTable Witness.loose_valid
     ((loose_relation _ Witness.looseTable rfl).trans (by decide))
 
 /-- **The hypotheses of the claim of `strict` are met.** -/
 theorem strict_witnessed : strictWitnessed :=
-  strict_witnessed_of Zkc.Formal.Written.FiniteModel.data Witness.strictTable Witness.strict_valid
+  strict_witnessed_of ZkcFormal.Written.FiniteModel.data Witness.strictTable Witness.strict_valid
     ((strict_relation _ Witness.strictTable rfl).trans (by decide))
 end

@@ -1,14 +1,14 @@
 module
 
-import Zkc.Formal.WorldObservation
-import Zkc.Formal.Written.FiniteModel
+import ZkcFormal.WorldObservation
+import ZkcFormal.Written.FiniteModel
 import Zkc.Core.Evidence.ProtocolReadback
-meta import Zkc.Formal.Written.FiniteModel
+meta import ZkcFormal.Written.FiniteModel
 meta import Zkc.Core.Evidence.ProtocolReadback
 meta import Zkc.Frontend.Written.Root
 meta import Zkc.Frontend.Syntax.Parser
 
-open Zkc.Core Zkc.Formal.World
+open Zkc.Core ZkcFormal.World
 
 section
 variable {V : Vocabulary} (M : Model V)
@@ -64,7 +64,7 @@ example (kind : GivenKind V) (source : Source M) {H B : Role → Type}
 end
 
 section
-open Zkc.Frontend Zkc.Formal.Written
+open Zkc.Frontend ZkcFormal.Written
 
 private def checkPrivateProjection (a : Admitted Standard) (root : Key) : Except String Unit := do
   let p := a.program

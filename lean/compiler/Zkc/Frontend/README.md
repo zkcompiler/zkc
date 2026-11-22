@@ -81,7 +81,7 @@ every admitted one, and for each goal four propositions that are defined before 
 claim about the installed program, the goal for every admitted program, the result (the model
 covers the package, and the goal), and that the hypotheses of the claim are met together. The
 claim applies the experiment of the formal library (`ReturnsWithin`,
-`lean/formal/Zkc/Formal/ReturnExperiment.lean`) to the process of the deciding role on its
+`lean/formal/ZkcFormal/ReturnExperiment.lean`) to the process of the deciding role on its
 inputs, the samplers of the model and the bound; the generator does not write which services
 the bound is against or which event it is of.
 For a text that establishes its claims by the judgment with fees it also writes, before the

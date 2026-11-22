@@ -345,7 +345,7 @@ theorem sound_judged : soundJudged := by
 /-! ## The hypotheses are met -/
 
 namespace Witness
-open Zkc.Formal.Written.ScalarField
+open ZkcFormal.Written.ScalarField
 
 /-- The scalar field of the source: the integers modulo its order, a prime. -/
 abbrev Scalars : Type := ScalarField
@@ -416,7 +416,7 @@ theorem returns_at_corner (path : List Frame) :
 
 end Witness
 
-open Zkc.Formal.Written.ScalarField in
+open ZkcFormal.Written.ScalarField in
 /-- **The hypotheses of the claim are met** over the scalar field of the source: the zero
 matrices and the matrix with a corner are valid, the relation returns false on them, the field
 has the order of the charge, and the service of the laws draws within the samplers and answers

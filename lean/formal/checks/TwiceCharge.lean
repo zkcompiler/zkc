@@ -181,7 +181,7 @@ def loopedText : String :=
   "    exact Bool.eq_false_iff.mpr fun same => differs (Nat.eq_of_beq_eq_true same)\n" ++
   "  case after =>\n    obtain ⟨rfl, _⟩ := invariant_i\n    walk\n\n" ++
   "theorem looped_witnessed : loopedWitnessed :=\n" ++
-  "  looped_witnessed_of Zkc.Formal.Written.FiniteModel.data false trivial\n" ++
+  "  looped_witnessed_of ZkcFormal.Written.FiniteModel.data false trivial\n" ++
   "    (looped_relation _ false)\n\nend\n"
 
 /-- A root that applies `Round` and then a protocol of the prover alone. `Round` is then not
@@ -227,7 +227,7 @@ def asideText : String :=
   "  walk as hit\n" ++
   "  exact differs (Nat.eq_of_beq_eq_true hit)\n\n" ++
   "theorem aside_witnessed : asideWitnessed :=\n" ++
-  "  aside_witnessed_of Zkc.Formal.Written.FiniteModel.data false trivial\n" ++
+  "  aside_witnessed_of ZkcFormal.Written.FiniteModel.data false trivial\n" ++
   "    (aside_relation _ false)\n\nend\n"
 
 /-- A root whose callees fork. `Gate` has a guard after its draw, and `Pick` chooses by an input
@@ -304,7 +304,7 @@ def forkedText : String :=
   "    · exact differs_one (Nat.eq_of_beq_eq_true h)\n" ++
   "    · exact differs_two (Nat.eq_of_beq_eq_true h)\n\n" ++
   "theorem forked_witnessed : forkedWitnessed :=\n" ++
-  "  forked_witnessed_of Zkc.Formal.Written.FiniteModel.data false trivial true trivial\n" ++
+  "  forked_witnessed_of ZkcFormal.Written.FiniteModel.data false trivial true trivial\n" ++
   "    (forked_relation _ false)\n\nend\n"
 
 /-- The source of `Twice` with a second function of the same types, `other`, which a protocol of

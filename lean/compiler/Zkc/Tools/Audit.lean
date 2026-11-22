@@ -189,6 +189,9 @@ Their constants still participate in the transitive axiom audit. -/
 structure Policy where
   axioms : Array Name := allowedAxioms
   packages : Array Name := #[]
+  /-- The roots of the modules of the repository's packages. A library taken as built imports
+  no module under them. -/
+  project : Array Name := #[`Zkc]
 
 /-- The kinds of finding. -/
 inductive Rule where
@@ -384,8 +387,8 @@ out of the replay is not replayed, and a replayed module that imports one is a f
 which nothing is replayed: the environment of the replay would hold what that module imports.
 Returns the finding of the first module whose declarations the kernel refuses, after which the
 replay stops, and what was replayed and what was taken as built, as lines. -/
-def replay (env : Environment) (libraries : Array Library) (arts : NameMap ImportArtifacts)
-    (packages : Array Name := #[]) :
+def replay (env : Environment) (libraries : Array Library)
+    (packages : Array Name := #[]) (project : Array Name := #[`Zkc]) :
     IO (Option Finding × Array String) := do
   let replayed := libraries.filter (·.withoutReplay.isNone)
   if replayed.isEmpty then return (none, #[])
@@ -399,7 +402,7 @@ def replay (env : Environment) (libraries : Array Library) (arts : NameMap Impor
   -- Importing even one pinned module loads its entire dependency graph into the
   -- starting kernel environment. Reject a back edge before importing that base.
   if let some localModule := moduleNames.find? (fun m =>
-      upstream.contains m && (m.getRoot == `Zkc || libraries.any (·.contains m))) then
+      upstream.contains m && (project.contains m.getRoot || libraries.any (·.contains m))) then
     return (some { subject := localModule, rule := .kernel,
                    line := s!"a prebuilt library imports project module {localModule}" }, #[])
   let built (m : Name) := isOfLean m || upstream.contains m
@@ -417,7 +420,7 @@ def replay (env : Environment) (libraries : Array Library) (arts : NameMap Impor
       if built target && !base.contains target then base := base.push target
   let start ← IO.monoMsNow
   let environment ← importModules (base.map fun module => { module }) {} (loadExts := false)
-    (level := .private) (arts := arts)
+    (level := .private)
   let mut kernel := environment.toKernelEnv
   -- the declarations and the modules replayed: of each library, and of each prefix of the modules
   -- that the libraries import
@@ -454,10 +457,8 @@ def replay (env : Environment) (libraries : Array Library) (arts : NameMap Impor
     #[s!"  not replayed: {skipped} unsafe declarations and code of `partial` definitions, which the kernel does not check",
       s!"  taken as built: libraries {", ".intercalate (fromLean.toList.map toString)}"])
 
-/-- The audit of libraries in an environment that imports them. `arts` are the built files of
-the modules, for the environments of the replay. -/
-def audit (env : Environment) (libraries : Array Library) (arts : NameMap ImportArtifacts)
-    (policy : Policy := {}) :
+/-- The audit of libraries in an environment that imports them. -/
+def audit (env : Environment) (libraries : Array Library) (policy : Policy := {}) :
     IO Report := do
   let mut report : Report := {}
   let moduleNames := env.header.moduleNames
@@ -493,7 +494,7 @@ def audit (env : Environment) (libraries : Array Library) (arts : NameMap Import
     if let some reason := library.withoutReplay then
       report := { report with lines := report.lines.push s!"{library.name}: not replayed through the kernel: {reason}" }
   -- the kernel
-  let (finding, lines) ← replay env libraries arts policy.packages
+  let (finding, lines) ← replay env libraries policy.packages policy.project
   if let some finding := finding then report := { report with findings := report.findings.push finding }
   report := { report with lines := report.lines ++ lines }
   -- the axioms
@@ -673,35 +674,20 @@ def controls (directory : System.FilePath) : Array Control := #[
     isRefusal := fun finding => finding.subject == `Zkc.Tools.Audit.Controls.Layers &&
       (finding.line.splitOn "Zkc.Core.Program.Located").length > 1 }]
 
-/-- The built files of the modules under `Zkc` in the entries of a search path, by module. Lean
-finds a module by the first entry that has a directory of the module's first component, and
-every package of the repository keeps its modules under `Zkc`: so the modules of the packages of
-a workspace are given to the import by their files. -/
-def zkcArtifacts (searchPath : SearchPath) : IO (NameMap ImportArtifacts) := do
-  let mut arts : NameMap ImportArtifacts := {}
-  for entry in searchPath do
-    let root := entry / "Zkc"
-    unless ← root.isDir do continue
-    for file in ← root.walkDir do
-      unless file.extension == some "olean" do continue
-      let relative := (file.withExtension "").toString.drop (entry.toString.length + 1)
-      let module := (relative.toString.splitOn "/").foldl Name.mkStr .anonymous
-      if arts.contains module then continue
-      let mut parts := #[file]
-      for level in ["olean.server", "olean.private"] do
-        let path := file.withExtension level
-        if ← path.pathExists then parts := parts.push path
-      let ir := #[file.withExtension "ir.sig", file.withExtension "ir"]
-      let irParts := if ← ir.allM (·.pathExists) then ir else #[]
-      arts := arts.insert module (.ofArrays #[parts, irParts])
-  return arts
+/-- Whether a module is built: the search path has its object. A module root belongs to one
+package of the repository, so Lean finds every module of a workspace by its name. -/
+def built (module : Name) : IO Bool := do
+  -- the search path gives where the object of a module would be, whether or not it is there
+  match ← (← searchPathRef.get).findWithExt "olean" module with
+  | some file => file.pathExists
+  | none => return false
 
 /-- The modules that the audit imports for a library: the root of a library proper, and the
 modules of the files of a library of tests that are built. -/
-def modulesToLoad (library : Library) (arts : NameMap ImportArtifacts) : IO (Array Name) := do
+def modulesToLoad (library : Library) : IO (Array Name) := do
   match library.kind, library.directory with
   | .library, _ => return #[library.root]
-  | .tests, some directory => return (← libraryFiles directory library.root).filter arts.contains
+  | .tests, some directory => (← libraryFiles directory library.root).filterM built
   | .tests, none => return #[]
 
 /-- The directory of the package of the running executable, which Lake builds as
@@ -723,15 +709,14 @@ fixture pass and the audit refuses every negative control by its rule. -/
 def run (libraries : System.FilePath → Array Library)
     (compilerDirectory : System.FilePath → System.FilePath := id) (policy : Policy := {}) : IO UInt32 := do
   initSearchPath (← findSysroot)
-  let arts ← zkcArtifacts (← searchPathRef.get)
   let directory ← packageDirectory
   let libraries := libraries directory
   let mut modules : Array Import := #[]
   for library in libraries do
-    for module in ← modulesToLoad library arts do
+    for module in ← modulesToLoad library do
       modules := modules.push { module }
-  let env ← importModules modules {} (loadExts := false) (level := .private) (arts := arts)
-  let report ← audit env libraries arts policy
+  let env ← importModules modules {} (loadExts := false) (level := .private)
+  let report ← audit env libraries policy
   for finding in report.findings do IO.println finding.line
   for line in report.lines do IO.println line
   IO.println s!"{report.declarations} declarations, which reach {report.reached} constants and the axioms {", ".intercalate (report.axioms.toList.map toString)}"
@@ -740,20 +725,20 @@ def run (libraries : System.FilePath → Array Library)
   let mut controlModules : Array Import := #[]
   for control in controls do
     let module := control.library.root
-    if arts.contains module && !controlModules.any (·.module == module) then
+    if (← built module) && !controlModules.any (·.module == module) then
       controlModules := controlModules.push { module }
   controlModules := controlModules.push { module := `Zkc.Tools.Audit.Controls.Generated }
-  let controlEnv ← importModules controlModules {} (loadExts := false) (level := .private) (arts := arts)
+  let controlEnv ← importModules controlModules {} (loadExts := false) (level := .private)
   let generated ← audit controlEnv #[{
     name := "generated helpers", root := `Zkc.Tools.Audit.Controls.Generated,
-    imports := some coreImports }] arts
+    imports := some coreImports }]
   let generatedAccepted := generated.findings.isEmpty && generated.constructorIndices == 8
   IO.println s!"control, generated helpers (public, private, empty, indexed, mutual, nested, polymorphic): {if generatedAccepted then "accepted" else "NOT accepted"}; {generated.constructorIndices} recognized constructor indices"
   for finding in generated.findings do IO.println finding.line
   let mut refused := 0
   for control in controls do
     -- each control is audited alone, so that only its own findings refuse it
-    let found := control.refusedIn (← audit controlEnv #[control.library] arts policy)
+    let found := control.refusedIn (← audit controlEnv #[control.library] policy)
     if found then refused := refused + 1
     IO.println s!"control, {control.description}: {if found then "refused" else "NOT refused"} by the rule: {control.rule.describe}"
   IO.println s!"audit: {report.findings.size} findings in {libraries.size} libraries; {refused} of the {controls.size} controls are refused"

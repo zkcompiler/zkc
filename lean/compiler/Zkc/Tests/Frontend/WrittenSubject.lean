@@ -124,7 +124,7 @@ Lean's acceptance of a proof module is not what a check rests on: a text can tur
 kernel's check of its declarations (`Statements.module` says how). The module of the statements
 is compiled first, where no text is. The proof module is compiled against that object, and its
 own object is read by a program outside the file
-(`lean/formal/Zkc/Tools/Formal/VerifyPublication.lean`): the kernel replays the proof module's
+(`lean/formal/ZkcFormalTools/VerifyPublication.lean`): the kernel replays the proof module's
 declarations on its imports, the published theorems are of propositions that the module of the
 statements declares, and the axioms are read from the replayed proofs.
 
@@ -266,7 +266,7 @@ def proveOutside (work : System.FilePath) (name : String) (module : Module) (sta
   let manifestPath := proved.given / "manifest.json"
   IO.FS.writeFile manifestPath (manifest module axioms).compress
   let out ← confined (← folderAt (work / s!"{name}.reading"))
-    #["lake", "env", "lean", "--run", "Zkc/Tools/Formal/VerifyPublication.lean",
+    #["lake", "env", "lean", "--run", "ZkcFormalTools/VerifyPublication.lean",
       proved.setup.toString, manifestPath.toString, proved.object.toString]
   return { lean := proved.lean, verified := some (out.exitCode == 0, out.stdout ++ out.stderr) }
 

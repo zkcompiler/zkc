@@ -18,7 +18,7 @@ test:
 # Check source verifier certificates and replay the interactive formal library through the kernel.
 test-interactive:
     cd lean/compiler && lake build Zkc.Tools.Audit
-    cd lean/formal && lake build Zkc.Formal.Interactive Zkc.Tests.Formal.Interactive Zkc.Tests.Formal.Reuse.Controls Zkc.Tests.Formal.SourceHonestSumcheck
+    cd lean/formal && lake build ZkcFormal.Interactive ZkcFormalTests.Interactive ZkcFormalTests.Reuse.Controls ZkcFormalTests.SourceHonestSumcheck
     cd lean/formal && lake lean checks/SourceProtocols.lean
     cd lean/formal && lake lean checks/OracleNames.lean
     cd lean/formal && lake lean checks/WorldObservation.lean
@@ -63,7 +63,7 @@ test-packages:
 # Export the written knowledge claim and kernel-check the returning fork and source mutations.
 test-written-knowledge: test-frontend
     cd lean/compiler && lake build zkc-knowledge Zkc.Tools.Audit
-    cd lean/formal && lake build Zkc.Formal.Written.GroupReplay Zkc.Formal.Written.FiniteModel Zkc.Tools.Formal.Policy
+    cd lean/formal && lake build ZkcFormal.Written.GroupReplay ZkcFormal.Written.FiniteModel ZkcFormalTools.Policy
     cd lean/formal && lake env python3 checks/written_knowledge.py
 
 # Audit the compiler package: the kernel's replay of the core, the vocabulary and their tests, no `sorry`, no axiom beyond `propext` and `Quot.sound`, the import rules.
