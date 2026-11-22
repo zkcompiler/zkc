@@ -283,6 +283,51 @@ def calleeMember (s : Statements) (key : Nat) : String :=
   let before := s.definitions.takeWhile (·.1 != s.claims.root)
   memberAt (((before.dropWhile (·.1 != key)).drop 1).filter (!·.2)).length
 
+/-- A role of a protocol that the deciding role plays through applications: the protocol, the
+role in it, and the definition whose body applies it. The application finds the protocol in the
+table of the program before that definition. -/
+structure AppliedRole where
+  protocol : Nat
+  role : Nat
+  caller : Nat
+  deriving BEq
+
+/-- The applications in the stored body of a protocol of the package: each callee with the
+roles of the caller that play the callee's, in the callee's order. -/
+def applications (s : Statements) (key : Nat) : List (Nat × List Nat) :=
+  match s.package.named.definitions.find? (·.key.number == key) with
+  | some (.protocol _ _ _ _ body) =>
+    (body.counted (some 1)).filterMap fun (_, operation, _) =>
+      match operation with
+      | .apply callee roles => some (callee.number, roles)
+      | _ => none
+  | _ => []
+
+/-- The roles that a role of a definition plays in the protocols that the definition applies,
+and through them: `depth` bounds how many applications are entered, and no chain of
+applications is longer than the list of definitions. -/
+def appliedFrom (s : Statements) : Nat → Nat → Nat → List AppliedRole → List AppliedRole
+  | 0, _, _, found => found
+  | depth + 1, caller, role, found =>
+    (s.applications caller).foldl (init := found) fun found (callee, roles) =>
+      match roles.idxOf? role with
+      | none => found
+      | some played =>
+        let entry : AppliedRole := ⟨callee, played, caller⟩
+        if found.contains entry then found
+        else s.appliedFrom depth callee played (found ++ [entry])
+
+/-- The roles that the deciding role of the root plays through applications, read from the
+stored program: where a walk of the deciding role can go beside the root. -/
+def appliedRoles (s : Statements) : List AppliedRole :=
+  s.appliedFrom s.definitions.length s.claims.root s.claims.verifier []
+
+/-- The place of a protocol among the protocols of the program before a definition, which
+stand last first. -/
+def protocolMember (s : Statements) (key caller : Nat) : String :=
+  let before := s.definitions.takeWhile (·.1 != caller)
+  memberAt (((before.dropWhile (·.1 != key)).drop 1).filter (·.2)).length
+
 /-- The ports of the root, each with its type as a term and whether the deciding role holds
 it. -/
 def ports (s : Statements) : Except String (List (String × Bool)) := do
@@ -343,16 +388,19 @@ def facts (s : Statements) : String :=
 
 /-- Where the walks of a module start. The meanings of a program are closed to Lean's own
 reduction, and a walk reads a term in an environment; so for the deciding role of the root, for
-each function before the root that the text names and for each goal's relation, the meaning in
-the installed program is stated to be the sealed denotation of the body. For the role the
-kernel compares the two sides. For a function the equation is the one that the core carries
-with the entry of the function in its table (`Defs.functionEntry`), so that the kernel compares
-the body with the body and does not run the lookup against the interpreter: that comparison
-took 14 seconds for a function three entries deep in a table and takes none now. The program
-of the role is `<role>Program`, in the kernel's normal form; the equations
-are `<role>_meaning`, `<function>_meaning` and `<goal>_meaning`, for every model. Each has the
-label `walk_entry`: a walk on a goal that judges such a meaning passes along the equation that
-fits, and a text names none of them. -/
+each role that it plays in a protocol that is applied (`appliedRoles`), for each function
+before the root that the text names and for each goal's relation, the meaning in its program
+is stated to be the sealed denotation of the body. The equation is the one that the core
+carries with the entry of the definition in its table (`Defs.protocolEntry`,
+`Defs.functionEntry`), so that the kernel compares a body with a body and does not run a lookup
+against the interpreter: that comparison took 14 seconds for a function three entries deep in
+a table and takes none now. For a role the body is the projection of the protocol to the role,
+which the module names in the kernel's normal form: `verifierProgram` for the root, and
+`role<protocol>_<role>Program` for a role of an applied protocol, by the keys. The equations
+are `verifier_meaning`, `role<protocol>_<role>in<caller>_meaning` (the meaning in the table
+that the applications of the definition `<caller>` read), `<function>_meaning` and
+`<goal>_meaning`, for every model. Each has the label `walk_entry`: a walk on a goal that
+judges such a meaning passes along the equation that fits, and a text names none of them. -/
 def entries (s : Statements) : String :=
   let function (label member program : String) :=
     s!"/-- The function of `{label}` in its program is the denotation of its body. -/\n" ++
@@ -376,8 +424,32 @@ def entries (s : Statements) : String :=
       s!"    roleMeaning M installed rootMember {label}Role path inputs =\n" ++
       s!"      ({label}Program.denote (roleSem M {label}Role (Defs.fnTable M calleeProgram.defs)\n" ++
       s!"        (Defs.rTable M calleeProgram.defs)) path (Env.empty.extend rootNames inputs)).sealed := by\n" ++
-      "  kernel_rfl\n\n"
-  "noncomputable section\n\n" ++ role ++
+      s!"  unfold roleMeaning\n  rw [Process.sealed_eq, {label}Program.eq]\n" ++
+      s!"  exact (installed.defs.protocolEntry installed.distinct rootMember).meaning M {label}Role path inputs\n\n"
+  let applied := s.appliedRoles
+  let programs := (applied.map fun a => (a.protocol, a.role)).eraseDups
+  let appliedPrograms := String.join (programs.map fun (key, played) =>
+    s!"-- The program of role {played} of the protocol with key {key}, in the kernel's normal form.\n" ++
+    s!"kernel_normal role{key}_{played}Program :\n" ++
+    s!"    Term (roleDialect V {s.programBefore key}.headers {played}) (Ctx.empty.extend names{key}) header{key}.outs :=\n" ++
+    s!"  project {played} body{key}\n\n")
+  let appliedEntries := String.join (applied.map fun a =>
+    let (key, played, caller) := (a.protocol, a.role, a.caller)
+    let table := s.programBefore caller
+    let before := s.programBefore key
+    let name := s!"role{key}_{played}in{caller}"
+    s!"noncomputable abbrev {name}Member : Member {table}.headers.protocols header{key} :=\n" ++
+    s!"  {s.protocolMember key caller}\n\n" ++
+    s!"/-- The process of role {played} of the protocol with key {key}, where the definition with key\n" ++
+    s!"{caller} applies it, is the denotation of its program. -/\n" ++
+    s!"@[walk_entry]\ntheorem {name}_meaning (M : Model V) (path : List Frame)\n" ++
+    s!"    (inputs : HList (RV M {played}) header{key}.ins) :\n" ++
+    s!"    roleMeaning M {table} {name}Member {played} path inputs =\n" ++
+    s!"      (role{key}_{played}Program.denote (roleSem M {played} (Defs.fnTable M {before}.defs)\n" ++
+    s!"        (Defs.rTable M {before}.defs)) path (Env.empty.extend names{key} inputs)).sealed := by\n" ++
+    s!"  unfold roleMeaning\n  rw [Process.sealed_eq, role{key}_{played}Program.eq]\n" ++
+    s!"  exact ({table}.defs.protocolEntry {table}.distinct {name}Member).meaning M {played} path inputs\n\n")
+  "noncomputable section\n\n" ++ role ++ appliedPrograms ++ appliedEntries ++
   String.join (s.functions.map fun (label, _) => function label s!"{label}Member" "calleeProgram") ++
   String.join (s.claims.goals.map fun goal =>
     function goal.goal s!"{goal.goal}Member" "installed") ++
@@ -386,6 +458,9 @@ def entries (s : Statements) : String :=
 /-- The names of the theorems that `entries` writes. -/
 def entryNames (s : Statements) : List String :=
   ["verifierProgram.eq", "verifier_meaning"] ++
+  ((s.appliedRoles.map fun a => (a.protocol, a.role)).eraseDups.map fun (key, played) =>
+    s!"role{key}_{played}Program.eq") ++
+  (s.appliedRoles.map fun a => s!"role{a.protocol}_{a.role}in{a.caller}_meaning") ++
   s.functions.map (s!"{·.1}_meaning") ++ s.claims.goals.map (s!"{·.goal}_meaning")
 
 /-- That what holds of the root, and of the root with a goal's relation, in the installed
@@ -645,6 +720,11 @@ def _root_.Zkc.Frontend.Written.ClaimedGoal.siteCaps (goal : ClaimedGoal) :
   goal.siteLabels.filterMap fun (_, label, key) =>
     (capped.find? (·.key == key)).map fun cap => (label, cap)
 
+/-- The name, in a module, of a draw below applications of the root: the keys of the
+applications in their order, then the key of the draw. -/
+def appliedSite (site : Core.Site) : String :=
+  "site_at_" ++ "_".intercalate ((site.through ++ [site.key]).map fun key => toString key.number)
+
 /-- The draws of the root under the names of their sites: the key of each
 (`site_<name>`, and `site_<name>_<index>` for each block of a stepped loop), once for the
 package, and for each goal the cap that its table gives the draw (`<goal>_cap_<name>`), decided
@@ -661,11 +741,30 @@ def sites (s : Statements) : String :=
       s!"/-- The cap that the table of `{goal.goal}` gives the draw `{label}`. -/\n" ++
       s!"@[walk_cap]\ntheorem {goal.goal}_cap_{label} :\n" ++
       s!"    {goal.goal}Caps.capFrom {goal.goal}Caps.root [] site_{label} = " ++
-      s!"{cap.numerator} / {cap.denominator} := by\n  decide +kernel\n\n"))
+      s!"{cap.numerator} / {cap.denominator} := by\n  decide +kernel\n\n")) ++
+  -- the draws below applications: a draw is charged in the contract of the protocol that has
+  -- it, and the table gives the root its cap through the applications that reach it
+  let applied := (s.claims.goals.flatMap fun goal =>
+    (goal.caps.sites.filter (!·.1.through.isEmpty)).map (·.1)).eraseDups
+  String.join (applied.map fun site =>
+    s!"/-- A draw below the applications {site.through.map (·.number)} of the root: the draw with\n" ++
+    s!"key {site.key.number} of the protocol that the last of them applies. -/\n" ++
+    s!"abbrev {appliedSite site} : Key := ⟨{site.key.number}⟩\n\n") ++
+  String.join (s.claims.goals.map fun goal =>
+    String.join ((goal.caps.sites.filter (!·.1.through.isEmpty)).map
+      fun (site, numerator, denominator, _) =>
+        let through := ", ".intercalate (site.through.map fun key => s!"⟨{key.number}⟩")
+        s!"/-- The cap that the table of `{goal.goal}` gives the draw `{appliedSite site}`. -/\n" ++
+        s!"@[walk_cap]\ntheorem {goal.goal}_cap_{appliedSite site} :\n" ++
+        s!"    {goal.goal}Caps.capFrom {goal.goal}Caps.root [{through}] {appliedSite site} = " ++
+        s!"{numerator} / {denominator} := by\n  decide +kernel\n\n"))
 
 /-- The names of the theorems that `sites` writes. -/
 def siteNames (s : Statements) : List String :=
-  s.claims.goals.flatMap fun goal => goal.siteCaps.map fun (label, _) => s!"{goal.goal}_cap_{label}"
+  s.claims.goals.flatMap fun goal =>
+    (goal.siteCaps.map fun (label, _) => s!"{goal.goal}_cap_{label}") ++
+    ((goal.caps.sites.filter (!·.1.through.isEmpty)).map fun (site, _) =>
+      s!"{goal.goal}_cap_{appliedSite site}")
 
 /-- What the method of fees has to establish for a goal, as the text of a proposition: on valid
 inputs of the deciding role on which the relation returns false, the role's process in the
@@ -769,7 +868,8 @@ the library that the generated statements name, and the model's. A text that wal
 has the walk and the equations where it starts; `walks` says whether the module is for one. -/
 def imports (model : ModelText) (walks : Bool) : List String :=
   packageImports ++
-    (if walks then ["Zkc.Core.Evidence.FunctionEntry", "Zkc.Formal.Walk",
+    (if walks then ["Zkc.Core.Evidence.FunctionEntry", "Zkc.Core.Evidence.ProtocolReadback",
+      "Zkc.Formal.Walk",
       "Zkc.Formal.Written.WalkFees"] else []) ++
     ["Zkc.Formal.OracleProcess", "Zkc.Formal.ReturnExperiment", "Zkc.Formal.Written.LawSamplers",
       "Zkc.Formal.Written.SiteCaps", "Zkc.Formal.Written.FunctionMeaning",

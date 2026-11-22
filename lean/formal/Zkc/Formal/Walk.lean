@@ -2,6 +2,7 @@ module
 
 public import Zkc.Formal.ProcessJudgment
 public import Zkc.Formal.RoleRules
+public import Zkc.Formal.Application
 public import Zkc.Core.Meaning.Role
 public import Zkc.Core.Meaning.Program
 public import Zkc.Formal.WalkLabels
@@ -24,6 +25,11 @@ what the judgment asks of it (for the judgment with fees, `walk_free` and `walk_
 end of the program, where what is left is what the judgment asks of the end. `walk … at h`
 walks a hypothesis that judges a process: what a judgment of the process gives, as the walk of
 a goal says what a judgment of it needs.
+
+Where the program applies a protocol, the walk goes into the callee (`enterApplication`): under
+a judgment that reads no peer of an effect, the application and then the rest is judged as the
+callee's program of the role, whose condition at the end is the judgment of the rest on the
+results. The text writes nothing there; the next place that it meets is in the callee.
 
 A text follows the mathematics of a program, not its instructions.
 
@@ -85,7 +91,10 @@ Two instructions are taken by a rule and not by what they denote. The goal passe
 along the equation between the term and the step that the rule is about:
 
 - `walk_law law` takes a computation of a role by a law that the text gives, as a theorem of
-  what a function of the program computes: the value is what the law says.
+  what a function of the program computes: the value is what the law says. The law may be
+  stated in the table of another program that has the function than the one that the call
+  reads (a protocol that is applied reads the table of the definitions before it): the call
+  is the call there, by the entries of the function in the two tables (`fnMeaning_entry`).
 - `walk_compute value` takes a computation of a role by its law. The law, that the operation
   gives `value` on the operands, is left as the goal `law`; the body of a function that the
   operation calls is not read, and the law of a call is stated of the meaning of the function
@@ -139,10 +148,13 @@ private def readsEnvironment (e : Expr) : Bool :=
     s.isConstOf ``Zkc.Core.Env.insert).isSome
 
 /-- What a role holds of a value, when it holds it, is the value: `hide` and `reveal` are casts
-between the type of a role's part and the type of the value, and the kernel finds the two sides
-definitionally equal. -/
+between the type of a role's part and the type of the value, and so are the passages of a
+value into an application and out of it (`coverRV`, `enter`, `leave`) for a role that holds it
+on both sides. The kernel finds the two sides definitionally equal. -/
 private def unwrapped (e : Expr) : MetaM Expr := do
-  unless e.isAppOf ``Zkc.Core.hide || e.isAppOf ``Zkc.Core.reveal do return e
+  unless e.isAppOf ``Zkc.Core.hide || e.isAppOf ``Zkc.Core.reveal ||
+      e.isAppOf ``Zkc.Core.coverRV || e.isAppOf ``Zkc.Core.enter || e.isAppOf ``Zkc.Core.leave do
+    return e
   let inner := e.appArg!
   let same ← ofExceptKernelException (Lean.Kernel.isDefEq (← getEnv) (← getLCtx) e inner)
   return if same then inner else e
@@ -744,6 +756,163 @@ private def restAfter (a : Array Expr) (names rest : Expr) : MetaM Expr := do
     let newΓ := restType.getAppArgs[1]!
     mkLambdaFVars #[vs] (mkAppN (mkConst ``Zkc.Core.Term.denote) #[D, sem, newΓ, a[3]!, rest, path, extended])
 
+/-- The proof that a judgment reads no peer of an effect under a renaming of roles
+(`Zkc.Core.Blind`), from a theorem with the label `walk_blind` that says so of the judgment as
+the goal states it. -/
+private def blindUnder (roleMap judgment : Expr) : MetaM (Option Expr) := do
+  let wanted ← mkAppM ``Zkc.Core.Blind #[roleMap, judgment]
+  for name in ← Lean.labelled `walk_blind do
+    let found ← withNewMCtxDepth do
+      let theorem_ ← mkConstWithFreshMVarLevels name
+      let (args, _, stated) ← forallMetaTelescope (← inferType theorem_)
+      unless ← isDefEq stated wanted do return none
+      let proof ← instantiateMVars (mkAppN theorem_ args)
+      if proof.hasExprMVar then return none
+      return some proof
+    if found.isSome then return found
+  return none
+
+/-- Whether the kernel finds two terms definitionally equal. -/
+private def kernelSame (a b : Expr) : MetaM Bool := do
+  ofExceptKernelException (Lean.Kernel.isDefEq (← getEnv) (← getLCtx)
+    (← instantiateMVars a) (← instantiateMVars b))
+
+/-- The process of a role in a table of role programs (`table header member role path inputs`,
+with `table` the role programs of a program), stated as the meaning of that role in the
+program, in the words of the labelled entry equation that is about it: the left side of the
+equation at this path and these inputs. The program is compared as it is written, under
+reducible names; the header, the member and the role are small closed terms, which the kernel
+compares. No equation is passed along here: the next step of the walk enters the meaning by it.
+Nothing is returned where no labelled equation is about this role of this protocol in this
+program. -/
+private def statedByEntry (program model header member role path inputs : Expr) :
+    MetaM (Option Expr) := do
+  for name in ← Lean.labelled `walk_entry do
+    let found ← withNewMCtxDepth do
+      let entry ← mkConstWithFreshMVarLevels name
+      let (_, _, statement) ← forallMetaTelescope (← inferType entry)
+      let some (_, lhs, _) := statement.eq? | return none
+      let stated := lhs.getAppArgs
+      -- `roleMeaning M p member role path inputs`, after the vocabulary and the header
+      unless lhs.getAppFn.isConstOf ``Zkc.Core.roleMeaning && stated.size == 8 do return none
+      let (statedModel, statedProgram, statedHeader, statedMember, statedRole, statedPath,
+        statedInputs) := (stated[1]!, stated[2]!, stated[3]!, stated[4]!, stated[5]!, stated[6]!,
+          stated[7]!)
+      -- the equation is for every model, path and inputs, and for one program, member and role
+      unless statedModel.isMVar && statedPath.isMVar && statedInputs.isMVar do return none
+      if statedProgram.hasExprMVar || statedMember.hasExprMVar || statedRole.hasExprMVar then
+        return none
+      unless ← withReducible (isDefEq statedProgram program) do return none
+      statedModel.mvarId!.assign model
+      unless ← kernelSame statedHeader header do return none
+      unless ← kernelSame statedMember member do return none
+      unless ← kernelSame statedRole role do return none
+      statedPath.mvarId!.assign path
+      statedInputs.mvarId!.assign inputs
+      let lhs ← instantiateMVars lhs
+      if lhs.hasExprMVar then return none
+      return some lhs
+    if found.isSome then return found
+  return none
+
+/-- **An application is entered as a region is.** `bound` is an instruction that applies a
+protocol and then the rest, under the semantics of a role. What the instruction denotes for the
+role is the callee's program of the role that it plays there, at the path of the application,
+with the peers of its effects renamed to the caller's roles and its results carried back
+(`Instr.denote_apply_role`). Under a judgment that reads no peer (`blindUnder`), that process
+and then the rest is judged as the callee's program, as it stands, whose condition at the end
+is the judgment of the rest on the results carried (`Process.interpret_applied`). The goal
+passes to that judgment, with the callee's program stated as the meaning of its role in the
+program whose table the application reads, sealed, the role computed and each input in a form
+to read; the next step enters it by the labelled equation of that meaning, and from there every
+rule of the walk is the same in the callee as in the root.
+
+Nothing is returned, and the instruction is then computed as any other, where the instruction
+applies no protocol, where the semantics is not that of a role over the tables of a program,
+where no labelled theorem says that the judgment reads no peer, or where no labelled entry
+equation is about the role of the callee. -/
+private def enterApplication (goal : MVarId) (j : Judged) (bound why instr sem key path env : Expr) :
+    MetaM (Option MVarId) := goal.withContext do
+  -- the instruction: an operation that applies a protocol to operands
+  let ia := instr.getAppArgs
+  unless instr.isAppOf ``Zkc.Core.Instr.op && ia.size ≥ 2 do return none
+  let operation ← kernelWhnf ia[ia.size - 2]!
+  let oa := operation.getAppArgs
+  unless operation.isAppOf ``Zkc.Core.RoleOp.apply && oa.size ≥ 6 do return none
+  let n := oa.size
+  let (callee, roles, distinct, covers, operands, fits) :=
+    (oa[n - 6]!, oa[n - 5]!, oa[n - 4]!, oa[n - 3]!, oa[n - 2]!, oa[n - 1]!)
+  -- the semantics: of a role, over the tables of a program
+  let sa := sem.getAppArgs
+  unless sem.isAppOf ``Zkc.Core.roleSem && sa.size ≥ 3 do return none
+  let (role, fnTable, rTable) := (sa[sa.size - 3]!, sa[sa.size - 2]!, sa[sa.size - 1]!)
+  unless rTable.isAppOf ``Zkc.Core.Defs.rTable && rTable.getAppNumArgs ≥ 2 do return none
+  let definitions := rTable.appArg!
+  let some program := (match definitions with
+      | .proj ``Zkc.Core.Typed 1 p => some p
+      | _ => if definitions.isAppOf ``Zkc.Core.Typed.defs then some definitions.appArg! else none)
+    | return none
+  -- what the instruction denotes: `(mapR M ρ (rTable _ callee r' path' inputs')).map leave`
+  let rule ← mkAppM ``Zkc.Core.Instr.denote_apply_role
+    #[role, fnTable, rTable, key, callee, roles, distinct, covers, operands, fits,
+      ia[ia.size - 1]!, path, env]
+  -- the rule is `@Instr.denote_apply_role V M …`
+  let model := rule.getAppArgs[1]!
+  let some (_, _, applied) := (← inferType rule).eq? | return none
+  unless applied.isAppOf ``Zkc.Core.Process.map && applied.getAppNumArgs ≥ 2 do return none
+  let leave := applied.appFn!.appArg!
+  let renamed := applied.appArg!
+  -- `mapR M ρ (B := _) p`
+  unless renamed.isAppOf ``Zkc.Core.mapR && renamed.getAppNumArgs ≥ 3 do return none
+  let roleMap := renamed.appFn!.appFn!.appArg!
+  let calleeProcess := renamed.appArg!
+  let ca := calleeProcess.getAppArgs
+  unless ca.size ≥ 5 do return none
+  let m := ca.size
+  let (header, member, played, calleePath, given) :=
+    (ca[m - 5]!, ca[m - 4]!, ca[m - 3]!, ca[m - 2]!, ca[m - 1]!)
+  -- the judgment reads no peer
+  let a := j.fn.getAppArgs
+  let (judgment, done, halt) := (a[4]!, a[5]!, a[6]!)
+  let some blind ← blindUnder roleMap judgment | return none
+  -- the callee's program as the meaning of its role, on inputs in a form to read
+  let (cells, nil) ← spine given
+  let inputs := rebuild cells nil (← cells.mapM fun (_, value) => readValue value)
+  let some stated ← statedByEntry program model header member (← kernelWhnf played) calleePath inputs
+    | return none
+  -- the process of the goal is the application, then the rest
+  let b := bound.getAppArgs
+  let rest := b[5]!
+  let motive ← withLocalDeclD `left (← inferType b[4]!) fun left =>
+    mkLambdaFVars #[left] (mkAppN bound.getAppFn (b.set! 4 left))
+  let appliedThenRest := mkAppN bound.getAppFn (b.set! 4 applied)
+  let toApplied ← mkEqTrans why
+    (← mkCongrArg motive (← mkExpectedTypeHint rule (← mkEq b[4]! applied)))
+  -- the judgment of the callee: at its end, the judgment of the rest on the results carried,
+  -- which stays sealed
+  let resultsType := (← whnf (← inferType leave)).bindingDomain!
+  let after ← withLocalDeclD `results resultsType fun results =>
+    mkLambdaFVars #[results]
+      (mkApp j.fn (j.seal (mkApp rest (mkApp leave results).headBeta).headBeta))
+  let inside := { j with fn := ← mkAppM ``Zkc.Core.Process.interpret #[judgment, after, halt] }
+  let next ← mkFreshExprSyntheticOpaqueMVar (inside.of stated)
+  let passage ← mkAppM ``Zkc.Core.Process.interpret_applied
+    #[roleMap, judgment, blind, done, halt, leave, rest, calleeProcess]
+  let mut judged ← mkExpectedTypeHint passage
+    (← mkEq (mkApp j.fn appliedThenRest) (mkApp inside.fn calleeProcess))
+  for extra in j.extra do
+    judged ← mkCongrFun judged extra
+  -- the callee's program is the meaning as stated, which is sealed
+  let ia' := inside.fn.getAppArgs
+  let sealing ← mkEqSymm (mkApp4 (mkConst ``Zkc.Core.Process.sealed_eq) ia'[0]! ia'[1]! ia'[2]! stated)
+  let toStated ← mkEqTrans (← byComputation calleeProcess stated) sealing
+  let sealedMotive ← withLocalDeclD `p (← inferType calleeProcess) fun p =>
+    mkLambdaFVars #[p] (mkAppN (mkApp inside.fn p) j.extra)
+  let toInside ← mkEqTrans judged (← mkCongrArg sealedMotive toStated)
+  let statedGoal ← withLocalDeclD `judged (mkSort Level.zero) fun x => mkLambdaFVars #[x] (j.goal x)
+  j.pass goal appliedThenRest toApplied (← mkEqMPR (← mkCongrArg statedGoal toInside) next)
+  return some next.mvarId!
+
 /-- What an instruction is, in the words of an error: its constructor and, for an operation,
 the constructor of the operation. -/
 private def instructionKind (i : Expr) : String :=
@@ -807,6 +976,9 @@ private def stepOrFork (goal : MVarId) (hypothesis := false) (fork : Option Lean
         let stated := (← inferType rule).appArg!
         let bound := mkAppN stated.getAppFn (stated.getAppArgs.set! 5 (← restAfter a names rest))
         let why ← mkExpectedTypeHint rule (← mkEq p bound)
+        -- an instruction that applies a protocol: the walk goes into the callee
+        if let some inside ← enterApplication goal j bound why instruction sem key path env then
+          return ([inside], false)
         -- an instruction that runs a region: the walk goes into the region
         let left := bound.getAppArgs[4]!
         if let some (form, isForm) ← regionOf left instruction sem key path env then
@@ -1086,31 +1258,47 @@ private def compute (goal : MVarId) (written : Syntax) (hypothesis := false) (by
     s[4]!, s[5]!, Γ, outs, o[3]!, o[4]!, key, o[5]!, o[6]!, o[7]!, o[8]!, o[9]!, o[10]!,
     instr.getArg! 5, names, rest, path, env]
   let valueType := (← inferType rule).bindingDomain!
-  -- the law at a value, with the operands in a form to read
-  let lawAt (value : Expr) : MetaM Expr := do
+  -- a call of a function of a program: the program whose table the semantics reads, the header
+  -- of the function and its member there
+  let operation ← kernelWhnf o[6]!
+  let table := s[4]!
+  let called : Option (Expr × Expr × Expr) :=
+    if operation.isAppOfArity ``Zkc.Core.LocalOp.call 4 && table.isAppOfArity ``Zkc.Core.Defs.fnTable 4
+        && (table.getArg! 3).isAppOfArity ``Zkc.Core.Typed.defs 2 then
+      some ((table.getArg! 3).appArg!, operation.getArg! 2, operation.getArg! 3)
+    else none
+  -- the law at a value, with the operands in a form to read, and the operands. A call of a
+  -- function of a program is stated as the meaning of the function there, which is the form
+  -- that a law of the function has; with `place`, as its meaning in another program
+  let lawAt (value : Expr) (place : Option (Expr × Expr) := none) : MetaM (Expr × Expr) := do
     let lawType := (← inferType (mkApp rule value)).bindingDomain!
     let sides := lawType.getAppArgs
     let (cells, nil) ← spine sides[1]!.appArg!
     let operands ← cells.mapM fun (_, operand) => readValue operand
-    -- a call of a function of a program is stated as the meaning of the function there, which
-    -- is the form that a law of the function has
     let read := rebuild cells nil operands
-    let operation ← kernelWhnf o[6]!
-    let table := s[4]!
-    let computed :=
-      if operation.isAppOfArity ``Zkc.Core.LocalOp.call 4 && table.isAppOfArity ``Zkc.Core.Defs.fnTable 4
-          && (table.getArg! 3).isAppOfArity ``Zkc.Core.Typed.defs 2 then
-        mkAppN (mkConst ``Zkc.Core.fnMeaning) #[s[0]!, s[1]!, (table.getArg! 3).appArg!,
-          operation.getArg! 2, operation.getArg! 3, read]
-      else mkApp sides[1]!.appFn! read
-    return mkAppN lawType.getAppFn #[sides[0]!, computed, sides[2]!]
+    let computed := match called with
+      | some (program, header, member) =>
+        let (program, member) := place.getD (program, member)
+        mkAppN (mkConst ``Zkc.Core.fnMeaning) #[s[0]!, s[1]!, program, header, member, read]
+      | none => mkApp sides[1]!.appFn! read
+    return (mkAppN lawType.getAppFn #[sides[0]!, computed, sides[2]!], read)
   let (value, law, lawGoals) ← do
     if byLaw then
       -- the value is what the law that the text gave says of the operands. The text states its
       -- law of what the operands are, and not of the variables that stand for them in the
       -- process: the law is elaborated at the values, and carried back along the equations.
       let stated ← mkFreshExprMVar valueType
-      let law ← lawAt stated
+      -- a law of a function is stated in the table of whichever program the text chose: of the
+      -- definitions before the root, also for a call inside a protocol that the root applies,
+      -- which reads the table of the definitions before that protocol
+      let place ← match called with
+        | some (_, header, _) => do
+          let program ← mkFreshExprMVar (mkApp (mkConst ``Zkc.Core.Typed) s[0]!)
+          let functions ← mkAppM ``Zkc.Core.Headers.fns #[← mkAppM ``Zkc.Core.Typed.headers #[program]]
+          let member ← mkFreshExprMVar (← mkAppM ``Zkc.Core.Member #[functions, header])
+          pure (some (program, member))
+        | none => pure none
+      let (law, read) ← lawAt stated place
       let equations := (← getLCtx).foldl (init := #[]) fun found decl =>
         if isWalkEquation decl then found.push decl else found
       -- `forms[k]` is the law with the variables of the equations from `k` on replaced
@@ -1129,10 +1317,27 @@ private def compute (goal : MVarId) (written : Syntax) (hypothesis := false) (by
         let some (_, .fvar standing, _) := (← instantiateMVars equation.type).eq? | continue
         let motive ← mkLambdaFVars #[.fvar standing] (← instantiateMVars forms[k + 1]!)
         proof ← mkEqMPR (← mkCongrArg motive equation.toExpr) proof
+      -- the call here is the call where the law is stated: both are the body of the function,
+      -- by the entries of the function in the two tables
+      if let (some (program, _, member), some (lawProgram, lawMember)) := (called, place) then
+        let lawProgram ← instantiateMVars lawProgram
+        let lawMember ← instantiateMVars lawMember
+        if lawProgram.hasExprMVar || lawMember.hasExprMVar then
+          throwError "walk_law: the law is about no function of a program{indentExpr (← inferType proof)}"
+        let here ← (withReducible (isDefEq lawProgram program)) <&&> kernelSame lawMember member
+        unless here do
+          let entryHere ← mkAppM ``Zkc.Core.fnMeaning_entry #[s[1]!, program, member, read]
+          let entryThere ← mkAppM ``Zkc.Core.fnMeaning_entry #[s[1]!, lawProgram, lawMember, read]
+          let some (_, _, bodyHere) := (← inferType entryHere).eq? | unreachable!
+          let some (_, _, bodyThere) := (← inferType entryThere).eq? | unreachable!
+          unless ← kernelSame bodyHere bodyThere do
+            throwError "walk_law: the law is about another function than the one that is \
+              called, or about it over other definitions{indentExpr (← inferType proof)}"
+          proof ← mkEqTrans (← mkEqTrans entryHere (← mkEqSymm entryThere)) proof
       pure (value, ← instantiateMVars proof, [])
     else
       let value ← instantiateMVars (← Tactic.elabTermEnsuringType written valueType)
-      let law ← mkFreshExprSyntheticOpaqueMVar (tag := `law) (← lawAt value)
+      let law ← mkFreshExprSyntheticOpaqueMVar (tag := `law) (← lawAt value).1
       pure (value, law, (← readValues (← useEquations law.mvarId!)).toList)
   let withValue := mkApp rule value
   -- the step is the rest on the value: the term is the step of the rule, and the rule gives
