@@ -829,8 +829,9 @@ rule of the walk is the same in the callee as in the root.
 
 Nothing is returned, and the instruction is then computed as any other, where the instruction
 applies no protocol, where the semantics is not that of a role over the tables of a program,
-where no labelled theorem says that the judgment reads no peer, or where no labelled entry
-equation is about the role of the callee. -/
+or where no labelled theorem says that the judgment reads no peer. Under a judgment that reads
+no peer, an application whose callee has no labelled entry equation is an error: the module of
+statements is then not the module of this program. -/
 private def enterApplication (goal : MVarId) (j : Judged) (bound why instr sem key path env : Expr) :
     MetaM (Option MVarId) := goal.withContext do
   -- the instruction: an operation that applies a protocol to operands
@@ -879,7 +880,9 @@ private def enterApplication (goal : MVarId) (j : Judged) (bound why instr sem k
   let (cells, nil) ← spine given
   let inputs := rebuild cells nil (← cells.mapM fun (_, value) => readValue value)
   let some stated ← statedByEntry program model header member (← kernelWhnf played) calleePath inputs
-    | return none
+    | throwError "walk: the judgment reads no peer, and no equation with the label `walk_entry` \
+        is about the role of the protocol that is applied here: a module of statements states \
+        one for each role that its deciding role plays through applications{indentExpr calleeProcess}"
   -- the process of the goal is the application, then the rest
   let b := bound.getAppArgs
   let rest := b[5]!
@@ -1328,11 +1331,6 @@ private def compute (goal : MVarId) (written : Syntax) (hypothesis := false) (by
         unless here do
           let entryHere ← mkAppM ``Zkc.Core.fnMeaning_entry #[s[1]!, program, member, read]
           let entryThere ← mkAppM ``Zkc.Core.fnMeaning_entry #[s[1]!, lawProgram, lawMember, read]
-          let some (_, _, bodyHere) := (← inferType entryHere).eq? | unreachable!
-          let some (_, _, bodyThere) := (← inferType entryThere).eq? | unreachable!
-          unless ← kernelSame bodyHere bodyThere do
-            throwError "walk_law: the law is about another function than the one that is \
-              called, or about it over other definitions{indentExpr (← inferType proof)}"
           proof ← mkEqTrans (← mkEqTrans entryHere (← mkEqSymm entryThere)) proof
       pure (value, ← instantiateMVars proof, [])
     else
