@@ -31,7 +31,9 @@ differs from the others in the shape of its program:
   through the application, at each of the two applications;
 - **a function called inside the callee**, which reads the table of the definitions before the
   callee. The text states the law of the function once, in the table of the definitions
-  before the root, and the walk takes the call by it.
+  before the root, and the walk takes the call by it;
+- **a walk of a hypothesis through the application** (`twice_pays_first`, written by the check
+  after the text): for every judgment with fees that reads no peer of an effect.
 
 The check reads the source with the frontend and writes modules on which Lean is run: the
 proof module (the printed package, what `Written.Statements` writes, and the text of
@@ -145,6 +147,32 @@ def loopedText : String :=
   "  looped_witnessed_of Zkc.Formal.Written.FiniteModel.data false trivial\n" ++
   "    (looped_relation _ false)\n\nend\n"
 
+/-- A theorem after the text of `Twice` that walks a hypothesis: a judgment of the verifier is
+given, and the walk goes through the first application on it. The judgment is any judgment with
+fees that reads no peer of an effect, which the theorem states as a hypothesis; the walk takes
+the proof from there. The path of the application is the root's, so the theorem is of `Twice`
+and not of the nested root. -/
+def converseText : String :=
+  "\n" ++
+  "/-- **A walk of a hypothesis goes through an application.** Every judgment with fees that reads\n" ++
+  "no peer of an effect and judges the verifier, on a false claim, never to return pays at the\n" ++
+  "first effect of the run, which is the message of `Round` at the path of the first\n" ++
+  "application. -/\n" ++
+  "theorem twice_pays_first {F G : Type} (D : StandardModel.Data F G) [DecidableEq F] [DecidableEq G]\n" ++
+  "    (allowed : ∀ op, (RSig (StandardModel.model D)).Reply op → Prop)\n" ++
+  "    (pays : (op : ROp (StandardModel.model D)) → ℚ≥0 →\n" ++
+  "      ((RSig (StandardModel.model D)).Reply op → Prop) → Prop)\n" ++
+  "    (blind : ∀ ρ : Role → Role, Blind ρ (ProcessJudgment.charged allowed pays))\n" ++
+  "    (path : List Frame) (within : ℚ≥0)\n" ++
+  "    (judged : (roleMeaning (StandardModel.model D) installed rootMember verifierRole path\n" ++
+  "        (.cons false (.cons () (.cons () .nil)))).interpret (.charged allowed pays)\n" ++
+  "      (fun _ _ => False) (fun _ _ => True) within) :\n" ++
+  "    ∃ fee excluded, fee ≤ within ∧\n" ++
+  "      pays (.get .message 0 ⟨path ++ [.application ⟨0⟩], ⟨0⟩⟩ (.fin 4)) fee excluded := by\n" ++
+  "  walk at judged\n" ++
+  "  obtain ⟨fee, excluded, least, paid, _⟩ := judged\n" ++
+  "  exact ⟨fee, excluded, least, paid⟩\n"
+
 /-- What the check asserts of what the frontend read of a source of the subject: the goal
 selects the root; it reads the clause `proves @V Holds(claim)` on the first of the three ports,
 decided by the verifier of the scheme; it gives no proof argument; and its coins are positions,
@@ -187,7 +215,7 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
   let refusal := "the fee is not within the cap that the table gives the draw `site_at_0_1`\n  1 / 4 ≤ 1 / 8"
   let halvedControl : Control :=
     { title := "the charge of the callee halved", name := "CapControl", subject := halved,
-      text := template, unproved := ofWalk, places := [refusal], only := true,
+      text := template ++ converseText, unproved := ofWalk, places := [refusal], only := true,
       occurrences := [(refusal, 1)] }
 
   -- The nested root: one application in the root, two in the protocol that it applies.
@@ -208,7 +236,8 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
   let loopedModule ← looped.module "Looped" { text := loopedText, theorems := ofText "looped" }
   let loopedProof ← startLakeLean work "Looped" loopedModule.text
 
-  let _ ← check work "Twice" written { text := template, theorems := ofText "twice" }
+  let _ ← check work "Twice" written
+    { text := template ++ converseText, theorems := ofText "twice" ++ ["twice_pays_first"] }
     [halvedControl]
   let (ok, output) ← finishLean nestedProof
   acceptedOutput "Nested" ok output nestedModule.theorems allowed

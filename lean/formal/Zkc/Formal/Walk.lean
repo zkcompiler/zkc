@@ -757,19 +757,23 @@ private def restAfter (a : Array Expr) (names rest : Expr) : MetaM Expr := do
     mkLambdaFVars #[vs] (mkAppN (mkConst ``Zkc.Core.Term.denote) #[D, sem, newΓ, a[3]!, rest, path, extended])
 
 /-- The proof that a judgment reads no peer of an effect under a renaming of roles
-(`Zkc.Core.Blind`), from a theorem with the label `walk_blind` that says so of the judgment as
-the goal states it. -/
+(`Zkc.Core.Blind`): from a hypothesis of the goal that says so (a theorem about every judgment
+of a kind states it as a hypothesis), or from a theorem with the label `walk_blind` that says
+so of the judgment as the goal states it. -/
 private def blindUnder (roleMap judgment : Expr) : MetaM (Option Expr) := do
   let wanted ← mkAppM ``Zkc.Core.Blind #[roleMap, judgment]
+  let from_ (source : Expr) : MetaM (Option Expr) := withNewMCtxDepth do
+    let (args, _, stated) ← forallMetaTelescope (← instantiateMVars (← inferType source))
+    unless stated.isAppOf ``Zkc.Core.Blind do return none
+    unless ← isDefEq stated wanted do return none
+    let proof ← instantiateMVars (mkAppN source args)
+    if proof.hasExprMVar then return none
+    return some proof
+  for decl in ← getLCtx do
+    if decl.isImplementationDetail then continue
+    if let some proof ← from_ decl.toExpr then return some proof
   for name in ← Lean.labelled `walk_blind do
-    let found ← withNewMCtxDepth do
-      let theorem_ ← mkConstWithFreshMVarLevels name
-      let (args, _, stated) ← forallMetaTelescope (← inferType theorem_)
-      unless ← isDefEq stated wanted do return none
-      let proof ← instantiateMVars (mkAppN theorem_ args)
-      if proof.hasExprMVar then return none
-      return some proof
-    if found.isSome then return found
+    if let some proof ← from_ (← mkConstWithFreshMVarLevels name) then return some proof
   return none
 
 /-- Whether the kernel finds two terms definitionally equal. -/
