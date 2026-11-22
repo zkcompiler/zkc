@@ -1,5 +1,5 @@
 namespace SourceConsumer_CERTIFICATE_NAMESPACE
-open Zkc.Core Zkc.Formal.Written Zkc.Formal.Written.FiniteModel
+open Zkc.Core ZkcFormal.Written ZkcFormal.Written.FiniteModel
 open CERTIFICATE_NAMESPACE
 
 -- These three argument lists and the observed addresses come from the source fixture.

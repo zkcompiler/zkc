@@ -1,10 +1,10 @@
 module
 
 public import Baseline
-public import Zkc.Formal.Written.FiniteModel
+public import ZkcFormal.Written.FiniteModel
 
 @[expose] public section
-open Zkc.Core Zkc.Formal.Written
+open Zkc.Core ZkcFormal.Written
 
 namespace Reindexed
 export Baseline (V PublicStatement ports header stored storedRelation storedExtractor RelationHeader ExtractorHeader

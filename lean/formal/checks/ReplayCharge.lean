@@ -1,15 +1,14 @@
-import Zkc.Tools.Formal.DrawCharge
-import Zkc.Tools.Formal.Policy
+import ZkcFormalTools.DrawCharge
+import ZkcFormalTools.Policy
 
 open Lean Zkc.Tools.Audit
 
 #eval show IO Unit from do
   initSearchPath (← findSysroot)
-  let arts ← zkcArtifacts (← searchPathRef.get)
-  let issuers := Zkc.Tools.Formal.publicIssuers "."
+  let issuers := ZkcFormalTools.publicIssuers "."
   let env ← importModules (issuers.map fun issuer => {module := issuer.root}) {}
-    (level := .private) (loadExts := false) (arts := arts)
-  let report ← audit env issuers arts Zkc.Tools.Formal.policy
+    (level := .private) (loadExts := false)
+  let report ← audit env issuers ZkcFormalTools.policy
   for line in report.lines do IO.println line
   for failure in report.findings do IO.println failure.line
   unless report.declarations > 0 && report.findings.isEmpty do throw (IO.userError "charge issuer audit failed")

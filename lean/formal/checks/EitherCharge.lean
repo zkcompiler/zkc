@@ -125,7 +125,7 @@ def steppedText : String :=
   "  walk as secondKept\n  walk_free as third\n" ++
   "  walk as thirdKept\n\n" ++
   "theorem stepped_witnessed : steppedWitnessed :=\n" ++
-  "  stepped_witnessed_of Zkc.Formal.Written.FiniteModel.data false trivial\n" ++
+  "  stepped_witnessed_of ZkcFormal.Written.FiniteModel.data false trivial\n" ++
   "    (stepped_relation _ false)\n\nend\n"
 
 /-- A text that turns the kernel's check off and proves the judgment from a false equation.
@@ -144,7 +144,7 @@ def uncheckedText : String :=
   "  exact absurd h (by decide)\n\n" ++
   "theorem either_judged_forked : eitherJudged := either_judged\n\n" ++
   "theorem either_witnessed : eitherWitnessed :=\n" ++
-  "  either_witnessed_of Zkc.Formal.Written.FiniteModel.data false trivial\n" ++
+  "  either_witnessed_of ZkcFormal.Written.FiniteModel.data false trivial\n" ++
   "    (either_relation _ false)\n\nend\n"
 
 /-- The theorems of the text of the proofs. -/

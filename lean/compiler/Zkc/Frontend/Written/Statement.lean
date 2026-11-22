@@ -32,7 +32,7 @@ the library, about the class of models that it reads from the package (`chosenMo
   of the deciding role, where the relation of the goal's clause returns false at its operands
   (for every valid witness, when the relation has witness parameters), the deciding role
   returns within the total of the goal's table of caps, in the experiment that the formal library
-  defines (`ReturnsWithin`, `Zkc/Formal/ReturnExperiment.lean`): against every service that is
+  defines (`ReturnsWithin`, `ZkcFormal/ReturnExperiment.lean`): against every service that is
   no more likely to answer a coin within a set of replies than the sampler of the coin's law
   is to draw one there (it may also not answer) and that answers only what is permitted. The
   generator writes the process, the samplers and the bound, and not what the probability is of. The goal for every admitted program (`<goal>Goal`), the result with the coverage
@@ -124,7 +124,7 @@ def standardModelText : ModelText where
   model := "(StandardModel.model D)"
   samplers := "(lawSamplers (StandardModel.model D) (StandardModel.draws D))"
   covers := "StandardModel.covers"
-  imports := ["Zkc.Formal.Written.FiniteModel"]
+  imports := ["ZkcFormal.Written.FiniteModel"]
   witnesses := "F, G, D, inferInstance, inferInstance"
   served := "(StandardModel.served D)"
 
@@ -139,7 +139,7 @@ def arithmeticModelText : ModelText where
   model := "(ArithmeticModel.model F G)"
   samplers := "(lawSamplers (ArithmeticModel.model F G) (ArithmeticModel.draws F G))"
   covers := "ArithmeticModel.covers"
-  imports := ["Zkc.Formal.Written.ArithmeticDraws"]
+  imports := ["ZkcFormal.Written.ArithmeticDraws"]
   witnesses := "F, G, inferInstance, inferInstance, inferInstance, inferInstance, " ++
     "inferInstance, inferInstance, inferInstance"
   served := "(ArithmeticModel.served F G)"
@@ -150,7 +150,7 @@ uniform scalar of the model pays for; the scalar field itself is such a field. -
 def scalarFieldModelText : ModelText :=
   { arithmeticModelText with
     hypotheses := [("large", "Zkc.Vocabulary.Field.bls12381Fr.order ≤ Fintype.card F")]
-    imports := ["Zkc.Formal.Written.ArithmeticDraws", "Zkc.Formal.Written.ScalarField"] }
+    imports := ["ZkcFormal.Written.ArithmeticDraws", "ZkcFormal.Written.ScalarField"] }
 
 /-- The hypotheses of a model as the antecedents of a proposition. -/
 def ModelText.assumed (model : ModelText) : String :=
@@ -390,7 +390,7 @@ def relationInputs (s : Statements) (goal : ClaimedGoal) : Except String (List S
 
 /-- The names that the text after this one may use. -/
 def opens : String :=
-  "open Zkc.Formal Zkc.Formal.ProbabilisticProcess Zkc.Formal.Written OracleComp ProbComp\n" ++
+  "open ZkcFormal ZkcFormal.ProbabilisticProcess ZkcFormal.Written OracleComp ProbComp\n" ++
   "open Zkc.Frontend.Written (CapTable UseCaps DrawCap CallCap)\n" ++
   "open scoped NNRat ENNReal\n"
 
@@ -915,11 +915,11 @@ has the walk and the equations where it starts; `walks` says whether the module 
 def imports (model : ModelText) (walks : Bool) : List String :=
   packageImports ++
     (if walks then ["Zkc.Core.Evidence.FunctionEntry", "Zkc.Core.Evidence.ProtocolReadback",
-      "Zkc.Formal.Walk",
-      "Zkc.Formal.Written.WalkFees"] else []) ++
-    ["Zkc.Formal.OracleProcess", "Zkc.Formal.ReturnExperiment", "Zkc.Formal.Written.LawSamplers",
-      "Zkc.Formal.Written.SiteCaps", "Zkc.Formal.Written.FunctionMeaning",
-      "Zkc.Formal.Written.ClaimIntro"] ++ model.imports
+      "ZkcFormal.Walk",
+      "ZkcFormal.Written.WalkFees"] else []) ++
+    ["ZkcFormal.OracleProcess", "ZkcFormal.ReturnExperiment", "ZkcFormal.Written.LawSamplers",
+      "ZkcFormal.Written.SiteCaps", "ZkcFormal.Written.FunctionMeaning",
+      "ZkcFormal.Written.ClaimIntro"] ++ model.imports
 
 /-- The lines that open a module: its imports, and the namespace of the core. -/
 def header (modules : List String) : String :=
@@ -928,7 +928,7 @@ def header (modules : List String) : String :=
 /-- The published theorems of the goals, each with the proposition that it is of, under their
 full names in the name space `name`: for a goal, `<goal>_installed : <goal>Claim`,
 `<goal>_sound : <goal>Goal`, `<goal>_result : <goal>Result`, `<goal>_met : <goal>Witnessed`.
-The check outside the file (`Zkc/Tools/Formal/VerifyPublication.lean`) is given this list. The
+The check outside the file (`ZkcFormalTools/VerifyPublication.lean`) is given this list. The
 theorems themselves are written by `conclusions` and `closings`, which spell the same endings:
 if the two came apart, the check outside would find no theorem under the listed name. -/
 def publicationPairs (s : Statements) (name : String) : List (Lean.Name × Lean.Name) :=
@@ -966,7 +966,7 @@ hypothesis of the theorems after it, and Lean then accepts the proof module and 
 axiom. So Lean's acceptance of the proof module is not what a check of a subject rests on. The
 check compiles the module of the statements first, where no text is; it compiles the proof
 module against that object; and it has the object of the proof module read outside the file
-(`Zkc/Tools/Formal/VerifyPublication.lean`): the kernel replays its declarations on its imports
+(`ZkcFormalTools/VerifyPublication.lean`): the kernel replays its declarations on its imports
 (all that it checks: not code marked `unsafe`, which no theorem can use), the object declares
 no name that an import has, each published theorem is read from the result of that replay and
 is of a proposition that the module of the statements declares, and the axioms are read from
@@ -1025,8 +1025,8 @@ def claimsModule (s : Statements) (name : String) (model : ModelText := s.chosen
 /-- A module with the package of the claims and the one theorem that a model covers it. -/
 def coverageModule (s : Statements) (name : String) (model : ModelText := s.chosenModel) :
     PlainModule :=
-  let text := header (packageImports ++ ["Zkc.Formal.Written.LawSamplers"] ++ model.imports) ++
-    s!"namespace {name}\n" ++ (Written.package s.package).text ++ "open Zkc.Formal.Written\n" ++
+  let text := header (packageImports ++ ["ZkcFormal.Written.LawSamplers"] ++ model.imports) ++
+    s!"namespace {name}\n" ++ (Written.package s.package).text ++ "open ZkcFormal.Written\n" ++
     coverage model ++ footer name ["covered"]
   { text, theorems := ["covered"] }
 
@@ -1034,7 +1034,7 @@ def coverageModule (s : Statements) (name : String) (model : ModelText := s.chos
 with the ceiling that it states. A goal whose ceiling is below its total gives no module. -/
 def ceilingModule (s : Statements) (name : String) : Except String PlainModule := do
   let ceilings ← s.ceilings
-  let text := header (packageImports ++ ["Zkc.Formal.Written.SiteCaps"]) ++
+  let text := header (packageImports ++ ["ZkcFormal.Written.SiteCaps"]) ++
     s!"namespace {name}\n" ++ (Written.package s.package).text ++ opens ++ s.facts ++ "\n" ++
     ceilings ++ footer name s.ceilingNames
   return { text, theorems := s.ceilingNames }

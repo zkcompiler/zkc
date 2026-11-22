@@ -298,8 +298,8 @@ the laws. Its proof is the published theorem `sound_sound` at those inputs. -/
 def proofText (guarded : String) : String :=
   let (first, second) := if guarded == "flag" then ("false", "other") else ("flag", "false")
   "noncomputable section\n" ++
-  "open Zkc.Formal.Written.StandardModel\n" ++
-  "open Zkc.Formal.Written.FiniteModel (data)\n\n" ++
+  "open ZkcFormal.Written.StandardModel\n" ++
+  "open ZkcFormal.Written.FiniteModel (data)\n\n" ++
   "theorem sound_installed : soundClaim := by\n" ++
   "  intro F G D _ _ path flag _ other _ premise σ service conforms state\n" ++
   s!"  have declined : {guarded} = false := by\n" ++
@@ -325,8 +325,8 @@ def proofText (guarded : String) : String :=
 
 def consumer : String :=
   "noncomputable section\n" ++
-  "open Zkc.Formal.Written.StandardModel\n" ++
-  "open Zkc.Formal.Written.FiniteModel (data)\n\n" ++
+  "open ZkcFormal.Written.StandardModel\n" ++
+  "open ZkcFormal.Written.FiniteModel (data)\n\n" ++
   "theorem consumer {a : Admitted V} (admitted : admit stored association = .ok a) :\n" ++
   "    ∃ root : Member a.program.headers.protocols rootHeader,\n" ++
   "      a.program.findProtocol rootKey = some ⟨rootHeader, root⟩ ∧\n" ++

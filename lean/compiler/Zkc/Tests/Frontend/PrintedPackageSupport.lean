@@ -172,8 +172,7 @@ def confined (folder : System.FilePath) (command : Array String) : IO IO.Process
     IO.FS.removeFile filter
 
 /-- Lean's output on a module in the workspace of the current directory, through `lake`: with
-the options of the package, and with the modules of every package of the workspace, which two
-packages that share a root name do not give to a bare `lean`.
+the options of the package, and with the modules of every package of the workspace.
 
 The module is elaborated one declaration after another. When declarations are elaborated
 concurrently, a theorem whose proof ends in an exception (a timeout) is left as a name without

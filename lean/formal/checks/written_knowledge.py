@@ -251,18 +251,18 @@ module secondary:
     entry.write_text(ENTRY.read_text())
 
     controls = work / "Checks.lean"
-    imports = [f"public import {name}" for name in [*names, "Zkc.Formal.Written.FiniteModel"]]
+    imports = [f"public import {name}" for name in [*names, "ZkcFormal.Written.FiniteModel"]]
 
     controls.write_text("\n".join(["module", "", *imports, "", CONTROL.read_text(),
                                    *(source_consumer(name, fixture) for name, fixture in
                                      [("Baseline", "Baseline"), ("SameLog", "SameLog"), ("Context", "Baseline"),
                                       ("Named", "Baseline"), ("NamedArguments", "Baseline"), ("RolesReversed", "RolesReversed")]),
                                    """
-open Zkc.Formal.Written.FiniteModel in
+open ZkcFormal.Written.FiniteModel in
 example (s : Context.PublicStatement model) :
     model.Val (.seq (.fin 256) none) × model.Val (.seq (.fin 256) none) :=
   (s.src_message, s.src_domain)
-open Zkc.Formal.Written.FiniteModel in
+open ZkcFormal.Written.FiniteModel in
 example : ¬ (Context.PublicStatement.mk (M := model) true false [256] []).Valid := by
   intro h
   exact (Nat.lt_irrefl 256) (h.2.2.1.1 256 (by simp))
@@ -283,8 +283,8 @@ example : Named.selectedScheme = "Proof" ∧ Named.selectedGoal = some "chosen" 
     failed = work / "Rejected.lean"
     for name, issued in [("Baseline", base), ("SameLog", same_log_module)]:
         weakened = issued.split("theorem certified_core_admitted {", 1)[0]
-        weakened = replace_once(weakened, "public import Zkc.Formal.Written.GroupReplay",
-                                "public import Zkc.Formal.Written.GroupReplay\npublic import Zkc.Formal.Written.FiniteModel")
+        weakened = replace_once(weakened, "public import ZkcFormal.Written.GroupReplay",
+                                "public import ZkcFormal.Written.GroupReplay\npublic import ZkcFormal.Written.FiniteModel")
         weakened += f"theorem certified_source_admitted : True := trivial\nend «{name}»\n"
         failed.write_text(weakened + source_consumer(name, name))
         run(["lake", "-q", "lean", failed], failure="Function expected", cwd=work)

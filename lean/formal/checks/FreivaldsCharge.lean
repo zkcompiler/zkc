@@ -155,7 +155,7 @@ def ofClaim : List String :=
 Mathlib's matrices. -/
 def proofOf (template : String) : Proof :=
   { text := template, theorems := ofText
-    imports := ["Zkc.Formal.Written.FixedSequences", "Mathlib.Data.Matrix.Mul"] }
+    imports := ["ZkcFormal.Written.FixedSequences", "Mathlib.Data.Matrix.Mul"] }
 
 /-- A text that defines again, in its own scope, a name of the library that the statement of
 the goal's judgment uses, and proves the judgment written anew under that name: the fees within

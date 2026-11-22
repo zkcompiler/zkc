@@ -108,8 +108,8 @@ role on that claim returns with probability at most three eighths under the serv
 laws. Its proof is the published theorem and the budget that the module states. -/
 def consumer : String :=
   "noncomputable section\n" ++
-  "open Zkc.Formal.Written.StandardModel\n" ++
-  "open Zkc.Formal.Written.FiniteModel (data)\n\n" ++
+  "open ZkcFormal.Written.StandardModel\n" ++
+  "open ZkcFormal.Written.FiniteModel (data)\n\n" ++
   "theorem consumer {a : Admitted V} (admitted : admit stored association = .ok a) :\n" ++
   "    ∃ root : Member a.program.headers.protocols rootHeader,\n" ++
   "      a.program.findProtocol rootKey = some ⟨rootHeader, root⟩ ∧\n" ++

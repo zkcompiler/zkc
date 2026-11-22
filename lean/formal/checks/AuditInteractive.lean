@@ -4,17 +4,16 @@ open Lean Zkc.Tools.Audit
 
 def main : IO UInt32 := do
   initSearchPath (← findSysroot)
-  let artifacts ← zkcArtifacts (← searchPathRef.get)
   let libraries : Array Library := #[
-    { name := "interactive security", root := `Zkc.Formal.Interactive, directory := some ".",
-      imports := some #[`Zkc.Core,`Zkc.Formal,`Init] },
-    { name := "process judgments", root := `Zkc.Formal.ProcessJudgment, directory := some ".",
+    { name := "interactive security", root := `ZkcFormal.Interactive, directory := some ".",
+      imports := some #[`Zkc.Core,`ZkcFormal,`Init] },
+    { name := "process judgments", root := `ZkcFormal.ProcessJudgment, directory := some ".",
       imports := some #[`Zkc.Core,`Init] },
-    { name := "world observations", root := `Zkc.Formal.WorldObservation, directory := some ".",
-      imports := some #[`Zkc.Core,`Zkc.Formal,`Init] },
-    { name := "interactive mathematical controls", kind := .tests, root := `Zkc.Tests.Formal.Interactive, directory := some "." }]
-  let env ← importModules (libraries.map fun lib => { module := lib.root }) {} (loadExts := false) (level := .private) (arts := artifacts)
-  let report ← audit env libraries artifacts
+    { name := "world observations", root := `ZkcFormal.WorldObservation, directory := some ".",
+      imports := some #[`Zkc.Core,`ZkcFormal,`Init] },
+    { name := "interactive mathematical controls", kind := .tests, root := `ZkcFormalTests.Interactive, directory := some "." }]
+  let env ← importModules (libraries.map fun lib => { module := lib.root }) {} (loadExts := false) (level := .private)
+  let report ← audit env libraries
   for line in report.lines do IO.println line
   for finding in report.findings do IO.println finding.line
   IO.println s!"{report.declarations} declarations, {report.reached} reachable constants, axioms {report.axioms}, {report.findings.size} findings"

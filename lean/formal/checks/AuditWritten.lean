@@ -1,4 +1,4 @@
-import Zkc.Tools.Formal.Policy
+import ZkcFormalTools.Policy
 
 open Lean Zkc.Tools.Audit
 
@@ -7,20 +7,19 @@ imports are loaded from their private artifacts. The three-axiom policy is local
 the published written certificates and the proofs that their admissions succeed. -/
 def checkCertificates : IO Unit := do
   initSearchPath (← findSysroot)
-  let artifacts ← zkcArtifacts (← searchPathRef.get)
   let roots := #[`Baseline, `SameLog]
-  let probe ← importModules #[{module := `AuditLocal}] {} (loadExts := false) (level := .private) (arts := artifacts)
+  let probe ← importModules #[{module := `AuditLocal}] {} (loadExts := false) (level := .private)
   let (finding, _) ← replay probe #[{name := "local replay fixture", root := `AuditLocal},
-    {name := "source certificate", root := `Baseline}] artifacts #[`AuditVendor]
+    {name := "source certificate", root := `Baseline}] #[`AuditVendor] ZkcFormalTools.policy.project
   unless finding.any (fun f => f.rule == .kernel && f.line.startsWith "a prebuilt library imports project module ") do
     throw (IO.userError "a prebuilt library could preload a project proof into kernel replay")
   let (probeAxioms, _, _) := dependencies probe #[`AuditLocal.fromExternal]
-  unless probeAxioms.any (fun ax => !Zkc.Tools.Formal.policy.axioms.contains ax) do
+  unless probeAxioms.any (fun ax => !ZkcFormalTools.policy.axioms.contains ax) do
     throw (IO.userError "axiom traversal missed a private upstream dependency")
   let env ← importModules #[{module := `Checks}, {module := `OddFork}] {} (loadExts := false)
-    (level := .private) (arts := artifacts)
+    (level := .private)
   let libraries := roots.map fun root => ({name := root.toString, root} : Library)
-  let (finding, lines) ← replay env libraries artifacts Zkc.Tools.Formal.policy.packages
+  let (finding, lines) ← replay env libraries ZkcFormalTools.policy.packages ZkcFormalTools.policy.project
   for line in lines do IO.println line
   if let some failure := finding then
     throw (IO.userError failure.line)
@@ -39,7 +38,7 @@ def checkCertificates : IO Unit := do
     unless (env.find? name).any (· matches .thmInfo _) do
       throw (IO.userError s!"missing theorem {name}")
   let (axioms, _, _) := dependencies env theorems
-  let allowed := Zkc.Tools.Formal.policy.axioms
+  let allowed := ZkcFormalTools.policy.axioms
   IO.println s!"{theorems.size} written theorems, axioms {axioms}"
   unless axioms.all allowed.contains do
     throw (IO.userError s!"written certificate exceeds the formal axiom policy: {axioms}")

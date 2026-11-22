@@ -12,7 +12,7 @@ inductive Binding where
 
 /-- The generated application is type-checked at the actual formal definition. -/
 def Binding.statement : Binding → String
-  | .writtenFork => "Zkc.Formal.Written.SpecialSoundness"
+  | .writtenFork => "ZkcFormal.Written.SpecialSoundness"
 
 inductive HonestSide where
   | allRoles | verifier | exceptSimulated

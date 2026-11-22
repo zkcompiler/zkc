@@ -1,12 +1,12 @@
-import Zkc.Tests.Formal.Reuse.Controls
-import Zkc.Tests.Formal.SourceHonestSumcheck
+import ZkcFormalTests.Reuse.Controls
+import ZkcFormalTests.SourceHonestSumcheck
 
-open Zkc.Core Zkc.Frontend Zkc.Tests.Formal
+open Zkc.Core Zkc.Frontend ZkcFormalTests
 
 #eval show IO Unit from do
   let root := (← IO.currentDir) / ".." / ".."
-  Zkc.Tests.Formal.SourceProtocolRoots.checkAll root
-  Zkc.Tests.Formal.Reuse.run root 0
+  ZkcFormalTests.SourceProtocolRoots.checkAll root
+  ZkcFormalTests.Reuse.run root 0
   let cases : List (Nat × SourcePairReadback.Variant × Option (String × String) × String) := [
     (0,.original,none,"empty reduction and terminal guard"),
     (1,.original,none,"one message and restriction"),

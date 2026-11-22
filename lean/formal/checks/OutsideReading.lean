@@ -5,7 +5,7 @@ The reading of a module outside the file, on small modules written here.
 
 A check of a subject does not rest on Lean's acceptance of a proof module: the module of the
 statements is compiled with no text, the proof module is compiled against it, and the object of
-the proof module is read by `Zkc/Tools/Formal/VerifyPublication.lean`
+the proof module is read by `ZkcFormalTools/VerifyPublication.lean`
 (`WrittenSubject.readOutside`). This check gives that program modules that Lean accepts and
 that it must refuse, each for the reason that the control names, and three that it must accept
 (the module as stated; a text with imports of its own; a text with an `unsafe` and a `partial`

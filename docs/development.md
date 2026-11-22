@@ -14,13 +14,15 @@
 | Path | Content |
 |---|---|
 | `lean/compiler/` | the Lake package of the compiler: the core (`Zkc/Core`), the frontend (`Zkc/Frontend`), their tests (`Zkc/Tests`) and tools (`Zkc/Tools`) |
-| `lean/formal/` | the Lake package of statements and proofs over the meaning of the core; it requires `../compiler` |
+| `lean/formal/` | the Lake package of statements and proofs over the meaning of the core; it requires `../compiler`. Its modules have roots of their own: the library (`ZkcFormal`), its tests (`ZkcFormalTests`) and its tools (`ZkcFormalTools`) |
 | `language/` | the reference of the source language and its conformance tests |
 | `libraries/zkc/` | the library of the source language, in source |
 | `examples/` | worked programs |
 | `docs/` | the status, this guide and the specification of the core language |
 | `scripts/check_docs.py` | the document checker |
 | `.github/` | the contribution guide, the pull request template and CI |
+
+A module root belongs to one package: the compiler package has `Zkc`, the formal package the three above. Lean finds a module by name through the folder of its first name component, so a tool that takes module names (`leanchecker`, `leanexport`, `lake check`, `lake comparator`) finds the modules of both packages.
 
 Lake writes the outputs of each package to its `.lake/` directory, which git ignores.
 Both packages pin Lean 4.36.0. See the [toolchain guide](lean-toolchain.md) for its trust boundary,
@@ -120,7 +122,7 @@ and fails if any expected result changes. Private declarations are loaded from
 `.olean.private`; the controls also check private native attributes. The
 [compiler guide](../lean/compiler/README.md#build-test-and-audit) describes the entry points.
 
-The formal audit adds `Zkc.Tools.Formal.DrawCharge` as a replay root. Both
+The formal audit adds `ZkcFormalTools.DrawCharge` as a replay root. Both
 `lake test` in the formal package and `just test-written-charge` check the issuer and its
 project import closure through the kernel. The formal policy takes Lean and the pinned
 Mathlib and VCVio import closures as built, checks for project modules in the upstream

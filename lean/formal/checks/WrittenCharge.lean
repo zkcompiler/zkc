@@ -1,10 +1,10 @@
-import Zkc.Tools.Formal.DrawCharge
-import Zkc.Tools.Formal.Policy
+import ZkcFormalTools.DrawCharge
+import ZkcFormalTools.Policy
 import Zkc.Tools.Audit.Controls.Axiom
-import Zkc.Tests.Formal.Reuse.Automatic
+import ZkcFormalTests.Reuse.Automatic
 
-open Zkc.Core Zkc.Frontend Zkc.Tools.Formal Zkc.Tests.Formal
-open Zkc.Formal.Written.RoundCharge
+open Zkc.Core Zkc.Frontend ZkcFormalTools ZkcFormalTests
+open ZkcFormal.Written.RoundCharge
 
 -- Retaining the original emission equality rules out a mixed public certificate.
 example (source _other : Written.AdmittedRoot) : Written.AdmittedRoot := by
@@ -101,10 +101,10 @@ private def sum (root : System.FilePath) (rounds : Nat) (edit : Option (String �
       "def evaluate(m, r): (1 - r) * m.0 + r * m.1"
       "def evaluate(m, r): if depth == 1 then m.0 + r * (m.1 - m.0) else (1 - r) * m.0 + r * m.1"
   let mixedCharge ← IO.ofExcept (chargeSumcheck mixed 2 "challenge")
-  let rows := Zkc.Formal.Written.SumcheckRows.sourceRows mixed.emission.bindings
+  let rows := ZkcFormal.Written.SumcheckRows.sourceRows mixed.emission.bindings
   let rounds := mixedCharge.verifier.linked
   for single in [rows.evaluationReadback, rows.affineReadback] do
-    if (Zkc.Formal.Interactive.Sumcheck.ReductionRound.checkPairSequence rows rounds.entry.definitions
+    if (ZkcFormal.Interactive.Sumcheck.ReductionRound.checkPairSequence rows rounds.entry.definitions
         (List.nodup_append.mp rounds.entry.distinct).1 single rounds.rounds).isSome then
       throw (IO.userError "one interpolation rule unexpectedly certified the mixed sequence")
   let actualKeys := mixedCharge.verifier.linked.rounds.instances.filterMap fun r =>
@@ -151,7 +151,7 @@ private def sum (root : System.FilePath) (rounds : Nat) (edit : Option (String �
 
 
 namespace RepeatedCoin
-open Zkc.Formal.FiniteService Zkc.Formal.ProbabilisticProcess Zkc.Formal.Interactive OracleComp
+open ZkcFormal.FiniteService ZkcFormal.ProbabilisticProcess ZkcFormal.Interactive OracleComp
 open scoped ENNReal
 
 private abbrev Coin : Sig := ⟨Unit, fun _ => Bool⟩
@@ -181,16 +181,15 @@ end RepeatedCoin
 open Lean Zkc.Tools.Audit in
 #eval show IO Unit from do
   initSearchPath (← findSysroot)
-  let artifacts ← zkcArtifacts (← searchPathRef.get)
-  let env ← importModules #[{module := `Zkc.Tools.Formal.DrawCharge}, {module := `Zkc.Tools.Audit.Controls.Axiom}]
-    {} (level := .private) (loadExts := false) (arts := artifacts)
+  let env ← importModules #[{module := `ZkcFormalTools.DrawCharge}, {module := `Zkc.Tools.Audit.Controls.Axiom}]
+    {} (level := .private) (loadExts := false)
   let authorized (names : Array Lean.Name) := do
     for name in names do
       unless (env.find? name).any (· matches .thmInfo _) do throw (IO.userError s!"missing theorem {name}")
     let (axioms,_,_) := dependencies env names
     IO.println s!"{names}: axioms {axioms}"
-    return axioms.all Zkc.Tools.Formal.policy.axioms.contains
-  unless ← authorized #[`Zkc.Tools.Formal.ChargedSumcheck.primeBound, `Zkc.Tools.Formal.ChargedLayer.bound] do
+    return axioms.all ZkcFormalTools.policy.axioms.contains
+  unless ← authorized #[`ZkcFormalTools.ChargedSumcheck.primeBound, `ZkcFormalTools.ChargedLayer.bound] do
     throw (IO.userError "published charge theorem exceeds the formal axiom policy")
   let some control := env.constants.toList.findSome? (fun (n,info) =>
     if (privateToUserName n) == `Zkc.Tools.Audit.Controls.fromAxiom && info matches .thmInfo _ then some n else none)

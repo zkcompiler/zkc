@@ -62,7 +62,7 @@ def run (template work : System.FilePath) : IO Unit := do
     [/- controls -/]
 ```
 
-The rest of a check file is frame that the five checks share word for word: the imports, the `open`s, and at the end `#eval show IO Unit from IO.FS.withTempDir fun work => run "checks/EitherCharge.lean.in" work`. The path of the text is relative to `lean/formal`, where a check is run: `lake lean checks/EitherCharge.lean`. A text that uses a lemma of a library module that the generated module does not import names the module in `imports` of its proof (Freivalds: `Zkc.Formal.Written.FixedSequences`, `Mathlib.Data.Matrix.Mul`).
+The rest of a check file is frame that the five checks share word for word: the imports, the `open`s, and at the end `#eval show IO Unit from IO.FS.withTempDir fun work => run "checks/EitherCharge.lean.in" work`. The path of the text is relative to `lean/formal`, where a check is run: `lake lean checks/EitherCharge.lean`. A text that uses a lemma of a library module that the generated module does not import names the module in `imports` of its proof (Freivalds: `ZkcFormal.Written.FixedSequences`, `Mathlib.Data.Matrix.Mul`).
 
 A subject is accepted when Lean accepts the proof module; the module is accepted outside the file, where the kernel replays it and its published theorems are of the propositions of the module of the statements (below, "A check does not rest on Lean's acceptance"); every theorem of the statements, and everything that the proof module declares, rests on `propext`, `Classical.choice` and `Quot.sound` at most; Lean accepts the module in which the package is compared with what the frontend gives to admission (`<Name>Source`); and every control is refused as it says.
 
@@ -161,7 +161,7 @@ case after => …   -- the rest, from `invariant_i` after the last
 
 ```lean
 theorem either_witnessed : eitherWitnessed :=
-  either_witnessed_of Zkc.Formal.Written.FiniteModel.data false trivial (either_relation _ false)
+  either_witnessed_of ZkcFormal.Written.FiniteModel.data false trivial (either_relation _ false)
 ```
 
 ## Controls

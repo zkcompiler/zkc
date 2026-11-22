@@ -156,7 +156,7 @@ source lookup and keep Mathlib and VCVio outside the compiler dependency graph.
 An external name can already have a checked source association. The Sumcheck extension and
 GKR summand checks inspect the selected external name and its operands. Supplying the
 semantics of the named algorithm for a particular game is a further obligation.
-[Shared declarations](../lean/compiler/Zkc/Vocabulary/Security.lean) · [Formal fork](../lean/formal/Zkc/Formal/Written/Extraction.lean)
+[Shared declarations](../lean/compiler/Zkc/Vocabulary/Security.lean) · [Formal fork](../lean/formal/ZkcFormal/Written/Extraction.lean)
 
 **Facts.** Section 7.1 already assigns fact acceptance to Core admission, and TY4 describes
 a mutable name as its current value. Three independent expectations contradicted admission.
