@@ -37,14 +37,15 @@ The check reads the source with the frontend and writes modules on which Lean is
 What the source says and the proof module takes as given is asserted here against the source:
 the ports, the clause, the operand and the table of caps, as literals.
 
-Four controls are refused by Lean, each at the places that the check names and at no other.
+Four controls are refused: three by Lean, each at the places that the check names and at no
+other, and one outside the file.
 
 - A text that proves nothing of the judgment: after its last `end` it declares the judgment as
   an instance variable of the module's scope, with the two linters that would report that
   switched off, and takes the judgment from the variable. Every theorem that the generator
-  writes after the text takes the variable as a hypothesis; Lean proves each and reports no
-  axiom for it beyond the allowed. The module is refused at the four places where the stored
-  statements of those theorems are read (`published`): none states its proposition.
+  writes after the text takes the variable as a hypothesis; Lean proves each and accepts the
+  module. It is refused outside the file, where the stored statements of those theorems are
+  read: none of the four is of its proposition.
 
 - The charge of the source halved (`1 / 16`): the program is what it was, the cap of the draw
   is another and so is the budget, three sixteenths. The module is refused at three places:
@@ -200,7 +201,9 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
         "`Guess.guessing_met` is not of the proposition `Guess.guessingWitnessed`"] }]
   IO.println ("Guess<3> is judged within the table of caps of its goal (the draw at 1/8, three " ++
     "times: 3/8), a fee at every round of the loop; a consumer written apart states the bound " ++
-    "as 3/8; 4 of 4 controls refused, each at the places that the check names and at no other.")
+    "as 3/8; 4 of 4 controls refused, three by Lean at the places that the check names and at " ++
+    "no other, and one outside the file, where none of its four published theorems is of its " ++
+    "proposition.")
 
 end GuessCharge
 

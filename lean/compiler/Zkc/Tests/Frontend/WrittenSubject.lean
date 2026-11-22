@@ -234,14 +234,17 @@ def components : Lean.Name → List String
   | .anonymous => []
 
 /-- What a check asks the program outside the file of a proof module: the module of the
-statements, the allowed axioms and the published pairs, names as lists of components. -/
+statements, the allowed axioms, the published pairs and every theorem that the proof module has
+to have, names as lists of components. -/
 def manifest (module : Module) (axioms : List String) : Lean.Json :=
   let name (parts : List String) : Lean.Json := .arr (parts.map Lean.Json.str).toArray
   .mkObj [
     ("statements", name (components module.statementsName)),
     ("allowed", .arr (axioms.map fun axiom_ => name (axiom_.splitOn ".")).toArray),
     ("pairs", .arr (module.published.map fun (theorem_, proposition) =>
-      .arr #[name (components theorem_), name (components proposition)]).toArray)]
+      .arr #[name (components theorem_), name (components proposition)]).toArray),
+    ("theorems", .arr (module.proved.map fun theorem_ =>
+      name (module.space :: theorem_.splitOn ".")).toArray)]
 
 /-- What Lean and the program outside the file gave on a proof module: Lean's result on it,
 and, where Lean accepted it, whether the program outside accepted it and what it printed. -/

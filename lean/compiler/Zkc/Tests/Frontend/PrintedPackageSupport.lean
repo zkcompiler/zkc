@@ -183,7 +183,7 @@ the other behaviour: the failed theorem is unknown, and what uses it rests on `s
 
 **The module is elaborated in a sandbox.** A module of a check can hold an author's text, and a
 text is code that runs while Lean elaborates it: unconfined, one line of it could rewrite a
-file that the check reads afterwards (the program that reads a module's object, a reference,
+file that the check reads afterwards (the program that reads a module's object, the statements,
 another module of the check). So Lean runs in the sandbox of `confined`, in which it can write
 the folder of the module and nothing else. The folder has to be the module's own; what Lean
 and Lake write for the module (an object, Lake's temporary file) goes there. -/

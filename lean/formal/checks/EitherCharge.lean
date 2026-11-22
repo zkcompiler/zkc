@@ -45,8 +45,8 @@ draw of a block is where a walk that computed a block as one instruction was stu
 is in this check.
 
 Every module that the check accepts is also read outside the file (`startModule`): its object
-is replayed by the kernel and its published theorems are compared with the module that the
-generator writes without the text. One control is of that reading: a text that turns the
+is replayed by the kernel on the module of its statements, which was compiled with no text, and
+its published theorems are of the propositions of that module. One control is of that reading: a text that turns the
 kernel's check off and proves a false bound, on a source whose charges are too low. Lean
 accepts it, with the allowed axioms for every theorem, and the reading outside refuses it at
 the false equation.

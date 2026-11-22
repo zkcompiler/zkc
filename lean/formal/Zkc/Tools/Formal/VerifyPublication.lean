@@ -35,10 +35,15 @@ Lake names for the imports of the generator and of the text, and for the name of
 the statements the object that the check compiled. The check writes it, and the manifest, where
 a text cannot write.
 
+- each theorem that the check lists for the proof module (those of the text, and what a check
+  writes after the closing theorems) is a theorem of the candidate after the replay. A text can
+  make a later command of the module elaborate nothing; the theorem that the command would have
+  stated is then missing from the object, and Lean says nothing.
+
 Arguments: the setup of the proof module, the manifest, and the object of the proof module. The
 manifest is a JSON object: `statements`, the name of the module of the statements; `allowed`,
-the allowed axioms; `pairs`, each published theorem with its proposition. A name is the list of
-its components.
+the allowed axioms; `pairs`, each published theorem with its proposition; `theorems`, the
+theorems that the proof module has to have. A name is the list of its components.
 -/
 
 open Lean
@@ -87,6 +92,8 @@ structure Manifest where
   allowed : List Name
   /-- Each published theorem with its proposition. -/
   pairs : List (Name × Name)
+  /-- The theorems that the proof module has to have, the published ones among them or not. -/
+  theorems : List Name
 
 /-- A name from the list of its components. -/
 def nameOf (json : Json) : Except String Name := do
@@ -101,7 +108,8 @@ def Manifest.read (path : System.FilePath) : IO Manifest := do
       let #[theorem_, proposition] ← pair.getArr?
         | throw "a pair of the manifest is a theorem and its proposition"
       return (← nameOf theorem_, ← nameOf proposition)
-    return { statements, allowed, pairs }
+    let theorems ← (← (← json.getObjVal? "theorems").getArr?).toList.mapM nameOf
+    return { statements, allowed, pairs, theorems }
 
 /-- Why a published theorem is not of its proposition, where it is not: the proposition is a
 closed proposition that the module of the statements declares, and the theorem is a theorem of
@@ -130,8 +138,11 @@ axioms. -/
 def publications (manifest : Manifest) (candidate : Declarations) (imports : Environment)
     (checked : Kernel.Environment) : IO Unit := do
   if manifest.pairs.isEmpty then throw <| IO.userError "no published theorem was named"
-  let failures := manifest.pairs.filterMap fun (theorem_, proposition) =>
-    unpublished manifest candidate imports checked theorem_ proposition
+  let failures := (manifest.pairs.filterMap fun (theorem_, proposition) =>
+    unpublished manifest candidate imports checked theorem_ proposition) ++
+    manifest.theorems.filterMap fun theorem_ =>
+      if candidate.contains theorem_ && (checked.find? theorem_ matches some (.thmInfo _)) then none
+      else some s!"the candidate does not have the theorem `{theorem_}`, which the check lists"
   unless failures.isEmpty do throw <| IO.userError ("\n".intercalate failures)
   let base := imports.toKernelEnv
   let within (axioms : Array Name) : Bool :=

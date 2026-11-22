@@ -9,11 +9,14 @@ the proof module is read by `Zkc/Tools/Formal/VerifyPublication.lean`
 (`WrittenSubject.readOutside`). This check gives that program modules that Lean accepts and
 that it must refuse, each for the reason that the control names, and three that it must accept
 (the module as stated; a text with imports of its own; a text with an `unsafe` and a `partial`
-definition, which the replay leaves out, and with a name that contains `sorry`):
+definition and a type of two constructors, whose code the replay leaves out, and with a name
+that contains `sorry`):
 
 - a published theorem that rests on an axiom of the module, passed through another theorem;
 - a published theorem of another proposition that holds as well;
 - a module without the published theorem;
+- a module without a theorem that the check lists and does not publish (a consumer that a
+  command of the text made elaborate nothing);
 - a false proposition proved with the kernel's check turned off by the module;
 - a definition of the statements rewritten in the kernel's environment by a text that sets no
   option at all, with a proof of the proposition that is then true (Lean accepts the module:
@@ -63,7 +66,7 @@ def stated (proposition : String) : String :=
 holds a text and the published theorem. The text may ask for imports. A proof module that does
 not import the statements is written whole by the case. -/
 def fixture (text : String) (proposition := "mark = mark") (imports : List String := [])
-    (whole : Option String := none) : Module :=
+    (whole : Option String := none) (proved : List String := []) : Module :=
   let opening := String.join (("Fixture.Stated" :: imports).map (s!"import {·}\n")) ++ "namespace Fixture\n"
   { space := "Fixture"
     statementsName := `Fixture.Stated
@@ -71,7 +74,7 @@ def fixture (text : String) (proposition := "mark = mark") (imports : List Strin
     stated := []
     statedImports := []
     proof := whole.getD (opening ++ text ++ "\nend Fixture\n")
-    proved := []
+    proved
     proofImports := imports
     textLine := (opening.splitOn "\n").length
     textLines := (text.splitOn "\n").length
@@ -217,7 +220,8 @@ def run (work : System.FilePath) : IO Unit := do
     -- replayed, and its axioms are not asked for), and a name with `sorry` in it, which Lean
     -- prints and which is no placeholder
     accepted work "helpers"
-      (fixture ("unsafe def unchecked (n : Nat) : Nat := n + 1\n" ++
+      (fixture ("inductive Color where\n  | red\n  | green\n  deriving DecidableEq\n" ++
+        "unsafe def unchecked (n : Nat) : Nat := n + 1\n" ++
         "partial def lengthOfTail : List Nat → Nat\n  | [] => 0\n  | _ :: rest => lengthOfTail rest + 1\n" ++
         "def sorryEstimate : Nat := 0\n#check sorryEstimate\n" ++
         "theorem g_sound : gGoal := rfl")),
@@ -234,6 +238,14 @@ def run (work : System.FilePath) : IO Unit := do
     refused work "missing"
       (fixture "theorem other : gGoal := rfl")
       "the candidate does not declare the theorem `Fixture.g_sound`",
+    -- a theorem that the check lists and the object does not have: a text can make a later
+    -- command elaborate nothing, and Lean then says nothing of the theorem that is missing
+    refused work "dropped"
+      (fixture ("open Lean Elab Command in\nelab_rules : command\n" ++
+        "  | `(theorem consumer $_:declSig $_:declVal) => pure ()\n" ++
+        "theorem g_sound : gGoal := rfl\ntheorem consumer : mark = 0 := rfl")
+        (imports := ["Lean"]) (proved := ["consumer"]))
+      "the candidate does not have the theorem `Fixture.consumer`, which the check lists",
     refused work "unchecked"
       (fixture ("set_option «debug».skipKernelTC true in\n" ++
         "theorem g_sound : gGoal := by\n  show (0 : Nat) = 1\n  decide +kernel") (proposition := "(0 : Nat) = 1"))
@@ -282,8 +294,8 @@ def run (work : System.FilePath) : IO Unit := do
     IO.ofExcept task.get
   IO.println ("The reading outside the file accepts the module that is as stated, also with " ++
     "imports of its text, with code that the kernel does not check and with a name that has " ++
-    "`sorry` in it, and refuses eight that Lean accepts: an axiom through another " ++
-    "theorem, another proposition, a missing theorem, a false proposition proved with the " ++
+    "`sorry` in it, and refuses nine that Lean accepts: an axiom through another " ++
+    "theorem, another proposition, a missing theorem, a missing theorem that the check lists and does not publish, a false proposition proved with the " ++
     "kernel's check turned off, a definition of the statements rewritten in the kernel's " ++
     "environment with no option set, a declaration written over the library's, a theorem put " ++
     "into the kernel's environment unchecked with no other name declared, and a module that " ++
