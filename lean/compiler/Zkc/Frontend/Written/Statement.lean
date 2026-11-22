@@ -943,12 +943,17 @@ that replay, each is of its proposition as a module generated without the text a
 the text's imports defines it (`Module.reference`, with the definitions that the proposition
 uses), and the axioms are read from the replayed proofs. Every module of a check, a proof module as a control with the same
 text, is elaborated in a sandbox (the file system read-only but for the module's own folder, no
-network, no process that outlives it), so a text cannot change the program, the reference or
+network, no socket, no process that outlives it), so a text cannot change the program, the reference or
 the imports before they are read. What is trusted is then
-the toolchain, the imports, this generator, that program and the sandbox; and that the object
-which Lean wrote for the proof module is read as an object is (the program replays every
-declaration that it finds there, but reads the file's format without checking it). A statement that a check itself writes after the text (a consumer, with its
-numerals and notations) is still read in the scope that the text leaves. -/
+the toolchain, the imports, this generator, that program and the sandbox. The object that is
+read is whatever the run of Lean on the text left in the module's folder, which a text can
+write itself: the program replays every declaration that it finds there and compares the
+published theorems with the reference, so what it accepts is a proof of the reference's
+propositions whoever wrote the file; but it maps the file into memory without checking its
+format, so that the reader of objects behaves on such a file as on an object is trusted too
+(the program runs in the sandbox, where a malformed object can change no file). A statement
+that a check itself writes after the text (a consumer, with its numerals and notations) is
+still read in the scope that the text leaves. -/
 def module (s : Statements) (name : String) (proof : ProofText)
     (walks := true) (after : ProofText := {}) (model : ModelText := s.chosenModel) :
     Except String Module := do
