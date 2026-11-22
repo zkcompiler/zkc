@@ -34,7 +34,10 @@ differs from the others in the shape of its program:
   before the root, and the walk takes the call by it;
 - **a walk of a hypothesis through the application** (`twice_pays_first`, written by the check
   after the text): for every judgment with fees that reads no peer of an effect;
-- **a walk under another judgment** (`twice_returns`): on every permitted reply.
+- **a walk under another judgment** (`twice_returns`): on every permitted reply;
+- **a walk under a judgment that reads peers** (`twice_first_effect`): the judgment that
+  records the effects of a run. The walk goes into the application under every judgment; the
+  callee is then judged under the judgment with its peers renamed.
 
 The check reads the source with the frontend and writes modules on which Lean is run: the
 proof module (the printed package, what `Written.Statements` writes, and the text of
@@ -60,7 +63,7 @@ other chooses by an input and has a draw and a guard in each arm. The text of th
 the forks: the guard is a hypothesis of the walk, and the choice gives one goal for each arm.
 The table has the draws of both arms, and its total is three quarters.
 
-Five controls are refused by Lean, each at the place that the check names and at no other:
+Four controls are refused by Lean, each at the place that the check names and at no other:
 
 - the charge of the draw halved in the source. The program is what it was; the cap that the
   table gives the draw through the application is one eighth, and the fee of one quarter that
@@ -68,8 +71,6 @@ Five controls are refused by Lean, each at the place that the check names and at
   that draw below that application;
 - the body of the function that the callee calls turned. The law that the text states of it is
   refused, and nothing else is: the walks take the call by the law;
-- a walk under the judgment that records the effects of a run, of which nothing says that it
-  reads no peer of an effect: refused at the application, with the judgment;
 - a call of the callee's function taken by a true law of another function of the same types:
   refused at that line, since the header of a function has its key and the law is of another
   type than the call;
@@ -330,20 +331,30 @@ def sideSource : String :=
   "scheme Checked = Twice:\n    prover P\n    construction interactive\n" ++
   "goal twice = soundness(Checked, stage = written)\n"
 
-/-- A walk of the verifier of `Twice` under the judgment that records the effects of a run.
-Nothing says that it reads no peer of an effect, and it does read them: the walk does not enter
-the application under it. -/
+/-- A walk of the verifier of `Twice` under the judgment that records the effects of a run,
+which reads who gives and who gets. The rule of an application holds for every judgment: the
+walk goes into the application, and the hypothesis is then stated under the judgment with its
+peers renamed. A run that the judgment accepts begins with the message of `Round` at the path
+of the first application, read from that hypothesis. -/
 def tracedText : String :=
   "\n" ++
-  "theorem twice_traced {F G : Type} (D : StandardModel.Data F G) [DecidableEq F] [DecidableEq G]\n" ++
-  "    (path : List Frame) (effects : EffectTrace (RSig (StandardModel.model D))) :\n" ++
-  "    (roleMeaning (StandardModel.model D) installed rootMember verifierRole path\n" ++
+  "/-- **Under a judgment that reads peers the walk goes into an application too.** A run of\n" ++
+  "the verifier that the judgment of recorded effects accepts begins with the message of\n" ++
+  "`Round` at the path of the first application. -/\n" ++
+  "theorem twice_first_effect {F G : Type} (D : StandardModel.Data F G) [DecidableEq F] [DecidableEq G]\n" ++
+  "    (path : List Frame) (effects : EffectTrace (RSig (StandardModel.model D)))\n" ++
+  "    (judged : (roleMeaning (StandardModel.model D) installed rootMember verifierRole path\n" ++
   "        (.cons true (.cons () (.cons () .nil)))).interpret\n" ++
   "      (ProcessJudgment.trace (RSig (StandardModel.model D)))\n" ++
-  "      (fun _ _ => True) (fun _ _ => True) effects := by\n" ++
-  "  walk\n"
+  "      (fun _ _ => True) (fun _ _ => True) effects) :\n" ++
+  "    ∃ first tail, effects =\n" ++
+  "      ⟨.get .message 0 ⟨path ++ [.application ⟨0⟩], ⟨0⟩⟩ (.fin 4), first⟩ :: tail := by\n" ++
+  "  walk at judged\n" ++
+  "  obtain ⟨first, tail, said, _⟩ := judged\n" ++
+  "  exact ⟨first, tail, said⟩\n"
 
-/-- Two theorems after the text of `Twice` under other judgments than the goal's. The first
+/-- Three theorems after the text of `Twice` under other judgments than the goal's (the third is
+`tracedText`, under a judgment that reads peers). The first
 walks a hypothesis: a judgment of the verifier is given, and the walk goes through the first
 application on it. The judgment is any judgment with
 fees that reads no peer of an effect, which the theorem states as a hypothesis; the walk takes
@@ -392,7 +403,8 @@ def converseText : String :=
   "  intro two _\n" ++
   "  walk\n" ++
   "  walk_law same_law D two second\n" ++
-  "  walk\n"
+  "  walk\n" ++
+  tracedText
 
 /-- What the check asserts of what the frontend read of a source of the subject: the goal
 selects the root; it reads the clause `proves @V Holds(claim)` on the first of the three ports,
@@ -448,16 +460,6 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
       unproved := "same_law" :: ofWalk ++ ["twice_returns"],
       places := ["The left-hand side\n  HList.cons (!a.beq b) HList.nil\n" ++
         "is not definitionally equal to the right-hand side\n  HList.cons (a.beq b) HList.nil"],
-      only := true }
-  -- A walk under a judgment of which nothing says that it reads no peer of an effect: refused
-  -- at the application, which is the first instruction of the root.
-  let tracedControl : Control :=
-    { title := "a walk under a judgment that reads the peers", name := "BlindControl",
-      subject := written, text := template ++ converseText ++ tracedText, unproved := [],
-      places := ["walk: at instruction 0 (apply):\n  walk: the instruction applies a protocol in " ++
-        "which the role plays a role, and nothing says that the judgment reads no peer of an effect " ++
-        "(a theorem with the label `walk_blind`, or a hypothesis `Blind ρ judgment` of the goal): " ++
-        "the application is not entered\n    ProcessJudgment.trace (RSig (StandardModel.model D))"],
       only := true }
   -- A true law of another function of the same types, used at the first call of `same`: the
   -- header of a function has its key, so the law is of another type than the call, and the
@@ -519,8 +521,8 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
 
   let _ ← check work "Twice" written
     { text := template ++ converseText,
-      theorems := ofText "twice" ++ ["twice_pays_first", "twice_returns"] }
-    [halvedControl, turnedControl, tracedControl, otherControl]
+      theorems := ofText "twice" ++ ["twice_pays_first", "twice_returns", "twice_first_effect"] }
+    [halvedControl, turnedControl, otherControl]
   let (ok, output) ← finishLean foreign
   refusedOutput "a call taken by the law of a function of another program" ok output
     ["walk_law: the law is about a function that this call does not read"] (only := true)
@@ -556,7 +558,9 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
     "that applies it in the body of a loop by an invariant, and a root that applies it and " ++
     "then a protocol of the prover alone, and a root whose callees have a guard after a draw " ++
     "and a choice, with the forks named by the root's text; " ++
-    "5 of 5 controls refused, at the places that the check names and at no other, and a law " ++
+    "under the judgment of recorded effects, which reads peers, the walk goes into the " ++
+    "application as well; " ++
+    "4 of 4 controls refused, at the places that the check names and at no other, and a law " ++
     "about a function of the same header in another program refused where it is used.")
 
 end TwiceCharge

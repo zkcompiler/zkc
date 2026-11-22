@@ -6,6 +6,8 @@ public import Zkc.Formal.Application
 public import Zkc.Core.Meaning.Role
 public import Zkc.Core.Meaning.Program
 public import Zkc.Formal.WalkLabels
+public import Zkc.Formal.ComputedTypes
+public meta import Zkc.Kernel.Normal
 public meta import Lean
 
 public meta section
@@ -282,33 +284,6 @@ private def rebuild (cells : Array (Array Expr × Expr)) (nil : Expr) (elems : A
   (cells.zip elems).foldr
     (fun ((implicits, _), x) tail => mkAppN (mkConst ``Zkc.Core.HList.cons) (implicits ++ #[x, tail])) nil
 
-/-- The type of a variable that a step introduces, computed: the carrier of a type of the
-vocabulary, and for a sequence the list of the carrier of its items. -/
-private partial def readType (type : Expr) : MetaM Expr := do
-  let computed ← whnfD type
-  if computed.isAppOfArity ``List 1 then return mkApp computed.appFn! (← readType computed.appArg!)
-  else return computed
-
-/-- Whether a term mentions the type of the values of a type of the vocabulary. -/
-private def mentionsValues (e : Expr) : Bool :=
-  (e.find? fun s => s.isConstOf ``Zkc.Core.Model.Val || s.isConstOf ``Zkc.Core.Ty.Val ||
-    s.isConstOf ``Zkc.Core.Tys.Val || s.isConstOf ``Zkc.Core.Tys.Choice ||
-    s.isConstOf ``Zkc.Core.Semantics.Val || s.isConstOf ``Zkc.Core.RV ||
-    s.isConstOf ``Zkc.Core.LVal).isSome
-
-/-- A statement with the types in it computed: a type that is written as the values of a type of
-the vocabulary is replaced by its carrier, also where it is an implicit argument, so that the
-statement is about the same terms as a lemma about the carrier. The result is definitionally
-the statement given. A reply and an input of a statement are read with it: a part of a tuple,
-an item of a sequence and an alternative of a variant are then values of the field, the group
-or the natural numbers, and not of a type that only computation makes one of those. -/
-def computedTypes (e : Expr) : MetaM Expr :=
-  Meta.transform e (post := fun sub => do
-    if sub.hasLooseBVars || !mentionsValues sub then return .continue
-    if !(← Meta.isType sub) then return .continue
-    let computed ← whnfD sub
-    return if computed == sub then .continue else .visit computed)
-
 /-- A value in a form to read, as a step states it: what it settles to, and the variable, the
 literal or the truth value that it is when the kernel finds one. -/
 private def readValue (value : Expr) : MetaM Expr := do
@@ -554,6 +529,29 @@ private def splitStuck (goal : MVarId) (j : Judged) (bound why stuck : Expr)
     return current
   return (sides, true)
 
+/-- The goal passes to the judgment of an inner process: the one way into a region and into an
+application. `whole` is the process of the goal in the form that the passage is about, with
+`toWhole` the equation between the process of the goal and it; `judged` is the passage, the
+equation between the judgment of `whole` and the judgment `inside` of the inner process
+`inner`; `stated` is the inner process as the new goal states it, with `toStated` the equation
+between `inner` and it. The new goal judges `stated`, sealed, as every process that a goal of
+the walk judges: a tactic of the text that reduces its goal does not run it. The goal, or the
+hypothesis that it concludes from, passes along the equations. -/
+private def passInside (goal : MVarId) (j inside : Judged)
+    (whole toWhole inner stated toStated judged : Expr) : MetaM MVarId := do
+  let next ← mkFreshExprSyntheticOpaqueMVar (inside.of stated)
+  let mut judged := judged
+  for extra in j.extra do
+    judged ← mkCongrFun judged extra
+  let ia := inside.fn.getAppArgs
+  let sealing ← mkEqSymm (mkApp4 (mkConst ``Zkc.Core.Process.sealed_eq) ia[0]! ia[1]! ia[2]! stated)
+  let sealedMotive ← withLocalDeclD `p (← inferType inner) fun p =>
+    mkLambdaFVars #[p] (mkAppN (mkApp inside.fn p) j.extra)
+  let toInside ← mkEqTrans judged (← mkCongrArg sealedMotive (← mkEqTrans toStated sealing))
+  let statedGoal ← withLocalDeclD `judged (mkSort Level.zero) fun x => mkLambdaFVars #[x] (j.goal x)
+  j.pass goal whole toWhole (← mkEqMPR (← mkCongrArg statedGoal toInside) next)
+  return next.mvarId!
+
 /-- **A region is walked as a program is.** `bound` is a region and then the rest: the term of
 an arm of a choice or of a block in its environment, bound to what follows it. The judgment of
 such a process is the judgment of the region whose condition at the end is the judgment of the
@@ -580,22 +578,11 @@ private def enterRegion (goal : MVarId) (j : Judged) (bound why region isRegion 
   let after ← withLocalDeclD `values valuesType fun values =>
     mkLambdaFVars #[values] (mkApp j.fn (j.seal (mkApp rest values).headBeta))
   let inside := { j with fn := ← mkAppM ``Zkc.Core.Process.interpret #[judgment, after, halt] }
-  let next ← mkFreshExprSyntheticOpaqueMVar (inside.of region)
   -- `interpret (region.bind rest) = interpret region` with that condition, at what follows
   let bind ← mkAppM ``Zkc.Core.Process.interpret_bind #[judgment, done, halt, rest, region]
-  let mut judged ← mkExpectedTypeHint bind
+  let judged ← mkExpectedTypeHint bind
     (← mkEq (mkApp j.fn regionThenRest) (mkApp inside.fn region))
-  for extra in j.extra do
-    judged ← mkCongrFun judged extra
-  let ia := inside.fn.getAppArgs
-  let sealing ← mkEqSymm (mkApp4 (mkConst ``Zkc.Core.Process.sealed_eq) ia[0]! ia[1]! ia[2]! region)
-  let sealedMotive ← withLocalDeclD `p (← inferType region) fun p =>
-    mkLambdaFVars #[p] (mkAppN (mkApp inside.fn p) j.extra)
-  let toInside ← mkEqTrans judged (← mkCongrArg sealedMotive sealing)
-  -- the goal, or the hypothesis that it concludes from, passes along the equation
-  let stated ← withLocalDeclD `judged (mkSort Level.zero) fun x => mkLambdaFVars #[x] (j.goal x)
-  j.pass goal regionThenRest toRegion (← mkEqMPR (← mkCongrArg stated toInside) next)
-  return next.mvarId!
+  passInside goal j inside regionThenRest toRegion region region (← mkEqRefl region) judged
 
 /-- What an instruction denotes, where it runs a region: a block is its body under its frame,
 and a choice is the region that its condition chooses. The result is the process in that form
@@ -849,9 +836,15 @@ applies no protocol, or where the role plays no role of the callee (its program 
 effect). An application that the walk cannot enter is an error, said at the step, and is not
 computed as one instruction (the callee's program with its peers renamed is no term that a text
 can read): where the semantics is not written as that of a role over the tables of a program;
-where the kernel does not decide whether the role plays a role of the callee; where no theorem
-or hypothesis says that the judgment reads no peer; and where no labelled entry equation is
-about the callee's role (the module of statements is then not the module of this program). -/
+where the kernel does not decide whether the role plays a role of the callee; and where no
+labelled entry equation is about the callee's role (the module of statements is then not the
+module of this program).
+
+The rule holds for every judgment: the callee's program, as it stands, is judged under the
+judgment with its peers renamed (`ProcessJudgment.renamed`). Where a theorem or a hypothesis
+says that the judgment reads no peer (`blindUnder`), that is the judgment itself, and the goal
+in the callee is stated under it, as in the root. Under another judgment the goal in the callee
+is stated under the renamed judgment. -/
 private def enterApplication (goal : MVarId) (j : Judged) (bound why instr sem key path env : Expr) :
     MetaM (Option MVarId) := goal.withContext do
   -- the instruction: an operation that applies a protocol to operands. Each term is taken
@@ -888,21 +881,19 @@ private def enterApplication (goal : MVarId) (j : Judged) (bound why instr sem k
   let_expr Zkc.Core.mapR _ _ roleMap _ calleeProcess := renamed | shape renamed
   let_expr Zkc.Core.Defs.rTable _ _ _ _ header member played calleePath given := calleeProcess
     | shape calleeProcess
-  -- the judgment reads no peer: without that, the callee's program is not judged as it stands
+  -- the callee's program is judged under the judgment with its peers renamed; where a theorem
+  -- or a hypothesis says that the judgment reads no peer, that is the judgment itself
   let a := j.fn.getAppArgs
   let (judgment, done, halt) := (a[4]!, a[5]!, a[6]!)
-  let some blind ← blindUnder roleMap judgment
-    | throwError "walk: the instruction applies a protocol in which the role plays a role, and \
-        nothing says that the judgment reads no peer of an effect (a theorem with the label \
-        `walk_blind`, or a hypothesis `Blind ρ judgment` of the goal): the application is not \
-        entered{indentExpr judgment}"
+  let blind? ← blindUnder roleMap judgment
+  let renamedJudgment ← mkAppM ``Zkc.Core.ProcessJudgment.renamed #[judgment, roleMap]
   -- the callee's program as the meaning of its role, on inputs in a form to read
   let (cells, nil) ← spine given
   let inputs := rebuild cells nil (← cells.mapM fun (_, value) => readValue value)
   let some stated ← statedByEntry program model header member (← kernelWhnf played) calleePath inputs
-    | throwError "walk: the judgment reads no peer, and no equation with the label `walk_entry` \
-        is about the role of the protocol that is applied here: a module of statements states \
-        one for each role that its deciding role plays through applications{indentExpr calleeProcess}"
+    | throwError "walk: no equation with the label `walk_entry` is about the role of the protocol \
+        that is applied here: a module of statements states one for each role that its deciding \
+        role plays through applications{indentExpr calleeProcess}"
   -- the process of the goal is the application, then the rest
   let b := bound.getAppArgs
   let rest := b[5]!
@@ -917,24 +908,23 @@ private def enterApplication (goal : MVarId) (j : Judged) (bound why instr sem k
   let after ← withLocalDeclD `results resultsType fun results =>
     mkLambdaFVars #[results]
       (mkApp j.fn (j.seal (mkApp rest (mkApp leave results).headBeta).headBeta))
-  let inside := { j with fn := ← mkAppM ``Zkc.Core.Process.interpret #[judgment, after, halt] }
-  let next ← mkFreshExprSyntheticOpaqueMVar (inside.of stated)
+  let underRenamed ← mkAppM ``Zkc.Core.Process.interpret #[renamedJudgment, after, halt]
   let passage ← mkAppM ``Zkc.Core.Process.interpret_applied
-    #[roleMap, judgment, blind, done, halt, leave, rest, calleeProcess]
+    #[roleMap, judgment, done, halt, leave, rest, calleeProcess]
   let mut judged ← mkExpectedTypeHint passage
-    (← mkEq (mkApp j.fn appliedThenRest) (mkApp inside.fn calleeProcess))
-  for extra in j.extra do
-    judged ← mkCongrFun judged extra
-  -- the callee's program is the meaning as stated, which is sealed
-  let ia' := inside.fn.getAppArgs
-  let sealing ← mkEqSymm (mkApp4 (mkConst ``Zkc.Core.Process.sealed_eq) ia'[0]! ia'[1]! ia'[2]! stated)
-  let toStated ← mkEqTrans (← byComputation calleeProcess stated) sealing
-  let sealedMotive ← withLocalDeclD `p (← inferType calleeProcess) fun p =>
-    mkLambdaFVars #[p] (mkAppN (mkApp inside.fn p) j.extra)
-  let toInside ← mkEqTrans judged (← mkCongrArg sealedMotive toStated)
-  let statedGoal ← withLocalDeclD `judged (mkSort Level.zero) fun x => mkLambdaFVars #[x] (j.goal x)
-  j.pass goal appliedThenRest toApplied (← mkEqMPR (← mkCongrArg statedGoal toInside) next)
-  return some next.mvarId!
+    (← mkEq (mkApp j.fn appliedThenRest) (mkApp underRenamed calleeProcess))
+  let inside ← match blind? with
+    | some blind => do
+      let same ← mkAppM ``Zkc.Core.Blind.renamed_eq #[blind]
+      let motive ← withLocalDeclD `judgment (← inferType judgment) fun x => do
+        mkLambdaFVars #[x]
+          (mkApp (← mkAppM ``Zkc.Core.Process.interpret #[x, after, halt]) calleeProcess)
+      judged ← mkEqTrans judged (← mkCongrArg motive same)
+      pure { j with fn := ← mkAppM ``Zkc.Core.Process.interpret #[judgment, after, halt] }
+    | none => pure { j with fn := underRenamed }
+  -- the callee's program is the meaning as stated
+  return some (← passInside goal j inside appliedThenRest toApplied calleeProcess stated
+    (← byComputation calleeProcess stated) judged)
 
 /-- What an instruction is, in the words of an error: its constructor and, for an operation,
 the constructor of the operation. -/
@@ -1306,9 +1296,7 @@ private def compute (goal : MVarId) (written : Syntax) (hypothesis := false) (by
       pure (← mkForallFVars #[inputs] (← mkEq (at_ program member) (at_ thereProgram thereMember)),
         ← mkLambdaFVars #[inputs] (← mkEqTrans entryHere (← mkEqSymm entryThere)))
     try
-      let joined ← withOptions (fun options =>
-          debug.skipKernelTC.set (Lean.Elab.async.set options false) false) do
-        mkAuxTheorem (← instantiateMVars bridgeType) (← instantiateMVars proof)
+      let joined ← Zkc.Kernel.checkedTheorem (← instantiateMVars bridgeType) (← instantiateMVars proof)
       return some (mkApp joined read)
     catch failure =>
       if failure.isRuntime || failure matches .internal .. then throw failure

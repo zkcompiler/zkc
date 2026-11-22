@@ -35,7 +35,8 @@ register_label_attr walk_cap
 
 /-- **A judgment that reads no peer.** A theorem `Blind ρ judgment` (`Zkc/Formal/Application.lean`)
 for every renaming `ρ` of roles: the judgment of an effect does not change when the peers of
-the effect are renamed. Under a judgment for which a labelled theorem says so, a walk goes into
-an application of a protocol: the callee's program, whose peers the application renames, is
-judged as it stands. -/
+the effect are renamed. A walk goes into an application of a protocol under every judgment; the
+callee's program, whose peers the application renames, is judged under the judgment with its
+peers renamed. Under a judgment for which a labelled theorem says that it reads no peer, that
+is the judgment as it stands, and the walk states its goal in the callee so. -/
 register_label_attr walk_blind

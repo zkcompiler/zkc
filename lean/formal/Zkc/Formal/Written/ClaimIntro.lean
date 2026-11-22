@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Formal.Walk
+public import Zkc.Formal.ComputedTypes
 public meta import Lean
 
 public meta section
