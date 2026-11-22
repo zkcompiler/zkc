@@ -24,8 +24,10 @@ the check compiled before the proof module, and which the candidate imports. The
   candidate, with no parameter of a universe, whose stored type is the constant of its
   proposition, and the proposition is a closed proposition that **the module of the statements
   declares** (the module that owns the name among the imports). Every pair that fails is named;
-- the axioms of each published theorem, and then of every declaration of the candidate, are
-  read from the replayed proofs, and are among the allowed ones.
+- the axioms of each published theorem, and then of every declaration of the candidate that
+  the kernel checks, are read from the replayed proofs, and are among the allowed ones. Code
+  that the replay leaves out (an `unsafe` definition, the compiled body of a `partial` one) is
+  not walked: no theorem can use it, and a text may have it.
 
 The imports are trusted: they are loaded as compiled, through the artifacts that the setup
 names, and are not replayed. The setup is the one that the proof module was compiled with: what
@@ -143,8 +145,10 @@ def publications (manifest : Manifest) (candidate : Declarations) (imports : Env
       unless within own do
         throw <| IO.userError s!"`{theorem_}` rests on {own}, beyond {manifest.allowed}"
     throw <| IO.userError s!"the published theorems rest on {axioms}, beyond {manifest.allowed}"
-  -- and nothing else that the candidate declares rests on another axiom
-  let whole ← axiomsOf checked (candidate.toList.map (·.1))
+  -- and nothing else that the candidate declares rests on another axiom: every declaration
+  -- of it that the replay checked (the replay leaves out `unsafe` and `partial` ones)
+  let whole ← axiomsOf checked
+    (candidate.toList.filterMap fun (n, c) => if c.isUnsafe || c.isPartial then none else some n)
   unless within whole do
     throw <| IO.userError s!"the candidate rests on {whole}, beyond {manifest.allowed}"
   for (theorem_, proposition) in manifest.pairs do

@@ -230,8 +230,12 @@ most. -/
 def acceptedOutput (name : String) (ok : Bool) (output : String) (theorems : List String)
     (allowed : List String := ["propext", "Quot.sound"]) : IO Unit := do
   unless ok do throw (IO.userError s!"{name}: Lean refused the module\n{output}")
-  if output.contains "sorry" then throw (IO.userError s!"{name}: the module uses sorry")
-  if output.contains "PANIC" then throw (IO.userError s!"{name}: Lean panicked on the module\n{output}")
+  -- Lean's own words for the two, and not a search for `sorry`: a name of a source or of a
+  -- text may contain it, and what Lean prints of such a name is no placeholder
+  if output.contains "declaration uses `sorry`" then
+    throw (IO.userError s!"{name}: the module uses sorry")
+  if output.contains "PANIC at " then
+    throw (IO.userError s!"{name}: Lean panicked on the module\n{output}")
   for theorem_ in theorems do
     unless axiomReports s!"{name}.{theorem_}" output ≤ 1 do
       throw (IO.userError s!"{name}: the axioms of {theorem_} are reported more than once")

@@ -7,7 +7,9 @@ A check of a subject does not rest on Lean's acceptance of a proof module: the m
 statements is compiled with no text, the proof module is compiled against it, and the object of
 the proof module is read by `Zkc/Tools/Formal/VerifyPublication.lean`
 (`WrittenSubject.readOutside`). This check gives that program modules that Lean accepts and
-that it must refuse, each for the reason that the control names, and two that it must accept:
+that it must refuse, each for the reason that the control names, and three that it must accept
+(the module as stated; a text with imports of its own; a text with an `unsafe` and a `partial`
+definition, which the replay leaves out, and with a name that contains `sorry`):
 
 - a published theorem that rests on an axiom of the module, passed through another theorem;
 - a published theorem of another proposition that holds as well;
@@ -130,11 +132,10 @@ def refused (work : System.FilePath) (title : String) (module : Module) (place :
       throw (IO.userError s!"{title}: refused outside the file for another reason\n{said}")
   | _ => throw (IO.userError s!"{title}: the module was accepted outside the file")
 
-/-- A module that the reading outside accepts. -/
+/-- A module that a check accepts: Lean and the reading outside do, as a check of a subject
+judges them (`Outside.accepted`). -/
 def accepted (work : System.FilePath) (title : String) (module : Module) : IO Unit := do
-  let outside ← readOutside (work / title) "Fixture" module
-  unless outside.lean.1 && outside.verified.map (·.1) == some true do
-    throw (IO.userError s!"{title}: the module is refused\n{outside.lean.2}\n{outside.verified.map (·.2)}")
+  (← readOutside (work / title) "Fixture" module).accepted title
 
 /-- A text that writes a file outside its own folder, in a proof module that is read outside:
 the module is elaborated in a sandbox, and Lean stops at the write. The file is the object of
@@ -212,6 +213,14 @@ def run (work : System.FilePath) : IO Unit := do
     accepted work "honest" (fixture "theorem g_sound : gGoal := rfl"),
     -- a text with imports of its own, which the statements do not have, is read as any other
     accepted work "imported" (fixture "theorem g_sound : gGoal := rfl" (imports := metaImports)),
+    -- what a text may have beside its proofs: code that the kernel does not check (it is not
+    -- replayed, and its axioms are not asked for), and a name with `sorry` in it, which Lean
+    -- prints and which is no placeholder
+    accepted work "helpers"
+      (fixture ("unsafe def unchecked (n : Nat) : Nat := n + 1\n" ++
+        "partial def lengthOfTail : List Nat → Nat\n  | [] => 0\n  | _ :: rest => lengthOfTail rest + 1\n" ++
+        "def sorryEstimate : Nat := 0\n#check sorryEstimate\n" ++
+        "theorem g_sound : gGoal := rfl")),
     refused work "axiom"
       (fixture "axiom extra : True\ntheorem helper : True := extra\ntheorem g_sound : gGoal := (fun _ : True => rfl) helper")
       "`Fixture.g_sound` rests on",
@@ -272,7 +281,8 @@ def run (work : System.FilePath) : IO Unit := do
   for task in started do
     IO.ofExcept task.get
   IO.println ("The reading outside the file accepts the module that is as stated, also with " ++
-    "imports of its text, and refuses eight that Lean accepts: an axiom through another " ++
+    "imports of its text, with code that the kernel does not check and with a name that has " ++
+    "`sorry` in it, and refuses eight that Lean accepts: an axiom through another " ++
     "theorem, another proposition, a missing theorem, a false proposition proved with the " ++
     "kernel's check turned off, a definition of the statements rewritten in the kernel's " ++
     "environment with no option set, a declaration written over the library's, a theorem put " ++
