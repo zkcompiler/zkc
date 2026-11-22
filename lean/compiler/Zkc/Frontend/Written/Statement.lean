@@ -355,7 +355,7 @@ def entries (s : Statements) : String :=
     s!"@[walk_entry]\ntheorem {label}_meaning (M : Model V) (inputs : HList M.Val {label}Header.ins) :\n" ++
     s!"    fnMeaning M {program} {member} inputs =\n" ++
     s!"      ({label}Body.denote (localSem M {label}Before.headers.fns (Defs.fnTable M {label}Before.defs)) []\n" ++
-    s!"        (Env.empty.extend {label}Names inputs)).sealed := by\n  kernel_rfl\n\n"
+    s!"        (Env.empty.extend {label}Names inputs)).sealed := by\n  kernel_rfl late\n\n"
   let label := "verifier"
   let role :=
       s!"-- The program of the {label}, in the kernel's normal form.\n" ++
@@ -369,7 +369,7 @@ def entries (s : Statements) : String :=
       s!"    roleMeaning M installed rootMember {label}Role path inputs =\n" ++
       s!"      ({label}Program.denote (roleSem M {label}Role (Defs.fnTable M calleeProgram.defs)\n" ++
       s!"        (Defs.rTable M calleeProgram.defs)) path (Env.empty.extend rootNames inputs)).sealed := by\n" ++
-      "  kernel_rfl\n\n"
+      "  kernel_rfl late\n\n"
   "noncomputable section\n\n" ++ role ++
   String.join (s.functions.map fun (label, _) => function label s!"{label}Member" "calleeProgram") ++
   String.join (s.claims.goals.map fun goal =>
@@ -787,6 +787,39 @@ def publications (s : Statements) (name : String) : String :=
 def footer (name : String) (theorems : List String) : String :=
   String.join (theorems.map (s!"#print axioms {·}\n")) ++ s!"end {name}\n"
 
+/-- The names that a generated text declares, in order: of each line that begins a definition,
+a theorem or a command of the kernel, the name after the keyword, and for `kernel_ok` the names
+after `with`. -/
+def declaredNames (text : String) : List String :=
+  let name (rest : List Char) : String :=
+    String.ofList (rest.takeWhile fun c => c.isAlphanum || c == '_' || c == '.' || c == '\'')
+  let after (line keyword : List Char) : Option (List Char) :=
+    if keyword.isPrefixOf line then some (line.drop keyword.length) else none
+  (text.splitOn "\n").flatMap fun line =>
+    let line := line.toList.dropWhile (· == ' ')
+    let line := (after line "noncomputable ".toList).getD line
+    match ["def ", "abbrev ", "theorem ", "kernel_normal "].findSome? fun keyword =>
+        after line keyword.toList with
+    | some rest => [name rest]
+    | none =>
+      match after line "kernel_ok ".toList with
+      | none => []
+      | some rest =>
+        let words := (String.ofList rest).splitOn " "
+        let named := (words.drop 1).takeWhile (· != ":")
+        name rest :: (if named.head? == some "with" then named.drop 1 else [])
+
+/-- The first name that a generated text would declare twice. A goal or a function of the
+source gives its name to names of the module (`<name>Key`, `<name>Member`, `<name>_meaning`),
+and a name of the source can be one that the module uses for its own (`root`, `verifier`). Lean
+would refuse the module at the second declaration; the generator refuses it first and says
+why. -/
+def collision (text : String) : Option String :=
+  let rec first (seen : List String) : List String → Option String
+    | [] => none
+    | name :: rest => if seen.contains name then some name else first (name :: seen) rest
+  first [] (declaredNames text)
+
 /-- **The module of the goals of one scheme**: the package of the claims; what is generated
 before any proof (the facts, the coverage, the counts, the names of the draws, where
 the walks start, the transfers, the propositions of each goal and, for a text of the method of
@@ -822,12 +855,16 @@ def module (s : Statements) (name : String) (proof : ProofText)
     (if walks then s.entryNames else []) ++ (if fees then s.judgmentNames else []) ++
     s.ceilingNames ++ proof.theorems ++ (if fees then s.conclusionNames else []) ++
     s.closingNames ++ after.theorems
-  let text := header (imports model walks ++ proof.imports ++ after.imports) ++
-    s!"namespace {name}\n" ++ (Written.package s.package).text ++ opens ++ s.facts ++ "\n" ++
+  let before := (Written.package s.package).text ++ opens ++ s.facts ++ "\n" ++
     coverage model ++ s.counts ++ s.sites ++ (if walks then s.entries else "") ++ s.transfers ++
-    claims ++ judgments ++ ceilings ++ proof.text ++ "\n" ++
-    (if fees then s.conclusions else "") ++ s.closings ++ after.text ++ s.publications name ++
-    footer name theorems
+    claims ++ judgments ++ ceilings
+  let closing := (if fees then s.conclusions else "") ++ s.closings
+  if let some twice := collision (before ++ closing) then
+    throw s!"{name}: the module would declare `{twice}` twice: a goal or a function of the \
+      source has a name from which a name of the module is made"
+  let text := header (imports model walks ++ proof.imports ++ after.imports) ++
+    s!"namespace {name}\n" ++ before ++ proof.text ++ "\n" ++ closing ++ after.text ++
+    s.publications name ++ footer name theorems
   return { text, theorems }
 
 /-- A module with the package of the claims and the statements of the goals, with no proof: the

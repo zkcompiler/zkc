@@ -290,6 +290,17 @@ private def computedTypes (e : Expr) : MetaM Expr :=
     let computed ← whnfD sub
     return if computed == sub then .continue else .visit computed)
 
+/-- The type of a reply in a form to read: the carrier that the type of the vocabulary
+computes to, and for a pair the carriers of its parts, so that a part of a tuple that a role
+got is a value of the field and not of a type that only computation makes the field. The
+result is definitionally the type given. -/
+partial def replyType (type : Expr) : MetaM Expr := do
+  let computed ← whnfD type
+  if computed.isAppOfArity ``Prod 2 then
+    let parts ← computed.getAppArgs.mapM replyType
+    return mkAppN computed.getAppFn parts
+  return computed
+
 /-- A value in a form to read, as a step states it: what it settles to, and the variable, the
 literal or the truth value that it is when the kernel finds one. -/
 private def readValue (value : Expr) : MetaM Expr := do
@@ -727,6 +738,29 @@ private def restAfter (a : Array Expr) (names rest : Expr) : MetaM Expr := do
     let newΓ := restType.getAppArgs[1]!
     mkLambdaFVars #[vs] (mkAppN (mkConst ``Zkc.Core.Term.denote) #[D, sem, newΓ, a[3]!, rest, path, extended])
 
+/-- What an instruction is, in the words of an error: its constructor and, for an operation,
+the constructor of the operation. -/
+private def instructionKind (i : Expr) : String :=
+  let last (e : Expr) : String := match e.getAppFn with
+    | .const name _ => name.components.getLast?.map toString |>.getD "?"
+    | _ => "?"
+  let args := i.getAppArgs
+  if i.isAppOf ``Zkc.Core.Instr.op && args.size ≥ 2 then
+    let op := args[args.size - 2]!
+    let inner := op.getAppArgs.find? fun a => a.getAppFn.isConst &&
+      (a.isAppOf ``Zkc.Core.LocalOp.call || a.isAppOf ``Zkc.Core.LocalOp.row ||
+        a.isAppOf ``Zkc.Core.LocalOp.owned)
+    match inner with
+    | some local_ => s!"{last op} of {last local_}"
+    | none => last op
+  else last i
+
+/-- A step that fails says which instruction it was at. -/
+private def atInstruction {α : Type} (key i : Expr) (step : MetaM α) : MetaM α := do
+  try step
+  catch failure =>
+    throwError "walk: at the instruction {key} ({instructionKind i}):{indentD failure.toMessageData}"
+
 /-- One step of the walk on a goal: on the judgment that the goal is, or, with `hypothesis`, on
 the judgment from which the goal concludes. -/
 private def stepOrFork (goal : MVarId) (hypothesis := false) (fork : Option Lean.Name := none)
@@ -751,23 +785,25 @@ private def stepOrFork (goal : MVarId) (hypothesis := false) (fork : Option Lean
     if term.isAppOfArity ``Zkc.Core.Term.step 8 then
       let t := term.getAppArgs
       let (mid, key, i, names, rest) := (t[3]!, t[4]!, t[5]!, t[6]!, t[7]!)
-      -- the term is its first instruction, then the rest on the values
-      let rule := mkAppN (mkConst ``Zkc.Core.Term.denote_step)
-        #[D, sem, Γ, outs, mid, key, i, names, rest, path, env]
-      let stated := (← inferType rule).appArg!
-      let bound := mkAppN stated.getAppFn (stated.getAppArgs.set! 5 (← restAfter a names rest))
-      let why ← mkExpectedTypeHint rule (← mkEq p bound)
-      -- an instruction that runs a region: the walk goes into the region
-      let left := bound.getAppArgs[4]!
-      if let some (form, isForm) ← regionOf left (← kernelWhnf i) sem key path env then
-        if form.isAppOfArity ``Zkc.Core.Term.denote 7 then
-          return ([← enterRegion goal j bound why form isForm], false)
-        -- a choice on a condition that is not known: the step waits on the condition
-        let motive ← withLocalDeclD `left (← inferType left) fun x =>
-          mkLambdaFVars #[x] (mkAppN bound.getAppFn (bound.getAppArgs.set! 4 x))
-        return ← splitStuck goal j (mkAppN bound.getAppFn (bound.getAppArgs.set! 4 form))
-          (← mkEqTrans why (← mkCongrArg motive isForm)) form fork named
-      advance goal j bound why fork named
+      let instruction ← kernelWhnf i
+      atInstruction key instruction do
+        -- the term is its first instruction, then the rest on the values
+        let rule := mkAppN (mkConst ``Zkc.Core.Term.denote_step)
+          #[D, sem, Γ, outs, mid, key, i, names, rest, path, env]
+        let stated := (← inferType rule).appArg!
+        let bound := mkAppN stated.getAppFn (stated.getAppArgs.set! 5 (← restAfter a names rest))
+        let why ← mkExpectedTypeHint rule (← mkEq p bound)
+        -- an instruction that runs a region: the walk goes into the region
+        let left := bound.getAppArgs[4]!
+        if let some (form, isForm) ← regionOf left instruction sem key path env then
+          if form.isAppOfArity ``Zkc.Core.Term.denote 7 then
+            return ([← enterRegion goal j bound why form isForm], false)
+          -- a choice on a condition that is not known: the step waits on the condition
+          let motive ← withLocalDeclD `left (← inferType left) fun x =>
+            mkLambdaFVars #[x] (mkAppN bound.getAppFn (bound.getAppArgs.set! 4 x))
+          return ← splitStuck goal j (mkAppN bound.getAppFn (bound.getAppArgs.set! 4 form))
+            (← mkEqTrans why (← mkCongrArg motive isForm)) form fork named
+        advance goal j bound why fork named
     else if term.isAppOfArity ``Zkc.Core.Term.ret 4 then
       -- the term returns the values of its names
       let exit := term.getArg! 3

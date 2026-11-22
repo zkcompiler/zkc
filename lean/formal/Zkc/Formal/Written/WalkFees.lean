@@ -24,7 +24,8 @@ it writes `walk as …` where it names a fork on the way.
   the path at which the run started, from the judgment; where the effect occurs, from the
   effect; the sampler of the coin's law. It leaves, in this order, what the text has to say:
   `weight`, that the sampler draws a reply of the set with probability at most the fee; `within`,
-  that the fee is within the budget, unless it is a hypothesis as it stands; `cap`, that the fee
+  that the fee is within the budget, unless it is a hypothesis as it stands or the kernel
+  decides it on closed numbers; `cap`, that the fee
   is within the cap that the table gives the draw, unless the kernel decides it; and the rest
   of the walk after a reply `v` outside the set, with `permitted_v` and `kept : ¬ set v`.
 
@@ -58,7 +59,7 @@ private def atEffect (who : String) : TacticM (Array Expr × Expr) := do
 value. -/
 private def readReply (goal : MVarId) (reply : Lean.Name) : MetaM MVarId := goal.withContext do
   let some decl := (← getLCtx).findFromUserName? reply | return goal
-  goal.replaceLocalDeclDefEq decl.fvarId (← whnfD decl.type)
+  goal.replaceLocalDeclDefEq decl.fvarId (← Zkc.Formal.Walk.replyType decl.type)
 
 /-- The name of the hypothesis that a reply is permitted. -/
 private def permittedName (reply : TSyntax `ident) : TSyntax `ident :=
@@ -142,10 +143,29 @@ elab "walk_pay " fee:term:max " excluding " set:term:max " as " reply:ident kept
   let beside (goal : MVarId) : MetaM (Option MVarId) := do
     Zkc.Formal.Walk.readValues (← Zkc.Formal.Walk.useEquations goal)
   let weightLeft := (← beside weight).toList
-  -- the fee within the budget, where it is a hypothesis as it stands
+  let closedBy (goal : MVarId) (tactic : TSyntax `tactic) : TacticM Bool := do
+    let saved ← saveState
+    try
+      setGoals [goal]
+      evalTactic tactic
+      if (← getGoals).isEmpty then pure true else saved.restore; pure false
+    catch _ =>
+      saved.restore
+      pure false
+  -- the fee within the budget: a hypothesis as it stands, or decided by the kernel where both
+  -- sides are closed numbers; refused where the kernel decides that the fee is over what is
+  -- left, and left to the text where it decides neither
   let withinLeft ← match ← beside within with
     | none => pure []
-    | some within => pure (if (← observing? within.assumption).isSome then [] else [within])
+    | some within =>
+      if (← observing? within.assumption).isSome then pure []
+      else if ← closedBy within (← `(tactic| decide +kernel)) then pure []
+      else
+        let stated ← instantiateMVars (← within.getType)
+        let over ← mkFreshExprSyntheticOpaqueMVar (mkNot stated)
+        if ← closedBy over.mvarId! (← `(tactic| decide +kernel)) then
+          throwError "walk_pay: the fee is not within what is left of the budget{indentExpr stated}"
+        pure [within]
   -- the fee within the cap of the draw: the applications of the frames are computed, so that
   -- no iteration is in what the kernel decides
   let capLeft ← match ← beside cap with
@@ -171,15 +191,6 @@ elab "walk_pay " fee:term:max " excluding " set:term:max " as " reply:ident kept
         stated := narrowed
         site := m!"the draw `{lhs.appArg!}`"
         break
-      let closedBy (goal : MVarId) (tactic : TSyntax `tactic) : TacticM Bool := do
-        let saved ← saveState
-        try
-          setGoals [goal]
-          evalTactic tactic
-          if (← getGoals).isEmpty then pure true else saved.restore; pure false
-        catch _ =>
-          saved.restore
-          pure false
       if ← closedBy cap (← `(tactic| first | exact le_rfl | decide +kernel)) then pure []
       else
         -- refused where the kernel decides that the fee is over the cap; left to the text where

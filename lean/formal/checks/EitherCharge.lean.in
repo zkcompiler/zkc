@@ -41,7 +41,6 @@ theorem either_judged : eitherJudged := by
   -- the draw: one quarter pays for the position that was sent
   walk_pay (1 / 4) excluding (fun drawn : ℕ => drawn = sent) as drawn differs
   case weight => simpa using prEvent_drawPosition_eq_le 3 sent
-  case within => decide +kernel
   -- the guard on the draw: where it passes, the draw is the position sent
   walk as hit
   exact differs (Nat.eq_of_beq_eq_true hit)
@@ -59,7 +58,6 @@ theorem either_judged_forked : eitherJudged := by
     walk as allowed
     walk_pay (1 / 4) excluding (fun drawn : ℕ => drawn = sent) as drawn differs
     case weight => simpa using prEvent_drawPosition_eq_le 3 sent
-    case within => decide +kernel
     walk as hit
     exact differs (Nat.eq_of_beq_eq_true hit)
   · -- the arm of a true claim

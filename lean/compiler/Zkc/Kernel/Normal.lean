@@ -140,14 +140,18 @@ def nameComponents (scope : Name) (names : Array Name) (term : Expr) : MetaM Exp
 
 /-- Closes an equation whose two sides the kernel finds definitionally equal, by reflexivity.
 Lean's own reduction is not asked: the kernel compares the sides here, so that a failure is
-reported at the tactic, and again when the proof is closed. -/
-elab "kernel_rfl" : tactic => Lean.Elab.Tactic.withMainContext do
+reported at the tactic, and again when the proof is closed. With `late` it compares them only
+when the proof is closed. -/
+elab "kernel_rfl" late:(" late")? : tactic => Lean.Elab.Tactic.withMainContext do
   let goal ← Lean.Elab.Tactic.getMainGoal
   let some (_, lhs, rhs) := (← instantiateMVars (← goal.getType)).eq?
     | throwError "kernel_rfl: the goal is no equation"
-  let same ← ofExceptKernelException (Lean.Kernel.isDefEq (← getEnv) (← getLCtx) lhs rhs)
-  unless same do
-    throwError "kernel_rfl: the kernel does not find the two sides definitionally equal"
+  -- `late`: the kernel compares the sides once, when the proof is closed. An equation that a
+  -- generator writes is then not paid for twice; a failure is reported at the declaration.
+  if late.isNone then
+    let same ← ofExceptKernelException (Lean.Kernel.isDefEq (← getEnv) (← getLCtx) lhs rhs)
+    unless same do
+      throwError "kernel_rfl: the kernel does not find the two sides definitionally equal"
   goal.assign (← mkEqRefl lhs)
 
 /-- `kernel_normal name : type := term` defines `name` as the kernel's normal form of `term`,
