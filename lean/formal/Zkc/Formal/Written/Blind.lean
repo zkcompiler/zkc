@@ -13,11 +13,12 @@ The judgment with fees of a written goal reads no peer.
 What the world may give (`Permitted`), the samplers of the laws (`lawSamplers`) and what a
 table of caps allows an effect (`CapTable.allowanceFrom`, which reads where the effect occurs)
 do not read who gives, gets, hears or owns. So the judgment in which the statements of a goal
-are made is `Blind`, and a walk goes into an application under it. So are the judgments "on
-every permitted reply" and "on some permitted reply", in which a text states what a role
-returns. The theorems carry the label `walk_blind`, by which the walk finds that a judgment
-reads no peer. The judgment that records the trace of a run (`ProcessJudgment.trace`) reads the
-peers, and is not among them.
+are made is `Blind`: inside an application a walk states its goal under that judgment as it
+stands, and not under the judgment with its peers renamed. So are the judgments "on every
+permitted reply" and "on some permitted reply", in which a text states what a role returns. The
+theorems carry the label `walk_blind`, by which the walk finds that a judgment reads no peer.
+The judgment that records the trace of a run (`ProcessJudgment.trace`) reads the peers, and is
+not among them: under it the goal in a callee is stated under `ProcessJudgment.renamed`.
 -/
 
 namespace Zkc.Formal.Written

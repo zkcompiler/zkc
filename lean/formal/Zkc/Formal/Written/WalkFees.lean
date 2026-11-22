@@ -54,6 +54,13 @@ private def atEffect (who : String) : TacticM (Array Expr × Expr) := do
     unless ← isAtEffect goal do
       throwError "{who}: the walk does not stop at an effect{indentExpr target}"
     let args := target.getAppArgs
+    -- inside an application, a judgment that nothing says reads no peer is renamed: the rules
+    -- of a fee are about the judgment with fees itself
+    if args[4]!.isAppOf ``Zkc.Core.ProcessJudgment.renamed then
+      throwError "{who}: the effect is inside an application, under a judgment with its peers \
+        renamed: nothing says that the judgment reads no peer of an effect (a theorem with the \
+        label `walk_blind`, or a hypothesis `Blind ρ judgment` of the goal), so the goal in the \
+        callee is not stated under the judgment with fees itself{indentExpr args[4]!}"
     return (args, args[7]!.getArg! 3)
 
 /-- The reply that a tactic introduced, at its computed type, so that a text reads it as a
@@ -61,7 +68,7 @@ value: the type of the reply of its effect is computed to the type of values tha
 the types inside that one (the parts of a tuple, the items of a sequence) to their carriers. -/
 private def readReply (goal : MVarId) (reply : Lean.Name) : MetaM MVarId := goal.withContext do
   let some decl := (← getLCtx).findFromUserName? reply | return goal
-  goal.replaceLocalDeclDefEq decl.fvarId (← Zkc.Formal.Walk.computedTypes (← whnfD decl.type))
+  goal.replaceLocalDeclDefEq decl.fvarId (← Zkc.Formal.computedTypes (← whnfD decl.type))
 
 /-- The name of the hypothesis that a reply is permitted. -/
 private def permittedName (reply : TSyntax `ident) : TSyntax `ident :=
