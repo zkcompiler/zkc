@@ -13,10 +13,20 @@ names, and one that it must accept:
 - a definition under the published proposition that is not the reference's;
 - a published theorem of another proposition that holds as well;
 - a module without the published theorem;
-- a false proposition proved with the kernel's check turned off by the module.
+- a false proposition proved with the kernel's check turned off by the module;
+- a definition under the proposition rewritten in the kernel's environment by a text that sets
+  no option at all, with a proof of the proposition that is then true (Lean accepts the module:
+  neither the generator's search for an option nor Lean's acceptance sees it);
+- a declaration written over one of an import;
+- a module that lacks an import of the reference.
 
-The modules import nothing, so the program's own steps are what is run: the replay, the
-comparison with the reference, and the walk of the proofs for axioms.
+One more module is refused by Lean itself, in the sandbox in which a proof module is compiled:
+a text that writes a file outside its own folder (the program that reads the object, the
+reference and the imports all stand outside it).
+
+The reference imports nothing, so the program's own steps are what is run: the replay, the
+comparison with the reference, and the walk of the proofs for axioms. A text's own imports are
+not the reference's, and a module with them is accepted.
 -/
 
 open Zkc.Frontend.Written Zkc.Tests.Frontend.PrintedPackageSupport
@@ -28,22 +38,48 @@ namespace OutsideReading
 def stated (proposition : String) : String :=
   "namespace Fixture\ndef mark : Nat := 0\n" ++ s!"def gGoal : Prop := {proposition}\n"
 
-/-- A module of the fixture: the statements, a text, and the published theorem. -/
-def fixture (text : String) (mark := "0") (proposition := "mark = mark") : Module where
-  text := (stated proposition).replace "def mark : Nat := 0" s!"def mark : Nat := {mark}" ++ text ++
+/-- A module of the fixture: the statements, a text, and the published theorem. The text may
+ask for imports, which the reference does not have; `needs` are imports of the reference. -/
+def fixture (text : String) (mark := "0") (proposition := "mark = mark") (imports := "")
+    (needs := "") : Module where
+  text := imports ++
+    (stated proposition).replace "def mark : Nat := 0" s!"def mark : Nat := {mark}" ++ text ++
     "\nend Fixture\n"
   theorems := []
-  reference := stated proposition ++ "end Fixture\n"
+  reference := needs ++ stated proposition ++ "end Fixture\n"
   published := [("Fixture.g_sound", "Fixture.gGoal")]
 
-/-- A module that Lean accepts and the reading outside refuses, saying `place`. -/
-def refused (work : System.FilePath) (title : String) (module : Module) (place : String) : IO Unit := do
+/-- The imports with which a text can reach the kernel's environment. -/
+def metaImports : String := "import Lean\nimport Batteries.Tactic.OpenPrivate\n"
+
+/-- A text that sets no option. It writes a declaration into the kernel's environment directly,
+replacing what stands there under `name`, and then adds the published theorem with the proof
+`proof`, which no check of the file reads against the old declaration. -/
+def rewriting (name value proof : String) : String :=
+  "open Lean Elab Command\n" ++
+  "open private Lean.Environment.setCheckedSync from Lean.Environment\n" ++
+  "open private Lean.Kernel.Environment.add from Lean.Environment\n" ++
+  "run_cmd do\n" ++
+  "  let env ← getEnv\n" ++
+  "  let kernel := env.toKernelEnv\n" ++
+  "  let some (.defnInfo found) := kernel.find? `Fixture.mark | throwError \"no mark\"\n" ++
+  s!"  let written : DefinitionVal := \{ found with toConstantVal.name := `{name}, value := {value} }\n" ++
+  "  let changed := Lean.Kernel.Environment.add kernel (.defnInfo written)\n" ++
+  "  setEnv (Lean.Environment.setCheckedSync env changed)\n" ++
+  "run_cmd do\n" ++
+  "  let stated := mkConst `Fixture.gGoal\n" ++
+  s!"  let proof := {proof}\n" ++
+  "  liftCoreM <| addDecl (.thmDecl { name := `Fixture.g_sound, levelParams := [], type := stated, value := proof })\n"
+
+/-- A module that Lean accepts and the reading outside refuses, saying `place` and `also`. -/
+def refused (work : System.FilePath) (title : String) (module : Module) (place : String)
+    (also : String := "") : IO Unit := do
   let outside ← readOutside (work / title) "Fixture" module
   unless outside.lean.1 do
     throw (IO.userError s!"{title}: Lean refused the module\n{outside.lean.2}")
   match outside.verified with
   | some (false, said) =>
-    unless said.contains place do
+    unless said.contains place && said.contains also do
       throw (IO.userError s!"{title}: refused outside the file for another reason\n{said}")
   | _ => throw (IO.userError s!"{title}: the module was accepted outside the file")
 
@@ -57,7 +93,7 @@ def run (work : System.FilePath) : IO Unit := do
     "`Fixture.g_sound` rests on"
   refused work "definition"
     (fixture "theorem g_sound : gGoal := rfl" (mark := "1"))
-    "`Fixture.mark` is not the declaration that the reference has"
+    "`Fixture.mark` is not the declaration that the reference has: its value differs"
   refused work "proposition"
     (fixture "theorem g_sound : mark = mark := rfl")
     "`Fixture.g_sound` is not of the proposition `Fixture.gGoal`"
@@ -67,11 +103,43 @@ def run (work : System.FilePath) : IO Unit := do
   refused work "unchecked"
     (fixture ("set_option «debug».skipKernelTC true in\n" ++
       "theorem g_sound : gGoal := by\n  show (0 : Nat) = 1\n  decide +kernel") (proposition := "(0 : Nat) = 1"))
-    "while replaying declaration 'Fixture.g_sound"
-  IO.println ("The reading outside the file accepts the module that is as stated and refuses five " ++
-    "that Lean accepts: an axiom through another theorem, a definition that is not the " ++
-    "reference's, another proposition, a missing theorem, and a false proposition proved with " ++
-    "the kernel's check turned off.")
+    "the kernel refuses a declaration of the candidate on replay" "Fixture.g_sound"
+  -- a text with imports of its own, which the reference does not have, is read as any other
+  let imported ← readOutside (work / "imported") "Fixture"
+    (fixture "theorem g_sound : gGoal := rfl" (imports := metaImports))
+  unless imported.lean.1 && imported.verified.map (·.1) == some true do
+    throw (IO.userError s!"a module with imports of its text is refused\n{imported.verified.map (·.2)}")
+  refused work "rewritten"
+    (fixture (rewriting "Fixture.mark" "mkNatLit 1"
+      "mkApp2 (mkConst ``Eq.refl [1]) (mkConst ``Nat) (mkNatLit 1)") (proposition := "mark = 1")
+      (imports := metaImports))
+    "`Fixture.mark` is not the declaration that the reference has"
+  refused work "overwritten"
+    (fixture (rewriting "Nat.zero" "mkNatLit 1"
+      "mkApp2 (mkConst ``Eq.refl [1]) (mkConst ``Nat) (mkConst `Fixture.mark)") (imports := metaImports))
+    "the candidate declares `Nat.zero`, which an import has"
+  refused work "unimported"
+    (fixture "theorem g_sound : gGoal := rfl" (needs := "import Lean\n"))
+    "the candidate does not import `Lean`, which the reference imports"
+  -- a text that writes a file outside its own folder: the proof module is compiled in a
+  -- sandbox, and Lean stops at the write. The file is one that the check itself made beside
+  -- the module's folder, so that a sandbox that failed would harm nothing.
+  IO.FS.createDirAll (work / "written")
+  let target := (← IO.FS.realPath (work / "written")) / "beside.txt"
+  IO.FS.writeFile target "as the check wrote it\n"
+  let writing ← readOutside (work / "written") "Fixture"
+    (fixture (s!"#eval IO.FS.writeFile {reprStr target.toString} \"rewritten by the text\"\n" ++
+      "theorem g_sound : gGoal := rfl"))
+  unless !writing.lean.1 && writing.lean.2.contains "read-only" &&
+      (← IO.FS.readFile target) == "as the check wrote it\n" do
+    throw (IO.userError s!"a text wrote a file outside its folder\n{writing.lean.2}")
+  IO.println ("The reading outside the file accepts the module that is as stated, also with " ++
+    "imports of its text, and refuses eight that Lean accepts: an axiom through another " ++
+    "theorem, a definition that is not the reference's, another proposition, a missing " ++
+    "theorem, a false proposition proved with the kernel's check turned off, a definition " ++
+    "rewritten in the kernel's environment with no option set, a declaration written over an " ++
+    "import's, and a module without an import of the reference. A text that writes a file " ++
+    "outside its own folder is stopped by the sandbox in which the module is compiled.")
 
 end OutsideReading
 

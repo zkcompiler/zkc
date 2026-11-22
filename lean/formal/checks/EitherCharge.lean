@@ -203,7 +203,7 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
   let (ok, output) ← finishLean steppedProof
   acceptedOutput "Steps" ok output steppedModule.theorems allowed
   refusedOutside work "the kernel's check turned off by the text" "Unchecked" unchecked
-    "while replaying declaration 'Unchecked.either_judged"
+    ["the kernel refuses a declaration of the candidate on replay", "Unchecked.either_judged"]
   IO.println ("Either is judged within the table of caps of its goal (the draws of its two arms " ++
     "at 1/8 and 1/4: 3/8), with a guard inside each arm and a guard before the draw; " ++
     "the blocks of a stepped loop are walked; " ++

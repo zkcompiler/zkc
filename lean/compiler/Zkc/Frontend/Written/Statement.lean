@@ -202,11 +202,12 @@ the module states them. -/
 structure Module where
   text : String
   theorems : List String
-  /-- The module without the text of the proofs and without anything that is proved: the same
-  imports, the package, the facts, the transfers and the propositions of the goals. It is what
-  the generator states, written with no word of an author, and the check outside the file
-  compares the published theorems of `text` with the propositions that this module defines. A
-  module that publishes nothing has none. -/
+  /-- The module without the text of the proofs and without anything that is proved: the
+  package, the facts, the transfers and the propositions of the goals, under the imports that
+  the generator's statements need. The imports that a text asks for are not among them, so no
+  word and no choice of an author is in it. The check outside the file compares the published
+  theorems of `text` with the propositions that this module defines. A module that publishes
+  nothing has none. -/
   reference : String := ""
   /-- The published theorems of `text`, each with its proposition, under their full names. -/
   published : List (String × String) := []
@@ -892,8 +893,10 @@ def header (modules : List String) : String :=
 /-- The published theorems of the goals, each with the proposition that it states, under their
 full names in the module `name`: for a goal, `<goal>_installed : <goal>Claim`,
 `<goal>_sound : <goal>Goal`, `<goal>_result : <goal>Result`, `<goal>_met : <goal>Witnessed`.
-The names are written here and nowhere else: the check inside a module (`publications`) and the
-check outside it (`Zkc/Tools/Formal/VerifyPublication.lean`) are both given this list. -/
+The check inside a module (`publications`) and the check outside it
+(`Zkc/Tools/Formal/VerifyPublication.lean`) are both given this one list. The theorems
+themselves are written by `closings`, which spells the same endings: if the two came apart, the
+check outside would find no theorem under the listed name. -/
 def publicationPairs (s : Statements) (name : String) : List (String × String) :=
   s.claims.goals.flatMap fun goal =>
     [("_installed", "Claim"), ("_sound", "Goal"), ("_result", "Result"), ("_met", "Witnessed")].map
@@ -933,13 +936,17 @@ has the kernel not check a declaration. That guards against an accident, and it 
 a string: a text can spell the option otherwise, or set it by a command of its own, and Lean
 then accepts a false theorem and reports no axiom for it. So Lean's acceptance of this module
 is not what a check of a subject rests on. The check compiles the module to an object and has
-it read outside the file (`Zkc/Tools/Formal/VerifyPublication.lean`): the kernel replays every
-declaration of the object on the imports, the published theorems are read from the result of
-that replay, each is of its proposition as a module generated without the text defines it
-(`statementsModule`, with the definitions that the proposition uses), and the axioms are read
-from the replayed proofs. What is trusted is then the toolchain, the imports, this generator
-and that program; of a text, only that it does not write files or run programs while Lean
-elaborates it. A statement that a check itself writes after the text (a consumer, with its
+it read outside the file (`Zkc/Tools/Formal/VerifyPublication.lean`): the kernel replays the
+declarations of the object on the imports (all that it checks: not code marked `unsafe`, which
+no theorem can use), the published theorems are read from the result of
+that replay, each is of its proposition as a module generated without the text and without
+the text's imports defines it (`Module.reference`, with the definitions that the proposition
+uses), and the axioms are read from the replayed proofs. The proof module is compiled in a sandbox (the file system
+read-only but for its own folder, no network, no process that outlives it), so a text cannot
+change the program, the reference or the imports before they are read. What is trusted is then
+the toolchain, the imports, this generator, that program and the sandbox; and that the object
+which Lean wrote for the proof module is read as an object is (the program replays every
+declaration that it finds there, but reads the file's format without checking it). A statement that a check itself writes after the text (a consumer, with its
 numerals and notations) is still read in the scope that the text leaves. -/
 def module (s : Statements) (name : String) (proof : ProofText)
     (walks := true) (after : ProofText := {}) (model : ModelText := s.chosenModel) :
@@ -954,14 +961,19 @@ def module (s : Statements) (name : String) (proof : ProofText)
     (if walks then s.entryNames else []) ++ (if fees then s.judgmentNames else []) ++
     s.ceilingNames ++ proof.theorems ++ (if fees then s.conclusionNames else []) ++
     s.closingNames ++ after.theorems
-  let opening := header (imports model walks ++ proof.imports ++ after.imports) ++
-    s!"namespace {name}\n" ++ (Written.package s.package).text ++ opens ++ s.facts ++ "\n"
-  let text := opening ++
-    coverage model ++ s.counts ++ s.sites ++ (if walks then s.entries else "") ++ s.transfers ++
-    claims ++ judgments ++ ceilings ++ proof.text ++ "\n" ++
+  let stated := s!"namespace {name}\n" ++ (Written.package s.package).text ++ opens ++ s.facts ++ "\n"
+  -- what the reference has stands first and in the reference's order, so that the two modules
+  -- elaborate the same commands up to the end of the claims
+  let text := header (imports model walks ++ proof.imports ++ after.imports) ++ stated ++
+    s.transfers ++ claims ++
+    coverage model ++ s.counts ++ s.sites ++ (if walks then s.entries else "") ++
+    judgments ++ ceilings ++ proof.text ++ "\n" ++
     (if fees then s.conclusions else "") ++ s.closings ++ after.text ++ s.publications name ++
     footer name theorems
-  let reference := opening ++ s.transfers ++ claims ++ s!"end {name}\n"
+  -- the reference imports what the generator's statements need and nothing that a text or a
+  -- check asked for: an import of the text that changed how a statement is read would make the
+  -- two modules differ
+  let reference := header (imports model walks) ++ stated ++ s.transfers ++ claims ++ s!"end {name}\n"
   return { text, theorems, reference, published := s.publicationPairs name }
 
 /-- A module with the package of the claims and the statements of the goals, with no proof: the

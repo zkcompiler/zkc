@@ -134,26 +134,41 @@ structure Outside where
 
 /-- Lean on a module and on its reference, each compiled to an object, and then the program
 outside the file on the two objects. The two sources have one module name and stand in two
-directories. A reference that Lean refuses is an error of the generator. -/
+directories. The proof module is compiled in a sandbox (`bwrap`, which the host must have),
+since its text is code that runs while Lean elaborates it. A reference that Lean refuses is an
+error of the generator. -/
 def readOutside (work : System.FilePath) (name : String) (module : Module)
     (axioms : List String := allowed) : IO Outside := do
-  let compile (part source : String) : IO (System.FilePath × System.FilePath × (Bool × String)) := do
-    let root := work / s!"{name}.{part}"
-    IO.FS.createDirAll root
+  let place (part source : String) : IO (System.FilePath × System.FilePath × System.FilePath) := do
+    let root ← IO.FS.realPath (← do IO.FS.createDirAll (work / s!"{name}.{part}"); pure (work / s!"{name}.{part}"))
     let path := root / s!"{name}.lean"
-    let object := path.withExtension "olean"
     IO.FS.writeFile path source
-    return (path, object, ← runLakeLean path #["-R", root.toString, "-o", object.toString])
-  let (_, candidate, lean) ← compile "candidate" module.text
+    return (root, path, path.withExtension "olean")
+  let (candidateRoot, candidateSource, candidate) ← place "candidate" module.text
+  let (referenceRoot, referenceSource, reference) ← place "reference" module.reference
+  -- where Lake has the imports of the proof module's header, which the generator wrote: asked
+  -- before the text runs, and kept outside the folder that the text can write
+  let setup ← IO.Process.output { cmd := "lake", args := #["-q", "setup-file", candidateSource.toString] }
+  unless setup.exitCode == 0 do
+    throw (IO.userError s!"{name}: no setup for the imports of the proof module\n{setup.stderr}")
+  let setupPath := referenceRoot / "setup.json"
+  IO.FS.writeFile setupPath setup.stdout
+  -- the proof module, with the author's text, is compiled in a sandbox: the file system is
+  -- read-only but for the module's own folder, there is no network, and no process outlives
+  -- the compilation. A text can then not change the program that reads its object, the
+  -- reference, or the imports.
+  let confined ← IO.Process.output {
+    cmd := "bwrap"
+    args := #["--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc", "--unshare-net",
+      "--unshare-pid", "--die-with-parent", "--bind", candidateRoot.toString, candidateRoot.toString,
+      "--setenv", "TMPDIR", candidateRoot.toString, "--",
+      "lake", "-q", "lean", candidateSource.toString, "--", "-DElab.async=false",
+      "-R", candidateRoot.toString, "-o", candidate.toString] }
+  let lean := (confined.exitCode == 0, confined.stdout ++ confined.stderr)
   unless lean.1 do return { lean }
-  let (referenceSource, reference, referenceLean) ← compile "reference" module.reference
+  let referenceLean ← runLakeLean referenceSource #["-R", referenceRoot.toString, "-o", reference.toString]
   unless referenceLean.1 do
     throw (IO.userError s!"{name}: Lean refused the module without the text\n{referenceLean.2}")
-  let setup ← IO.Process.output { cmd := "lake", args := #["-q", "setup-file", referenceSource.toString] }
-  unless setup.exitCode == 0 do
-    throw (IO.userError s!"{name}: no setup for the module without the text\n{setup.stderr}")
-  let setupPath := work / s!"{name}.reference" / "setup.json"
-  IO.FS.writeFile setupPath setup.stdout
   let out ← IO.Process.output {
     cmd := "lake"
     args := #["env", "lean", "--run", "Zkc/Tools/Formal/VerifyPublication.lean",
@@ -161,12 +176,16 @@ def readOutside (work : System.FilePath) (name : String) (module : Module)
       (module.published.map fun (theorem_, proposition) => s!"{theorem_}={proposition}").toArray }
   return { lean, verified := some (out.exitCode == 0, out.stdout ++ out.stderr) }
 
-/-- Lean on a proof module, as a task, with the module read outside the file where it publishes
-theorems: a module that Lean accepts and the program outside refuses is an error here, with
-what that program said. The result is Lean's on the module. -/
+/-- Lean on a proof module, as a task, with the module read outside the file: a module that
+Lean accepts and the program outside refuses is an error here, with what that program said. The
+result is Lean's on the module. The module has to publish theorems: one that publishes nothing
+is an error, so that a module whose list was lost is not accepted unread. A module that is
+meant to publish nothing (a control, the module of a ceiling) is started with
+`startLakeLean`. -/
 def startModule (work : System.FilePath) (name : String) (module : Module)
     (axioms : List String := allowed) : IO (Task (Except IO.Error (Bool × String))) := do
-  if module.published.isEmpty then return ← startLakeLean work name module.text
+  if module.published.isEmpty || module.reference.isEmpty then
+    throw (IO.userError s!"{name}: the module names no published theorem to read outside the file")
   IO.asTask do
     let outside ← readOutside work name module axioms
     if let some (false, said) := outside.verified then
@@ -175,14 +194,14 @@ def startModule (work : System.FilePath) (name : String) (module : Module)
 
 /-- A control of the reading outside the file: Lean accepts the module, with every theorem on
 the allowed axioms as its output has them, and the program outside the file refuses it, saying
-`place`. -/
+each of `places`. -/
 def refusedOutside (work : System.FilePath) (title name : String) (module : Module)
-    (place : String) : IO Unit := do
+    (places : List String) : IO Unit := do
   let outside ← readOutside work name module
   acceptedOutput name outside.lean.1 outside.lean.2 module.theorems allowed
   match outside.verified with
   | some (false, said) =>
-    unless said.contains place do
+    unless places.all (fun place => said.contains place) do
       throw (IO.userError s!"{title}: refused outside the file for another reason\n{said}")
   | _ => throw (IO.userError s!"{title}: the module was accepted outside the file")
 

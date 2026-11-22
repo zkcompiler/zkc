@@ -8,11 +8,15 @@ A check of a subject runs Lean on a module that contains an author's text, and a
 arbitrary Lean: it can turn off the kernel's check of its declarations, and Lean then accepts a
 false theorem and reports no axiom for it. This program does not read what Lean printed. It
 reads two objects that Lean compiled: the proof module (the candidate), and the module that the
-generator writes without the text (the reference: the same imports, the package and the
-propositions of the goals). Then:
+generator writes without the text (the reference: the package and the propositions of the
+goals, under the imports that the generator's statements need and none that a text asked for).
+Then:
 
-- the kernel **replays** every declaration of the candidate on the imports, so a declaration
-  that the file's elaboration left unchecked is checked here, and refused if it does not hold;
+- the kernel **replays** the declarations of the candidate on the imports, so a declaration
+  that the file's elaboration left unchecked is checked here, and refused if it does not hold.
+  Lean's replay leaves out what the kernel never checks: a declaration marked `unsafe`, and the
+  compiled body of a `partial` definition. Those are code; no theorem can use them, and the
+  constant that a `partial` definition gives to proofs is replayed;
 - each published theorem is read from the result of that replay, and is of its proposition
   under its full name, with no parameter of a universe;
 - each such proposition, and every declaration of the module that it uses, is in the replayed
@@ -22,10 +26,12 @@ propositions of the goals). Then:
   allowed ones.
 
 The imports are trusted: they are loaded as compiled, through the artifacts that Lake names for
-the reference, and are not replayed. The candidate must have the reference's imports and must
-declare no name that an import has.
+the candidate's header, and are not replayed. The candidate imports what the reference imports,
+and may import more (what a text asked for); it must declare no name that an import has. A
+proposition that an import of the text made mean something else is then not the reference's
+declaration, and is refused.
 
-Arguments: the setup of the reference as Lake prints it (`lake setup-file`), the object of the
+Arguments: the setup of the candidate as Lake prints it (`lake setup-file`), the object of the
 reference, the object of the candidate, the allowed axioms separated by commas, and then each
 published theorem with its proposition as `theorem=proposition`.
 -/
@@ -74,7 +80,20 @@ partial def sameAsReference (reference : Declarations) (base checked : Kernel.En
   let some actual := checked.find? n
     | throw <| IO.userError s!"the candidate does not declare `{n}`, which the reference does"
   unless actual == expected do
-    throw <| IO.userError s!"`{n}` is not the declaration that the reference has"
+    let differs :=
+      if actual.type != expected.type then "its type differs"
+      else if actual.levelParams != expected.levelParams then "its universe parameters differ"
+      else match actual, expected with
+        | .defnInfo a, .defnInfo e => if a.value != e.value then "its value differs" else "its hints or safety differ"
+        | .thmInfo _, .thmInfo _ => "its proof differs"
+        | .opaqueInfo _, .opaqueInfo _ => "its value differs"
+        | .inductInfo _, .inductInfo _ => "its family, parameters or constructors differ"
+        | .ctorInfo _, .ctorInfo _ => "its place in its type differs"
+        | .recInfo _, .recInfo _ => "its rules differ"
+        | .axiomInfo _, .axiomInfo _ => "its safety differs"
+        | .quotInfo _, .quotInfo _ => "its kind differs"
+        | _, _ => "it is a declaration of another kind"
+    throw <| IO.userError s!"`{n}` is not the declaration that the reference has: {differs}"
   sameAsReference reference base checked (dependencies expected ++ rest) seen
 
 /-- The axioms that a declaration rests on, read from the replayed declarations. -/
@@ -103,15 +122,24 @@ def publications (reference candidate : Declarations) (base checked : Kernel.Env
     unless proved.levelParams.isEmpty && proved.type == mkConst proposition do
       throw <| IO.userError s!"`{theorem_}` is not of the proposition `{proposition}`"
   sameAsReference reference base checked (pairs.map (·.2))
+  let within (axioms : Array Name) : Bool :=
+    axioms.all fun a => allowed.contains a && (base.find? a matches some (.axiomInfo _))
+  -- one walk for all the published theorems, which share most of what they use; where it
+  -- finds an axiom beyond the allowed ones, each theorem is walked to say which rests on it
+  let axioms ← axiomsOf checked (pairs.map (·.1))
+  unless within axioms do
+    for (theorem_, _) in pairs do
+      let own ← axiomsOf checked [theorem_]
+      unless within own do
+        throw <| IO.userError s!"`{theorem_}` rests on {own}, beyond {allowed}"
+    throw <| IO.userError s!"the published theorems rest on {axioms}, beyond {allowed}"
   for (theorem_, proposition) in pairs do
-    let axioms ← axiomsOf checked [theorem_]
-    unless axioms.all fun a => allowed.contains a && (base.find? a matches some (.axiomInfo _)) do
-      throw <| IO.userError s!"`{theorem_}` rests on {axioms}, beyond {allowed}"
-    IO.println s!"replayed {theorem_} : {proposition} {axioms}"
+    IO.println s!"replayed {theorem_} : {proposition}"
+  IO.println s!"axioms of the published theorems: {axioms}"
 
 def run (args : List String) : IO Unit := do
   let setupPath :: referencePath :: candidatePath :: allowed :: pairs := args
-    | throw <| IO.userError "expected: setup, reference object, candidate object, allowed axioms, theorem=proposition …"
+    | throw <| IO.userError "expected: the candidate's setup, reference object, candidate object, allowed axioms, theorem=proposition …"
   let pairs ← pairs.mapM fun pair => match pair.splitOn "=" with
     | [theorem_, proposition] => pure (theorem_.toName, proposition.toName)
     | _ => throw <| IO.userError s!"not `theorem=proposition`: {pair}"
@@ -122,17 +150,23 @@ def run (args : List String) : IO Unit := do
   let (candidateData, _) ← readModuleData candidatePath
   let reference ← declarations referenceData
   let candidate ← declarations candidateData
-  unless candidateData.imports == referenceData.imports do
-    throw <| IO.userError "the candidate does not have the imports of the reference"
-  -- the imports, as compiled: both parts of the `Zkc` namespace through Lake's artifacts
-  let (_, state) ← importModulesCore referenceData.imports (arts := setup.importArts) |>.run
+  for needed in referenceData.imports do
+    unless candidateData.imports.contains needed do
+      throw <| IO.userError s!"the candidate does not import `{needed.module}`, which the reference imports"
+  -- the candidate's imports, as compiled: both parts of the `Zkc` namespace through Lake's
+  -- artifacts
+  let (_, state) ← importModulesCore candidateData.imports (arts := setup.importArts) |>.run
   let base :=
-    (← finalizeImport state referenceData.imports {} 0 false false (isModule := true)).toKernelEnv
+    (← finalizeImport state candidateData.imports {} 0 false false (isModule := true)).toKernelEnv
   for (n, _) in candidate do
     if (base.find? n).isSome then
       throw <| IO.userError s!"the candidate declares `{n}`, which an import has"
-  -- the kernel on every declaration of the candidate
-  let checked ← base.replay candidate
+  -- the kernel on the declarations of the candidate (all but `unsafe` ones and the compiled
+  -- bodies of `partial` definitions, which the kernel does not check and no proof can use)
+  let checked ←
+    try base.replay candidate
+    catch refusal =>
+      throw <| IO.userError s!"the kernel refuses a declaration of the candidate on replay\n{refusal}"
   publications reference candidate base checked allowed pairs
 
 end Zkc.Tools.Formal.VerifyPublication
