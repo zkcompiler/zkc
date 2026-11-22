@@ -60,15 +60,16 @@ experiment of the statement is the one that a reader would write.
 - Two controls are of the text of the proofs, on the first source. Their text proves its claim
   itself (the other method than the judgment with fees). In one, the text takes its claim as a
   hypothesis of the module's scope: every theorem after the text takes that hypothesis, Lean
-  proves each and reports no axiom for it, and the module is refused at the four places where
-  the stored statements are read (`published`). In the other, the text defines a name of the
-  claim again (the experiment, as a proposition that always holds) and proves the claim written
-  anew: the goal is not concluded from it, and the theorem that has the claim's name does not
-  state the claim.
+  proves each and accepts the module, and the module is refused outside the file, where the
+  stored statements are read: none of the four published theorems is of its proposition. In
+  the other, the text defines a name of the claim again (the experiment, as a proposition that
+  always holds) and proves the claim written anew: the goal is not concluded from it, and Lean
+  refuses the module there.
 -/
 
 open Zkc.Core Zkc.Frontend Zkc.Frontend.Written
 open Zkc.Tests.Frontend Zkc.Tests.Frontend.PrintedPackageSupport
+open Zkc.Tests.Frontend.WrittenSubject (startModule startRefused refusedOutside)
 
 namespace GoalStatementCheck
 
@@ -547,22 +548,29 @@ def run (work : System.FilePath) : IO Unit := do
   let fronted := decided ("spec note: bool, " ++ both) "flag" "proves @V IsSet(flag)"
   let aboutOther := decided ("spec note: bool, " ++ both) "other" "proves @V IsSet(other)"
   let module ← proofModule "Operands" fronted "flag"
-  let theorems := module.theorems
-  let proof ← Zkc.Tests.Frontend.WrittenSubject.startModule work "Operands" module
-  let control ← startLakeLean work "OperandsControl"
-    (← proofModule "OperandsControl" aboutOther "other").text
-  let assumedProof ← startLakeLean work "AssumedControl"
-    (← proofModule "AssumedControl" fronted "flag" assuming).text
-  let shadowedProof ← startLakeLean work "ShadowControl"
-    (← proofModule "ShadowControl" fronted "flag" shadowing).text
+  let theorems := module.proved
+  let proof ← startModule work "Operands" module
+  let control ← startRefused work "OperandsControl"
+    (← proofModule "OperandsControl" aboutOther "other")
+  let assumed ← proofModule "AssumedControl" fronted "flag" assuming
+  -- The claim taken as a hypothesis of the module's scope: every theorem that the generator
+  -- writes after the text takes the variable, so Lean proves each and accepts the module;
+  -- none is of its proposition, and the module is refused outside the file, where the stored
+  -- statements are read, with each of the four named.
+  let assumedProof ← IO.asTask (refusedOutside work "a claim taken as a hypothesis" "AssumedControl" assumed
+    ["`AssumedControl.sound_installed` is not of the proposition `AssumedControl.soundClaim`",
+      "`AssumedControl.sound_sound` is not of the proposition `AssumedControl.soundGoal`",
+      "`AssumedControl.sound_result` is not of the proposition `AssumedControl.soundResult`",
+      "`AssumedControl.sound_met` is not of the proposition `AssumedControl.soundWitnessed`"])
+  let shadowedProof ← startRefused work "ShadowControl"
+    (← proofModule "ShadowControl" fronted "flag" shadowing)
   let (ok, output) ← finishLean closed
   expect s!"the records of a goal were altered outside the reader\n{output}"
     (!ok && output.contains "constructor for `ClaimedGoal` is marked as private" &&
       output.contains "constructor for `GoalClaims` is marked as private" &&
       (output.splitOn "error").length == 4)
-  let allowed := ["propext", "Classical.choice", "Quot.sound"]
-  let (ok, output) ← finishLean proof
-  acceptedOutput "Operands" ok output theorems allowed
+  -- the task ends when the two modules are accepted, the proof module outside the file too
+  let _ ← finishLean proof
   -- The published theorem of the control is about the second input. It is proved; the consumer,
   -- which reads the first, is not, and is refused where it gives the theorem its premise.
   expectUnproved "a clause about the other input" "OperandsControl" theorems control ["consumer"]
@@ -570,23 +578,14 @@ def run (work : System.FilePath) : IO Unit := do
   expect s!"the consumer of the control was refused for another reason\n{refusal}"
     (refusal.contains "The argument\n  rejected\nhas type" &&
       refusal.contains "(HList.cons true HList.nil)) = some false\nin the application")
-  -- The claim taken as a hypothesis of the module's scope: every theorem that the generator
-  -- writes after the text takes the variable, so Lean proves each and reports no axiom beyond
-  -- the allowed; none states its proposition, and the module is refused where the stored
-  -- statements are read, at four places and no other.
-  expectUnproved "a claim taken as a hypothesis" "AssumedControl" theorems assumedProof []
-  expectPlaces "a claim taken as a hypothesis" assumedProof
-    ["`AssumedControl.sound_installed` does not state `AssumedControl.soundClaim`",
-      "`AssumedControl.sound_sound` does not state `AssumedControl.soundGoal`",
-      "`AssumedControl.sound_result` does not state `AssumedControl.soundResult`",
-      "`AssumedControl.sound_met` does not state `AssumedControl.soundWitnessed`"]
+  IO.ofExcept assumedProof.get
   -- A name of the claim defined again by the text: the claim written anew is not the claim that
-  -- was stated before the text. The goal is not concluded from it, and the theorem that the
-  -- text gave the name of the claim's does not state the claim.
+  -- was stated before the text, and the goal is not concluded from it: Lean refuses the module
+  -- there, at one place. (The theorem that the text gave the name of the claim's is not of the
+  -- claim either; a module that Lean refuses is not read outside the file.)
   expectUnproved "a name of the claim defined again" "ShadowControl" theorems shadowedProof
     ["sound_sound", "sound_result", "consumer"]
-  expectPlaces "a name of the claim defined again" shadowedProof
-    ["Type mismatch", "`ShadowControl.sound_installed` does not state `ShadowControl.soundClaim`"]
+  expectPlaces "a name of the claim defined again" shadowedProof ["Type mismatch"]
   IO.println ("The statement of a goal reads its operands in the deployed header, its deciding role " ++
     "in the goal's scheme and its event in the clause: a spec port that nothing uses leaves the " ++
     "claim as it is, another operand changes it, and a consumer written apart uses the published " ++

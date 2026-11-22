@@ -189,15 +189,15 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
       text := short, unproved := ofWalk, only := true,
       places := ["omega could not prove the goal"] },
     -- The judgment taken as a hypothesis: every theorem that the generator writes after the
-    -- text takes the variable, so Lean proves each and reports no axiom beyond the allowed;
-    -- none states its proposition, and the module is refused where the stored statements are
-    -- read.
+    -- text takes the variable, so Lean proves each and accepts the module; none is of its
+    -- proposition, and the module is refused outside the file, where the stored statements
+    -- are read, with each of the four named.
     { title := "a judgment taken as a hypothesis", name := "AssumedControl", subject := written,
-      text := assumed, unproved := [], only := true,
-      places := ["`AssumedControl.guessing_installed` does not state `AssumedControl.guessingClaim`",
-        "`AssumedControl.guessing_sound` does not state `AssumedControl.guessingGoal`",
-        "`AssumedControl.guessing_result` does not state `AssumedControl.guessingResult`",
-        "`AssumedControl.guessing_met` does not state `AssumedControl.guessingWitnessed`"] }]
+      text := assumed, refusal := .outside,
+      places := ["`Guess.guessing_installed` is not of the proposition `Guess.guessingClaim`",
+        "`Guess.guessing_sound` is not of the proposition `Guess.guessingGoal`",
+        "`Guess.guessing_result` is not of the proposition `Guess.guessingResult`",
+        "`Guess.guessing_met` is not of the proposition `Guess.guessingWitnessed`"] }]
   IO.println ("Guess<3> is judged within the table of caps of its goal (the draw at 1/8, three " ++
     "times: 3/8), a fee at every round of the loop; a consumer written apart states the bound " ++
     "as 3/8; 4 of 4 controls refused, each at the places that the check names and at no other.")

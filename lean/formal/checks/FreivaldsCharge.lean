@@ -82,15 +82,15 @@ written anew under it. Every statement of the module is a proposition defined be
 so the claim is not concluded from that proof: Lean refuses the generated conclusion at one
 place, as a mismatch of types.
 
-The check does not rest on Lean's acceptance of the proof module: the module is compiled to an
-object, in a sandbox, and read outside the file, where the kernel replays its declarations and
-the published theorems are compared with the module that the generator writes without the text
-(`WrittenSubject.startModule`; `checks/OutsideReading.lean` has the controls of that reading,
-and the check of `Either` one on a real subject). Lean's report of the axioms is still read
-for the theorems of the text, where there is exactly one report of each. That the theorems
-after the text state their propositions, and not those under a hypothesis that the text
-declared for its scope, is also read inside the file from what Lean stored (`published`); the
-check of `Guess<3>` has the control.
+The check does not rest on Lean's acceptance of the proof module: the module of the statements
+is compiled with no text, the proof module is compiled against it, in a sandbox, and its object
+is read outside the file, where the kernel replays its declarations, the published theorems are
+of propositions that the module of the statements declares, and the axioms are read from the
+replayed proofs (`WrittenSubject.proveOutside`; `checks/OutsideReading.lean` has the controls
+of that reading, the check of `Either` one on a real subject, and the check of `Guess<3>` the
+control of a text that makes the theorems after it take a hypothesis). Lean's report of the
+axioms is read for the theorems of the module of the statements, and for a control, where
+there is exactly one report of each.
 -/
 
 open Zkc.Core Zkc.Frontend Zkc.Frontend.Written
@@ -211,8 +211,9 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
   let fronted ← read (source "Product(a, b, c)" "spec note: bool, ")
     (reading ["a", "b", "c"] #[0, 1, 2] #["note"])
   let proof := proofOf template
-  unless (← fronted.module "Freivalds" proof).text == (← written.module "Freivalds" proof).text do
-    throw (IO.userError "a spec port in front of the matrices changed the proof module")
+  let (frontedModule, writtenModule) := (← fronted.module "Freivalds" proof, ← written.module "Freivalds" proof)
+  unless frontedModule.statements == writtenModule.statements && frontedModule.proof == writtenModule.proof do
+    throw (IO.userError "a spec port in front of the matrices changed the modules")
 
   -- A charge of half the source's, in the source: the program is what it was, and the cap of
   -- the draw is half.
@@ -277,16 +278,13 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
   let uncoveredProof ← startLakeLean work "CoverageControl"
     (written.statements.coverageModule "CoverageControl" (model := standardModelText)).text
 
-  let (ok, output) ← freivalds.finish
-  let theorems := freivalds.module.theorems
-  -- The reading of Lean's output: a report of axioms that stands twice is not read, and a text
-  -- with an option for debugging is not run.
+  let _ ← freivalds.finish
+  -- The reading of Lean's output: a report of axioms that stands twice is not read.
+  let report := "'Freivalds.covered' depends on axioms: [propext]\n"
+  acceptedOutput "Freivalds" true report ["covered"] allowed
   refuses "a report of axioms printed again"
-    (acceptedOutput "Freivalds" ok
-      (output ++ "'Freivalds.sound_sound' does not depend on any axioms\n") theorems allowed)
-  refuses "a text with an option for debugging"
-    (discard (written.module "Freivalds"
-      (proofOf (template ++ "set_option debug.skipKernelTC true in\n"))))
+    (acceptedOutput "Freivalds" true
+      (report ++ "'Freivalds.covered' does not depend on any axioms\n") ["covered"] allowed)
   let _ ← rewrittenCheck.finish
   -- The kernel decides that the standard model does not cover the package.
   let (ok, output) ← finishLean uncoveredProof

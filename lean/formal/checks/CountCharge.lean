@@ -264,7 +264,13 @@ def run (corpus template : System.FilePath) (work : System.FilePath) : IO Unit :
     { title := "a charge on a loop that does not run", name := "SiteControl", subject := elsewhere,
       text := template, unproved := ofCharge, places := atCap },
     { title := "a charge of another protocol", name := "OwnerControl", subject := foreign,
-      text := template, unproved := ofCharge, places := atCap }]
+      text := template, unproved := ofCharge, places := atCap },
+    -- A row outside the table of the model: what is generated before the text does not hold
+    -- of this source (the model does not cover its package), so the module of the statements
+    -- is refused and the text is not read.
+    { title := "a row outside the table of the model", name := "UncoveredControl", subject := uncovered,
+      text := template, refusal := .generated, unproved := ["covered"],
+      places := ["StandardModel.covers stored = true"] }]
   -- The roster reversed: the same text proves the same theorems.
   let turnedCount ← start work "CountTurned" turned proof
   let _ ← count.finish
@@ -280,7 +286,9 @@ def run (corpus template : System.FilePath) (work : System.FilePath) : IO Unit :
     s!"{name} at tolerance {arguments[0]!} within {caps.ratio}")
   IO.println (s!"Count<8> is judged within the tables of caps of its goals ({charges}), " ++
     "on the tables on which the admitted relation returns false, in either order of the roster; " ++
-    "5 of 5 controls refused, and a scheme whose prover decides the clause is refused by the frontend.")
+    "6 of 6 controls refused, one of them in what is generated before the text (the model does " ++
+    "not cover a row of its package), and a scheme whose prover decides the clause is refused " ++
+    "by the frontend.")
 
 end CountCharge
 
