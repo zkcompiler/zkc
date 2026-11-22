@@ -13,8 +13,11 @@ The judgment with fees of a written goal reads no peer.
 What the world may give (`Permitted`), the samplers of the laws (`lawSamplers`) and what a
 table of caps allows an effect (`CapTable.allowanceFrom`, which reads where the effect occurs)
 do not read who gives, gets, hears or owns. So the judgment in which the statements of a goal
-are made is `Blind`, and a walk goes into an application under it. The theorems carry the label
-`walk_blind`, by which the walk finds that a judgment reads no peer.
+are made is `Blind`, and a walk goes into an application under it. So are the judgments "on
+every permitted reply" and "on some permitted reply", in which a text states what a role
+returns. The theorems carry the label `walk_blind`, by which the walk finds that a judgment
+reads no peer. The judgment that records the trace of a run (`ProcessJudgment.trace`) reads the
+peers, and is not among them.
 -/
 
 namespace Zkc.Formal.Written
@@ -63,6 +66,34 @@ theorem paysWithin_blind (ρ : Role → Role) (draws : LawDraws M) (table : CapT
   cases op with
   | own kind => cases kind <;> exact Iff.rfl
   | _ => exact Iff.rfl
+
+/-- The judgment "on every permitted reply" reads no peer when what is permitted reads none. -/
+theorem every_blind (ρ : Role → Role) (allowed : ∀ op, (RSig M).Reply op → Prop)
+    (hAllowed : ∀ op, allowed (renameOp ρ op) = carryReply ρ op (allowed op)) :
+    Blind ρ (.every allowed) := by
+  intro op next
+  have ha := hAllowed op
+  cases op <;> simp only [renameOp, carryReply] at ha ⊢ <;> simp only [ProcessJudgment.every, ha]
+
+/-- The judgment "on some permitted reply" reads no peer when what is permitted reads none. -/
+theorem possible_blind (ρ : Role → Role) (allowed : ∀ op, (RSig M).Reply op → Prop)
+    (hAllowed : ∀ op, allowed (renameOp ρ op) = carryReply ρ op (allowed op)) :
+    Blind ρ (.possible allowed) := by
+  intro op next
+  have ha := hAllowed op
+  cases op <;> simp only [renameOp, carryReply] at ha ⊢ <;> simp only [ProcessJudgment.possible, ha]
+
+/-- **Every permitted reply**: the judgment in which a text states that a role returns on every
+run, at what the world may give, reads no peer. -/
+@[walk_blind]
+theorem every_permitted_blind (ρ : Role → Role) : Blind (M := M) ρ (.every (Permitted M)) :=
+  every_blind ρ _ (permitted_blind ρ)
+
+/-- **Some permitted reply**: the judgment in which a text states that a role can return reads
+no peer. -/
+@[walk_blind]
+theorem possible_permitted_blind (ρ : Role → Role) : Blind (M := M) ρ (.possible (Permitted M)) :=
+  possible_blind ρ _ (permitted_blind ρ)
 
 /-- **The judgment of a written goal reads no peer.** -/
 @[walk_blind]

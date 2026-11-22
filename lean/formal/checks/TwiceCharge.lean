@@ -33,7 +33,8 @@ differs from the others in the shape of its program:
   callee. The text states the law of the function once, in the table of the definitions
   before the root, and the walk takes the call by it;
 - **a walk of a hypothesis through the application** (`twice_pays_first`, written by the check
-  after the text): for every judgment with fees that reads no peer of an effect.
+  after the text): for every judgment with fees that reads no peer of an effect;
+- **a walk under another judgment** (`twice_returns`): on every permitted reply.
 
 The check reads the source with the frontend and writes modules on which Lean is run: the
 proof module (the printed package, what `Written.Statements` writes, and the text of
@@ -193,11 +194,14 @@ def asideText : String :=
   "  aside_witnessed_of Zkc.Formal.Written.FiniteModel.data false trivial\n" ++
   "    (aside_relation _ false)\n\nend\n"
 
-/-- A theorem after the text of `Twice` that walks a hypothesis: a judgment of the verifier is
-given, and the walk goes through the first application on it. The judgment is any judgment with
+/-- Two theorems after the text of `Twice` under other judgments than the goal's. The first
+walks a hypothesis: a judgment of the verifier is given, and the walk goes through the first
+application on it. The judgment is any judgment with
 fees that reads no peer of an effect, which the theorem states as a hypothesis; the walk takes
 the proof from there. The path of the application is the root's, so the theorem is of `Twice`
-and not of the nested root. -/
+and not of the nested root. The second is under the judgment "on every permitted reply", which
+the library proves reads no peer: on a true claim the verifier returns on every run, through
+both applications. -/
 def converseText : String :=
   "\n" ++
   "/-- **A walk of a hypothesis goes through an application.** Every judgment with fees that reads\n" ++
@@ -217,7 +221,29 @@ def converseText : String :=
   "      pays (.get .message 0 ⟨path ++ [.application ⟨0⟩], ⟨0⟩⟩ (.fin 4)) fee excluded := by\n" ++
   "  walk at judged\n" ++
   "  obtain ⟨fee, excluded, least, paid, _⟩ := judged\n" ++
-  "  exact ⟨fee, excluded, least, paid⟩\n"
+  "  exact ⟨fee, excluded, least, paid⟩\n" ++
+  "\n" ++
+  "/-- **On a true claim the verifier returns on every run**, through both applications: the\n" ++
+  "judgment \"on every permitted reply\" reads no peer either, and the walk goes into `Round` under\n" ++
+  "it. -/\n" ++
+  "theorem twice_returns {F G : Type} (D : StandardModel.Data F G) [DecidableEq F] [DecidableEq G]\n" ++
+  "    (path : List Frame) :\n" ++
+  "    (roleMeaning (StandardModel.model D) installed rootMember verifierRole path\n" ++
+  "        (.cons true (.cons () (.cons () .nil)))).interpret\n" ++
+  "      (.every (Permitted (StandardModel.model D))) (fun _ => True) (fun _ => False) := by\n" ++
+  "  walk\n" ++
+  "  intro first _\n" ++
+  "  walk\n" ++
+  "  intro one _\n" ++
+  "  walk\n" ++
+  "  walk_law same_law D one first\n" ++
+  "  walk\n" ++
+  "  intro second _\n" ++
+  "  walk\n" ++
+  "  intro two _\n" ++
+  "  walk\n" ++
+  "  walk_law same_law D two second\n" ++
+  "  walk\n"
 
 /-- What the check asserts of what the frontend read of a source of the subject: the goal
 selects the root; it reads the clause `proves @V Holds(claim)` on the first of the three ports,
@@ -294,7 +320,8 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
   let asideProof ← startLakeLean work "Aside" asideModule.text
 
   let _ ← check work "Twice" written
-    { text := template ++ converseText, theorems := ofText "twice" ++ ["twice_pays_first"] }
+    { text := template ++ converseText,
+      theorems := ofText "twice" ++ ["twice_pays_first", "twice_returns"] }
     [halvedControl]
   let (ok, output) ← finishLean nestedProof
   acceptedOutput "Nested" ok output nestedModule.theorems allowed
