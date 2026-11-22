@@ -55,11 +55,23 @@ A fourth module is of a root that applies `Round` and then a protocol of the pro
 that place; in the application of the prover's protocol the verifier plays no role, its
 program there has no effect, and the walk passes it as any other instruction.
 
-One control is refused by Lean, at the place that the check names and at no other: the charge
-of the draw halved in the source. The program is what it was; the cap that the table gives the
-draw through the application is one eighth, and the fee of one quarter that the text pays at
-the first application is refused there, with the name that the module gives that draw below
-that application.
+A fifth module is of a root whose callees fork (`Forked`): one has a guard after its draw, the
+other chooses by an input and has a draw and a guard in each arm. The text of the root names
+the forks: the guard is a hypothesis of the walk, and the choice gives one goal for each arm.
+The table has the draws of both arms, and its total is three quarters.
+
+Four controls are refused by Lean, each at the place that the check names and at no other:
+
+- the charge of the draw halved in the source. The program is what it was; the cap that the
+  table gives the draw through the application is one eighth, and the fee of one quarter that
+  the text pays at the first application is refused there, with the name that the module gives
+  that draw below that application;
+- the body of the function that the callee calls turned. The law that the text states of it is
+  refused, and nothing else is: the walks take the call by the law;
+- a walk under the judgment that records the effects of a run, of which nothing says that it
+  reads no peer of an effect: refused at the application, with the judgment;
+- the comparison of one arm of the forking callee turned. The walk is what it was, and the text
+  is refused at the end of that arm.
 -/
 
 open Zkc.Core Zkc.Frontend Zkc.Frontend.Written
@@ -68,19 +80,20 @@ open Zkc.Tests.Frontend.WrittenSubject
 
 namespace TwiceCharge
 
-/-- The function and the protocol that the roots apply, with the charge of its draw. -/
-def round (charge : String) : String :=
+/-- The function and the protocol that the roots apply, with the charge of its draw and the
+body of the function. -/
+def round (charge : String) (same : String := "a == b") : String :=
   "module t\nuse zkc::security::{soundness}\n" ++
   "relation Holds(claim: bool): claim\n" ++
-  "def same(a: index<4>, b: index<4>) -> bool: a == b\n" ++
+  s!"def same(a: index<4>, b: index<4>) -> bool: {same}\n" ++
   "protocol Round roles(P, V)(sent: index<4> @P) -> (hit: bool @(P, V), drawn: index<4> @(P, V)):\n" ++
   "    x <- send sent from P to V\n    r <- draw index<4> from V to P\n" ++
   "    return (same(r, x), r)\n" ++
   s!"spec for Round:\n    charge sites.r <= {charge}\n"
 
 /-- The source: the root applies `Round` twice. -/
-def source (charge : String) : String :=
-  round charge ++
+def source (charge : String) (same : String := "a == b") : String :=
+  round charge same ++
   "protocol Twice roles(P, V)(claim: bool @(P, V), first: index<4> @P, second: index<4> @P):\n" ++
   "    a <- Round(first)\n    b <- Round(second)\n" ++
   "    guard @V claim or a.hit or b.hit\n" ++
@@ -194,6 +207,96 @@ def asideText : String :=
   "  aside_witnessed_of Zkc.Formal.Written.FiniteModel.data false trivial\n" ++
   "    (aside_relation _ false)\n\nend\n"
 
+/-- A root whose callees fork. `Gate` has a guard after its draw, and `Pick` chooses by an input
+and has a draw and a guard in each arm; the root applies the first and passes its result, with
+the claim, to the second. The comparison of the arm of a false side is a parameter. -/
+def forkedSource (second : String := "s == x") : String :=
+  "module t\nuse zkc::security::{soundness}\n" ++
+  "relation Holds(claim: bool): claim\n" ++
+  "def same(a: index<4>, b: index<4>) -> bool: a == b\n" ++
+  "protocol Gate roles(P, V)(sent: index<4> @P) -> (hit: bool @(P, V), drawn: index<4> @(P, V)):\n" ++
+  "    x <- send sent from P to V\n    r <- draw index<4> from V to P\n" ++
+  "    guard @V r != 3\n" ++
+  "    return (same(r, x), r)\n" ++
+  "spec for Gate:\n    charge sites.r <= 1 / 4\n" ++
+  "protocol Pick roles(P, V)(pass: bool @(P, V), side: bool @(P, V), sent: index<4> @P):\n" ++
+  "    x <- send sent from P to V\n" ++
+  "    if side:\n" ++
+  "        r <- draw index<4> from V to P\n        guard @V pass or r == x\n" ++
+  "    else:\n" ++
+  s!"        s <- draw index<4> from V to P\n        guard @V pass or {second}\n" ++
+  "spec for Pick:\n    charge sites.r <= 1 / 4\n    charge sites.s <= 1 / 4\n" ++
+  "protocol Forked roles(P, V)(claim: bool @(P, V), side: bool @(P, V), first: index<4> @P, second: index<4> @P):\n" ++
+  "    a <- Gate(first)\n    Pick(claim or a.hit, side, second)\n" ++
+  "spec for Forked:\n    proves @V Holds(claim)\n" ++
+  "scheme Checked = Forked:\n    prover P\n    construction interactive\n" ++
+  "goal forked = soundness(Checked, stage = written)\n"
+
+/-- The text of that root. The forks are inside the callees and the text of the root names
+them: the guard of `Gate` after its draw is a hypothesis of the walk (`kept`), and the choice of
+`Pick` forks the walk on the input that the root passed (`chosen`), into one goal for each arm.
+In each arm the fee of the draw pays for the position that was sent, and the guard passes only
+where one of the two draws is the position sent. -/
+def forkedText : String :=
+  "noncomputable section\n\n" ++
+  "theorem forked_relation {F G : Type} (D : StandardModel.Data F G) [DecidableEq F]\n" ++
+  "    [DecidableEq G] (claim : Bool) :\n" ++
+  "    functionResult (t := .bool)\n" ++
+  "      (fnMeaning (StandardModel.model D) installed forkedMember (.cons claim .nil)) =\n" ++
+  "        some claim := by\n  kernel_rfl\n\n" ++
+  "theorem same_law {F G : Type} (D : StandardModel.Data F G) [DecidableEq F] [DecidableEq G]\n" ++
+  "    (a b : ℕ) :\n" ++
+  "    fnMeaning (StandardModel.model D) calleeProgram sameMember (.cons a (.cons b .nil)) =\n" ++
+  "      .done (.cons (a.beq b) .nil) := by\n" ++
+  "  refine done_of_judged ?_\n  repeat walk_step\n  subst_vars\n  rfl\n\n" ++
+  "theorem forked_judged : forkedJudged := by\n" ++
+  "  claim_intro\n" ++
+  "  obtain rfl : input_claim = false :=\n" ++
+  "    Option.some.inj ((forked_relation D input_claim).symm.trans rejected)\n" ++
+  "  -- the first application: the message and the draw of `Gate`\n" ++
+  "  walk_free as first\n" ++
+  "  walk_pay (1 / 4) excluding (fun drawn : ℕ => drawn = first) as one differs_one\n" ++
+  "  case weight => simpa using prEvent_drawPosition_eq_le 3 first\n" ++
+  "  -- the guard of `Gate` after its draw: a fork inside the callee, named here\n" ++
+  "  walk as kept\n" ++
+  "  guard_hyp kept : (!one.beq 3) = true\n" ++
+  "  walk_law same_law D one first\n" ++
+  "  -- the second application: the message of `Pick`, then its choice, which forks the walk\n" ++
+  "  walk_free as second\n" ++
+  "  walk as chosen\n" ++
+  "  · -- the arm of a false side: its draw and its guard\n" ++
+  "    guard_hyp chosen : input_side = false\n" ++
+  "    walk_pay (1 / 4) excluding (fun drawn : ℕ => drawn = second) as two differs_two\n" ++
+  "    case weight => simpa using prEvent_drawPosition_eq_le 3 second\n" ++
+  "    walk as hit\n" ++
+  "    rcases Bool.or_eq_true _ _ |>.mp hit with h | h\n" ++
+  "    · exact differs_one (Nat.eq_of_beq_eq_true h)\n" ++
+  "    · exact differs_two (Nat.eq_of_beq_eq_true h)\n" ++
+  "  · -- the arm of a true side, as the other\n" ++
+  "    guard_hyp chosen : input_side = true\n" ++
+  "    walk_pay (1 / 4) excluding (fun drawn : ℕ => drawn = second) as two differs_two\n" ++
+  "    case weight => simpa using prEvent_drawPosition_eq_le 3 second\n" ++
+  "    walk as hit\n" ++
+  "    rcases Bool.or_eq_true _ _ |>.mp hit with h | h\n" ++
+  "    · exact differs_one (Nat.eq_of_beq_eq_true h)\n" ++
+  "    · exact differs_two (Nat.eq_of_beq_eq_true h)\n\n" ++
+  "theorem forked_witnessed : forkedWitnessed :=\n" ++
+  "  forked_witnessed_of Zkc.Formal.Written.FiniteModel.data false trivial true trivial\n" ++
+  "    (forked_relation _ false)\n\nend\n"
+
+/-- A walk of the verifier of `Twice` under the judgment that records the effects of a run.
+Nothing says that it reads no peer of an effect, and it does read them: the walk does not enter
+the application under it. -/
+def tracedText : String :=
+  "\n" ++
+  "theorem twice_traced {F G : Type} (D : StandardModel.Data F G) [DecidableEq F] [DecidableEq G]\n" ++
+  "    (path : List Frame) (effects : EffectTrace (RSig (StandardModel.model D))) :\n" ++
+  "    (roleMeaning (StandardModel.model D) installed rootMember verifierRole path\n" ++
+  "        (.cons true (.cons () (.cons () .nil)))).interpret\n" ++
+  "      (ProcessJudgment.trace (RSig (StandardModel.model D)))\n" ++
+  "      (fun _ _ => True) (fun _ _ => True) effects := by\n" ++
+  "  walk\n"
+
 /-- Two theorems after the text of `Twice` under other judgments than the goal's. The first
 walks a hypothesis: a judgment of the verifier is given, and the walk goes through the first
 application on it. The judgment is any judgment with
@@ -289,6 +392,25 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
     { title := "the charge of the callee halved", name := "CapControl", subject := halved,
       text := template ++ converseText, unproved := ofWalk, places := [refusal], only := true,
       occurrences := [(refusal, 1)] }
+  -- The body of the function that the callee calls turned: the law of the text is no longer
+  -- what the function computes, and is refused there; the walks that take the call by it are
+  -- left unproved and meet no other refusal.
+  let turned ← read (source "1 / 4" "a != b") (reading "twice")
+  let turnedControl : Control :=
+    { title := "the function that the callee calls turned", name := "LawControl", subject := turned,
+      text := template ++ converseText,
+      unproved := "same_law" :: ofWalk ++ ["twice_returns"],
+      places := ["The left-hand side\n  HList.cons (!a.beq b) HList.nil\n" ++
+        "is not definitionally equal to the right-hand side\n  HList.cons (a.beq b) HList.nil"],
+      only := true }
+  -- A walk under a judgment of which nothing says that it reads no peer of an effect: refused
+  -- at the application, which is the first instruction of the root.
+  let tracedControl : Control :=
+    { title := "a walk under a judgment that reads the peers", name := "BlindControl",
+      subject := written, text := template ++ converseText ++ tracedText, unproved := [],
+      places := ["walk: at instruction 0 (apply):\n  walk: the instruction applies a protocol in " ++
+        "which the role plays a role, and nothing says that the judgment reads no peer of an effect"],
+      only := true }
 
   -- The nested root: one application in the root, two in the protocol that it applies.
   let nested ← read nestedSource (reading "nested")
@@ -322,20 +444,40 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
   let _ ← check work "Twice" written
     { text := template ++ converseText,
       theorems := ofText "twice" ++ ["twice_pays_first", "twice_returns"] }
-    [halvedControl]
+    [halvedControl, turnedControl, tracedControl]
   let (ok, output) ← finishLean nestedProof
   acceptedOutput "Nested" ok output nestedModule.theorems allowed
   let (ok, output) ← finishLean loopedProof
   acceptedOutput "Looped" ok output loopedModule.theorems allowed
   let (ok, output) ← finishLean asideProof
   acceptedOutput "Aside" ok output asideModule.theorems allowed
+
+  -- The root whose callees fork, after the modules above (each is a run of Lean of its own):
+  -- the draw of `Gate`, the draws of both arms of `Pick`, and one application of each.
+  let forked ← read (forkedSource) (reading "forked" #["claim", "side", "first", "second"])
+  let forkedGoal ← forked.goal
+  unless forkedGoal.total == 3 / 4 && shape forkedGoal.caps ==
+      [([(1, 4, 1)], []), ([(1, 4, 1), (1, 4, 1)], []), ([], [(0, 1), (1, 1)])] do
+    throw (IO.userError s!"the table of the forked root is not three draws under two applications: {repr forkedGoal.caps}")
+  -- The comparison of one arm of `Pick` turned: the walk is what it was, and the text is
+  -- refused at the end of that arm, where the guard no longer says that the draw is the
+  -- position sent, and nowhere before.
+  let arm ← read (forkedSource "s != x") (reading "forked" #["claim", "side", "first", "second"])
+  let armControl : Control :=
+    { title := "the comparison of an arm of the callee turned", name := "ArmControl", subject := arm,
+      text := forkedText,
+      unproved := ["forked_judged", "forked_installed", "forked_sound", "forked_result"],
+      places := ["has type\n  (!two.beq second) = true\nbut is expected to have type\n  two.beq second = true"],
+      only := true }
+  let _ ← check work "Forked" forked { text := forkedText, theorems := ofText "forked" } [armControl]
   IO.println ("Twice is judged within the table of caps of its goal (the draw of the protocol " ++
     "that it applies at 1/4, under two applications: 1/2), with the call of a function inside " ++
     "the callee taken by a law stated before the root; a root that applies a protocol that " ++
     "applies it, with the roles in the other order, is judged by the same text, and a root " ++
     "that applies it in the body of a loop by an invariant, and a root that applies it and " ++
-    "then a protocol of the prover alone; " ++
-    "1 of 1 control refused, at the place that the check names and at no other.")
+    "then a protocol of the prover alone, and a root whose callees have a guard after a draw " ++
+    "and a choice, with the forks named by the root's text; " ++
+    "4 of 4 controls refused, at the places that the check names and at no other.")
 
 end TwiceCharge
 
