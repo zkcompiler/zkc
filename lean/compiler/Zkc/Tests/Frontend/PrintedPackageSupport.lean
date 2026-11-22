@@ -109,6 +109,68 @@ def runLean (path : System.FilePath) (options : Array String := #[]) : IO (Bool 
   let out ← IO.Process.output { cmd := "lean", args := options.push path.toString }
   return (out.exitCode == 0, out.stdout ++ out.stderr)
 
+/-- The filter of system calls of the sandbox, as the compiled program that `bwrap --seccomp`
+takes: a process inside can make no socket. A file system that is bound read-only does not stop
+a connection to a socket that has a path, and through such a socket a process asks another one
+outside to act for it (the user's service manager runs a command; so would a container daemon
+or a session bus). So `socket`, `connect` and `io_uring_setup` (whose operations make and
+connect sockets past a filter of system calls) fail with "operation not permitted"; a pair of
+connected sockets without a path, which a process uses to start another, is left. The filter
+knows the system calls of x86-64 and of 64-bit ARM, and stops a process of another
+architecture or of the 32-bit interface of x86-64.
+
+Each instruction is eight bytes: an operation, the two relative jumps of a comparison, and a
+constant. -/
+def socketFilter : ByteArray :=
+  let instruction (code : UInt16) (ifTrue ifFalse : UInt8) (constant : UInt32) : List UInt8 :=
+    [code.toUInt8, (code >>> 8).toUInt8, ifTrue, ifFalse, constant.toUInt8,
+      (constant >>> 8).toUInt8, (constant >>> 16).toUInt8, (constant >>> 24).toUInt8]
+  -- load a word of the call's description: the number of the call at 0, the architecture at 4
+  let load (offset : UInt32) := instruction 0x20 0 0 offset
+  let equal (constant : UInt32) (ifTrue ifFalse : UInt8) := instruction 0x15 ifTrue ifFalse constant
+  let atLeast (constant : UInt32) (ifTrue ifFalse : UInt8) := instruction 0x35 ifTrue ifFalse constant
+  let jump (over : UInt32) := instruction 0x05 0 0 over
+  let give (verdict : UInt32) := instruction 0x06 0 0 verdict
+  ⟨(List.flatten [
+    /- 0 -/ load 4,
+    /- 1 -/ equal 0xC000003E 1 0,      -- x86-64: to 3
+    /- 2 -/ equal 0xC00000B7 6 12,     -- 64-bit ARM: to 9; another architecture: to 15
+    /- 3 -/ load 0,
+    /- 4 -/ atLeast 0x40000000 10 0,   -- the 32-bit interface of x86-64: to 15
+    /- 5 -/ equal 41 8 0,              -- socket: to 14
+    /- 6 -/ equal 42 7 0,              -- connect: to 14
+    /- 7 -/ equal 425 6 0,             -- io_uring_setup: to 14
+    /- 8 -/ jump 4,                    -- any other call: to 13
+    /- 9 -/ load 0,
+    /- 10 -/ equal 198 3 0,            -- socket: to 14
+    /- 11 -/ equal 203 2 0,            -- connect: to 14
+    /- 12 -/ equal 425 1 0,            -- io_uring_setup: to 14
+    /- 13 -/ give 0x7FFF0000,          -- the call is allowed
+    /- 14 -/ give 0x00050001,          -- the call fails: operation not permitted
+    /- 15 -/ give 0x80000000           -- the process is stopped
+  ]).toArray⟩
+
+/-- A command run in a sandbox (`bwrap`, which the host must have). The file system is read-only
+but for `folder`, which is also where temporary files go. The process has its own name spaces
+(no network, no process of the host in sight, no shared memory of the host) and its own
+session, so that it cannot type into the terminal of the check. It can make no socket
+(`socketFilter`), so it cannot ask a process outside to act for it. No process outlives the
+run. `folder` is an absolute path. -/
+def confined (folder : System.FilePath) (command : Array String) : IO IO.Process.Output := do
+  let (handle, filter) ← IO.FS.createTempFile
+  try
+    handle.write socketFilter
+    handle.flush
+    -- `bwrap` reads the filter from a descriptor, which the shell opens for it
+    IO.Process.output {
+      cmd := "sh"
+      args := #["-c", "exec bwrap --seccomp 9 \"$@\" 9<\"$0\"", filter.toString,
+        "--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc", "--unshare-all",
+        "--new-session", "--die-with-parent", "--bind", folder.toString, folder.toString,
+        "--setenv", "TMPDIR", folder.toString, "--"] ++ command }
+  finally
+    IO.FS.removeFile filter
+
 /-- Lean's output on a module in the workspace of the current directory, through `lake`: with
 the options of the package, and with the modules of every package of the workspace, which two
 packages that share a root name do not give to a bare `lean`.
@@ -122,22 +184,17 @@ the other behaviour: the failed theorem is unknown, and what uses it rests on `s
 **The module is elaborated in a sandbox.** A module of a check can hold an author's text, and a
 text is code that runs while Lean elaborates it: unconfined, one line of it could rewrite a
 file that the check reads afterwards (the program that reads a module's object, a reference,
-another module of the check). So Lean runs under `bwrap`, which the host must have: the file
-system is read-only but for the folder of the module, there is no network, and no process
-outlives the run. The folder has to be the module's own; what Lean and Lake write for the
-module (an object, Lake's temporary file) goes there. -/
+another module of the check). So Lean runs in the sandbox of `confined`, in which it can write
+the folder of the module and nothing else. The folder has to be the module's own; what Lean
+and Lake write for the module (an object, Lake's temporary file) goes there. -/
 def runLakeLean (path : System.FilePath) (options : Array String := #[]) : IO (Bool × String) := do
   let some folder := path.parent
     | throw (IO.userError s!"a module to elaborate has no folder of its own: {path}")
   let folder ← IO.FS.realPath folder
   let some file := path.fileName
     | throw (IO.userError s!"no module to elaborate at {path}")
-  let out ← IO.Process.output {
-    cmd := "bwrap"
-    args := #["--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc", "--unshare-net",
-      "--unshare-pid", "--die-with-parent", "--bind", folder.toString, folder.toString,
-      "--setenv", "TMPDIR", folder.toString, "--",
-      "lake", "-q", "lean", (folder / file).toString, "--", "-DElab.async=false"] ++ options }
+  let out ← confined folder
+    (#["lake", "-q", "lean", (folder / file).toString, "--", "-DElab.async=false"] ++ options)
   return (out.exitCode == 0, out.stdout ++ out.stderr)
 
 /-- The axioms that Lean's output says a theorem rests on, when the output has them. -/
