@@ -30,8 +30,8 @@ temporary folders covered, has no network and no other process, and can write th
 
 What a text can reach is therefore the objects of step 2 and the solution's export, which are
 what the comparator judges. What Lean said of a module in step 2 is read from Lake's log, which
-a text can write into; no proof module is accepted on it (`result`), and a module of a check
-that holds no text is built in step 1.
+a text can write into; no proof module of a subject is accepted on it (`result`), and a module
+of a subject's check that holds no text is built in step 1.
 
 A module is added, and a judgment expected, before the first asking; afterwards both are
 errors, since a challenge exported after a text was read would rest on objects that the text
@@ -405,7 +405,9 @@ said of it.
 Of a module of statements or a challenge this is what was so before any text was read. Of
 another module it is read from a log that a text of the same build can write into, and from an
 object that it can write: it says what Lean reported, for a message and for a control that Lean
-must refuse, and a module is accepted on its judgment only (`judge`). -/
+must refuse, and a proof module is accepted on its judgment only (`judge`). A check's own
+module that is read so and accepted on it (several pairs as one source, a module of a check
+without an author's text) rests on Lean's word, and its check says so. -/
 def result (project : System.FilePath) (module : Name) : IO (Bool × String) := do
   settle project
   let some (kind, _) := (← modules project).find? (·.2 == module)
