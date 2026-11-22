@@ -56,10 +56,11 @@ private def atEffect (who : String) : TacticM (Array Expr × Expr) := do
     return (args, args[7]!.getArg! 3)
 
 /-- The reply that a tactic introduced, at its computed type, so that a text reads it as a
-value. -/
+value: the type of the reply of its effect is computed to the type of values that it is, and
+the types inside that one (the parts of a tuple, the items of a sequence) to their carriers. -/
 private def readReply (goal : MVarId) (reply : Lean.Name) : MetaM MVarId := goal.withContext do
   let some decl := (← getLCtx).findFromUserName? reply | return goal
-  goal.replaceLocalDeclDefEq decl.fvarId (← Zkc.Formal.Walk.replyType decl.type)
+  goal.replaceLocalDeclDefEq decl.fvarId (← Zkc.Formal.Walk.computedTypes (← whnfD decl.type))
 
 /-- The name of the hypothesis that a reply is permitted. -/
 private def permittedName (reply : TSyntax `ident) : TSyntax `ident :=
@@ -83,7 +84,7 @@ private partial def afterStart (path start : Expr) : MetaM (Option (List Expr)) 
   return none
 
 /-- At a coin, pay `fee` for the replies in `set`: see the header of this module. -/
-elab "walk_pay " fee:term:max " excluding " set:term:max " as " reply:ident kept:ident : tactic =>
+elab "walk_pay " fee:term:max &" excluding " set:term:max " as " reply:ident kept:ident : tactic =>
     do
   let (args, op) ← atEffect "walk_pay"
   withMainContext do
@@ -152,22 +153,9 @@ elab "walk_pay " fee:term:max " excluding " set:term:max " as " reply:ident kept
     catch _ =>
       saved.restore
       pure false
-  -- the fee within the budget: a hypothesis as it stands, or decided by the kernel where both
-  -- sides are closed numbers; refused where the kernel decides that the fee is over what is
-  -- left, and left to the text where it decides neither
-  let withinLeft ← match ← beside within with
-    | none => pure []
-    | some within =>
-      if (← observing? within.assumption).isSome then pure []
-      else if ← closedBy within (← `(tactic| decide +kernel)) then pure []
-      else
-        let stated ← instantiateMVars (← within.getType)
-        let over ← mkFreshExprSyntheticOpaqueMVar (mkNot stated)
-        if ← closedBy over.mvarId! (← `(tactic| decide +kernel)) then
-          throwError "walk_pay: the fee is not within what is left of the budget{indentExpr stated}"
-        pure [within]
-  -- the fee within the cap of the draw: the applications of the frames are computed, so that
-  -- no iteration is in what the kernel decides
+  -- the fee within the cap of the draw, compared first, so that a fee over the cap is refused
+  -- with the name of its site also where it is over what is left of the budget: the
+  -- applications of the frames are computed, so that no iteration is in what the kernel decides
   let capLeft ← match ← beside cap with
     | none => pure []
     | some cap => cap.withContext do
@@ -199,6 +187,21 @@ elab "walk_pay " fee:term:max " excluding " set:term:max " as " reply:ident kept
         if ← closedBy over.mvarId! (← `(tactic| decide +kernel)) then
           throwError "walk_pay: the fee is not within the cap that the table gives {site}{indentExpr stated}"
         pure [cap]
+  -- the fee within the budget: a hypothesis as it stands, or decided by the kernel where both
+  -- sides are closed numbers; refused where the kernel decides that the fee is over what is
+  -- left, and left to the text where it decides neither
+  let withinLeft ← match ← beside within with
+    | none => pure []
+    | some within =>
+      if (← observing? within.assumption).isSome then pure []
+      else if ← closedBy within (← `(tactic| decide +kernel)) then pure []
+      else
+        within.withContext do
+          let stated ← instantiateMVars (← within.getType)
+          let over ← mkFreshExprSyntheticOpaqueMVar (mkNot stated)
+          if ← closedBy over.mvarId! (← `(tactic| decide +kernel)) then
+            throwError "walk_pay: the fee is not within what is left of the budget{indentExpr stated}"
+          pure [within]
   setGoals (weightLeft ++ withinLeft ++ capLeft ++ [after] ++ others)
 
 end Zkc.Formal.Written

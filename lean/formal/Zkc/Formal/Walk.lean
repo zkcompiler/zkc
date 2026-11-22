@@ -282,24 +282,15 @@ private def mentionsValues (e : Expr) : Bool :=
 /-- A statement with the types in it computed: a type that is written as the values of a type of
 the vocabulary is replaced by its carrier, also where it is an implicit argument, so that the
 statement is about the same terms as a lemma about the carrier. The result is definitionally
-the statement given. -/
-private def computedTypes (e : Expr) : MetaM Expr :=
+the statement given. A reply and an input of a statement are read with it: a part of a tuple,
+an item of a sequence and an alternative of a variant are then values of the field, the group
+or the natural numbers, and not of a type that only computation makes one of those. -/
+def computedTypes (e : Expr) : MetaM Expr :=
   Meta.transform e (post := fun sub => do
     if sub.hasLooseBVars || !mentionsValues sub then return .continue
     if !(← Meta.isType sub) then return .continue
     let computed ← whnfD sub
     return if computed == sub then .continue else .visit computed)
-
-/-- The type of a reply in a form to read: the carrier that the type of the vocabulary
-computes to, and for a pair the carriers of its parts, so that a part of a tuple that a role
-got is a value of the field and not of a type that only computation makes the field. The
-result is definitionally the type given. -/
-partial def replyType (type : Expr) : MetaM Expr := do
-  let computed ← whnfD type
-  if computed.isAppOfArity ``Prod 2 then
-    let parts ← computed.getAppArgs.mapM replyType
-    return mkAppN computed.getAppFn parts
-  return computed
 
 /-- A value in a form to read, as a step states it: what it settles to, and the variable, the
 literal or the truth value that it is when the kernel finds one. -/
@@ -427,7 +418,22 @@ private partial def waitsOn (e : Expr) : MetaM (Expr × (Expr → Expr)) := do
     match position with
     | some at_ =>
       unless at_ < args.size do throwError "walk: a stuck recursor without its major premise{indentExpr e}"
-      inner args[at_]! fun x => mkAppN e.getAppFn (args.set! at_ x)
+      -- an argument after the major premise whose type is stated of it (the equation that a
+      -- match on an indexed family carries) is not an argument at another value: the term at
+      -- a variable in place of the major premise is then no term, and no step is built
+      let major := args[at_]!
+      if at_ + 1 < args.size then
+        let fits ← withLocalDeclD `waited (← inferType major) fun x => withNewMCtxDepth do
+          let mut type ← inferType (mkAppN e.getAppFn ((args.extract 0 at_).push x))
+          for later in args.extract (at_ + 1) args.size do
+            let .forallE _ domain body _ ← whnf type | return false
+            unless ← isDefEq domain (← inferType later) do return false
+            type := body.instantiate1 later
+          return true
+        unless fits do
+          throwError "walk: the step waits on a case analysis whose later arguments are stated \
+            of what it analyses (a match on a variant), which has no step yet{indentExpr major}"
+      inner major fun x => mkAppN e.getAppFn (args.set! at_ x)
     | none =>
       match ← unfoldDefinition? e with
       | some unfolded => waitsOn unfolded
@@ -755,11 +761,19 @@ private def instructionKind (i : Expr) : String :=
     | none => last op
   else last i
 
-/-- A step that fails says which instruction it was at. -/
+/-- A step that begins an instruction and fails says which instruction it was at: the number
+of its key in the stored program and what it is. A failure of Lean itself (an interruption, a
+limit of time or of depth) is passed on as it is. -/
 private def atInstruction {α : Type} (key i : Expr) (step : MetaM α) : MetaM α := do
   try step
   catch failure =>
-    throwError "walk: at the instruction {key} ({instructionKind i}):{indentD failure.toMessageData}"
+    if failure.isRuntime || failure matches .internal .. then throw failure
+    let number : MessageData := match key.getAppArgs with
+      | #[n] => match n.nat? <|> n.rawNatLit? with
+        | some n => m!"{n}"
+        | none => m!"{key}"
+      | _ => m!"{key}"
+    throwError "walk: at instruction {number} ({instructionKind i}):{indentD failure.toMessageData}"
 
 /-- One step of the walk on a goal: on the judgment that the goal is, or, with `hypothesis`, on
 the judgment from which the goal concludes. -/
