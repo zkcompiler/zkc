@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Core.Meaning.Role
+import Zkc.Core.Meaning.Role
 public meta import Lean
 
 public meta section
@@ -17,7 +17,7 @@ a generated proposition; a module of statements that has no walk needs only this
 
 open Lean Meta
 
-namespace Zkc.Formal.Walk
+namespace Zkc.Formal
 
 /-- The type of a variable that a step introduces, computed: the carrier of a type of the
 vocabulary, and for a sequence the list of the carrier of its items. -/
@@ -27,7 +27,7 @@ partial def readType (type : Expr) : MetaM Expr := do
   else return computed
 
 /-- Whether a term mentions the type of the values of a type of the vocabulary. -/
-def mentionsValues (e : Expr) : Bool :=
+private def mentionsValues (e : Expr) : Bool :=
   (e.find? fun s => s.isConstOf ``Zkc.Core.Model.Val || s.isConstOf ``Zkc.Core.Ty.Val ||
     s.isConstOf ``Zkc.Core.Tys.Val || s.isConstOf ``Zkc.Core.Tys.Choice ||
     s.isConstOf ``Zkc.Core.Semantics.Val || s.isConstOf ``Zkc.Core.RV ||
@@ -46,4 +46,4 @@ def computedTypes (e : Expr) : MetaM Expr :=
     let computed ← whnfD sub
     return if computed == sub then .continue else .visit computed)
 
-end Zkc.Formal.Walk
+end Zkc.Formal

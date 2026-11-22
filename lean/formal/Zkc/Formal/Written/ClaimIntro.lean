@@ -48,7 +48,7 @@ elab "claim_intro" : tactic => liftMetaTactic fun goal => do
   for binder in binders do
     let type ← introduced.withContext do instantiateMVars (← binder.getType)
     if ← introduced.withContext do isProp type then continue
-    let computed ← introduced.withContext do Zkc.Formal.Walk.computedTypes type
+    let computed ← introduced.withContext do Zkc.Formal.computedTypes type
     unless computed == type do
       introduced ← introduced.replaceLocalDeclDefEq binder computed
   return [introduced]

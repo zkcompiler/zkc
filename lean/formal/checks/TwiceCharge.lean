@@ -35,9 +35,12 @@ differs from the others in the shape of its program:
 - **a walk of a hypothesis through the application** (`twice_pays_first`, written by the check
   after the text): for every judgment with fees that reads no peer of an effect;
 - **a walk under another judgment** (`twice_returns`): on every permitted reply;
-- **a walk under a judgment that reads peers** (`twice_first_effect`): the judgment that
-  records the effects of a run. The walk goes into the application under every judgment; the
-  callee is then judged under the judgment with its peers renamed.
+- **a walk under a judgment that reads peers** (`twice_first_effect`, with `twice_recorded`,
+  a run that meets its hypothesis): the judgment that records the effects of a run. The walk
+  goes into the application under every judgment; the callee is then judged under the judgment
+  with its peers renamed. The nested root, whose roles are in the other order, shows the
+  renaming: the peer of the first effect is the caller's (`nested_first_effect`), and a module
+  that states the callee's is refused.
 
 The check reads the source with the frontend and writes modules on which Lean is run: the
 proof module (the printed package, what `Written.Statements` writes, and the text of
@@ -63,7 +66,7 @@ other chooses by an input and has a draw and a guard in each arm. The text of th
 the forks: the guard is a hypothesis of the walk, and the choice gives one goal for each arm.
 The table has the draws of both arms, and its total is three quarters.
 
-Four controls are refused by Lean, each at the place that the check names and at no other:
+Five controls are refused by Lean, each at the place that the check names and at no other:
 
 - the charge of the draw halved in the source. The program is what it was; the cap that the
   table gives the draw through the application is one eighth, and the fee of one quarter that
@@ -71,6 +74,9 @@ Four controls are refused by Lean, each at the place that the check names and at
   that draw below that application;
 - the body of the function that the callee calls turned. The law that the text states of it is
   refused, and nothing else is: the walks take the call by the law;
+- a tactic of an effect inside an application, under a judgment with fees of which nothing
+  says that it reads no peer: the goal in the callee is under the renamed judgment, and the
+  tactic says so and names what would say it;
 - a call of the callee's function taken by a true law of another function of the same types:
   refused at that line, since the header of a function has its key and the law is of another
   type than the call;
@@ -351,7 +357,71 @@ def tracedText : String :=
   "      ⟨.get .message 0 ⟨path ++ [.application ⟨0⟩], ⟨0⟩⟩ (.fin 4), first⟩ :: tail := by\n" ++
   "  walk at judged\n" ++
   "  obtain ⟨first, tail, said, _⟩ := judged\n" ++
+  "  exact ⟨first, tail, said⟩\n" ++
+  "\n" ++
+  "/-- **The hypothesis of `twice_first_effect` is met**: the judgment of recorded effects accepts\n" ++
+  "the record of a run of the verifier, two rounds of a message and a draw. The walk goes through\n" ++
+  "both applications under the renamed judgment; at each effect the record is read off. -/\n" ++
+  "theorem twice_recorded {F G : Type} (D : StandardModel.Data F G) [DecidableEq F] [DecidableEq G]\n" ++
+  "    (path : List Frame) :\n" ++
+  "    (roleMeaning (StandardModel.model D) installed rootMember verifierRole path\n" ++
+  "        (.cons true (.cons () (.cons () .nil)))).interpret\n" ++
+  "      (ProcessJudgment.trace (RSig (StandardModel.model D)))\n" ++
+  "      (fun _ _ => True) (fun _ _ => True)\n" ++
+  "      [⟨.get .message 0 ⟨path ++ [.application ⟨0⟩], ⟨0⟩⟩ (.fin 4), (0 : ℕ)⟩,\n" ++
+  "       ⟨.own (.coin (Zkc.Vocabulary.LawKey.uniform (.fin 4))) [0]\n" ++
+  "          ⟨path ++ [.application ⟨0⟩], ⟨1⟩⟩ [] .nil (.fin 4), (1 : ℕ)⟩,\n" ++
+  "       ⟨.get .message 0 ⟨path ++ [.application ⟨1⟩], ⟨0⟩⟩ (.fin 4), (2 : ℕ)⟩,\n" ++
+  "       ⟨.own (.coin (Zkc.Vocabulary.LawKey.uniform (.fin 4))) [0]\n" ++
+  "          ⟨path ++ [.application ⟨1⟩], ⟨1⟩⟩ [] .nil (.fin 4), (3 : ℕ)⟩] := by\n" ++
+  "  walk\n" ++
+  "  refine ⟨_, _, rfl, ?_⟩\n" ++
+  "  walk\n" ++
+  "  refine ⟨_, _, rfl, ?_⟩\n" ++
+  "  walk\n" ++
+  "  walk_law same_law D 1 0\n" ++
+  "  walk\n" ++
+  "  refine ⟨_, _, rfl, ?_⟩\n" ++
+  "  walk\n" ++
+  "  refine ⟨_, _, rfl, ?_⟩\n" ++
+  "  walk\n" ++
+  "  walk_law same_law D 3 2\n" ++
+  "  walk\n"
+
+/-- The same reading in the nested root, whose roles are in the other order: the prover is role 1
+of `Nested` and role 0 of `Pair` and of `Round`. The peer of the first effect is the caller's,
+role `peer`: with 1 the theorem is proved, and with 0, the callee's, Lean refuses it, so a walk
+that judged the callee under the judgment itself, not renamed, would be seen here. In `Twice`
+it would not: there the two orders of roles are one. -/
+def nestedTracedText (peer : Nat) : String :=
+  "\n" ++
+  "theorem nested_first_effect {F G : Type} (D : StandardModel.Data F G) [DecidableEq F] [DecidableEq G]\n" ++
+  "    (path : List Frame) (effects : EffectTrace (RSig (StandardModel.model D)))\n" ++
+  "    (judged : (roleMeaning (StandardModel.model D) installed rootMember verifierRole path\n" ++
+  "        (.cons true (.cons () (.cons () .nil)))).interpret\n" ++
+  "      (ProcessJudgment.trace (RSig (StandardModel.model D)))\n" ++
+  "      (fun _ _ => True) (fun _ _ => True) effects) :\n" ++
+  "    ∃ first tail, effects =\n" ++
+  s!"      ⟨.get .message {peer} ⟨path ++ [.application ⟨0⟩] ++ [.application ⟨0⟩], ⟨0⟩⟩ (.fin 4), first⟩ :: tail := by\n" ++
+  "  walk at judged\n" ++
+  "  obtain ⟨first, tail, said, _⟩ := judged\n" ++
   "  exact ⟨first, tail, said⟩\n"
+
+/-- A walk under a judgment with fees of which nothing says that it reads no peer (what is
+permitted is written otherwise than the library's theorem has it): the walk goes into the
+application, the goal in the callee is under the renamed judgment, and the tactic of an effect,
+whose rule is about the judgment with fees itself, says so. -/
+def unblindText : String :=
+  "\n" ++
+  "theorem twice_unblind {F G : Type} (D : StandardModel.Data F G) [DecidableEq F] [DecidableEq G]\n" ++
+  "    (draws : LawDraws (StandardModel.model D)) (path : List Frame) :\n" ++
+  "    (roleMeaning (StandardModel.model D) installed rootMember verifierRole path\n" ++
+  "        (.cons false (.cons () (.cons () .nil)))).interpret\n" ++
+  "      (.charged (fun op v => Permitted (StandardModel.model D) op v ∧ True)\n" ++
+  "        (paysWithin (lawSamplers (StandardModel.model D) draws)\n" ++
+  "          (twiceCaps.allowance (StandardModel.model D) path)))\n" ++
+  "      (fun _ _ => False) (fun _ _ => True) twiceCaps.budget := by\n" ++
+  "  walk_free as first\n"
 
 /-- Three theorems after the text of `Twice` under other judgments than the goal's (the third is
 `tracedText`, under a judgment that reads peers). The first
@@ -457,9 +527,17 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
   let turnedControl : Control :=
     { title := "the function that the callee calls turned", name := "LawControl", subject := turned,
       text := template ++ converseText,
-      unproved := "same_law" :: ofWalk ++ ["twice_returns"],
+      unproved := "same_law" :: ofWalk ++ ["twice_returns", "twice_recorded"],
       places := ["The left-hand side\n  HList.cons (!a.beq b) HList.nil\n" ++
         "is not definitionally equal to the right-hand side\n  HList.cons (a.beq b) HList.nil"],
+      only := true }
+  -- A tactic of an effect inside an application, under a judgment with fees of which nothing
+  -- says that it reads no peer: refused there, with the reason.
+  let unblindControl : Control :=
+    { title := "a fee tactic under a judgment that nothing says reads no peer", name := "UnblindControl",
+      subject := written, text := template ++ converseText ++ unblindText, unproved := [],
+      places := ["walk_free: the effect is inside an application, under a judgment with its peers " ++
+        "renamed: nothing says that the judgment reads no peer of an effect"],
       only := true }
   -- A true law of another function of the same types, used at the first call of `same`: the
   -- header of a function has its key, so the law is of another type than the call, and the
@@ -497,8 +575,13 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
       [([(1, 4, 1)], []), ([], [(0, 1), (0, 1)]), ([], [(1, 1)])] do
     throw (IO.userError s!"the table of the nested root is not one application of two: {repr nestedGoal.caps}")
   let nestedModule ← nested.module "Nested"
-    { text := template.replace "twice" "nested", theorems := ofText "nested" }
+    { text := template.replace "twice" "nested" ++ nestedTracedText 1,
+      theorems := ofText "nested" ++ ["nested_first_effect"] }
   let nestedProof ← startModule work "Nested" nestedModule
+  -- The same with the callee's number for the peer: refused where the statement is concluded.
+  let nestedPeer ← nested.module "NestedPeer"
+    { text := template.replace "twice" "nested" ++ nestedTracedText 0, theorems := ofText "nested" }
+  let nestedPeerRun ← startLakeLean work "NestedPeer" nestedPeer.text
 
   -- The looped root: one application in the body of a loop of three iterations.
   let looped ← read loopedSource (reading "looped" #["claim", "guess"])
@@ -524,7 +607,8 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
   -- as it is alone.
   let earlier ← written.module "Earlier"
     { text := template ++ converseText,
-      theorems := ofText "twice" ++ ["twice_pays_first", "twice_returns"] }
+      theorems := ofText "twice" ++
+        ["twice_pays_first", "twice_returns", "twice_first_effect", "twice_recorded"] }
   let [_, asideBody] := asideModule.text.splitOn "namespace Aside\n"
     | throw (IO.userError "the module of `Aside` does not open its name space once")
   let twoPrograms ← startLakeLean work "TwoPrograms"
@@ -532,13 +616,17 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
 
   let _ ← check work "Twice" written
     { text := template ++ converseText,
-      theorems := ofText "twice" ++ ["twice_pays_first", "twice_returns", "twice_first_effect"] }
-    [halvedControl, turnedControl, otherControl]
+      theorems := ofText "twice" ++
+        ["twice_pays_first", "twice_returns", "twice_first_effect", "twice_recorded"] }
+    [halvedControl, turnedControl, unblindControl, otherControl]
   let (ok, output) ← finishLean foreign
   refusedOutput "a call taken by the law of a function of another program" ok output
     ["walk_law: the law is about a function that this call does not read"] (only := true)
   let (ok, output) ← finishLean nestedProof
   acceptedOutput "Nested" ok output nestedModule.theorems allowed
+  let (ok, output) ← finishLean nestedPeerRun
+  refusedOutput "the callee's number for the peer of an effect under a renamed judgment" ok output
+    ["Application type mismatch"] (only := true)
   let (ok, output) ← finishLean loopedProof
   acceptedOutput "Looped" ok output loopedModule.theorems allowed
   let (ok, output) ← finishLean asideProof
@@ -573,7 +661,7 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
     "and a choice, with the forks named by the root's text; " ++
     "under the judgment of recorded effects, which reads peers, the walk goes into the " ++
     "application as well; " ++
-    "4 of 4 controls refused, at the places that the check names and at no other, and a law " ++
+    "5 of 5 controls refused, at the places that the check names and at no other, and a law " ++
     "about a function of the same header in another program refused where it is used.")
 
 end TwiceCharge

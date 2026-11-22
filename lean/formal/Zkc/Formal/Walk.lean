@@ -27,10 +27,12 @@ end of the program, where what is left is what the judgment asks of the end. `wa
 walks a hypothesis that judges a process: what a judgment of the process gives, as the walk of
 a goal says what a judgment of it needs.
 
-Where the program applies a protocol, the walk goes into the callee (`enterApplication`): under
-a judgment that reads no peer of an effect, the application and then the rest is judged as the
-callee's program of the role, whose condition at the end is the judgment of the rest on the
-results. The text writes nothing there; the next place that it meets is in the callee.
+Where the program applies a protocol, the walk goes into the callee (`enterApplication`): the
+application and then the rest is judged as the callee's program of the role, under the judgment
+with its peers renamed, whose condition at the end is the judgment of the rest on the results.
+Under a judgment that reads no peer of an effect the renamed judgment is the judgment, and the
+goal in the callee is stated under it. The text writes nothing there; the next place that it
+meets is in the callee.
 
 A text follows the mathematics of a program, not its instructions.
 
@@ -125,7 +127,7 @@ side goes into its arm. A case analysis on a variant and an attempt are still co
 instruction: the values inside them have no variables, and no check walks one.
 
 `walk_step` on a computation that calls a function reads the function's body; on a loop it has
-no step. An application waits for its first subject.
+no step.
 
 A walk enters by itself. The meaning of a role or of a function in a program (`roleMeaning`,
 `fnMeaning`) is closed to Lean's own reduction, and the equation between it and the sealed
@@ -822,10 +824,10 @@ private def programOfDefs (definitions : Expr) : Option Expr :=
 protocol and then the rest, under the semantics of a role. What the instruction denotes for the
 role is the callee's program of the role that it plays there, at the path of the application,
 with the peers of its effects renamed to the caller's roles and its results carried back
-(`Instr.denote_apply_role`). Under a judgment that reads no peer (`blindUnder`), that process
-and then the rest is judged as the callee's program, as it stands, whose condition at the end
-is the judgment of the rest on the results carried (`Process.interpret_applied`). The goal
-passes to that judgment, with the callee's program stated as the meaning of its role in the
+(`Instr.denote_apply_role`). That process and then the rest is judged as the callee's program,
+as it stands, under the judgment with its peers renamed, whose condition at the end is the
+judgment of the rest on the results carried (`Process.interpret_applied`, for every judgment).
+The goal passes to that judgment, with the callee's program stated as the meaning of its role in the
 program whose table the application reads, sealed, the role computed and each input in a form
 to read; the next step enters it by the labelled equation of that meaning, and from there every
 rule of the walk is the same in the callee as in the root.
@@ -839,11 +841,11 @@ where the kernel does not decide whether the role plays a role of the callee; an
 labelled entry equation is about the callee's role (the module of statements is then not the
 module of this program).
 
-The rule holds for every judgment: the callee's program, as it stands, is judged under the
-judgment with its peers renamed (`ProcessJudgment.renamed`). Where a theorem or a hypothesis
-says that the judgment reads no peer (`blindUnder`), that is the judgment itself, and the goal
-in the callee is stated under it, as in the root. Under another judgment the goal in the callee
-is stated under the renamed judgment. -/
+Where a theorem or a hypothesis says that the judgment reads no peer (`blindUnder`), the
+renamed judgment is the judgment itself (`Process.interpret_applied_blind`), and the goal in
+the callee is stated under it, as in the root. Under another judgment the goal in the callee
+is stated under `ProcessJudgment.renamed`; at an effect a text that unfolds it is left with the
+judgment of the renamed effect. -/
 private def enterApplication (goal : MVarId) (j : Judged) (bound why instr sem key path env : Expr) :
     MetaM (Option MVarId) := goal.withContext do
   -- the instruction: an operation that applies a protocol to operands. Each term is taken
@@ -907,20 +909,20 @@ private def enterApplication (goal : MVarId) (j : Judged) (bound why instr sem k
   let after ← withLocalDeclD `results resultsType fun results =>
     mkLambdaFVars #[results]
       (mkApp j.fn (j.seal (mkApp rest (mkApp leave results).headBeta).headBeta))
-  let underRenamed ← mkAppM ``Zkc.Core.Process.interpret #[renamedJudgment, after, halt]
-  let passage ← mkAppM ``Zkc.Core.Process.interpret_applied
-    #[roleMap, judgment, done, halt, leave, rest, calleeProcess]
-  let mut judged ← mkExpectedTypeHint passage
-    (← mkEq (mkApp j.fn appliedThenRest) (mkApp underRenamed calleeProcess))
-  let inside ← match blind? with
-    | some blind => do
-      let same ← mkAppM ``Zkc.Core.Blind.renamed_eq #[blind]
-      let motive ← withLocalDeclD `judgment (← inferType judgment) fun x => do
-        mkLambdaFVars #[x]
-          (mkApp (← mkAppM ``Zkc.Core.Process.interpret #[x, after, halt]) calleeProcess)
-      judged ← mkEqTrans judged (← mkCongrArg motive same)
-      pure { j with fn := ← mkAppM ``Zkc.Core.Process.interpret #[judgment, after, halt] }
-    | none => pure { j with fn := underRenamed }
+  -- the passage: under the judgment itself where it reads no peer, and else under the
+  -- renamed judgment
+  let (inside, passage) ← match blind? with
+    | some blind =>
+      pure (← mkAppM ``Zkc.Core.Process.interpret #[judgment, after, halt],
+        ← mkAppM ``Zkc.Core.Process.interpret_applied_blind
+          #[roleMap, judgment, blind, done, halt, leave, rest, calleeProcess])
+    | none =>
+      pure (← mkAppM ``Zkc.Core.Process.interpret #[renamedJudgment, after, halt],
+        ← mkAppM ``Zkc.Core.Process.interpret_applied
+          #[roleMap, judgment, done, halt, leave, rest, calleeProcess])
+  let judged ← mkExpectedTypeHint passage
+    (← mkEq (mkApp j.fn appliedThenRest) (mkApp inside calleeProcess))
+  let inside := { j with fn := inside }
   -- the callee's program is the meaning as stated
   return some (← passInside goal j inside appliedThenRest toApplied calleeProcess stated
     (← byComputation calleeProcess stated) judged)
