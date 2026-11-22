@@ -10,7 +10,7 @@ def checkCertificates : IO Unit := do
   let roots := #[`Baseline, `SameLog]
   let probe ← importModules #[{module := `AuditLocal}] {} (loadExts := false) (level := .private)
   let (finding, _) ← replay probe #[{name := "local replay fixture", root := `AuditLocal},
-    {name := "source certificate", root := `Baseline}] #[`AuditVendor]
+    {name := "source certificate", root := `Baseline}] #[`AuditVendor] ZkcFormalTools.policy.project
   unless finding.any (fun f => f.rule == .kernel && f.line.startsWith "a prebuilt library imports project module ") do
     throw (IO.userError "a prebuilt library could preload a project proof into kernel replay")
   let (probeAxioms, _, _) := dependencies probe #[`AuditLocal.fromExternal]

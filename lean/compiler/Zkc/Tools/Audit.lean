@@ -36,7 +36,8 @@ module of a library:
 The rules on imports hold for a library proper and are read from the headers of the modules: a
 module of the library imports only modules of the library itself and of the prefixes that the
 library allows (`imports`), and no module of the library imports a module of the tests or of the
-tools (`Zkc.Tests`, `Zkc.Tools`). Every `.lean` file under the directory of a library proper is a
+tools (the prefixes that the policy names: `Zkc.Tests` and `Zkc.Tools`, and those of the
+policy's own package). Every `.lean` file under the directory of a library proper is a
 module that its root module imports, directly or not. Every `.lean` file under the directory of
 a library of tests is a module of the environment that the audit loads, so that no file of the
 tests is left unbuilt and unaudited.
@@ -96,8 +97,16 @@ structure Library where
 def Library.contains (library : Library) (module : Name) : Bool :=
   library.root.isPrefixOf module
 
-/-- The prefixes of the modules that no module of a library imports: the tests and the tools. -/
-def testsAndTools : Array Name := #[`Zkc.Tests, `Zkc.Tools]
+/-- What the modules under a prefix are. -/
+inductive Part where
+  | library
+  | tests
+  | tools
+  deriving DecidableEq
+
+/-- The prefixes of the modules of the compiler package, each with what its modules are. -/
+def compilerParts : Array (Name × Part) :=
+  #[(`Zkc.Tests, .tests), (`Zkc.Tools, .tools), (`Zkc, .library)]
 
 /-- The prefixes outside the core that a module of the core may import: Lean's prelude and its
 standard library. -/
@@ -189,9 +198,19 @@ Their constants still participate in the transitive axiom audit. -/
 structure Policy where
   axioms : Array Name := allowedAxioms
   packages : Array Name := #[]
-  /-- The roots of the modules of the repository's packages. A library taken as built imports
-  no module under them. -/
-  project : Array Name := #[`Zkc]
+  /-- The prefixes of the modules of the repository's packages that an audit under this policy
+  can meet, each with what its modules are. The two rules below read this one table. -/
+  parts : Array (Name × Part) := compilerParts
+
+/-- The roots of the repository's modules. A library taken as built imports no module under
+them. -/
+def Policy.project (policy : Policy) : Array Name :=
+  policy.parts.foldl (init := #[]) fun roots (under, _) =>
+    if roots.contains under.getRoot then roots else roots.push under.getRoot
+
+/-- The prefixes of the modules of tests and of tools, which no module of a library imports. -/
+def Policy.testsAndTools (policy : Policy) : Array Name :=
+  (policy.parts.filter (·.2 != .library)).map (·.1)
 
 /-- The kinds of finding. -/
 inductive Rule where
@@ -388,7 +407,7 @@ which nothing is replayed: the environment of the replay would hold what that mo
 Returns the finding of the first module whose declarations the kernel refuses, after which the
 replay stops, and what was replayed and what was taken as built, as lines. -/
 def replay (env : Environment) (libraries : Array Library)
-    (packages : Array Name := #[]) (project : Array Name := #[`Zkc]) :
+    (packages project : Array Name) :
     IO (Option Finding × Array String) := do
   let replayed := libraries.filter (·.withoutReplay.isNone)
   if replayed.isEmpty then return (none, #[])
@@ -515,7 +534,7 @@ def audit (env : Environment) (libraries : Array Library) (policy : Policy := {}
       for imported in env.header.moduleData[index]!.imports do
         let target := imported.module
         if library.contains target then continue
-        if testsAndTools.any (·.isPrefixOf target) then
+        if policy.testsAndTools.any (·.isPrefixOf target) then
           report := report.add module .importOfTestsOrTools
             s!"{module}: imports {target}, a module of the tests or of the tools"
         else if let some allowed := library.imports then

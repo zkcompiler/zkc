@@ -178,7 +178,7 @@ def run (args : List String) : IO Unit := do
   let candidate ← declarations candidateData
   unless candidateData.imports.any (·.module == manifest.statements) do
     throw <| IO.userError s!"the candidate does not import `{manifest.statements}`, the module of the statements"
-  -- the candidate's imports, as compiled: both parts of the `Zkc` namespace through Lake's
+  -- the candidate's imports, as compiled: the modules of the workspace through Lake's
   -- artifacts, and the module of the statements as the check compiled it
   let (_, state) ← importModulesCore candidateData.imports (arts := setup.importArts) |>.run
   let imports ← finalizeImport state candidateData.imports {} 0 false false (isModule := true)

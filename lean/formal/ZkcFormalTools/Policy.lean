@@ -7,7 +7,8 @@ and their logical declarations are replayed locally. -/
 def policy : Zkc.Tools.Audit.Policy where
   axioms := Zkc.Tools.Audit.allowedAxioms.push ``Classical.choice
   packages := #[`Mathlib, `VCVio]
-  project := #[`Zkc, `ZkcFormal, `ZkcFormalTests, `ZkcFormalTools]
+  parts := Zkc.Tools.Audit.compilerParts ++
+    #[(`ZkcFormal, .library), (`ZkcFormalTests, .tests), (`ZkcFormalTools, .tools)]
 
 /-- Source-facing clients recheck admission and refer to elaboration. Each client is
 a separate replay root outside the formal semantics library. -/
