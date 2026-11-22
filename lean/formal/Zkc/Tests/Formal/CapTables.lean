@@ -113,7 +113,7 @@ def top : Definition V :=
 def levels : NamedProgram V := ⟨[other, once, caller, top]⟩
 
 /-- A stepped loop of three: each block and each draw has a key of its own. -/
-def stepped : NamedProgram V := ⟨[
+def steppedRounds : Definition V :=
   .protocol ⟨1⟩ 2 [⟨.bool, [0, 1]⟩] []
     (.mk [0] [
       .block ⟨1⟩ 0 [] (.mk [] [
@@ -122,7 +122,9 @@ def stepped : NamedProgram V := ⟨[
         .op ⟨2⟩ [2] (.event (.given (.coin (.uniform (.fin 3))) 1 [0]) (.fin 3)) []] []),
       .block ⟨5⟩ 2 [] (.mk [] [
         .op ⟨4⟩ [3] (.event (.given (.coin (.uniform (.fin 4))) 1 [0]) (.fin 4)) []] []),
-      .guard ⟨6⟩ [1] 0 .reject] [])]⟩
+      .guard ⟨6⟩ [1] 0 .reject] [])
+
+def stepped : NamedProgram V := ⟨[steppedRounds]⟩
 
 /-! ## How often a draw can occur -/
 
@@ -332,6 +334,47 @@ theorem judged (path : List Frame) :
     obtain ⟨rfl, _⟩ := invariant_i
     walk
 
+/-! ## A fee within its cap and over what is left of the budget
+
+The three draws of the stepped loop each have the cap one half. Judged within three quarters,
+the first fee of one half leaves one quarter, and a second fee of one half is within its cap
+and over what is left: the kernel decides that, and `walk_pay` refuses the fee there. -/
+
+kernel_ok steppedElaborated with steppedHeader steppedNames steppedBody :
+    Elaborated V Typed.empty.headers :=
+  elaborateDefinition Typed.empty.headers steppedRounds
+
+def steppedInstalled : Typed V := Typed.empty.add steppedElaborated
+
+kernel_normal steppedVerifier :
+    Term (roleDialect V Typed.empty.headers verifier) (Ctx.empty.extend steppedNames)
+      steppedHeader.outs :=
+  project verifier steppedBody
+
+theorem stepped_meaning (M : Model V) (path : List Frame)
+    (inputs : HList (RV M verifier) steppedHeader.ins) :
+    roleMeaning M steppedInstalled Member.head verifier path inputs =
+      (steppedVerifier.denote (roleSem M verifier (Defs.fnTable M Typed.empty.defs)
+        (Defs.rTable M Typed.empty.defs)) path (Env.empty.extend steppedNames inputs)).sealed := by
+  kernel_rfl
+
+def steppedInputs (claim : Bool) : HList (RV (model D) verifier) steppedHeader.ins :=
+  .cons claim .nil
+
+/--
+error: walk_pay: the fee is not within what is left of the budget
+  1 / 2 ≤ 3 / 4 - 1 / 2
+-/
+#guard_msgs in
+example (path : List Frame) :
+    (roleMeaning (model D) steppedInstalled Member.head verifier path (steppedInputs D false)).interpret
+      (.charged (Permitted (model D)) (paysWithin (samplers D) (steppedCaps.allowance (model D) path)))
+      (fun _ _ => False) (fun _ _ => True) (3 / 4) := by
+  rw [stepped_meaning]
+  walk_pay (1 / 2) excluding (fun drawn : ℕ => drawn = 0) as first kept
+  case weight => simpa using prEvent_drawPosition_eq_le 1 0
+  walk_pay (1 / 2) excluding (fun drawn : ℕ => drawn = 0) as second keptToo
+
 end
 
 /--
@@ -349,6 +392,11 @@ set_option debug.skipKernelTC true in
 example : (0 : Nat) = 1 := by kernel_rfl
 
 example (n : Nat) : n + 0 = n := by kernel_rfl
+
+/-- An equation that holds by the value of a `let` of the context. -/
+example : let x := 5; x = 5 := by
+  intro x
+  kernel_rfl
 
 example (late excluding : Nat) : late + excluding = excluding + late := Nat.add_comm late excluding
 
