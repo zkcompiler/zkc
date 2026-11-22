@@ -516,6 +516,17 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
   unless (asideModule.text.splitOn "(Member.tail Member.head)").length > 1 do
     throw (IO.userError "the protocol that the root applies first is the last before the root")
   let asideProof ← startModule work "Aside" asideModule
+  -- The same module after the module of another program that has the same function `same`
+  -- (the module of `Twice`): the entry equations of both are then in scope, and the value step
+  -- of the text states its law in the text's own program, so that the text is accepted there
+  -- as it is alone.
+  let earlier ← written.module "Earlier"
+    { text := template ++ converseText,
+      theorems := ofText "twice" ++ ["twice_pays_first", "twice_returns"] }
+  let [_, asideBody] := asideModule.text.splitOn "namespace Aside\n"
+    | throw (IO.userError "the module of `Aside` does not open its name space once")
+  let twoPrograms ← startLakeLean work "TwoPrograms"
+    (earlier.text ++ "\nnamespace Aside\n" ++ asideBody)
 
   let _ ← check work "Twice" written
     { text := template ++ converseText,
@@ -529,6 +540,8 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
   let (ok, output) ← finishLean loopedProof
   acceptedOutput "Looped" ok output loopedModule.theorems allowed
   let (ok, output) ← finishLean asideProof
+  acceptedOutput "Aside" ok output asideModule.theorems allowed
+  let (ok, output) ← finishLean twoPrograms
   acceptedOutput "Aside" ok output asideModule.theorems allowed
 
   -- The root whose callees fork, after the modules above (each is a run of Lean of its own):

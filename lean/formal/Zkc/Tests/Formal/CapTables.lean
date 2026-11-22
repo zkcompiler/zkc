@@ -393,6 +393,20 @@ example : (0 : Nat) = 1 := by kernel_rfl
 
 example (n : Nat) : n + 0 = n := by kernel_rfl
 
+/-! The same after another tactic left a lemma of the same statement unchecked in the same
+declaration: `kernel_rfl` adds its theorem anew, and does not take that lemma from the cache
+of auxiliary lemmas. -/
+
+/--
+error: kernel_rfl: the kernel does not find the two sides definitionally equal
+-/
+#guard_msgs in
+set_option debug.skipKernelTC true in
+example : (0 : Nat) = 1 ∧ (0 : Nat) = 1 := by
+  constructor
+  · decide +kernel
+  · kernel_rfl
+
 /-- An equation that holds by the value of a `let` of the context. -/
 example : let x := 5; x = 5 := by
   intro x

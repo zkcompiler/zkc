@@ -1298,8 +1298,10 @@ private def compute (goal : MVarId) (written : Syntax) (hypothesis := false) (by
   -- The call here is the call of the same function in another table: both are the body of the
   -- function, by the entries of the function in the two tables (`fnMeaning_entry`). The
   -- equation is for every input and is a theorem of its own, which the kernel checks here
-  -- whatever the file says of its checks; it is stated once for a function and a pair of
-  -- tables. Nothing is returned where the kernel refuses it: the two are not one function.
+  -- whatever the file says of its checks: it is added anew at each use and never taken from
+  -- the cache of auxiliary lemmas, in which a lemma of the same type that another tactic added
+  -- under an option of the file may stand unchecked. Nothing is returned where the kernel
+  -- refuses it: the two are not one function.
   let bridge (program header member thereProgram thereMember read : Expr) : MetaM (Option Expr) := do
     let (bridgeType, proof) ← withLocalDeclD `inputs (← inferType read) fun inputs => do
       let at_ (p m : Expr) := mkAppN (mkConst ``Zkc.Core.fnMeaning) #[s[0]!, s[1]!, p, header, m, inputs]
@@ -1310,7 +1312,7 @@ private def compute (goal : MVarId) (written : Syntax) (hypothesis := false) (by
     try
       let joined ← withOptions (fun options =>
           debug.skipKernelTC.set (Lean.Elab.async.set options false) false) do
-        mkAuxTheorem (← instantiateMVars bridgeType) (← instantiateMVars proof)
+        mkAuxTheorem (← instantiateMVars bridgeType) (← instantiateMVars proof) (cache := false)
       return some (mkApp joined read)
     catch failure =>
       if failure.isRuntime || failure matches .internal .. then throw failure
@@ -1319,31 +1321,37 @@ private def compute (goal : MVarId) (written : Syntax) (hypothesis := false) (by
   -- entry equation of a function of the same header that is the function of the call (in the
   -- call's own table, or in another one by `bridge`), with the proof that the call here is the
   -- call there, where the two tables differ. A text states a law of a function in that table.
-  -- The equations of the name space in which the text stands are tried first: an environment
-  -- can hold the equations of two programs with one function between them (a module of
-  -- statements that another imports), and the text's laws are about its own.
+  -- An environment can hold the entry equations of two programs with one function between
+  -- them (a module of two programs; a module of statements that another imports), so the
+  -- order is fixed: an equation of the call's own table, wherever it stands; then the
+  -- equations of the name space in which the text stands, whose laws are about its own
+  -- program; then the others.
   let statedFunction (program header member read : Expr) :
       MetaM (Option (Expr × Expr × Option Expr)) := do
+    -- the program, the header and the member of a labelled entry equation of a function
+    let entryOf (name : Lean.Name) : MetaM (Option (Expr × Expr × Expr)) := withNewMCtxDepth do
+      let entry ← mkConstWithFreshMVarLevels name
+      let (_, _, statement) ← forallMetaTelescope (← inferType entry)
+      let some (_, lhs, _) := statement.eq? | return none
+      let stated := lhs.getAppArgs
+      -- `fnMeaning M p member inputs`, after the vocabulary and before the header
+      unless lhs.getAppFn.isConstOf ``Zkc.Core.fnMeaning && stated.size == 6 do return none
+      let (thereProgram, thereHeader, thereMember) := (stated[2]!, stated[3]!, stated[4]!)
+      if thereProgram.hasExprMVar || thereHeader.hasExprMVar || thereMember.hasExprMVar then
+        return none
+      unless ← kernelSame thereHeader header do return none
+      return some (thereProgram, thereHeader, thereMember)
     let here ← getCurrNamespace
     let (own, others) := (← Lean.labelled `walk_entry).partition fun name => here.isPrefixOf name
+    let mut elsewhere := #[]
     for name in own ++ others do
-      let found ← withNewMCtxDepth do
-        let entry ← mkConstWithFreshMVarLevels name
-        let (_, _, statement) ← forallMetaTelescope (← inferType entry)
-        let some (_, lhs, _) := statement.eq? | return none
-        let stated := lhs.getAppArgs
-        -- `fnMeaning M p member inputs`, after the vocabulary and before the header
-        unless lhs.getAppFn.isConstOf ``Zkc.Core.fnMeaning && stated.size == 6 do return none
-        let (thereProgram, thereHeader, thereMember) := (stated[2]!, stated[3]!, stated[4]!)
-        if thereProgram.hasExprMVar || thereHeader.hasExprMVar || thereMember.hasExprMVar then
-          return none
-        unless ← kernelSame thereHeader header do return none
-        if ← withReducible (isDefEq thereProgram program) then
-          if ← kernelSame thereMember member then return some (thereProgram, thereMember, none)
-          else return none
-        let some joined ← bridge program header member thereProgram thereMember read | return none
+      let some (thereProgram, _, thereMember) ← entryOf name | continue
+      if ← withReducible (isDefEq thereProgram program) then
+        if ← kernelSame thereMember member then return some (thereProgram, thereMember, none)
+      else elsewhere := elsewhere.push (thereProgram, thereMember)
+    for (thereProgram, thereMember) in elsewhere do
+      if let some joined ← bridge program header member thereProgram thereMember read then
         return some (thereProgram, thereMember, some joined)
-      if found.isSome then return found
     return none
   -- the law at a value, with the operands in a form to read, and the operands. A call of a
   -- function of a program is stated as the meaning of the function there, which is the form

@@ -161,12 +161,15 @@ elab "kernel_rfl" : tactic => Lean.Elab.Tactic.withMainContext do
     let proof ←
       try
         -- checked now and by the kernel whatever the file says: an option that has the
-        -- kernel skip a declaration does not reach this one
-        -- a `let` of the context keeps its value in the theorem: the kernel has it where it
+        -- kernel skip a declaration does not reach this one. The theorem is added anew and
+        -- never taken from the cache of auxiliary lemmas: a lemma of the same type that
+        -- another tactic added earlier in the declaration, under such an option, is there
+        -- unchecked.
+        -- A `let` of the context keeps its value in the theorem: the kernel has it where it
         -- compares the sides in the goal's context, and an equation that holds by it is one
         withOptions (fun options =>
             debug.skipKernelTC.set (Lean.Elab.async.set options false) false) do
-          mkAuxTheorem type (← mkEqRefl lhs) (zetaDelta := true)
+          mkAuxTheorem type (← mkEqRefl lhs) (zetaDelta := true) (cache := false)
       catch failure =>
         -- the kernel's own message shows both sides in full, which for a program is long
         if failure.isRuntime || failure matches .internal .. then throw failure
