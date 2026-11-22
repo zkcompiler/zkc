@@ -42,6 +42,11 @@ roles in the other order (`Nested`): the walk goes through both applications, an
 that it follows is the first of the root and the second of the two protocols below it. Its
 text is the text of `Twice` with the names of the goal.
 
+A third module is of a root that applies `Round` in the body of a loop of three iterations
+(`Looped`). The loop is taken by an invariant, as the loop of `Guess` is; in its body the walk
+goes into the application at the path of the iteration, and the fee of the callee's draw is
+within the cap that the table gives it under that iteration.
+
 One control is refused by Lean, at the place that the check names and at no other: the charge
 of the draw halved in the source. The program is what it was; the cap that the table gives the
 draw through the application is one eighth, and the fee of one quarter that the text pays at
@@ -89,13 +94,64 @@ def nestedSource : String :=
   "scheme Checked = Nested:\n    prover P\n    construction interactive\n" ++
   "goal nested = soundness(Checked, stage = written)\n"
 
+/-- A root whose loop applies `Round` three times to one position and returns where the claim
+holds or a round hit: an application in the body of a loop. -/
+def loopedSource : String :=
+  round "1 / 4" ++
+  "protocol Looped roles(P, V)(claim: bool @(P, V), guess: index<4> @P):\n" ++
+  "    mut hit = false\n    for i in 0..3:\n" ++
+  "        a <- Round(guess)\n        hit := hit or a.hit\n" ++
+  "    guard @V claim or hit\n" ++
+  "spec for Looped:\n    proves @V Holds(claim)\n" ++
+  "scheme Checked = Looped:\n    prover P\n    construction interactive\n" ++
+  "goal looped = soundness(Checked, stage = written)\n"
+
+/-- The text of the looped root: the loop is taken by an invariant, as the loop of `Guess` is,
+and in its body the walk goes into the application, pays at the callee's draw under the frame
+of the iteration, and takes the call of `same` by the law stated before the root. -/
+def loopedText : String :=
+  "noncomputable section\n\n" ++
+  "theorem looped_relation {F G : Type} (D : StandardModel.Data F G) [DecidableEq F]\n" ++
+  "    [DecidableEq G] (claim : Bool) :\n" ++
+  "    functionResult (t := .bool)\n" ++
+  "      (fnMeaning (StandardModel.model D) installed loopedMember (.cons claim .nil)) =\n" ++
+  "        some claim := by\n  kernel_rfl\n\n" ++
+  "theorem same_law {F G : Type} (D : StandardModel.Data F G) [DecidableEq F] [DecidableEq G]\n" ++
+  "    (a b : ℕ) :\n" ++
+  "    fnMeaning (StandardModel.model D) calleeProgram sameMember (.cons a (.cons b .nil)) =\n" ++
+  "      .done (.cons (a.beq b) .nil) := by\n" ++
+  "  refine done_of_judged ?_\n  repeat walk_step\n  subst_vars\n  rfl\n\n" ++
+  "theorem looped_judged : loopedJudged := by\n" ++
+  "  claim_intro\n" ++
+  "  obtain rfl : input_claim = false :=\n" ++
+  "    Option.some.inj ((looped_relation D input_claim).symm.trans rejected)\n" ++
+  "  walk\n" ++
+  "  walk_loop fun i (hit : Bool) budget => hit = false ∧ ((3 - i : ℕ) : ℚ≥0) * (1 / 4) ≤ budget\n" ++
+  "  case first => exact ⟨rfl, by decide +kernel⟩\n" ++
+  "  case step =>\n" ++
+  "    obtain ⟨rfl, enough⟩ := invariant_i\n" ++
+  "    have split : (3 - i : ℕ) = (3 - (i + 1)) + 1 := by omega\n" ++
+  "    rw [split, Nat.cast_add, Nat.cast_one, add_mul, one_mul] at enough\n" ++
+  "    -- the application in the body: the message and the draw of `Round`\n" ++
+  "    walk_free as sent\n" ++
+  "    walk_pay (1 / 4) excluding (fun drawn : ℕ => drawn = sent) as drawn differs\n" ++
+  "    case weight => simpa using prEvent_drawPosition_eq_le 3 sent\n" ++
+  "    case within => exact le_trans le_add_self enough\n" ++
+  "    walk\n    walk_law same_law D drawn sent\n    walk\n" ++
+  "    refine ⟨?_, le_tsub_of_add_le_right enough⟩\n" ++
+  "    exact Bool.eq_false_iff.mpr fun same => differs (Nat.eq_of_beq_eq_true same)\n" ++
+  "  case after =>\n    obtain ⟨rfl, _⟩ := invariant_i\n    walk\n\n" ++
+  "theorem looped_witnessed : loopedWitnessed :=\n" ++
+  "  looped_witnessed_of Zkc.Formal.Written.FiniteModel.data false trivial\n" ++
+  "    (looped_relation _ false)\n\nend\n"
+
 /-- What the check asserts of what the frontend read of a source of the subject: the goal
 selects the root; it reads the clause `proves @V Holds(claim)` on the first of the three ports,
 decided by the verifier of the scheme; it gives no proof argument; and its coins are positions,
 so the statements are about the standard model. -/
-def reading (goal : String) : Reading where
+def reading (goal : String) (ports : Array String := #["claim", "first", "second"]) : Reading where
   goals := [goal]
-  ports := #["claim", "first", "second"]
+  ports := ports
   clause := ⟨"proves", none, "V", "Holds", ["claim"], []⟩
   operands := #[0]
 
@@ -144,14 +200,25 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
     { text := template.replace "twice" "nested", theorems := ofText "nested" }
   let nestedProof ← startLakeLean work "Nested" nestedModule.text
 
+  -- The looped root: one application in the body of a loop of three iterations.
+  let looped ← read loopedSource (reading "looped" #["claim", "guess"])
+  let loopedGoal ← looped.goal
+  unless loopedGoal.total == 3 / 4 && shape loopedGoal.caps == [([(1, 4, 1)], []), ([], [(0, 3)])] do
+    throw (IO.userError s!"the table of the looped root is not three applications: {repr loopedGoal.caps}")
+  let loopedModule ← looped.module "Looped" { text := loopedText, theorems := ofText "looped" }
+  let loopedProof ← startLakeLean work "Looped" loopedModule.text
+
   let _ ← check work "Twice" written { text := template, theorems := ofText "twice" }
     [halvedControl]
   let (ok, output) ← finishLean nestedProof
   acceptedOutput "Nested" ok output nestedModule.theorems allowed
+  let (ok, output) ← finishLean loopedProof
+  acceptedOutput "Looped" ok output loopedModule.theorems allowed
   IO.println ("Twice is judged within the table of caps of its goal (the draw of the protocol " ++
     "that it applies at 1/4, under two applications: 1/2), with the call of a function inside " ++
     "the callee taken by a law stated before the root; a root that applies a protocol that " ++
-    "applies it, with the roles in the other order, is judged by the same text; " ++
+    "applies it, with the roles in the other order, is judged by the same text, and a root " ++
+    "that applies it in the body of a loop by an invariant; " ++
     "1 of 1 control refused, at the place that the check names and at no other.")
 
 end TwiceCharge
