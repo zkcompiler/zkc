@@ -4,7 +4,7 @@ import Zkc.Frontend.Written.Package
 import Zkc.Frontend.Written.Statement
 import Zkc.Tests.Frontend.SyntaxHarness
 import Zkc.Tests.Frontend.PrintedPackageSupport
-import Zkc.Tests.Frontend.WrittenSubject
+import Zkc.Tests.Formal.WrittenSubject
 
 /-!
 The statement of a written soundness goal is about the goal of the source.
@@ -69,7 +69,7 @@ experiment of the statement is the one that a reader would write.
 
 open Zkc.Core Zkc.Frontend Zkc.Frontend.Written
 open Zkc.Tests.Frontend Zkc.Tests.Frontend.PrintedPackageSupport
-open Zkc.Tests.Frontend.WrittenSubject (startModule startRefused refusedOutside)
+open Zkc.Tests.Formal.WrittenSubject (startModule startRefused refusedOutside)
 
 namespace GoalStatementCheck
 

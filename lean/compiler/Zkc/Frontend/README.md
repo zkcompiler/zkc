@@ -106,7 +106,7 @@ whose clause is a `reduces` gets no statement yet: the statement of a reduction 
 return on which the reduced statement is true. The `requires` of a contract are not hypotheses
 of a statement, which is then the stronger one. The checks of the four subjects
 (`lean/formal/checks/CountCharge.lean`, `FreivaldsCharge.lean`, `GuessCharge.lean`,
-`EitherCharge.lean`, on the library `Zkc/Tests/Frontend/WrittenSubject.lean`) are its users;
+`EitherCharge.lean`, on the library `lean/formal/Zkc/Tests/Formal/WrittenSubject.lean`) are its users;
 [the page for authors](../../../../docs/written-soundness.md) says how a subject is written.
 `lean/formal/checks/GoalClaim.lean` has Lean elaborate the statement of a goal whose relation
 has a witness.

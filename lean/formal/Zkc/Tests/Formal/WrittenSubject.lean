@@ -21,7 +21,7 @@ theorems that are then left unproved and the texts of the places at which it is 
 `replaceOnce` (`PrintedPackageSupport`), which fails when the place that it alters is gone.
 -/
 
-namespace Zkc.Tests.Frontend.WrittenSubject
+namespace Zkc.Tests.Formal.WrittenSubject
 open Zkc.Core Zkc.Frontend Zkc.Frontend.Written
 open Zkc.Tests.Frontend Zkc.Tests.Frontend.PrintedPackageSupport
 
@@ -246,6 +246,12 @@ def manifest (module : Module) (axioms : List String) : Lean.Json :=
     ("theorems", .arr (module.proved.map fun theorem_ =>
       name (module.space :: theorem_.splitOn ".")).toArray)]
 
+/-- The program that reads a proof module outside the file, as the formal package builds it
+(`zkc-verify-publication`, from `Zkc/Tools/Formal/VerifyPublication.lean`), by its path from the
+package's folder, in which a check runs. A check does not build it: the sandbox in which it
+runs can write nothing of the package. -/
+def program : String := ".lake/build/bin/zkc-verify-publication"
+
 /-- What Lean and the program outside the file gave on a proof module: Lean's result on it,
 and, where Lean accepted it, whether the program outside accepted it and what it printed. -/
 structure Outside where
@@ -266,8 +272,7 @@ def proveOutside (work : System.FilePath) (name : String) (module : Module) (sta
   let manifestPath := proved.given / "manifest.json"
   IO.FS.writeFile manifestPath (manifest module axioms).compress
   let out ← confined (← folderAt (work / s!"{name}.reading"))
-    #["lake", "env", "lean", "--run", "Zkc/Tools/Formal/VerifyPublication.lean",
-      proved.setup.toString, manifestPath.toString, proved.object.toString]
+    #["lake", "env", program, proved.setup.toString, manifestPath.toString, proved.object.toString]
   return { lean := proved.lean, verified := some (out.exitCode == 0, out.stdout ++ out.stderr) }
 
 /-- The two modules compiled, one after the other, and the proof module read outside. -/
@@ -486,4 +491,4 @@ def check (work : System.FilePath) (name : String) (subject : Subject) (proof : 
     (controls : List Control := []) : IO (Bool × String) := do
   (← start work name subject proof controls).finish
 
-end Zkc.Tests.Frontend.WrittenSubject
+end Zkc.Tests.Formal.WrittenSubject

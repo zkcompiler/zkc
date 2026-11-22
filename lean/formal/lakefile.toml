@@ -1,6 +1,6 @@
 name = "zkc_formal"
 version = "0.0.0"
-defaultTargets = ["ZkcFormal", "ZkcFormalTests", "ZkcFormalTools"]
+defaultTargets = ["ZkcFormal", "ZkcFormalTests", "ZkcFormalTools", "zkc-verify-publication"]
 testDriver = "«zkc-formal-audit»"
 
 [leanOptions]
@@ -38,6 +38,13 @@ allowNonModules = true
 name = "ZkcFormalTests"
 roots = ["Zkc.Tests.Formal"]
 globs = ["Zkc.Tests.Formal", "Zkc.Tests.Formal.+"]
+allowNonModules = true
+
+# The program that reads a generated proof module outside the file: a check of a written subject
+# runs it on the object of each proof module that Lean accepts.
+[[lean_exe]]
+name = "zkc-verify-publication"
+root = "Zkc.Tools.Formal.VerifyPublication"
 allowNonModules = true
 
 [[lean_exe]]

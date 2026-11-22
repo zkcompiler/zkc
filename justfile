@@ -29,6 +29,7 @@ test-written-charge: _charge-checks
     cd lean/formal && lake lean checks/ReplayCharge.lean
 
 _charge-checks:
+    cd lean/formal && lake build zkc-verify-publication
     cd lean/formal && lake lean checks/AuditCharge.lean
     cd lean/formal && lake lean checks/WrittenCharge.lean
     cd lean/formal && lake lean checks/OccurrenceDepth.lean

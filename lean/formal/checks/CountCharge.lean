@@ -5,7 +5,7 @@ import Zkc.Frontend.Written.Statement
 import Zkc.Tests.Frontend.SyntaxHarness
 import Zkc.Tests.Frontend.SourceClause
 import Zkc.Tests.Frontend.PrintedPackageSupport
-import Zkc.Tests.Frontend.WrittenSubject
+import Zkc.Tests.Formal.WrittenSubject
 import Zkc.Core.Admission.Theorems
 import Zkc.Kernel
 import Zkc.Vocabulary.Project
@@ -88,7 +88,7 @@ statement.
 
 open Zkc.Core Zkc.Frontend Zkc.Frontend.Written
 open Zkc.Tests.Frontend Zkc.Tests.Frontend.PrintedPackageSupport
-open Zkc.Tests.Frontend.WrittenSubject
+open Zkc.Tests.Formal.WrittenSubject
 
 namespace CountCharge
 
@@ -105,7 +105,7 @@ def reading : Reading where
   arguments := 1
 
 /-- A source of the subject read, with what is asserted of the reading. -/
-def read (text : String) : IO Subject := WrittenSubject.read text reading
+def read (text : String) : IO Subject := Zkc.Tests.Formal.WrittenSubject.read text reading
 
 /-- The root, the verifier and the prover of a subject. -/
 def places (s : Subject) : Nat × Nat × Nat :=

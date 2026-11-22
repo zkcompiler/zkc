@@ -1,4 +1,4 @@
-import Zkc.Tests.Frontend.WrittenSubject
+import Zkc.Tests.Formal.WrittenSubject
 
 /-!
 The reading of a module outside the file, on small modules written here.
@@ -53,7 +53,7 @@ are not the statements', and a module with them is accepted.
 -/
 
 open Zkc.Frontend.Written Zkc.Tests.Frontend.PrintedPackageSupport
-open Zkc.Tests.Frontend.WrittenSubject
+open Zkc.Tests.Formal.WrittenSubject
 
 namespace OutsideReading
 

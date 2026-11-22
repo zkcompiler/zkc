@@ -45,7 +45,7 @@ theorem either_relation {F G : Type} (D : StandardModel.Data F G) [DecidableEq F
 
 A relation that the kernel does not compute on variables (one with a loop) is walked as any function is (`Count<8>`, Freivalds).
 
-**The check** is a Lean file that reads the source with the frontend, asserts what it read, and runs Lean on the generated module. With the library of `lean/compiler/Zkc/Tests/Frontend/WrittenSubject.lean` it is data:
+**The check** is a Lean file that reads the source with the frontend, asserts what it read, and runs Lean on the generated module. With the library of `lean/formal/Zkc/Tests/Formal/WrittenSubject.lean` it is data:
 
 ```lean
 def reading : Reading where
