@@ -106,35 +106,40 @@ in the roster and the bound as a number: in every admitted program with the prot
 relation found by their keys, where the relation returns false of the false claim, the second
 role on that claim returns with probability at most three eighths under the service of the
 laws. Its proof is the published theorem and the budget that the module states. -/
-def consumer : String :=
-  "noncomputable section\n" ++
-  "open ZkcFormal.Written.StandardModel\n" ++
-  "open ZkcFormal.Written.FiniteModel (data)\n\n" ++
-  "theorem consumer {a : Admitted V} (admitted : admit stored association = .ok a) :\n" ++
-  "    ∃ root : Member a.program.headers.protocols rootHeader,\n" ++
-  "      a.program.findProtocol rootKey = some ⟨rootHeader, root⟩ ∧\n" ++
-  "      ∃ relation : Member a.program.headers.fns guessingHeader,\n" ++
-  "        a.program.find guessingKey = some (.fn relation) ∧\n" ++
-  "        (functionResult (t := .bool)\n" ++
-  "            (fnMeaning (StandardModel.model data) a.program relation (.cons false .nil)) = some false →\n" ++
-  "          Pr{let out ← (simulateQ (handlerOf (serveLaws (StandardModel.model data) (draws data))) (embed\n" ++
-  "              (roleMeaning (StandardModel.model data) a.program root 1 []\n" ++
-  "                (.cons false (.cons () .nil))))).run.run ()}[\n" ++
-  "            ∃ results, out.1 = some (.inl results)] ≤ 3 / 8) := by\n" ++
-  "  have total : guessingCaps.total = 3 / 8 := by\n" ++
-  "    rw [CapTable.total, guessing_budget, toProbability_natCast_div 3 8 (by decide)]\n" ++
-  "    norm_num\n" ++
-  "  obtain ⟨root, found, relation, foundRelation, claim⟩ := guessing_sound admitted\n" ++
-  "  refine ⟨root, found, relation, foundRelation, fun rejected => ?_⟩\n" ++
-  "  rw [← total]\n" ++
-  "  simpa using claim data [] false trivial rejected _ (serveLaws (StandardModel.model data) (draws data))\n" ++
-  "    ⟨serveLaws_follows _ _, serveLaws_permitted _ _ (StandardModel.draws_permitted data)⟩ ()\n\n" ++
-  "end\n"
+def consumer : Consumer where
+  name := "consumer"
+  before :=
+    "noncomputable section\n" ++
+    "open ZkcFormal.Written.StandardModel\n" ++
+    "open ZkcFormal.Written.FiniteModel (data)\n\n"
+  signature :=
+    "theorem consumer {a : Admitted V} (admitted : admit stored association = .ok a) :\n" ++
+    "    ∃ root : Member a.program.headers.protocols rootHeader,\n" ++
+    "      a.program.findProtocol rootKey = some ⟨rootHeader, root⟩ ∧\n" ++
+    "      ∃ relation : Member a.program.headers.fns guessingHeader,\n" ++
+    "        a.program.find guessingKey = some (.fn relation) ∧\n" ++
+    "        (functionResult (t := .bool)\n" ++
+    "            (fnMeaning (StandardModel.model data) a.program relation (.cons false .nil)) = some false →\n" ++
+    "          Pr{let out ← (simulateQ (handlerOf (serveLaws (StandardModel.model data) (draws data))) (embed\n" ++
+    "              (roleMeaning (StandardModel.model data) a.program root 1 []\n" ++
+    "                (.cons false (.cons () .nil))))).run.run ()}[\n" ++
+    "            ∃ results, out.1 = some (.inl results)] ≤ 3 / 8)"
+  proof :=
+    "by\n" ++
+    "  have total : guessingCaps.total = 3 / 8 := by\n" ++
+    "    rw [CapTable.total, guessing_budget, toProbability_natCast_div 3 8 (by decide)]\n" ++
+    "    norm_num\n" ++
+    "  obtain ⟨root, found, relation, foundRelation, claim⟩ := guessing_sound admitted\n" ++
+    "  refine ⟨root, found, relation, foundRelation, fun rejected => ?_⟩\n" ++
+    "  rw [← total]\n" ++
+    "  simpa using claim data [] false trivial rejected _ (serveLaws (StandardModel.model data) (draws data))\n" ++
+    "    ⟨serveLaws_follows _ _, serveLaws_permitted _ _ (StandardModel.draws_permitted data)⟩ ()"
+  after := "\nend\n"
 
 def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
   let template ← IO.FS.readFile template
   let proof : Proof :=
-    { text := template, theorems := ofText, after := { text := consumer, theorems := ["consumer"] } }
+    { text := template, theorems := ofText, after := [consumer] }
   let written ← read (source "3" "1 / 8") reading
   let goal ← written.goal
   let claims := written.statements.claims

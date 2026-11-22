@@ -5,10 +5,12 @@ The judgment of a recipe's proof modules.
 
 The checks of the written subjects that a recipe runs write each pair that they accept (the
 module of the statements, the challenge and the proof module) into the folder that the recipe
-names (`ZKC_SUBJECTS`). This is the recipe's last step: one run of `lake comparator` over all
-of them. The cost of a run is the libraries that the subjects share, so one run for all costs
-little more than a run for one. With `ZKC_PARANOID` set, the comparator also runs every other
-kernel that the toolchain bundles.
+names (`ZKC_SUBJECTS`). This is the recipe's last step: the folder is a project of its own,
+settled as every project of a check is (the statements and the challenges built and exported
+before any text is read, every text read confined), and judged by one run of
+`lake comparator` over all the pairs. The cost of a run is the libraries that the subjects
+share, so one run for all costs little more than a run for one. With `ZKC_PARANOID` set, the
+comparator also runs every other kernel that the toolchain bundles.
 -/
 
 open ZkcFormalTests ZkcFormalTests.WrittenSubject
@@ -20,11 +22,15 @@ open ZkcFormalTests ZkcFormalTests.WrittenSubject
   if pairs.isEmpty then
     throw (IO.userError s!"the checks of the recipe noted no pair in {shared}")
   let paranoid := (← IO.getEnv "ZKC_PARANOID").isSome
-  let (ok, said) ← SubjectProject.judge shared "Accepted" pairs theorems allowed paranoid
-  unless ok do
+  SubjectProject.expect shared acceptedLabel pairs theorems allowed
+  match ← SubjectProject.judge shared acceptedLabel paranoid with
+  | (.accepted, _) => pure ()
+  | (.refused, said) =>
     throw (IO.userError s!"the judgment refuses the proof modules that the checks accepted\n{said}")
+  | (.failed, said) =>
+    throw (IO.userError s!"the proof modules that the checks accepted were not judged\n{said}")
   IO.println (s!"`lake comparator` accepts the {pairs.length} proof modules that the checks " ++
-    s!"accepted: each of their {theorems.length} published theorems has the statement of its " ++
+    s!"accepted: each of their {theorems.length} judged theorems has the statement of its " ++
     "challenge, the kernel accepts the solutions" ++
     (if paranoid then ", as does every other kernel that the toolchain bundles," else "") ++
     s!" and the theorems rest on {allowed} at most.")

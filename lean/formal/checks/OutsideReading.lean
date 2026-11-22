@@ -1,111 +1,182 @@
-import ZkcFormalTests.SubjectProject
+import ZkcFormalTests.WrittenSubject
 
 /-!
 The judgment of a proof module, as the checks use it.
 
 A check of a written subject does not rest on Lean's acceptance of a proof module: a text is
 arbitrary Lean. It gives the proof modules that it accepts to `lake comparator`, with the
-module of the statements and a challenge that the generator writes
-(`ZkcFormalTests.SubjectProject.judge`). The comparator's own behaviour is the toolchain's to
-test. What is checked here is the use that the checks make of it, on pairs as the generator
-writes them (a module of statements with a definition and a proposition, a challenge that
-states the published theorem with no proof, a proof module that imports the statements and
-holds a text):
+module of the statements and a challenge that the generator writes, in a project that is
+settled so that a text has nothing to change (`ZkcFormalTests.SubjectProject`). The
+comparator's own behaviour is the toolchain's to test. What is checked here is the use that the
+checks make of it, through the functions by which every check has a module accepted
+(`WrittenSubject.startModule`) or refused by the judgment (`WrittenSubject.readOutside`), on
+pairs as the generator writes them: a module of statements with a definition and a proposition,
+a challenge that states the published theorem with no proof, and a proof module that imports the
+statements and holds a text.
 
-- the pair that is as stated is accepted;
-- a proof of another proposition under the published name, a proof module without the
+- The pair that is as stated is accepted.
+- A proof of another proposition under the published name, a proof module without the
   published theorem, and a theorem that rests on an axiom through another theorem are refused,
-  each with its reason;
-- a false proposition proved with the kernel's check turned off by the text, which Lean
-  accepts, is refused by the kernel;
-- a text that writes a file beside its project, or over the challenge, changes nothing: the
-  comparator builds a solution in its sandbox, and a check gives it a text that no other run
-  of Lean has read.
-
-Each case is a project of its own that requires no package, so that `lake` has nothing to
-resolve.
+  each with its reason.
+- A false proposition proved with the kernel's check turned off by the text, which Lean
+  accepts, is refused by the kernel.
+- A text that proves a false proposition from an axiom and, while Lean reads it, writes over
+  its statements, its challenge, the exported challenge, the list of the pairs to judge, the
+  verdict, and under a recipe a pair in the recipe's folder: every write fails, the files are as the check wrote them, and the pair is refused
+  for its axiom.
+- A text of another module of the same project that, while Lean reads it, replaces the objects
+  of a pair (the statements with a true proposition, the proof module with a proof of it): the
+  objects are replaced, and the pair is refused, since its challenge was exported before any
+  text was read.
+- A consumer that the check writes after the closing theorems is judged with the published
+  theorems: after a text that turns the kernel's check off for what follows it, Lean accepts a
+  false consumer, and the kernel of the judgment refuses it.
 -/
 
-open ZkcFormalTests
+open Zkc.Frontend.Written
+open ZkcFormalTests ZkcFormalTests.WrittenSubject
 
 namespace OutsideReading
 
-/-- What the generator would state, in a module of its own: a definition, and a proposition
-that uses it. -/
-def stated (proposition : String) : String :=
-  "namespace Fixture\ndef mark : Nat := 0\n" ++ s!"def gGoal : Prop := {proposition}\nend Fixture\n"
+/-- A pair as the generator would write it, in the name space `name`: the statements are a
+definition and the proposition `gGoal`, and the proof module holds `text`, which is to prove
+`g_sound : gGoal`. -/
+def pair (name text : String) (proposition := "mark = mark") : Module where
+  space := name
+  statementsName := .str (.str .anonymous name) "Stated"
+  statements := s!"namespace {name}\ndef mark : Nat := 0\ndef gGoal : Prop := {proposition}\nend {name}\n"
+  stated := []
+  statedImports := []
+  proof := s!"import {name}.Stated\nnamespace {name}\n{text}\nend {name}\n"
+  proved := ["g_sound"]
+  proofImports := []
+  textLine := 3
+  textLines := (text.splitOn "\n").length
+  published := [(.str (.str .anonymous name) "g_sound", .str (.str .anonymous name) "gGoal")]
 
-/-- The challenge of the pair: the published theorem over its proposition, with no proof. -/
-def challenge : String :=
-  "import Fixture.Stated\ntheorem Fixture.g_sound : Fixture.gGoal := by sorry\n"
+/-- A pair that the judgment must refuse, saying `reason`; Lean accepts its two modules. -/
+def refused (work : System.FilePath) (name text reason : String) (proposition := "mark = mark") :
+    IO (IO Unit) :=
+  refusedOutside work name name (pair name text proposition) [reason]
 
-/-- A proof module with the text `text`. -/
-def proof (text : String) : String :=
-  "import Fixture.Stated\nnamespace Fixture\n" ++ text ++ "\nend Fixture\n"
+/-- A text that proves its proposition from an axiom and tries each write that would have the
+pair accepted: `targets`, each a file and what to write there. It says how many failed. -/
+def writer (targets : List (System.FilePath × String)) : String :=
+  "axiom cheat : False\n#eval show IO Unit from do\n  let mut failed := 0\n" ++
+  String.join (targets.map fun (file, content) =>
+    s!"  try IO.FS.writeFile {reprStr file.toString} {reprStr content}\n" ++
+    "  catch _ => failed := failed + 1\n") ++
+  "  IO.println s!\"writes that failed: {failed}\"\n" ++
+  "theorem g_sound : gGoal := cheat.elim"
 
-/-- The pair of a case in a project of its own, judged without an earlier build: the
-comparator's verdict and what it said. -/
-def judged (work : System.FilePath) (title text : String) (proposition := "mark = mark") :
-    IO (Bool × String) := do
-  let project := work / title
-  SubjectProject.bare project
-  discard <| SubjectProject.add project `Fixture.Stated (stated proposition)
-  discard <| SubjectProject.add project `Fixture.Challenge challenge .challenge
-  discard <| SubjectProject.add project `Fixture (proof text)
-  SubjectProject.judge project "Case" [(`Fixture.Challenge, `Fixture)] [`Fixture.g_sound]
-    ["propext", "Classical.choice", "Quot.sound"]
+/-- A module that imports the proof module of the pair `Forged` and, while Lean reads it,
+compiles a module of statements with a true proposition and a proof module with a proof of it
+over the objects of the pair. It says how each compilation ended. -/
+def forger : String :=
+  "import Forged\n" ++
+  "#eval show IO Unit from do\n" ++
+  "  IO.FS.createDirAll \".lake/forge/Forged\"\n" ++
+  "  IO.FS.writeFile \".lake/forge/Forged/Stated.lean\"\n" ++
+  "    \"namespace Forged\\ndef mark : Nat := 0\\ndef gGoal : Prop := True\\nend Forged\\n\"\n" ++
+  "  IO.FS.writeFile \".lake/forge/Forged.lean\"\n" ++
+  "    \"import Forged.Stated\\nnamespace Forged\\ntheorem g_sound : gGoal := trivial\\nend Forged\\n\"\n" ++
+  "  let objects := \".lake/build/lib/lean\"\n" ++
+  "  let lean (object source : String) : IO UInt32 := do\n" ++
+  "    let out ← IO.Process.output { cmd := \"lean\", args := #[\"-o\", s!\"{objects}/{object}\", source] }\n" ++
+  "    return out.exitCode\n" ++
+  "  let stated ← lean \"Forged/Stated.olean\" \".lake/forge/Forged/Stated.lean\"\n" ++
+  "  let proved ← lean \"Forged.olean\" \".lake/forge/Forged.lean\"\n" ++
+  "  IO.println s!\"objects replaced: {stated} {proved}\"\n"
 
-/-- A case that the judgment accepts. -/
-def accepted (work : System.FilePath) (title text : String) : IO Unit := do
-  let (ok, said) ← judged work title text
-  unless ok do throw (IO.userError s!"{title}: the judgment refuses the pair\n{said}")
-
-/-- A case that the judgment refuses, saying `reason`. -/
-def refused (work : System.FilePath) (title text reason : String)
-    (proposition := "mark = mark") : IO Unit := do
-  let (ok, said) ← judged work title text proposition
-  if ok then throw (IO.userError s!"{title}: the judgment accepts the pair")
-  unless said.contains reason do
-    throw (IO.userError s!"{title}: refused for another reason than `{reason}`\n{said}")
-
-/-- A text that writes over a file beside the project and over the challenge of its own pair.
-The comparator builds it in its sandbox: both writes fail, the build of the solution fails with
-them, and the files are as the check wrote them. -/
-def written (work : System.FilePath) : IO Unit := do
-  let beside := (← IO.FS.realPath work) / "beside.txt"
-  IO.FS.writeFile beside "as the check wrote it\n"
-  let project := (← IO.FS.realPath work) / "writer"
-  let target := project / "Fixture" / "Challenge.lean"
-  let (ok, said) ← judged work "writer"
-    (s!"#eval IO.FS.writeFile {reprStr beside.toString} \"rewritten by the text\"\n" ++
-      s!"#eval IO.FS.writeFile {reprStr target.toString} \"theorem Fixture.g_sound : True := trivial\"\n" ++
-      "theorem g_sound : gGoal := rfl")
-  if ok then throw (IO.userError "a text that writes outside its build was accepted")
-  unless said.contains "read-only" do
-    throw (IO.userError s!"the writes of a text were not stopped by a file system that is read-only\n{said}")
-  unless (← IO.FS.readFile beside) == "as the check wrote it\n" && (← IO.FS.readFile target) == challenge do
-    throw (IO.userError "a text wrote a file beside its project or over its challenge")
+/-- A pair with a consumer, as a check writes one after the closing theorems: the text turns
+the kernel's check off for what follows it and makes `decide` decide by the kernel, so that
+Lean accepts the consumer's false statement. -/
+def consumed : Module :=
+  let text := "theorem g_proof : gGoal := rfl\nset_option debug.skipKernelTC true\n" ++
+    "macro_rules | `(tactic| decide) => `(tactic| decide +kernel)"
+  let consumer : Consumer :=
+    { name := "consumer", signature := "theorem consumer : mark = 1", proof := "by decide",
+      imports := ["ZkcFormal.Written.WalkFees", "ZkcFormal.Written.FiniteModel"] }
+  let plain := pair "Consumed" text
+  { plain with
+    proof := s!"import Consumed.Stated\nnamespace Consumed\n{text}\n" ++
+      "theorem g_sound : gGoal := g_proof\n" ++ consumer.text ++ "end Consumed\n"
+    proved := ["g_proof", "g_sound", "consumer"]
+    consumers := [consumer] }
 
 def run (work : System.FilePath) : IO Unit := do
-  accepted work "honest" "theorem g_sound : gGoal := rfl"
-  refused work "proposition" "theorem g_sound : mark = mark := rfl"
-    "Challenge and solution theorem statement do not match: 'Fixture.g_sound'"
-  -- the solution is exported by its published names: the exporter does not find the name
-  refused work "missing" "theorem other : gGoal := rfl"
-    "Constant Fixture.g_sound not found in environment"
-  refused work "axiom"
+  let project ← IO.FS.realPath work
+  let project := projectOf project
+  let honest ← startModule work "Honest" (pair "Honest" "theorem g_sound : gGoal := rfl")
+  let proposition ← refused work "Proposition" "theorem g_sound : mark = mark := rfl"
+    "Challenge and solution theorem statement do not match: 'Proposition.g_sound'"
+  -- the solution is exported by the names that the judgment is of: the exporter does not
+  -- find the name
+  let missing ← refused work "Missing" "theorem other : gGoal := rfl"
+    "Constant Missing.g_sound not found in environment"
+  let axiom_ ← refused work "Axiom"
     "axiom extra : True\ntheorem helper : True := extra\ntheorem g_sound : gGoal := (fun _ : True => rfl) helper"
-    "Illegal axiom detected: 'Fixture.extra'"
-  refused work "unchecked"
+    "Illegal axiom detected: 'Axiom.extra'"
+  let unchecked ← refused work "Unchecked"
     "set_option «debug».skipKernelTC true in\ntheorem g_sound : gGoal := by\n  show (0 : Nat) = 1\n  decide +kernel"
     "kernel rejected the solution" (proposition := "(0 : Nat) = 1")
-  written work
+  -- what the writer writes over: its statements and its challenge, the exported challenge,
+  -- the verdict and the mark of a settled project, the list of the pairs to judge, and under a
+  -- recipe the statements of another pair in the recipe's folder
+  let shared ← (← IO.getEnv "ZKC_SUBJECTS").mapM fun folder => IO.FS.realPath folder
+  let noted := shared.getD project / "accepted.txt"
+  let trueStatements (name : String) := (pair name "" "True").statements
+  let targets := [(project / "Writer" / "Stated.lean", trueStatements "Writer"),
+    (project / "Writer" / "Challenge.lean", "import Writer.Stated\ntheorem Writer.g_sound : True := by sorry\n"),
+    (project / "exports" / "WriterAlone.challenge.ndjson", ""),
+    (project / "WriterAlone.verdict", "accepted"), (project / "settled", ""),
+    (noted, "Writer.Challenge\tWriter\tWriter.g_sound\n")] ++
+    (shared.map fun folder => (folder / "Honest" / "Stated.lean", trueStatements "Honest")).toList
+  let writerPair := pair "Writer" (writer targets) "(0 : Nat) = 1"
+  let writing ← readOutside work "Writer" writerPair
+  let forgedPair := pair "Forged" "axiom cheat : False\ntheorem g_sound : gGoal := cheat.elim" "(0 : Nat) = 1"
+  let forging ← readOutside work "Forged" forgedPair
+  let forgerLean ← startLakeLean work "Forger" forger
+  let consuming ← refusedOutside work "a false consumer after a text that turns the kernel's check off"
+    "Consumed" consumed ["kernel rejected the solution"]
+
+  let honestPair := pair "Honest" "theorem g_sound : gGoal := rfl"
+  let notedBefore ← IO.FS.readFile noted
+
+  let _ ← honest
+  proposition
+  missing
+  axiom_
+  unchecked
+  -- the writer: Lean read it, every write failed, and the files are as the check wrote them
+  let wrote ← writing
+  unless wrote.lean.2.contains s!"writes that failed: {targets.length}" do
+    throw (IO.userError s!"a text wrote a file outside the objects of its project\n{wrote.lean.2}")
+  unless (← IO.FS.readFile (project / "Writer" / "Stated.lean")) == writerPair.statements do
+    throw (IO.userError "a text changed its statements")
+  unless (← IO.FS.readFile (project / "Writer" / "Challenge.lean")) == writerPair.challenge do
+    throw (IO.userError "a text changed its challenge")
+  unless (← IO.FS.readFile noted) == notedBefore do
+    throw (IO.userError "a text changed the list of the pairs to judge")
+  if let some folder := shared then
+    unless (← IO.FS.readFile (folder / "Honest" / "Stated.lean")) == honestPair.statements do
+      throw (IO.userError "a text changed the statements of a pair in the recipe's folder")
+  wrote.refused "a text that writes over what it is judged by" "Writer" ["Illegal axiom detected: 'Writer.cheat'"]
+  -- the forger: the objects of the pair are replaced, and the pair is refused all the same
+  let (forgerOk, forgerSaid) ← forgerLean
+  unless forgerOk && forgerSaid.contains "objects replaced: 0 0" do
+    throw (IO.userError s!"the objects of a pair were not replaced: the control tests nothing\n{forgerSaid}")
+  (← forging).refused "the objects of a pair replaced by another text" "Forged"
+    ["Const does not match between challenge and target 'Forged.gGoal'"]
+  consuming
   IO.println ("The judgment accepts the pair that is as stated, and refuses a proof of another " ++
     "proposition under the published name, a proof module without the published theorem, a " ++
     "theorem that rests on an axiom through another theorem, and a false proposition proved " ++
-    "with the kernel's check turned off, each with its reason; a text that writes beside its " ++
-    "project and over its challenge is stopped by the sandbox in which the comparator builds " ++
-    "it, and the files are as the check wrote them.")
+    "with the kernel's check turned off, each with its reason; a text that writes over its " ++
+    "statements, its challenge, the exported challenge and the verdict has every write fail " ++
+    "and is refused for its axiom; a pair whose objects another text replaced is refused, " ++
+    "since its challenge was exported before any text was read; a consumer that a check " ++
+    "wrote after a text is judged with the published theorems.")
 
 end OutsideReading
 

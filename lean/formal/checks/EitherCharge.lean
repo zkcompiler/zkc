@@ -44,7 +44,7 @@ the draw in each). The walk goes into each block as it goes into an arm: the gua
 draw of a block is where a walk that computed a block as one instruction was stuck. Its text
 is in this check.
 
-Every module that the check accepts is also judged (`startModule`): `lake comparator` builds
+Every module that the check accepts is also judged (`startModule`): `lake comparator` judges
 it against the module of its statements and its challenge, which hold no text, and its
 published theorems have the statements of the challenge and pass the kernel. One control is of
 that judgment: a text that turns the kernel's check off and proves a false bound, on a source

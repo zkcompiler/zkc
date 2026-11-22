@@ -323,29 +323,34 @@ def proofText (guarded : String) : String :=
   "      serveLaws_permitted _ _ (StandardModel.draws_permitted data)⟩, by kernel_rfl⟩\n\n" ++
   "end\n"
 
-def consumer : String :=
-  "noncomputable section\n" ++
-  "open ZkcFormal.Written.StandardModel\n" ++
-  "open ZkcFormal.Written.FiniteModel (data)\n\n" ++
-  "theorem consumer {a : Admitted V} (admitted : admit stored association = .ok a) :\n" ++
-  "    ∃ root : Member a.program.headers.protocols rootHeader,\n" ++
-  "      a.program.findProtocol rootKey = some ⟨rootHeader, root⟩ ∧\n" ++
-  "      ∃ relation : Member a.program.headers.fns soundHeader,\n" ++
-  "        a.program.find soundKey = some (.fn relation) ∧\n" ++
-  "        (functionResult (t := .bool)\n" ++
-  "            (fnMeaning (model data) a.program relation (.cons false .nil)) = some false →\n" ++
-  "          Pr{let out ← (simulateQ (handlerOf (serveLaws (model data) (draws data))) (embed\n" ++
-  "              (roleMeaning (model data) a.program root 1 []\n" ++
-  "                (.cons false (.cons true .nil))))).run.run ()}[\n" ++
-  "            ∃ results, out.1 = some (.inl results)] ≤ 0) := by\n" ++
-  "  have free : soundCaps.total = 0 := by\n" ++
-  "    rw [CapTable.total, sound_budget]\n    simp [toProbability]\n" ++
-  "  obtain ⟨root, found, relation, foundRelation, claim⟩ := sound_sound admitted\n" ++
-  "  refine ⟨root, found, relation, foundRelation, fun rejected => ?_⟩\n" ++
-  "  rw [← free]\n" ++
-  "  simpa using claim data [] false trivial true trivial rejected _ (serveLaws (model data) (draws data))\n" ++
-  "    ⟨serveLaws_follows _ _, serveLaws_permitted _ _ (StandardModel.draws_permitted data)⟩ ()\n\n" ++
-  "end\n"
+def consumer : Consumer where
+  name := "consumer"
+  before :=
+    "noncomputable section\n" ++
+    "open ZkcFormal.Written.StandardModel\n" ++
+    "open ZkcFormal.Written.FiniteModel (data)\n\n"
+  signature :=
+    "theorem consumer {a : Admitted V} (admitted : admit stored association = .ok a) :\n" ++
+    "    ∃ root : Member a.program.headers.protocols rootHeader,\n" ++
+    "      a.program.findProtocol rootKey = some ⟨rootHeader, root⟩ ∧\n" ++
+    "      ∃ relation : Member a.program.headers.fns soundHeader,\n" ++
+    "        a.program.find soundKey = some (.fn relation) ∧\n" ++
+    "        (functionResult (t := .bool)\n" ++
+    "            (fnMeaning (model data) a.program relation (.cons false .nil)) = some false →\n" ++
+    "          Pr{let out ← (simulateQ (handlerOf (serveLaws (model data) (draws data))) (embed\n" ++
+    "              (roleMeaning (model data) a.program root 1 []\n" ++
+    "                (.cons false (.cons true .nil))))).run.run ()}[\n" ++
+    "            ∃ results, out.1 = some (.inl results)] ≤ 0)"
+  proof :=
+    "by\n" ++
+    "  have free : soundCaps.total = 0 := by\n" ++
+    "    rw [CapTable.total, sound_budget]\n    simp [toProbability]\n" ++
+    "  obtain ⟨root, found, relation, foundRelation, claim⟩ := sound_sound admitted\n" ++
+    "  refine ⟨root, found, relation, foundRelation, fun rejected => ?_⟩\n" ++
+    "  rw [← free]\n" ++
+    "  simpa using claim data [] false trivial true trivial rejected _ (serveLaws (model data) (draws data))\n" ++
+    "    ⟨serveLaws_follows _ _, serveLaws_permitted _ _ (StandardModel.draws_permitted data)⟩ ()"
+  after := "\nend\n"
 
 /-- The proof module of a source, as the generator assembles it for a text that does not walk:
 the package of its claims, what the generator writes around the proofs, the proofs and the
@@ -358,7 +363,7 @@ def proofModule (name text guarded : String)
     { text := ← IO.ofExcept (alter s (proofText guarded))
       theorems := ["sound_installed", "sound_witnessed"]
       method := .direct }
-    (walks := false) (after := { text := consumer, theorems := ["consumer"] }))
+    (walks := false) (after := [consumer]))
 
 /-- The proof of the claim under another name, so that a control can state `sound_installed`
 itself. -/
