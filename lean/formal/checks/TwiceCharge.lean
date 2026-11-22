@@ -49,6 +49,11 @@ A third module is of a root that applies `Round` in the body of a loop of three 
 goes into the application at the path of the iteration, and the fee of the callee's draw is
 within the cap that the table gives it under that iteration.
 
+A fourth module is of a root that applies `Round` and then a protocol of the prover alone
+(`Aside`). `Round` is then the second protocol before the root, and its entry equation is of
+that place; in the application of the prover's protocol the verifier plays no role, its
+program there has no effect, and the walk passes it as any other instruction.
+
 One control is refused by Lean, at the place that the check names and at no other: the charge
 of the draw halved in the source. The program is what it was; the cap that the table gives the
 draw through the application is one eighth, and the fee of one quarter that the text pays at
@@ -147,6 +152,47 @@ def loopedText : String :=
   "  looped_witnessed_of Zkc.Formal.Written.FiniteModel.data false trivial\n" ++
   "    (looped_relation _ false)\n\nend\n"
 
+/-- A root that applies `Round` and then a protocol of the prover alone. `Round` is then not
+the last protocol before the root, and in the second application the verifier plays no role. -/
+def asideSource : String :=
+  round "1 / 4" ++
+  "protocol Keep roles(P)(x: index<4> @P) -> y: index<4> @P:\n    return x\n" ++
+  "protocol Aside roles(P, V)(claim: bool @(P, V), first: index<4> @P):\n" ++
+  "    a <- Round(first)\n    k <- Keep(first)\n" ++
+  "    guard @V claim or a.hit\n" ++
+  "spec for Aside:\n    proves @V Holds(claim)\n" ++
+  "scheme Checked = Aside:\n    prover P\n    construction interactive\n" ++
+  "goal aside = soundness(Checked, stage = written)\n"
+
+/-- The text of that root: one application of `Round`, as in `Twice`; the walk passes the
+application of the prover's protocol as it passes any instruction without an effect. -/
+def asideText : String :=
+  "noncomputable section\n\n" ++
+  "theorem aside_relation {F G : Type} (D : StandardModel.Data F G) [DecidableEq F]\n" ++
+  "    [DecidableEq G] (claim : Bool) :\n" ++
+  "    functionResult (t := .bool)\n" ++
+  "      (fnMeaning (StandardModel.model D) installed asideMember (.cons claim .nil)) =\n" ++
+  "        some claim := by\n  kernel_rfl\n\n" ++
+  "theorem same_law {F G : Type} (D : StandardModel.Data F G) [DecidableEq F] [DecidableEq G]\n" ++
+  "    (a b : ℕ) :\n" ++
+  "    fnMeaning (StandardModel.model D) calleeProgram sameMember (.cons a (.cons b .nil)) =\n" ++
+  "      .done (.cons (a.beq b) .nil) := by\n" ++
+  "  refine done_of_judged ?_\n  repeat walk_step\n  subst_vars\n  rfl\n\n" ++
+  "theorem aside_judged : asideJudged := by\n" ++
+  "  claim_intro\n" ++
+  "  obtain rfl : input_claim = false :=\n" ++
+  "    Option.some.inj ((aside_relation D input_claim).symm.trans rejected)\n" ++
+  "  walk_free as sent\n" ++
+  "  walk_pay (1 / 4) excluding (fun drawn : ℕ => drawn = sent) as drawn differs\n" ++
+  "  case weight => simpa using prEvent_drawPosition_eq_le 3 sent\n" ++
+  "  walk\n  walk_law same_law D drawn sent\n" ++
+  "  -- the application of `Keep` is passed, and the guard of the root is met\n" ++
+  "  walk as hit\n" ++
+  "  exact differs (Nat.eq_of_beq_eq_true hit)\n\n" ++
+  "theorem aside_witnessed : asideWitnessed :=\n" ++
+  "  aside_witnessed_of Zkc.Formal.Written.FiniteModel.data false trivial\n" ++
+  "    (aside_relation _ false)\n\nend\n"
+
 /-- A theorem after the text of `Twice` that walks a hypothesis: a judgment of the verifier is
 given, and the walk goes through the first application on it. The judgment is any judgment with
 fees that reads no peer of an effect, which the theorem states as a hypothesis; the walk takes
@@ -236,6 +282,17 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
   let loopedModule ← looped.module "Looped" { text := loopedText, theorems := ofText "looped" }
   let loopedProof ← startLakeLean work "Looped" loopedModule.text
 
+  -- The root beside a protocol of the prover alone: one application of `Round`, which is the
+  -- second protocol before the root, and one in which the verifier takes no part.
+  let aside ← read asideSource (reading "aside" #["claim", "first"])
+  let asideGoal ← aside.goal
+  unless asideGoal.total == 1 / 4 do
+    throw (IO.userError s!"the table of the root beside a protocol is not one draw: {repr asideGoal.caps}")
+  let asideModule ← aside.module "Aside" { text := asideText, theorems := ofText "aside" }
+  unless (asideModule.text.splitOn "(Member.tail Member.head)").length > 1 do
+    throw (IO.userError "the protocol that the root applies first is the last before the root")
+  let asideProof ← startLakeLean work "Aside" asideModule.text
+
   let _ ← check work "Twice" written
     { text := template ++ converseText, theorems := ofText "twice" ++ ["twice_pays_first"] }
     [halvedControl]
@@ -243,11 +300,14 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
   acceptedOutput "Nested" ok output nestedModule.theorems allowed
   let (ok, output) ← finishLean loopedProof
   acceptedOutput "Looped" ok output loopedModule.theorems allowed
+  let (ok, output) ← finishLean asideProof
+  acceptedOutput "Aside" ok output asideModule.theorems allowed
   IO.println ("Twice is judged within the table of caps of its goal (the draw of the protocol " ++
     "that it applies at 1/4, under two applications: 1/2), with the call of a function inside " ++
     "the callee taken by a law stated before the root; a root that applies a protocol that " ++
     "applies it, with the roles in the other order, is judged by the same text, and a root " ++
-    "that applies it in the body of a loop by an invariant; " ++
+    "that applies it in the body of a loop by an invariant, and a root that applies it and " ++
+    "then a protocol of the prover alone; " ++
     "1 of 1 control refused, at the place that the check names and at no other.")
 
 end TwiceCharge

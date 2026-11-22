@@ -833,9 +833,10 @@ rule of the walk is the same in the callee as in the root.
 
 Nothing is returned, and the instruction is then computed as any other, where the instruction
 applies no protocol, where the semantics is not that of a role over the tables of a program,
-or where no labelled theorem says that the judgment reads no peer. Under a judgment that reads
-no peer, an application whose callee has no labelled entry equation is an error: the module of
-statements is then not the module of this program. -/
+where the role plays no role of the callee (its program there has no effect), or where no
+theorem or hypothesis says that the judgment reads no peer. Under a judgment that reads no
+peer, an application in which the role takes part and whose callee has no labelled entry
+equation is an error: the module of statements is then not the module of this program. -/
 private def enterApplication (goal : MVarId) (j : Judged) (bound why instr sem key path env : Expr) :
     MetaM (Option MVarId) := goal.withContext do
   -- the instruction: an operation that applies a protocol to operands
@@ -876,6 +877,10 @@ private def enterApplication (goal : MVarId) (j : Judged) (bound why instr sem k
   let m := ca.size
   let (header, member, played, calleePath, given) :=
     (ca[m - 5]!, ca[m - 4]!, ca[m - 3]!, ca[m - 2]!, ca[m - 1]!)
+  -- a role that plays no role of the callee takes no part in the application: its program
+  -- there has no effect, and the instruction is computed as any other
+  let plays ← kernelWhnf (← mkAppM ``List.elem #[role, roles])
+  unless plays.isConstOf ``Bool.true do return none
   -- the judgment reads no peer
   let a := j.fn.getAppArgs
   let (judgment, done, halt) := (a[4]!, a[5]!, a[6]!)
