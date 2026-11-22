@@ -157,14 +157,19 @@ def unsettled (project : System.FilePath) (what : String) : IO Unit := do
       "and every judgment expected, before the first asking (a project is not used twice)"))
 
 /-- A module added to a project: its file written, and its name noted. A module that the
-project has is written again. -/
+project has is added again only as what it is, with the same source: another source or kind
+under a name that the project has would replace a module that something else rests on. -/
 def add (project : System.FilePath) (module : Name) (source : String) (kind : Kind := .module) :
     IO System.FilePath := do
   unsettled project s!"the module {module} is added"
   let file := fileOf module
+  if let some (had, _) := (← modules project).find? (·.2 == module) then
+    unless had == kind && (← IO.FS.readFile (project / file)) == source do
+      throw (IO.userError s!"the project {project} has another module named {module}")
+    return file
   if let some folder := (project / file).parent then IO.FS.createDirAll folder
   IO.FS.writeFile (project / file) source
-  unless (← modules project).any (·.2 == module) do
+  do
     let handle ← IO.FS.Handle.mk (project / "modules.txt") .append
     handle.putStr s!"{kind.word}\t{module}\n"
   return file
