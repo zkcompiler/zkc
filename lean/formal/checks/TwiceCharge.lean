@@ -502,6 +502,12 @@ def shape (caps : CapTable) : List (List (Nat × Nat × Nat) × List (Nat × Nat
     (use.draws.map fun draw => (draw.numerator, draw.denominator, draw.count),
       use.calls.map fun call => (call.callee, call.count))
 
+/-- Whether what a use adds up is one choice of two arms, a charged draw in each, and nothing
+after it. -/
+def twoArms : Tally Cap → Bool
+  | .choice (.item (.draw _) .nil) (.item (.draw _) .nil) .nil => true
+  | _ => false
+
 def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
   let template ← IO.FS.readFile template
   let written ← read (source "1 / 4") (reading "twice")
@@ -640,7 +646,9 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
   let forked ← read (forkedSource) (reading "forked" #["claim", "side", "first", "second"])
   let forkedGoal ← forked.goal
   unless forkedGoal.total == 1 / 2 && shape forkedGoal.caps ==
-      [([(1, 4, 1)], []), ([(1, 4, 1), (1, 4, 1)], []), ([], [(0, 1), (1, 1)])] do
+      [([(1, 4, 1)], []), ([(1, 4, 1), (1, 4, 1)], []), ([], [(0, 1), (1, 1)])] &&
+      -- the two draws of `Pick` are the two arms of a choice, with nothing after it
+      (forkedGoal.caps.uses.map fun use => twoArms use.caps) == [false, true, false] do
     throw (IO.userError s!"the table of the forked root is not three draws under two applications, with the larger arm of the choice: {repr forkedGoal.caps}")
   -- The comparison of one arm of `Pick` turned: the walk is what it was, and the text is
   -- refused at the end of that arm, where the guard no longer says that the draw is the

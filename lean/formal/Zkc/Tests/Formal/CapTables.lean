@@ -262,13 +262,80 @@ example : (⟨[⟨⟨2⟩, .choice (.item (.draw ⟨⟨0⟩, 3, 8, 1⟩) .nil) .
   decide +kernel
 example : choiceCaps.ratio = 1 := by decide +kernel
 
--- the tally of a stored body has the operations that are counted, in their order
-example : (match nested with
-    | .protocol _ _ _ _ body => decide ((body.tally (some 1)).items = body.counted (some 1))
-    | _ => false) = true := by decide +kernel
-example : (match caller with
-    | .protocol _ _ _ _ body => decide ((body.tally (some 1)).items = body.counted (some 1))
-    | _ => false) = true := by decide +kernel
+/-! ### The arms of a table are the program's
+
+`CapTable.counted` holds a table to the arms of the stored body as it holds it to the counts:
+a table with the same draws that adds them up otherwise is not counted. (That the tally of a
+body has the counted operations in their order is a theorem of the core,
+`Region.tally_items`.) -/
+
+/-- A stored body with a choice: a draw of eight in one arm, a draw of four in the other, and a
+draw of two after it. -/
+def chosen : Definition V :=
+  .protocol ⟨2⟩ 2 [⟨.bool, [0, 1]⟩] []
+    (.mk [0] [
+      .choose ⟨0⟩ [0, 1] 0 []
+        (.mk [] [.op ⟨1⟩ [2] (.event (.given (.coin (.uniform (.fin 8))) 1 [0]) (.fin 8)) []] [])
+        (.mk [] [.op ⟨2⟩ [3] (.event (.given (.coin (.uniform (.fin 4))) 1 [0]) (.fin 4)) []] []),
+      .op ⟨3⟩ [4] (.event (.given (.coin (.uniform (.fin 2))) 1 [0]) (.fin 2)) []] [])
+
+def eighth : DrawCap := ⟨⟨1⟩, 1, 8, 1⟩
+def quarter : DrawCap := ⟨⟨2⟩, 1, 4, 1⟩
+def half : DrawCap := ⟨⟨3⟩, 1, 2, 1⟩
+
+/-- A table of `chosen` with one use. -/
+def chosenTable (caps : Core.Tally Zkc.Frontend.Written.Cap) : CapTable := ⟨[⟨⟨2⟩, caps⟩]⟩
+
+-- the table as the program has it: the larger arm and the draw after it
+example : (chosenTable (.choice (.item (.draw eighth) .nil) (.item (.draw quarter) .nil)
+    (.item (.draw half) .nil))).counted ⟨[chosen]⟩ ⟨2⟩ = true := by decide +kernel
+example : (chosenTable (.choice (.item (.draw eighth) .nil) (.item (.draw quarter) .nil)
+    (.item (.draw half) .nil))).budget = 3 / 4 := by decide +kernel
+-- the draws in a sequence: the arms added (7/8)
+example : (⟨[.flat ⟨2⟩ [eighth, quarter, half] []]⟩ : CapTable).counted ⟨[chosen]⟩ ⟨2⟩ = false := by
+  decide +kernel
+-- the arms exchanged: the same total, and another structure
+example : (chosenTable (.choice (.item (.draw quarter) .nil) (.item (.draw eighth) .nil)
+    (.item (.draw half) .nil))).counted ⟨[chosen]⟩ ⟨2⟩ = false := by decide +kernel
+-- the draw after the choice in a choice with it: 1/2, below what a run can cost
+example : (chosenTable (.choice (.choice (.item (.draw eighth) .nil) (.item (.draw quarter) .nil) .nil)
+    (.item (.draw half) .nil) .nil)).counted ⟨[chosen]⟩ ⟨2⟩ = false := by decide +kernel
+example : (chosenTable (.choice (.choice (.item (.draw eighth) .nil) (.item (.draw quarter) .nil) .nil)
+    (.item (.draw half) .nil) .nil)).budget = 1 / 2 := by decide +kernel
+-- the draw after the choice moved into its second arm
+example : (chosenTable (.choice (.item (.draw eighth) .nil)
+    (.item (.draw quarter) (.item (.draw half) .nil)) .nil)).counted ⟨[chosen]⟩ ⟨2⟩ = false := by
+  decide +kernel
+-- a draw that the table does not charge leaves its arm empty: which draws are charged is the
+-- source's, and the table is held to the structure of those that it charges
+example : (chosenTable (.choice .nil (.item (.draw quarter) .nil)
+    (.item (.draw half) .nil))).counted ⟨[chosen]⟩ ⟨2⟩ = true := by decide +kernel
+-- the empty arm left out, or on the other side: the same total, refused
+example : (chosenTable (.item (.draw quarter) (.item (.draw half) .nil))).counted ⟨[chosen]⟩ ⟨2⟩ = false := by
+  decide +kernel
+example : (chosenTable (.choice (.item (.draw quarter) .nil) .nil
+    (.item (.draw half) .nil))).counted ⟨[chosen]⟩ ⟨2⟩ = false := by decide +kernel
+
+/-- A stored body with a case analysis of three arms: a draw of eight, nothing, a draw of two. -/
+def cased : Definition V :=
+  .protocol ⟨2⟩ 2 [⟨.bool, [0, 1]⟩] []
+    (.mk [0] [
+      .cases ⟨0⟩ [0, 1] 0 [] [
+        .mk [] [.op ⟨1⟩ [2] (.event (.given (.coin (.uniform (.fin 8))) 1 [0]) (.fin 8)) []] [],
+        .mk [] [] [],
+        .mk [] [.op ⟨3⟩ [3] (.event (.given (.coin (.uniform (.fin 2))) 1 [0]) (.fin 2)) []] []]] [])
+
+-- three arms nest: the first, or the choice of the others; the total is the largest arm
+example : (chosenTable (.choice (.item (.draw eighth) .nil)
+    (.choice .nil (.choice (.item (.draw half) .nil) .nil .nil) .nil) .nil)).counted ⟨[cased]⟩ ⟨2⟩ = true := by
+  decide +kernel
+example : (chosenTable (.choice (.item (.draw eighth) .nil)
+    (.choice .nil (.choice (.item (.draw half) .nil) .nil .nil) .nil) .nil)).budget = 1 / 2 := by
+  decide +kernel
+-- the arms added (5/8), and the three arms written as two (the same total): refused
+example : (⟨[.flat ⟨2⟩ [eighth, half] []]⟩ : CapTable).counted ⟨[cased]⟩ ⟨2⟩ = false := by decide +kernel
+example : (chosenTable (.choice (.item (.draw eighth) .nil) (.item (.draw half) .nil) .nil)).counted
+    ⟨[cased]⟩ ⟨2⟩ = false := by decide +kernel
 
 -- a ceiling: the budget of a table against a ratio of naturals, by the kernel
 example : callsCaps.total ≤ ((3 : ℕ) : ℝ≥0∞) / (4 : ℕ) :=

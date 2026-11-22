@@ -132,6 +132,13 @@ def filterMap (f : α → Option β) : Tally α → Tally β
     | .nil, .nil => rest.filterMap f
     | keptLeft, keptRight => .choice keptLeft keptRight (rest.filterMap f)
 
+/-- The items of one tally and then another are the items of both. -/
+theorem items_append (a b : Tally α) : (a.append b).items = a.items ++ b.items := by
+  induction a with
+  | nil => rfl
+  | item x rest ih => simp [append, items, ih]
+  | choice left right rest _ _ ih => simp [append, items, ih]
+
 /-- What a tally adds up to at most along one run: the values of its items in sequence, and at
 a choice the larger of its two arms. -/
 def total [Zero β] [Add β] [Max β] (value : α → β) : Tally α → β
@@ -168,6 +175,45 @@ mutual
   def Region.tallyOfArms : List (Region Op Who) → Option Nat → Tally (Key × Op × Option Nat)
     | [], _ => .nil
     | region :: rest, times => .choice (region.tally times) (Region.tallyOfArms rest times) .nil
+end
+
+mutual
+  /-- **The items of the tally of an instruction are its counted operations**, in their order:
+  the tally is the same reading of the body with the arms kept apart. -/
+  theorem Instruction.tally_items :
+      (i : Instruction Op Who) → (t : Option Nat) → (i.tally t).items = i.counted t
+    | .op .., _ => rfl
+    | .guard .., _ => rfl
+    | .choose _ _ _ _ a b, t => by
+      simp only [Instruction.tally, Instruction.counted, Tally.items, List.append_nil,
+        Region.tally_items a t, Region.tally_items b t]
+    | .cases _ _ _ _ arms, t => by
+      simp only [Instruction.tally, Instruction.counted]; exact Region.tallyOfArms_items arms t
+    | .loop _ _ _ _ _ body, t => by
+      simp only [Instruction.tally, Instruction.counted]; exact Region.tally_items body _
+    | .block _ _ _ body, t => by
+      simp only [Instruction.tally, Instruction.counted]; exact Region.tally_items body _
+    | .attempt _ _ _ body, _ => by
+      simp only [Instruction.tally, Instruction.counted]; exact Region.tally_items body _
+  /-- The items of the tally of a region are its counted operations. -/
+  theorem Region.tally_items :
+      (r : Region Op Who) → (t : Option Nat) → (r.tally t).items = r.counted t
+    | .mk _ body _, t => by
+      simp only [Region.tally, Region.counted]; exact Instruction.tallyOfAll_items body t
+  theorem Instruction.tallyOfAll_items :
+      (l : List (Instruction Op Who)) → (t : Option Nat) →
+        (Instruction.tallyOfAll l t).items = Instruction.countedAll l t
+    | [], _ => rfl
+    | i :: rest, t => by
+      simp only [Instruction.tallyOfAll, Instruction.countedAll, Tally.items_append,
+        Instruction.tally_items i t, Instruction.tallyOfAll_items rest t]
+  theorem Region.tallyOfArms_items :
+      (l : List (Region Op Who)) → (t : Option Nat) →
+        (Region.tallyOfArms l t).items = Region.countedAll l t
+    | [], _ => rfl
+    | r :: rest, t => by
+      simp only [Region.tallyOfArms, Region.countedAll, Tally.items, List.append_nil,
+        Region.tally_items r t, Region.tallyOfArms_items rest t]
 end
 
 end

@@ -592,7 +592,7 @@ def counts (s : Statements) : String :=
   String.join (s.claims.goals.map fun goal =>
     let name := goal.goal
     let total := goal.total
-    s!"/-- The counts of the table of caps of `{name}` are those of the stored program. -/\n" ++
+    s!"/-- The table of caps of `{name}` adds up as the stored program does: its counts and its arms are the program's. -/\n" ++
     s!"theorem {name}_counted : {name}Caps.counted stored rootKey = true := by decide +kernel\n\n" ++
     s!"/-- The budget of the table of caps of `{name}`: the number that the frontend computed. -/\n" ++
     s!"theorem {name}_budget : {name}Caps.budget = (({total.num.toNat} : ℕ) : ℚ≥0) / ({total.den} : ℕ) := by\n" ++
