@@ -159,7 +159,7 @@ def run (corpus template : System.FilePath) (work : System.FilePath) : IO Unit :
   -- The tables of caps, as the frontend read them: the one draw of the root, once, at the
   -- charge of each goal's tolerance.
   unless (tables written).map (·.2.2) ==
-      [⟨[⟨⟨1⟩, [⟨⟨0⟩, 3, 8, 1⟩], []⟩]⟩, ⟨[⟨⟨1⟩, [⟨⟨0⟩, 3, 4, 1⟩], []⟩]⟩] do
+      [⟨[(.flat ⟨1⟩ [⟨⟨0⟩, 3, 8, 1⟩] [])]⟩, ⟨[(.flat ⟨1⟩ [⟨⟨0⟩, 3, 4, 1⟩] [])]⟩] do
     throw (IO.userError s!"the tables of caps are not the draw of the root at 3/8 and at 3/4: {repr ((tables written).map (·.2.2))}")
 
   -- The roster reversed: the verifier is the first role, and the key of the root is as it was.
@@ -233,10 +233,10 @@ def run (corpus template : System.FilePath) (work : System.FilePath) : IO Unit :
     if tables control == tables written then
       throw (IO.userError s!"the charge {title}: the tables of caps are what they were")
   unless (tables small).map (·.2.2) ==
-      [⟨[⟨⟨1⟩, [⟨⟨0⟩, 1, 4, 1⟩], []⟩]⟩, ⟨[⟨⟨1⟩, [⟨⟨0⟩, 5, 8, 1⟩], []⟩]⟩] do
+      [⟨[(.flat ⟨1⟩ [⟨⟨0⟩, 1, 4, 1⟩] [])]⟩, ⟨[(.flat ⟨1⟩ [⟨⟨0⟩, 5, 8, 1⟩] [])]⟩] do
     throw (IO.userError "the smaller charge is not 1/4 and 5/8 at the draw")
   for control in [elsewhere, foreign] do
-    unless (tables control).all (·.2.2 == ⟨[⟨⟨1⟩, [], []⟩]⟩) do
+    unless (tables control).all (·.2.2 == ⟨[(.flat ⟨1⟩ [] [])]⟩) do
       throw (IO.userError s!"a charge that is not on the draw of the root gave a cap: {repr ((tables control).map (·.2.2))}")
   -- A row outside the table of the model, inside the loop of the relation: the power of a field
   -- element, which the standard model gives a constant.

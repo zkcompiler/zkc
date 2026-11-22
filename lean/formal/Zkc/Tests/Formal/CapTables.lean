@@ -138,24 +138,24 @@ example : stepped.occurrences ⟨1⟩ =
 /-! ## The counts of a table -/
 
 /-- The table of the guessing protocol: the draw at key 3, one eighth, three times. -/
-def guessCaps : CapTable := ⟨[⟨⟨0⟩, [⟨⟨3⟩, 1, 8, 3⟩], []⟩]⟩
+def guessCaps : CapTable := ⟨[(.flat ⟨0⟩ [⟨⟨3⟩, 1, 8, 3⟩] [])]⟩
 
 /-- The table of the nested rounds: the draw at key 4, one eighth, six times. -/
-def nestedCaps : CapTable := ⟨[⟨⟨1⟩, [⟨⟨4⟩, 1, 8, 6⟩], []⟩]⟩
+def nestedCaps : CapTable := ⟨[(.flat ⟨1⟩ [⟨⟨4⟩, 1, 8, 6⟩] [])]⟩
 
 /-- The table of the caller: the callee's use with its draw at one eighth, and the caller's use
 with its own draw at one quarter and its two calls, once and three times. -/
 def callsCaps : CapTable :=
-  ⟨[⟨⟨1⟩, [⟨⟨1⟩, 1, 8, 1⟩], []⟩, ⟨⟨2⟩, [⟨⟨6⟩, 1, 4, 1⟩], [⟨⟨0⟩, 1, 0⟩, ⟨⟨2⟩, 3, 0⟩]⟩]⟩
+  ⟨[(.flat ⟨1⟩ [⟨⟨1⟩, 1, 8, 1⟩] []), (.ordered ⟨2⟩ [.call ⟨⟨0⟩, 1, 0⟩, .call ⟨⟨2⟩, 3, 0⟩, .draw ⟨⟨6⟩, 1, 4, 1⟩])]⟩
 
 /-- The same caller with the callee at two proof arguments: the first call's use has the cap
 three eighths, the second's one quarter. -/
 def twoUses (first second : Nat) : CapTable :=
-  ⟨[⟨⟨1⟩, [⟨⟨1⟩, 3, 8, 1⟩], []⟩, ⟨⟨1⟩, [⟨⟨1⟩, 1, 4, 1⟩], []⟩,
-    ⟨⟨2⟩, [⟨⟨6⟩, 1, 4, 1⟩], [⟨⟨0⟩, 1, first⟩, ⟨⟨2⟩, 3, second⟩]⟩]⟩
+  ⟨[(.flat ⟨1⟩ [⟨⟨1⟩, 3, 8, 1⟩] []), (.flat ⟨1⟩ [⟨⟨1⟩, 1, 4, 1⟩] []),
+    (.ordered ⟨2⟩ [.call ⟨⟨0⟩, 1, first⟩, .call ⟨⟨2⟩, 3, second⟩, .draw ⟨⟨6⟩, 1, 4, 1⟩])]⟩
 
 def steppedCaps : CapTable :=
-  ⟨[⟨⟨1⟩, [⟨⟨0⟩, 1, 2, 1⟩, ⟨⟨2⟩, 1, 2, 1⟩, ⟨⟨4⟩, 1, 2, 1⟩], []⟩]⟩
+  ⟨[(.flat ⟨1⟩ [⟨⟨0⟩, 1, 2, 1⟩, ⟨⟨2⟩, 1, 2, 1⟩, ⟨⟨4⟩, 1, 2, 1⟩] [])]⟩
 
 example : guessCaps.counted guess ⟨0⟩ = true := by decide +kernel
 example : nestedCaps.counted ⟨[nested]⟩ ⟨1⟩ = true := by decide +kernel
@@ -165,24 +165,24 @@ example : (twoUses 1 0).counted calls ⟨2⟩ = true := by decide +kernel
 example : steppedCaps.counted stepped ⟨1⟩ = true := by decide +kernel
 
 -- another count
-example : (⟨[⟨⟨0⟩, [⟨⟨3⟩, 1, 8, 2⟩], []⟩]⟩ : CapTable).counted guess ⟨0⟩ = false := by decide +kernel
-example : (⟨[⟨⟨1⟩, [⟨⟨4⟩, 1, 8, 5⟩], []⟩]⟩ : CapTable).counted ⟨[nested]⟩ ⟨1⟩ = false := by
+example : (⟨[(.flat ⟨0⟩ [⟨⟨3⟩, 1, 8, 2⟩] [])]⟩ : CapTable).counted guess ⟨0⟩ = false := by decide +kernel
+example : (⟨[(.flat ⟨1⟩ [⟨⟨4⟩, 1, 8, 5⟩] [])]⟩ : CapTable).counted ⟨[nested]⟩ ⟨1⟩ = false := by
   decide +kernel
 -- a cap at the message, and at the guard
-example : (⟨[⟨⟨0⟩, [⟨⟨2⟩, 1, 8, 3⟩], []⟩]⟩ : CapTable).counted guess ⟨0⟩ = false := by decide +kernel
-example : (⟨[⟨⟨0⟩, [⟨⟨11⟩, 1, 8, 1⟩], []⟩]⟩ : CapTable).counted guess ⟨0⟩ = false := by decide +kernel
+example : (⟨[(.flat ⟨0⟩ [⟨⟨2⟩, 1, 8, 3⟩] [])]⟩ : CapTable).counted guess ⟨0⟩ = false := by decide +kernel
+example : (⟨[(.flat ⟨0⟩ [⟨⟨11⟩, 1, 8, 1⟩] [])]⟩ : CapTable).counted guess ⟨0⟩ = false := by decide +kernel
 -- a draw listed twice
-example : (⟨[⟨⟨0⟩, [⟨⟨3⟩, 1, 8, 3⟩, ⟨⟨3⟩, 1, 8, 3⟩], []⟩]⟩ : CapTable).counted guess ⟨0⟩ = false := by
+example : (⟨[(.flat ⟨0⟩ [⟨⟨3⟩, 1, 8, 3⟩, ⟨⟨3⟩, 1, 8, 3⟩] [])]⟩ : CapTable).counted guess ⟨0⟩ = false := by
   decide +kernel
 -- a call that the definition does not make, and a call left out
-example : (⟨[⟨⟨0⟩, [], []⟩, ⟨⟨0⟩, [⟨⟨3⟩, 1, 8, 3⟩], [⟨⟨1⟩, 1, 0⟩]⟩]⟩ : CapTable).counted guess ⟨0⟩ = false := by
+example : (⟨[(.flat ⟨0⟩ [] []), (.flat ⟨0⟩ [⟨⟨3⟩, 1, 8, 3⟩] [⟨⟨1⟩, 1, 0⟩])]⟩ : CapTable).counted guess ⟨0⟩ = false := by
   decide +kernel
-example : (⟨[⟨⟨1⟩, [⟨⟨1⟩, 1, 8, 1⟩], []⟩, ⟨⟨2⟩, [⟨⟨6⟩, 1, 4, 1⟩], [⟨⟨0⟩, 1, 0⟩]⟩]⟩ : CapTable).counted
+example : (⟨[(.flat ⟨1⟩ [⟨⟨1⟩, 1, 8, 1⟩] []), (.ordered ⟨2⟩ [.call ⟨⟨0⟩, 1, 0⟩, .draw ⟨⟨6⟩, 1, 4, 1⟩])]⟩ : CapTable).counted
     calls ⟨2⟩ = false := by decide +kernel
 -- the count of a call, the use of another definition as its callee, a callee that stands later
-example : (⟨[⟨⟨1⟩, [⟨⟨1⟩, 1, 8, 1⟩], []⟩, ⟨⟨2⟩, [⟨⟨6⟩, 1, 4, 1⟩], [⟨⟨0⟩, 1, 0⟩, ⟨⟨2⟩, 2, 0⟩]⟩]⟩ :
+example : (⟨[(.flat ⟨1⟩ [⟨⟨1⟩, 1, 8, 1⟩] []), (.ordered ⟨2⟩ [.call ⟨⟨0⟩, 1, 0⟩, .call ⟨⟨2⟩, 2, 0⟩, .draw ⟨⟨6⟩, 1, 4, 1⟩])]⟩ :
     CapTable).counted calls ⟨2⟩ = false := by decide +kernel
-example : (⟨[⟨⟨1⟩, [⟨⟨1⟩, 1, 8, 1⟩], []⟩, ⟨⟨2⟩, [⟨⟨6⟩, 1, 4, 1⟩], [⟨⟨0⟩, 1, 1⟩, ⟨⟨2⟩, 3, 0⟩]⟩]⟩ :
+example : (⟨[(.flat ⟨1⟩ [⟨⟨1⟩, 1, 8, 1⟩] []), (.ordered ⟨2⟩ [.call ⟨⟨0⟩, 1, 1⟩, .call ⟨⟨2⟩, 3, 0⟩, .draw ⟨⟨6⟩, 1, 4, 1⟩])]⟩ :
     CapTable).counted calls ⟨2⟩ = false := by decide +kernel
 -- the last use is not of the root
 example : callsCaps.counted calls ⟨1⟩ = false := by decide +kernel
@@ -191,11 +191,11 @@ example : callsCaps.counted calls ⟨1⟩ = false := by decide +kernel
 caller's two calls name the uses at the places `first` and `second`; with `callerFirst` the
 caller's use stands before the uses of its callees. -/
 def levelsCaps (first second : Nat) (callerFirst : Bool) : CapTable :=
-  let otherUse : UseCaps := ⟨⟨3⟩, [⟨⟨1⟩, 1, 8, 1⟩], []⟩
-  let onceUse : UseCaps := ⟨⟨1⟩, [⟨⟨1⟩, 1, 8, 1⟩], []⟩
-  let callerUse : UseCaps := ⟨⟨2⟩, [⟨⟨6⟩, 1, 4, 1⟩], [⟨⟨0⟩, 1, first⟩, ⟨⟨2⟩, 3, second⟩]⟩
-  if callerFirst then ⟨[callerUse, otherUse, onceUse, ⟨⟨4⟩, [], [⟨⟨0⟩, 1, 0⟩]⟩]⟩
-  else ⟨[otherUse, onceUse, callerUse, ⟨⟨4⟩, [], [⟨⟨0⟩, 1, 2⟩]⟩]⟩
+  let otherUse : UseCaps := (.flat ⟨3⟩ [⟨⟨1⟩, 1, 8, 1⟩] [])
+  let onceUse : UseCaps := (.flat ⟨1⟩ [⟨⟨1⟩, 1, 8, 1⟩] [])
+  let callerUse : UseCaps := (.ordered ⟨2⟩ [.call ⟨⟨0⟩, 1, first⟩, .call ⟨⟨2⟩, 3, second⟩, .draw ⟨⟨6⟩, 1, 4, 1⟩])
+  if callerFirst then ⟨[callerUse, otherUse, onceUse, (.flat ⟨4⟩ [] [⟨⟨0⟩, 1, 0⟩])]⟩
+  else ⟨[otherUse, onceUse, callerUse, (.flat ⟨4⟩ [] [⟨⟨0⟩, 1, 2⟩])]⟩
 
 -- each call names a use of the definition that it applies, which stands earlier
 example : (levelsCaps 1 1 false).counted levels ⟨4⟩ = true := by decide +kernel
@@ -236,6 +236,39 @@ example : (callsCaps.sites.all fun (site, _, _, count) =>
 example : (nestedCaps.sites.all fun (site, _, _, count) =>
     ((⟨[nested]⟩ : NamedProgram V).occurrences ⟨1⟩).lookup site == some (some count)) = true := by
   decide +kernel
+
+/-! ## A choice: the larger arm
+
+A run takes one arm of a choice, so the total of a use takes the larger arm and not the sum:
+one eighth before the choice, the larger of one quarter and of two eighths with a call of the
+first use (one eighth), and one half after it. -/
+
+def choiceCaps : CapTable :=
+  ⟨[.flat ⟨1⟩ [⟨⟨1⟩, 1, 8, 1⟩] [],
+    ⟨⟨2⟩, .item (.draw ⟨⟨0⟩, 1, 8, 1⟩)
+      (.choice (.item (.draw ⟨⟨2⟩, 1, 4, 1⟩) .nil)
+        (.item (.draw ⟨⟨4⟩, 1, 8, 2⟩) (.item (.call ⟨⟨5⟩, 1, 0⟩) .nil))
+        (.item (.draw ⟨⟨7⟩, 1, 2, 1⟩) .nil))⟩]⟩
+
+-- 1/8 + max (1/4) (2/8 + 1/8) + 1/2
+example : choiceCaps.totals = [1 / 8, 1] := by decide +kernel
+-- the caps and the calls are found in an arm as in a sequence
+example : (choiceCaps.cap ⟨[], ⟨4⟩⟩, choiceCaps.cap ⟨[⟨5⟩], ⟨1⟩⟩) = (1 / 8, 1 / 8) := by decide +kernel
+example : choiceCaps.sites =
+    [(⟨[], ⟨0⟩⟩, 1, 8, 1), (⟨[], ⟨2⟩⟩, 1, 4, 1), (⟨[], ⟨4⟩⟩, 1, 8, 2), (⟨[], ⟨7⟩⟩, 1, 2, 1),
+      (⟨[⟨5⟩], ⟨1⟩⟩, 1, 8, 1)] := by decide +kernel
+-- an arm that is empty adds nothing, and the frontend's number is the library's
+example : (⟨[⟨⟨2⟩, .choice (.item (.draw ⟨⟨0⟩, 3, 8, 1⟩) .nil) .nil .nil⟩]⟩ : CapTable).budget = 3 / 8 := by
+  decide +kernel
+example : choiceCaps.ratio = 1 := by decide +kernel
+
+-- the tally of a stored body has the operations that are counted, in their order
+example : (match nested with
+    | .protocol _ _ _ _ body => decide ((body.tally (some 1)).items = body.counted (some 1))
+    | _ => false) = true := by decide +kernel
+example : (match caller with
+    | .protocol _ _ _ _ body => decide ((body.tally (some 1)).items = body.counted (some 1))
+    | _ => false) = true := by decide +kernel
 
 -- a ceiling: the budget of a table against a ratio of naturals, by the kernel
 example : callsCaps.total ≤ ((3 : ℕ) : ℝ≥0∞) / (4 : ℕ) :=

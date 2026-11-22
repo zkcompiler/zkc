@@ -216,9 +216,13 @@ structure Module where
 def capsTerm (table : CapTable) : String :=
   let draw (d : DrawCap) := s!"⟨⟨{d.key.number}⟩, {d.numerator}, {d.denominator}, {d.count}⟩"
   let call (c : CallCap) := s!"⟨⟨{c.key.number}⟩, {c.count}, {c.callee}⟩"
-  let use (u : UseCaps) :=
-    s!"⟨⟨{u.definition.number}⟩, [{", ".intercalate (u.draws.map draw)}], " ++
-    s!"[{", ".intercalate (u.calls.map call)}]⟩"
+  -- what adds up along a run: an item then the rest, or a choice of two arms then the rest
+  let rec tally : Core.Tally Cap → String
+    | .nil => ".nil"
+    | .item (.draw d) rest => s!"(.item (.draw {draw d}) {tally rest})"
+    | .item (.call c) rest => s!"(.item (.call {call c}) {tally rest})"
+    | .choice left right rest => s!"(.choice {tally left} {tally right} {tally rest})"
+  let use (u : UseCaps) := s!"⟨⟨{u.definition.number}⟩, {tally u.caps}⟩"
   s!"⟨[{", ".intercalate (table.uses.map use)}]⟩"
 
 /-- The member of a list of headers that is `depth` places after its head. -/

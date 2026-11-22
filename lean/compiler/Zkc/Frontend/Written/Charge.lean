@@ -92,13 +92,50 @@ def namesDraw (s : Compile.State) (owner : InstanceId) (name : String) : ExportM
 (one, or one for each block of a stepped loop). -/
 abbrev SiteKeys := List (String × List Core.Key)
 
+mutual
+
+/-- The caps of a use as they add up along one run of its definition: the tally of the stored
+body, with each application as a call of the use of its callee at the proof arguments of that
+application, each charged draw at its cap, and everything else left out. A choice of which
+neither arm has a charged draw or a call is no choice, as in `Core.Tally.filterMap`, by which a
+module checks this tally against the stored program. -/
+partial def capsOfTally {V : Core.Vocabulary} (c : AdmittedRoot) (subject : ProofSubject)
+    (name : String) (place : Syntax.Span) (capped : Array (Core.Key × Nat × Nat)) :
+    Core.Tally (Core.Key × Core.ProtocolRaw V × Option Nat) →
+      StateT (Array (ProofSubject × UseCaps × SiteKeys)) ExportM (Core.Tally Cap)
+  | .nil => pure .nil
+  | .item (key, operation, count) rest => do
+    match operation with
+    | .apply _ _ =>
+      let some count := count
+        | refuse place "WK-CHARGE" (s!"an application in `{name}` is under a loop whose count is read " ++
+            s!"at run time, or in an attempt (instruction {key.number}): it has no count in a table " ++
+            "of caps yet")
+      let child ← subject.child c key
+      let callee ← capsOfUse c child
+      return .item (.call ⟨key, count, callee⟩) (← capsOfTally c subject name place capped rest)
+    | _ =>
+      match capped.find? (·.1 == key), count with
+      | some (_, numerator, denominator), some count =>
+        return .item (.draw ⟨key, numerator, denominator, count⟩)
+          (← capsOfTally c subject name place capped rest)
+      | _, _ => capsOfTally c subject name place capped rest
+  | .choice left right rest => do
+    let left ← capsOfTally c subject name place capped left
+    let right ← capsOfTally c subject name place capped right
+    let rest ← capsOfTally c subject name place capped rest
+    match left, right with
+    | .nil, .nil => return rest
+    | _, _ => return .choice left right rest
+
 /-- The use of a definition at its proof arguments, in a table under construction: its place.
 A use that the table has is found again, so two applications that give a callee the same proof
 arguments are calls of one use. The calls of a new use are the applications of the stored
-definition, in the order of its body, each with the use of its callee at the proof arguments of
-that application; its draws are the realizations of the draws that the contract of its
-definition charges, at the cap that the charge has at these proof arguments. The counts are
-those of the stored body. -/
+definition, each with the use of its callee at the proof arguments of that application; its
+draws are the realizations of the draws that the contract of its definition charges, at the cap
+that the charge has at these proof arguments. The counts are those of the stored body, and the
+draws and the calls stand as the body has them: in its order, and in the arms of its choices
+(`capsOfTally`). -/
 partial def capsOfUse (c : AdmittedRoot) (subject : ProofSubject) :
     StateT (Array (ProofSubject × UseCaps × SiteKeys)) ExportM Nat := do
   if let some place := (← get).findIdx? (·.1 == subject) then return place
@@ -107,23 +144,14 @@ partial def capsOfUse (c : AdmittedRoot) (subject : ProofSubject) :
     | throw "WK-CHARGE: a use of the table is of no protocol of the package"
   let found := body.counted (some 1)
   let (charged, name, place) ← chargedSites c.state subject.protocol
-  let mut calls : Array CallCap := #[]
-  for (key, operation, count) in found do
-    let .apply _ _ := operation | continue
-    let some count := count
-      | refuse place "WK-CHARGE" (s!"an application in `{name}` is under a loop whose count is read " ++
-          s!"at run time, or in an attempt (instruction {key.number}): it has no count in a table " ++
-          "of caps yet")
-    let child ← subject.child c key
-    calls := calls.push ⟨key, count, ← capsOfUse c child⟩
   -- a site has one cap: a second charge on it is refused before any charge is read
-  let mut capped : Array (Array String) := #[]
+  let mut seen : Array (Array String) := #[]
   for (names, span) in charged do
-    if capped.contains names then
+    if seen.contains names then
       refuse span "WK-CHARGE"
         s!"a second charge on `sites.{".".intercalate names.toList}`: a site has one cap"
-    capped := capped.push names
-  let mut draws : Array DrawCap := #[]
+    seen := seen.push names
+  let mut capped : Array (Core.Key × Nat × Nat) := #[]
   let mut sites : SiteKeys := []
   for (names, span) in charged do
     let #[site] := names
@@ -134,13 +162,16 @@ partial def capsOfUse (c : AdmittedRoot) (subject : ProofSubject) :
     let charge ← drawCharge c.state c.evidence.admitted.program ⟨subject.protocol⟩ site
       subject.specification
     for (_, key) in charge.draws do
-      let some (_, _, some count) := found.find? (·.1 == key)
+      let some (_, _, some _) := found.find? (·.1 == key)
         | refuse span "WK-CHARGE" (s!"the draw `{site}` of `{name}` is under a loop whose count is " ++
             "read at run time, or in an attempt: it has no count in a table of caps yet")
-      draws := draws.push ⟨key, charge.numerator, charge.denominator, count⟩
+      capped := capped.push (key, charge.numerator, charge.denominator)
     sites := sites ++ [(site, charge.draws.map (·.2))]
-  modify (·.push (subject, ⟨⟨subject.protocol⟩, draws.toList, calls.toList⟩, sites))
+  let caps ← capsOfTally c subject name place capped (body.tally (some 1))
+  modify (·.push (subject, ⟨⟨subject.protocol⟩, caps⟩, sites))
   return (← get).size - 1
+
+end
 
 /-- The draws of the root by the names that the source gives them, each with the keys of the
 draws that realize it (one, or one for each block of a stepped loop): every draw that has a

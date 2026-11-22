@@ -58,7 +58,8 @@ program there has no effect, and the walk passes it as any other instruction.
 A fifth module is of a root whose callees fork (`Forked`): one has a guard after its draw, the
 other chooses by an input and has a draw and a guard in each arm. The text of the root names
 the forks: the guard is a hypothesis of the walk, and the choice gives one goal for each arm.
-The table has the draws of both arms, and its total is three quarters.
+The table has the draws of both arms as the arms of a choice, and its total is one half: the
+draw of the first callee and the larger arm of the second.
 
 Five controls are refused by Lean, each at the place that the check names and at no other:
 
@@ -548,9 +549,9 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
   -- the draw of `Gate`, the draws of both arms of `Pick`, and one application of each.
   let forked ← read (forkedSource) (reading "forked" #["claim", "side", "first", "second"])
   let forkedGoal ← forked.goal
-  unless forkedGoal.total == 3 / 4 && shape forkedGoal.caps ==
+  unless forkedGoal.total == 1 / 2 && shape forkedGoal.caps ==
       [([(1, 4, 1)], []), ([(1, 4, 1), (1, 4, 1)], []), ([], [(0, 1), (1, 1)])] do
-    throw (IO.userError s!"the table of the forked root is not three draws under two applications: {repr forkedGoal.caps}")
+    throw (IO.userError s!"the table of the forked root is not three draws under two applications, with the larger arm of the choice: {repr forkedGoal.caps}")
   -- The comparison of one arm of `Pick` turned: the walk is what it was, and the text is
   -- refused at the end of that arm, where the guard no longer says that the draw is the
   -- position sent, and nowhere before.

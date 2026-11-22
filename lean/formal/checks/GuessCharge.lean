@@ -141,18 +141,18 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
     throw (IO.userError "the root and the roles of the source are not where they were")
   -- The table of caps, as the frontend read it: the draw of the loop's body, at one eighth,
   -- three times.
-  unless goal.caps == ⟨[⟨⟨0⟩, [⟨⟨3⟩, 1, 8, 3⟩], []⟩]⟩ && goal.total == 3 / 8 do
+  unless goal.caps == ⟨[(.flat ⟨0⟩ [⟨⟨3⟩, 1, 8, 3⟩] [])]⟩ && goal.total == 3 / 8 do
     throw (IO.userError s!"the table of caps is not the draw at 1/8, three times: {repr goal.caps}")
 
   -- The charge halved in the source: the program is what it was, and the cap is another.
   let halved ← read (source "3" "1 / 16") reading
   unless halved.package == written.package &&
-      (halved.goals.map (·.caps)) == [⟨[⟨⟨0⟩, [⟨⟨3⟩, 1, 16, 3⟩], []⟩]⟩] do
+      (halved.goals.map (·.caps)) == [⟨[(.flat ⟨0⟩ [⟨⟨3⟩, 1, 16, 3⟩] [])]⟩] do
     throw (IO.userError "the halved charge changed the package, or is not half at the draw")
   -- Four rounds: the count of the draw is four.
   let four ← read (source "4" "1 / 8") reading
   unless (four.goals.map fun goal => (goal.caps, goal.total)) ==
-      [(⟨[⟨⟨0⟩, [⟨⟨3⟩, 1, 8, 4⟩], []⟩]⟩, 1 / 2)] do
+      [(⟨[(.flat ⟨0⟩ [⟨⟨3⟩, 1, 8, 4⟩] [])]⟩, 1 / 2)] do
     throw (IO.userError "with four rounds the draw is not counted four times")
   -- An invariant that leaves one fee too few.
   let short ← replaceOnce template "((3 - i : ℕ) : ℚ≥0) * (1 / 8) ≤ budget"

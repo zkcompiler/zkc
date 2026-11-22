@@ -197,6 +197,19 @@ def chargedArms : String := charged
     "spec for Arms:\n    proves @V Holds(claim)\n    charge sites.x <= 1 / 8\n    charge sites.y <= 1 / 4\n")
   "Arms"
 
+/-- A choice in a kept loop of three whose arms apply two callees, one charged one eighth and
+the other one quarter. -/
+def loopedArms : String := charged
+  ("protocol Once roles(P, V)(claim: bool @(P, V)):\n    z <- draw index<8> from V to P\n" ++
+    "spec for Once:\n    charge sites.z <= 1 / 8\n" ++
+    "protocol Other roles(P, V)(claim: bool @(P, V)):\n    w <- draw index<4> from V to P\n" ++
+    "spec for Other:\n    charge sites.w <= 1 / 4\n" ++
+    "protocol Arms roles(P, V)(claim: bool @(P, V)):\n" ++
+    "    for i in 0..3:\n        if claim:\n            Once(claim)\n        else:\n            Other(claim)\n" ++
+    "    guard @V claim\n" ++
+    "spec for Arms:\n    proves @V Holds(claim)\n")
+  "Arms"
+
 /-- A callee that the root reaches by three ways: through `A`, which applies it twice in a kept
 loop, through `B`, and through `A` again in a kept loop of five. -/
 def sharedCallee : String := charged
@@ -440,21 +453,21 @@ def run (work : System.FilePath) : IO Unit := do
     let [goal] := s.claims.goals | none
     return (goal.caps, goal.total)
   expect "two charged draws of the root are not both in its table"
-    (tableOf twoDraws == some (⟨[⟨⟨1⟩, [⟨⟨0⟩, 3, 8, 1⟩, ⟨⟨1⟩, 1, 2, 1⟩], []⟩]⟩, 7 / 8))
+    (tableOf twoDraws == some (⟨[(.flat ⟨1⟩ [⟨⟨0⟩, 3, 8, 1⟩, ⟨⟨1⟩, 1, 2, 1⟩] [])]⟩, 7 / 8))
   expect "a callee at the proof arguments 3 and 2 is not two uses, each call with its own"
-    (tableOf (twoCalls "3" "2") == some (⟨[⟨⟨1⟩, [⟨⟨0⟩, 3, 8, 1⟩], []⟩, ⟨⟨1⟩, [⟨⟨0⟩, 1, 4, 1⟩], []⟩,
-      ⟨⟨2⟩, [], [⟨⟨0⟩, 1, 0⟩, ⟨⟨1⟩, 1, 1⟩]⟩]⟩, 5 / 8))
+    (tableOf (twoCalls "3" "2") == some (⟨[(.flat ⟨1⟩ [⟨⟨0⟩, 3, 8, 1⟩] []), (.flat ⟨1⟩ [⟨⟨0⟩, 1, 4, 1⟩] []),
+      (.flat ⟨2⟩ [] [⟨⟨0⟩, 1, 0⟩, ⟨⟨1⟩, 1, 1⟩])]⟩, 5 / 8))
   expect "exchanging the proof arguments does not exchange the caps of the two calls"
-    (tableOf (twoCalls "2" "3") == some (⟨[⟨⟨1⟩, [⟨⟨0⟩, 1, 4, 1⟩], []⟩, ⟨⟨1⟩, [⟨⟨0⟩, 3, 8, 1⟩], []⟩,
-      ⟨⟨2⟩, [], [⟨⟨0⟩, 1, 0⟩, ⟨⟨1⟩, 1, 1⟩]⟩]⟩, 5 / 8))
+    (tableOf (twoCalls "2" "3") == some (⟨[(.flat ⟨1⟩ [⟨⟨0⟩, 1, 4, 1⟩] []), (.flat ⟨1⟩ [⟨⟨0⟩, 3, 8, 1⟩] []),
+      (.flat ⟨2⟩ [] [⟨⟨0⟩, 1, 0⟩, ⟨⟨1⟩, 1, 1⟩])]⟩, 5 / 8))
   expect "two calls at one proof argument do not share a use"
-    (tableOf (twoCalls "3" "3") == some (⟨[⟨⟨1⟩, [⟨⟨0⟩, 3, 8, 1⟩], []⟩,
-      ⟨⟨2⟩, [], [⟨⟨0⟩, 1, 0⟩, ⟨⟨1⟩, 1, 0⟩]⟩]⟩, 3 / 4))
+    (tableOf (twoCalls "3" "3") == some (⟨[(.flat ⟨1⟩ [⟨⟨0⟩, 3, 8, 1⟩] []),
+      (.flat ⟨2⟩ [] [⟨⟨0⟩, 1, 0⟩, ⟨⟨1⟩, 1, 0⟩])]⟩, 3 / 4))
   expect "a call in a kept loop has not the count of the loop"
-    (tableOf loopedCalls == some (⟨[⟨⟨1⟩, [⟨⟨0⟩, 1, 8, 1⟩], []⟩,
-      ⟨⟨2⟩, [⟨⟨3⟩, 1, 4, 1⟩], [⟨⟨0⟩, 1, 0⟩, ⟨⟨1⟩, 3, 0⟩]⟩]⟩, 3 / 4))
+    (tableOf loopedCalls == some (⟨[(.flat ⟨1⟩ [⟨⟨0⟩, 1, 8, 1⟩] []),
+      (.ordered ⟨2⟩ [.call ⟨⟨0⟩, 1, 0⟩, .call ⟨⟨1⟩, 3, 0⟩, .draw ⟨⟨3⟩, 1, 4, 1⟩])]⟩, 3 / 4))
   expect "the blocks of a stepped loop do not each have a draw"
-    (tableOf steppedDraws == some (⟨[⟨⟨1⟩, [⟨⟨0⟩, 1, 2, 1⟩, ⟨⟨2⟩, 1, 2, 1⟩, ⟨⟨4⟩, 1, 2, 1⟩], []⟩]⟩, 3 / 2))
+    (tableOf steppedDraws == some (⟨[(.flat ⟨1⟩ [⟨⟨0⟩, 1, 2, 1⟩, ⟨⟨2⟩, 1, 2, 1⟩, ⟨⟨4⟩, 1, 2, 1⟩] [])]⟩, 3 / 2))
   -- The names that a module gives the draws of the root, charged or not: the site's, with the place
   -- of the block in a stepped loop; the key where two draws would share a name or the site's
   -- name is no plain identifier.
@@ -474,15 +487,23 @@ def run (work : System.FilePath) : IO Unit := do
     match labelsOf text with
     | .ok found => expect s!"{title}: {found}" (found == labels)
     | .error why => throw (IO.userError s!"{title}: {why}")
-  -- The arms of a choice are added, though one of them runs: the total is no smaller than what
-  -- a run can cost.
-  expect "the charged draws of the two arms of a choice are not both in the table"
-    (tableOf chargedArms == some (⟨[⟨⟨1⟩, [⟨⟨0⟩, 1, 8, 1⟩, ⟨⟨1⟩, 1, 4, 1⟩], []⟩]⟩, 3 / 8))
+  -- The arms of a choice are arms of the table, and one of them runs: the total takes the
+  -- larger, one quarter, and not their sum.
+  expect "the charged draws of the two arms of a choice are not the two arms of a choice of the table"
+    (tableOf chargedArms == some (⟨[⟨⟨1⟩, .choice (.item (.draw ⟨⟨0⟩, 1, 8, 1⟩) .nil)
+      (.item (.draw ⟨⟨1⟩, 1, 4, 1⟩) .nil) .nil⟩]⟩, 1 / 4))
+  -- A choice in a kept loop whose arms call two callees: each call has the count of the loop,
+  -- and the total is three times the larger arm.
+  expect "a choice in a kept loop is not the count times its larger arm"
+    (match tableOf loopedArms with
+      | some (⟨[_, _, ⟨_, .choice (.item (.call first) .nil) (.item (.call second) .nil) .nil⟩]⟩, total) =>
+        total == 3 / 4 && (first.count, first.callee, second.count, second.callee) == (3, 0, 3, 1)
+      | _ => false)
   -- A callee reached by three ways is one use, and its draw is counted thirteen times: twice
   -- through `A`, once through `B`, and five times twice through `A` in the loop.
   expect "a callee reached by three ways is not one use with the counts of the ways"
-    (tableOf sharedCallee == some (⟨[⟨⟨1⟩, [⟨⟨0⟩, 1, 8, 1⟩], []⟩, ⟨⟨2⟩, [], [⟨⟨0⟩, 2, 0⟩]⟩,
-      ⟨⟨3⟩, [], [⟨⟨0⟩, 1, 0⟩]⟩, ⟨⟨4⟩, [], [⟨⟨0⟩, 1, 1⟩, ⟨⟨1⟩, 1, 2⟩, ⟨⟨2⟩, 5, 1⟩]⟩]⟩, 13 / 8))
+    (tableOf sharedCallee == some (⟨[(.flat ⟨1⟩ [⟨⟨0⟩, 1, 8, 1⟩] []), (.flat ⟨2⟩ [] [⟨⟨0⟩, 2, 0⟩]),
+      (.flat ⟨3⟩ [] [⟨⟨0⟩, 1, 0⟩]), (.flat ⟨4⟩ [] [⟨⟨0⟩, 1, 1⟩, ⟨⟨1⟩, 1, 2⟩, ⟨⟨2⟩, 5, 1⟩])]⟩, 13 / 8))
   -- What has no table yet is refused with the reason, and no claim is read.
   for (title, text, reason) in [
       ("a charge on an application", chargedCall, "`sites.first` is no draw"),
@@ -502,7 +523,7 @@ def run (work : System.FilePath) : IO Unit := do
         (why.contains "WK-CHARGE" && why.contains reason)
   -- A draw without a charge under such a loop is in no table: it is allowed nothing.
   expect "a draw without a charge under a loop of a run-time count is in a table"
-    (tableOf (runtimeDraws "") == some (⟨[⟨⟨1⟩, [], []⟩]⟩, 0))
+    (tableOf (runtimeDraws "") == some (⟨[(.flat ⟨1⟩ [] [])]⟩, 0))
 
   -- The event: the claims of a reduction are read, and no statement is written for them.
   let reduced ← IO.ofExcept (statementsOf reduction ["sound"])

@@ -18,7 +18,8 @@ The subject is `Either`: by the claim the verifier takes one of two arms. In eac
 position from the prover, draws one, and rejects unless the draw is the position that it got;
 in the second it first rejects the last position. Its contract charges the draw of the first
 arm one eighth and the draw of the second one quarter. The table of caps has both draws once,
-and its total is three eighths, though a run pays in one arm only. It is the fourth subject of
+as the two arms of a choice, and its total is the larger arm, one quarter: a run pays in one
+arm only. It is the fourth subject of
 a written soundness goal, and differs from the others in the shape of its program:
 
 - **a choice.** The walk goes into the arm that the condition chooses, and inside it every
@@ -160,16 +161,18 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
   let template ← IO.FS.readFile template
   let written ← read (source "1 / 8" "1 / 4") reading
   let goal ← written.goal
-  -- The table of caps: the draws of the two arms, once each, and the two arms added.
-  unless goal.total == 3 / 8 && (goal.caps.uses.map fun use => use.draws.map fun draw =>
+  -- The table of caps: the draws of the two arms, once each, as the arms of a choice, whose
+  -- total is the larger arm.
+  unless goal.total == 1 / 4 && (goal.caps.uses.map (·.caps)) ==
+      [.choice (.item (.draw ⟨⟨1⟩, 1, 8, 1⟩) .nil) (.item (.draw ⟨⟨12⟩, 1, 4, 1⟩) .nil) .nil] && (goal.caps.uses.map fun use => use.draws.map fun draw =>
       (draw.numerator, draw.denominator, draw.count)) == [[(1, 8, 1), (1, 4, 1)]] do
     throw (IO.userError s!"the table of caps is not the two draws at 1/8 and 1/4: {repr goal.caps}")
   unless goal.siteLabels.map (·.2.1) == ["x", "y"] do
     throw (IO.userError s!"the draws are not named `x` and `y`: {goal.siteLabels.map (·.2.1)}")
-  -- The charges exchanged: the program and the budget are what they were, and the caps are
-  -- exchanged.
+  -- The charges exchanged: the program and the budget (the larger arm) are what they were,
+  -- and the caps are exchanged.
   let exchanged ← read (source "1 / 4" "1 / 8") reading
-  unless exchanged.package == written.package && (exchanged.goals.map (·.total)) == [3 / 8] do
+  unless exchanged.package == written.package && (exchanged.goals.map (·.total)) == [1 / 4] do
     throw (IO.userError "exchanging the charges changed the package or the budget")
   -- The fee of one quarter at the draw of the second arm is over its cap of one eighth: at
   -- two places and no other, one in each proof of the judgment.
@@ -190,12 +193,12 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
   let steppedProof ← startModule work "Steps" steppedModule
 
   -- The kernel's check turned off by the text, on a source whose charges are too low for the
-  -- protocol (one sixteenth each: the table's total is one eighth, and a false claim is
-  -- accepted with probability one quarter). Lean accepts the module; outside the file the
+  -- protocol (one sixteenth each: the table's total is one sixteenth, the larger arm, and a
+  -- false claim is accepted with probability one quarter). Lean accepts the module; outside the file the
   -- kernel refuses the false equation that the judgment was proved from.
   let low ← read (source "1 / 16" "1 / 16") reading
-  unless (low.goals.map (·.total)) == [1 / 8] do
-    throw (IO.userError "the low charges do not give a total of one eighth")
+  unless (low.goals.map (·.total)) == [1 / 16] do
+    throw (IO.userError "the low charges do not give a total of one sixteenth")
   let unchecked ← low.module "Unchecked" { text := uncheckedText, theorems := ofText }
 
   let _ ← check work "Either" written { text := template, theorems := ofText }
@@ -205,7 +208,8 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
   refusedOutside work "the kernel's check turned off by the text" "Unchecked" unchecked
     ["the kernel refuses a declaration of the candidate on replay", "Unchecked.either_judged"]
   IO.println ("Either is judged within the table of caps of its goal (the draws of its two arms " ++
-    "at 1/8 and 1/4: 3/8), with a guard inside each arm and a guard before the draw; " ++
+    "at 1/8 and 1/4, of which a run takes one: 1/4), with a guard inside each arm and a guard " ++
+    "before the draw; " ++
     "the blocks of a stepped loop are walked; " ++
     "1 of 1 control refused, at the place that the check names and at no other; a text that " ++
     "turns the kernel's check off is accepted by Lean and refused outside the file.")

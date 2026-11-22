@@ -33,14 +33,46 @@ structure CallCap where
   callee : Nat
   deriving DecidableEq, Repr
 
+/-- What a use is charged for at one place of its definition: a charged draw, or a call. -/
+inductive Cap where
+  | draw (cap : DrawCap)
+  | call (cap : CallCap)
+  deriving DecidableEq, Repr
+
+/-- The key of the instruction, and how often it can run. -/
+def Cap.counted : Cap → Core.Key × Nat
+  | .draw cap => (cap.key, cap.count)
+  | .call cap => (cap.key, cap.count)
+
 /-- A use of a definition: the definition at the proof arguments of one of its uses, with the
-caps of its charged draws and with its calls. Two applications that give a callee the same proof
-arguments are calls of one use. -/
+caps of its charged draws and with its calls, as they add up along one run of the definition:
+in the order of its body, and at a choice in the arms of the choice, of which a run takes one
+(`Core.Tally`). Two applications that give a callee the same proof arguments are calls of one
+use. -/
 structure UseCaps where
   definition : Core.Key
-  draws : List DrawCap
-  calls : List CallCap
+  caps : Core.Tally Cap
   deriving DecidableEq, Repr
+
+/-- The caps of the charged draws of a use, in the order of its body. -/
+def UseCaps.draws (use : UseCaps) : List DrawCap :=
+  use.caps.items.filterMap fun
+    | .draw cap => some cap
+    | .call _ => none
+
+/-- The calls of a use, in the order of its body. -/
+def UseCaps.calls (use : UseCaps) : List CallCap :=
+  use.caps.items.filterMap fun
+    | .call cap => some cap
+    | .draw _ => none
+
+/-- A use without a choice: its draws and its calls in the order of its body. -/
+def UseCaps.ordered (definition : Core.Key) (caps : List Cap) : UseCaps :=
+  ⟨definition, caps.foldr Core.Tally.item .nil⟩
+
+/-- A use without a choice whose draws all stand before its calls. -/
+def UseCaps.flat (definition : Core.Key) (draws : List DrawCap) (calls : List CallCap) : UseCaps :=
+  .ordered definition (draws.map Cap.draw ++ calls.map Cap.call)
 
 /-- The table of caps of a root: the uses that the root reaches, each after the uses that it
 calls; the root's own use is the last. The charge of an application is computed from the
@@ -61,7 +93,12 @@ draw of the use is a coin of the definition with the count that the kept loops a
 and no draw is listed twice; the calls of the use are the applications of the definition, in
 their order, each with its count and with the use of the definition that it applies, which
 stands earlier in the table. A coin or an application under a loop whose count is read at run
-time, or in an attempt, has no count and meets no entry. -/
+time, or in an attempt, has no count and meets no entry.
+
+**And they add up as the definition does.** The charged draws and the calls of the use stand in
+the sequence and in the arms of the choices in which the coins and the applications of the
+definition stand (`Region.tally`, with the coins that the use does not charge left out), so that
+the total of the use takes the larger arm exactly where a run takes one arm. -/
 def countedUse {V : Vocabulary} (p : NamedProgram V) (table : CapTable) (place : Nat)
     (use : UseCaps) : Bool :=
   match p.definitions.find? (·.key == use.definition) with
@@ -75,11 +112,18 @@ def countedUse {V : Vocabulary} (p : NamedProgram V) (table : CapTable) (place :
       match operation with
       | .apply callee _ => some (key, callee, count)
       | _ => none
+    let charged := use.draws.map (·.key)
+    let added := (body.tally (some 1)).filterMap fun (key, operation, count) =>
+      match operation with
+      | .event (.given (.coin _) _ _) _ => if charged.contains key then some (key, count) else none
+      | .apply _ _ => some (key, count)
+      | _ => none
     use.draws.all (fun draw => coins.contains (draw.key, some draw.count)) &&
       decide (use.draws.map (·.key)).Nodup &&
       applications == (use.calls.filterMap fun call =>
         (table.uses[call.callee]?).map fun callee => (call.key, callee.definition, some call.count)) &&
-      use.calls.all (fun call => call.callee < place)
+      use.calls.all (fun call => call.callee < place) &&
+      added == use.caps.filterMap fun cap => some (cap.counted.1, some cap.counted.2)
   | _ => false
 
 /-- **The counts of a table are those of the program.** Every use has the counts of its
@@ -109,14 +153,17 @@ def sites (table : CapTable) : List (Site × Nat × Nat × Nat) :=
   table.sitesFrom table.uses.length table.root [] 1
 
 /-- The totals of uses in their order, as rationals, after the totals `done` of the uses before
-them: what the frontend compares with a ceiling (GL4). It is the computation of the formal
+them: what the frontend compares with a ceiling (GL4). The total of a use is what one run of
+its definition can be charged at most: its draws at their caps and its calls at the totals of
+their callees, each times its count, in sequence, and at a choice the larger of the two arms
+(`Core.Tally.total`). It is the computation of the formal
 library's `CapTable.totals`, and a generated module states that the two give one number. -/
 def ratiosAfter : List UseCaps → List Rat → List Rat
   | [], done => done
   | use :: rest, done =>
-    ratiosAfter rest (done ++
-      [(use.draws.map fun draw => (draw.count : Rat) * ((draw.numerator : Rat) / draw.denominator)).sum +
-        (use.calls.map fun call => (call.count : Rat) * done.getD call.callee 0).sum])
+    ratiosAfter rest (done ++ [use.caps.total fun
+      | .draw draw => (draw.count : Rat) * ((draw.numerator : Rat) / draw.denominator)
+      | .call call => (call.count : Rat) * done.getD call.callee 0])
 
 /-- The total of a table as a rational: that of the root's use. -/
 def ratio (table : CapTable) : Rat := (ratiosAfter table.uses []).getLastD 0
