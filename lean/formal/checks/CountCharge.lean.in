@@ -511,10 +511,10 @@ theorem unallowed_judges_nothing (caps : CapTable) (path : List Frame)
         simp at absurd)
 
 /-- The table of `loose` with its cap on the guard and not on the draw. -/
-def misplaced : CapTable := ⟨[⟨rootKey, [⟨⟨5⟩, 3, 8, 1⟩], []⟩]⟩
+def misplaced : CapTable := ⟨[.flat rootKey [⟨⟨5⟩, 3, 8, 1⟩] []]⟩
 
 /-- The table of `loose` as the table of another definition, with a draw at the same key. -/
-def foreign : CapTable := ⟨[⟨⟨rootKey.number + 1⟩, [⟨site_z, 3, 8, 1⟩], []⟩]⟩
+def foreign : CapTable := ⟨[.flat ⟨rootKey.number + 1⟩ [⟨site_z, 3, 8, 1⟩] []]⟩
 
 /-- **The fee is paid at the draw.** A table whose cap is on another instruction allows the draw
 nothing, and judges the verifier at no budget. -/

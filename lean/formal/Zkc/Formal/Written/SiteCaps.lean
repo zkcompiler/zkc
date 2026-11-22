@@ -21,9 +21,10 @@ calls. Three numbers stay apart.
   (`CapTable.allowance`), whatever iteration or attempt the occurrence is in; an effect at a
   draw without a cap, or not below `start`, is allowed nothing.
 - **The sum of the fees along a path** is what the judgment with fees bounds by its budget.
-- **The total** of a use is the caps of its draws times their counts and, for each call, its
-  count times the total of the callee's use (`CapTable.totals`); the total of the table is that
-  of the root (`CapTable.budget`, and `CapTable.total` as a probability). It is a bound that a
+- **The total** of a use is what one run of its definition can be charged at most: the caps
+  of its draws times their counts and, for each call, its count times the total of the callee's
+  use, in sequence, and at a choice the larger of the two arms, of which a run takes one
+  (`CapTable.totals`, `Core.Tally.total`); the total of the table is that of the root (`CapTable.budget`, and `CapTable.total` as a probability). It is a bound that a
   proof has to meet and never an assumption: a judgment checks the fees against the budget on
   every path.
 
@@ -94,18 +95,16 @@ theorem _root_.Zkc.Frontend.Written.CapTable.allowanceFrom_at {V : Vocabulary} (
     table.allowanceFrom M place start op = table.capFrom place (Frame.applications rest) key := by
   simp [CapTable.allowanceFrom, occurs, Occurrence.siteBelow_append]
 
-/-- What the draws of a use add up to: their caps times their counts. -/
-def _root_.Zkc.Frontend.Written.UseCaps.own (use : UseCaps) : ℚ≥0 :=
-  (use.draws.map fun draw => (draw.count : ℚ≥0) * draw.cap).sum
-
-/-- The totals of uses in their order, after the totals `done` of the uses before them: the
-total of a use is what its draws add up to and, for each call, the count times the total of the
-callee's use. -/
+/-- The totals of uses in their order, after the totals `done` of the uses before them. The
+total of a use is what one run of its definition can be charged at most: each draw at its cap
+and each call at the total of the callee's use, times its count, in sequence, and at a choice
+the larger of the two arms, of which a run takes one (`Core.Tally.total`). -/
 def totalsAfter : List UseCaps → List ℚ≥0 → List ℚ≥0
   | [], done => done
   | use :: rest, done =>
-    totalsAfter rest (done ++
-      [use.own + (use.calls.map fun call => (call.count : ℚ≥0) * done.getD call.callee 0).sum])
+    totalsAfter rest (done ++ [use.caps.total fun
+      | .draw draw => (draw.count : ℚ≥0) * draw.cap
+      | .call call => (call.count : ℚ≥0) * done.getD call.callee 0])
 
 /-- The total of each use of a table. -/
 def _root_.Zkc.Frontend.Written.CapTable.totals (table : CapTable) : List ℚ≥0 :=

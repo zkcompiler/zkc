@@ -30,7 +30,7 @@ scheme Checked = Either:
 goal either = soundness(Checked, stage = written)
 ```
 
-The claim of the goal: on inputs on which the relation returns false, the verifier returns with probability at most the total of the charges that the root reaches (here three eighths), against every service that draws each coin no more favourably than its law.
+The claim of the goal: on inputs on which the relation returns false, the verifier returns with probability at most the total of the charges that the root reaches along one run (here one quarter: the two draws are in the two arms of a choice, and the total takes the larger arm), against every service that draws each coin no more favourably than its law.
 
 **The text** is a Lean file without a header, between `noncomputable section` and `end`. It proves, for each goal, the judgment that the generator states (`<goal>_judged : <goal>Judged`) and that the hypotheses of the claim are met at some input (`<goal>_witnessed : <goal>Witnessed`). The propositions that a module publishes are all generated before the text, and the text states none of them. What it states is its own: what the relation computes, and any law or lemma that its proofs use. The first is needed by every text, since the judgment assumes that the relation returns false and the text has to say what that means of the inputs:
 
@@ -70,7 +70,7 @@ A `Reading` asserts the ports of the root, the clause that each goal reads, the 
 
 ```lean
   let goal ← written.goal
-  unless goal.total == 3 / 8 && (goal.caps.uses.map fun use => use.draws.map fun draw =>
+  unless goal.total == 1 / 4 && (goal.caps.uses.map fun use => use.draws.map fun draw =>
       (draw.numerator, draw.denominator, draw.count)) == [[(1, 8, 1), (1, 4, 1)]] do
     throw (IO.userError "the table of caps is not the two draws at 1/8 and 1/4")
   unless goal.siteLabels.map (·.2.1) == ["x", "y"] do

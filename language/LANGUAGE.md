@@ -2831,7 +2831,9 @@ the mark "unwitnessed"; satisfiable hypotheses are not presented as coverage (GL
 **SX8. Charges.** A charge is a `rational` over static terms (TY8): static parameters, members
 of static things, numbers. The charge of a `draw` is the probability that the reduced statement
 becomes true there. The charge of an application is computed from the callee's charges and the
-counts of the loops around them; a written charge on an application replaces it with a smaller
+counts of the loops around them: along one run the charges add, each as often as the loops
+around it run it, and of the arms of an `if` or a `match`, of which a run takes one, the arm
+with the largest charge counts; a written charge on an application replaces it with a smaller
 one. The charge of an `attempt` is the probability that one attempt aborts. A charge at a site
 between a deferred query and the `open` of its claim is stated for the runs in which the claim
 may be false. The charges of a contract are also the bound that a `knowledge` clause claims

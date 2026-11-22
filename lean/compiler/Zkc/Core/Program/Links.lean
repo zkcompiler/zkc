@@ -23,6 +23,11 @@ states and a module checks against the stored program. `NamedProgram.occurrences
 applications from a root and gives every site of a coin with its count along the way; it grows
 with the number of ways to a draw and not with the program, and is the view that tests compare
 a table with.
+
+`Region.tally` gives the same operations as they add up along one run: in sequence, and at a
+choice or a case analysis as arms of which a run takes one (`Tally`). What a run can be charged
+at most is the larger arm of each choice, and a table of caps has that structure of its
+definition, which a module checks against the stored program as it checks the counts.
 -/
 
 namespace Zkc.Core
@@ -86,6 +91,129 @@ mutual
   def Region.countedAll : List (Region Op Who) → Option Nat → List (Key × Op × Option Nat)
     | [], _ => []
     | region :: rest, times => region.counted times ++ Region.countedAll rest times
+end
+
+end
+
+/-- What adds up along one run: items in sequence, and at a choice two arms of which a run takes
+one, then what follows. A case analysis of several arms is a choice of its first arm and the
+choice of the others. -/
+inductive Tally (α : Type) where
+  | nil
+  | item (a : α) (rest : Tally α)
+  | choice (left right rest : Tally α)
+  deriving DecidableEq, Repr
+
+namespace Tally
+variable {α β : Type}
+
+/-- One tally, then another. -/
+def append : Tally α → Tally α → Tally α
+  | .nil, after => after
+  | .item a rest, after => .item a (rest.append after)
+  | .choice left right rest, after => .choice left right (rest.append after)
+
+/-- The items of a tally in the order of the program, those of both arms of every choice. -/
+def items : Tally α → List α
+  | .nil => []
+  | .item a rest => a :: rest.items
+  | .choice left right rest => left.items ++ right.items ++ rest.items
+
+/-- The items that a function keeps, each as what it gives; a choice of which neither arm keeps
+an item is no choice. -/
+def filterMap (f : α → Option β) : Tally α → Tally β
+  | .nil => .nil
+  | .item a rest =>
+    match f a with
+    | some b => .item b (rest.filterMap f)
+    | none => rest.filterMap f
+  | .choice left right rest =>
+    match left.filterMap f, right.filterMap f with
+    | .nil, .nil => rest.filterMap f
+    | keptLeft, keptRight => .choice keptLeft keptRight (rest.filterMap f)
+
+/-- The items of one tally and then another are the items of both. -/
+theorem items_append (a b : Tally α) : (a.append b).items = a.items ++ b.items := by
+  induction a with
+  | nil => rfl
+  | item x rest ih => simp [append, items, ih]
+  | choice left right rest _ _ ih => simp [append, items, ih]
+
+/-- What a tally adds up to at most along one run: the values of its items in sequence, and at
+a choice the larger of its two arms. -/
+def total [Zero β] [Add β] [Max β] (value : α → β) : Tally α → β
+  | .nil => 0
+  | .item a rest => value a + rest.total value
+  | .choice left right rest => max (left.total value) (right.total value) + rest.total value
+
+end Tally
+
+section
+variable {Op Who : Type}
+
+mutual
+  /-- The operations of an instruction as they add up along one run, each with its key and how
+  often it can run (`Instruction.counted`): the arms of a choice and of a case analysis are
+  arms of a tally, since one run takes one of them. -/
+  def Instruction.tally : Instruction Op Who → Option Nat → Tally (Key × Op × Option Nat)
+    | .op key _ o _, times => .item (key, o, times) .nil
+    | .guard .., _ => .nil
+    | .choose _ _ _ _ onTrue onFalse, times => .choice (onTrue.tally times) (onFalse.tally times) .nil
+    | .cases _ _ _ _ arms, times => Region.tallyOfArms arms times
+    | .loop _ _ count _ _ body, times => body.tally (timesMore times count)
+    | .block _ _ _ body, times => body.tally times
+    | .attempt _ _ _ body, _ => body.tally none
+  /-- The tally of a region. -/
+  def Region.tally : Region Op Who → Option Nat → Tally (Key × Op × Option Nat)
+    | .mk _ body _, times => Instruction.tallyOfAll body times
+  def Instruction.tallyOfAll : List (Instruction Op Who) → Option Nat →
+      Tally (Key × Op × Option Nat)
+    | [], _ => .nil
+    | instruction :: rest, times =>
+      (instruction.tally times).append (Instruction.tallyOfAll rest times)
+  /-- The arms of a case analysis, of which a run takes one. -/
+  def Region.tallyOfArms : List (Region Op Who) → Option Nat → Tally (Key × Op × Option Nat)
+    | [], _ => .nil
+    | region :: rest, times => .choice (region.tally times) (Region.tallyOfArms rest times) .nil
+end
+
+mutual
+  /-- **The items of the tally of an instruction are its counted operations**, in their order:
+  the tally is the same reading of the body with the arms kept apart. -/
+  theorem Instruction.tally_items :
+      (i : Instruction Op Who) → (t : Option Nat) → (i.tally t).items = i.counted t
+    | .op .., _ => rfl
+    | .guard .., _ => rfl
+    | .choose _ _ _ _ a b, t => by
+      simp only [Instruction.tally, Instruction.counted, Tally.items, List.append_nil,
+        Region.tally_items a t, Region.tally_items b t]
+    | .cases _ _ _ _ arms, t => by
+      simp only [Instruction.tally, Instruction.counted]; exact Region.tallyOfArms_items arms t
+    | .loop _ _ _ _ _ body, t => by
+      simp only [Instruction.tally, Instruction.counted]; exact Region.tally_items body _
+    | .block _ _ _ body, t => by
+      simp only [Instruction.tally, Instruction.counted]; exact Region.tally_items body _
+    | .attempt _ _ _ body, _ => by
+      simp only [Instruction.tally, Instruction.counted]; exact Region.tally_items body _
+  /-- The items of the tally of a region are its counted operations. -/
+  theorem Region.tally_items :
+      (r : Region Op Who) → (t : Option Nat) → (r.tally t).items = r.counted t
+    | .mk _ body _, t => by
+      simp only [Region.tally, Region.counted]; exact Instruction.tallyOfAll_items body t
+  theorem Instruction.tallyOfAll_items :
+      (l : List (Instruction Op Who)) → (t : Option Nat) →
+        (Instruction.tallyOfAll l t).items = Instruction.countedAll l t
+    | [], _ => rfl
+    | i :: rest, t => by
+      simp only [Instruction.tallyOfAll, Instruction.countedAll, Tally.items_append,
+        Instruction.tally_items i t, Instruction.tallyOfAll_items rest t]
+  theorem Region.tallyOfArms_items :
+      (l : List (Region Op Who)) → (t : Option Nat) →
+        (Region.tallyOfArms l t).items = Region.countedAll l t
+    | [], _ => rfl
+    | r :: rest, t => by
+      simp only [Region.tallyOfArms, Region.countedAll, Tally.items, List.append_nil,
+        Region.tally_items r t, Region.tallyOfArms_items rest t]
 end
 
 end

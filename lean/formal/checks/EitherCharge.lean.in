@@ -12,7 +12,8 @@ of the propositions. This text proves the judgment and gives the input.
 The protocol chooses by the claim. On a false claim only the second arm runs: the verifier
 gets a position of four, stops unless it is not the last, draws a position, and returns only
 where the draw is the position sent. The fee of the draw, one quarter, pays for that position.
-The table has the draws of both arms, and its budget is three eighths.
+The table has the draws of both arms as the arms of a choice, and its budget is the larger arm,
+one quarter: the fee of this text is the whole budget.
 -/
 
 noncomputable section

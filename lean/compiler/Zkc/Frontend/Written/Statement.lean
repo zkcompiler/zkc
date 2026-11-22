@@ -216,9 +216,13 @@ structure Module where
 def capsTerm (table : CapTable) : String :=
   let draw (d : DrawCap) := s!"⟨⟨{d.key.number}⟩, {d.numerator}, {d.denominator}, {d.count}⟩"
   let call (c : CallCap) := s!"⟨⟨{c.key.number}⟩, {c.count}, {c.callee}⟩"
-  let use (u : UseCaps) :=
-    s!"⟨⟨{u.definition.number}⟩, [{", ".intercalate (u.draws.map draw)}], " ++
-    s!"[{", ".intercalate (u.calls.map call)}]⟩"
+  -- what adds up along a run: an item then the rest, or a choice of two arms then the rest
+  let rec tally : Core.Tally Cap → String
+    | .nil => ".nil"
+    | .item (.draw d) rest => s!"(.item (.draw {draw d}) {tally rest})"
+    | .item (.call c) rest => s!"(.item (.call {call c}) {tally rest})"
+    | .choice left right rest => s!"(.choice {tally left} {tally right} {tally rest})"
+  let use (u : UseCaps) := s!"⟨⟨{u.definition.number}⟩, {tally u.caps}⟩"
   s!"⟨[{", ".intercalate (table.uses.map use)}]⟩"
 
 /-- The member of a list of headers that is `depth` places after its head. -/
@@ -588,7 +592,7 @@ def counts (s : Statements) : String :=
   String.join (s.claims.goals.map fun goal =>
     let name := goal.goal
     let total := goal.total
-    s!"/-- The counts of the table of caps of `{name}` are those of the stored program. -/\n" ++
+    s!"/-- The table of caps of `{name}` adds up as the stored program does: its counts and its arms are the program's. -/\n" ++
     s!"theorem {name}_counted : {name}Caps.counted stored rootKey = true := by decide +kernel\n\n" ++
     s!"/-- The budget of the table of caps of `{name}`: the number that the frontend computed. -/\n" ++
     s!"theorem {name}_budget : {name}Caps.budget = (({total.num.toNat} : ℕ) : ℚ≥0) / ({total.den} : ℕ) := by\n" ++
