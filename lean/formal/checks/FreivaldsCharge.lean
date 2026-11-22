@@ -5,7 +5,7 @@ import Zkc.Frontend.Written.Statement
 import Zkc.Tests.Frontend.SyntaxHarness
 import Zkc.Tests.Frontend.SourceClause
 import Zkc.Tests.Frontend.PrintedPackageSupport
-import Zkc.Tests.Frontend.WrittenSubject
+import ZkcFormalTests.WrittenSubject
 import Zkc.Core.Admission.Theorems
 import Zkc.Kernel
 import Zkc.Vocabulary.Project
@@ -83,19 +83,19 @@ so the claim is not concluded from that proof: Lean refuses the generated conclu
 place, as a mismatch of types.
 
 The check does not rest on Lean's acceptance of the proof module: the module of the statements
-is compiled with no text, the proof module is compiled against it, in a sandbox, and its object
-is read outside the file, where the kernel replays its declarations, the published theorems are
-of propositions that the module of the statements declares, and the axioms are read from the
-replayed proofs (`WrittenSubject.proveOutside`; `checks/OutsideReading.lean` has the controls
-of that reading, the check of `Either` one on a real subject, and the check of `Guess<3>` the
-control of a text that makes the theorems after it take a hypothesis). Lean's report of the
+holds no text, and the proof module is judged against it and the challenge that the generator
+writes, by `lake comparator`: the published theorems have the statements of the challenge, the
+kernel accepts them, and they rest on the allowed axioms (`WrittenSubject.startModule`;
+`checks/OutsideReading.lean` has the controls of that use, the check of `Either` one on a real
+subject, and the check of `Guess<3>` the control of a text that makes the theorems after it
+take a hypothesis). Lean's report of the
 axioms is read for the theorems of the module of the statements, and for a control, where
 there is exactly one report of each.
 -/
 
 open Zkc.Core Zkc.Frontend Zkc.Frontend.Written
 open Zkc.Tests.Frontend Zkc.Tests.Frontend.PrintedPackageSupport
-open Zkc.Tests.Frontend.WrittenSubject
+open ZkcFormalTests ZkcFormalTests.WrittenSubject
 
 namespace FreivaldsCharge
 

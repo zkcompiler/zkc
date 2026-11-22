@@ -5,7 +5,7 @@ import Zkc.Frontend.Written.Statement
 import Zkc.Tests.Frontend.SyntaxHarness
 import Zkc.Tests.Frontend.SourceClause
 import Zkc.Tests.Frontend.PrintedPackageSupport
-import Zkc.Tests.Frontend.WrittenSubject
+import ZkcFormalTests.WrittenSubject
 import Zkc.Core.Admission.Theorems
 import Zkc.Kernel
 import Zkc.Vocabulary.Project
@@ -94,7 +94,7 @@ at that line and nowhere else.
 
 open Zkc.Core Zkc.Frontend Zkc.Frontend.Written
 open Zkc.Tests.Frontend Zkc.Tests.Frontend.PrintedPackageSupport
-open Zkc.Tests.Frontend.WrittenSubject
+open ZkcFormalTests ZkcFormalTests.WrittenSubject
 
 namespace TwiceCharge
 

@@ -3,6 +3,7 @@ import Zkc.Frontend.Written.Package
 import Zkc.Frontend.Written.Statement
 import Zkc.Tests.Frontend.SyntaxHarness
 import Zkc.Tests.Frontend.PrintedPackageSupport
+import ZkcFormalTests.WrittenSubject
 
 /-!
 What written soundness goals of one scheme claim, as one package.
@@ -52,6 +53,7 @@ elaborates it.
 
 open Zkc.Core Zkc.Frontend Zkc.Frontend.Written
 open Zkc.Tests.Frontend Zkc.Tests.Frontend.PrintedPackageSupport
+open ZkcFormalTests.WrittenSubject (startLakeLean finishLean)
 
 namespace GoalClaimCheck
 
@@ -261,13 +263,13 @@ def run (corpus : System.FilePath) (work : System.FilePath) : IO Unit := do
     ((pairText.splitOn "∀ (witness0 : ").length == 3)
   let stated ← startLakeLean work "ClaimsWitness"
     (← IO.ofExcept (pairStated.claimsModule "ClaimsWitness"))
-  let (ok, output) ← IO.ofExcept proof.get
+  let (ok, output) ← finishLean proof
   acceptedOutput "Claims" ok output theorems
-  let (ok, output) ← IO.ofExcept stated.get
+  let (ok, output) ← finishLean stated
   acceptedOutput "ClaimsWitness" ok output []
-  let (ok, output) ← IO.ofExcept comparison.get
+  let (ok, output) ← finishLean comparison
   acceptedOutput "ClaimsSource" ok output []
-  let (ok, output) ← IO.ofExcept control.get
+  let (ok, output) ← finishLean control
   if ok then throw (IO.userError "Lean accepted another verifier as the deployed package of the claims")
   let unproved := theorems.filter fun theorem_ =>
     ((axiomsOf s!"ClaimsControl.{theorem_}" output).getD ["sorryAx"]).contains "sorryAx"

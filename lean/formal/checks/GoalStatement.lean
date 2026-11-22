@@ -4,7 +4,7 @@ import Zkc.Frontend.Written.Package
 import Zkc.Frontend.Written.Statement
 import Zkc.Tests.Frontend.SyntaxHarness
 import Zkc.Tests.Frontend.PrintedPackageSupport
-import Zkc.Tests.Frontend.WrittenSubject
+import ZkcFormalTests.WrittenSubject
 
 /-!
 The statement of a written soundness goal is about the goal of the source.
@@ -60,8 +60,8 @@ experiment of the statement is the one that a reader would write.
 - Two controls are of the text of the proofs, on the first source. Their text proves its claim
   itself (the other method than the judgment with fees). In one, the text takes its claim as a
   hypothesis of the module's scope: every theorem after the text takes that hypothesis, Lean
-  proves each and accepts the module, and the module is refused outside the file, where the
-  stored statements are read: none of the four published theorems is of its proposition. In
+  proves each and accepts the module, and the judgment (`lake comparator`) refuses it: the
+  statement of a published theorem is not the challenge's. In
   the other, the text defines a name of the claim again (the experiment, as a proposition that
   always holds) and proves the claim written anew: the goal is not concluded from it, and Lean
   refuses the module there.
@@ -69,7 +69,7 @@ experiment of the statement is the one that a reader would write.
 
 open Zkc.Core Zkc.Frontend Zkc.Frontend.Written
 open Zkc.Tests.Frontend Zkc.Tests.Frontend.PrintedPackageSupport
-open Zkc.Tests.Frontend.WrittenSubject (startModule startRefused refusedOutside)
+open ZkcFormalTests.WrittenSubject (startModule startRefused refusedOutside startLakeLean finishLean expectUnproved expectPlaces)
 
 namespace GoalStatementCheck
 
@@ -555,13 +555,10 @@ def run (work : System.FilePath) : IO Unit := do
   let assumed ← proofModule "AssumedControl" fronted "flag" assuming
   -- The claim taken as a hypothesis of the module's scope: every theorem that the generator
   -- writes after the text takes the variable, so Lean proves each and accepts the module;
-  -- none is of its proposition, and the module is refused outside the file, where the stored
-  -- statements are read, with each of the four named.
-  let assumedProof ← IO.asTask (refusedOutside work "a claim taken as a hypothesis" "AssumedControl" assumed
-    ["`AssumedControl.sound_installed` is not of the proposition `AssumedControl.soundClaim`",
-      "`AssumedControl.sound_sound` is not of the proposition `AssumedControl.soundGoal`",
-      "`AssumedControl.sound_result` is not of the proposition `AssumedControl.soundResult`",
-      "`AssumedControl.sound_met` is not of the proposition `AssumedControl.soundWitnessed`"])
+  -- none is of its proposition, and the judgment refuses the module.
+  -- the comparator stops at the first published theorem whose statement is another
+  let assumedProof ← refusedOutside work "a claim taken as a hypothesis" "AssumedControl" assumed
+    ["Challenge and solution theorem statement do not match: 'AssumedControl.sound_installed'"]
   let shadowedProof ← startRefused work "ShadowControl"
     (← proofModule "ShadowControl" fronted "flag" shadowing)
   let (ok, output) ← finishLean closed
@@ -569,7 +566,7 @@ def run (work : System.FilePath) : IO Unit := do
     (!ok && output.contains "constructor for `ClaimedGoal` is marked as private" &&
       output.contains "constructor for `GoalClaims` is marked as private" &&
       (output.splitOn "error").length == 4)
-  -- the task ends when the two modules are accepted, the proof module outside the file too
+  -- accepted when its two modules are, the proof module by the judgment too
   let _ ← finishLean proof
   -- The published theorem of the control is about the second input. It is proved; the consumer,
   -- which reads the first, is not, and is refused where it gives the theorem its premise.
@@ -578,11 +575,11 @@ def run (work : System.FilePath) : IO Unit := do
   expect s!"the consumer of the control was refused for another reason\n{refusal}"
     (refusal.contains "The argument\n  rejected\nhas type" &&
       refusal.contains "(HList.cons true HList.nil)) = some false\nin the application")
-  IO.ofExcept assumedProof.get
+  assumedProof
   -- A name of the claim defined again by the text: the claim written anew is not the claim that
   -- was stated before the text, and the goal is not concluded from it: Lean refuses the module
   -- there, at one place. (The theorem that the text gave the name of the claim's is not of the
-  -- claim either; a module that Lean refuses is not read outside the file.)
+  -- claim either; a module that Lean refuses is not judged.)
   expectUnproved "a name of the claim defined again" "ShadowControl" theorems shadowedProof
     ["sound_sound", "sound_result", "consumer"]
   expectPlaces "a name of the claim defined again" shadowedProof ["Type mismatch"]

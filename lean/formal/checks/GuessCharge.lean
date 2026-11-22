@@ -5,7 +5,7 @@ import Zkc.Frontend.Written.Statement
 import Zkc.Tests.Frontend.SyntaxHarness
 import Zkc.Tests.Frontend.SourceClause
 import Zkc.Tests.Frontend.PrintedPackageSupport
-import Zkc.Tests.Frontend.WrittenSubject
+import ZkcFormalTests.WrittenSubject
 import Zkc.Core.Admission.Theorems
 import Zkc.Kernel
 import Zkc.Vocabulary.Project
@@ -38,14 +38,14 @@ What the source says and the proof module takes as given is asserted here agains
 the ports, the clause, the operand and the table of caps, as literals.
 
 Four controls are refused: three by Lean, each at the places that the check names and at no
-other, and one outside the file.
+other, and one by the judgment.
 
 - A text that proves nothing of the judgment: after its last `end` it declares the judgment as
   an instance variable of the module's scope, with the two linters that would report that
   switched off, and takes the judgment from the variable. Every theorem that the generator
   writes after the text takes the variable as a hypothesis; Lean proves each and accepts the
-  module. It is refused outside the file, where the stored statements of those theorems are
-  read: none of the four is of its proposition.
+  module. The judgment (`lake comparator`) refuses it: the statement of a published theorem is
+  not the challenge's.
 
 - The charge of the source halved (`1 / 16`): the program is what it was, the cap of the draw
   is another and so is the budget, three sixteenths. The module is refused at three places:
@@ -67,7 +67,7 @@ other, and one outside the file.
 
 open Zkc.Core Zkc.Frontend Zkc.Frontend.Written
 open Zkc.Tests.Frontend Zkc.Tests.Frontend.PrintedPackageSupport
-open Zkc.Tests.Frontend.WrittenSubject
+open ZkcFormalTests ZkcFormalTests.WrittenSubject
 
 namespace GuessCharge
 
@@ -191,19 +191,17 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
       places := ["omega could not prove the goal"] },
     -- The judgment taken as a hypothesis: every theorem that the generator writes after the
     -- text takes the variable, so Lean proves each and accepts the module; none is of its
-    -- proposition, and the module is refused outside the file, where the stored statements
-    -- are read, with each of the four named.
+    -- proposition, and the judgment refuses the module: the statement of a published theorem
+    -- is not the challenge's.
     { title := "a judgment taken as a hypothesis", name := "AssumedControl", subject := written,
       text := assumed, refusal := .outside,
-      places := ["`Guess.guessing_installed` is not of the proposition `Guess.guessingClaim`",
-        "`Guess.guessing_sound` is not of the proposition `Guess.guessingGoal`",
-        "`Guess.guessing_result` is not of the proposition `Guess.guessingResult`",
-        "`Guess.guessing_met` is not of the proposition `Guess.guessingWitnessed`"] }]
+      -- the comparator stops at the first published theorem whose statement is another
+      places := ["Challenge and solution theorem statement do not match: 'Guess.guessing_installed'"] }]
   IO.println ("Guess<3> is judged within the table of caps of its goal (the draw at 1/8, three " ++
     "times: 3/8), a fee at every round of the loop; a consumer written apart states the bound " ++
     "as 3/8; 4 of 4 controls refused, three by Lean at the places that the check names and at " ++
-    "no other, and one outside the file, where none of its four published theorems is of its " ++
-    "proposition.")
+    "no other, and one by the judgment, where a published theorem has not the statement of its " ++
+    "challenge.")
 
 end GuessCharge
 
