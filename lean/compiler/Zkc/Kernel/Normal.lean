@@ -138,15 +138,6 @@ def nameComponents (scope : Name) (names : Array Name) (term : Expr) : MetaM Exp
     throwError "kernel_ok: {names.size} names for {next} explicit arguments of data{indentExpr term}"
   return mkAppN term.getAppFn out
 
-/-- A statement with its proof as a theorem of its own, which the kernel checks as it is added,
-whatever the file says of its checks: an option that has the kernel skip a declaration, or
-check it later, does not reach this one. With `zetaDelta` a `let` of the context keeps its
-value in the theorem. A proof that the kernel refuses is an exception here, where the tactic
-that asked is. -/
-def checkedTheorem (type proof : Expr) (zetaDelta := false) : MetaM Expr :=
-  withOptions (fun options => debug.skipKernelTC.set (Lean.Elab.async.set options false) false) do
-    mkAuxTheorem type proof (zetaDelta := zetaDelta)
-
 /-- Closes an equation whose two sides the kernel finds definitionally equal, by reflexivity.
 Lean's own reduction is not asked. The kernel compares the sides once, here: the equation
 becomes a theorem of its own, which the kernel checks as the tactic runs, and the proof that
@@ -169,10 +160,16 @@ elab "kernel_rfl" : tactic => Lean.Elab.Tactic.withMainContext do
   else
     let proof ←
       try
-        -- checked now and by the kernel whatever the file says. A `let` of the context keeps
-        -- its value in the theorem: the kernel has it where it compares the sides in the
-        -- goal's context, and an equation that holds by it is one
-        checkedTheorem type (← mkEqRefl lhs) (zetaDelta := true)
+        -- checked now and by the kernel whatever the file says: an option that has the
+        -- kernel skip a declaration does not reach this one. The theorem is added anew and
+        -- never taken from the cache of auxiliary lemmas: a lemma of the same type that
+        -- another tactic added earlier in the declaration, under such an option, is there
+        -- unchecked.
+        -- A `let` of the context keeps its value in the theorem: the kernel has it where it
+        -- compares the sides in the goal's context, and an equation that holds by it is one
+        withOptions (fun options =>
+            debug.skipKernelTC.set (Lean.Elab.async.set options false) false) do
+          mkAuxTheorem type (← mkEqRefl lhs) (zetaDelta := true) (cache := false)
       catch failure =>
         -- the kernel's own message shows both sides in full, which for a program is long
         if failure.isRuntime || failure matches .internal .. then throw failure
