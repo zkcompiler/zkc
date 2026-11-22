@@ -956,8 +956,10 @@ private def atInstruction {α : Type} (key i path : Expr) (step : MetaM α) : Me
         | none => m!"{key}"
       | _ => m!"{key}"
     -- keys are numbered in each definition: below an application or in a loop the path says
-    -- whose instruction it is. At the start of a walk the path is a variable and says nothing.
-    let below : MessageData := if path.isFVar then m!"" else m!", at the path `{path}`"
+    -- whose instruction it is. At the start of a walk the path is a variable, and in the body
+    -- of a function it is empty: neither says anything.
+    let below : MessageData :=
+      if path.isFVar || path.isAppOfArity ``List.nil 1 then m!"" else m!", at the path `{path}`"
     throwError "walk: at instruction {number} ({instructionKind i}){below}:{indentD failure.toMessageData}"
 
 /-- One step of the walk on a goal: on the judgment that the goal is, or, with `hypothesis`, on
@@ -1305,9 +1307,14 @@ private def compute (goal : MVarId) (written : Syntax) (hypothesis := false) (by
   -- entry equation of a function of the same header that is the function of the call (in the
   -- call's own table, or in another one by `bridge`), with the proof that the call here is the
   -- call there, where the two tables differ. A text states a law of a function in that table.
+  -- The equations of the name space in which the text stands are tried first: an environment
+  -- can hold the equations of two programs with one function between them (a module of
+  -- statements that another imports), and the text's laws are about its own.
   let statedFunction (program header member read : Expr) :
       MetaM (Option (Expr × Expr × Option Expr)) := do
-    for name in ← Lean.labelled `walk_entry do
+    let here ← getCurrNamespace
+    let (own, others) := (← Lean.labelled `walk_entry).partition fun name => here.isPrefixOf name
+    for name in own ++ others do
       let found ← withNewMCtxDepth do
         let entry ← mkConstWithFreshMVarLevels name
         let (_, _, statement) ← forallMetaTelescope (← inferType entry)
@@ -1397,8 +1404,8 @@ private def compute (goal : MVarId) (written : Syntax) (hypothesis := false) (by
       let (lawHere, read) ← lawAt value
       -- the law of a call is left where the module states the function: a call inside a
       -- protocol that the root applies reads the table of the definitions before that
-      -- protocol, of which a text has no name, and a law of the text is about the table of
-      -- the definitions before the root
+      -- protocol, in which the module names no member of the function, and a law of the text
+      -- is about the table of the definitions before the root
       let there ← match called with
         | some (program, header, member) => statedFunction program header member read
         | none => pure none
