@@ -136,7 +136,9 @@ structure Outside where
 outside the file on the two objects. The two sources have one module name and stand in two
 directories, each its own folder: a module is elaborated in a sandbox in which it can write
 only there (`runLakeLean`), since a text is code that runs while Lean elaborates it. A reference
-that Lean refuses is an error of the generator. -/
+that Lean refuses is an error of the generator. The object of the proof module is what that run
+left in the module's folder; the program reads it in the same sandbox, in a folder of its
+own. -/
 def readOutside (work : System.FilePath) (name : String) (module : Module)
     (axioms : List String := allowed) : IO Outside := do
   let place (part source : String) : IO (System.FilePath × System.FilePath × System.FilePath) := do
@@ -164,12 +166,16 @@ def readOutside (work : System.FilePath) (name : String) (module : Module)
   let referenceLean ← runLakeLean referenceSource #["-R", referenceRoot.toString, "-o", reference.toString]
   unless referenceLean.1 do
     throw (IO.userError s!"{name}: Lean refused the module without the text\n{referenceLean.2}")
-  let out ← IO.Process.output {
-    cmd := "lake"
-    env := #[("TMPDIR", some referenceRoot.toString)]
-    args := #["env", "lean", "--run", "Zkc/Tools/Formal/VerifyPublication.lean",
+  -- the object of the proof module is whatever the run of Lean on the text left in its folder,
+  -- and the program maps it into memory as an object without checking its format: it reads the
+  -- object in the sandbox too, in a folder of its own, so that a malformed object can change
+  -- no file. The verdict is still the program's.
+  let readingRoot ← IO.FS.realPath (← do
+    IO.FS.createDirAll (work / s!"{name}.reading"); pure (work / s!"{name}.reading"))
+  let out ← confined readingRoot
+    (#["lake", "env", "lean", "--run", "Zkc/Tools/Formal/VerifyPublication.lean",
       setupPath.toString, reference.toString, candidate.toString, ",".intercalate axioms] ++
-      (module.published.map fun (theorem_, proposition) => s!"{theorem_}={proposition}").toArray }
+      (module.published.map fun (theorem_, proposition) => s!"{theorem_}={proposition}").toArray)
   return { lean, verified := some (out.exitCode == 0, out.stdout ++ out.stderr) }
 
 /-- Lean on a proof module, as a task, with the module read outside the file: a module that
