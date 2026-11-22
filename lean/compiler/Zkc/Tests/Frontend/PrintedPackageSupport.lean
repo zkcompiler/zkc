@@ -117,10 +117,27 @@ The module is elaborated one declaration after another. When declarations are el
 concurrently, a theorem whose proof ends in an exception (a timeout) is left as a name without
 a body: Lean then prints that it depends on no axioms, and that what uses it depends on itself.
 A check reads which theorems are unproved from what Lean prints of their axioms, so it needs
-the other behaviour: the failed theorem is unknown, and what uses it rests on `sorryAx`. -/
+the other behaviour: the failed theorem is unknown, and what uses it rests on `sorryAx`.
+
+**The module is elaborated in a sandbox.** A module of a check can hold an author's text, and a
+text is code that runs while Lean elaborates it: unconfined, one line of it could rewrite a
+file that the check reads afterwards (the program that reads a module's object, a reference,
+another module of the check). So Lean runs under `bwrap`, which the host must have: the file
+system is read-only but for the folder of the module, there is no network, and no process
+outlives the run. The folder has to be the module's own; what Lean and Lake write for the
+module (an object, Lake's temporary file) goes there. -/
 def runLakeLean (path : System.FilePath) (options : Array String := #[]) : IO (Bool × String) := do
-  let out ← IO.Process.output
-    { cmd := "lake", args := #["-q", "lean", path.toString, "--", "-DElab.async=false"] ++ options }
+  let some folder := path.parent
+    | throw (IO.userError s!"a module to elaborate has no folder of its own: {path}")
+  let folder ← IO.FS.realPath folder
+  let some file := path.fileName
+    | throw (IO.userError s!"no module to elaborate at {path}")
+  let out ← IO.Process.output {
+    cmd := "bwrap"
+    args := #["--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc", "--unshare-net",
+      "--unshare-pid", "--die-with-parent", "--bind", folder.toString, folder.toString,
+      "--setenv", "TMPDIR", folder.toString, "--",
+      "lake", "-q", "lean", (folder / file).toString, "--", "-DElab.async=false"] ++ options }
   return (out.exitCode == 0, out.stdout ++ out.stderr)
 
 /-- The axioms that Lean's output says a theorem rests on, when the output has them. -/
@@ -181,7 +198,9 @@ def comparisonModule (name source : String) (goals : List String) (package : Str
 /-- Lean on a module in the package of the working directory, as a task. -/
 def startLakeLean (work : System.FilePath) (name text : String) :
     IO (Task (Except IO.Error (Bool × String))) := do
-  let path := work / s!"{name}.lean"
+  -- a folder of the module's own: it is all that the module can write while Lean reads it
+  IO.FS.createDirAll (work / name)
+  let path := work / name / s!"{name}.lean"
   IO.FS.writeFile path text
   IO.asTask (runLakeLean path)
 

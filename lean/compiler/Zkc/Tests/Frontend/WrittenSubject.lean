@@ -134,9 +134,9 @@ structure Outside where
 
 /-- Lean on a module and on its reference, each compiled to an object, and then the program
 outside the file on the two objects. The two sources have one module name and stand in two
-directories. The proof module is compiled in a sandbox (`bwrap`, which the host must have),
-since its text is code that runs while Lean elaborates it. A reference that Lean refuses is an
-error of the generator. -/
+directories, each its own folder: a module is elaborated in a sandbox in which it can write
+only there (`runLakeLean`), since a text is code that runs while Lean elaborates it. A reference
+that Lean refuses is an error of the generator. -/
 def readOutside (work : System.FilePath) (name : String) (module : Module)
     (axioms : List String := allowed) : IO Outside := do
   let place (part source : String) : IO (System.FilePath × System.FilePath × System.FilePath) := do
@@ -148,29 +148,25 @@ def readOutside (work : System.FilePath) (name : String) (module : Module)
   let (referenceRoot, referenceSource, reference) ← place "reference" module.reference
   -- where Lake has the imports of the proof module's header, which the generator wrote: asked
   -- before the text runs, and kept outside the folder that the text can write
-  let setup ← IO.Process.output { cmd := "lake", args := #["-q", "setup-file", candidateSource.toString] }
+  let setup ← IO.Process.output {
+    cmd := "lake"
+    args := #["-q", "setup-file", candidateSource.toString]
+    env := #[("TMPDIR", some referenceRoot.toString)] }
   unless setup.exitCode == 0 do
     throw (IO.userError s!"{name}: no setup for the imports of the proof module\n{setup.stderr}")
   let setupPath := referenceRoot / "setup.json"
   IO.FS.writeFile setupPath setup.stdout
-  -- the proof module, with the author's text, is compiled in a sandbox: the file system is
-  -- read-only but for the module's own folder, there is no network, and no process outlives
-  -- the compilation. A text can then not change the program that reads its object, the
-  -- reference, or the imports.
-  let confined ← IO.Process.output {
-    cmd := "bwrap"
-    args := #["--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc", "--unshare-net",
-      "--unshare-pid", "--die-with-parent", "--bind", candidateRoot.toString, candidateRoot.toString,
-      "--setenv", "TMPDIR", candidateRoot.toString, "--",
-      "lake", "-q", "lean", candidateSource.toString, "--", "-DElab.async=false",
-      "-R", candidateRoot.toString, "-o", candidate.toString] }
-  let lean := (confined.exitCode == 0, confined.stdout ++ confined.stderr)
+  -- the proof module, with the author's text, is compiled as every module of a check is: in
+  -- a sandbox in which only its own folder can be written (`runLakeLean`). A text can then
+  -- not change the program that reads its object, the reference, the setup or the imports.
+  let lean ← runLakeLean candidateSource #["-R", candidateRoot.toString, "-o", candidate.toString]
   unless lean.1 do return { lean }
   let referenceLean ← runLakeLean referenceSource #["-R", referenceRoot.toString, "-o", reference.toString]
   unless referenceLean.1 do
     throw (IO.userError s!"{name}: Lean refused the module without the text\n{referenceLean.2}")
   let out ← IO.Process.output {
     cmd := "lake"
+    env := #[("TMPDIR", some referenceRoot.toString)]
     args := #["env", "lean", "--run", "Zkc/Tools/Formal/VerifyPublication.lean",
       setupPath.toString, reference.toString, candidate.toString, ",".intercalate axioms] ++
       (module.published.map fun (theorem_, proposition) => s!"{theorem_}={proposition}").toArray }

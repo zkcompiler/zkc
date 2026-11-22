@@ -941,9 +941,10 @@ declarations of the object on the imports (all that it checks: not code marked `
 no theorem can use), the published theorems are read from the result of
 that replay, each is of its proposition as a module generated without the text and without
 the text's imports defines it (`Module.reference`, with the definitions that the proposition
-uses), and the axioms are read from the replayed proofs. The proof module is compiled in a sandbox (the file system
-read-only but for its own folder, no network, no process that outlives it), so a text cannot
-change the program, the reference or the imports before they are read. What is trusted is then
+uses), and the axioms are read from the replayed proofs. Every module of a check, a proof module as a control with the same
+text, is elaborated in a sandbox (the file system read-only but for the module's own folder, no
+network, no process that outlives it), so a text cannot change the program, the reference or
+the imports before they are read. What is trusted is then
 the toolchain, the imports, this generator, that program and the sandbox; and that the object
 which Lean wrote for the proof module is read as an object is (the program replays every
 declaration that it finds there, but reads the file's format without checking it). A statement that a check itself writes after the text (a consumer, with its
