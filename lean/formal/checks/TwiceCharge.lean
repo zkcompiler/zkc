@@ -258,7 +258,7 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
     throw (IO.userError "halving the charge changed the package, or the budget is not one quarter")
   -- The fee of one quarter at the draw of the first application is over its cap of one eighth:
   -- at that place and no other.
-  let refusal := "the fee is not within the cap that the table gives the draw `site_at_0_1`\n  1 / 4 ≤ 1 / 8"
+  let refusal := "the fee is not within the cap that the table gives the draw `site_0_1`\n  1 / 4 ≤ 1 / 8"
   let halvedControl : Control :=
     { title := "the charge of the callee halved", name := "CapControl", subject := halved,
       text := template ++ converseText, unproved := ofWalk, places := [refusal], only := true,

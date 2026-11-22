@@ -21,8 +21,9 @@ condition at the end is the judgment of the rest on what the role holds of the r
 into an application by it, as it goes into the arm of a choice.
 
 Inside the callee a function is read in the table of the definitions before the callee, and a
-law of the function is stated once, in another table. `fnMeaning_entry` is the equation by
-which a call in one table is the call in another.
+law of the function is stated once, in another table. The core's `fnMeaning_entry`
+(`Zkc/Core/Evidence/FunctionEntry.lean`) is the equation by which a call in one table is the
+call in another.
 -/
 
 namespace Zkc.Core
@@ -91,22 +92,5 @@ theorem Process.interpret_applied {L B C D : Type} (ρ : Role → Role)
   rw [Process.interpret_bind, Process.map_eq_bind, Process.interpret_bind,
     interpret_mapR ρ j blind]
   rfl
-
-/-- **A function is the denotation of its body, in whatever table it is read.** The meaning of
-a function in a program is its body over the functions before it, as the entry of the function
-in the program's table has them (`Defs.functionEntry`). The entry of one function in two
-programs has one body and one table before it, so this equation, at the two programs, is the
-passage from a call in the table of one to a law stated in the table of the other: a protocol
-that is applied calls its functions in the table of the definitions before it, and a text
-states a law of a function in the table of the definitions before the root. -/
-theorem fnMeaning_entry (M : Model V) (p : Typed V) {hdr : FnHeader V}
-    (f : Member p.headers.fns hdr) (ins : HList M.Val hdr.ins) :
-    fnMeaning M p f ins =
-      (p.defs.functionEntry (List.nodup_append.mp p.distinct).1 f).body.denote
-        (localSem M _
-          (Defs.fnTable M (p.defs.functionEntry (List.nodup_append.mp p.distinct).1 f).definitions))
-        [] (Env.empty.extend (p.defs.functionEntry (List.nodup_append.mp p.distinct).1 f).inputs ins) := by
-  unfold fnMeaning
-  exact (p.defs.functionEntry _ f).meaning M ins
 
 end Zkc.Core
