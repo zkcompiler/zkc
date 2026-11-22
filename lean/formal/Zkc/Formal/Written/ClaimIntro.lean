@@ -1,5 +1,6 @@
 module
 
+public import Zkc.Formal.Walk
 public meta import Lean
 
 public meta section
@@ -14,7 +15,9 @@ and in the judgment that a text proves (`<goal>Judged`) also the validity of eac
 premise. A proof of it begins by introducing them. `intro` with a list of names counts
 positions, and a text written that way changes whenever the generator adds a binder;
 `claim_intro` introduces every binder with the name that the proposition has for it. A
-hypothesis that the proposition states with an arrow has no name and gets none.
+hypothesis that the proposition states with an arrow has no name and gets none. A binder of
+data (an input, the path) is introduced at its computed type, as a reply of the walk is, so
+that a law about a value of the field or about a list of them applies to it as it stands.
 -/
 
 namespace Zkc.Formal.Written
@@ -40,7 +43,14 @@ elab "claim_intro" : tactic => liftMetaTactic fun goal => do
   unless target.isForall do
     throwError "claim_intro: the goal binds nothing{indentExpr target}"
   goal ← goal.replaceTargetDefEq target
-  let (_, introduced) ← goal.introNP (leadingBinders target)
+  let (binders, introduced) ← goal.introNP (leadingBinders target)
+  let mut introduced := introduced
+  for binder in binders do
+    let type ← introduced.withContext do instantiateMVars (← binder.getType)
+    if ← introduced.withContext do isProp type then continue
+    let computed ← introduced.withContext do Zkc.Formal.Walk.computedTypes type
+    unless computed == type do
+      introduced ← introduced.replaceLocalDeclDefEq binder computed
   return [introduced]
 
 end Zkc.Formal.Written

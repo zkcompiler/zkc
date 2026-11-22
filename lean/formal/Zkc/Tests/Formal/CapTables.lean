@@ -340,4 +340,16 @@ info: 'Zkc.Tests.Formal.CapTables.judged' depends on axioms: [propext, Classical
 #guard_msgs in
 #print axioms judged
 
+/-! `kernel_rfl` is checked by the kernel also where a file turns the check of its
+declarations off, and the words of the walk's tactics stay names. -/
+
+/-- error: kernel_rfl: the kernel does not find the two sides definitionally equal -/
+#guard_msgs in
+set_option debug.skipKernelTC true in
+example : (0 : Nat) = 1 := by kernel_rfl
+
+example (n : Nat) : n + 0 = n := by kernel_rfl
+
+example (late excluding : Nat) : late + excluding = excluding + late := Nat.add_comm late excluding
+
 end Zkc.Tests.Formal.CapTables

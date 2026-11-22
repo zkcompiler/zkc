@@ -344,8 +344,12 @@ def facts (s : Statements) : String :=
 /-- Where the walks of a module start. The meanings of a program are closed to Lean's own
 reduction, and a walk reads a term in an environment; so for the deciding role of the root, for
 each function before the root that the text names and for each goal's relation, the meaning in
-the installed program is stated to be the sealed denotation of the body, which the kernel
-checks. The program of the role is `<role>Program`, in the kernel's normal form; the equations
+the installed program is stated to be the sealed denotation of the body. For the role the
+kernel compares the two sides. For a function the equation is the one that the core carries
+with the entry of the function in its table (`Defs.functionEntry`), so that the kernel compares
+the body with the body and does not run the lookup against the interpreter: that comparison
+took 14 seconds for a function three entries deep in a table and takes none now. The program
+of the role is `<role>Program`, in the kernel's normal form; the equations
 are `<role>_meaning`, `<function>_meaning` and `<goal>_meaning`, for every model. Each has the
 label `walk_entry`: a walk on a goal that judges such a meaning passes along the equation that
 fits, and a text names none of them. -/
@@ -355,7 +359,10 @@ def entries (s : Statements) : String :=
     s!"@[walk_entry]\ntheorem {label}_meaning (M : Model V) (inputs : HList M.Val {label}Header.ins) :\n" ++
     s!"    fnMeaning M {program} {member} inputs =\n" ++
     s!"      ({label}Body.denote (localSem M {label}Before.headers.fns (Defs.fnTable M {label}Before.defs)) []\n" ++
-    s!"        (Env.empty.extend {label}Names inputs)).sealed := by\n  kernel_rfl\n\n"
+    s!"        (Env.empty.extend {label}Names inputs)).sealed := by\n" ++
+    s!"  unfold fnMeaning\n  rw [Process.sealed_eq]\n" ++
+    s!"  exact ({program}.defs.functionEntry (List.nodup_append.mp {program}.distinct).1\n" ++
+    s!"    {member}).meaning M inputs\n\n"
   let label := "verifier"
   let role :=
       s!"-- The program of the {label}, in the kernel's normal form.\n" ++
@@ -761,7 +768,9 @@ def ceilingNames (s : Statements) : List String :=
 the library that the generated statements name, and the model's. A text that walks the program
 has the walk and the equations where it starts; `walks` says whether the module is for one. -/
 def imports (model : ModelText) (walks : Bool) : List String :=
-  packageImports ++ (if walks then ["Zkc.Formal.Walk", "Zkc.Formal.Written.WalkFees"] else []) ++
+  packageImports ++
+    (if walks then ["Zkc.Core.Evidence.FunctionEntry", "Zkc.Formal.Walk",
+      "Zkc.Formal.Written.WalkFees"] else []) ++
     ["Zkc.Formal.OracleProcess", "Zkc.Formal.ReturnExperiment", "Zkc.Formal.Written.LawSamplers",
       "Zkc.Formal.Written.SiteCaps", "Zkc.Formal.Written.FunctionMeaning",
       "Zkc.Formal.Written.ClaimIntro", "Zkc.Formal.Written.Published"] ++ model.imports

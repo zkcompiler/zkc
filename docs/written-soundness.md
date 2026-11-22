@@ -110,7 +110,6 @@ theorem either_judged : eitherJudged := by
   walk as allowed
   walk_pay (1 / 4) excluding (fun drawn : ℕ => drawn = sent) as drawn differs
   case weight => simpa using prEvent_drawPosition_eq_le 3 sent
-  case within => decide +kernel
   walk as hit
   exact differs (Nat.eq_of_beq_eq_true hit)
 ```
@@ -129,8 +128,8 @@ A condition of the source shows in a goal as the values that it computes: `or` a
 
 **At an effect** under the judgment with fees:
 
-- `walk_free as v`: nothing is excluded and no fee is paid. The reply is `v`, and `permitted_v` says that it is permitted. A message got has no sampler and is met this way.
-- `walk_pay fee excluding set as v kept`: a coin pays `fee` for the replies in `set`. It leaves, in this order: `weight`, that the sampler draws a reply of the set with probability at most the fee, which is the mathematics of the step; `within`, that the fee is at most what is left of the budget (the budget less the fees paid before), unless a hypothesis of the goal is exactly that; `cap`, that the fee is within the cap of the draw, unless the kernel decides it; and then the rest after a reply `v` with `kept : ¬ set v`, judged within the budget less the fee. A fee over the cap that the module states is refused with the name of the site.
+- `walk_free as v`: nothing is excluded and no fee is paid. The reply is `v`, and `permitted_v` says that it is permitted. A reply has its computed type: a scalar is a value of the field of the model, and so is a part of a tuple and an item of a sequence, so that a theorem about the field or about a list over it applies to `v.1` or to `v` as it stands. The inputs that `claim_intro` introduces are read the same way. A message got has no sampler and is met this way.
+- `walk_pay fee excluding set as v kept`: a coin pays `fee` for the replies in `set`. It leaves, in this order: `weight`, that the sampler draws a reply of the set with probability at most the fee, which is the mathematics of the step; `within`, that the fee is at most what is left of the budget (the budget less the fees paid before), unless a hypothesis of the goal is exactly that or the kernel decides it on closed numbers (a fee over what is left is then refused); `cap`, that the fee is within the cap of the draw, unless the kernel decides it; and then the rest after a reply `v` with `kept : ¬ set v`, judged within the budget less the fee. The cap is compared first: a fee over the cap that the module states is refused with the name of the site, also where it is over what is left of the budget.
 
 For a draw of a position in the standard model, `prEvent_drawPosition_eq_le n v` bounds the probability that a position of `index<n + 1>` is `v` by one in `n + 1` (so `7` for `index<8>`), stated with `toProbability`; `simpa using` puts it in the form of `weight`.
 
@@ -171,4 +170,4 @@ A control of a charge is a source: no caller gives a statement its table. A text
 
 ## What a text cannot do yet
 
-A case analysis on a variant and an attempt are computed as one instruction: a walk does not go into them. A call of a protocol (an application) has no rule: a root that applies another protocol has a table of caps and no text. A goal whose clause is a `reduces`, and a knowledge goal, get no statement from this generator.
+A case analysis on a variant and an attempt are computed as one instruction: a walk does not go into them, and a walk that has to wait on the value that a case analysis on a variant takes apart (a `match` on a reply) is refused there. A walk goes through a call of a protocol (an application) as the kernel computes it: a text meets the effects of the callee and pays at its draws under the root's table, and nothing inside the callee has a variable, so a hypothesis about a value of the callee is not in a form to read. A step that begins an instruction and fails says the number of the instruction's key in the stored program and what the instruction is; a step on what is left of an instruction after an effect or a fork names none. A goal whose clause is a `reduces`, and a knowledge goal, get no statement from this generator.

@@ -139,16 +139,37 @@ def nameComponents (scope : Name) (names : Array Name) (term : Expr) : MetaM Exp
   return mkAppN term.getAppFn out
 
 /-- Closes an equation whose two sides the kernel finds definitionally equal, by reflexivity.
-Lean's own reduction is not asked: the kernel compares the sides here, so that a failure is
-reported at the tactic, and again when the proof is closed. -/
+Lean's own reduction is not asked. The kernel compares the sides once, here: the equation
+becomes a theorem of its own, which the kernel checks as the tactic runs, and the proof that
+the tactic closes refers to that theorem, so that the declaration around it does not have the
+kernel compare the sides again. A failure is reported at the tactic, also under an option of
+the file that turns the kernel's check of declarations off. -/
 elab "kernel_rfl" : tactic => Lean.Elab.Tactic.withMainContext do
   let goal ← Lean.Elab.Tactic.getMainGoal
-  let some (_, lhs, rhs) := (← instantiateMVars (← goal.getType)).eq?
+  let type ← instantiateMVars (← goal.getType)
+  let some (_, lhs, rhs) := type.eq?
     | throwError "kernel_rfl: the goal is no equation"
-  let same ← ofExceptKernelException (Lean.Kernel.isDefEq (← getEnv) (← getLCtx) lhs rhs)
-  unless same do
-    throwError "kernel_rfl: the kernel does not find the two sides definitionally equal"
-  goal.assign (← mkEqRefl lhs)
+  let refused : MessageData :=
+    m!"kernel_rfl: the kernel does not find the two sides definitionally equal"
+  if type.hasExprMVar then
+    -- an equation with something still to be found is no theorem yet: the kernel compares the
+    -- sides as they stand, and again when the proof is closed
+    let same ← ofExceptKernelException (Lean.Kernel.isDefEq (← getEnv) (← getLCtx) lhs rhs)
+    unless same do throwError refused
+    goal.assign (← mkEqRefl lhs)
+  else
+    let proof ←
+      try
+        -- checked now and by the kernel whatever the file says: an option that has the
+        -- kernel skip a declaration does not reach this one
+        withOptions (fun options =>
+            debug.skipKernelTC.set (Lean.Elab.async.set options false) false) do
+          mkAuxTheorem type (← mkEqRefl lhs)
+      catch failure =>
+        -- the kernel's own message shows both sides in full, which for a program is long
+        if failure.isRuntime || failure matches .internal .. then throw failure
+        throwError refused
+    goal.assign proof
 
 /-- `kernel_normal name : type := term` defines `name` as the kernel's normal form of `term`,
 and states `name.eq : name = term`, which the kernel checks. -/
