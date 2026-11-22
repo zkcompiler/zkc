@@ -72,11 +72,16 @@ Five controls are refused by Lean, each at the place that the check names and at
   reads no peer of an effect: refused at the application, with the judgment;
 - a call of the callee's function taken by a true law of another function of the same types:
   refused at that line, since the header of a function has its key and the law is of another
-  type than the call. (A law about a function of the same header in another program is refused
-  by the equation that the kernel checks at that line; a text has one package, and no check
-  gives it such a law.)
+  type than the call;
 - the comparison of one arm of the forking callee turned. The walk is what it was, and the text
   is refused at the end of that arm.
+
+A sixth module that Lean must refuse holds two programs. A law about a function of the same
+header in another program, with another body, is of the type of the call, and what refuses it
+is the equation between the two tables that the kernel checks where the law is used. The module
+of a second source, whose `same` compares its first operand with itself, stands before the
+module of `Twice`, and the text of `Twice` takes its first call by the law of the other: refused
+at that line and nowhere else.
 -/
 
 open Zkc.Core Zkc.Frontend Zkc.Frontend.Written
@@ -184,7 +189,9 @@ def asideSource : String :=
   "goal aside = soundness(Checked, stage = written)\n"
 
 /-- The text of that root: one application of `Round`, as in `Twice`; the walk passes the
-application of the prover's protocol as it passes any instruction without an effect. -/
+application of the prover's protocol as it passes any instruction without an effect. The call
+of `same` inside `Round` is taken by its value (`walk_compute`), with the law of the text as
+the proof of the goal that this leaves. -/
 def asideText : String :=
   "noncomputable section\n\n" ++
   "theorem aside_relation {F G : Type} (D : StandardModel.Data F G) [DecidableEq F]\n" ++
@@ -204,7 +211,10 @@ def asideText : String :=
   "  walk_free as sent\n" ++
   "  walk_pay (1 / 4) excluding (fun drawn : ℕ => drawn = sent) as drawn differs\n" ++
   "  case weight => simpa using prEvent_drawPosition_eq_le 3 sent\n" ++
-  "  walk\n  walk_law same_law D drawn sent\n" ++
+  "  -- the call of `same` in `Round`, by its value: the law is left where the module states\n" ++
+  "  -- the function, in the table before the root, and the law of the text closes it\n" ++
+  "  walk\n  walk_compute (.cons (drawn.beq sent) .nil)\n" ++
+  "  case law => exact same_law D drawn sent\n" ++
   "  -- the application of `Keep` is passed, and the guard of the root is met\n" ++
   "  walk as hit\n" ++
   "  exact differs (Nat.eq_of_beq_eq_true hit)\n\n" ++
@@ -307,6 +317,18 @@ def otherLaw : String :=
   "    fnMeaning (StandardModel.model D) calleeProgram otherMember (.cons a (.cons b .nil)) =\n" ++
   "      .done (.cons (!a.beq b) .nil) := by\n" ++
   "  refine done_of_judged ?_\n  repeat walk_step\n  subst_vars\n  rfl\n\n"
+
+/-- A second program whose function `same` has the header of the one of `Twice` (its key and its
+types) and another body: it compares its first operand with itself. Every round then hits, so
+the root returns on the claim alone. -/
+def sideSource : String :=
+  round "1 / 4" "a == a" ++
+  "protocol Twice roles(P, V)(claim: bool @(P, V), first: index<4> @P, second: index<4> @P):\n" ++
+  "    a <- Round(first)\n    b <- Round(second)\n" ++
+  "    guard @V claim\n" ++
+  "spec for Twice:\n    proves @V Holds(claim)\n" ++
+  "scheme Checked = Twice:\n    prover P\n    construction interactive\n" ++
+  "goal twice = soundness(Checked, stage = written)\n"
 
 /-- A walk of the verifier of `Twice` under the judgment that records the effects of a run.
 Nothing says that it reads no peer of an effect, and it does read them: the walk does not enter
@@ -448,6 +470,23 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
     { title := "a call taken by the law of another function", name := "OtherControl",
       subject := other, text := otherText ++ converseText, unproved := ofWalk,
       places := ["Type mismatch\n  other_law D one first"], only := true }
+  -- A law about a function of the same header in another program: the module of the second
+  -- source, with the text of its own proofs, and after it the module of `Twice`, whose text
+  -- takes its first call of `same` by the law of the other program. The law is of the type of
+  -- the call; the equation between the two tables is what the kernel refuses, at that line.
+  let side ← read sideSource (reading "twice")
+  let sideText ← replaceOnce (← replaceOnce template ".done (.cons (a.beq b) .nil)" ".done (.cons (a.beq a) .nil)")
+    ("  walk as hit\n  rcases Bool.or_eq_true _ _ |>.mp hit with h | h\n" ++
+      "  · exact differs_one (Nat.eq_of_beq_eq_true h)\n  · exact differs_two (Nat.eq_of_beq_eq_true h)\n")
+    "  walk\n"
+  let sideModule ← side.module "Side" { text := sideText, theorems := ofText "twice" }
+  let foreignText ← replaceOnce template "  walk_law same_law D one first\n"
+    "  walk_law Side.same_law D one first\n"
+  let foreignModule ← written.module "Foreign" { text := foreignText, theorems := ofText "twice" }
+  let [_, foreignBody] := foreignModule.text.splitOn "namespace Foreign\n"
+    | throw (IO.userError "the module of `Twice` does not open its name space once")
+  let foreign ← startLakeLean work "ForeignLaw"
+    (sideModule.text ++ "\nnamespace Foreign\n" ++ foreignBody)
 
   -- The nested root: one application in the root, two in the protocol that it applies.
   let nested ← read nestedSource (reading "nested")
@@ -477,16 +516,32 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
   unless (asideModule.text.splitOn "(Member.tail Member.head)").length > 1 do
     throw (IO.userError "the protocol that the root applies first is the last before the root")
   let asideProof ← startModule work "Aside" asideModule
+  -- The same module after the module of another program that has the same function `same`
+  -- (the module of `Twice`): the entry equations of both are then in scope, and the value step
+  -- of the text states its law in the text's own program, so that the text is accepted there
+  -- as it is alone.
+  let earlier ← written.module "Earlier"
+    { text := template ++ converseText,
+      theorems := ofText "twice" ++ ["twice_pays_first", "twice_returns"] }
+  let [_, asideBody] := asideModule.text.splitOn "namespace Aside\n"
+    | throw (IO.userError "the module of `Aside` does not open its name space once")
+  let twoPrograms ← startLakeLean work "TwoPrograms"
+    (earlier.text ++ "\nnamespace Aside\n" ++ asideBody)
 
   let _ ← check work "Twice" written
     { text := template ++ converseText,
       theorems := ofText "twice" ++ ["twice_pays_first", "twice_returns"] }
     [halvedControl, turnedControl, tracedControl, otherControl]
+  let (ok, output) ← finishLean foreign
+  refusedOutput "a call taken by the law of a function of another program" ok output
+    ["walk_law: the law is about a function that this call does not read"] (only := true)
   let (ok, output) ← finishLean nestedProof
   acceptedOutput "Nested" ok output nestedModule.theorems allowed
   let (ok, output) ← finishLean loopedProof
   acceptedOutput "Looped" ok output loopedModule.theorems allowed
   let (ok, output) ← finishLean asideProof
+  acceptedOutput "Aside" ok output asideModule.theorems allowed
+  let (ok, output) ← finishLean twoPrograms
   acceptedOutput "Aside" ok output asideModule.theorems allowed
 
   -- The root whose callees fork, after the modules above (each is a run of Lean of its own):
@@ -514,7 +569,8 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
     "that applies it in the body of a loop by an invariant, and a root that applies it and " ++
     "then a protocol of the prover alone, and a root whose callees have a guard after a draw " ++
     "and a choice, with the forks named by the root's text; " ++
-    "5 of 5 controls refused, at the places that the check names and at no other.")
+    "5 of 5 controls refused, at the places that the check names and at no other, and a law " ++
+    "about a function of the same header in another program refused where it is used.")
 
 end TwiceCharge
 

@@ -98,7 +98,10 @@ along the equation between the term and the step that the rule is about:
 - `walk_compute value` takes a computation of a role by its law. The law, that the operation
   gives `value` on the operands, is left as the goal `law`; the body of a function that the
   operation calls is not read, and the law of a call is stated of the meaning of the function
-  in its program (`fnMeaning`). `walk_compute value at h` does the same on a hypothesis.
+  in a program (`fnMeaning`): in the program in which a labelled entry equation states that
+  function, which for a call inside a protocol that is applied is another table than the one
+  that the call reads, so that a law of the text closes the goal as it stands.
+  `walk_compute value at h` does the same on a hypothesis.
 - `walk_loop invariant` takes a loop by an invariant (`Term.interpret_loop_invariant`). The
   invariant is a function of the iteration number, of each carried value, of what was collected
   so far for each collected type, latest first, and of what the judgment carries along a path.
@@ -821,6 +824,14 @@ private def statedByEntry (program model header member role path inputs : Expr) 
     if found.isSome then return found
   return none
 
+/-- The program whose definitions a table reads: `p` where the definitions are written `p.defs`,
+as the projection or as the field applied. -/
+private def programOfDefs (definitions : Expr) : Option Expr :=
+  match definitions with
+  | .proj ``Zkc.Core.Typed 1 p => some p
+  | _ =>
+    if definitions.isAppOfArity ``Zkc.Core.Typed.defs 2 then some definitions.appArg! else none
+
 /-- **An application is entered as a region is.** `bound` is an instruction that applies a
 protocol and then the rest, under the semantics of a role. What the instruction denotes for the
 role is the callee's program of the role that it plays there, at the path of the application,
@@ -834,12 +845,13 @@ to read; the next step enters it by the labelled equation of that meaning, and f
 rule of the walk is the same in the callee as in the root.
 
 Nothing is returned, and the instruction is then computed as any other, where the instruction
-applies no protocol, where the semantics is not that of a role over the tables of a program,
-or where the role plays no role of the callee (its program there has no effect). Where the
-role takes part, two things are errors, each said at the step: that no theorem or hypothesis
-says that the judgment reads no peer (the callee's program, computed with its peers renamed,
-is no term that a text can read), and that no labelled entry equation is about the callee's
-role (the module of statements is then not the module of this program). -/
+applies no protocol, or where the role plays no role of the callee (its program there has no
+effect). An application that the walk cannot enter is an error, said at the step, and is not
+computed as one instruction (the callee's program with its peers renamed is no term that a text
+can read): where the semantics is not written as that of a role over the tables of a program;
+where the kernel does not decide whether the role plays a role of the callee; where no theorem
+or hypothesis says that the judgment reads no peer; and where no labelled entry equation is
+about the callee's role (the module of statements is then not the module of this program). -/
 private def enterApplication (goal : MVarId) (j : Judged) (bound why instr sem key path env : Expr) :
     MetaM (Option MVarId) := goal.withContext do
   -- the instruction: an operation that applies a protocol to operands. Each term is taken
@@ -849,17 +861,21 @@ private def enterApplication (goal : MVarId) (j : Judged) (bound why instr sem k
   let_expr Zkc.Core.RoleOp.apply _ _ _ _ callee roles distinct covers operands fits := operation
     | return none
   -- the semantics: of a role, over the tables of a program
-  let_expr Zkc.Core.roleSem _ model _ role fnTable rTable := sem | return none
-  let_expr Zkc.Core.Defs.rTable _ _ _ definitions := rTable | return none
-  let program ← match definitions with
-    | .proj ``Zkc.Core.Typed 1 p => pure p
-    | _ => do
-      let_expr Zkc.Core.Typed.defs _ p := definitions | return none
-      pure p
+  let unread (what : MessageData) (e : Expr) : MetaM (Option MVarId) :=
+    throwError "walk: the instruction applies a protocol, and {what}: the application is not \
+      entered{indentExpr e}"
+  let_expr Zkc.Core.roleSem _ model _ role fnTable rTable := sem
+    | unread "the semantics is not written as that of a role" sem
+  let_expr Zkc.Core.Defs.rTable _ _ _ definitions := rTable
+    | unread "the table of role programs is not written as that of a program" rTable
+  let some program := programOfDefs definitions
+    | unread "the table of role programs is not written over the definitions of a program" rTable
   -- a role that plays no role of the callee takes no part in the application: its program
   -- there has no effect, and the instruction is computed as any other
   let plays ← kernelWhnf (← mkAppM ``List.elem #[role, roles])
-  unless plays.isConstOf ``Bool.true do return none
+  if plays.isConstOf ``Bool.false then return none
+  unless plays.isConstOf ``Bool.true do
+    return ← unread "the kernel does not decide whether the role plays a role of it" plays
   -- what the instruction denotes: `(mapR M ρ (rTable _ callee r' path' inputs')).map leave`
   let rule ← mkAppM ``Zkc.Core.Instr.denote_apply_role
     #[role, fnTable, rTable, key, callee, roles, distinct, covers, operands, fits, arguments,
@@ -940,7 +956,7 @@ private def instructionKind (i : Expr) : String :=
 /-- A step that begins an instruction and fails says which instruction it was at: the number
 of its key in the stored program and what it is. A failure of Lean itself (an interruption, a
 limit of time or of depth) is passed on as it is. -/
-private def atInstruction {α : Type} (key i : Expr) (step : MetaM α) : MetaM α := do
+private def atInstruction {α : Type} (key i path : Expr) (step : MetaM α) : MetaM α := do
   try step
   catch failure =>
     if failure.isRuntime || failure matches .internal .. then throw failure
@@ -949,7 +965,12 @@ private def atInstruction {α : Type} (key i : Expr) (step : MetaM α) : MetaM �
         | some n => m!"{n}"
         | none => m!"{key}"
       | _ => m!"{key}"
-    throwError "walk: at instruction {number} ({instructionKind i}):{indentD failure.toMessageData}"
+    -- keys are numbered in each definition: below an application or in a loop the path says
+    -- whose instruction it is. At the start of a walk the path is a variable, and in the body
+    -- of a function it is empty: neither says anything.
+    let below : MessageData :=
+      if path.isFVar || path.isAppOfArity ``List.nil 1 then m!"" else m!", at the path `{path}`"
+    throwError "walk: at instruction {number} ({instructionKind i}){below}:{indentD failure.toMessageData}"
 
 /-- One step of the walk on a goal: on the judgment that the goal is, or, with `hypothesis`, on
 the judgment from which the goal concludes. -/
@@ -976,7 +997,7 @@ private def stepOrFork (goal : MVarId) (hypothesis := false) (fork : Option Lean
       let t := term.getAppArgs
       let (mid, key, i, names, rest) := (t[3]!, t[4]!, t[5]!, t[6]!, t[7]!)
       let instruction ← kernelWhnf i
-      atInstruction key instruction do
+      atInstruction key instruction path do
         -- the term is its first instruction, then the rest on the values
         let rule := mkAppN (mkConst ``Zkc.Core.Term.denote_step)
           #[D, sem, Γ, outs, mid, key, i, names, rest, path, env]
@@ -1270,10 +1291,68 @@ private def compute (goal : MVarId) (written : Syntax) (hypothesis := false) (by
   let operation ← kernelWhnf o[6]!
   let table := s[4]!
   let called : Option (Expr × Expr × Expr) :=
-    if operation.isAppOfArity ``Zkc.Core.LocalOp.call 4 && table.isAppOfArity ``Zkc.Core.Defs.fnTable 4
-        && (table.getArg! 3).isAppOfArity ``Zkc.Core.Typed.defs 2 then
-      some ((table.getArg! 3).appArg!, operation.getArg! 2, operation.getArg! 3)
+    if operation.isAppOfArity ``Zkc.Core.LocalOp.call 4 && table.isAppOfArity ``Zkc.Core.Defs.fnTable 4 then
+      (programOfDefs (table.getArg! 3)).map fun program =>
+        (program, operation.getArg! 2, operation.getArg! 3)
     else none
+  -- The call here is the call of the same function in another table: both are the body of the
+  -- function, by the entries of the function in the two tables (`fnMeaning_entry`). The
+  -- equation is for every input and is a theorem of its own, which the kernel checks here
+  -- whatever the file says of its checks: it is added anew at each use and never taken from
+  -- the cache of auxiliary lemmas, in which a lemma of the same type that another tactic added
+  -- under an option of the file may stand unchecked. Nothing is returned where the kernel
+  -- refuses it: the two are not one function.
+  let bridge (program header member thereProgram thereMember read : Expr) : MetaM (Option Expr) := do
+    let (bridgeType, proof) ← withLocalDeclD `inputs (← inferType read) fun inputs => do
+      let at_ (p m : Expr) := mkAppN (mkConst ``Zkc.Core.fnMeaning) #[s[0]!, s[1]!, p, header, m, inputs]
+      let entryHere ← mkAppM ``Zkc.Core.fnMeaning_entry #[s[1]!, program, member, inputs]
+      let entryThere ← mkAppM ``Zkc.Core.fnMeaning_entry #[s[1]!, thereProgram, thereMember, inputs]
+      pure (← mkForallFVars #[inputs] (← mkEq (at_ program member) (at_ thereProgram thereMember)),
+        ← mkLambdaFVars #[inputs] (← mkEqTrans entryHere (← mkEqSymm entryThere)))
+    try
+      let joined ← withOptions (fun options =>
+          debug.skipKernelTC.set (Lean.Elab.async.set options false) false) do
+        mkAuxTheorem (← instantiateMVars bridgeType) (← instantiateMVars proof) (cache := false)
+      return some (mkApp joined read)
+    catch failure =>
+      if failure.isRuntime || failure matches .internal .. then throw failure
+      return none
+  -- Where the module states the function of a call: the program and the member of a labelled
+  -- entry equation of a function of the same header that is the function of the call (in the
+  -- call's own table, or in another one by `bridge`), with the proof that the call here is the
+  -- call there, where the two tables differ. A text states a law of a function in that table.
+  -- An environment can hold the entry equations of two programs with one function between
+  -- them (a module of two programs; a module of statements that another imports), so the
+  -- order is fixed: an equation of the call's own table, wherever it stands; then the
+  -- equations of the name space in which the text stands, whose laws are about its own
+  -- program; then the others.
+  let statedFunction (program header member read : Expr) :
+      MetaM (Option (Expr × Expr × Option Expr)) := do
+    -- the program, the header and the member of a labelled entry equation of a function
+    let entryOf (name : Lean.Name) : MetaM (Option (Expr × Expr × Expr)) := withNewMCtxDepth do
+      let entry ← mkConstWithFreshMVarLevels name
+      let (_, _, statement) ← forallMetaTelescope (← inferType entry)
+      let some (_, lhs, _) := statement.eq? | return none
+      let stated := lhs.getAppArgs
+      -- `fnMeaning M p member inputs`, after the vocabulary and before the header
+      unless lhs.getAppFn.isConstOf ``Zkc.Core.fnMeaning && stated.size == 6 do return none
+      let (thereProgram, thereHeader, thereMember) := (stated[2]!, stated[3]!, stated[4]!)
+      if thereProgram.hasExprMVar || thereHeader.hasExprMVar || thereMember.hasExprMVar then
+        return none
+      unless ← kernelSame thereHeader header do return none
+      return some (thereProgram, thereHeader, thereMember)
+    let here ← getCurrNamespace
+    let (own, others) := (← Lean.labelled `walk_entry).partition fun name => here.isPrefixOf name
+    let mut elsewhere := #[]
+    for name in own ++ others do
+      let some (thereProgram, _, thereMember) ← entryOf name | continue
+      if ← withReducible (isDefEq thereProgram program) then
+        if ← kernelSame thereMember member then return some (thereProgram, thereMember, none)
+      else elsewhere := elsewhere.push (thereProgram, thereMember)
+    for (thereProgram, thereMember) in elsewhere do
+      if let some joined ← bridge program header member thereProgram thereMember read then
+        return some (thereProgram, thereMember, some joined)
+    return none
   -- the law at a value, with the operands in a form to read, and the operands. A call of a
   -- function of a program is stated as the meaning of the function there, which is the form
   -- that a law of the function has; with `place`, as its meaning in another program
@@ -1333,31 +1412,31 @@ private def compute (goal : MVarId) (written : Syntax) (hypothesis := false) (by
           throwError "walk_law: the law is about no function of a program{indentExpr (← inferType proof)}"
         let here ← (withReducible (isDefEq lawProgram program)) <&&> kernelSame lawMember member
         unless here do
-          -- for every input: a theorem of its own, which the kernel checks here, so that a
-          -- law of a function that this call does not read is refused at this line; it is
-          -- stated once for a function and a pair of tables
-          let (bridgeType, bridge) ← withLocalDeclD `inputs (← inferType read) fun inputs => do
-            let at_ (p m : Expr) := mkAppN (mkConst ``Zkc.Core.fnMeaning) #[s[0]!, s[1]!, p, header, m, inputs]
-            let entryHere ← mkAppM ``Zkc.Core.fnMeaning_entry #[s[1]!, program, member, inputs]
-            let entryThere ← mkAppM ``Zkc.Core.fnMeaning_entry #[s[1]!, lawProgram, lawMember, inputs]
-            pure (← mkForallFVars #[inputs] (← mkEq (at_ program member) (at_ lawProgram lawMember)),
-              ← mkLambdaFVars #[inputs] (← mkEqTrans entryHere (← mkEqSymm entryThere)))
-          let joined ←
-            try
-              withOptions (fun options =>
-                  debug.skipKernelTC.set (Lean.Elab.async.set options false) false) do
-                mkAuxTheorem (← instantiateMVars bridgeType) (← instantiateMVars bridge)
-            catch failure =>
-              if failure.isRuntime || failure matches .internal .. then throw failure
-              throwError "walk_law: the law is about a function that this call does not read: \
+          -- a law of a function that this call does not read is refused at this line
+          let some joined ← bridge program header member lawProgram lawMember read
+            | throwError "walk_law: the law is about a function that this call does not read: \
                 the call is in the table of one program and the law in the table of another, \
                 and the two are not one function{indentExpr (← inferType proof)}"
-          proof ← mkEqTrans (mkApp joined read) proof
+          proof ← mkEqTrans joined proof
       pure (value, ← instantiateMVars proof, [])
     else
       let value ← instantiateMVars (← Tactic.elabTermEnsuringType written valueType)
-      let law ← mkFreshExprSyntheticOpaqueMVar (tag := `law) (← lawAt value).1
-      pure (value, law, (← readValues (← useEquations law.mvarId!)).toList)
+      let (lawHere, read) ← lawAt value
+      -- the law of a call is left where the module states the function: a call inside a
+      -- protocol that the root applies reads the table of the definitions before that
+      -- protocol, in which the module names no member of the function, and a law of the text
+      -- is about the table of the definitions before the root
+      let there ← match called with
+        | some (program, header, member) => statedFunction program header member read
+        | none => pure none
+      match there with
+      | some (thereProgram, thereMember, some joined) =>
+        let law ← mkFreshExprSyntheticOpaqueMVar (tag := `law)
+          (← lawAt value (some (thereProgram, thereMember))).1
+        pure (value, ← mkEqTrans joined law, (← readValues (← useEquations law.mvarId!)).toList)
+      | _ =>
+        let law ← mkFreshExprSyntheticOpaqueMVar (tag := `law) lawHere
+        pure (value, law, (← readValues (← useEquations law.mvarId!)).toList)
   let withValue := mkApp rule value
   -- the step is the rest on the value: the term is the step of the rule, and the rule gives
   -- the rest on what the role holds of the value
