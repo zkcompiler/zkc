@@ -32,3 +32,10 @@ module of statements proves for each charged draw of its root. Where a text pays
 a draw, the fee is compared with the value, and a fee that is not within it is refused with the
 name of the site. -/
 register_label_attr walk_cap
+
+/-- **A judgment that reads no peer.** A theorem `Blind ρ judgment` (`Zkc/Formal/Application.lean`)
+for every renaming `ρ` of roles: the judgment of an effect does not change when the peers of
+the effect are renamed. Under a judgment for which a labelled theorem says so, a walk goes into
+an application of a protocol: the callee's program, whose peers the application renames, is
+judged as it stands. -/
+register_label_attr walk_blind

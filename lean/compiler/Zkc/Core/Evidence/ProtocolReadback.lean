@@ -39,6 +39,20 @@ def Defs.protocolEntry : {hs : Headers V} → (defs : Defs V hs) → hs.keys.Nod
     let entry := ds.protocolEntry (Headers.earlierProtocolKeys distinct) ref
     ⟨entry.earlier,entry.definitions,entry.distinct,entry.inputs,entry.body,entry.checked,entry.meaning⟩
 
+/-- **The program of a role is the denotation of the projection of its protocol's body, in
+whatever table the protocol is read**: over the tables of the definitions before the protocol,
+as its entry in the program's table has them. -/
+theorem roleMeaning_entry (M : Model V) (p : Typed V) {hdr : ProtocolHeader V}
+    (x : Member p.headers.protocols hdr) (r : Role) (path : List Frame)
+    (ins : HList (RV M r) hdr.ins) :
+    roleMeaning M p x r path ins =
+      (project r (p.defs.protocolEntry p.distinct x).body).denote
+        (roleSem M r (Defs.fnTable M (p.defs.protocolEntry p.distinct x).definitions)
+          (Defs.rTable M (p.defs.protocolEntry p.distinct x).definitions))
+        path (Env.empty.extend (p.defs.protocolEntry p.distinct x).inputs ins) := by
+  unfold roleMeaning
+  exact (p.defs.protocolEntry p.distinct x).meaning M r path ins
+
 namespace ProtocolEntry
 
 /-- Resolve the call identity and executable ports while retaining the checked protocol shape. -/

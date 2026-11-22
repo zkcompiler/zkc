@@ -2,6 +2,7 @@ module
 
 public import Zkc.Formal.Walk
 public import Zkc.Formal.Written.SiteCaps
+public import Zkc.Formal.Written.Blind
 public meta import Lean
 
 public meta section
