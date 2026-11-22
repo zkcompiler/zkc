@@ -197,6 +197,35 @@ structure ProofText where
   /-- How the text establishes the claim of each goal. -/
   method : Method := .fees
 
+/-- The names that a text, and a consumer after it, may use. -/
+def opens : String :=
+  "open ZkcFormal ZkcFormal.ProbabilisticProcess ZkcFormal.Written OracleComp ProbComp\n" ++
+  "open Zkc.Frontend.Written (CapTable UseCaps DrawCap CallCap)\n" ++
+  "open scoped NNRat ENNReal\n"
+
+/-- A theorem that a check writes after the closing theorems of a proof module: a consumer of
+the published theorems, as a reader of the source could write it. It is given in parts, so
+that its statement can stand in the challenge with no proof (`Module.challenge`): the lines
+before it (a section and its variables), its signature from `theorem` up to the `:=`, its
+proof, and the lines after it. The statement is elaborated on both sides and compared as
+terms, so it should make no auxiliary declaration (a `match`, a nested proof): a text with a
+declaration of the same shape would have Lean reuse its own, and the pair would be refused. -/
+structure Consumer where
+  name : String
+  before : String := ""
+  signature : String
+  proof : String
+  after : String := ""
+  imports : List String := []
+
+/-- A consumer as it stands in the proof module. -/
+def Consumer.text (c : Consumer) : String :=
+  c.before ++ c.signature ++ " := " ++ c.proof ++ "\n" ++ c.after
+
+/-- A consumer as it stands in the challenge: its statement, with no proof. -/
+def Consumer.stated (c : Consumer) : String :=
+  c.before ++ c.signature ++ " := by sorry\n" ++ c.after
+
 /-- **The two modules of the goals of one scheme**, as Lean reads them: the module of the
 statements, which holds everything that the generator states before a proof and no word of an
 author, and the proof module, which imports it and holds the author's text with what is proved
@@ -215,7 +244,7 @@ structure Module where
   statedImports : List String
   /-- The proof module: the import of the statements and of what the text asks for, the name
   space with the names that a text may use, the text, and what is proved after it. It asks for
-  no axioms: a module that is accepted is read outside the file, and a control appends
+  no axioms: a module that is accepted is judged by its published theorems, and a control appends
   `requests`. -/
   proof : String
   /-- The theorems of the proof module, in its order. -/
@@ -227,9 +256,31 @@ structure Module where
   textLine : Nat
   textLines : Nat
   /-- The published theorems of the proof module, each with its proposition, under their full
-  names: a name is its components, so that a name of the source that is no identifier of Lean
-  is not written and read again. -/
+  names. A check writes them as Lean prints a name and reads them again (`String.toName`
+  reads the quotation of a component that is no identifier). -/
   published : List (Lean.Name × Lean.Name) := []
+  /-- The consumers that a check wrote after the closing theorems, which are judged with the
+  published theorems. -/
+  consumers : List Consumer := []
+
+/-- The challenge of a pair, as `lake comparator` takes one: a module that imports the module
+of the statements and states each published theorem over its proposition, and each consumer
+as the check wrote its statement, with no proof. It is the trusted side with the statements;
+the proof module is the solution. A consumer is stated in the name space and under the names
+that the proof module opens, so that its statement is read as it is there. -/
+def Module.challenge (m : Module) : String :=
+  s!"import {m.statementsName}\n" ++
+    String.join ((m.consumers.flatMap (·.imports)).eraseDups.map (s!"import {·}\n")) ++
+    String.join (m.published.map fun (theorem_, proposition) =>
+      s!"theorem {theorem_} : {proposition} := by sorry\n") ++
+    (if m.consumers.isEmpty then "" else
+      s!"\nopen Zkc.Core\nnamespace {m.space}\n" ++ opens ++ String.join (m.consumers.map (·.stated)) ++
+        s!"end {m.space}\n")
+
+/-- The theorems of a pair that the judgment is of: the published ones and the consumers,
+under their full names (a name is its components, as in `publicationPairs`). -/
+def Module.judged (m : Module) : List Lean.Name :=
+  m.published.map (·.1) ++ m.consumers.map fun c => .str (.str .anonymous m.space) c.name
 
 /-- Requests for the axioms of the theorems of the proof module, by their full names: what a
 control appends to the proof module, to read from Lean's reports which theorems are left
@@ -387,12 +438,6 @@ def relationInputs (s : Statements) (goal : ClaimedGoal) : Except String (List S
     | throw s!"the package of the claims does not have the relation of {goal.goal}"
   let .fn _ ins _ _ _ _ _ _ := relation | throw s!"the relation of {goal.goal} is no function"
   return ins.map (ty (b := s.package.bindings))
-
-/-- The names that the text after this one may use. -/
-def opens : String :=
-  "open ZkcFormal ZkcFormal.ProbabilisticProcess ZkcFormal.Written OracleComp ProbComp\n" ++
-  "open Zkc.Frontend.Written (CapTable UseCaps DrawCap CallCap)\n" ++
-  "open scoped NNRat ENNReal\n"
 
 /-- What was read from the source, as terms: the root, the roles, the functions before the root
 that the text names, and for each goal its proof arguments, its table of caps and its
@@ -928,9 +973,9 @@ def header (modules : List String) : String :=
 /-- The published theorems of the goals, each with the proposition that it is of, under their
 full names in the name space `name`: for a goal, `<goal>_installed : <goal>Claim`,
 `<goal>_sound : <goal>Goal`, `<goal>_result : <goal>Result`, `<goal>_met : <goal>Witnessed`.
-The check outside the file (`ZkcFormalTools/VerifyPublication.lean`) is given this list. The
-theorems themselves are written by `conclusions` and `closings`, which spell the same endings:
-if the two came apart, the check outside would find no theorem under the listed name. -/
+The challenge of a pair states this list (`Module.challenge`), and the judgment is of these
+names. The theorems themselves are written by `conclusions` and `closings`, which spell the
+same endings: if the two came apart, the judgment would find no theorem under a listed name. -/
 def publicationPairs (s : Statements) (name : String) : List (Lean.Name × Lean.Name) :=
   s.claims.goals.flatMap fun goal =>
     [("_installed", "Claim"), ("_sound", "Goal"), ("_result", "Result"), ("_met", "Witnessed")].map
@@ -964,28 +1009,30 @@ another class gives its own description (`model`).
 declarations, write into the kernel's environment, and declare a variable that becomes a
 hypothesis of the theorems after it, and Lean then accepts the proof module and reports no
 axiom. So Lean's acceptance of the proof module is not what a check of a subject rests on. The
-check compiles the module of the statements first, where no text is; it compiles the proof
-module against that object; and it has the object of the proof module read outside the file
-(`ZkcFormalTools/VerifyPublication.lean`): the kernel replays its declarations on its imports
-(all that it checks: not code marked `unsafe`, which no theorem can use), the object declares
-no name that an import has, each published theorem is read from the result of that replay and
-is of a proposition that the module of the statements declares, and the axioms are read from
-the replayed proofs. A proposition is therefore what the generator stated, elaborated where no
-text was read: there is no second copy of it to compare.
+two modules are the trusted and the untrusted side of a judgment that the toolchain makes
+(`lake comparator`, Lean's own way to judge a proof that may be malicious): the module of the
+statements and the challenge (`Module.challenge`: each published theorem stated over its
+proposition, with no proof) are written by the generator and hold no word of an author; the
+proof module is the solution. A check builds and exports the trusted side before any text is
+read, builds the solution confined, and gives the two exports to the comparator
+(`ZkcFormalTests.SubjectProject`), which loads no object: each published theorem of the
+solution has the statement of the challenge, with every definition that the statement uses, the
+kernel accepts the solution, and the published theorems rest on the allowed axioms.
 
-Every module of a check is elaborated in a sandbox (the file system read-only but for the
-module's own folder, no network, no socket, no process that outlives it), so a text cannot
-change the program, the object of the statements or the imports before they are read. What is
-trusted is then the toolchain, the imports, this generator, that program and the sandbox. The
-object that is read is whatever the run of Lean on the text left in the module's folder, which
-a text can write itself: the program replays every declaration that it finds there, so what it
-accepts is a proof of the stated propositions whoever wrote the file; but it maps the file into
-memory without checking its format, so that the reader of objects behaves on such a file as on
-an object is trusted too (the program runs in the sandbox, where a malformed object can change
-no file). A statement that a check itself writes after the text (a consumer, with its numerals
-and notations) is still read in the scope that the text leaves. -/
+What is trusted is then Lean's logic and a kernel, the comparator and the exporter, the
+sandbox in which a text is read, the imports as built, and this generator and the frontend, for
+the statements saying what the source claims. A statement that a check itself writes after the
+text (a `Consumer`, with its numerals and notations) stands in the challenge as well, read
+there in the name space and under the names that the generator opens, and is judged with the
+published theorems; in the proof module it is read in the scope that the text leaves, and a
+text that changes what it says there is refused by its statement.
+
+`statements` names the module of the statements where it is not `<name>.Stated`: a control
+whose statements differ from its subject's keeps the subject's name space and has a module of
+statements of its own. -/
 def module (s : Statements) (name : String) (proof : ProofText)
-    (walks := true) (after : ProofText := {}) (model : ModelText := s.chosenModel) :
+    (walks := true) (after : List Consumer := []) (model : ModelText := s.chosenModel)
+    (statements : Option Lean.Name := none) :
     Except String Module := do
   let claims ← s.claimTexts model
   let ceilings ← s.ceilings
@@ -994,25 +1041,26 @@ def module (s : Statements) (name : String) (proof : ProofText)
   let stated := ["admitted_exists", "covered"] ++ s.countNames ++ s.siteNames ++
     (if walks then s.entryNames else []) ++ (if fees then s.judgmentNames else []) ++
     s.ceilingNames
-  let statements := header (imports model walks) ++ s!"namespace {name}\n" ++
+  let stating := header (imports model walks) ++ s!"namespace {name}\n" ++
     (Written.package s.package).text ++ opens ++ s.facts ++ "\n" ++ s.transfers ++ claims ++
     coverage model ++ s.counts ++ s.sites ++ (if walks then s.entries else "") ++
     judgments ++ ceilings ++ footer name stated
-  let statementsName : Lean.Name := .str (.str .anonymous name) "Stated"
-  let proofImports := proof.imports ++ after.imports
+  let statementsName : Lean.Name := statements.getD (.str (.str .anonymous name) "Stated")
+  let proofImports := proof.imports ++ after.flatMap (·.imports)
   -- the proof module reopens the name space and the names that the statements were read with
   let opening := header (toString statementsName :: proofImports) ++ s!"namespace {name}\n" ++ opens
   let text := opening ++ proof.text ++ "\n" ++ (if fees then s.conclusions else "") ++
-    s.closings ++ after.text ++ s!"end {name}\n"
+    s.closings ++ String.join (after.map (·.text)) ++ s!"end {name}\n"
   return {
-    space := name, statementsName, statements, stated, statedImports := imports model walks
+    space := name, statementsName, statements := stating, stated, statedImports := imports model walks
     proof := text
     proved := proof.theorems ++ (if fees then s.conclusionNames else []) ++ s.closingNames ++
-      after.theorems
+      after.map (·.name)
     proofImports
     textLine := (opening.splitOn "\n").length
     textLines := (proof.text.splitOn "\n").length
-    published := s.publicationPairs name }
+    published := s.publicationPairs name
+    consumers := after }
 
 /-- A module with the package of the claims and the propositions of the goals alone: the facts,
 the transfers and the propositions, with nothing proved. Lean elaborates the statements. -/

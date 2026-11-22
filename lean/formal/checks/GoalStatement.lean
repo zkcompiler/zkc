@@ -4,7 +4,7 @@ import Zkc.Frontend.Written.Package
 import Zkc.Frontend.Written.Statement
 import Zkc.Tests.Frontend.SyntaxHarness
 import Zkc.Tests.Frontend.PrintedPackageSupport
-import Zkc.Tests.Frontend.WrittenSubject
+import ZkcFormalTests.WrittenSubject
 
 /-!
 The statement of a written soundness goal is about the goal of the source.
@@ -60,8 +60,8 @@ experiment of the statement is the one that a reader would write.
 - Two controls are of the text of the proofs, on the first source. Their text proves its claim
   itself (the other method than the judgment with fees). In one, the text takes its claim as a
   hypothesis of the module's scope: every theorem after the text takes that hypothesis, Lean
-  proves each and accepts the module, and the module is refused outside the file, where the
-  stored statements are read: none of the four published theorems is of its proposition. In
+  proves each and accepts the module, and the judgment (`lake comparator`) refuses it: the
+  statement of a published theorem is not the challenge's. In
   the other, the text defines a name of the claim again (the experiment, as a proposition that
   always holds) and proves the claim written anew: the goal is not concluded from it, and Lean
   refuses the module there.
@@ -69,7 +69,7 @@ experiment of the statement is the one that a reader would write.
 
 open Zkc.Core Zkc.Frontend Zkc.Frontend.Written
 open Zkc.Tests.Frontend Zkc.Tests.Frontend.PrintedPackageSupport
-open Zkc.Tests.Frontend.WrittenSubject (startModule startRefused refusedOutside)
+open ZkcFormalTests.WrittenSubject (startModule startRefused refusedOutside startLakeLean finishLean expectUnproved expectPlaces)
 
 namespace GoalStatementCheck
 
@@ -323,29 +323,34 @@ def proofText (guarded : String) : String :=
   "      serveLaws_permitted _ _ (StandardModel.draws_permitted data)⟩, by kernel_rfl⟩\n\n" ++
   "end\n"
 
-def consumer : String :=
-  "noncomputable section\n" ++
-  "open ZkcFormal.Written.StandardModel\n" ++
-  "open ZkcFormal.Written.FiniteModel (data)\n\n" ++
-  "theorem consumer {a : Admitted V} (admitted : admit stored association = .ok a) :\n" ++
-  "    ∃ root : Member a.program.headers.protocols rootHeader,\n" ++
-  "      a.program.findProtocol rootKey = some ⟨rootHeader, root⟩ ∧\n" ++
-  "      ∃ relation : Member a.program.headers.fns soundHeader,\n" ++
-  "        a.program.find soundKey = some (.fn relation) ∧\n" ++
-  "        (functionResult (t := .bool)\n" ++
-  "            (fnMeaning (model data) a.program relation (.cons false .nil)) = some false →\n" ++
-  "          Pr{let out ← (simulateQ (handlerOf (serveLaws (model data) (draws data))) (embed\n" ++
-  "              (roleMeaning (model data) a.program root 1 []\n" ++
-  "                (.cons false (.cons true .nil))))).run.run ()}[\n" ++
-  "            ∃ results, out.1 = some (.inl results)] ≤ 0) := by\n" ++
-  "  have free : soundCaps.total = 0 := by\n" ++
-  "    rw [CapTable.total, sound_budget]\n    simp [toProbability]\n" ++
-  "  obtain ⟨root, found, relation, foundRelation, claim⟩ := sound_sound admitted\n" ++
-  "  refine ⟨root, found, relation, foundRelation, fun rejected => ?_⟩\n" ++
-  "  rw [← free]\n" ++
-  "  simpa using claim data [] false trivial true trivial rejected _ (serveLaws (model data) (draws data))\n" ++
-  "    ⟨serveLaws_follows _ _, serveLaws_permitted _ _ (StandardModel.draws_permitted data)⟩ ()\n\n" ++
-  "end\n"
+def consumer : Consumer where
+  name := "consumer"
+  before :=
+    "noncomputable section\n" ++
+    "open ZkcFormal.Written.StandardModel\n" ++
+    "open ZkcFormal.Written.FiniteModel (data)\n\n"
+  signature :=
+    "theorem consumer {a : Admitted V} (admitted : admit stored association = .ok a) :\n" ++
+    "    ∃ root : Member a.program.headers.protocols rootHeader,\n" ++
+    "      a.program.findProtocol rootKey = some ⟨rootHeader, root⟩ ∧\n" ++
+    "      ∃ relation : Member a.program.headers.fns soundHeader,\n" ++
+    "        a.program.find soundKey = some (.fn relation) ∧\n" ++
+    "        (functionResult (t := .bool)\n" ++
+    "            (fnMeaning (model data) a.program relation (.cons false .nil)) = some false →\n" ++
+    "          Pr{let out ← (simulateQ (handlerOf (serveLaws (model data) (draws data))) (embed\n" ++
+    "              (roleMeaning (model data) a.program root 1 []\n" ++
+    "                (.cons false (.cons true .nil))))).run.run ()}[\n" ++
+    "            ∃ results, out.1 = some (.inl results)] ≤ 0)"
+  proof :=
+    "by\n" ++
+    "  have free : soundCaps.total = 0 := by\n" ++
+    "    rw [CapTable.total, sound_budget]\n    simp [toProbability]\n" ++
+    "  obtain ⟨root, found, relation, foundRelation, claim⟩ := sound_sound admitted\n" ++
+    "  refine ⟨root, found, relation, foundRelation, fun rejected => ?_⟩\n" ++
+    "  rw [← free]\n" ++
+    "  simpa using claim data [] false trivial true trivial rejected _ (serveLaws (model data) (draws data))\n" ++
+    "    ⟨serveLaws_follows _ _, serveLaws_permitted _ _ (StandardModel.draws_permitted data)⟩ ()"
+  after := "\nend\n"
 
 /-- The proof module of a source, as the generator assembles it for a text that does not walk:
 the package of its claims, what the generator writes around the proofs, the proofs and the
@@ -358,7 +363,7 @@ def proofModule (name text guarded : String)
     { text := ← IO.ofExcept (alter s (proofText guarded))
       theorems := ["sound_installed", "sound_witnessed"]
       method := .direct }
-    (walks := false) (after := { text := consumer, theorems := ["consumer"] }))
+    (walks := false) (after := [consumer]))
 
 /-- The proof of the claim under another name, so that a control can state `sound_installed`
 itself. -/
@@ -555,13 +560,10 @@ def run (work : System.FilePath) : IO Unit := do
   let assumed ← proofModule "AssumedControl" fronted "flag" assuming
   -- The claim taken as a hypothesis of the module's scope: every theorem that the generator
   -- writes after the text takes the variable, so Lean proves each and accepts the module;
-  -- none is of its proposition, and the module is refused outside the file, where the stored
-  -- statements are read, with each of the four named.
-  let assumedProof ← IO.asTask (refusedOutside work "a claim taken as a hypothesis" "AssumedControl" assumed
-    ["`AssumedControl.sound_installed` is not of the proposition `AssumedControl.soundClaim`",
-      "`AssumedControl.sound_sound` is not of the proposition `AssumedControl.soundGoal`",
-      "`AssumedControl.sound_result` is not of the proposition `AssumedControl.soundResult`",
-      "`AssumedControl.sound_met` is not of the proposition `AssumedControl.soundWitnessed`"])
+  -- none is of its proposition, and the judgment refuses the module.
+  -- the comparator stops at the first published theorem whose statement is another
+  let assumedProof ← refusedOutside work "a claim taken as a hypothesis" "AssumedControl" assumed
+    ["Challenge and solution theorem statement do not match: 'AssumedControl.sound_installed'"]
   let shadowedProof ← startRefused work "ShadowControl"
     (← proofModule "ShadowControl" fronted "flag" shadowing)
   let (ok, output) ← finishLean closed
@@ -569,7 +571,7 @@ def run (work : System.FilePath) : IO Unit := do
     (!ok && output.contains "constructor for `ClaimedGoal` is marked as private" &&
       output.contains "constructor for `GoalClaims` is marked as private" &&
       (output.splitOn "error").length == 4)
-  -- the task ends when the two modules are accepted, the proof module outside the file too
+  -- accepted when its two modules are, the proof module by the judgment too
   let _ ← finishLean proof
   -- The published theorem of the control is about the second input. It is proved; the consumer,
   -- which reads the first, is not, and is refused where it gives the theorem its premise.
@@ -578,11 +580,11 @@ def run (work : System.FilePath) : IO Unit := do
   expect s!"the consumer of the control was refused for another reason\n{refusal}"
     (refusal.contains "The argument\n  rejected\nhas type" &&
       refusal.contains "(HList.cons true HList.nil)) = some false\nin the application")
-  IO.ofExcept assumedProof.get
+  assumedProof
   -- A name of the claim defined again by the text: the claim written anew is not the claim that
   -- was stated before the text, and the goal is not concluded from it: Lean refuses the module
   -- there, at one place. (The theorem that the text gave the name of the claim's is not of the
-  -- claim either; a module that Lean refuses is not read outside the file.)
+  -- claim either; a module that Lean refuses is not judged.)
   expectUnproved "a name of the claim defined again" "ShadowControl" theorems shadowedProof
     ["sound_sound", "sound_result", "consumer"]
   expectPlaces "a name of the claim defined again" shadowedProof ["Type mismatch"]

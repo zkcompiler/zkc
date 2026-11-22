@@ -5,7 +5,7 @@ import Zkc.Frontend.Written.Statement
 import Zkc.Tests.Frontend.SyntaxHarness
 import Zkc.Tests.Frontend.SourceClause
 import Zkc.Tests.Frontend.PrintedPackageSupport
-import Zkc.Tests.Frontend.WrittenSubject
+import ZkcFormalTests.WrittenSubject
 import Zkc.Core.Admission.Theorems
 import Zkc.Kernel
 import Zkc.Vocabulary.Project
@@ -94,7 +94,7 @@ at that line and nowhere else.
 
 open Zkc.Core Zkc.Frontend Zkc.Frontend.Written
 open Zkc.Tests.Frontend Zkc.Tests.Frontend.PrintedPackageSupport
-open Zkc.Tests.Frontend.WrittenSubject
+open ZkcFormalTests ZkcFormalTests.WrittenSubject
 
 namespace TwiceCharge
 
@@ -617,23 +617,13 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
         ["twice_pays_first", "twice_returns", "twice_first_effect", "twice_recorded"] }
   let twoPrograms ← startLakeLean work "TwoPrograms" (asOne [earlier, asideModule])
 
-  let _ ← check work "Twice" written
+  let twiceCheck ← start work "Twice" written
     { text := template ++ converseText,
       theorems := ofText "twice" ++
         ["twice_pays_first", "twice_returns", "twice_first_effect", "twice_recorded"] }
     [halvedControl, turnedControl, unblindControl, otherControl]
-  let (ok, output) ← finishLean foreign
-  refusedOutput "a call taken by the law of a function of another program" ok output
-    ["walk_law: the law is about a function that this call does not read"] (only := true)
-  -- each of these tasks ends when its two modules are accepted, the proof module outside the
-  -- file as well
-  let _ ← nestedCheck.finish
-  let _ ← finishLean loopedProof
-  let _ ← finishLean asideProof
-  let (ok, output) ← finishLean twoPrograms
-  acceptedOutput "Aside" ok output (asideModule.stated ++ asideModule.proved) allowed
 
-  -- The root whose callees fork, after the modules above (each is a run of Lean of its own):
+  -- The root whose callees fork:
   -- the draw of `Gate`, the draws of both arms of `Pick`, and one application of each.
   let forked ← read (forkedSource) (reading "forked" #["claim", "side", "first", "second"])
   let forkedGoal ← forked.goal
@@ -652,7 +642,21 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
       unproved := ["forked_judged", "forked_installed", "forked_sound", "forked_result"],
       places := ["has type\n  (!two.beq second) = true\nbut is expected to have type\n  two.beq second = true"],
       only := true }
-  let _ ← check work "Forked" forked { text := forkedText, theorems := ofText "forked" } [armControl]
+  let forkedCheck ← start work "Forked" forked { text := forkedText, theorems := ofText "forked" } [armControl]
+
+  -- Every module is added: the first asking builds them all.
+  let _ ← twiceCheck.finish
+  let (ok, output) ← finishLean foreign
+  refusedOutput "a call taken by the law of a function of another program" ok output
+    ["walk_law: the law is about a function that this call does not read"] (only := true)
+  -- each of these tasks ends when its two modules are accepted, the proof module by the
+  -- judgment as well
+  let _ ← nestedCheck.finish
+  let _ ← finishLean loopedProof
+  let _ ← finishLean asideProof
+  let (ok, output) ← finishLean twoPrograms
+  acceptedOutput "Aside" ok output (asideModule.stated ++ asideModule.proved) allowed
+  let _ ← forkedCheck.finish
   IO.println ("Twice is judged within the table of caps of its goal (the draw of the protocol " ++
     "that it applies at 1/4, under two applications: 1/2), with the call of a function inside " ++
     "the callee taken by a law stated before the root; a root that applies a protocol that " ++

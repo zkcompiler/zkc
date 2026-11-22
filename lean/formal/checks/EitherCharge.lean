@@ -5,7 +5,7 @@ import Zkc.Frontend.Written.Statement
 import Zkc.Tests.Frontend.SyntaxHarness
 import Zkc.Tests.Frontend.SourceClause
 import Zkc.Tests.Frontend.PrintedPackageSupport
-import Zkc.Tests.Frontend.WrittenSubject
+import ZkcFormalTests.WrittenSubject
 import Zkc.Core.Admission.Theorems
 import Zkc.Kernel
 import Zkc.Vocabulary.Project
@@ -44,12 +44,12 @@ the draw in each). The walk goes into each block as it goes into an arm: the gua
 draw of a block is where a walk that computed a block as one instruction was stuck. Its text
 is in this check.
 
-Every module that the check accepts is also read outside the file (`startModule`): its object
-is replayed by the kernel on the module of its statements, which was compiled with no text, and
-its published theorems are of the propositions of that module. One control is of that reading: a text that turns the
-kernel's check off and proves a false bound, on a source whose charges are too low. Lean
-accepts it, with the allowed axioms for every theorem, and the reading outside refuses it at
-the false equation.
+Every module that the check accepts is also judged (`startModule`): `lake comparator` judges
+it against the module of its statements and its challenge, which hold no text, and its
+published theorems have the statements of the challenge and pass the kernel. One control is of
+that judgment: a text that turns the kernel's check off and proves a false bound, on a source
+whose charges are too low. Lean accepts it, with the allowed axioms for every theorem, and the
+kernel of the judgment refuses it.
 
 One control is refused by Lean, at the place that the check names and at no other: the two
 charges exchanged in the source. The program and the budget are what they were; the cap of
@@ -59,7 +59,7 @@ is refused with the name of that site.
 
 open Zkc.Core Zkc.Frontend Zkc.Frontend.Written
 open Zkc.Tests.Frontend Zkc.Tests.Frontend.PrintedPackageSupport
-open Zkc.Tests.Frontend.WrittenSubject
+open ZkcFormalTests ZkcFormalTests.WrittenSubject
 
 namespace EitherCharge
 
@@ -129,7 +129,7 @@ def steppedText : String :=
   "    (stepped_relation _ false)\n\nend\n"
 
 /-- A text that turns the kernel's check off and proves the judgment from a false equation.
-Lean accepts the module; the kernel, asked outside the file, refuses the equation. -/
+Lean accepts the module; the kernel of the judgment refuses the equation. -/
 def uncheckedText : String :=
   "noncomputable section\n\n" ++
   "theorem either_relation {F G : Type} (D : StandardModel.Data F G) [DecidableEq F]\n" ++
@@ -192,25 +192,29 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
 
   -- The kernel's check turned off by the text, on a source whose charges are too low for the
   -- protocol (one sixteenth each: the table's total is one sixteenth, the larger arm, and a
-  -- false claim is accepted with probability one quarter). Lean accepts the module; outside the file the
-  -- kernel refuses the false equation that the judgment was proved from.
+  -- false claim is accepted with probability one quarter). Lean accepts the module; in the
+  -- judgment the kernel refuses the false equation that the judgment of the process was proved from.
   let low ← read (source "1 / 16" "1 / 16") reading
   unless (low.goals.map (·.total)) == [1 / 16] do
     throw (IO.userError "the low charges do not give a total of one sixteenth")
   let unchecked ← low.module "Unchecked" { text := uncheckedText, theorems := ofText }
 
-  let _ ← check work "Either" written { text := template, theorems := ofText }
+  -- every module is added before the first is asked about: one build for all
+  let either ← start work "Either" written { text := template, theorems := ofText }
     [exchangedControl]
-  -- the task ends when the two modules are accepted, the proof module outside the file too
+  let uncheckedRefused ← refusedOutside work "the kernel's check turned off by the text" "Unchecked" unchecked
+    -- the checker ended with 1, as on a declaration that it refuses, and was not killed
+    ["Lean default kernel rejected the solution", "Lean default exited with 1"]
+  let _ ← either.finish
+  -- accepted when its two modules are, the proof module by the judgment too
   let _ ← finishLean steppedProof
-  refusedOutside work "the kernel's check turned off by the text" "Unchecked" unchecked
-    ["the kernel refuses a declaration of the candidate on replay", "Unchecked.either_judged"]
+  uncheckedRefused
   IO.println ("Either is judged within the table of caps of its goal (the draws of its two arms " ++
     "at 1/8 and 1/4, of which a run takes one: 1/4), with a guard inside each arm and a guard " ++
     "before the draw; " ++
     "the blocks of a stepped loop are walked; " ++
     "1 of 1 control refused, at the place that the check names and at no other; a text that " ++
-    "turns the kernel's check off is accepted by Lean and refused outside the file.")
+    "turns the kernel's check off is accepted by Lean and refused by the judgment.")
 
 end EitherCharge
 

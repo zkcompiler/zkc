@@ -28,21 +28,17 @@ test-interactive:
 test-written-charge: _charge-checks
     cd lean/formal && lake lean checks/ReplayCharge.lean
 
+# The checks of the written subjects. Each writes the pairs that it accepts into one folder, and the last step judges them all in one run of `lake comparator`.
 _charge-checks:
-    cd lean/formal && lake lean checks/AuditCharge.lean
-    cd lean/formal && lake lean checks/WrittenCharge.lean
-    cd lean/formal && lake lean checks/OccurrenceDepth.lean
-    cd lean/formal && lake lean checks/ProofArguments.lean
-    cd lean/formal && lake lean checks/GoalClause.lean
-    cd lean/formal && lake lean checks/GoalClaim.lean
-    cd lean/formal && lake lean checks/GoalStatement.lean
-    cd lean/formal && lake lean checks/CountCharge.lean
-    cd lean/formal && lake lean checks/FreivaldsCharge.lean
-    cd lean/formal && lake lean checks/GuessCharge.lean
-    cd lean/formal && lake lean checks/EitherCharge.lean
-    cd lean/formal && lake lean checks/TwiceCharge.lean
-    cd lean/formal && lake lean checks/OutsideReading.lean
-    cd lean/formal && lake lean checks/FixedTableSampling.lean
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export ZKC_SUBJECTS=$(mktemp -d "${TMPDIR:-/tmp}/zkc-subjects.XXXXXX")
+    trap 'rm -rf "$ZKC_SUBJECTS"' EXIT
+    cd lean/formal
+    for check in AuditCharge WrittenCharge OccurrenceDepth ProofArguments GoalClause GoalClaim GoalStatement \
+        CountCharge FreivaldsCharge GuessCharge EitherCharge TwiceCharge OutsideReading FixedTableSampling Judgment; do
+      lake lean "checks/$check.lean"
+    done
 
 # Build the public formal package and audit its dependencies and proof controls.
 test-formal:
