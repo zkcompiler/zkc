@@ -44,5 +44,4 @@ theorem clauseTruth_bound {D : Dialect} {Raw : Type} [DecidableEq Raw] {cfg : Co
         | none => simp [clauseTruth,truth,entered,bound,guard] at ok; cases ok
         | some n => exact ⟨x,vs,state,n,rfl,Asks.upperAt_source bound⟩
 
-#print axioms clauseTruth_bound
 end Zkc.Core.BodyAnalysis

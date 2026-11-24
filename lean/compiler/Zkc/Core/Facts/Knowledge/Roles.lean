@@ -242,6 +242,4 @@ def roleDomainLawful (M : Model V) (r : Role) {hs : Headers V} (fns : FnTable M 
       (fun _ _ _ _ => RoleKnowledge.measures_length M r fns roles)
       (fun eq => congrArg (fun v => v.bind (RoleKnowledge.lengthOf M)) eq) _
 
-#print axioms roleDomainLawful
-#print axioms roleKnowledgeLawful
 end Zkc.Core.BodyAnalysis

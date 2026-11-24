@@ -47,5 +47,4 @@ example : check (guardedHeader 4) guardedConversions = some (.inr []) := by deci
 
 example : check (guardedHeader 3) guardedConversions = some (.inl .unknown) := by decide +kernel
 
-#print axioms wideningPreservesInputBound
 end Zkc.Core.BodyAnalysis.FiniteRefinements

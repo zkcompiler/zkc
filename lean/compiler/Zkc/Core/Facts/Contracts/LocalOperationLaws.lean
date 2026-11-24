@@ -30,6 +30,4 @@ theorem localResultCount_correct (M : Model V) (table : FnTable M fns) (distinct
   obtain ⟨ins, outs, op, args, result, rfl, rfl, rfl, _⟩ := run
   simp [localResultCount, resolveLocal_print distinct, Semantics.dyns_length]
 
-#print axioms resolveLocal_read
-#print axioms localResultCount_correct
 end Zkc.Core.BodyAnalysis

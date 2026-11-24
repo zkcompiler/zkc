@@ -40,5 +40,4 @@ def lawful {T Raw Val : Type} {types : KnowledgeTypes T} {ops : KnowledgeOperati
   enter slots := enter_sound observations.functional slots typing
   afterLoop slots := afterLoop_sound observations slots
 
-#print axioms lawful
 end Zkc.Core.BodyAnalysis.Knowledge

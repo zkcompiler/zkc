@@ -157,5 +157,4 @@ theorem result {k : Nat} (initial : Var Γ (point t k)) (running : Var Γ (share
   rw [bound_get env b (hide M 1 ty (xs.map (Sequence.scalar M env)))]
   rfl
 
-#print axioms result
 end ZkcFormal.Interactive.Sumcheck.ReductionRound.PointReturn

@@ -66,5 +66,4 @@ def certify (p : Zkc.Core.Typed V) (k : Key) (state scalar : V.Ty) (prefixSize :
     (Law k state scalar prefixSize sh) (empty_value k state scalar prefixSize sh entry.definitions)
   return ⟨sh,actual,holds⟩
 
-#print axioms empty_value
 end ZkcFormal.Interactive.Sumcheck.EmptyReduction

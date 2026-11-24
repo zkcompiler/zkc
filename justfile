@@ -6,19 +6,19 @@ set positional-arguments
 default:
     @just --list --unsorted
 
-# Build the compiler package: the core and its tests, whose checks run when they are built.
+# Build the compiler package: the core and its tests, whose checks run when they are built. A module that logs fails the build.
 build:
-    cd lean/compiler && lake build
+    cd lean/compiler && lake build --iofail
 
 # Build and test the compiler package and audit it.
 test:
-    cd lean/compiler && lake build && lake test
+    cd lean/compiler && lake build --iofail && lake test
     just audit
 
 # Check source verifier certificates and replay the interactive formal library through the kernel.
 test-interactive:
-    cd lean/compiler && lake build Zkc.Tools.Audit
-    cd lean/formal && lake build ZkcFormal.Interactive ZkcFormalTests.Interactive ZkcFormalTests.Reuse.Controls ZkcFormalTests.SourceHonestSumcheck
+    cd lean/compiler && lake build --iofail Zkc.Tools.Audit
+    cd lean/formal && lake build --iofail ZkcFormal.Interactive ZkcFormalTests.Interactive ZkcFormalTests.Reuse.Controls ZkcFormalTests.SourceHonestSumcheck
     cd lean/formal && lake lean checks/SourceProtocols.lean
     cd lean/formal && lake lean checks/OracleNames.lean
     cd lean/formal && lake lean checks/WorldObservation.lean
@@ -42,24 +42,24 @@ _charge-checks:
 
 # Build the public formal package and audit its dependencies and proof controls.
 test-formal:
-    cd lean/formal && lake build && lake test
+    cd lean/formal && lake build --iofail && lake test
     just _charge-checks
 
 # Parse and format the reference corpus and check source contracts and generated view types.
 test-frontend:
-    cd lean/compiler && lake build Zkc.Tests.Frontend.Reference Zkc.Frontend.Driver.SourcePhases Zkc.Frontend.Written.Selection
+    cd lean/compiler && lake build --iofail Zkc.Tests.Frontend.Reference Zkc.Frontend.Driver.SourcePhases Zkc.Frontend.Written.Selection
     cd lean/compiler && lake env lean --run Zkc/Tests/Frontend/SourceConformance.lean
     cd lean/compiler && lake env lean --run Zkc/Tests/Frontend/ProtocolViews.lean
 
 # Print every admitted example root as a Lean module in which the kernel elaborates the program, compare each with its source, read a fixture back, and refuse four controls.
 test-packages:
-    cd lean/compiler && lake build Zkc.Frontend.Written.Package Zkc.Kernel Zkc.Tests.Frontend.PrintedPackageSupport Zkc.Tests.Frontend.PrintedFixtureCoverage
+    cd lean/compiler && lake build --iofail Zkc.Frontend.Written.Package Zkc.Kernel Zkc.Tests.Frontend.PrintedPackageSupport Zkc.Tests.Frontend.PrintedFixtureCoverage
     cd lean/compiler && lake env lean --run Zkc/Tests/Frontend/PrintedPackages.lean
 
 # Export the written knowledge claim and kernel-check the returning fork and source mutations.
 test-written-knowledge: test-frontend
-    cd lean/compiler && lake build zkc-knowledge Zkc.Tools.Audit
-    cd lean/formal && lake build ZkcFormal.Written.GroupReplay ZkcFormal.Written.FiniteModel ZkcFormalTools.Policy
+    cd lean/compiler && lake build --iofail zkc-knowledge Zkc.Tools.Audit
+    cd lean/formal && lake build --iofail ZkcFormal.Written.GroupReplay ZkcFormal.Written.FiniteModel ZkcFormalTools.Policy
     cd lean/formal && lake env python3 checks/written_knowledge.py
 
 # Audit the compiler package: the kernel's replay of the core, the vocabulary and their tests, no `sorry`, no axiom beyond `propext` and `Quot.sound`, the import rules.

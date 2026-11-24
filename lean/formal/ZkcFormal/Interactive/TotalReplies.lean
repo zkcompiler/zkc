@@ -62,5 +62,4 @@ theorem probability_one_of_every (p : Process S H A) (s : σ) {P : A → Prop}
     exact Mass.le_antisymm ((K.answer op s).mono fun a h => (equal a h) ▸ Mass.le_refl)
       ((K.answer op s).mono fun a h => (equal a h) ▸ Mass.le_refl)
 
-#print axioms probability_one_of_every
 end ZkcFormal.Interactive.Experiment

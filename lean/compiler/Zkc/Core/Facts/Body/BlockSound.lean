@@ -79,10 +79,6 @@ theorem blockSound : BlockSoundStatement σ := by
   rw [BoundsApart, entry.2.2.1]
   exact apart
 
-#print axioms blockGrows
-#print axioms blockRuns
-#print axioms blockSound
-
 end
 
 end Zkc.Core.BodyAnalysis

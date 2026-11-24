@@ -171,6 +171,5 @@ theorem boundsOfMembers (rounds : Sequence hs events state claim term count) (la
   exact rounds.boundsFromMembers law verified M fns roles q points positive degree interpret equalLaw K path env s x
     (rounds.freshFromService M fns roles K points positive fresh path env s)
 
-#print axioms boundsOfMembers
 end Sequence
 end ZkcFormal.Interactive.Sumcheck.ReductionRound

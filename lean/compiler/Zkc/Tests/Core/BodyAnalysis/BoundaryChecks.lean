@@ -110,10 +110,4 @@ example : Concern.premise (Raw := Unit) (.block .root ⟨10⟩ 0) (.step 0 []) �
 example : checkDefinition signature [] .nil unrolled []
     ⟨[], [⟨.apply () .nil 0, some (.arg 0)⟩]⟩ = .error .contract := rfl
 
-#print axioms Lemma.resolve?_eq_some
-#print axioms Lemma.valid_iff_typed
-#print axioms finalIndex_sound
-#print axioms roleIndexFromCount_denote
-#print axioms roleIndexAt_denote
-
 end Zkc.Core.BodyAnalysis.Checks

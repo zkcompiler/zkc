@@ -49,5 +49,4 @@ theorem Located.charge (round : Located state events running actual) (ns : Names
   obtain ⟨cv,rv⟩ := binders.values M env r v
   simp only [Sequence.scalar,cv,rv,reveal_hide,Mass.le_refl]
 
-#print axioms Located.charge
 end ZkcFormal.Interactive.Sumcheck.ReductionRound

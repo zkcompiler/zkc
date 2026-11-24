@@ -112,5 +112,4 @@ def compare (checks : SkelRules D) (lawful : checks.Lawful) {Γ Δ : Ctx D.Ty} {
   | _,_ => none
 termination_by structural a
 
-#print axioms compare
 end Zkc.Core.StraightLine

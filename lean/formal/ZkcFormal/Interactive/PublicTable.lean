@@ -59,5 +59,4 @@ theorem flatten_interpolate (r : F) (n : Nat) (lo hi : Cube F n) :
       ((List.zipWith (·-·) (flatten n hi.1) (flatten n lo.1)).map (·*r)).length by simp [flatten_length])]
     rw [ih,ih]
 
-#print axioms flatten_interpolate
 end ZkcFormal.Interactive.Sumcheck.Cube

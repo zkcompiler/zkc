@@ -40,8 +40,8 @@ Run every command from the root of the repository.
 | Command | What it does |
 |---|---|
 | `just` | lists the recipes |
-| `just build` | `lake build` in `lean/compiler`: all active targets |
-| `just test` | `lake build` and `lake test` in `lean/compiler`, then `just audit` |
+| `just build` | `lake build --iofail` in `lean/compiler`: all active targets |
+| `just test` | `lake build --iofail` and `lake test` in `lean/compiler`, then `just audit` |
 | `just test-interactive` | build the interactive formal modules, check emitted source entries and mutations, and audit the interactive library and its mathematical controls |
 | `just test-frontend` | parse and format the source corpus, compare assembly and name diagnostics with the reference, and check typed generated views |
 | `just test-packages` | print every admitted root of eight examples as a Lean module in which the kernel elaborates the program by names, compare that program with what the frontend gave to admission, read a fixture with every constructor back, and refuse four controls |
@@ -50,6 +50,13 @@ Run every command from the root of the repository.
 | `just test-formal` | build and audit the formal library, its tests and the charge issuer together, then run the charge checks |
 | `just audit` | `lake exe zkc-audit` in `lean/compiler`: core, vocabulary and their tests |
 | `just check` | the checks that need no build: `bash .github/scripts/public-tree-guard.sh`, `python3 scripts/check_docs.py --all`, and `python3 lean/compiler/scripts/generate_unicode_tables.py --check` |
+
+Every recipe builds with Lake's `--iofail`, under which a module that logs anything fails
+the build. Lake keeps what a module logs and replays it whenever a module that imports it is
+built or opened, so a module that prints (a `#print axioms` left after a theorem, a line that
+a test writes when it passes) puts those lines into every later build and every editor
+session. The rule reaches the pinned dependencies too: a change of a pin that brings in a
+module which logs fails the recipe on a module outside this repository.
 
 Lake builds incrementally, so `just build` after a change rebuilds only the modules that the
 change affects. Run `just test` and `just test-interactive` for changes that cross the compiler and interactive proof boundary. Include `just test-packages` when a change affects the Core program, admission, emission, the printed package, the keys of the standard vocabulary or the parameters of a project primitive: no other recipe and no CI job checks that the fixture of the printer holds every constructor. Include `just test-written-knowledge` when a change affects generated claims, their source types, role projection or shared proof rules.

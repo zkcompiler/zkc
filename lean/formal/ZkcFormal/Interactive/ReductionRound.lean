@@ -162,5 +162,4 @@ theorem verifier (point : V.Ty) (M : Model V) [DecidableEq (M.Val t)]
     conv => lhs; arg 1; rw [decide_eq_false reverse]
     rfl
 
-#print axioms verifier
 end ZkcFormal.Interactive.Sumcheck.ReductionRound

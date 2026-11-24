@@ -610,8 +610,4 @@ theorem skelDiffer {D : Dialect} : SkelDifferStatement (D := D) := by
     subst same
     exact Skel.differ_self checks exact.2 at_ s
 
-#print axioms skelRunsGrow
-#print axioms skelRunsSame
-#print axioms skelDiffer
-
 end Zkc.Core.BodyAnalysis

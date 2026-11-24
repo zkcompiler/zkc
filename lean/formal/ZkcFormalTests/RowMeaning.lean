@@ -25,6 +25,5 @@ def probe (y : String) : String :=
   expectValue "the negation of the element" (outcome (probe "-x")) 4 []
   expectValue "the element minus itself" (outcome (probe "x - x")) 7 []
   expectValue "the element plus its negation" (outcome (probe "x + -x")) 7 []
-  IO.println "the negation of a field element is the element taken from zero, in the finite model (5 cases)"
 
 end ZkcFormalTests.RowMeaning

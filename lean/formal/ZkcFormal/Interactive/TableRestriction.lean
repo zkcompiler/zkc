@@ -97,5 +97,4 @@ def check (free : Ty.isLinear V t = false) {hs : Headers V} (defs : Defs V hs) (
   let ⟨law⟩ ← entry.recognize expected (Law rows k) (value rows lo hi k _ lowLaw highLaw)
   return ⟨ref,law⟩
 
-#print axioms check
 end ZkcFormal.Interactive.Sumcheck.TableRestriction

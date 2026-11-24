@@ -122,5 +122,4 @@ def certify (p : Zkc.Core.Typed V) (key red eval : Key) (n : Nat)
       exact callerReturns rows sums vectors events entry.definitions ref ev key sh law tableLaw M math path x⟩
   else none
 
-#print axioms certify
 end ZkcFormal.Interactive.Sumcheck.HonestPairs

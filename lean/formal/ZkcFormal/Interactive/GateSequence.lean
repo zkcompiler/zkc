@@ -122,7 +122,4 @@ theorem sound (rounds : Sequence hs events st running term count)
   · exact rounds.boundsOfMembers _ checked M _ _ _ points positive 2
       (fun _ laws => Laws.interpretOn rows laws M math model q Fin.val honest sum restricted points distinct) equalLaw K fresh path
 
-#print axioms sound
-#print axioms check
-#print axioms Laws.interpret
 end ZkcFormal.Interactive.Sumcheck.Gate

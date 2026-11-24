@@ -27,6 +27,4 @@ theorem FunctionContracts.compareFunctions_places (contracts : FunctionContracts
     notes notes' summary source.inputs candidate.inputs source.body
     candidate.body checked
 
-#print axioms FunctionContracts.checkFunction_places
-#print axioms FunctionContracts.compareFunctions_places
 end Zkc.Core.BodyAnalysis

@@ -73,10 +73,6 @@ theorem guardSound : GuardSoundStatement σ := by
       simp only [Bool.cond_false, Process.Every]
       exact laws.rules.stop w why _
 
-#print axioms guardGrows
-#print axioms guardRuns
-#print axioms guardSound
-
 end
 
 end Zkc.Core.BodyAnalysis

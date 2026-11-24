@@ -122,5 +122,4 @@ def checkExit (distinct : hs.keys.Nodup) (st : Var Γ ⟨table t 0,[0]⟩) (pt :
     else none
   | _ => none
 
-#print axioms checkExit
 end ZkcFormal.Interactive.Sumcheck.HonestPairs

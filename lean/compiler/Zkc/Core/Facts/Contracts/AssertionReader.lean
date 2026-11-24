@@ -75,5 +75,4 @@ example : (localAssertionTypes fns (fun _ => false)).signature (.owned .natLess 
     none := rfl
 end
 
-#print axioms AssertionTypes.ofReader_lawful
 end Zkc.Core.BodyAnalysis

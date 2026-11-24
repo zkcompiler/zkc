@@ -91,5 +91,4 @@ theorem FunctionContracts.compareFunctions_assured (contracts : FunctionContract
     candidate.Assured bounds ∧ source.SameAs candidate :=
   contracts.compareAnnotated_assured source candidate safe (contracts.emptyEvidence candidate) accepted
 
-#print axioms FunctionContracts.compareFunctions_assured
 end Zkc.Core.BodyAnalysis

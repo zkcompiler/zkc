@@ -76,6 +76,4 @@ theorem checkedProjection_safe (source : Prot V hs header inputs) (ok : Protocol
   (checkedProjection catalog r header source ok accepted M fns roles callees rcallees []
     (by simp) path values valid).2
 
-#print axioms checkedProjection_safe
-#print axioms checkRole_safe
 end Zkc.Core.BodyAnalysis.RoleContracts

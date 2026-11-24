@@ -115,6 +115,4 @@ theorem transfer_sound {asks : Asks} {e : Entry Raw} (external : asks.Sound Run 
       · exact learned
     · exact learned
 
-#print axioms offsetLimit_sound
-#print axioms transfer_sound
 end Zkc.Core.BodyAnalysis.Knowledge

@@ -76,7 +76,4 @@ theorem compareStored_places (f g : TypedFn V hs hdr) {bounds}
   obtain ⟨catalog, checked, _⟩ := compareStored_accepted f g ok
   exact catalog.compareFunctions_places f g checked
 
-#print axioms checkStored_assured
-#print axioms compareStored_assured
-#print axioms checkStored_places
 end Zkc.Core.BodyAnalysis

@@ -121,6 +121,4 @@ theorem lawful (M : Model V) (fns : FnTable M hs.fns) (roles : RTable M hs.proto
   settle := role_settle M r fns roles
   stop := fun _ _ _ h => nomatch h
 
-#print axioms lawful
-
 end Zkc.Core.BodyAnalysis.RoleContracts

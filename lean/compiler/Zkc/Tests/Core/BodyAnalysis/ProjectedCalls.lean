@@ -22,5 +22,4 @@ theorem roundsRoleTable (M : Model plain) : RCallees M (Defs.rTable M roundsProg
   (checkedTables M roundsProgram (by simp)
     ⟨⟨emptyCatalog, fun r _ => checksRounds r⟩, ⟨emptyCatalog, fun r _ => checksRound r⟩, trivial⟩).2
 
-#print axioms roundsRoleTable
 end Zkc.Core.BodyAnalysis.RoleExamples

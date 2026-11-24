@@ -69,5 +69,4 @@ theorem enter_sound {types : KnowledgeTypes T} (law : types.Lawful R Typed)
     obtain ⟨x, found, reads⟩ := carriedRead.get idAt
     exact ⟨x, reads, typedAt j x _ found typeAt⟩
 
-#print axioms enter_sound
 end Zkc.Core.BodyAnalysis.Knowledge

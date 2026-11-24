@@ -104,5 +104,4 @@ def check (ds : Defs V hs) (unique : (hs.fns.map (·.key)).Nodup) (key : Key) (n
     rw [source.meaning M]
     exact holds M math [] _ x [] pt v rfl rfl rfl value⟩
 
-#print axioms check
 end ZkcFormal.Interactive.Sumcheck.TableEvaluation

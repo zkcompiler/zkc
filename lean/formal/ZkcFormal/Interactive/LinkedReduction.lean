@@ -90,5 +90,4 @@ theorem Linked.sound (linked : Linked p key state t residual k n events) (M : Mo
       (fun vs _ => correctReturn M q x point.length vs) ≤ (n : Mass) * cost := by
   exact linked.soundFrom M q cost nonneg K path s hidden point claim x wrong (bounds _ s x)
 
-#print axioms Linked.sound
 end ZkcFormal.Interactive.Sumcheck.ReductionRound

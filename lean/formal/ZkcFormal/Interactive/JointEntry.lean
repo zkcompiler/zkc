@@ -49,5 +49,4 @@ theorem returns_mapG {A : Type} (M : Model V) (ρ : Role → Role) (p : Protocol
   | call op k ih =>
     cases op <;> exact fun r _ => ih r (good r trivial)
 
-#print axioms locate
 end ZkcFormal.Interactive.JointEntry

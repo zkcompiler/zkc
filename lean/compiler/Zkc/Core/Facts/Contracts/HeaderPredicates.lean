@@ -106,6 +106,5 @@ theorem holds_iff {e : Assertion V} {b : Bool} (distinct : (fns.map (·.key)).No
   · rintro rfl
     exact ⟨_,den,rfl⟩
 
-#print axioms holds_iff
 end HeaderContracts
 end Zkc.Core.BodyAnalysis

@@ -103,6 +103,4 @@ theorem falseClaim {k : Key} {shape : Shape V} {run : ProtocolEntry.RoleMeaning 
   simp only [law M equality path v claim, incorrect, ↓reduceIte]
   rfl
 
-#print axioms certify
-#print axioms falseClaim
 end ZkcFormal.Interactive.Sumcheck.EmptySumcheck

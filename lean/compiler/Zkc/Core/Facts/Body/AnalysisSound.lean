@@ -322,13 +322,6 @@ theorem analyseSound : AnalyseSoundStatement σ := by
     (Values.empty_wf _) [] values
     (Process.every_mono _ _ (fun _ _ => trivial) (fun _ h => h) safe.2)⟩
 
-#print axioms analyseRuns
-#print axioms analyseSafe
-#print axioms analyseAssured
-#print axioms analyseHolds
-#print axioms analyseRequired
-#print axioms analyseSound
-
 end
 
 end Zkc.Core.BodyAnalysis

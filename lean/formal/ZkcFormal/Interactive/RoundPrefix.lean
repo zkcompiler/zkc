@@ -110,5 +110,4 @@ theorem Prefix.process {hs : Headers V} {ds : Defs V hs} {key state point t outs
   rw [verifier cert.members events point M (Defs.fnTable M cert.entry.definitions)
     (Defs.rTable M cert.entry.definitions) boundary evaluate equalLaw boundaryLaw evaluateLaw _ hidden initialPoint claim]
 
-#print axioms Prefix.process
 end ZkcFormal.Interactive.Sumcheck.ReductionRound

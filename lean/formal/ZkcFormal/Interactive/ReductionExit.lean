@@ -101,5 +101,4 @@ def checkReduction (unique : (hs.fns.map (·.key)).Nodup) {Δ : Ctx (LTy V)} {st
       funext (last,rs,v)
       simp only [List.map_append,List.map_cons,List.map_nil,List.append_assoc,List.cons_append,List.nil_append,draws.get,pointPort.get]⟩
 
-#print axioms checkReduction
 end ZkcFormal.Interactive.Sumcheck.ReductionRound.PointReturn

@@ -194,5 +194,4 @@ theorem learnTruth_sound {ops : KnowledgeOperations Raw} (laws : ops.Lawful R Ru
       · exact learned
     · exact learnSelection_sound laws slots (learnTruth_sound laws slots external fuel) learned read val
 
-#print axioms learnTruth_sound
 end Zkc.Core.BodyAnalysis.Knowledge

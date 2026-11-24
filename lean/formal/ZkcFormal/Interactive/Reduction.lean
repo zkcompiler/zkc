@@ -71,6 +71,5 @@ theorem reduce_sound (v : Verifier (S := S) H F M) (q : Claims F)
     intro (rs,value) _ _
     by_cases agrees : q.evaluate n (q.restrict n x r) rs = some value <;> simp [Claims.evaluate, agrees]
 
-#print axioms reduce_sound
 end Verifier
 end ZkcFormal.Interactive.Sumcheck

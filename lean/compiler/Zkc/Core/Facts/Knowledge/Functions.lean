@@ -45,5 +45,4 @@ def localKnowledgeLawful {V : Vocabulary} (M : Model V) {fns : List (FnHeader V)
       ranges := fun _ _ _ known run => FactCheck.localRun_ranges known run }
     (localKnowledgeTypes_lawful M table)
 
-#print axioms localKnowledgeLawful
 end Zkc.Core.BodyAnalysis

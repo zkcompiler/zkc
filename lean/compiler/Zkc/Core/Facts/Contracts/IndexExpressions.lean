@@ -93,7 +93,5 @@ theorem next_denotes (n : Nat) : next.Denotes localRuns [⟨.nat, n⟩] ⟨.nat,
     obtain rfl := List.mem_singleton.mp m
     trivial
 
-#print axioms next_denotes
 end LocalIndex
-#print axioms indexValue_available
 end Zkc.Core.BodyAnalysis

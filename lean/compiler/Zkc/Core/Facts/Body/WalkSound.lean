@@ -360,13 +360,4 @@ theorem termFromPrefix : TermFromPrefixStatement σ := by
 
 end
 
-#print axioms walkGrows
-#print axioms walkRuns
-#print axioms walkSound
-#print axioms prefixFact
-#print axioms prefixSound
-#print axioms walkFill
-#print axioms toPrefixFill
-#print axioms termFromPrefix
-
 end Zkc.Core.BodyAnalysis

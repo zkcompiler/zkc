@@ -61,5 +61,4 @@ theorem checkedTables (M : Model V) : ∀ {hs : Headers V} (defs : Defs V hs),
           (fun _ _ _ => True) []).1
     | tail found => exact roles _ found r path args valid
 
-#print axioms checkedTables
 end Zkc.Core.BodyAnalysis.RoleContracts

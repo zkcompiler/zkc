@@ -982,8 +982,4 @@ theorem loopSound : LoopSoundStatement σ := by
 
 end
 
-#print axioms loopGrows
-#print axioms loopRuns
-#print axioms loopSound
-
 end Zkc.Core.BodyAnalysis

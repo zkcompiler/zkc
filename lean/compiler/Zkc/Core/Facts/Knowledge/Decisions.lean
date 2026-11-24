@@ -383,5 +383,4 @@ theorem decideTruth_sound {id v b} (read : Reads Run R.bool table ρ id v)
       cases value : (asks.orElse (answers k)).truth (.val n) <;>
         simpa [decideTruth, value] using found
 
-#print axioms decideTruth_sound
 end Zkc.Core.BodyAnalysis.Knowledge

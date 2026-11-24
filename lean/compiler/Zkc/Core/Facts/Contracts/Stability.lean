@@ -91,5 +91,4 @@ theorem Contract.holds_tables {ins outs : List V.Ty} (summary : Contract (LocalR
     (List.all_eq_true.mp ens e m)⟩
 
 end
-#print axioms Contract.holds_tables
 end Zkc.Core.BodyAnalysis

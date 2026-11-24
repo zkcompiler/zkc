@@ -115,5 +115,4 @@ def readReduction (distinct : hs.keys.Nodup) (evaluation : ∀ k, FunctionReadba
     else none
   | _+1, _, _, _, _, _, _ => none
 
-#print axioms readReduction
 end ZkcFormal.Interactive.Sumcheck.HonestPairs
