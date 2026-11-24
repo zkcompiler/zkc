@@ -1399,8 +1399,10 @@ never a `spec def` and never bound to `external`. The signature of a function me
 interface's, read with the interface's static arguments and with each member name standing for
 `M`'s definition; the member's own static parameters are in scope in its body under the names the
 interface gives them. A call of a member bound to a row takes the same static arguments and
-operands as a call of a member with a body. Where the module is concrete, the row at those
-static arguments must take the parameter types and give the result type of the member. In
+operands as a call of a member with a body. In both cases the inferred or written static arguments
+must satisfy the member's parameter bounds (SP3) and its `where` (SP4), with `Self` the module.
+Where the module is concrete, the row at those static arguments must take the parameter types
+and give the result type of the member. In
 the opaque typing of a module parameter (SP12), the interface supplies the signature.
 `Self` in an interface is the implementing module (in a sort, the type). A
 member's own name is not in scope in its definition. `M<A>::T` is its definition to every reader. An interface is satisfied only by a module that names it: a module

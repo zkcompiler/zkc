@@ -53,7 +53,7 @@ def SpecificationClosure.close (closure : SpecificationClosure) (callee : Instan
   let some entry := state.table.entries[callee]? | throw .abandoned
   let target ← declaration entry.key.declaration
   let closed := instanceEnv state.program target entry.key.arguments values
-  checkWheres closed target (state.program.nameOf entry.key.declaration) false (fun _ => pure false)
+  checkWheres closed target.scopes (state.program.nameOf entry.key.declaration) false (fun _ => pure false)
     (specification := true)
   liftM ((← read).contractClauses callee values place)
   return values

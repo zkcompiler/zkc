@@ -48,7 +48,83 @@ private def expectRow (session : Driver.Session) (root : String) (row : Zkc.Voca
       | _ => false
     | _ => false) s!"{root}: missing standard row or unexpected project binding"
 
+/-- Conditions on the interface member apply to a call through either implementation. -/
+private def memberParameterSuite (repository : Repository) : TestM Unit := do
+  let boundedCopy := "module caller
+interface I<minimum: nat>:
+    def copy<n: nat>(input: [byte; n]) -> [byte; n] where (minimum <= n)
+module M: I<2>:
+    def copy(input): input
+def evaluate(input: [byte; 1]) -> [byte; 1]: M::copy<n = 1>(input)"
+  let fieldCopy := "module caller
+use zkc::algebra::{Field}
+interface I:
+    def copy<T: Field>(x: T) -> T
+module M: I:
+    def copy(x): x
+def evaluate(x: bool) -> bool: "
+  let groupEqual := "module caller
+use zkc::algebra::{Field}
+use zkc::curves::bls12_381::{G1}
+interface I:
+    def eq<T: Field>(a: T, b: T) -> bool
+module M: I = primitive(\"group.equal\")
+def evaluate(a: G1, b: G1) -> bool: M::eq<G1>(a, b)"
+  let sized := "module caller
+interface I:
+    nat Size
+    def copy(x: bool) -> bool where (2 <= Self::Size)
+module M: I:
+    nat Size = 1
+    def copy(x): x
+def evaluate(x: bool) -> bool: M::copy(x)"
+  let shake := "module caller
+use zkc::hash::{ExtendableOutput, Shake128}
+def one<H: ExtendableOutput>(input: [byte]) -> [byte; 1]: H::output(input)
+def evaluate(input: [byte]) -> [byte; 1]: one<Shake128>(input)"
+  let output := "def output<count: nat>(input: [byte]) -> [byte; count]"
+  let boundedOutput : HeaderChange := ⟨"zkc/hash.zkc", output, output ++ " where (2 <= count)"⟩
+  let field := "`bool` is not of sort `Field`, which `T` of `copy` requires"
+  let cases : List (String × Option HeaderChange × String × String) := [
+    (boundedCopy, none, "SP4", "`copy` requires `minimum <= n`, which is `2 <= 1`"),
+    (fieldCopy ++ "M::copy<bool>(x)", none, "SP3", field),
+    (fieldCopy ++ "M::copy(x)", none, "SP3", field),
+    (groupEqual, none, "SP3", "is not of sort `Field`, which `T` of `eq` requires"),
+    (sized, none, "SP4", "`copy` requires `2 <= Self::Size`, which is `2 <= 1`"),
+    (shake, some boundedOutput, "SP4", "`output` requires `2 <= count`, which is `2 <= 1`")]
+  for (source, header, rule, message) in cases do
+    let session ← memberSession repository source header
+    let file := header.map (fun h => (repository.libraries / h.library).toString) |>.getD "caller"
+    let refused := session.diagnostics.any fun d => d.isError && d.rule == rule &&
+      d.span.file == file && (d.render session.state.env.renderer).contains message
+    expectTrue (refused && ((session.admitRoots (some #["evaluate"])).complete matches .error _))
+      s!"{source.splitOn "\n" |>.getLast!}: expected {rule} ({message}); got {session.renderDiagnostics}"
+
+  -- The opaque type has the Group sort. Its order becomes available at the concrete call.
+  let orderCall (condition : String) := "module caller
+use zkc::algebra::{Group}
+use zkc::curves::bls12_381::{G1}
+interface Carrier:
+    type Element: Group
+module Points: Carrier:
+    type Element = G1
+interface I:
+    def copy<T: Group>(x: T) -> T where (" ++ condition ++ ")
+module M: I:
+    def copy(x): x
+def copyValue<T: Group>(x: T) -> T: M::copy(x)
+def selected<C: Carrier>(x: C::Element) -> C::Element: copyValue(x)
+def evaluate(x: G1) -> G1: selected<Points>(x)"
+  let holds ← memberSession repository (orderCall "2 <= T::Order")
+  let fails ← memberSession repository (orderCall "T::Order <= 2")
+  let rejected := fails.diagnostics.any fun d => d.isError && d.rule == "SP4" &&
+    (d.render fails.state.env.renderer).contains "`copy` requires `T::Order <= 2`"
+  expectTrue (((holds.admitRoots (some #["evaluate"])).complete matches .ok _) && rejected &&
+    ((fails.admitRoots (some #["evaluate"])).complete matches .error _))
+    s!"expected the concrete order to decide both constraints: {holds.renderDiagnostics}; {fails.renderDiagnostics}"
+
 def memberRowSuite (repository : Repository) : TestM Unit := do
+  memberParameterSuite repository
   expectRow (← memberSession repository (caller "generic")) "evaluate" .pair
   let shake ← memberSession repository (caller "shake")
   expectRow shake "written" (.hash (.shake128 5))

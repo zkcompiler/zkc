@@ -620,7 +620,7 @@ def typeModuleMembers (inst : InstanceId) : CompileM Unit := do
       let env : Env :=
         { instanceEnv program memberDeclaration (args ++ own) with self? := some (.«module» inst) }
       let holds ← recover (skipped := true) (waits := true) (fallback := pure false) do
-        checkWheres env memberDeclaration name true (fun _ => pure false)
+        checkWheres env memberDeclaration.scopes name true (fun _ => pure false)
         pure true
       if holds then
         endItem do

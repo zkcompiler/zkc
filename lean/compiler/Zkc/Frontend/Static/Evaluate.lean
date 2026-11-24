@@ -382,7 +382,7 @@ mutual
             s!"`{renderType state type}` has no member `{name}`; its sorts are Group"
         refuse "SP3" place s!"`{renderType state type}` has no member `{name}`; it has no sort"
       | .«opaque» .. =>
-        throw (.waiting "a type member of a type member of a module parameter, in the opaque typing (SP12)")
+        throw (.waiting .opaqueProjection)
       | _ => refuse "SP3" place s!"`{renderType state type}` has no member `{name}`; it has no sort"
     | .natural number => refuse "SP3" place s!"`{number}` is a natural; it has no member `{name}`"
 
@@ -717,11 +717,12 @@ mutual
           return some s!"`{renderInstance state inst}` does not implement `{← sourceText env place}`"
         | _ => return some s!"`{renderValue state value}` is not a module"
 
-  /-- The bound of every parameter of an instance, outermost scope first (SP3). -/
-  partial def checkBounds (env : Env) (found : Declaration) (name : String) : CompileM Unit := do
+  /-- Check the bounds of the deployed parameters at their assigned values (SP3). -/
+  partial def checkBounds (env : Env) (parameters : Array (ParameterRef × StaticParam))
+      (name : String) (deferOpaque : Bool := false) : CompileM Unit := do
     let state ← get
     let modules ← getModules
-    for (reference, parameter) in deployedParameters state.program found do
+    for (reference, parameter) in parameters do
       let some value := env.values[reference]? | continue
       let some scope := modules.loweredScope? reference.scope
         | throw (.defect "a scope without its lowered form")
@@ -735,7 +736,11 @@ mutual
       | some bound =>
         let scopeEnv := { env with file := (state.program.scopes[reference.scope]?).map (·.file) |>.getD env.file }
         for sort in bound.sorts do
-          if let some failure ← meetsSort scopeEnv value sort then
+          let failure ← try meetsSort scopeEnv value sort catch failure =>
+            match failure with
+            | .waiting .opaqueProjection => if deferOpaque then pure none else throw failure
+            | other => throw other
+          if let some failure := failure then
             refuse "SP3" bound.span
               s!"{failure}, which `{parameter.name.text}` of `{name}` requires"
 
@@ -778,20 +783,22 @@ mutual
 
   /-- The `where` constraints of the scopes of an instance, outermost first (SP4). At a default
   instance a constraint that does not hold skips the instance (SP7). -/
-  partial def checkWheres (env : Env) (found : Declaration) (owner : String) (isDefault : Bool)
-      (skip : Lowered.Constraint → CompileM Bool) (specification : Bool := false) : CompileM Unit := do
+  partial def checkWheres (env : Env) (scopes : Array ScopeId) (owner : String) (isDefault : Bool)
+      (skip : Lowered.Constraint → CompileM Bool) (specification := false) (deferOpaque := false) :
+      CompileM Unit := do
     let modules ← getModules
     let program ← program
-    for scope in found.scopes do
+    for scope in scopes do
       let some lowered := modules.loweredScope? scope | continue
       let scopeEnv := { env with file := (program.scopes[scope]?).map (·.file) |>.getD env.file }
       for constraint in lowered.constraints do
         if ← skip constraint then continue
-        -- a constraint that cannot be evaluated here (it reads a member that a later layer
-        -- gives) is not taken to hold: the instance waits for it (SP4)
+        -- The opaque pass may defer one constraint. The instance checks every constraint again.
         let outcome ← try checkConstraint scopeEnv constraint owner specification
           catch failure => match failure with
-            | .waiting reason => throw (.waiting s!"a constraint of its `where`: {reason}")
+            | .waiting reason =>
+              if deferOpaque && (reason matches .opaqueProjection) then pure none
+              else throw (.waiting s!"a constraint of its `where`: {reason}")
             | other => throw other
         if let some message := outcome then
           if isDefault then throw .skipped
@@ -854,7 +861,7 @@ mutual
     catch failure =>
       match failure with
       | .waiting reason =>
-        modifyResults (·.modifySignatures (·.setState inst (.done (.data (.waits reason)))))
+        modifyResults (·.modifySignatures (·.setState inst (.done (.data (.waits reason.render)))))
         return inst
       | .exhausted exhaustion =>
         modifyResults (·.modifySignatures (·.setState inst (.exhausted exhaustion)))
@@ -882,8 +889,8 @@ mutual
     | .typeDecl (.type _ _ _ _ (.primitive _)) | .«module» (.«module» _ _ _ _ _ _ (.primitive _))
     | .«module» (.«module» _ _ _ _ _ _ (.asset _)) => checkBindings id
     | _ => pure ()
-    checkBounds env found name
-    checkWheres env found name isDefault (hostDefinition env found)
+    checkBounds env (deployedParameters program found) name
+    checkWheres env found.scopes name isDefault (hostDefinition env found)
     let optional (type : Lowered.TypeTerm) : CompileM (Option ClosedType) := do
       try return some (← evalType env type)
       catch failure => match failure with
@@ -1100,7 +1107,7 @@ mutual
       let interfaceDeclaration ← declaration interface
       let interfaceEnv : Env :=
         { instanceEnv program interfaceDeclaration args with self? := some (.«module» inst) }
-      checkBounds interfaceEnv interfaceDeclaration (program.nameOf interface)
+      checkBounds interfaceEnv (deployedParameters program interfaceDeclaration) (program.nameOf interface)
       let some lowered := interfaceDeclaration.ownScope.bind ((← getModules).loweredScope? ·) | continue
       for constraint in lowered.constraints do
         -- a constraint of an interface that cannot be evaluated here is not taken to hold:

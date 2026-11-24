@@ -23,7 +23,8 @@ def evaluate {α : Type} (s : Compile.State) (at_ : Span) (attempt : CompileM α
     refuse at_ "WK-TYPE" (d.render after.env.renderer)
   match result with
   | .ok a => pure (a, after)
-  | .error (.waiting why) | .error (.defect why) => refuse at_ "WK-TYPE" why
+  | .error (.waiting why) => refuse at_ "WK-TYPE" why.render
+  | .error (.defect why) => refuse at_ "WK-TYPE" why
   | .error _ => refuse at_ "WK-TYPE" "could not elaborate the selected source declaration"
 
 /-- An executable instance with the proof-only values at one use, in parameter order. -/

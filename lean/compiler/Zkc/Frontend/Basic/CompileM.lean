@@ -38,12 +38,26 @@ namespace Zkc.Frontend
 
 open Syntax
 
+/-- A projection of an opaque type can be checked at the concrete instantiation (SP12). -/
+inductive WaitReason where
+  | message (text : String)
+  | opaqueProjection
+  deriving Inhabited
+
+instance : Coe String WaitReason := ⟨WaitReason.message⟩
+
+def WaitReason.render : WaitReason → String
+  | .message text => text
+  | .opaqueProjection => "a type member of a type member of a module parameter, in the opaque typing (SP12)"
+
+instance : ToString WaitReason := ⟨WaitReason.render⟩
+
 /-- Why the computation of an item ends early. -/
 inductive Interrupt where
   /-- An error was logged and the item cannot go on. -/
   | abandoned
   /-- The item needs a form of a layer that is not elaborated yet: it waits. -/
-  | waiting (reason : String)
+  | waiting (reason : WaitReason)
   /-- A default instance whose `where` does not hold: it is skipped (SP7). -/
   | skipped
   /-- A budget of the compiler ran out: the item is not checked to the end, and is not refused
@@ -352,7 +366,7 @@ is recorded with the request being computed, whatever its state. -/
     return (id, outcome)
   tryCatch (do finish (.done (← query.compute id key))) fun
     | .abandoned => finish .failed
-    | .waiting reason => finish (.waiting reason)
+    | .waiting reason => finish (.waiting reason.render)
     | .exhausted exhaustion => finish (.exhausted exhaustion)
     | other => do
       let _ ← finish .failed

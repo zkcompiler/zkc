@@ -75,7 +75,7 @@ mutual
         modifyResults (·.addFinished inst)
     catch failure =>
       match failure with
-      | .waiting reason => setBody inst (.waiting reason)
+      | .waiting reason => setBody inst (.waiting reason.render)
       | .staticIndex name => setBody inst (.waiting s!"the index `{name}` in a static position")
       | .exhausted exhaustion => setBody inst (.exhausted exhaustion)
       | _ =>

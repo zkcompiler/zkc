@@ -542,6 +542,23 @@ def interfaceMember (inst : InstanceId) (name : String) :
         return (interface, member, found, args)
   refuseHere "SP3" default s!"`{renderInstance state inst}` has no member `{name}`"
 
+/-- Read the interface member's parameter and result types at its static arguments. -/
+def memberSignatureAt (member : DeclarationId) (env : Env) :
+    ElabM (Array ClosedType × ClosedType) := do
+  let (parameters, result) ← memberSignatureOf member
+  let types ← parameters.mapM fun (_, type) => liftM (evalType env type : CompileM ClosedType)
+  let resultType ← match result with
+    | some type => liftM (evalType env type : CompileM ClosedType)
+    | none => pure ClosedType.unit
+  return (types, resultType)
+
+/-- The types of a function member at the module and the member's own arguments (SP8). -/
+def memberSignature (inst : InstanceId) (name : String) (own : Array StaticValue := #[]) :
+    ElabM (Array ClosedType × ClosedType) := do
+  let (_, id, member, args) ← interfaceMember inst name
+  let program := (← getThe Compile.State).program
+  memberSignatureAt id { instanceEnv program member (args ++ own) with self? := some (.«module» inst) }
+
 /-- The parameters of a function member of a module, from the interface that declares it. -/
 def memberParameters (inst : InstanceId) (name : String) : ElabM (Array String) := do
   let (_, _, member, _) ← interfaceMember inst name
@@ -1472,25 +1489,6 @@ to the end makes the caller wait or not checked; a refused body abandons the cal
     | .written expr => elabAt expr type
     | .typed expr place quote => convertTo expr type place quote
 
-  /-- The types of a function member of a module at the module: the interface's member read with
-  `Self` the module (SP8). -/
-  partial def memberSignature (inst : InstanceId) (name : String) (own : Array StaticValue := #[]) :
-      ElabM (Array ClosedType × ClosedType) := do
-    let (interface, memberId, member, args) ← interfaceMember inst name
-    let program := (← getThe Compile.State).program
-    let interfaceDeclaration ← liftM (declaration interface : CompileM Declaration)
-    let (parameters, result) ← memberSignatureOf memberId
-    let base : Env := { instanceEnv program interfaceDeclaration args with
-      file := member.file, self? := some (.«module» inst) }
-    let ownValues := ((ownParameters program member).zip own).foldl (init := base.values)
-      fun map (reference, value) => map.insert reference value
-    let env : Env := { base with values := ownValues }
-    let types ← parameters.mapM fun (_, type) => liftM (evalType env type : CompileM ClosedType)
-    let resultType ← match result with
-      | some type => liftM (evalType env type : CompileM ClosedType)
-      | none => pure ClosedType.unit
-    return (types, resultType)
-
   /-- An operator, a form or a dot call that is a member of the interface of a module parameter
   (NL6, SP12): in the opaque elaboration, on a value of a type member of the parameter, recorded
   by its place; at the instance, at the places the opaque elaboration recorded. -/
@@ -1568,7 +1566,12 @@ to the end makes the caller wait or not checked; a refused body abandons the cal
       let (parameters, result) ← memberSignatureOf memberId
       let (allValues, states) ← inferArguments memberId assigned member.file parameters result args expected place (some inst)
       pure (allValues.extract (allValues.size - own.size) allValues.size, states)
-    let (types, result) ← memberSignature inst name ownValues
+    let env := { instanceEnv program member (interfaceArgs ++ ownValues) with self? := some (.«module» inst) }
+    -- The module already satisfies its interfaces. A call checks the member's own scope (SP3, SP4).
+    if let some scope := member.ownScope then
+      liftM (checkBounds env own name (deferOpaque := true) : CompileM Unit)
+      liftM (checkWheres env #[scope] name false (fun _ => pure false) (deferOpaque := true) : CompileM Unit)
+    let (types, result) ← memberSignatureAt memberId env
     let operands ← finishArguments args states types
     applyAfterArguments operands (targetsOf args types) fun vs => do
       let callee ← if entry.key.opaqueFor.isSome then

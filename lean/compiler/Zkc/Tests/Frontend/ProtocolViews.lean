@@ -123,7 +123,7 @@ def check : IO Unit := do
       unless fields.toList.map (·.name) == selectors do throw (IO.userError s!"incorrect {view.member}")
     let (.error (.waiting why), _) := (Static.protocolViewFields inst (.coins "P") default).run {vocabulary} state
       | throw (IO.userError "private loop lost the owner's coin field")
-    unless why.contains "hidden" do throw (IO.userError why)
+    unless why.render.contains "hidden" do throw (IO.userError why.render)
 
   -- The ordinary frontend checks each clause in its own role, even without a scheme.
   let contract := "spec for Sharing:\n    proves @P secret_check: secret == secret\n"
