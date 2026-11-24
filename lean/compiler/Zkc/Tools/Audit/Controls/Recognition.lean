@@ -45,7 +45,6 @@ run_cmd do
     throwError "recognized an unrelated replacement"
   if ← isConstructorIndexImplementation env `absent implementation then
     throwError "recognized a missing declaration"
-  logInfo "constructor-index recognition: generated form accepted; 10 altered forms refused"
 
 run_cmd do
   let env ← getEnv

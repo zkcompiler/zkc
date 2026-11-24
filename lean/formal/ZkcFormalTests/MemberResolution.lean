@@ -283,7 +283,5 @@ def equalityLoop :=
     twoMembers
   expectValue "protocol, one module twice"
     (protocolOutcome (protocolOf (loop 2 "x" "y") "Walk<First, First>")) 0 [first]
-  IO.println ("a place typed more than once with different members waits (13 cases); the " ++
-    "written-out forms and the places with one member mean what the source says (19 cases)")
 
 end ZkcFormalTests.MemberResolution
