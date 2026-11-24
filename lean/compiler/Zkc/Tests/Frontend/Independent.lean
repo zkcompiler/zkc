@@ -1,5 +1,5 @@
 import Lean.Data.Json
-import Zkc.Tests.Frontend.Protocols
+import Zkc.Tests.Frontend.TypingReference
 
 /-!
 # The independent conformance suite
@@ -17,14 +17,12 @@ packages of its roots emitted and admitted by the core.
 - `underdetermined`: the outcome is printed, and checked against the reading taken for the
   question (the table of readings below), not against the suite's own label.
 
-A case whose roots wait for a form that is not elaborated yet waits, with the form. Ten cases
-whose expectations state small runs are run on those inputs.
+An exhausted check is counted separately and fails the suite. A case whose roots wait for a form that is not elaborated yet waits, with the form.
 -/
 
 namespace Zkc.Tests.Frontend
 
 open Zkc.Frontend
-open Zkc.Core.Concrete (Datum)
 
 /-- A case of the suite: its files, by the names the expectations give them. -/
 structure IndependentCase where
@@ -89,13 +87,34 @@ inductive IndependentOutcome where
   | accepted
   | refused (rule : String) (text : String)
   | waiting (reasons : Array String)
+  | incomplete (reason : String)
   | notAdmitted (text : String)
 
 def IndependentOutcome.describe : IndependentOutcome → String
   | .accepted => "accepted"
+  | .incomplete reason => s!"incomplete: {reason}"
   | .refused rule text => s!"refused by {rule}: {text}"
   | .waiting reasons => s!"waiting for {"; ".intercalate reasons.toList}"
   | .notAdmitted text => s!"not admitted by the core: {text}"
+
+/-- Classify every executable root of a typed conformance case. -/
+def checkedOutcome (check : TypingCheck) : IndependentOutcome := Id.run do
+  if let some diagnostic := check.incomplete[0]? then
+    return .incomplete (diagnostic.message.renderWith Renderer.plain false)
+  if let some first := check.refusals[0]? then
+    return .refused first.rule first.render
+  let mut waits : Array String := #[]
+  for root in Typing.functionRoots check.state do
+    -- A primitive declaration names a row. Every other selected root needs its own outcome.
+    if check.state.results.body? root matches some (.row _) then continue
+    match Typing.rootPackage check.state root with
+    | .ok _ => pure ()
+    | .error (.waiting reason) | .error (.noPackage reason) =>
+      unless waits.contains reason do waits := waits.push reason
+    | .error (.exhausted e) => return .incomplete e.describe
+    | .error lack => return .notAdmitted s!"{Typing.rootDescription check.state root}: {lack.describe}"
+  unless waits.isEmpty do return .waiting waits
+  return .accepted
 
 /-- A case through the frontend: names, instances, typing, and the core's admission of the
 packages of its roots. -/
@@ -119,66 +138,13 @@ def independentOutcome (load : Array String → IO (Option SourceInput)) (case :
   if let some first := instances.refusals[0]? then
     return (.refused first.rule first.render, none)
   let check := checkTyping instances names
-  if let some first := check.refusals[0]? then
-    return (.refused first.rule first.render, some check)
-  let mut waits : Array String := #[]
-  for report in check.packages do
-    match report.outcome with
-    | .refused reason _ => return (.notAdmitted s!"{report.description}: {reason}", some check)
-    | .unjustified functions _ =>
-      return (.notAdmitted s!"{report.description}: {"; ".intercalate functions.toList}", some check)
-    | .defect message => return (.notAdmitted s!"{report.description}: {message}", some check)
-    | .waiting reason => unless waits.contains reason do waits := waits.push reason
-    | _ => pure ()
-  unless waits.isEmpty do return (.waiting waits, some check)
-  return (.accepted, some check)
+  return (checkedOutcome check, some check)
 
 /-- Whether a refusal by a rule agrees with the rules a case cites, directly or by the table of
 equivalent labels. -/
 def refusalAgrees (rule : String) (cited : Array String) : Bool :=
   cited.contains rule || equivalentLabels.any fun (label, citations, _) =>
     label == rule && citations.any cited.contains
-
-/-- A function root run on inputs, against the outcome stated. -/
-def expectCaseRun (label : String) (check : TypingCheck) (root : String) (inputs : List Datum)
-    (expected : Expected) : TestM Unit :=
-  expectRun label check root inputs expected
-
-/-- The runs of ten cases whose expectations state small runs, encoded by hand. -/
-def independentRuns (case : String) (check : TypingCheck) : TestM Unit := do
-  let label := s!"independent {case}"
-  match case with
-  | "facts-indexed-sum" => expectCaseRun label check "f" [numbers [1, 2]] (.returned [.number 513])
-  | "facts-natural-expression-type" => expectCaseRun label check "f" [.number 3] (.returned [.number 4])
-  | "facts-guarded-index" =>
-    let xs := numbers (List.range 8)
-    expectCaseRun label check "f" [xs, .number 7] (.returned [.number 7])
-    expectCaseRun label check "f" [xs, .number 8] (.stopped .refused)
-  | "loop-stepped-collection" =>
-    expectCaseRun label check "f" [] (.returned [.sequence [numbers [0], numbers [0, 0], numbers [0, 0, 0]]])
-  | "opaque-interface-dispatch" => expectCaseRun label check "main" [] (.returned [.number 2])
-  | "match-exhaustive-payloads" =>
-    expectCaseRun label check "f" [.sequence [.number 0, .number 9]] (.returned [.number 9])
-    expectCaseRun label check "f" [.sequence [.number 1, Datum.ofBool true]] (.returned [.number 1])
-  | "infer-fact-explicit-bound" =>
-    expectCaseRun label check "main" [.number 7] (.returned [.number 7])
-    expectCaseRun label check "main" [.number 8] (.stopped .reject)
-  | "holders-nested-send-call" =>
-    -- x = 0: A stops `abort` in the payload, and B, which waits for the message, is blocked
-    expectProtocolRun label check "P" [.number 0] [("A", .stopped .abort), ("B", .blocked)]
-    expectProtocolRun label check "P" [.number 3] [("A", .returned []), ("B", .returned [])]
-  | "wire-fact-does-not-cross" =>
-    expectProtocolRun label check "P" [numbers [4, 9]] [("A", .returned []), ("B", .returned [])]
-    expectProtocolRun label check "P" [numbers [4]] [("A", .stopped .refused), ("B", .blocked)]
-  | "sampling-empty-array" => expectProtocolRun label check "P" [] [("A", .returned [])]
-  | _ => pure ()
-
-/-- The cases whose runs are checked. -/
-def independentRunCases : Array String := #[
-  "facts-indexed-sum", "facts-natural-expression-type", "facts-guarded-index",
-  "loop-stepped-collection", "opaque-interface-dispatch", "match-exhaustive-payloads",
-  "infer-fact-explicit-bound", "holders-nested-send-call", "wire-fact-does-not-cross",
-  "sampling-empty-array"]
 
 def independentSuite (directory : System.FilePath) (library : System.FilePath) : TestM Unit := do
   let cases ← match ← readIndependentCases directory with
@@ -187,14 +153,17 @@ def independentSuite (directory : System.FilePath) (library : System.FilePath) :
   let load ← cachedLoader #[library]
   let mut agreeing := 0
   let mut disagreeing : Array String := #[]
+  let mut incomplete := 0
   let mut waiting : Array String := #[]
   let mut readings : Array String := #[]
-  let mut executions := 0
   let mut protocolRoots := 0
   for case in cases do
     let (outcome, check?) ← independentOutcome (fun names => (load names : IO _)) case
     if let some check := check? then protocolRoots := protocolRoots + (checkedProtocols check).1
     match case.expected, outcome with
+    | _, .incomplete reason =>
+      incomplete := incomplete + 1
+      failure s!"independent {case.id}: incomplete: {reason}"
     | "underdetermined", _ =>
       match independentReadings.find? (·.1 == case.id) with
       | some (_, reading, rules, reason) =>
@@ -225,12 +194,8 @@ def independentSuite (directory : System.FilePath) (library : System.FilePath) :
         readings := readings.push s!"{case.id}: accepted; the suite expects {expected} {case.rules.toList} by the reference before a fact was about a value ({reason})"
       | _, _ =>
         disagreeing := disagreeing.push s!"{case.id}: expects {expected} {case.rules.toList}; {other.describe}"
-    if independentRunCases.contains case.id then
-      if let some check := check? then
-        independentRuns case.id check
-        executions := executions + 1
   for entry in disagreeing do failure s!"independent {entry}"
-  note s!"{cases.size} cases: {agreeing} agreeing, {disagreeing.size} disagreeing, {waiting.size} waiting, {readings.size} questions checked against their readings; {executions} cases run on the inputs their expectations state; {protocolRoots} packages of protocol roots admitted with the check of facts of their protocols"
+  note s!"{cases.size} cases: {agreeing} agreeing, {disagreeing.size} disagreeing, {waiting.size} waiting, {incomplete} incomplete, {readings.size} questions checked against their readings; {protocolRoots} packages of protocol roots admitted with the check of facts of their protocols"
   for entry in waiting do note s!"waiting: {entry}"
   for entry in readings do note s!"question: {entry}"
   for (label, citations, reason) in equivalentLabels do

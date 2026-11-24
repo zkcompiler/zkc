@@ -45,15 +45,16 @@ test-formal:
     cd lean/formal && lake build --iofail && lake test
     just _charge-checks
 
-# Parse and format the reference corpus and check source contracts and generated view types.
+# Build the frontend libraries and run the source, generated-view and frontend driver suites.
 test-frontend:
-    cd lean/compiler && lake build --iofail Zkc.Tests.Frontend.Reference Zkc.Frontend.Driver.SourcePhases Zkc.Frontend.Written.Selection
+    cd lean/compiler && lake build --iofail ZkcFrontend ZkcFrontendTools ZkcFrontendTests zkc-syntax zkc-check zkc-frontend-tests
     cd lean/compiler && lake env lean --run Zkc/Tests/Frontend/SourceConformance.lean
     cd lean/compiler && lake env lean --run Zkc/Tests/Frontend/ProtocolViews.lean
+    cd lean/compiler && lake exe zkc-frontend-tests
 
 # Print every admitted example root as a Lean module in which the kernel elaborates the program, compare each with its source, read a fixture back, and refuse four controls.
 test-packages:
-    cd lean/compiler && lake build --iofail Zkc.Frontend.Written.Package Zkc.Kernel Zkc.Tests.Frontend.PrintedPackageSupport Zkc.Tests.Frontend.PrintedFixtureCoverage
+    cd lean/compiler && lake build --iofail Zkc.Frontend.Written.Package ZkcKernel Zkc.Tests.Frontend.PrintedPackageSupport Zkc.Tests.Frontend.PrintedFixtureCoverage
     cd lean/compiler && lake env lean --run Zkc/Tests/Frontend/PrintedPackages.lean
 
 # Export the written knowledge claim and kernel-check the returning fork and source mutations.
@@ -62,7 +63,7 @@ test-written-knowledge: test-frontend
     cd lean/formal && lake build --iofail ZkcFormal.Written.GroupReplay ZkcFormal.Written.FiniteModel ZkcFormalTools.Policy
     cd lean/formal && lake env python3 checks/written_knowledge.py
 
-# Audit the compiler package: the kernel's replay of the core, the vocabulary and their tests, no `sorry`, no axiom beyond `propext` and `Quot.sound`, the import rules.
+# Check compiler library coverage and audit the package: the kernel's replay of the core, the vocabulary and their tests, no `sorry`, no axiom beyond `propext` and `Quot.sound`, the import rules.
 audit:
     cd lean/compiler && lake exe zkc-audit
 

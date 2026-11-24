@@ -1,4 +1,6 @@
-import Zkc.Tools.Frontend
+import Zkc.Tools.Frontend.Commands
+import Zkc.Tools.Frontend.Generate
+import Zkc.Tools.Frontend.Bench
 
 open Zkc.Tools.Frontend
 

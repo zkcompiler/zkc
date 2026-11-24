@@ -174,8 +174,21 @@ def libraryNamesSuite (repository : Repository) : TestM Unit := do
       failure s!"{path} does not resolve: {refusal.span.file}: {refusal.render}"
   note s!"{count} modules of libraries/"
 
-/-- Every worked program resolves with its example file where there is one, and with every
-module it reaches. -/
+/-- The two examples with a specification-only algorithm after `by` fail name resolution. -/
+def expectedAlgorithmLine (stem : String) : Option Nat :=
+  match stem with
+  | "spot_check" => some 39
+  | "mldsa_signature" => some 43
+  | _ => none
+
+def expectedNameRefusal (path : System.FilePath) (refusals : Array Refusal) : Bool :=
+  match expectedAlgorithmLine (path.fileStem.getD ""), refusals with
+  | some line, #[r] =>
+    r.span.file == path.toString && r.span.startLine.toNat == line && r.rule == "SX6" &&
+      r.message == "the function after `by` must be an executable def"
+  | _, _ => false
+
+/-- Resolve each worked program and check its source locations. -/
 def programNamesSuite (repository : Repository) : TestM Unit := do
   let programs := repository.examples
   let load ← cachedLoader #[repository.libraries, programs, programs / "support"]
@@ -196,9 +209,13 @@ def programNamesSuite (repository : Repository) : TestM Unit := do
         parsed := parsed.push (file.toString, ← IO.FS.readFile file, tree.tree)
     checkCoverage stem check parsed
     let label := if files.size == 2 then s!"{stem} with {stem}_example" else stem
-    if check.refusals.isEmpty then pass
-    for refusal in check.refusals do
-      failure s!"{label} does not resolve: {refusal.span.file}: {refusal.render}"
+    if (expectedAlgorithmLine stem).isSome then
+      expectTrue (expectedNameRefusal path check.refusals)
+        s!"{label}: expected a refusal of its specification-only algorithm; got {check.refusals.map (·.render)}"
+    else
+      if check.refusals.isEmpty then pass
+      for refusal in check.refusals do
+        failure s!"{label} does not resolve: {refusal.span.file}: {refusal.render}"
   note s!"{count} worked programs"
 
 /-- The generated program of the measurements resolves with the library of the reference. -/

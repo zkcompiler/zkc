@@ -1,28 +1,19 @@
 module
 
 public import Zkc.Core.Admission.Admit
-public import Zkc.Core.Program.EraseProgram
 public import Zkc.Frontend.Emit.Bindings
 public import Zkc.Frontend.Basic.Log
-public import Zkc.Core.Scheme.Deployed
 
 @[expose] public section
 
 set_option autoImplicit false
 
 /-!
-# What emission and the construction of schemes report
+# Package admission reports
 
-Until a run emits one package, every root has a package of its own, which the core admits or
-refuses (`PackageReport`), and every scheme is constructed by the core on the package of its
-protocol instance (`SchemeReport`). These are the results of the phases of packages and of
-schemes, kept in the store of results.
-
-What a run made of the roots it was asked for is an `Admitted` result: the roots it holds, each
-with what was made of it, the roots it lacks, each with why, and the number of errors and of
-incomplete checks it reported, read from the log of the run. A root is run, proved, verified or
-written as a package only from a `Completed` result, which only an admitted one makes: a root is
-complete when the run reported no error, left no check incomplete, and holds that root.
+Each root carries the result of emitting and checking its source package.
+A session records selected roots and their diagnostics. A completed selection
+requires a checked package for each requested root and no errors or incomplete checks.
 -/
 
 namespace Zkc.Frontend
@@ -70,11 +61,8 @@ inductive PackageOutcome where
   /-- Admitted by the core: elaborated, and every function and protocol passes the check of
   facts. -/
   | admitted (package : CheckedPackage)
-  /-- Elaborated by the core; the functions and protocols named do not pass its check of facts,
-  each with its first application that is not justified. -/
-  | unjustified (functions : Array String) (package : SourcePackage)
   /-- Emitted and refused by the core. -/
-  | refused (reason : String) (package : SourcePackage)
+  | refused (package : SourcePackage) (refusals : List (Core.AdmissionRefusal package.bindings.vocabulary))
   /-- Not emitted: a form that is not typed yet. -/
   | waiting (reason : String)
   /-- Typed, and not emitted: a specification item whose types or operations have no form in
@@ -94,62 +82,6 @@ structure PackageReport where
   outcome : PackageOutcome
   deriving Inhabited
 
-/-- The deployment of a source scheme and the source names of its roles and ports. -/
-structure Constructed where
-  name : String
-  bindings : Zkc.Vocabulary.Project.Bindings
-  deployment : Core.Deployed bindings.vocabulary
-  identity : List Nat
-  roles : Array String
-  prover : Nat
-  verifier : Nat
-  /-- The names of the ports that are not `spec`. -/
-  ports : Array String
-  /-- The ports of the statement and of the witness, in the order of the signature. -/
-  statement : Array Nat
-  witness : Array Nat
-  /-- The port of each input of the entry. -/
-  inputPorts : Array Nat
-  /-- The projection to the prover's and the verifier's programs: the number of programs, or why
-  the core does not project. -/
-  projected : Except String Nat
-
-namespace Constructed
-
-abbrev source (scheme : Constructed) := scheme.deployment.admitted
-
-abbrev typed (scheme : Constructed) := scheme.source.program
-
-abbrev declaration (scheme : Constructed) := scheme.deployment.declaration
-
-/-- The definitions of the admitted interactive program named by the deployment. -/
-abbrev package (scheme : Constructed) := Core.erase scheme.typed
-
-end Constructed
-
-/-- What became of a scheme. -/
-inductive SchemeOutcome where
-  | constructed (scheme : Constructed)
-  /-- Emitted, and refused by the core's elaboration or by its construction. -/
-  | refusedByCore (reason : String) (package : SourcePackage)
-  | waiting (reason : String)
-  | refused (refusal : Diagnostic)
-  | defect (message : String)
-  /-- Not constructed: the protocol is not checked to the end, a budget of the compiler ran out
-  (SP10). -/
-  | exhausted (exhaustion : Exhaustion)
-
-instance : Inhabited SchemeOutcome := ⟨.waiting ""⟩
-
-structure SchemeReport where
-  name : String
-  /-- The scheme as source writes it: `scheme Proof = Schnorr<G1>`. -/
-  description : String
-  outcome : SchemeOutcome
-  deriving Inhabited
-
-/-! ## Admitted and completed results -/
-
 /-- Why a root that was asked for is not in a result. -/
 inductive Lack where
   /-- Refused: by the frontend, with an error logged, or by the core. -/
@@ -165,6 +97,7 @@ inductive Lack where
   | defect (message : String)
   /-- The program has no root of the name asked for. -/
   | absent
+  | ambiguous (places : Array String)
   deriving Inhabited
 
 def Lack.describe : Lack → String
@@ -174,11 +107,10 @@ def Lack.describe : Lack → String
   | .noPackage reason => s!"no package of its own: {reason}"
   | .defect message => s!"not computed, a defect of the frontend: {message}"
   | .absent => "no root of this name"
+  | .ambiguous places => s!"ambiguous root: {", ".intercalate places.toList}"
 
 /-- What a run made of the roots it was asked for: those it holds, each with what was made of it,
-and those it lacks, each with why, beside the errors and incomplete checks that the run reported.
-It is built from the log of the run (`ofLog`); it says what is there and what is not, and nothing
-of it is run, proved, verified or written until a completed result is taken from it. -/
+and those it lacks, each with why, beside the errors and incomplete checks from its log. -/
 structure Admitted (α : Type) where
   private mk ::
   /-- The roots held, each named as source writes it, with what was made of it. -/
@@ -260,6 +192,8 @@ def namesRoot (name description : String) : Bool :=
 
 /-- What a completed result holds for a root it was asked for. -/
 def Completed.find? {α : Type} (completed : Completed α) (root : String) : Option α :=
-  (completed.held.find? fun (description, _) => namesRoot root description).map (·.2)
+  match completed.held.filter (fun (description, _) => namesRoot root description) with
+  | #[(_, value)] => some value
+  | _ => none
 
 end Zkc.Frontend

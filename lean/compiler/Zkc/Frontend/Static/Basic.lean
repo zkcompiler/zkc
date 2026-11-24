@@ -193,10 +193,11 @@ mutual
     | .module id => renderInstance state id
 
   /-- An instance as `name<values>`, positionally, then its specification-only values by name. -/
-  partial def renderInstance (state : Compile.State) (id : InstanceId) : String :=
+  partial def renderInstance (state : Compile.State) (id : InstanceId)
+      (declarationName : Option String := none) : String :=
     match state.table.entries[id]? with
     | some entry =>
-      let name := state.program.nameOf entry.key.declaration
+      let name := declarationName.getD (state.program.nameOf entry.key.declaration)
       let specNames := ((state.program.declarations[entry.key.declaration]?).map fun found =>
         ((state.program.parameters found).filter (·.2.spec)).map (·.2.name.text)).getD #[]
       let parts := entry.key.arguments.toList.map (renderValue state) ++

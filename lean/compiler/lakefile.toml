@@ -51,8 +51,8 @@ requiresModuleSystem = true
 
 [[lean_lib]]
 name = "ZkcFrontendTools"
-roots = ["Zkc.Tools.Frontend"]
-globs = ["Zkc.Tools.Frontend", "Zkc.Tools.Frontend.+"]
+roots = ["Zkc.Tools.Frontend", "Zkc.Tools.WrittenKnowledge"]
+globs = ["Zkc.Tools.Frontend.*", "Zkc.Tools.WrittenKnowledge"]
 allowNonModules = true
 
 [[lean_lib]]
@@ -61,12 +61,11 @@ roots = ["Zkc.Tests.Frontend"]
 globs = ["Zkc.Tests.Frontend", "Zkc.Tests.Frontend.+"]
 allowNonModules = true
 
-# The audit and its pinned-compiler helper recognizer. Controls are in no glob and are built
-# because both audit executables import them; they are not part of an audited project library.
+# Includes the executable and the negative controls it exercises.
 [[lean_lib]]
 name = "ZkcAudit"
 roots = ["Zkc.Tools.Audit"]
-globs = ["Zkc.Tools.Audit", "Zkc.Tools.Audit.CompilerHelpers"]
+globs = ["Zkc.Tools.Audit.*"]
 allowNonModules = true
 
 [[lean_exe]]

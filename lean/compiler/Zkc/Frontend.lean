@@ -32,7 +32,6 @@ public import Zkc.Frontend.Semantics.Rows
 public import Zkc.Frontend.Driver.Bodies
 public import Zkc.Frontend.Emit.Root
 public import Zkc.Frontend.Semantics.Typing
-public import Zkc.Frontend.Semantics.Scheme
 public import Zkc.Frontend.Basic.Message
 public import Zkc.Frontend.Basic.Diagnostic
 public import Zkc.Frontend.Basic.Log
@@ -92,3 +91,6 @@ public import Zkc.Frontend.Syntax.Parser.Stmt
 public import Zkc.Frontend.Syntax.UnicodeData
 public import Zkc.Frontend.Emit.Application
 public import Zkc.Frontend.Written.Charge
+public import Zkc.Frontend.Driver.Files
+public import Zkc.Frontend.Written.Export
+public import Zkc.Frontend.Written.Statement

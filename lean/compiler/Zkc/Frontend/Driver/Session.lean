@@ -14,11 +14,8 @@ report of each phase run so far. It is a value: a session that has loaded and lo
 is the base of every program compiled against that library, and each of them continues from a
 copy of it without repeating what the base did.
 
-A command is the name of the last phase it needs. The driver has one path from the emitted
-package to anything that runs, proves, verifies or writes it: an admitted result of the roots
-asked for (`admitRoots`, `admitSchemes`), which says which it holds and which it lacks,
-from which a root is taken complete only when the session reported no error, left no check
-incomplete, and holds that root.
+A command selects the last phase it needs. Admission records which roots have a checked
+package. A completed result requires an error-free session with no incomplete checks.
 -/
 
 namespace Zkc.Frontend.Driver
@@ -69,11 +66,15 @@ def runAllTimed {m : Type → Type} [Monad m] (clock : m Nat) (session : Session
 /-- Loads and assembles the sources of a program, and runs the phases up to one with a name.
 `load` reads the library file of a module path, with the effects of the caller. -/
 def compile {m : Type → Type} [Monad m] (session : Session) (inputs : Array SourceInput)
-    (load : Array String → m (Option SourceInput)) (lastPhase : String := "schemes") :
+    (load : Array String → m (Option SourceInput)) (lastPhase : String := "packages") :
     m Session := do
   let assembly ← Zkc.Frontend.assemble inputs load
   let session := { session with inputNames := inputs.map fun (input : SourceInput) => input.name }
-  return session.runAll (upTo (pipeline assembly) lastPhase)
+  match upTo (pipeline assembly) lastPhase with
+  | .ok phases => return session.runAll phases
+  | .error message =>
+    let log := session.state.log.add { rule := "phase", span := default, message := .ofText message }
+    return { session with state.log := log }
 
 /-- The files in the order of output: those given, in the order given, then those of the
 library in the order of the program. -/
@@ -104,49 +105,39 @@ def incompleteOf (session : Session) (phases : Array String) : Array Diagnostic 
 def ran (session : Session) (name : String) : Bool := session.reports.any (·.name == name)
 
 /-- The packages of the roots asked for: the roots named (each as `types` prints it, or the
-declaration of a default instance), or, when none is named, every root that is a function or a
+declaration of a default instance), qualified by the module when names coincide, or, when none is named, every root that is a function or a
 protocol and has a package of its own. A root whose package the core admitted is held; any other
 is lacking, with why. -/
 def admitRoots (session : Session) (requested : Option (Array String) := none) :
-    Admitted RootPackage :=
+    Admitted CheckedPackage :=
   let state := session.state
-  let roots := (Typing.functionRoots state).map fun root => (root, Typing.rootDescription state root)
-  let outcomes : Array (String × Except Lack RootPackage) := match requested with
-    | none => roots.filterMap fun (root, description) =>
-      match Typing.rootPackage state root with
-      | .error (.noPackage _) => none
-      | outcome => some (description, outcome)
-    | some names => names.map fun name =>
-      match roots.find? fun (_, description) => namesRoot name description with
-      | some (root, description) => (description, Typing.rootPackage state root)
-      | none => (name, .error .absent)
+  let roots := (Typing.functionRoots state).map fun root =>
+    (root, Typing.rootDescription state root, Typing.rootDescription state root (qualified := true))
+  let outcomes : Array (String × Except Lack CheckedPackage) := Id.run do
+    match requested with
+    | none =>
+      let mut seen : Std.HashSet String := {}
+      let mut ambiguous : Std.HashSet String := {}
+      for (_, short, _) in roots do
+        if seen.contains short then ambiguous := ambiguous.insert short
+        seen := seen.insert short
+      return roots.filterMap fun (root, short, full) =>
+        match Typing.rootPackage state root with
+        | .error (.noPackage _) => none
+        | outcome => some (if ambiguous.contains short then full else short, outcome)
+    | some names =>
+      return names.toList.eraseDups.toArray.map fun name =>
+        match roots.filter (fun (_, short, full) => namesRoot name short || namesRoot name full) with
+        | #[(root, _, _)] => (name, Typing.rootPackage state root)
+        | #[] => (name, .error .absent)
+        | candidates =>
+          let places := candidates.map fun (root, _, full) => Id.run do
+            let some entry := state.table.entries[root]? | return full
+            let some decl := state.program.declarations[entry.key.declaration]? | return full
+            let some written := decl.name | return full
+            return s!"{full} at {written.span.file}:{written.span.render}"
+          (name, .error (.ambiguous places))
   Admitted.ofLog state.log outcomes
-
-/-- What an admitted result holds of a scheme: its construction, when the core constructed it,
-admitted what each step returns and projects its constructed program, or why it has none. -/
-def schemeOutcome (report : SchemeReport) : Except Lack Constructed :=
-  match report.outcome with
-  | .constructed scheme =>
-    match scheme.projected with
-    | .ok _ => .ok scheme
-    | .error message => .error (.refused s!"the core does not project its constructed program: {message}")
-  | .refusedByCore reason _ => .error (.refused reason)
-  | .waiting reason => .error (.waiting reason)
-  | .refused refusal => .error (.refused (refusal.toRefusal Renderer.plain).render)
-  | .defect message => .error (.defect message)
-  | .exhausted exhaustion => .error (.exhausted exhaustion)
-
-/-- The schemes asked for, by name, or every scheme when none is named. -/
-def admitSchemes (session : Session) (requested : Option (Array String) := none) :
-    Admitted Constructed :=
-  let reports := session.state.results.schemeReports
-  let outcomes : Array (String × Except Lack Constructed) := match requested with
-    | none => reports.map fun report => (report.name, schemeOutcome report)
-    | some names => names.map fun name =>
-      match reports.find? (·.name == name) with
-      | some report => (name, schemeOutcome report)
-      | none => (name, .error .absent)
-  Admitted.ofLog session.state.log outcomes
 
 /-- The diagnostics in the order of output: those of the files given first, in the order the
 files were given, then those of the library. -/
@@ -171,16 +162,13 @@ inductive Command where
   | names
   /-- The instances of the program with their default instances. -/
   | instances
-  /-- The typed bodies, their packages, sites and obligations, and the schemes. -/
+  /-- The typed bodies, their packages, sites and obligations. -/
   | types
-  /-- A root run, or a scheme proved or verified. -/
-  | run
   deriving Inhabited, BEq, Repr
 
 def Command.lastPhase : Command → String
   | .names => "names"
   | .instances => "defaults"
-  | .types => "schemes"
-  | .run => "schemes"
+  | .types => "packages"
 
 end Zkc.Frontend.Driver

@@ -15,7 +15,6 @@ open Zkc.Frontend.Syntax
 
 structure Tally where
   passed : Nat := 0
-  failed : Nat := 0
   failures : Array String := #[]
   notes : Array String := #[]
 
@@ -24,7 +23,7 @@ abbrev TestM := StateT Tally IO
 def pass : TestM Unit := modify fun t => { t with passed := t.passed + 1 }
 
 def failure (message : String) : TestM Unit :=
-  modify fun t => { t with failed := t.failed + 1, failures := t.failures.push message }
+  modify fun t => { t with failures := t.failures.push message }
 
 def note (message : String) : TestM Unit := modify fun t => { t with notes := t.notes.push message }
 
@@ -158,12 +157,42 @@ def checkPrinter (label : String) (parsed : SourceFile) : TestM Unit := do
     expectTrue (commentTexts again.comments == commentTexts parsed.comments)
       s!"{label}: the canonical text does not keep the comments"
 
-/-- Runs a suite and prints its summary; the failures are listed. -/
-def runSuite (name : String) (suite : TestM Unit) : IO Tally := do
-  let ((), tally) ← suite.run {}
-  IO.println s!"{name}: {tally.passed} checks passed, {tally.failed} failed"
-  for message in tally.notes do IO.println s!"  {message}"
-  for message in tally.failures do IO.println s!"  FAIL {message}"
-  return tally
+/-- One specific diagnostic expected from one case in one suite. -/
+structure KnownFailure where
+  suite : String
+  caseName : String
+  detail : String
+  reason : String
+  deriving BEq
+
+structure TestCounts where
+  passed : Nat := 0
+  known : Nat := 0
+  failed : Nat := 0
+
+/-- Each entry accounts for one occurrence. Check the remaining entries after all suites,
+so that removing or renaming a suite also exposes its stale entries. -/
+def runSuites (suites : List (String × TestM Unit)) (knownFailures : List KnownFailure := []) :
+    IO TestCounts := do
+  let mut remaining := knownFailures
+  let mut totals : TestCounts := {}
+  for (name, suite) in suites do
+    let ((), tally) ← suite.run {}
+    let mut known := 0
+    for message in tally.notes do IO.println s!"  {name}: {message}"
+    for message in tally.failures do
+      match remaining.find? (fun entry =>
+          entry.suite == name && message == s!"{entry.caseName}: {entry.detail}") with
+      | some entry =>
+        remaining := remaining.erase entry
+        known := known + 1
+        IO.println s!"  KNOWN {name}: {message}. {entry.reason}"
+      | none => IO.println s!"  FAIL {name}: {message}"
+    let failed := tally.failures.size - known
+    IO.println s!"{name}: {tally.passed} checks passed, {known} known failures, {failed} failed"
+    totals := ⟨totals.passed + tally.passed, totals.known + known, totals.failed + failed⟩
+  for entry in remaining do
+    IO.println s!"  FAIL {entry.suite}: {entry.caseName}: {entry.detail} did not occur; remove the known-failure entry"
+  return { totals with failed := totals.failed + remaining.length }
 
 end Zkc.Tests.Frontend

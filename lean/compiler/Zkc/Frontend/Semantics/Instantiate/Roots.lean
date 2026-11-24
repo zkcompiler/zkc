@@ -289,8 +289,7 @@ def schemeWaits (env : Env) (node : Syntax.Scheme) : CompileM (Option String) :=
   return none
 
 /-- The protocol instance that a scheme names: a root of the package; and the scheme, with the
-suite of its `construction` line (`schemeSuite`) and the first line that waits (`schemeWaits`).
-The construction reads the rest (`Zkc.Frontend.Semantics.Scheme`). -/
+suite of its `construction` line (`schemeSuite`) and the first line that waits (`schemeWaits`). -/
 def schemeProtocol (declaration : DeclarationId) (file : FileId) (node : Syntax.Scheme) : CompileM Unit := do
   let env : Env := { file }
   let path := node.protocol

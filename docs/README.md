@@ -19,7 +19,7 @@ theorems:
 |---|---|
 | [Compiler package](../lean/compiler/README.md) | the Lake package of the core and the frontend |
 | [Core](../lean/compiler/Zkc/Core/README.md) | admission, construction, projection, the executor and their theorems |
-| [Frontend](../lean/compiler/Zkc/Frontend/README.md) | the lexer, the parser, the checker, the emission to the core, the tools and the test driver |
+| [Frontend](../lean/compiler/Zkc/Frontend/README.md) | source checking and emission, frontend commands and their test driver |
 | [Formal package](../lean/formal/README.md) | statements and proofs over the meaning of the core |
 
 ## Which document decides what

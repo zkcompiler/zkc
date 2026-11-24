@@ -1,5 +1,6 @@
 module
 
+public import Zkc.Core.Program.LocalRaw
 public import Zkc.Frontend.Lowered.Basic
 public import Zkc.Frontend.Semantics.Static
 public import Zkc.Frontend.Typed.Summary
@@ -128,14 +129,29 @@ inductive CoreOperation where
 
 namespace CoreOperation
 
+/-- The operation selected by emission. -/
+def owned : CoreOperation → Core.OwnedName
+  | .natAdd => .natAdd | .natSub => .natSub | .natMul => .natMul
+  | .natDiv => .natDiv | .natRem => .natRem | .natPow => .natPow
+  | .natEqual => .natEqual | .natLess => .natLess | .boolAnd => .boolAnd
+  | .boolOr => .boolOr | .boolNot => .boolNot | .boolEqual => .boolEqual
+  | .seqLength => .seqLength | .seqAt => .seqAt | .seqSlice => .seqSlice
+  | .seqConcat => .seqConcat | .seqFill => .seqFill
+
+/-- Catalogue spelling of an operation owned by the core, including conversions. -/
+def ownedSpelling : Core.OwnedName → String
+  | .natAdd => "nat.add" | .natSub => "nat.sub" | .natMul => "nat.mul"
+  | .natDiv => "nat.div" | .natRem => "nat.rem" | .natPow => "nat.pow"
+  | .natEqual => "nat.equal" | .natLess => "nat.less" | .boolAnd => "bool.and"
+  | .boolOr => "bool.or" | .boolNot => "bool.not" | .boolEqual => "bool.equal"
+  | .seqLength => "seq.length" | .seqAt => "seq.at" | .seqSlice => "seq.slice"
+  | .seqConcat => "seq.concat" | .seqFill => "seq.fill" | .seqSized => "seq.sized"
+  | .seqUnsized => "seq.unsized" | .natBelow => "nat.below" | .finWiden => "fin.widen"
+  | .finToNat => "fin.to_nat" | .make => "make" | .get => "get"
+  | .take => "take" | .variant => "variant"
+
 /-- The name the reference gives the operation. -/
-def name : CoreOperation → String
-  | .natAdd => "nat.add" | .natSub => "nat.sub" | .natMul => "nat.mul" | .natDiv => "nat.div"
-  | .natRem => "nat.rem" | .natPow => "nat.pow" | .natEqual => "nat.equal"
-  | .natLess => "nat.less" | .boolAnd => "bool.and" | .boolOr => "bool.or"
-  | .boolNot => "bool.not" | .boolEqual => "bool.equal" | .seqLength => "seq.length"
-  | .seqAt => "seq.at" | .seqSlice => "seq.slice" | .seqConcat => "seq.concat"
-  | .seqFill => "seq.fill"
+def name (op : CoreOperation) : String := ownedSpelling op.owned
 
 /-- Whether the operation is defined on a domain only: an application of it is justified by
 the facts of the role that computes it. -/

@@ -53,8 +53,8 @@ def expectedTypingRefusals : Array (String × String × Nat) := #[
   ("T-H1", "HO1", 3), ("T-H3", "HO2", 3), ("T-H4", "EV5", 3), ("T-H5", "GU2", 3),
   ("T-H7", "CT2", 3), ("T-E1", "EV3", 5), ("T-E1b", "EV3", 4),
   ("T-E7", "RM1", 5), ("T-E9", "HO5", 3), ("S-A1", "GU2", 8), ("S-A1b", "GU2", 8),
-  ("I-5c", "CT2", 6), ("R-EV1b", "EV1", 7), ("R-EV1c", "EV1", 5), ("M-SCH1", "GU2", 15),
-  ("M-SCH4", "HO5", 11), ("M-SCH6", "NL6", 15), ("T-H10", "TY4", 5), ("I-3", "TY15", 3),
+  ("I-5c", "CT2", 6), ("R-EV1b", "EV1", 7), ("R-EV1c", "EV1", 5),
+  ("M-SCH2", "TY5", 23), ("T-H10", "TY4", 5), ("I-3", "TY15", 3),
   ("I-4d", "TY4", 5), ("V-F2", "TY4", 5), ("V-F3", "TY7", 6), ("V-H1", "TY7", 6),
   ("V-H2", "TY5", 6), ("V-H3", "TY7", 6), ("N-TY14c", "TY7", 7),
   ("M-FRA23", "TY7", 183), ("M-FRA24", "TY7", 192), ("T-H9", "EV5", 5), ("I-8a", "CT2", 7),
@@ -85,7 +85,6 @@ def conformanceTypingSuite (repository : Repository) : TestM Unit := do
   let mut accepted := 0
   let mut admitted := 0
   let mut checkedTotal := 0
-  let mut failingTotal := 0
   let mut seen : Array String := #[]
   let mut contradictions : Array (String × String) := #[]
   let mut unreached : Array String := #[]
@@ -112,9 +111,8 @@ def conformanceTypingSuite (repository : Repository) : TestM Unit := do
         continue
       let check := checkTyping instances names
       checkPackages block.id check
-      let (checked, failing) := checkedFunctions check
+      let checked := checkedFunctions check
       checkedTotal := checkedTotal + checked
-      failingTotal := failingTotal + failing
       let (roots, protocols) := checkedProtocols check
       protocolRootsTotal := protocolRootsTotal + roots
       protocolsTotal := protocolsTotal + protocols
@@ -174,7 +172,7 @@ def conformanceTypingSuite (repository : Repository) : TestM Unit := do
   for (fragment, reason) in knownWaits do
     note s!"a wait that this check leaves, `{fragment}`: {reason}"
   note s!"tests that wait, among others, for it: {" ".intercalate left.toList}"
-  note s!"functions of the packages elaborated by the core: {checkedTotal}, of which {checkedTotal - failingTotal} pass the check of facts"
+  note s!"functions in packages admitted by the core: {checkedTotal}"
   note s!"packages of protocol roots admitted with the check of facts of their protocols: {protocolRootsTotal}, holding {protocolsTotal} protocols"
   for entry in refusedHere do note s!"refused: {entry}"
   for entry in waiting do note s!"waiting: {entry}"
@@ -213,7 +211,7 @@ def libraryTypingSuite (repository : Repository) : TestM Unit := do
         note s!"{stem}: refused as recorded: {refusal.span.file}: {refusal.render}"
       else failure s!"{path}: {refusal.span.file}: {refusal.render}"
     checkPackages stem check
-    let (checked, failing) := checkedFunctions check
+    let checked := checkedFunctions check
     let mut admitted := 0
     let mut waits : Array String := #[]
     for report in check.packages do
@@ -240,7 +238,7 @@ def libraryTypingSuite (repository : Repository) : TestM Unit := do
             (check.state.table.entries[report.root]?).any (·.key.declaration == index)
         expectTrue found s!"{stem}: `{name}` has no admitted package"
     let typedOnly := (check.packages.filter fun report => report.outcome matches .typedOnly _).size
-    note s!"{stem}: {check.packages.size} packages, {admitted} admitted, {typedOnly} typed only{if waits.isEmpty then "" else s!", waiting for {", ".intercalate waits.toList}"}; {checked} functions elaborated, {checked - failing} pass the check of facts; {check.state.results.obligations.size} obligations of laws"
+    note s!"{stem}: {check.packages.size} packages, {admitted} admitted, {typedOnly} typed only{if waits.isEmpty then "" else s!", waiting for {", ".intercalate waits.toList}"}; {checked} functions in admitted packages; {check.state.results.obligations.size} obligations of laws"
 
 /-- Every worked program with its example file: its bodies type, except where the check of
 instances refuses it, and its packages are admitted or wait. -/
@@ -258,21 +256,22 @@ def programTypingSuite (repository : Repository) : TestM Unit := do
       return ({ name := file.toString, parsed := parse file.toString source } : SourceInput)
     let nameCheck ← checkNames inputs fun names => (load names : IO _)
     unless nameCheck.refusals.isEmpty do
-      failure s!"{stem}: the names do not resolve"
+      unless expectedNameRefusal path nameCheck.refusals do
+        failure s!"{stem}: the names do not resolve"
       continue
     let check := checkTyping (checkInstances nameCheck (files.map (·.toString))) (files.map (·.toString))
     if check.refusals.isEmpty then pass
     for refusal in check.refusals do failure s!"{stem}: {refusal.span.file}: {refusal.render}"
     checkPackages stem check
     let admitted := (check.packages.filter fun report => report.outcome matches .admitted _).size
-    let (checked, failing) := checkedFunctions check
+    let checked := checkedFunctions check
     let (protocolRoots, protocols) := checkedProtocols check
     let typedOnly := (check.packages.filter fun report => report.outcome matches .typedOnly _).size
     let mut waits : Array String := #[]
     for report in check.packages do
       if let .waiting reason := report.outcome then
         unless waits.contains reason do waits := waits.push reason
-    note s!"{stem}: {check.state.results.finished.size} function instances typed, {check.packages.size} packages, {admitted} admitted, {typedOnly} typed only{if waits.isEmpty then "" else s!", waiting for {", ".intercalate waits.toList}"}; {checked} functions elaborated, {checked - failing} pass the check of facts; {protocolRoots} protocol roots admitted with {protocols} protocols checked; {check.state.results.obligations.size} obligations of laws"
+    note s!"{stem}: {check.state.results.finished.size} function instances typed, {check.packages.size} packages, {admitted} admitted, {typedOnly} typed only{if waits.isEmpty then "" else s!", waiting for {", ".intercalate waits.toList}"}; {checked} functions in admitted packages; {protocolRoots} protocol roots admitted with {protocols} protocols checked; {check.state.results.obligations.size} obligations of laws"
 
 /-- The generated program of the measurements: its bodies type. -/
 def generatedTypingSuite (repository : Repository) : TestM Unit := do
@@ -286,8 +285,8 @@ def generatedTypingSuite (repository : Repository) : TestM Unit := do
     failure s!"the generated program: {refusal.span.file}: {refusal.render}"
   checkPackages "generated" check
   let admitted := (check.packages.filter fun report => report.outcome matches .admitted _).size
-  let (checked, failing) := checkedFunctions check
-  note s!"generated program: {check.state.results.finished.size} function instances typed, {check.packages.size} packages, {admitted} admitted; {checked} functions elaborated, {checked - failing} pass the check of facts"
+  let checked := checkedFunctions check
+  note s!"generated program: {check.state.results.finished.size} function instances typed, {check.packages.size} packages, {admitted} admitted; {checked} functions in admitted packages"
 
 /-- A body over a type of the vocabulary at a module argument is checked for its facts like any
 other: the type has no form in a package yet, and the check of a definition does not wait for

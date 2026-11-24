@@ -37,9 +37,9 @@ structure CheckedFile where
 /-- Checks one file given under `name`, with the modules that `load` gives: its names, its
 instances and the typing of its bodies; or the first refusal of its names. -/
 def checkFile (load : Array String → IO (Option SourceInput)) (name : String)
-    (parsed : Except SyntaxError SourceFile) : IO (Except String CheckedFile) := do
+    (parsed : Except SyntaxError SourceFile) : IO (Except (Array Refusal) CheckedFile) := do
   let nameCheck ← checkNames #[({ name, parsed } : SourceInput)] load
-  if let some first := nameCheck.refusals[0]? then return .error first.render
+  unless nameCheck.refusals.isEmpty do return .error nameCheck.refusals
   let instances := checkInstances nameCheck #[name]
   return .ok { instances, typing := checkTyping instances #[name] }
 
@@ -77,8 +77,7 @@ def instanceLines (check : InstanceCheck) : Array String :=
 
 def packageOutcomeText : PackageOutcome → String
   | .admitted _ => "admitted"
-  | .unjustified functions _ => s!"not justified: {", ".intercalate functions.toList}"
-  | .refused reason _ => s!"refused by the core: {reason}"
+  | .refused source errors => s!"refused by the core: {source.describeRefusals errors}"
   | .waiting reason => s!"waiting for {reason}"
   | .typedOnly reason => s!"typed only: {reason}"
   | .defect message => s!"not emitted: {message}"
@@ -119,9 +118,14 @@ def checkFormatting (load : Array String → IO (Option SourceInput)) (label nam
   let before ← checkFile load name (.ok source)
   let after ← checkFile load name reparsed
   match before, after with
-  | .error first, _ => failure s!"{label}: the names of the source do not resolve: {first}"
+  | .error original, .error formatted =>
+    let sameDiagnostic (r : Refusal) := (r.rule, r.message)
+    expectTrue (!admitted && expectedNameRefusal name original &&
+      original.map sameDiagnostic == formatted.map sameDiagnostic)
+      s!"{label}: name refusals before and after formatting: {original.map (·.render)}, {formatted.map (·.render)}"
+  | .error first, _ => failure s!"{label}: the names of the source do not resolve: {first.map (·.render)}"
   | .ok _, .error first =>
-    failure s!"{label}: the names of the canonical text do not resolve: {first}\n{canonical}"
+    failure s!"{label}: the names of the canonical text do not resolve: {first.map (·.render)}\n{canonical}"
   | .ok original, .ok formatted =>
     if admitted then
       expectTrue (isAdmitted original) s!"{label}: the source is not admitted: {outcomeLines original.typing}"
@@ -219,7 +223,7 @@ def independentFormattingSuite (repository : Repository) : TestM Unit := do
         compared := compared + 1
         checkFormatting load name name source (admitted := false)
   note s!"{printed} files of the independent suite parse; {compared} cases of one file that the suite expects to be accepted keep their meaning after formatting"
-  expectTrue (compared == 65)
-    s!"expected the 65 cases of one file that the independent suite expects to be accepted, found {compared}"
+  expectTrue (compared == 69)
+    s!"expected the 69 cases of one file that the independent suite expects to be accepted, found {compared}"
 
 end Zkc.Tests.Frontend
