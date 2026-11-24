@@ -124,7 +124,9 @@ private def checkWaitingVerdict (block : Block) (deferred : List (String × Stri
   if block.expect.startsWith "accept" then
     pass
     return none
-  if let some entry := deferred.find? fun (id, rule) => id == block.id && block.expect == s!"refuse {rule}" then
+  -- a deferred rule is one of the rules that the reference permits for the block
+  if let some entry := deferred.find? fun (id, rule) =>
+      id == block.id && (refusalRules block.expect).contains rule then
     pass
     note s!"{block.id}: a waiting root defers the reference refusal {entry.2}"
     return some entry
@@ -139,6 +141,13 @@ private def waitingVerdictControls : TestM Unit := do
     let ok := if allowed then matched == some ("bound", "TY7") && result.failures.isEmpty
       else matched.isNone && result.failures.size == 1 && result.failures[0]!.contains "refuse TY7"
     expectTrue ok s!"waiting block with reference refusal: {result.failures}"
+  -- a block that permits several rules: each of them can be the deferred one, and no other
+  let several : Block := ⟨"either", "refuse TY4 TY7", "", #[]⟩
+  for (rule, allowed) in [("TY4", true), ("TY7", true), ("TY5", false), ("TY4 TY7", false)] do
+    let (matched, result) ← (checkWaitingVerdict several [("either", rule)]).run {}
+    expectTrue (if allowed then matched == some ("either", rule) && result.failures.isEmpty
+      else matched.isNone && result.failures.size == 1)
+      s!"waiting block with alternative refusals, deferred {rule}: {result.failures}"
 
 /-- The tests of layer A, from their instances to the core. -/
 def conformanceTypingSuite (repository : Repository) : TestM Unit := do
