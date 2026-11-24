@@ -47,14 +47,11 @@ def checkLibraryImports : IO Unit := do
         throw (IO.userError s!"{root} does not import {file}")
 
 /-- These cases keep their original expectations until the frontend decides how to
-report specification-only roots and implements the catalogue's pairing binding. -/
+report specification-only roots. -/
 def knownFailures : List KnownFailure :=
   let specification := "The specification-only root waits for an executable form, and its frontend verdict is undecided."
   let waiting (caseName root reason : String) : KnownFailure :=
     ⟨"typing: conformance of layer A", caseName, s!"a root waits, and no reason is recorded: {root}: {reason}", specification⟩
-  let pairing (suite caseName : String) : KnownFailure :=
-    ⟨suite, caseName, ": refuse defect 0:0 a defect of the frontend: missing or incompatible primitive binding for bls12-381",
-      "The frontend refuses the catalogue's pairing module binding, a defect pending a separate fix."⟩
   [⟨"typing", "rational", "expected to be admitted; bound waits for the sum of `rational`s", specification⟩,
    ⟨"typing", "rational", "expected to be admitted; small waits for specification type in executable code", specification⟩,
    waiting "M-GKR2" "default instance `PartialSum<koala-bear, 0, 0, 0>`" "specification type in executable code",
@@ -63,9 +60,7 @@ def knownFailures : List KnownFailure :=
    waiting "R-NL9b" "check" "specification type in executable code",
    waiting "R-TY8a" "bound" "the sum of `rational`s",
    waiting "M-FRA3" "birthday" "the quotient of `rational`s",
-   waiting "M-FRA14" "birthday" "the quotient of `rational`s",
-   pairing "typing: libraries/" "../../libraries/zkc/curves/bls12_381.zkc",
-   pairing "typing: examples/" "product_check"]
+   waiting "M-FRA14" "birthday" "the quotient of `rational`s"]
 
 def frontendSuites : List (String × TestM Unit) := [
   ("rules of §3 and §5", ruleCaseSuite),
@@ -96,6 +91,8 @@ def frontendSuites : List (String × TestM Unit) := [
   ("instances: a `where` that waits", waitingInstanceSuite repository),
   ("typing: conformance of layer A", conformanceTypingSuite repository),
   ("typing: libraries/", libraryTypingSuite repository),
+  ("typing: pairing member", pairingMemberSuite repository),
+  ("typing: module member rows", memberRowSuite repository),
   ("typing: a body over a module argument", moduleArgumentSuite repository),
   ("typing: examples/", programTypingSuite repository),
   ("typing: generated program", generatedTypingSuite repository),

@@ -33,6 +33,9 @@ structure VocabularyModule where
   implements : Option String
   typeMembers : Array (String × ClosedType)
   naturalMembers : Array (String × Nat)
+  /-- The row of each function member that the vocabulary gives the module, by the member's
+  name. A member that is not named here is the module's row, a dot and the member's name. -/
+  standardFunctions : List (String × String) := []
   deriving Inhabited
 
 structure Vocabulary where

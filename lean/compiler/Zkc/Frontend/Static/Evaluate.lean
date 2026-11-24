@@ -488,37 +488,53 @@ mutual
     for (stepId, args?) in steps do
       let some args := args? | continue
       let chain := ((program.declarations[stepId]?).map (·.scopes)).getD #[]
-      let candidates := parameters.filter fun (reference, _) =>
-        chain.contains reference.scope && !assigned.contains reference
-      let stepName := program.nameOf stepId
-      let mut position := 0
-      let mut numerals : Array String := #[]
-      for arg in args do
-        match arg with
-        | .term argSpan none term =>
-          let some (reference, parameter) := candidates[position]?
-            | refuse "SP5" argSpan s!"`{stepName}` takes {candidates.size} static arguments here"
-          position := position + 1
-          let cls ← parameterClass reference
-          if cls == .natural then
-            if let .number .. := term then numerals := numerals.push parameter.name.text
-          assigned := assigned.insert reference (← evalTerm env term cls)
-        | .term argSpan (some argName) term =>
-          match parameters.find? (·.2.name.text == argName) with
-          | some (reference, _) =>
-            let cls ← parameterClass reference
-            assigned := assigned.insert reference (← evalTerm env term cls)
+      let visible := parameters.filter fun (ref, _) => chain.contains ref.scope
+      assigned ← assignWritten env stepId visible assigned args place
+    return assigned
+
+  /-- Bind a written argument list to the deployed parameters visible at this segment.
+  A member exposes only its own parameters: its interface arguments are already fixed. -/
+  partial def assignWritten (env : Env) (step : DeclarationId)
+      (parameters : Array (ParameterRef × StaticParam)) (initial : StaticEnvironment)
+      (args : Array Lowered.StaticArgument) (place : Span) : CompileM StaticEnvironment := do
+    let program ← program
+    let found ← declaration step
+    let name := program.nameOf step
+    let candidates := parameters.filter fun (reference, _) => !initial.contains reference
+    let mut assigned := initial
+    let mut position := 0
+    let mut numerals := #[]
+    let mut used := #[]
+    for arg in args do
+      let (span, label, term?) ← match arg with
+        | .term span label term => pure (span, label, some term)
+        | .inferred span label => pure (span, label, none)
+        | .spec .. => continue
+      let (reference, parameter) ← match label with
+        | none =>
+          let some next := candidates[position]?
+            | refuse "SP5" span s!"`{name}` takes {candidates.size} static arguments here"
+          pure next
+        | some label =>
+          match parameters.find? (·.2.name.text == label) with
+          | some next => pure next
           | none =>
-            if (specificationParameters program found).any (fun (ref, p) =>
-                chain.contains ref.scope && p.name.text == argName) then
-              refuse "SP11" argSpan s!"`{argName}` is a specification-only parameter and cannot be supplied as a deployed argument"
-            refuse "SP5" argSpan s!"`{stepName}` has no static parameter `{argName}`"
-        | .inferred _ none => position := position + 1
-        | .inferred _ (some _) | .spec .. => pure ()
-      if numerals.size >= 2 then
-        let named := ", ".intercalate (numerals.toList.map (s!"{·} = …"))
-        refuse "SP5" place
-          s!"`{stepName}` takes the naturals {", ".intercalate (numerals.toList.map (s!"`{·}`"))}: write them by name, `{stepName}<{named}>`"
+            if (specificationParameters program found).any (·.2.name.text == label) then
+              refuse "SP11" span s!"`{label}` is a specification-only parameter and cannot be supplied as a deployed argument"
+            refuse "SP5" span s!"`{name}` has no static parameter `{label}`"
+      if used.contains reference then
+        refuse "SP5" span s!"the static argument `{parameter.name.text}` of `{name}` is given twice"
+      used := used.push reference
+      if label.isNone then position := position + 1
+      if let some term := term? then
+        let cls ← parameterClass reference
+        if label.isNone && cls == .natural && (term matches .number ..) then
+          numerals := numerals.push parameter.name.text
+        assigned := assigned.insert reference (← evalTerm env term cls)
+    if numerals.size >= 2 then
+      let named := ", ".intercalate (numerals.toList.map (s!"{·} = …"))
+      refuse "SP5" place
+        s!"`{name}` takes the naturals {", ".intercalate (numerals.toList.map (s!"`{·}`"))}: write them by name, `{name}<{named}>`"
     return assigned
 
   /-- A size: a term over numerals and static naturals with `+ - * / ^`, `log2( )` and
@@ -961,7 +977,8 @@ mutual
     match body with
     | .primitive primitive =>
       let row := primitive.row.content
-      if let some entry := (← getVocabulary).module? row then
+      let catalogue := (← getVocabulary).module? row
+      if let some entry := catalogue then
         if let some implemented := entry.implements then
           let named := interfaces.map fun (interface, _) => qualifiedName program interface
           unless named.contains implemented do
@@ -972,10 +989,19 @@ mutual
         for (memberName, value) in entry.naturalMembers do
           members := members.push (memberName, .natural value)
       for (interface, _) in interfaces do
-        for member in (state.members[(← declaration interface).inner.getD 0]?).getD #[] do
-          let memberDeclaration ← declaration member
-          if memberDeclaration.kind == .functionMember then
-            members := members.push (program.nameOf member, .row row)
+        let declared := (state.members[(← declaration interface).inner.getD 0]?).getD #[]
+        let functions := declared.filter fun id =>
+          (program.declarations[id]?).any (·.kind == .functionMember)
+        for id in functions do
+          let name := program.nameOf id
+          -- a module of the vocabulary: the row that the catalogue names, and otherwise the
+          -- module's row, a dot and the member's name, whatever else the interface declares; a
+          -- module of a project: its row when the interface has one function, and that
+          -- otherwise
+          let binding := match catalogue with
+            | some entry => (entry.standardFunctions.lookup name).getD s!"{row}.{name}"
+            | none => if functions.size == 1 then row else s!"{row}.{name}"
+          members := members.push (name, .row binding)
       return .«module» interfaces members
     | .asset _ => return .«module» interfaces members
     | .suite _ =>

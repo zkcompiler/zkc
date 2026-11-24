@@ -185,6 +185,19 @@ reaches it. -/
 def expectedLibraryRefusals : Array (String × String × String × Nat) := #[
   ("layout", "layout.zkc", "TY8", 46), ("suites", "layout.zkc", "TY8", 46)]
 
+/-- Check the admitted operation of a caller using the catalogue's pairing module. -/
+def pairingMemberSuite (repository : Repository) : TestM Unit := do
+  let text := "module caller\nuse zkc::curves::bls12_381::{Bls12381, G1, G2, Gt}\n" ++
+    "def evaluate(a: G1, b: G2) -> Gt: Bls12381::pair(a, b)\n"
+  let load ← cachedLoader #[repository.libraries]
+  let session ← Driver.Session.start.compile #[⟨"caller", parseString "caller" text⟩] fun names => (load names : IO _)
+  let .ok roots := (session.admitRoots (some #["evaluate"])).complete
+    | failure s!"pairing caller was not admitted: {session.renderDiagnostics}"
+  let some p := roots.find? "evaluate" | failure "missing pairing caller"
+  let some (.fn _ _ _ _ _ _ body _) := p.named.definitions.getLast? | failure "missing caller body"
+  expectTrue ((body.operations matches [.row (.inl .pair)]) && p.bindings.rows.isEmpty)
+    "the caller must apply the standard pairing row with no project binding"
+
 /-- The modules of `libraries/` whose every function must be admitted at its default instances. -/
 def admittedModules : Array String := #["prelude", "option", "algebra", "sequence"]
 

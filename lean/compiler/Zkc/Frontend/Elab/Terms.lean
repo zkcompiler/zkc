@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Frontend.Elab.Family
+public import Zkc.Frontend.Static.Rows
 public import Zkc.Frontend.Static.Specification
 
 @[expose] public section
@@ -408,14 +409,11 @@ inductive ArgState where
 inductive CalleeOf where
   | declaration (steps : Array (DeclarationId × Option (Array Lowered.StaticArgument)))
       (scopes : StaticEnvironment)
-  /-- A function member of a module instance defined in source. -/
-  | member («module» : InstanceId) (definition : DeclarationId) (name : String)
+  /-- A function member of a module instance. -/
+  | member («module» : InstanceId) (implementation : MemberValue) (name : String)
       (args : Option (Array Lowered.StaticArgument))
   /-- A function member of a sort: a row of §7.4. -/
   | sortMember (type : ClosedType) (name : String)
-  /-- A function member of a module bound to a row of the vocabulary. -/
-  | moduleRow («module» : InstanceId) (row : String) (name : String)
-      (args : Option (Array Lowered.StaticArgument))
   | alternative (steps : Array (DeclarationId × Option (Array Lowered.StaticArgument)))
       (scopes : StaticEnvironment) («variant» : DeclarationId) (index : Nat)
   | bare (name : String)
@@ -614,10 +612,10 @@ def pairRelationArguments (name : String) (statement witness : Array String)
 /-- The application over the arguments of a call, each converted to its target where it is
 evaluated, at its place and with its quote. -/
 def applyAfterArguments (args : Array Typed.Expr) (targets : Array (ClosedType × Span × Typed.Quote))
-    (node : Array Typed.Expr → Typed.Expr) : ElabM Typed.Expr := do
+    (node : Array Typed.Expr → ElabM Typed.Expr) : ElabM Typed.Expr := do
   let places := targets.map (·.2.1.startByte)
   if places.toList.Pairwise (· ≤ ·) then
-    return node (← (args.zip targets).mapM fun (use, (target, place, quote)) => convertTo use target place quote)
+    return ← node (← (args.zip targets).mapM fun (use, (target, place, quote)) => convertTo use target place quote)
   -- named arguments written out of the order of the parameters are evaluated in the order
   -- written (HO4): each is converted and bound where it is written
   let order := (List.range args.size).toArray.qsort fun i j => places[i]! < places[j]!
@@ -629,7 +627,7 @@ def applyAfterArguments (args : Array Typed.Expr) (targets : Array (ClosedType �
     let (binder, use) ← operandBinder value
     bound := bound.push (binder, value)
     uses := uses.set! index use
-  let applied := node uses
+  let applied ← node uses
   return afterOperands applied.span bound applied
 
 /-- What a loop, a comprehension or a fold ranges over, typed (TY10, TY11). -/
@@ -1255,7 +1253,7 @@ mutual
       if found.kind == .functionDefinition then
         -- a member definition named through its module
         match ← liftM (thingValue env prefixThing (some .«module») span (pure text) : CompileM StaticValue) with
-        | .«module» inst => return .member inst id ((found.name.map (·.text)).getD "") lastArgs
+        | .«module» inst => return .member inst (.definition id) ((found.name.map (·.text)).getD "") lastArgs
         | _ => refuseHere "GR5" span s!"`{text}` names no function"
       match prefixThing with
       | .declarations previous scopes => return .declaration (previous.push (id, lastArgs)) scopes
@@ -1278,8 +1276,7 @@ mutual
           | _ => waitFor "a member of a module whose members are not evaluated"
         let found : Option MemberValue := (members.find? (·.1 == name)).map (·.2)
         match found with
-        | some (.definition id) => return .member inst id name lastArgs
-        | some (.row row) => return .moduleRow inst row name lastArgs
+        | some impl@(.definition _) | some impl@(.row _) => return .member inst impl name lastArgs
         | _ => refuseHere "SP3" span s!"`{text}` is no function"
       | .type type => return .sortMember type name
       | .natural _ => refuseHere "SP3" span s!"`{text}` is no function"
@@ -1320,10 +1317,6 @@ mutual
       let (parameters, _) ← sortSignature type name span
       let paired ← pairArguments name (parameters.map (·.1)) arguments witnesses span
       callSortMember type name paired span
-    | .moduleRow inst row name staticArgs =>
-      let parameters ← memberParameters inst name
-      let paired ← pairArguments name parameters arguments witnesses span
-      callModuleRow inst row name staticArgs paired span
 
   /-- `length(t)` of a collection. -/
   partial def lengthNode (span : Span) (xs : Typed.Expr) : ElabM Typed.Expr := do
@@ -1383,7 +1376,7 @@ mutual
       | _ => waitFor (← liftM (signatureWait inst : CompileM String))
     let typed ← finishArguments args states parameterTypes
     let node ← applyAfterArguments typed (targetsOf args parameterTypes) fun operands =>
-      .apply (info place resultType) (.instance inst) operands
+      pure (.apply (info place resultType) (.instance inst) operands)
     reachCallee inst place
     return node
 
@@ -1433,7 +1426,7 @@ to the end makes the caller wait or not checked; a refused body abandons the cal
           if mentionsUnknown problem type then
             typed := typed.push .deferred
           else
-            let target ← liftM (evalType { file, values := problem.known } type : CompileM ClosedType)
+            let target ← liftM (evalType { file, values := problem.known, self? := self?.map StaticValue.«module» } type : CompileM ClosedType)
             typed := typed.push (.typed (← elabExpr expr (some target)))
         else
           let value ← elabExpr expr none
@@ -1502,11 +1495,12 @@ to the end makes the caller wait or not checked; a refused body abandons the cal
   (NL6, SP12): in the opaque elaboration, on a value of a type member of the parameter, recorded
   by its place; at the instance, at the places the opaque elaboration recorded. -/
   partial def memberOperator? (span : Span) (type : ClosedType) (function : String) (args : Array Arg)
-      (expected : Option ClosedType) (path : String := "") : ElabM (Option Typed.Expr) := do
+      (expected : Option ClosedType) (path : String := "")
+      (staticArgs : Option (Array Lowered.StaticArgument) := none) : ElabM (Option Typed.Expr) := do
     let key := resolvedPlace span (function ++ path)
     if let some reference := (← getContext).resolutions[key]? then
       let some (.«module» inst) := (← getContext).env.values[reference]? | throw .abandoned
-      return some (← callModuleMember inst function args expected span)
+      return some (← callModuleMember inst function args expected span staticArgs)
     -- the opaque elaboration records that this typing of the place found no member
     let noMember : ElabM (Option Typed.Expr) := do
       if (← getContext).«opaque» then
@@ -1540,24 +1534,24 @@ to the end makes the caller wait or not checked; a refused body abandons the cal
         s!"`{interface}` declares no `{function}`: an operator on its type member `{typeText}` is a member of the interface"
     modify fun builder =>
       { builder with resolved := builder.resolved.push ⟨span, function ++ path, some reference⟩ }
-    return some (← callModuleMember «module» function args expected span)
+    return some (← callModuleMember «module» function args expected span staticArgs)
 
   /-- A call of the function member `name` of a module instance, in source or bound to a row. -/
   partial def callModuleMember (inst : InstanceId) (name : String) (args : Array Arg)
-      (expected : Option ClosedType) (place : Span) : ElabM Typed.Expr := do
+      (expected : Option ClosedType) (place : Span)
+      (staticArgs : Option (Array Lowered.StaticArgument)) : ElabM Typed.Expr := do
     match (← getThe Compile.State).table.content? inst with
     | some (.«module» _ members) =>
-      match (members.find? (·.1 == name)).map (·.2) with
-      | some (MemberValue.definition id) => callMember inst id name none args expected place
-      | some (MemberValue.row row) => callModuleRow inst row name none args place
-      | _ => refuseHere "SP3" place s!"`{renderInstance (← getThe Compile.State) inst}` has no function `{name}`"
+      let some (_, impl) := members.find? (·.1 == name)
+        | refuseHere "SP3" place s!"`{renderInstance (← getThe Compile.State) inst}` has no function `{name}`"
+      callMember inst impl name staticArgs args expected place
     | _ => waitFor "a module whose members are not evaluated"
 
-  /-- A call of a function member of a module defined in source. -/
-  partial def callMember (inst : InstanceId) (definition : DeclarationId) (name : String)
+  /-- Type a member call against its interface, then select its concrete implementation.
+  In the opaque pass the interface member itself is the callee (SP12). -/
+  partial def callMember (inst : InstanceId) (implementation : MemberValue) (name : String)
       (staticArgs : Option (Array Lowered.StaticArgument)) (args : Array Arg)
       (expected : Option ClosedType) (place : Span) : ElabM Typed.Expr := do
-    -- a member that its interface declares `spec` is called only from specifications (SX2)
     let (interface, memberId, member, interfaceArgs) ← interfaceMember inst name
     if let .member (.defMember _ (some (.spec _)) ..) := member.node then
       unless (← getContext).specification do
@@ -1565,41 +1559,33 @@ to the end makes the caller wait or not checked; a refused body abandons the cal
     let state ← getThe Compile.State
     let program := state.program
     let some entry := state.table.entries[inst]? | throw .abandoned
-    let own := ownParameters program member
-    -- the member's own static parameters: written, or inferred from the arguments (SP6, SP8)
-    let (ownValues, states) ← if own.isEmpty then pure (#[], none) else do
-      let interfaceDeclaration ← liftM (declaration interface : CompileM Declaration)
-      let mut assigned : StaticEnvironment := ((deployedParameters program interfaceDeclaration).zip
-        interfaceArgs).foldl (init := {}) fun map ((reference, _), value) => map.insert reference value
-      let written := staticArgs.getD #[]
-      let env ← staticEnv
-      for index in [0:min own.size written.size] do
-        if let some (.term _ _ term) := written[index]? then
-          let cls ← liftM (parameterClass own[index]! : CompileM Class)
-          assigned := assigned.insert own[index]! (← liftM (evalTerm env term cls : CompileM StaticValue))
+    let own := (deployedParameters program member).filter fun (ref, _) => some ref.scope == member.ownScope
+    let interfaceDecl ← liftM (declaration interface : CompileM Declaration)
+    let base := (instanceEnv program interfaceDecl interfaceArgs).values
+    deployedStaticArguments #[(memberId, staticArgs)]
+    let assigned ← liftM (assignWritten (← staticEnv) memberId own base (staticArgs.getD #[]) place : CompileM _)
+    let (ownValues, states) ← if own.isEmpty then pure (#[], Array.replicate args.size ArgState.deferred) else do
       let (parameters, result) ← memberSignatureOf memberId
-      let (values, states) ← inferArguments memberId assigned member.file parameters result args
-        expected place (some inst)
-      let interfaceCount := (deployedParameters program interfaceDeclaration).size
-      pure (values.extract interfaceCount values.size, some states)
-    let (types, resultType) ← memberSignature inst name ownValues
-    let values := entry.key.arguments ++ ownValues
-    let ownText := ((own.zip ownValues).map fun (reference, value) =>
-      let parameterName := ((program.scopes[reference.scope]?).bind (·.parameters[reference.index]?)).map
-        (·.name.text)
-      s!"{parameterName.getD "?"} = {renderValue state value}").toList
-    let description := if ownText.isEmpty then name else s!"{name}<{", ".intercalate ownText}>"
-    let callee ← liftM (instantiate definition values { description, span := place } : CompileM InstanceId)
-    let node ← match states with
-      | some states =>
-        let typed ← finishArguments args states types
-        applyAfterArguments typed (targetsOf args types) fun operands =>
-          .apply (info place resultType) (.instance callee) operands
-      | none =>
-        let operands ← (args.zip types).mapM fun (arg, type) => argumentAt arg type
-        pure (.apply (info place resultType) (.instance callee) operands)
-    reachCallee callee place
-    return node
+      let (allValues, states) ← inferArguments memberId assigned member.file parameters result args expected place (some inst)
+      pure (allValues.extract (allValues.size - own.size) allValues.size, states)
+    let (types, result) ← memberSignature inst name ownValues
+    let operands ← finishArguments args states types
+    applyAfterArguments operands (targetsOf args types) fun vs => do
+      let callee ← if entry.key.opaqueFor.isSome then
+          pure (Typed.Callee.member inst name memberId)
+        else match implementation with
+          | .row row => do
+            let request ← liftM (rowRequest row ownValues : CompileM _)
+            let row ← liftM (checkedRow request types result place (some name) : CompileM _)
+            pure (.boundRow row)
+          | .definition definition => do
+            let assignments := (own.zip ownValues).map fun ((_, p), v) => s!"{p.name.text} = {renderValue state v}"
+            let description := if assignments.isEmpty then name else s!"{name}<{", ".intercalate assignments.toList}>"
+            let id ← liftM (instantiate definition (entry.key.arguments ++ ownValues) {description, span := place} : CompileM _)
+            pure (.instance id)
+          | _ => refuseHere "SP3" place s!"`{name}` is no function"
+      if let .instance id := callee then reachCallee id place
+      return .apply (info place result) callee vs
 
   /-- The signature of a function member of a sort at a type: its member in `zkc::algebra`
   read with `Self` the type. -/
@@ -1639,51 +1625,6 @@ to the end makes the caller wait or not checked; a refused body abandons the cal
     let some resultType := row.outputs[0]? | throw .abandoned
     return applyRowNode place resultType request operands
 
-  /-- A function member of a module bound to a row: the module's row, at the member's own static
-  arguments. -/
-  partial def callModuleRow (inst : InstanceId) (row : String) (name : String)
-      (staticArgs : Option (Array Lowered.StaticArgument)) (args : Array Arg) (place : Span) :
-      ElabM Typed.Expr := do
-    let (interface, memberId, member, interfaceArgs) ← interfaceMember inst name
-    let program := (← getThe Compile.State).program
-    let interfaceDeclaration ← liftM (declaration interface : CompileM Declaration)
-    let (parameters, result) ← memberSignatureOf memberId
-    let env ← staticEnv
-    let mut memberEnv : Env := { instanceEnv program interfaceDeclaration interfaceArgs with
-      file := member.file, self? := some (.«module» inst) }
-    let mut statics : Array Typing.RowStatic := #[]
-    let ownParameters := ((member.ownScope.bind fun scope => program.scopes[scope]?).map
-      fun scope => scope.parameters).getD #[]
-    let written := staticArgs.getD #[]
-    for index in [0:ownParameters.size] do
-      let reference : ParameterRef := ⟨member.ownScope.getD 0, index⟩
-      let some (.term _ _ term) := written[index]?
-        | refuseHere "SP6" place
-            s!"cannot infer `{ownParameters[index]!.name.text}` of `{name}`; write `{name}<{ownParameters[index]!.name.text} = …>`"
-      let cls ← liftM (parameterClass reference : CompileM Class)
-      let value ← liftM (evalTerm env term cls : CompileM StaticValue)
-      memberEnv := { memberEnv with values := memberEnv.values.insert reference value }
-      match value with
-      | .natural n => statics := statics.push (.nat n)
-      | .type type => statics := statics.push (.type type)
-      | .«module» _ => waitFor "a row at a module argument"
-    let types ← parameters.mapM fun (_, type) => liftM (evalType memberEnv type : CompileM ClosedType)
-    let resultType ← match result with
-      | some type => liftM (evalType memberEnv type : CompileM ClosedType)
-      | none => pure ClosedType.unit
-    let functionMembers := (((program.declarations[interface]?).bind (·.inner)).map fun inner =>
-      (program.declarations.filter fun d => d.namespace == inner && d.kind == .functionMember).size).getD 1
-    let rowName := if functionMembers ≤ 1 then row else s!"{row}.{name}"
-    -- a row of the vocabulary has its type there; a row that a project binds, the interface's
-    let entry : Typing.Row := match Typing.rowOf? { name := rowName, statics } with
-      | some found => found
-      | none => { key := { name := rowName, statics }, kind := .pure, inputs := types,
-                  outputs := #[resultType] }
-    let mut operands := #[]
-    for (arg, type) in args.zip entry.inputs do operands := operands.push (← argumentAt arg type)
-    let some resultType := entry.outputs[0]? | throw .abandoned
-    return .apply (info place resultType) (.boundRow entry) operands
-
   /-- A dot call (NL5): `e.m(a…)` is `H::m(e, a…)` with `H` the home module of the type of `e`. -/
   partial def elabMethod (span : Span) (target : Lowered.Expr) (name : Name)
       (staticArgs : Option (Array Lowered.StaticArgument)) (arguments : Array Lowered.Argument)
@@ -1704,7 +1645,7 @@ to the end makes the caller wait or not checked; a refused body abandons the cal
     if let some inst := memberModule then
       let parameters ← memberParameters inst name.text
       let rest ← pairArguments name.text (parameters.extract 1 parameters.size) arguments none span
-      if let some typed ← memberOperator? span receiver.type name.text (#[first] ++ rest) expected then
+      if let some typed ← memberOperator? span receiver.type name.text (#[first] ++ rest) expected (staticArgs := staticArgs) then
         return typed
     else if (← getContext).«opaque» then
       -- a function of the home module: this typing of the place found no member
@@ -1790,7 +1731,7 @@ to the end makes the caller wait or not checked; a refused body abandons the cal
     let payload := alternatives[index]!.2
     let typed ← finishArguments args states payload
     applyAfterArguments typed (targetsOf args payload) fun operands =>
-      .construct (info span (.«variant» inst)) (.alternative inst index) operands
+      pure <| .construct (info span (.«variant» inst)) (.alternative inst index) operands
 
   /-- A tuple: each component at the type expected of it, when the expected type is a tuple of
   as many components, and converted where it stands. -/
@@ -2055,7 +1996,7 @@ to the end makes the caller wait or not checked; a refused body abandons the cal
             s!"the elements of the collection are a `{← renderTypeE joined}` and a `{← renderTypeE item.type}`, which have no join"
       let targets := (typed.zip elements).map fun (_, source) => (joined, source.span, Typed.Quote.span source.span)
       applyAfterArguments typed targets fun parts =>
-        .construct (info span (.seq joined (some elements.size))) .sequence parts
+        pure (.construct (info span (.seq joined (some elements.size))) .sequence parts)
 
   /-- `[v; n]`. -/
   partial def elabRepetition (span : Span) (element count : Lowered.Expr) (expected : Option ClosedType) :

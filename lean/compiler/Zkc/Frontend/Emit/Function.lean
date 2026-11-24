@@ -28,7 +28,7 @@ namespace Zkc.Frontend.Emit
 
 open Syntax
 open Static
-open Typing (RowStatic RowRequest Row FunctionCode BodyState)
+open Typing (FunctionCode BodyState)
 
 /-- Whether a closed type mentions `rational`. -/
 partial def mentionsRational : ClosedType → Bool
@@ -52,41 +52,14 @@ def primitiveRow (inst : InstanceId) (found : Declaration) (row : String)
   let state ← get
   let entry := state.table.entries[inst]!
   let env := instanceEnv state.program found entry.key.arguments entry.key.specification
-  let mut statics : Array RowStatic := #[]
   let written := arguments.filterMap fun
     | .term _ _ term => some term
     | _ => none
   let values ← if written.isEmpty then pure entry.key.arguments
     else written.mapM (evalAny env ·)
-  for value in values do
-    match value with
-    | .natural n => statics := statics.push (.nat n)
-    | .type type => statics := statics.push (.type type)
-    | .«module» _ => throw (.waiting "a row at a module argument")
-  -- a row of the vocabulary has its kind and type there; a row that a project binds, the
-  -- declaration's
-  let request : RowRequest := { name := row, statics }
+  let request ← rowRequest row values
   let place := (found.name.map (·.span)).getD default
-  let found : Row ← match Typing.rowOf? request with
-    | some known =>
-      -- the signature written is the row's at this instance (NL9)
-      let same := known.inputs.size == parameters.size &&
-        (known.inputs.zip parameters).all (fun (one, other) => typeEq one other) &&
-        known.outputs.size == 1 && known.outputs.all (typeEq · result)
-      unless same do
-        let state ← get
-        let render (types : Array ClosedType) : String :=
-          ", ".intercalate (types.map (renderType state)).toList
-        refuse "NL9" place
-          s!"the signature written is not that of the row `{row}` at this instance: the row takes ({render known.inputs}) and gives ({render known.outputs})"
-      pure known
-    | none =>
-      -- a name of the vocabulary at static arguments for which it has no row is no row of a
-      -- project
-      if Typing.reservedRow row then
-        refuse "NL9" place
-          s!"`{row}` is a row of the vocabulary, and the vocabulary has no row of that name at the static arguments of this instance; write them: `primitive(\"{row}\", …)`"
-      pure { key := request.key, kind := .pure, inputs := parameters, outputs := #[result] }
+  let found ← checkedRow request parameters result place
   internRow found place
 
 /-- What the session keeps of a function body that elaboration typed: whether it can stop and
