@@ -12,6 +12,7 @@ import Zkc.Tests.Frontend.Instances
 import Zkc.Tests.Frontend.TypingCases
 import Zkc.Tests.Frontend.Typing
 import Zkc.Tests.Frontend.TypingReference
+import Zkc.Tests.Frontend.MemberRows
 import Zkc.Tests.Frontend.Independent
 import Zkc.Tests.Frontend.Session
 import Zkc.Tests.Frontend.FormatCases

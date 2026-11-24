@@ -62,7 +62,7 @@ inductive MemberValue where
   /-- A function or protocol member defined in source: the declaration that defines it. It is
   instantiated when it is called, at the module's values and its own. -/
   | definition (declaration : DeclarationId)
-  /-- A function member that is a row of the vocabulary. -/
+  /-- The row family implementing the function member, before the member's static arguments. -/
   | row (name : String)
   /-- A type member with static parameters of its own, of a module that a module parameter
   stands for in the opaque typing: each application is a fresh type, with the sorts of the

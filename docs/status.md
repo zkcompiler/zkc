@@ -108,7 +108,10 @@ formatting, and runs independent conformance cases. It currently reports specifi
 without an executable core form as waiting. The test driver lists nine specification-only
 root failures pending a decision on their verdict; each appears as a known failure. A new
 failure or a listed diagnostic that disappears fails the driver. The function member `pair`
-of the catalogue's BLS12-381 module is the standard row `pairing.pair`.
+of the catalogue's BLS12-381 module is the standard row `pairing.pair`. A module instance
+stores the row name of each function member. Calls use the member's interface for its mode,
+static arguments and operands. A concrete call checks the selected row against that signature.
+In a generic definition the opaque pass uses the interface alone.
 
 Participant programs have no concrete executor and standard runtime model in this compiler.
 The historical commands to run, prove, verify and read trees have been removed. Derived

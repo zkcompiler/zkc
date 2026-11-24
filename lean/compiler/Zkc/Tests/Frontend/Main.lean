@@ -92,6 +92,7 @@ def frontendSuites : List (String × TestM Unit) := [
   ("typing: conformance of layer A", conformanceTypingSuite repository),
   ("typing: libraries/", libraryTypingSuite repository),
   ("typing: pairing member", pairingMemberSuite repository),
+  ("typing: module member rows", memberRowSuite repository),
   ("typing: a body over a module argument", moduleArgumentSuite repository),
   ("typing: examples/", programTypingSuite repository),
   ("typing: generated program", generatedTypingSuite repository),

@@ -1144,7 +1144,7 @@ field and a value do not. The grammar does not depend on case.
 |---|---|
 | `type T<…> = primitive("row", args)` | a type of the vocabulary: a field, a group, a sealed type. Its sorts and the values of their members are those the vocabulary gives the row |
 | `def f<…>(…) -> T = primitive("row")`; in an implementing module, `def f(x…) = primitive("row")` | a function to a row. A row cannot stop |
-| `module M<…>: I = primitive("row", args)` | a module of the vocabulary that implements `I`: a hash, a pairing, a suite of the catalogue. Its type and natural members are those the vocabulary gives the row. Each function member is a row of the vocabulary: the one that the catalogue names for the member (`pair` of the pairing is `pairing.pair`), and otherwise the module's row when `I` has one function member (`hash` of `hash.sha256`), or that row followed by a dot and the member's name when it has several |
+| `module M<…>: I = primitive("row", args)` | a module of the vocabulary that implements `I`: a hash, a pairing, a suite of the catalogue. Its type and natural members are those the vocabulary gives the row. Each function member is a row of the vocabulary: the one that the catalogue names for the member (`pair` of the pairing is `pairing.pair`), and otherwise the module's row when `I` has one function member (`hash` of `hash.sha256`), or that row followed by a dot and the member's name when it has several. Either way the row is compared with the member's signature in the interface (SP8) |
 | `module M: I = asset(name)` | a module whose members are read from an asset of the project manifest. `I` is an interface whose members are naturals and functions without parameters that return data: it has no type member, no function with a parameter and no law. A natural member is the asset's number of that name; a function member returns the asset's content of that name, decoded at the type of the member. Decoding is an admission check of the build: an asset whose content does not decode at the type refuses the build, with the member and the position. The digest of the asset in the manifest is a static argument of the module, and so in the deployment identity of every scheme that reaches it |
 | `spec type T<…> = external("name")` | a type that exists only in the formal library |
 | `relation R(…) = external("name")`, `spec def f(…) = external("name")`; in an implementing module, `spec def f(x…) = external("name")` | a predicate or a function of the formal library; the source checks only the header |
@@ -1398,7 +1398,11 @@ a member that the interface declares `def` is deployed code, defined by a body o
 never a `spec def` and never bound to `external`. The signature of a function member is the
 interface's, read with the interface's static arguments and with each member name standing for
 `M`'s definition; the member's own static parameters are in scope in its body under the names the
-interface gives them. `Self` in an interface is the implementing module (in a sort, the type). A
+interface gives them. A call of a member bound to a row takes the same static arguments and
+operands as a call of a member with a body. Where the module is concrete, the row at those
+static arguments must take the parameter types and give the result type of the member. In
+the opaque typing of a module parameter (SP12), the interface supplies the signature.
+`Self` in an interface is the implementing module (in a sort, the type). A
 member's own name is not in scope in its definition. `M<A>::T` is its definition to every reader. An interface is satisfied only by a module that names it: a module
 that implements `Rows<T, n>`, whose `where` requires `Self: Kind`, names both. **Messages:**
 "`<M>` does not define `<member>` of `<I>`"; "`<M>` defines `<member>`, which `<I>` does not
