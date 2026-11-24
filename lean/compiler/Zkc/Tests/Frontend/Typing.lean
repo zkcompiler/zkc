@@ -85,6 +85,73 @@ def checkPackages (label : String) (check : TypingCheck) : TestM Unit := do
       failure s!"{label}: the package of {report.description} is not checked: {exhaustion.describe}"
     | _ => pure ()
 
+/-- A source spelling of an instance key for fixture expectations. Table indices are local to
+one compilation. Resolve each one through that compilation, including nested arguments and
+the implementing owner of a law. A vocabulary type is identified by its row. -/
+private def withArguments (name : String) (args : List String) : String :=
+  if args.isEmpty then name else s!"{name}<{", ".intercalate args}>"
+
+private def parameterName (state : Compile.State) (param : ParameterRef) : String := Id.run do
+  let scope := state.program.scopes[param.scope]!
+  let parameter := scope.parameters[param.index]!
+  let owner := match state.scopeOwners[param.scope]? with
+    | some decl => Static.qualifiedName state.program decl
+    | none =>
+      -- An anonymous section has no declaration. Locate its binder in the named file module.
+      let path := "::".intercalate state.program.files[scope.file]!.path.toList
+      s!"{path}#section@{parameter.span.startByte}"
+  return s!"{owner}::{parameter.name.text}"
+
+mutual
+  private partial def instanceName (state : Compile.State) (root : InstanceId) : String := Id.run do
+    let key := state.table.entries[root]!.key
+    let name := Static.qualifiedName state.program key.declaration
+    let args := key.arguments.toList.map (valueName state) ++ key.specification.toList.map (s!"spec {·}")
+    let mut result := withArguments name args
+    if let some view := key.view then result := s!"{result}#{view.member}"
+    if let some (param, members) := key.opaqueFor then
+      result := s!"{result}#opaque({parameterName state param}, {reprStr members.toList})"
+    if let some owner := key.owner then result := s!"{result} at {instanceName state owner}"
+    return result
+
+  private partial def valueName (state : Compile.State) : StaticValue → String
+    | .natural n => toString n
+    | .module id => instanceName state id
+    | .type ty => typeName state ty
+
+  private partial def typeName (state : Compile.State) : ClosedType → String
+    | .bool => "bool"
+    | .nat => "nat"
+    | .rational => "rational"
+    | .index n => s!"index<{n}>"
+    | .nonzero ty => s!"nonzero<{typeName state ty}>"
+    | .seq ty none => s!"[{typeName state ty}]"
+    | .seq ty (some n) => s!"[{typeName state ty}; {n}]"
+    | .tuple types names =>
+      let fields := types.zipWith (fun ty name => (name.map (· ++ ": ")).getD "" ++ typeName state ty) names
+      s!"({", ".intercalate fields.toList})"
+    | .nominal row args => withArguments s!"row({reprStr row})" (args.toList.map (valueName state))
+    | .record id | .variant id | .specification id => instanceName state id
+    | .opaque owner member args _ =>
+      withArguments s!"({instanceName state owner})::{member}" (args.toList.map (valueName state))
+end
+
+/-- Count reports even when the block has a source refusal in another declaration. -/
+def recordTypingRoots (label : String) (check : TypingCheck) : TestM Unit := do
+  for report in check.packages do
+    let outcome : UnpackagedOutcome ← match report.outcome with
+      | .admitted _ =>
+        modify fun t => {t with admittedRoots := t.admittedRoots + 1}
+        continue
+      | .waiting reason => pure (.waiting reason)
+      | .typedOnly reason => pure (.typedOnly reason)
+      | _ => continue -- checkPackages reports refusals, emission defects and exhaustion.
+    let declaration := Static.qualifiedName check.state.program check.state.table.entries[report.root]!.key.declaration
+    let root : UnpackagedRoot := {
+      block := label, declaration, instanceName := instanceName check.state report.root, outcome
+      description := Typing.rootDescription check.state report.root true }
+    modify fun t => {t with unpackagedRoots := t.unpackagedRoots.push root}
+
 /-- Count functions in the programs returned by admission. -/
 def checkedFunctions (check : TypingCheck) : Nat :=
   check.packages.foldl (init := 0) fun count report =>
@@ -100,16 +167,12 @@ def checkedProtocols (check : TypingCheck) : Nat × Nat :=
     | .admitted package, some (.protocol _) => (roots + 1, protocols + package.admitted.program.headers.protocols.length)
     | _, _ => (roots, protocols)
 
-/-- Checks the assertions `// uses`, `// not uses`, `// applies`, `// obligations`, `// waits` and
-`// says`. -/
+/-- Check the source annotations about packages, operations, obligations and diagnostics. -/
 def checkTypingAssertions (label : String) (check : TypingCheck) (source : String) : TestM Unit := do
   let checkCount (name : String) (predicate : Nat → Bool) (message : Nat → String) : TestM Unit := do
     let some operation := resolveOperation check name | failure s!"{label}: unknown operation `{name}`"
     let count := (emittedPackages check).foldl (fun n p => n + operationCount p operation) 0
     expectTrue (predicate count) (message count)
-  let waits := check.packages.filterMap fun report => match report.outcome with
-    | .waiting reason => some reason
-    | _ => none
   for line in source.splitOn "\n" do
     if line.startsWith "// uses " then
       let name := String.ofList (line.toList.drop 8)
@@ -123,6 +186,14 @@ def checkTypingAssertions (label : String) (check : TypingCheck) (source : Strin
         checkCount name (fun found => some found == count.toNat?) fun found =>
           s!"{label}: the packages apply `{name}` {found} times; {count} are expected"
       | _ => failure s!"{label}: unreadable assertion `{line}`"
+    else if line.startsWith "// sole package " then
+      let name := (line.drop "// sole package ".length).toString
+      let admitted := check.packages.filterMap fun report =>
+        if report.outcome matches .admitted _ then
+          some (instanceName check.state report.root, Typing.rootDescription check.state report.root true)
+        else none
+      expectTrue (admitted.map Prod.fst == #[name])
+        s!"{label}: expected only the package of {name}, found {admitted.map fun (id, description) => describeExpectedInstance id description}"
     else if line.startsWith "// obligations " then
       let count := (String.ofList (line.toList.drop 15)).toNat?
       let found := check.state.results.obligations.size
@@ -133,8 +204,11 @@ def checkTypingAssertions (label : String) (check : TypingCheck) (source : Strin
       expectTrue (messages.any fun found => (found.splitOn text).length > 1)
         s!"{label}: no refusal says `{text}`; the refusals are {messages}"
     else if line.startsWith "// waits " then
-      let reason := String.ofList (line.toList.drop 9)
-      expectTrue (waits.any fun found => (found.splitOn reason).length > 1)
+      let reason := (line.drop 9).toString
+      let waits := check.packages.filterMap fun report => match report.outcome with
+        | .waiting text => some text
+        | _ => none
+      expectTrue (waits.any (·.contains reason))
         s!"{label}: no root waits for `{reason}`; the roots wait for {waits}"
 
 /-- Names, instances and typing of the files of a block. -/
@@ -157,18 +231,13 @@ def checkTypingBlock (block : Block) : TestM Unit := do
   | ["accept"] =>
     match check.refusals[0]? with
     | some first => failure s!"{block.id}: expected to be accepted; {first.span.file}: {first.render}"
-    | none =>
-      let waiting := check.packages.filter fun report => report.outcome matches .waiting _
-      if waiting.isEmpty then pass
-      for report in waiting do
-        if let .waiting reason := report.outcome then
-          failure s!"{block.id}: expected to be admitted; {report.description} waits for {reason}"
+    | none => pass
   | ["wait"] =>
     match check.refusals[0]? with
     | some first => failure s!"{block.id}: expected to wait; {first.span.file}: {first.render}"
     | none =>
-      expectTrue (check.packages.any fun report => report.outcome matches .waiting _)
-        s!"{block.id}: expected a root to wait"
+      expectTrue (check.packages.any (fun report => report.outcome matches .waiting _))
+        s!"{block.id}: expected a waiting root"
   | "refuse" :: rule :: place :: _ =>
     match check.refusals[0]? with
     | some first =>
@@ -179,10 +248,76 @@ def checkTypingBlock (block : Block) : TestM Unit := do
         s!"{block.id}: expected a refusal by {rule} at {place}; {first.span.file}: {first.render}"
     | none => failure s!"{block.id}: expected a refusal by {rule} at {place}; the bodies type"
   | _ => failure s!"{block.id}: unreadable expectation `{block.expect}`"
+  recordTypingRoots block.id check
   checkPackages block.id check
   for text in block.files do checkTypingAssertions block.id check text
 
+private def expectedFixtureRoots : List ExpectedRoot :=
+  let quotient := UnpackagedOutcome.waiting "the quotient of `rational`s"
+  [⟨"rational", .one "t::bound", .waiting "the sum of `rational`s"⟩,
+   ⟨"rational", .one "t::small", .waiting "specification type in executable code"⟩,
+   ⟨"mixed-roots", .one "t::half", quotient⟩,
+   ⟨"guarded-rational-index", .one "t::half", quotient⟩,
+   ⟨"unguarded-rational-index", .one "t::half", quotient⟩,
+   ⟨"static-rational-index", .one "t::half", quotient⟩,
+   ⟨"formal-signature-facts", .one "t::r", .waiting "specification type in executable code"⟩]
+
+/-- These checks intentionally give the driver a stale or incomplete expectation. Check
+the diagnostics themselves, including the instance that moved in source order. -/
+private def rootAccountingControls : TestM Unit := do
+  let half := "spec def half(x: nat) -> rational: x / 2\n"
+  let other := "spec def other(x: nat) -> rational: x / 3\n"
+  let reason := "the quotient of `rational`s"
+  let expected : List ExpectedRoot := [⟨"accounting", .one "t::half", .waiting reason⟩]
+  for (body, message) in [(half ++ other, s!"accounting: unexpected t::other: waiting for {reason}"),
+      (other ++ half, s!"accounting: unexpected t::other: waiting for {reason}"),
+      ("spec def half(b: bool) -> bool: b\n", s!"accounting: t::half: waiting for {reason}; missing 1 expected")] do
+    let block : Block := ⟨"accounting", "accept", "", #["module t\n" ++ body]⟩
+    let (_, result) ← (do checkTypingBlock block; checkExpectedRoots expected #["accounting"]).run {}
+    expectTrue (result.failures == #[message])
+      s!"root accounting: expected {message}, got {result.failures}"
+
+/-- An exact instance and its remaining family match in either order. -/
+private def namedInstanceAndFamily : TestM Unit := do
+  let outcome := UnpackagedOutcome.waiting "specification type in executable code"
+  let named : UnpackagedRoot := {block := "mixed instances", declaration := "t::f", instanceName := "t::f<1>", outcome := outcome}
+  let sibling : UnpackagedRoot := {block := "mixed instances", declaration := "t::f", instanceName := "t::f<2>", outcome := outcome}
+  let one : ExpectedRoot := ⟨"mixed instances", .one named.instanceName, outcome⟩
+  let family : ExpectedRoot := ⟨"mixed instances", .family named.declaration 1, outcome⟩
+  for reports in [#[named, sibling], #[sibling, named]] do
+    for expectations in [[one, family], [family, one]] do
+      let (_, result) ← (checkExpectedRoots expectations #["mixed instances"]).run {unpackagedRoots := reports}
+      expectTrue (result.passed == 2 && result.failures.isEmpty)
+        s!"mixed instances: report order {reports.map (·.instanceName)}; {result.failures}"
+
+/-- The same local name in another module denotes a different owner or argument. Exercise
+the checker with both modules and the same exact expectation. -/
+private def qualifiedInstanceControls : TestM Unit := do
+  let iface := "module common\npub interface I:\n    def identity(x: bool) -> bool\n    law bounded(x: rational): x <= 1 / 2\n"
+  let leftLaw := "common::I::bounded at left::M"
+  let waits := UnpackagedOutcome.waiting "a comparison of `rational`s"
+  for ns in ["left", "right"] do
+    let impl := "module " ++ ns ++ "\nuse common::{I}\npub module M: I:\n    def identity(x): x\n"
+    let (_, law) ← (do
+      checkTypingBlock ⟨"law", "accept", "", #[iface, impl]⟩
+      checkExpectedRoots [⟨"law", .one leftLaw, waits⟩] #["law"]).run {}
+    if ns == "left" then expectTrue law.failures.isEmpty s!"law at left::M: {law.failures}"
+    else
+      expectTrue (law.failures.size == 2 && law.failures[0]!.contains "common::I::bounded at right::M" &&
+        law.failures[1]!.contains leftLaw) s!"law at right::M: {law.failures}"
+    let client := "module client\nuse " ++ ns ++ "::{Box}\ndef run<T>(x: T) -> T: x\n" ++
+      "// instantiate: run<Box>\n// sole package client::run<left::Box>\n"
+    let record := s!"module {ns}\npub struct Box:\n    x: nat\n"
+    let (_, sole) ← (checkTypingBlock ⟨"argument", "accept", "", #[client, record]⟩).run {}
+    if ns == "left" then expectTrue sole.failures.isEmpty s!"package at left::Box: {sole.failures}"
+    else
+      expectTrue (sole.failures.size == 1 && sole.failures[0]!.contains "client::run<right::Box>")
+        s!"package at right::Box: {sole.failures}"
+
 def typingCaseSuite : TestM Unit := do
+  rootAccountingControls
+  qualifiedInstanceControls
+  namedInstanceAndFamily
   let source := "module assertions\ndef f(x: nat) -> nat: x + 1\n"
   let .ok (check, _) := typeBlock ⟨"assertions", "accept", "", #[source]⟩
     | failure "operation assertions: the control did not type"
@@ -192,6 +327,7 @@ def typingCaseSuite : TestM Unit := do
       s!"operation assertions: {line} must report an unknown name"
   let blocks := readBlocks typingCases
   for block in blocks do checkTypingBlock block
+  checkExpectedRoots expectedFixtureRoots (blocks.map (·.id))
   note s!"{blocks.size} programs for the typing of bodies"
 
 end Zkc.Tests.Frontend

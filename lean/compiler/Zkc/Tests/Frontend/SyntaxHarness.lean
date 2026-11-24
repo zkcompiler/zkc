@@ -13,7 +13,45 @@ namespace Zkc.Tests.Frontend
 
 open Zkc.Frontend.Syntax
 
+/-- The two report classes for a reached body that has no package of its own. -/
+inductive UnpackagedOutcome where
+  | waiting (reason : String)
+  | typedOnly (reason : String)
+  deriving BEq
+
+def UnpackagedOutcome.describe : UnpackagedOutcome → String
+  | .waiting reason => s!"waiting for {reason}"
+  | .typedOnly reason => s!"typed only: {reason}"
+
+structure UnpackagedRoot where
+  block : String
+  declaration : String
+  instanceName : String
+  outcome : UnpackagedOutcome
+  description : String := instanceName
+
+def describeExpectedInstance (id description : String) : String :=
+  if description == id then id else s!"{description} [{id}]"
+
+/-- An exact instance names its key, including qualified arguments and owner.
+A family counts reports of one qualified declaration in one block. -/
+inductive ExpectedInstances where
+  | one (instanceName : String)
+  | family (declaration : String) (count : Nat)
+
+structure ExpectedRoot where
+  block : String
+  instances : ExpectedInstances
+  outcome : UnpackagedOutcome
+
+private def ExpectedRoot.matches (expected : ExpectedRoot) (root : UnpackagedRoot) : Bool :=
+  expected.block == root.block && expected.outcome == root.outcome && match expected.instances with
+    | .one name => name == root.instanceName
+    | .family name _ => name == root.declaration
+
 structure Tally where
+  admittedRoots : Nat := 0
+  unpackagedRoots : Array UnpackagedRoot := #[]
   passed : Nat := 0
   failures : Array String := #[]
   notes : Array String := #[]
@@ -26,6 +64,34 @@ def failure (message : String) : TestM Unit :=
   modify fun t => { t with failures := t.failures.push message }
 
 def note (message : String) : TestM Unit := modify fun t => { t with notes := t.notes.push message }
+
+/-- Compare the multiset for the entire suite, including blocks which no longer reach typing.
+An excess report names the actual instance. A deficit names the expected instance or family. -/
+def checkExpectedRoots (expected : List ExpectedRoot) (blocks : Array String) : TestM Unit := do
+  for block in (expected.map (·.block)).eraseDups do
+    if blocks.count block > 1 then failure s!"ambiguous root expectations: several blocks named {block}"
+  let tally ← get
+  -- Reserve an exact instance before using a family allowance for the same declaration.
+  let (exact, families) := expected.partition fun entry => entry.instances matches .one _
+  let mut entries := (exact ++ families).toArray.map fun entry =>
+    let count := match entry.instances with
+      | .one _ => 1
+      | .family _ count => count
+    (entry, count)
+  for root in tally.unpackagedRoots do
+    if let some i := entries.findIdx? (fun (entry, left) => left > 0 && entry.matches root) then
+      entries := entries.modify i fun (entry, left) => (entry, left - 1)
+      pass
+    else failure s!"{root.block}: unexpected {describeExpectedInstance root.instanceName root.description}: {root.outcome.describe}"
+  for (entry, remaining) in entries do
+    let name := match entry.instances with
+      | .one instanceName => instanceName
+      | .family declaration count => s!"{declaration} (family of {count})"
+    let message := s!"{entry.block}: {name}: {entry.outcome.describe}"
+    if remaining > 0 then failure s!"{message}; missing {remaining} expected"
+    else note message
+  let waiting := tally.unpackagedRoots.countP (fun r => r.outcome matches .waiting _)
+  note s!"package reports in typing blocks: {tally.admittedRoots} admitted, {waiting} waiting, {tally.unpackagedRoots.size - waiting} typed only"
 
 /-- The directories of the repository that the tests read: the reference of the language
 (`language/`, which holds `LANGUAGE.md` and `conformance/`), the library in source
