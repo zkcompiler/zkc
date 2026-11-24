@@ -2,6 +2,7 @@ module
 
 public import Zkc.Frontend.Semantics.Instances
 public import Zkc.Frontend.Emit.Root
+public import Zkc.Frontend.Emit.Refusal
 
 @[expose] public section
 namespace Zkc.Frontend
@@ -24,8 +25,9 @@ def functionRoots (state : Compile.State) : Array InstanceId := Id.run do
   return result
 
 /-- A root as source writes it, with the words of a default instance. -/
-def rootDescription (state : Compile.State) (root : InstanceId) : String :=
-  let description := renderInstance state root
+def rootDescription (state : Compile.State) (root : InstanceId) (qualified : Bool := false) : String :=
+  let name := if qualified then (state.table.entries[root]?).map (qualifiedName state.program ·.key.declaration) else none
+  let description := renderInstance state root name
   if state.results.isDefault root then s!"default instance `{description}`" else description
 
 /-- What an admitted result holds of a root that is a function or a protocol: the package that
@@ -37,7 +39,7 @@ def rootPackage (state : Compile.State) (root : InstanceId) : Except Lack Checke
     (state.results.packageReports.find? (·.root == root)).map (·.outcome)
   match outcome with
   | some (.admitted package) => .ok package
-  | some (.refused reason _) => .error (.refused s!"the core refuses its package: {reason}")
+  | some (.refused p errors) => .error (.refused s!"the core refuses its package: {p.describeRefusals errors}")
   | some (.waiting reason) => .error (.waiting reason)
   | some (.typedOnly reason) => .error (.noPackage reason)
   | some (.defect message) => .error (.defect message)
@@ -59,15 +61,7 @@ def admit (state : Compile.State) (root : InstanceId) : Option PackageOutcome :=
       let source := emission.package ⟨[], [], [], [], []⟩
       match source.check with
       | .ok checked => some (.admitted checked)
-      | .error refusals =>
-        let describe {T Raw : Type} (stage : String) (r : Core.Refusal T Raw) :=
-          s!"{stage}: {reprStr r.rule} at {reprStr r.place}"
-        let reasons := refusals.map fun
-          | .definition (.fn r) => describe "function" r
-          | .definition (.protocol r) => describe "protocol" r
-          | .projection r => describe "projection" r
-          | .association r => describe "association" r
-        some (.refused ("; ".intercalate reasons) source)
+      | .error refusals => some (.refused source refusals)
     | .error (.waiting reason) => some (.waiting reason)
     | .error (.defect message) => some (.defect message)
     | .error (.noCoreForm reason) => some (.typedOnly reason)
@@ -85,19 +79,14 @@ def Typing.reportPackages : CompileM Unit := do
     let description := Typing.rootDescription state root
     (Typing.admit state root).map fun outcome => ({ root, description, outcome } : PackageReport)
   modifyResults fun results => { results with packageReports := reports }
-  -- every body passed its own check before its package was emitted, so a package that the
-  -- core does not admit is a defect of the frontend, and is logged as one: such a program is
-  -- not accepted
   for report in reports do
-    let reason : Option String := match report.outcome with
-      | .refused reason _ => some s!"the core refuses it: {reason}"
-      | .defect message => some message
+    let diagnostic : Option (String × DiagnosticOrigin × String) := match report.outcome with
+      | .refused p errors => some ("core", .core, s!"the core refuses the package: {p.describeRefusals errors}")
+      | .defect message => some ("defect", .emission, s!"a defect of the frontend: {message}")
       | _ => none
-    if let some reason := reason then
+    if let some (rule, origin, message) := diagnostic then
       let span := (((state.table.entries[report.root]?).bind fun entry =>
         state.program.declarations[entry.key.declaration]?).bind (·.name)).map (·.span)
-      logError "defect" (span.getD default) (.ofText
-        s!"a defect of the frontend: the package of `{report.description}`, whose bodies passed their own checks: {reason}")
-        (origin := .core)
+      logError rule (span.getD default) (.ofText s!"{report.description}: {message}") (origin := origin)
 
 end Zkc.Frontend

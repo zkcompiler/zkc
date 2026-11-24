@@ -27,7 +27,7 @@ Libraries:
 Executables:
 
 - `zkc-knowledge`: exports the written knowledge claim of an admitted protocol.
-- `zkc-audit`: library target coverage for the compiler package and the audit of `ZkcCore`, `ZkcVocabulary`, `ZkcCoreTests` and
+- `zkc-audit`: exactly one library target for each compiler module and the audit of `ZkcCore`, `ZkcVocabulary`, `ZkcCoreTests` and
   `ZkcVocabularyTests`.
 - `zkc-syntax`, `zkc-check`, `zkc-frontend-tests`: the frontend's lexer, parser and canonical
   printer on source files, its checks, and its test driver; outside the default build.

@@ -182,9 +182,9 @@ def types (options : Options) : IO UInt32 := do
     | .admitted package =>
       admitted := admitted + 1
       IO.println s!"package {report.description}: admitted, {package.admitted.program.headers.fns.length} functions"
-    | .refused reason _ =>
+    | .refused source errors =>
       failed := failed + 1
-      IO.println s!"package {report.description}: refused by the core: {reason}"
+      IO.println s!"package {report.description}: refused by the core: {source.describeRefusals errors}"
     | .waiting reason =>
       waiting := waiting + 1
       IO.println s!"package {report.description}: waiting for {reason}"

@@ -68,9 +68,9 @@ def pipeline (assembly : Assembly) : Array Phase :=
   sourcePhases assembly ++ #[types, defaults, defaultBodies, packages]
 
 /-- The phases up to and including the one with a name. -/
-def upTo (phases : Array Phase) (name : String) : Array Phase :=
+def upTo (phases : Array Phase) (name : String) : Except String (Array Phase) :=
   match phases.findIdx? (·.name == name) with
-  | some index => phases.extract 0 (index + 1)
-  | none => phases
+  | some index => .ok (phases.extract 0 (index + 1))
+  | none => .error s!"unknown frontend phase `{name}`"
 
 end Zkc.Frontend.Driver

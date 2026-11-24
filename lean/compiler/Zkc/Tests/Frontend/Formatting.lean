@@ -77,7 +77,7 @@ def instanceLines (check : InstanceCheck) : Array String :=
 
 def packageOutcomeText : PackageOutcome → String
   | .admitted _ => "admitted"
-  | .refused reason _ => s!"refused by the core: {reason}"
+  | .refused source errors => s!"refused by the core: {source.describeRefusals errors}"
   | .waiting reason => s!"waiting for {reason}"
   | .typedOnly reason => s!"typed only: {reason}"
   | .defect message => s!"not emitted: {message}"

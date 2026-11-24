@@ -62,7 +62,7 @@ inductive PackageOutcome where
   facts. -/
   | admitted (package : CheckedPackage)
   /-- Emitted and refused by the core. -/
-  | refused (reason : String) (package : SourcePackage)
+  | refused (package : SourcePackage) (refusals : List (Core.AdmissionRefusal package.bindings.vocabulary))
   /-- Not emitted: a form that is not typed yet. -/
   | waiting (reason : String)
   /-- Typed, and not emitted: a specification item whose types or operations have no form in
@@ -97,6 +97,7 @@ inductive Lack where
   | defect (message : String)
   /-- The program has no root of the name asked for. -/
   | absent
+  | ambiguous (places : Array String)
   deriving Inhabited
 
 def Lack.describe : Lack → String
@@ -106,6 +107,7 @@ def Lack.describe : Lack → String
   | .noPackage reason => s!"no package of its own: {reason}"
   | .defect message => s!"not computed, a defect of the frontend: {message}"
   | .absent => "no root of this name"
+  | .ambiguous places => s!"ambiguous root: {", ".intercalate places.toList}"
 
 /-- What a run made of the roots it was asked for: those it holds, each with what was made of it,
 and those it lacks, each with why, beside the errors and incomplete checks from its log. -/
@@ -190,6 +192,8 @@ def namesRoot (name description : String) : Bool :=
 
 /-- What a completed result holds for a root it was asked for. -/
 def Completed.find? {α : Type} (completed : Completed α) (root : String) : Option α :=
-  (completed.held.find? fun (description, _) => namesRoot root description).map (·.2)
+  match completed.held.filter (fun (description, _) => namesRoot root description) with
+  | #[(_, value)] => some value
+  | _ => none
 
 end Zkc.Frontend

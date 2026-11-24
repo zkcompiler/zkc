@@ -330,28 +330,22 @@ mutual
     -- the operands of an operation on naturals, as naturals
     let naturals : NamedM b (List ValueName) := operands.mapM fun (value, type) => naturalOf tag value type
     match operation, operands with
-    | .natAdd, [_, _] => builtin tag .natAdd [] [] (← naturals)
-    | .natSub, [_, _] => builtin tag .natSub [] [] (← naturals)
-    | .natMul, [_, _] => builtin tag .natMul [] [] (← naturals)
-    | .natDiv, [_, _] => builtin tag .natDiv [] [] (← naturals)
-    | .natRem, [_, _] => builtin tag .natRem [] [] (← naturals)
-    | .natPow, [_, _] => builtin tag .natPow [] [] (← naturals)
-    | .natLess, [_, _] => builtin tag .natLess [] [] (← naturals)
-    | .natEqual, [_, _] => builtin tag .natEqual [] [] (← naturals)
-    | .boolNot, [(x, _)] => builtin tag .boolNot [] [] [x]
-    | .boolEqual, [(x, _), (y, _)] => builtin tag .boolEqual [] [] [x, y]
-    | .boolAnd, [(x, _), (y, _)] => builtin tag .boolAnd [] [] [x, y]
-    | .boolOr, [(x, _), (y, _)] => builtin tag .boolOr [] [] [x, y]
-    | .seqLength, [(xs, .seq element size)] => builtin tag .seqLength [.seq (← ty element) size] [] [xs]
+    | .natAdd, [_, _] | .natSub, [_, _] | .natMul, [_, _] | .natDiv, [_, _]
+    | .natRem, [_, _] | .natPow, [_, _] | .natLess, [_, _] | .natEqual, [_, _] =>
+      builtin tag operation.owned [] [] (← naturals)
+    | .boolNot, [(x, _)] => builtin tag operation.owned [] [] [x]
+    | .boolEqual, [(x, _), (y, _)] | .boolAnd, [(x, _), (y, _)]
+    | .boolOr, [(x, _), (y, _)] => builtin tag operation.owned [] [] [x, y]
+    | .seqLength, [(xs, .seq element size)] => builtin tag operation.owned [.seq (← ty element) size] [] [xs]
     | .seqAt, [(xs, .seq element size), (i, type)] =>
       let position ← naturalOf tag i type
-      builtin tag .seqAt [.seq (← ty element) size] [] [xs, position]
+      builtin tag operation.owned [.seq (← ty element) size] [] [xs, position]
     | .seqConcat, [(x, .seq _ m), (y, .seq _ n)] =>
       let .seq element _ := info.type | defect "a concatenation whose type is no collection"
-      builtin tag .seqConcat [.seq (← ty element) m, .seq (← ty element) n] [] [x, y]
+      builtin tag operation.owned [.seq (← ty element) m, .seq (← ty element) n] [] [x, y]
     | .seqFill, [(element, _)] =>
       let .seq type (some count) := info.type | defect "a fill without a static count"
-      builtin tag .seqFill [.seq (← ty type) (some count)] [] [element]
+      builtin tag operation.owned [.seq (← ty type) (some count)] [] [element]
     | _, _ => defect s!"the operation {operation.name} on operands that do not fit it"
 
   /-- `xs[a..b]` (TY7): the collection, the lower bound, the length where the upper bound is

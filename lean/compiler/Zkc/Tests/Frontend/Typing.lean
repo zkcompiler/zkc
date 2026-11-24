@@ -1,3 +1,5 @@
+import Zkc.Core.Program.Links
+import Zkc.Tests.Frontend.PrintedFixtures
 import Zkc.Frontend.Written.Package
 import Zkc.Tests.Frontend.Instances
 import Zkc.Tests.Frontend.TypingCases
@@ -19,59 +21,65 @@ open Zkc.Frontend.Syntax
 def emittedPackages (check : TypingCheck) : Array SourcePackage :=
   check.packages.filterMap fun report => match report.outcome with
     | .admitted checked => some checked.toSourcePackage
-    | .refused _ source => some source
+    | .refused source _ => some source
     | _ => none
 
 def packageTexts (check : TypingCheck) : Array String :=
   (emittedPackages check).map fun source => (Written.package source).text
 
-/-- Match the catalogue names in the test tables against operations in the emitted body. -/
-private def usesOperation (p : SourcePackage) (name : String) : Zkc.Core.LocalRaw p.bindings.vocabulary → Bool
-  | .row (.inl (.field op ..)) => Typing.StandardRow.fieldOp name == some op
-  | .row (.inl (.group op ..)) => Typing.StandardRow.groupOp name == some op
-  | .row (.inl (.seq op ..)) => Typing.StandardRow.seqOp name == some op
-  | .row (.inl op) => Typing.StandardRow.resolve ⟨name, #[]⟩ == some op
-  | .row (.inr key) => key.name == name
-  | .owned op .. =>
-    let spelling := match op with
-      | .natAdd => "nat.add" | .natSub => "nat.sub" | .natMul => "nat.mul"
-      | .natDiv => "nat.div" | .natRem => "nat.rem" | .natPow => "nat.pow"
-      | .natEqual => "nat.equal" | .natLess => "nat.less"
-      | .boolAnd => "bool.and" | .boolOr => "bool.or" | .boolNot => "bool.not" | .boolEqual => "bool.equal"
-      | .seqLength => "seq.length" | .seqAt => "seq.at" | .seqSlice => "seq.slice"
-      | .seqConcat => "seq.concat" | .seqFill => "seq.fill"
-      | .seqSized => "seq.sized" | .seqUnsized => "seq.unsized"
-      | .natBelow => "nat.below" | .finWiden => "fin.widen" | .finToNat => "fin.to_nat"
-      | .make => "make" | .get => "get" | .take => "take" | .variant => "variant"
-    spelling == name
-  | _ => false
+/-- An assertion names a loop instruction or an operation of a function or role. -/
+private inductive FixtureOperation where
+  | loop
+  | localOp (test : (p : SourcePackage) → Zkc.Core.LocalRaw p.bindings.vocabulary → Bool)
 
-private partial def countBody {Op Who : Type} (matchesOp : Op → Bool) (loops : Bool)
-    (region : Zkc.Core.Region Op Who) : Nat :=
+private def resolveOperation (check : TypingCheck) (name : String) : Option FixtureOperation := do
+  if name == "loop" then return .loop
+  if let some expected := PrintedFixtures.ownedNames.find? (fun op => Typed.CoreOperation.ownedSpelling op == name) then
+    return .localOp fun _ => fun | .owned op .. => op == expected | _ => false
+  let standard : Option (Zkc.Vocabulary.RowKey → Bool) := do
+    if let some field := Typing.StandardRow.fieldOp name then
+      return fun | .field op .. => op == field | _ => false
+    if let some group := Typing.StandardRow.groupOp name then
+      return fun | .group op .. => op == group | _ => false
+    if let some seq := Typing.StandardRow.seqOp name then
+      return fun | .seq op .. => op == seq | _ => false
+    if let some key := Typing.StandardRow.resolve ⟨name, #[]⟩ then return (· == key)
+    match ← Typing.StandardRow.resolve ⟨name, #[.nat 0]⟩ with
+    | .hash (.shake128 _) => return fun | .hash (.shake128 _) => true | _ => false
+    | .hash (.shake256 _) => return fun | .hash (.shake256 _) => true | _ => false
+    | _ => none
+  guard (standard.isSome || check.state.results.rows.any (·.key.name == name))
+  return .localOp fun _ => fun
+    | .row (.inl key) => standard.any (· key)
+    | .row (.inr key) => key.name == name
+    | _ => false
+
+/-- Loops are instructions and do not occur in the region's operation listing. -/
+private partial def countLoops {Op Who : Type} (region : Zkc.Core.Region Op Who) : Nat :=
   let .mk _ steps _ := region
-  let count := countBody matchesOp loops
   steps.foldl (init := 0) fun total step => total + match step with
-    | .op _ _ op _ => (matchesOp op).toNat
-    | .guard .. => 0
-    | .choose _ _ _ _ yes no => count yes + count no
-    | .cases _ _ _ _ arms => (arms.map count).sum
-    | .loop _ _ _ _ _ body => loops.toNat + count body
-    | .block _ _ _ body | .attempt _ _ _ body => count body
+    | .choose _ _ _ _ yes no => countLoops yes + countLoops no
+    | .cases _ _ _ _ arms => (arms.map countLoops).sum
+    | .loop _ _ _ _ _ body => 1 + countLoops body
+    | .block _ _ _ body | .attempt _ _ _ body => countLoops body
+    | _ => 0
 
-private def operationCount (p : SourcePackage) (name : String) : Nat :=
+private def operationCount (p : SourcePackage) (operation : FixtureOperation) : Nat :=
   p.named.definitions.foldl (init := 0) fun total definition =>
-    total + match definition with
-      | .fn _ _ _ _ _ _ body _ => countBody (usesOperation p name) (name == "loop") body
-      | .protocol _ _ _ _ body => countBody (fun
-          | .compute _ op => usesOperation p name op
-          | _ => false) (name == "loop") body
+    total + match definition, operation with
+      | .fn _ _ _ _ _ _ body _, .loop => countLoops body
+      | .protocol _ _ _ _ body, .loop => countLoops body
+      | .fn _ _ _ _ _ _ body _, .localOp test => body.operations.countP (test p)
+      | .protocol _ _ _ _ body, .localOp test => body.operations.countP fun
+          | .compute _ op => test p op
+          | _ => false
 
 /-- Report core refusals, emission defects and exhausted checks. Individual cases specify
 which roots should be admitted or waiting. -/
 def checkPackages (label : String) (check : TypingCheck) : TestM Unit := do
   for report in check.packages do
     match report.outcome with
-    | .refused reason _ => failure s!"{label}: the core refuses the package of {report.description}: {reason}"
+    | .refused source errors => failure s!"{label}: the core refuses the package of {report.description}: {source.describeRefusals errors}"
     | .defect message => failure s!"{label}: the package of {report.description} is not emitted: {message}"
     | .exhausted exhaustion =>
       failure s!"{label}: the package of {report.description} is not checked: {exhaustion.describe}"
@@ -95,24 +103,24 @@ def checkedProtocols (check : TypingCheck) : Nat × Nat :=
 /-- Checks the assertions `// uses`, `// not uses`, `// applies`, `// obligations`, `// waits` and
 `// says`. -/
 def checkTypingAssertions (label : String) (check : TypingCheck) (source : String) : TestM Unit := do
-  let applications (name : String) := (emittedPackages check).foldl (fun n p => n + operationCount p name) 0
+  let checkCount (name : String) (predicate : Nat → Bool) (message : Nat → String) : TestM Unit := do
+    let some operation := resolveOperation check name | failure s!"{label}: unknown operation `{name}`"
+    let count := (emittedPackages check).foldl (fun n p => n + operationCount p operation) 0
+    expectTrue (predicate count) (message count)
   let waits := check.packages.filterMap fun report => match report.outcome with
     | .waiting reason => some reason
     | _ => none
   for line in source.splitOn "\n" do
     if line.startsWith "// uses " then
       let name := String.ofList (line.toList.drop 8)
-      expectTrue (applications name > 0)
-        s!"{label}: no package applies `{name}`"
+      checkCount name (· > 0) fun _ => s!"{label}: no package applies `{name}`"
     else if line.startsWith "// not uses " then
       let name := String.ofList (line.toList.drop 12)
-      expectTrue (applications name == 0)
-        s!"{label}: a package applies `{name}`"
+      checkCount name (· == 0) fun _ => s!"{label}: a package applies `{name}`"
     else if line.startsWith "// applies " then
       match (String.ofList (line.toList.drop 11)).splitOn " " with
       | [name, count] =>
-        let found := applications name
-        expectTrue (some found == count.toNat?)
+        checkCount name (fun found => some found == count.toNat?) fun found =>
           s!"{label}: the packages apply `{name}` {found} times; {count} are expected"
       | _ => failure s!"{label}: unreadable assertion `{line}`"
     else if line.startsWith "// obligations " then
@@ -175,6 +183,13 @@ def checkTypingBlock (block : Block) : TestM Unit := do
   for text in block.files do checkTypingAssertions block.id check text
 
 def typingCaseSuite : TestM Unit := do
+  let source := "module assertions\ndef f(x: nat) -> nat: x + 1\n"
+  let .ok (check, _) := typeBlock ⟨"assertions", "accept", "", #[source]⟩
+    | failure "operation assertions: the control did not type"
+  for line in ["// not uses nat.ad", "// applies nat.ad 0"] do
+    let (_, result) ← (checkTypingAssertions "control" check line).run {}
+    expectTrue (result.passed == 0 && result.failures == #["control: unknown operation `nat.ad`"])
+      s!"operation assertions: {line} must report an unknown name"
   let blocks := readBlocks typingCases
   for block in blocks do checkTypingBlock block
   note s!"{blocks.size} programs for the typing of bodies"

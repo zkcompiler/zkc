@@ -114,7 +114,9 @@ the driver.
 Participant programs have no concrete executor and standard runtime model in this compiler.
 The historical commands to run, prove, verify and read trees have been removed. Derived
 construction awaits the constructed stage on the library's protocol objects. Written scheme
-selection checks roles and statement ports (SC3 and SC4). The construction-time check of draws
+selection checks the deployed roles (SC3) and checks that the statement operands of a written
+claim come from inputs held by both prover and verifier (SC4). The scheme-wide SC4 requirement
+to mark a verifier-only input private currently has no checker. The construction-time check of draws
 (SC5) awaits that stage too.
 
 ## Earlier source and execution pipeline

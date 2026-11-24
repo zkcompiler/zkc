@@ -110,7 +110,7 @@ Beam does not replace either acceptance check.
 ### The audit
 
 `just audit`, also run by `just test`, checks that every Lean source file under
-`lean/compiler/Zkc` is selected by at least one whole library target. It reads the module
+`lean/compiler/Zkc` is selected by exactly one whole library target. It reads the module
 list from Lake for each library declared by the compiler package. The audit also checks
 the core, vocabulary and their tests.
 

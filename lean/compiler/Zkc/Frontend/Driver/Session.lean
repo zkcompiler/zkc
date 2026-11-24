@@ -70,7 +70,11 @@ def compile {m : Type → Type} [Monad m] (session : Session) (inputs : Array So
     m Session := do
   let assembly ← Zkc.Frontend.assemble inputs load
   let session := { session with inputNames := inputs.map fun (input : SourceInput) => input.name }
-  return session.runAll (upTo (pipeline assembly) lastPhase)
+  match upTo (pipeline assembly) lastPhase with
+  | .ok phases => return session.runAll phases
+  | .error message =>
+    let log := session.state.log.add { rule := "phase", span := default, message := .ofText message }
+    return { session with state.log := log }
 
 /-- The files in the order of output: those given, in the order given, then those of the
 library in the order of the program. -/
@@ -101,22 +105,38 @@ def incompleteOf (session : Session) (phases : Array String) : Array Diagnostic 
 def ran (session : Session) (name : String) : Bool := session.reports.any (·.name == name)
 
 /-- The packages of the roots asked for: the roots named (each as `types` prints it, or the
-declaration of a default instance), or, when none is named, every root that is a function or a
+declaration of a default instance), qualified by the module when names coincide, or, when none is named, every root that is a function or a
 protocol and has a package of its own. A root whose package the core admitted is held; any other
 is lacking, with why. -/
 def admitRoots (session : Session) (requested : Option (Array String) := none) :
     Admitted CheckedPackage :=
   let state := session.state
-  let roots := (Typing.functionRoots state).map fun root => (root, Typing.rootDescription state root)
-  let outcomes : Array (String × Except Lack CheckedPackage) := match requested with
-    | none => roots.filterMap fun (root, description) =>
-      match Typing.rootPackage state root with
-      | .error (.noPackage _) => none
-      | outcome => some (description, outcome)
-    | some names => names.map fun name =>
-      match roots.find? fun (_, description) => namesRoot name description with
-      | some (root, description) => (description, Typing.rootPackage state root)
-      | none => (name, .error .absent)
+  let roots := (Typing.functionRoots state).map fun root =>
+    (root, Typing.rootDescription state root, Typing.rootDescription state root (qualified := true))
+  let outcomes : Array (String × Except Lack CheckedPackage) := Id.run do
+    match requested with
+    | none =>
+      let mut seen : Std.HashSet String := {}
+      let mut ambiguous : Std.HashSet String := {}
+      for (_, short, _) in roots do
+        if seen.contains short then ambiguous := ambiguous.insert short
+        seen := seen.insert short
+      return roots.filterMap fun (root, short, full) =>
+        match Typing.rootPackage state root with
+        | .error (.noPackage _) => none
+        | outcome => some (if ambiguous.contains short then full else short, outcome)
+    | some names =>
+      return names.toList.eraseDups.toArray.map fun name =>
+        match roots.filter (fun (_, short, full) => namesRoot name short || namesRoot name full) with
+        | #[(root, _, _)] => (name, Typing.rootPackage state root)
+        | #[] => (name, .error .absent)
+        | candidates =>
+          let places := candidates.map fun (root, _, full) => Id.run do
+            let some entry := state.table.entries[root]? | return full
+            let some decl := state.program.declarations[entry.key.declaration]? | return full
+            let some written := decl.name | return full
+            return s!"{full} at {written.span.file}:{written.span.render}"
+          (name, .error (.ambiguous places))
   Admitted.ofLog state.log outcomes
 
 /-- The diagnostics in the order of output: those of the files given first, in the order the

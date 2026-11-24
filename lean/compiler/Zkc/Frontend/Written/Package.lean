@@ -124,27 +124,32 @@ section
 variable {b : Zkc.Vocabulary.Project.Bindings}
 
 mutual
-  def expr : BodyAnalysis.Expr (LocalRaw b.vocabulary) → String
+  def exprWith {Raw : Type} (op : Raw → String) : BodyAnalysis.Expr Raw → String
     | .arg position => s!"(.arg {position})"
-    | .apply written operands result => s!"(.apply {localRaw written} {exprs operands} {result})"
-  def exprs : BodyAnalysis.Exprs (LocalRaw b.vocabulary) → String
+    | .apply written operands result => s!"(.apply {op written} {exprsWith op operands} {result})"
+  def exprsWith {Raw : Type} (op : Raw → String) : BodyAnalysis.Exprs Raw → String
     | .nil => ".nil"
-    | .cons first others => s!"(.cons {expr first} {exprs others})"
+    | .cons first others => s!"(.cons {exprWith op first} {exprsWith op others})"
 end
 
-def operand : Operand Empty → String
+def operandWith {Raw : Type} (op : Raw → String) : Operand Raw → String
   | .arg position => s!"(.arg {position})"
-  | .apply written _ => nomatch written
+  | .apply written args => s!"(.apply {op written} {numbers args})"
 
-def requirement : Requirement Empty → String
-  | .le x y => s!"(.le {operand x} {operand y})"
-  | .lt x y => s!"(.lt {operand x} {operand y})"
-  | .atLeast x n => s!"(.atLeast {operand x} {n})"
-  | .below x n => s!"(.below {operand x} {n})"
-  | .exactly x n => s!"(.exactly {operand x} {n})"
-  | .difference x y n => s!"(.difference {operand x} {operand y} {n})"
-  | .holds x => s!"(.holds {operand x})"
-  | .bounded x => s!"(.bounded {operand x})"
+def requirementWith {Raw : Type} (op : Raw → String) : Requirement Raw → String
+  | .le x y => s!"(.le {operandWith op x} {operandWith op y})"
+  | .lt x y => s!"(.lt {operandWith op x} {operandWith op y})"
+  | .atLeast x n => s!"(.atLeast {operandWith op x} {n})"
+  | .below x n => s!"(.below {operandWith op x} {n})"
+  | .exactly x n => s!"(.exactly {operandWith op x} {n})"
+  | .difference x y n => s!"(.difference {operandWith op x} {operandWith op y} {n})"
+  | .holds x => s!"(.holds {operandWith op x})"
+  | .bounded x => s!"(.bounded {operandWith op x})"
+
+def expr := @exprWith (LocalRaw b.vocabulary) (localRaw (b := b))
+def exprs := @exprsWith (LocalRaw b.vocabulary) (localRaw (b := b))
+def operand := operandWith (fun x : Empty => nomatch x)
+def requirement := requirementWith (fun x : Empty => nomatch x)
 
 def headerClause : HeaderClause b.vocabulary → String
   | .positional q => s!"(.positional {requirement q})"
