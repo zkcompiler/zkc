@@ -82,6 +82,16 @@ def specParametersOf (term : Lowered.Expr) : CompileM (Array ParameterRef) := do
 def mentionsSpecParameter (term : Lowered.Expr) : CompileM Bool :=
   return !(← specParametersOf term).isEmpty
 
+/-- A specification conjunct may mention its proof parameter in an interface argument. -/
+def specificationConjunct : Lowered.Constraint → CompileM Bool
+  | .compare _ _ left right => do
+    return (← mentionsSpecParameter left) || (← mentionsSpecParameter right)
+  | .bound _ subject sorts => do
+    if ← mentionsSpecParameter subject then return true
+    sorts.anyM fun
+      | .reference ref => mentionsSpecParameter (.reference ref)
+      | _ => pure false
+
 /-- The source text at a place of the file of an environment: what a message quotes, and the
 name of a local name. -/
 def sourceText (env : Env) (place : Span) : CompileM String := do
@@ -139,7 +149,7 @@ def lowerSteps (env : Env) (steps : Array (DeclarationId × Option StaticArgs)) 
 
 /-- The members of the interfaces of a module instance, or nothing when it has none yet. -/
 def moduleMembers (inst : InstanceId) : CompileM (Option (Array (String × MemberValue))) := do
-  match (← get).table.content? inst with
+  match ← evaluatedContent? inst with
   | some (.«module» _ members) => return some members
   | _ => return none
 
@@ -435,7 +445,7 @@ mutual
   /-- The static value that an instance stands for. -/
   partial def valueOfInstance (id : DeclarationId) (inst : InstanceId) : CompileM StaticValue := do
     let found ← declaration id
-    let content := (← get).table.content? inst
+    let content ← evaluatedContent? inst
     match found.kind, content with
     | .alias, some (.alias type) => return .type type
     | .vocabularyType, some (.vocabularyType type) => return .type type
@@ -674,7 +684,7 @@ mutual
   /-- Whether a module instance names an interface at these static arguments (SP3, SP8). -/
   partial def implements (inst : InstanceId) (interface : DeclarationId)
       (args : Array StaticValue) : CompileM Bool := do
-    match (← get).table.content? inst with
+    match ← evaluatedContent? inst with
     | some (.«module» interfaces _) => return interfaces.any fun (id, values) => id == interface && values == args
     | _ =>
       -- a module whose members are being formed names what its declaration's bound names
@@ -738,7 +748,7 @@ mutual
         for sort in bound.sorts do
           let failure ← try meetsSort scopeEnv value sort catch failure =>
             match failure with
-            | .waiting .opaqueProjection => if deferOpaque then pure none else throw failure
+            | .waiting reason => if deferOpaque && reason.isOpaqueProjection then pure none else throw failure
             | other => throw other
           if let some failure := failure then
             refuse "SP3" bound.span
@@ -749,19 +759,18 @@ mutual
   partial def checkConstraint (env : Env) (constraint : Lowered.Constraint) (owner : String)
       (specification : Bool := false) : CompileM (Option String) := do
     let state ← get
+    if (← specificationConjunct constraint) != specification then return none
     let constraintText ← sourceText env (constraintSpan constraint)
     let failed (here : String) : String :=
       s!"`{owner}` requires `{constraintText}`, which is `{here}` here and does not hold"
     match constraint with
     | .bound _ subject sorts =>
-      if (← mentionsSpecParameter subject) != specification then return none
       let value ← evalAny env subject
       for sort in sorts do
         if let some _ ← meetsSort env value sort then
           return some (failed s!"{renderValue state value}: {← sourceText env (sortSpan sort)}")
       return none
     | .compare span operator left right =>
-      if ((← mentionsSpecParameter left) || (← mentionsSpecParameter right)) != specification then return none
       let a ← evalAny env left
       let b ← evalAny env right
       let holds : Option Bool := match a, b with
@@ -797,8 +806,8 @@ mutual
         let outcome ← try checkConstraint scopeEnv constraint owner specification
           catch failure => match failure with
             | .waiting reason =>
-              if deferOpaque && (reason matches .opaqueProjection) then pure none
-              else throw (.waiting s!"a constraint of its `where`: {reason}")
+              if deferOpaque && reason.isOpaqueProjection then pure none
+              else throw (.waiting (.context "a constraint of its `where`" reason))
             | other => throw other
         if let some message := outcome then
           if isDefault then throw .skipped
@@ -807,8 +816,8 @@ mutual
   /-- The instance of a declaration at values, made once (SP7). -/
   partial def instantiate (id : DeclarationId) (values : Array StaticValue) (requested : Frame)
       (isDefault : Bool := false) (specification : Array Nat := #[])
-      (owner : Option InstanceId := none) : CompileM InstanceId := do
-    let key : InstanceKey := { declaration := id, arguments := values, specification, owner }
+      (owner : Option InstanceId := none) (member : Option DeclarationId := none) : CompileM InstanceId := do
+    let key : InstanceKey := { declaration := id, arguments := values, specification, owner, member }
     let description ← describeInstance id values specification owner
     -- an instance first asked for as a default instance is one (SP7)
     if isDefault && ((← getResults).signatures.find? key).isNone then
@@ -835,6 +844,7 @@ mutual
         ((← getResults).signatures.entries[inst]?).map (·.state)
       match found with
       | some (.done _) => return inst
+      | some (.waiting reason) => throw (.waiting reason)
       | some .inProgress => refuseRecursion description requested.span
       | some (.exhausted exhaustion) => throw (.exhausted exhaustion)
       | some .skipped =>
@@ -861,7 +871,7 @@ mutual
     catch failure =>
       match failure with
       | .waiting reason =>
-        modifyResults (·.modifySignatures (·.setState inst (.done (.data (.waits reason.render)))))
+        modifyResults (·.modifySignatures (·.setState inst (.done (.data (.waits reason)))))
         return inst
       | .exhausted exhaustion =>
         modifyResults (·.modifySignatures (·.setState inst (.exhausted exhaustion)))
@@ -891,13 +901,18 @@ mutual
     | _ => pure ()
     checkBounds env (deployedParameters program found) name
     checkWheres env found.scopes name isDefault (hostDefinition env found)
-    let optional (type : Lowered.TypeTerm) : CompileM (Option ClosedType) := do
-      try return some (← evalType env type)
+    let optional (type : Lowered.TypeTerm) : StateT (Option WaitReason) CompileM (Option ClosedType) := do
+      try return some (← liftM (evalType env type : CompileM ClosedType))
       catch failure => match failure with
-        | .waiting _ => return none
+        | .waiting reason =>
+          modify fun first => first.orElse (fun _ => some reason)
+          return none
         | other => throw other
-    let parameters (head : Lowered.FunctionHead) : CompileM (Array (String × Option ClosedType)) :=
-      head.parameters.mapM fun parameter => do return (parameter.binder.name, ← optional parameter.type)
+    let readTypes {α : Type} (items : Array α) (name : α → String) (type : α → Lowered.TypeTerm) :
+        StateT (Option WaitReason) CompileM (Array (String × Option ClosedType)) :=
+      items.mapM fun item => do return (name item, ← optional (type item))
+    let parameters (head : Lowered.FunctionHead) :=
+      readTypes head.parameters (·.binder.name) (·.type)
     match found.node, content with
     | .typeDecl (.type _ _ _ _ (.type _)), .alias type => return .alias (← evalType env type)
     | .typeDecl (.type _ _ _ _ (.primitive _)), .vocabularyType row arguments =>
@@ -921,23 +936,21 @@ mutual
       return .«variant» evaluated
     | .«def» _, .function head _ =>
       -- the parameters first, then the result, in the order of the text
-      let evaluated ← parameters head
-      let result ← match head.result with
-        | some type => optional type
-        | none => pure (some ClosedType.unit)
-      return .signature evaluated result
+      let (evaluated, wait) ← (parameters head).run none
+      let (result, wait) ← (head.result.elim (pure (some ClosedType.unit)) optional).run wait
+      return .signature evaluated result wait
     | .oracleDef node, _ =>
       -- an oracle function is not lowered: its parameter types are lowered as written
       let types ← lowerWritten (node.params.mapM fun param => Names.Written.typeTerm env.file param.type)
-      let parameters ← (node.params.zip types).mapM fun (param, type) => do
-        return (param.name.text, ← optional type)
-      return .signature parameters none
+      let (parameters, wait) ← (readTypes (node.params.zip types) (·.1.name.text) (·.2)).run none
+      return .signature parameters none wait
     | .relation _, .function head _ | .law _, .function head _ | .member (.lawMember _), .function head _ =>
-      return .signature (← parameters head) (some .bool)
+      let (evaluated, wait) ← (parameters head).run none
+      return .signature evaluated (some .bool) wait
     | .protocol _, .protocol head _ _ =>
-      let ports ← head.ports.mapM fun port => do return (port.binder.name, ← optional port.type)
-      let results ← head.results.mapM fun result => do return (result.name.text, ← optional result.type)
-      return .protocol ports results
+      let (ports, wait) ← (readTypes head.ports (·.binder.name) (·.type)).run none
+      let (results, wait) ← (readTypes head.results (·.name.text) (·.type)).run wait
+      return .protocol ports results wait
     | .staticName _, .staticName value => return .staticName (← evalSize env value)
     | .«module» node, _ => moduleContent inst found node env
     | _, _ => return .unevaluated
@@ -1114,7 +1127,7 @@ mutual
         -- the module instance waits for it (SP4)
         let outcome ← try checkConstraint interfaceEnv constraint moduleName
           catch failure => match failure with
-            | .waiting reason => throw (.waiting s!"a constraint of `{program.nameOf interface}`: {reason}")
+            | .waiting reason => throw (.waiting (.context s!"a constraint of `{program.nameOf interface}`" reason))
             | other => throw other
         if let some message := outcome then
           if isDefault then throw .skipped

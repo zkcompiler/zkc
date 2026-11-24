@@ -1400,7 +1400,9 @@ interface's, read with the interface's static arguments and with each member nam
 `M`'s definition; the member's own static parameters are in scope in its body under the names the
 interface gives them. A call of a member bound to a row takes the same static arguments and
 operands as a call of a member with a body. In both cases the inferred or written static arguments
-must satisfy the member's parameter bounds (SP3) and its `where` (SP4), with `Self` the module.
+must satisfy the member's parameter bounds (SP3) and its `where` (SP4, SP11), with `Self` the
+module. A call through a module parameter uses the member of the interface selected from the
+parameter's bound (SP12), also at the concrete instance.
 Where the module is concrete, the row at those static arguments must take the parameter types
 and give the result type of the member. In
 the opaque typing of a module parameter (SP12), the interface supplies the signature.

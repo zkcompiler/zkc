@@ -333,7 +333,7 @@ structure Definition where
   nodes : Nat := 0
   /-- A form of a later layer that the body or its signature needs: it is typed as far as it
   goes and is not emitted. -/
-  waiting : Option String := none
+  waiting : Option WaitReason := none
   /-- The body applies an operation of specifications that has no form in the core. -/
   specificationOnly : Bool := false
   deriving Inhabited

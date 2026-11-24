@@ -1,5 +1,6 @@
 module
 
+public import Zkc.Frontend.Basic.WaitReason
 public import Std.Data.HashMap
 public import Zkc.Frontend.Basic.Diagnostic
 public import Zkc.Frontend.Semantics.Static
@@ -60,6 +61,12 @@ structure Row where
 first and the last byte, and the member's name. -/
 abbrev ResolvedPlace := String × UInt32 × UInt32 × String
 
+/-- The interface member selected on a module parameter in the opaque typing. -/
+structure SelectedMember where
+  parameter : ParameterRef
+  declaration : DeclarationId
+  deriving BEq, Inhabited
+
 /-- One typing of a place by the opaque elaboration of a definition generic over a module
 parameter (SP12): the place, the name of the function that an operator, a form or a dot call
 there is, and the parameter whose interface has it as a member, or none where that typing found
@@ -69,7 +76,7 @@ once for each. -/
 structure PlaceTyping where
   span : Syntax.Span
   function : String
-  parameter : Option ParameterRef
+  member : Option SelectedMember
 
 /-- The place of a typing. -/
 def PlaceTyping.place (typing : PlaceTyping) : ResolvedPlace :=
@@ -85,7 +92,7 @@ structure FunctionCode where
   canStop : Bool
   /-- A form of a later layer that the function or a callee needs, which keeps the packages that
   reach it from being emitted. -/
-  waiting : Option String := none
+  waiting : Option WaitReason := none
   /-- A specification function: a `spec def`, the formula of a relation, a law (SX1). -/
   specificationOnly : Bool := false
   /-- Bound to the formal library: the external name. The function is a header. -/
@@ -93,7 +100,7 @@ structure FunctionCode where
   /-- In the opaque elaboration of a definition generic over a module parameter (SP12): each
   place at which an operator, a form or a dot call was resolved to a member of the parameter's
   interface, with the member's name, and the parameter. -/
-  resolved : Array (ResolvedPlace × ParameterRef) := #[]
+  resolved : Array (ResolvedPlace × SelectedMember) := #[]
   deriving Inhabited
 
 /-- A core site of a protocol: the event of the text it belongs to (EV3), its part, the name
@@ -162,8 +169,8 @@ structure ProtocolCode where
   specificationArguments : Array SpecificationArgument := #[]
   /-- In the opaque elaboration of a protocol generic over a module parameter (SP12): the
   places resolved to a member of the parameter's interface, and the parameter. -/
-  resolved : Array (ResolvedPlace × ParameterRef) := #[]
-  waiting : Option String := none
+  resolved : Array (ResolvedPlace × SelectedMember) := #[]
+  waiting : Option WaitReason := none
   specificationOnly : Bool := false
   deriving Inhabited
 
@@ -174,7 +181,7 @@ inductive BodyState where
   /-- Refused; the refusal is recorded. -/
   | failed
   /-- Not typed here, for the reason given: a form of a later layer. -/
-  | waiting (reason : String)
+  | waiting (reason : WaitReason)
   /-- Not typed to the end: a budget of the compiler ran out, in this body or in one it calls.
   It is not refused (SP10). -/
   | exhausted (exhaustion : Exhaustion)

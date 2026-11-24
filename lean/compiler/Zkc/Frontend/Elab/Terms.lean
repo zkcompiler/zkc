@@ -334,26 +334,12 @@ def isDeclared : ClosedType → Bool
 /-- Why the signature of an instance is not evaluated here: what the instance itself waits for
 (a constraint of its `where`, a form of a later layer), or the reason of the first of its types
 that is not evaluated (a generated member, a specification-only parameter). -/
-def signatureWait (inst : InstanceId) : CompileM String := do
-  let state ← get
-  let some entry := state.table.entries[inst]? | return "a signature that is not evaluated here"
-  if let some (.waits reason) := state.table.content? inst then return reason
-  let some lowered := (← getModules).lowered? entry.key.declaration
-    | return "a signature that is not evaluated here"
-  let types : Array Lowered.TypeTerm := match lowered.content with
-    | .function head _ => head.parameters.map (·.type) ++ head.result.toArray
-    | .unlowered names => names.filterMap fun
-      | .type type => some type
-      | _ => none
-    | _ => #[]
-  let found ← declaration entry.key.declaration
-  let env := instanceEnv state.program found entry.key.arguments entry.key.specification
-  for type in types do
-    let waits ← recoverWith (do discard (evalType env type); pure none)
-      (fun | .waiting reason => pure (some reason) | _ => pure none) (waits := true)
-    if let some reason := waits then
-      return s!"a type of the signature that is not evaluated here: {reason}"
-  return "a signature that is not evaluated here"
+def signatureWait (inst : InstanceId) : CompileM WaitReason := do
+  match (← get).table.content? inst with
+  | some (.waits reason) => return reason
+  | some (.signature _ _ (some reason)) | some (.protocol _ _ (some reason)) =>
+    return .context "a type of the signature that is not evaluated here" reason
+  | _ => return "a signature that is not evaluated here"
 
 /-- A written argument that needs an expected type to be typed (SP6 step 2): a literal
 expression, `[]`, a bare alternative. -/
@@ -411,6 +397,7 @@ inductive CalleeOf where
       (scopes : StaticEnvironment)
   /-- A function member of a module instance. -/
   | member («module» : InstanceId) (implementation : MemberValue) (name : String)
+      (declared : Option DeclarationId)
       (args : Option (Array Lowered.StaticArgument))
   /-- A function member of a sort: a row of §7.4. -/
   | sortMember (type : ClosedType) (name : String)
@@ -423,14 +410,14 @@ inductive CalleeOf where
 
 /-- The fields of a record instance. -/
 def recordFields (inst : InstanceId) : ElabM (Array (String × ClosedType)) := do
-  match (← getThe Compile.State).table.content? inst with
+  match ← liftM (evaluatedContent? inst : CompileM _) with
   | some (.record _ fields) => return fields
   | some (.waits reason) => waitFor reason
   | _ => waitFor "a record whose fields are not evaluated"
 
 /-- The alternatives of a variant instance. -/
 def variantAlternatives (inst : InstanceId) : ElabM (Array (String × Array ClosedType)) := do
-  match (← getThe Compile.State).table.content? inst with
+  match ← liftM (evaluatedContent? inst : CompileM _) with
   | some (.«variant» alternatives) => return alternatives
   | some (.waits reason) => waitFor reason
   | _ => waitFor "a variant whose alternatives are not evaluated"
@@ -530,16 +517,14 @@ def recordDeclaration (inst : InstanceId) : ElabM (Option Declaration) := do
 
 /-- The interface of a module instance that declares a member, the member and its number, and
 the interface's static arguments. -/
-def interfaceMember (inst : InstanceId) (name : String) :
+def interfaceMember (inst : InstanceId) (name : String) (declared : Option DeclarationId := none) :
     ElabM (DeclarationId × DeclarationId × Declaration × Array StaticValue) := do
   let state ← getThe Compile.State
-  let some (.«module» interfaces _) := state.table.content? inst
+  let some (.«module» interfaces _) ← liftM (evaluatedContent? inst : CompileM _)
     | waitFor "a module whose members are not evaluated"
-  for (interface, args) in interfaces do
-    let some inner := (state.program.declarations[interface]?).bind (·.inner) | continue
-    if let some (.declaration member) := (state.program.namespaces[inner]?).bind (·.names[name]?) then
-      if let some found := state.program.declarations[member]? then
-        return (interface, member, found, args)
+  if let some applied := appliedMember? state.program interfaces name declared then
+    let found ← liftM (declaration applied.declaration : CompileM Declaration)
+    return (applied.interface, applied.declaration, found, applied.arguments)
   refuseHere "SP3" default s!"`{renderInstance state inst}` has no member `{name}`"
 
 /-- Read the interface member's parameter and result types at its static arguments. -/
@@ -560,8 +545,8 @@ def memberSignature (inst : InstanceId) (name : String) (own : Array StaticValue
   memberSignatureAt id { instanceEnv program member (args ++ own) with self? := some (.«module» inst) }
 
 /-- The parameters of a function member of a module, from the interface that declares it. -/
-def memberParameters (inst : InstanceId) (name : String) : ElabM (Array String) := do
-  let (_, _, member, _) ← interfaceMember inst name
+def memberParameters (inst : InstanceId) (name : String) (declared : Option DeclarationId) : ElabM (Array String) := do
+  let (_, _, member, _) ← interfaceMember inst name declared
   match member.node with
   | .member (.defMember _ _ _ _ params _ _) => return params.map (·.name.text)
   | _ => throw .abandoned
@@ -1270,7 +1255,7 @@ mutual
       if found.kind == .functionDefinition then
         -- a member definition named through its module
         match ← liftM (thingValue env prefixThing (some .«module») span (pure text) : CompileM StaticValue) with
-        | .«module» inst => return .member inst (.definition id) ((found.name.map (·.text)).getD "") lastArgs
+        | .«module» inst => return .member inst (.definition id) ((found.name.map (·.text)).getD "") none lastArgs
         | _ => refuseHere "GR5" span s!"`{text}` names no function"
       match prefixThing with
       | .declarations previous scopes => return .declaration (previous.push (id, lastArgs)) scopes
@@ -1279,7 +1264,7 @@ mutual
       match prefixThing with
       | .declarations previous scopes => return .alternative previous scopes «variant» index
       | _ => refuseHere "GR5" span s!"`{text}` is reached through a value"
-    | .member name _ =>
+    | .member name declared =>
       let value ← match prefixThing with
         | .value value => pure value
         | .declarations previous _ =>
@@ -1288,12 +1273,12 @@ mutual
         | _ => refuseHere "GR5" span s!"`{text}` names no function"
       match value with
       | .«module» inst =>
-        let members ← match (← getThe Compile.State).table.content? inst with
+        let members ← match ← liftM (evaluatedContent? inst : CompileM _) with
           | some (.«module» _ members) => pure members
           | _ => waitFor "a member of a module whose members are not evaluated"
         let found : Option MemberValue := (members.find? (·.1 == name)).map (·.2)
         match found with
-        | some impl@(.definition _) | some impl@(.row _) => return .member inst impl name lastArgs
+        | some impl@(.definition _) | some impl@(.row _) => return .member inst impl name declared lastArgs
         | _ => refuseHere "SP3" span s!"`{text}` is no function"
       | .type type => return .sortMember type name
       | .natural _ => refuseHere "SP3" span s!"`{text}` is no function"
@@ -1326,10 +1311,10 @@ mutual
             ((node.witness.getD #[]).map (·.name.text)) arguments witnesses span
         | _ => pairArguments name (parameters.map (·.1)) arguments witnesses span
       callDeclaration id assigned paired expected span (← callProofArguments steps found span)
-    | .member inst definition name staticArgs =>
-      let parameters ← memberParameters inst name
+    | .member inst definition name declared staticArgs =>
+      let parameters ← memberParameters inst name declared
       let paired ← pairArguments name parameters arguments witnesses span
-      callMember inst definition name staticArgs paired expected span
+      callMember inst definition name declared staticArgs paired expected span
     | .sortMember type name =>
       let (parameters, _) ← sortSignature type name span
       let paired ← pairArguments name (parameters.map (·.1)) arguments witnesses span
@@ -1385,12 +1370,12 @@ mutual
           liftM (instantiate id values { description, span := place } (specification := proofValues) :
             CompileM InstanceId)
         else pure deployed
-    let (parameterTypes, resultType) ← match (← getThe Compile.State).table.content? inst with
-      | some (.signature parameterTypes (some resultType)) =>
+    let (parameterTypes, resultType) ← match ← liftM (evaluatedContent? inst : CompileM _) with
+      | some (.signature parameterTypes (some resultType) _) =>
         if parameterTypes.all (·.2.isSome) then
           pure (parameterTypes.map fun (_, type) => type.getD default, resultType)
-        else waitFor (← liftM (signatureWait inst : CompileM String))
-      | _ => waitFor (← liftM (signatureWait inst : CompileM String))
+        else waitFor (← liftM (signatureWait inst : CompileM WaitReason))
+      | _ => waitFor (← liftM (signatureWait inst : CompileM WaitReason))
     let typed ← finishArguments args states parameterTypes
     let node ← applyAfterArguments typed (targetsOf args parameterTypes) fun operands =>
       pure (.apply (info place resultType) (.instance inst) operands)
@@ -1496,9 +1481,9 @@ to the end makes the caller wait or not checked; a refused body abandons the cal
       (expected : Option ClosedType) (path : String := "")
       (staticArgs : Option (Array Lowered.StaticArgument) := none) : ElabM (Option Typed.Expr) := do
     let key := resolvedPlace span (function ++ path)
-    if let some reference := (← getContext).resolutions[key]? then
-      let some (.«module» inst) := (← getContext).env.values[reference]? | throw .abandoned
-      return some (← callModuleMember inst function args expected span staticArgs)
+    if let some selected := (← getContext).resolutions[key]? then
+      let some (.«module» inst) := (← getContext).env.values[selected.parameter]? | throw .abandoned
+      return some (← callModuleMember inst function args expected span staticArgs selected.declaration)
     -- the opaque elaboration records that this typing of the place found no member
     let noMember : ElabM (Option Typed.Expr) := do
       if (← getContext).«opaque» then
@@ -1515,12 +1500,12 @@ to the end makes the caller wait or not checked; a refused body abandons the cal
     let some (reference, _) := (state.table.entries[«module»]?).bind (·.key.opaqueFor) | noMember
     let some (.«module» interfaces _) := state.table.content? «module» | noMember
     let program := state.program
-    let declared := interfaces.any fun (interface, _) =>
+    let declared := interfaces.findSome? fun (interface, _) =>
       (((program.declarations[interface]?).bind (·.inner)).bind fun inner =>
-        (program.namespaces[inner]?).bind (·.names[function]?)).any fun
-          | .declaration id => (program.declarations[id]?).any (·.kind == .functionMember)
-          | _ => false
-    unless declared do
+        (program.namespaces[inner]?).bind (·.names[function]?)).bind fun
+          | .declaration id => (program.declarations[id]?).filter (·.kind == .functionMember) |>.map fun _ => id
+          | _ => none
+    let some declared := declared | do
       let interface := ((interfaces[0]?).map fun (id, _) => program.nameOf id).getD "?"
       let parameter := ((program.scopes[reference.scope]?).bind (·.parameters[reference.index]?)).map
         (·.name.text)
@@ -1531,26 +1516,27 @@ to the end makes the caller wait or not checked; a refused body abandons the cal
       refuseHere "NL6" span
         s!"`{interface}` declares no `{function}`: an operator on its type member `{typeText}` is a member of the interface"
     modify fun builder =>
-      { builder with resolved := builder.resolved.push ⟨span, function ++ path, some reference⟩ }
-    return some (← callModuleMember «module» function args expected span staticArgs)
+      { builder with resolved := builder.resolved.push ⟨span, function ++ path, some ⟨reference, declared⟩⟩ }
+    return some (← callModuleMember «module» function args expected span staticArgs declared)
 
   /-- A call of the function member `name` of a module instance, in source or bound to a row. -/
   partial def callModuleMember (inst : InstanceId) (name : String) (args : Array Arg)
       (expected : Option ClosedType) (place : Span)
-      (staticArgs : Option (Array Lowered.StaticArgument)) : ElabM Typed.Expr := do
-    match (← getThe Compile.State).table.content? inst with
+      (staticArgs : Option (Array Lowered.StaticArgument)) (declared : DeclarationId) : ElabM Typed.Expr := do
+    match ← liftM (evaluatedContent? inst : CompileM _) with
     | some (.«module» _ members) =>
       let some (_, impl) := members.find? (·.1 == name)
         | refuseHere "SP3" place s!"`{renderInstance (← getThe Compile.State) inst}` has no function `{name}`"
-      callMember inst impl name staticArgs args expected place
+      callMember inst impl name declared staticArgs args expected place
     | _ => waitFor "a module whose members are not evaluated"
 
   /-- Type a member call against its interface, then select its concrete implementation.
   In the opaque pass the interface member itself is the callee (SP12). -/
   partial def callMember (inst : InstanceId) (implementation : MemberValue) (name : String)
+      (declared : Option DeclarationId)
       (staticArgs : Option (Array Lowered.StaticArgument)) (args : Array Arg)
       (expected : Option ClosedType) (place : Span) : ElabM Typed.Expr := do
-    let (interface, memberId, member, interfaceArgs) ← interfaceMember inst name
+    let (interface, memberId, member, interfaceArgs) ← interfaceMember inst name declared
     if let .member (.defMember _ (some (.spec _)) ..) := member.node then
       unless (← getContext).specification do
         refuseHere "SX2" place s!"`{name}` is a specification function; deployed code cannot call it"
@@ -1584,7 +1570,8 @@ to the end makes the caller wait or not checked; a refused body abandons the cal
           | .definition definition => do
             let assignments := (own.zip ownValues).map fun ((_, p), v) => s!"{p.name.text} = {renderValue state v}"
             let description := if assignments.isEmpty then name else s!"{name}<{", ".intercalate assignments.toList}>"
-            let id ← liftM (instantiate definition (entry.key.arguments ++ ownValues) {description, span := place} : CompileM _)
+            let id ← liftM (instantiate definition (entry.key.arguments ++ ownValues) {description, span := place}
+              (member := some memberId) : CompileM _)
             pure (.instance id)
           | _ => refuseHere "SP3" place s!"`{name}` is no function"
       if let .instance id := callee then reachCallee id place
@@ -1635,10 +1622,11 @@ to the end makes the caller wait or not checked; a refused body abandons the cal
     let receiver ← elabExpr target none
     -- a dot call that is a member of the interface of a module parameter (NL6, SP12)
     let first := Arg.typed receiver target.span (.span receiver.span)
+    let selected := (← getContext).resolutions[resolvedPlace span name.text]?
     let memberModule : Option InstanceId ← do
-      match (← getContext).resolutions[resolvedPlace span name.text]? with
-      | some reference =>
-        match (← getContext).env.values[reference]? with
+      match selected with
+      | some member =>
+        match (← getContext).env.values[member.parameter]? with
         | some (.«module» inst) => pure (some inst)
         | _ => pure none
       | none =>
@@ -1646,7 +1634,7 @@ to the end makes the caller wait or not checked; a refused body abandons the cal
         | .«opaque» «module» .. => pure (some «module»)
         | _ => pure none
     if let some inst := memberModule then
-      let parameters ← memberParameters inst name.text
+      let parameters ← memberParameters inst name.text (selected.map (·.declaration))
       let rest ← pairArguments name.text (parameters.extract 1 parameters.size) arguments none span
       if let some typed ← memberOperator? span receiver.type name.text (#[first] ++ rest) expected (staticArgs := staticArgs) then
         return typed

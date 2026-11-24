@@ -76,6 +76,7 @@ def content? (table : QueryTable InstanceKey Typed.Signature) (id : InstanceId) 
     Option InstanceContent :=
   match table.entries[id]? with
   | some { state := .done signature, .. } => signature.content?
+  | some { state := .waiting reason, .. } => some (.waits reason)
   | _ => none
 
 end Zkc.Frontend.QueryTable
@@ -84,6 +85,27 @@ namespace Zkc.Frontend.Static
 
 open Syntax
 open Names (segmentsOf segmentArgs segmentName)
+
+/-- Read a signature for evaluation. A waiting instance interrupts its reader with the same cause. -/
+def evaluatedContent? (id : InstanceId) : CompileM (Option InstanceContent) := do
+  match (← getResults).content? id with
+  | some (.waits reason) => throw (.waiting reason)
+  | content => return content
+
+/-- A function member of an applied interface, at the arguments the module implements. -/
+structure AppliedMember where
+  interface : DeclarationId
+  declaration : DeclarationId
+  arguments : Array StaticValue
+
+/-- An explicitly selected declaration, or the first interface declaring a concrete module's member. -/
+def appliedMember? (program : Program) (interfaces : Array (DeclarationId × Array StaticValue))
+    (name : String) (selected : Option DeclarationId := none) : Option AppliedMember :=
+  interfaces.findSome? fun (interface, arguments) => do
+    let inner ← (program.declarations[interface]?).bind (·.inner)
+    let .declaration member ← (program.namespaces[inner]?).bind (·.names[name]?) | none
+    guard (!selected.any (· != member))
+    return ⟨interface, member, arguments⟩
 
 /-- What a static term is classified as, by the parameter it is bound to (GR5). -/
 inductive Class where

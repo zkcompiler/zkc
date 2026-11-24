@@ -109,7 +109,9 @@ def checkedOutcome (check : TypingCheck) : IndependentOutcome := Id.run do
     if check.state.results.body? root matches some (.row _) then continue
     match Typing.rootPackage check.state root with
     | .ok _ => pure ()
-    | .error (.waiting reason) | .error (.noPackage reason) =>
+    | .error (.waiting reason) =>
+      unless waits.contains reason.render do waits := waits.push reason.render
+    | .error (.noPackage reason) =>
       unless waits.contains reason do waits := waits.push reason
     | .error (.exhausted e) => return .incomplete e.describe
     | .error lack => return .notAdmitted s!"{Typing.rootDescription check.state root}: {lack.describe}"

@@ -38,20 +38,6 @@ namespace Zkc.Frontend
 
 open Syntax
 
-/-- A projection of an opaque type can be checked at the concrete instantiation (SP12). -/
-inductive WaitReason where
-  | message (text : String)
-  | opaqueProjection
-  deriving Inhabited
-
-instance : Coe String WaitReason := ⟨WaitReason.message⟩
-
-def WaitReason.render : WaitReason → String
-  | .message text => text
-  | .opaqueProjection => "a type member of a type member of a module parameter, in the opaque typing (SP12)"
-
-instance : ToString WaitReason := ⟨WaitReason.render⟩
-
 /-- Why the computation of an item ends early. -/
 inductive Interrupt where
   /-- An error was logged and the item cannot go on. -/
@@ -241,7 +227,7 @@ def throwError {α : Type} (rule : String) (span : Span) (message : Message)
   throw .abandoned
 
 /-- The item waits for a form of a later layer. -/
-def waitFor {α : Type} (reason : String) : CompileM α := throw (.waiting reason)
+def waitFor {α : Type} (reason : WaitReason) : CompileM α := throw (.waiting reason)
 
 /-- Logs that a budget ran out when something was asked for: an incomplete check, with the
 budget, its value and the request, at the place of the request. -/
@@ -366,7 +352,7 @@ is recorded with the request being computed, whatever its state. -/
     return (id, outcome)
   tryCatch (do finish (.done (← query.compute id key))) fun
     | .abandoned => finish .failed
-    | .waiting reason => finish (.waiting reason.render)
+    | .waiting reason => finish (.waiting reason)
     | .exhausted exhaustion => finish (.exhausted exhaustion)
     | other => do
       let _ ← finish .failed

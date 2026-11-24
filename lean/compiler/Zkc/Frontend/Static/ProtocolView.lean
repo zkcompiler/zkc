@@ -82,12 +82,12 @@ def deriveViewFields (inst : InstanceId) (view : ProtocolView) (place : Span) :
     let some id := head.roster.idxOf? r | refuse "SX9" place s!"unknown role `{r}` in a generated view"
     pure id
   if let (.inputs _, some owner) := (view, role) then
-    let some (.protocol ports _) := state.results.content? inst | throw (.waiting "the closed protocol signature")
+    let some (.protocol ports _ wait) ← evaluatedContent? inst | throw (.waiting "the closed protocol signature")
     unless ports.size == head.ports.size do throw (.defect "port arity changed during typing")
     let mut fields := #[]
     for ((written, (name, type)), i) in (head.ports.zip ports).zipIdx do
       if written.holders.contains owner && !written.specification && written.readers.isNone then
-        let some type := type | throw (.waiting s!"the closed type of port `{name}`")
+        let some type := type | throw (.waiting (wait.getD s!"the closed type of port `{name}`"))
         fields := fields.push ⟨.port i, name, type⟩
     return fields
   discard <| checkedViewProtocol inst place

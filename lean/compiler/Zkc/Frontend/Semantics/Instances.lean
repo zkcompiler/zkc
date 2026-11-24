@@ -89,11 +89,11 @@ def renderContent (state : Compile.State) : InstanceContent → String
       if payload.isEmpty then name
       else s!"{name}({", ".intercalate (payload.toList.map (renderType state))})")
   | .staticName value => s!"= {value}"
-  | .signature parameters result =>
+  | .signature parameters result _ =>
     let typed (entry : String × Option ClosedType) : String :=
       s!"{entry.1}: {(entry.2.map (renderType state)).getD "?"}"
     s!"({", ".intercalate (parameters.toList.map typed)}) -> {(result.map (renderType state)).getD "?"}"
-  | .protocol ports results =>
+  | .protocol ports results _ =>
     let typed (entry : String × Option ClosedType) : String :=
       s!"{entry.1}: {(entry.2.map (renderType state)).getD "?"}"
     s!"({", ".intercalate (ports.toList.map typed)}) -> ({", ".intercalate (results.toList.map typed)})"

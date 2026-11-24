@@ -1,5 +1,6 @@
 module
 
+public import Zkc.Frontend.Basic.WaitReason
 public import Std.Data.HashMap
 public import Zkc.Frontend.Basic.Diagnostic
 
@@ -50,7 +51,7 @@ inductive QueryState (ρ : Type) where
   a request that the program makes computes it, and is refused where the `where` fails (SP4). -/
   | skipped
   /-- Not computed here: it needs a form of a later layer. -/
-  | waiting (reason : String)
+  | waiting (reason : WaitReason)
   /-- Not checked to the end: a budget of the compiler ran out, here or in a request it made.
   It is not refused: a later request finds it exhausted, never failed (SP10). -/
   | exhausted (exhaustion : Exhaustion)

@@ -85,8 +85,8 @@ def elabClauseApplication (expr : Lowered.Expr) (lenient : Bool := true) :
   -- that cannot be evaluated is not taken to hold
   let description ← liftM (describeInstance id values : CompileM String)
   let inst ← liftM (instantiate id values { description, span } : CompileM InstanceId)
-  unless ((← getThe Compile.State).table.content? inst) matches some (.signature _ (some _)) do
-    waitFor (← liftM (signatureWait inst : CompileM String))
+  unless ((← getThe Compile.State).table.content? inst) matches some (.signature _ (some _) _) do
+    waitFor (← liftM (signatureWait inst : CompileM WaitReason))
   -- the operands at the parameter types of the instance, and the body of the relation. When
   -- every proof argument has a value, the call reaches the relation at those values: its
   -- `where` holds there, and its body is typed there, where an index, a size or a condition

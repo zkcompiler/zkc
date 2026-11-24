@@ -54,7 +54,7 @@ structure Context where
   /-- In the elaboration at the instance of a definition generic over a module parameter
   (SP12): the places that its opaque elaboration resolved to a member of the parameter's
   interface. -/
-  resolutions : Std.HashMap Typing.ResolvedPlace ParameterRef := {}
+  resolutions : Std.HashMap Typing.ResolvedPlace Typing.SelectedMember := {}
   /-- The elaboration is the opaque one of a definition generic over a module parameter (SP12):
   every typing of a place that may be a member of an interface is recorded. -/
   «opaque» : Bool := false
@@ -162,7 +162,7 @@ def refuseHere {α : Type} (rule : String) (span : Span) (message : String) : El
   liftM (refuse rule span message : CompileM α)
 
 /-- A form not typed yet: the body waits for it. -/
-def waitFor {α : Type} (reason : String) : ElabM α := throw (.waiting reason)
+def waitFor {α : Type} (reason : WaitReason) : ElabM α := throw (.waiting reason)
 
 /-- A form that lowering does not give elaboration: a defect of the frontend. -/
 def unexpected {α : Type} (what : String) : ElabM α :=

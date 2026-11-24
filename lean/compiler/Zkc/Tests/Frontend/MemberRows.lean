@@ -123,7 +123,99 @@ def evaluate(x: G1) -> G1: selected<Points>(x)"
     ((fails.admitRoots (some #["evaluate"])).complete matches .error _))
     s!"expected the concrete order to decide both constraints: {holds.renderDiagnostics}; {fails.renderDiagnostics}"
 
+private def memberConditionSuite (repository : Repository) : TestM Unit := do
+  let admits (session : Driver.Session) := (session.admitRoots (some #["evaluate"])).complete.isOk
+  let refuses (session : Driver.Session) (condition : String) :=
+    !admits session && session.diagnostics.any fun d => d.isError && d.rule == "SP4" &&
+      (d.render session.state.env.renderer).contains condition
+  let scalarCall (scalar : String) := "module caller
+use zkc::algebra::{Group, Field}
+use zkc::curves::bls12_381::{G1, Fr}
+interface Carrier:
+    type Element: Group
+module Points: Carrier:
+    type Element = G1
+type ScalarOf<T: Group> = T::Scalar
+interface I:
+    def copy<T: Group>(x: T) -> T where (ScalarOf<T> == " ++ scalar ++ ")
+module M: I:
+    def copy(x): x
+def copyValue<T: Group>(x: T) -> T: M::copy(x)
+def selected<C: Carrier>(x: C::Element) -> C::Element: copyValue(x)
+def evaluate(x: G1) -> G1: selected<Points>(x)"
+  let valid ← memberSession repository (scalarCall "Fr")
+  let invalid ← memberSession repository (scalarCall "bool")
+  expectTrue (admits valid && refuses invalid "Fr == bool")
+    s!"the scalar alias must reach the concrete constraint: {valid.renderDiagnostics}, {invalid.renderDiagnostics}"
+  let sized ← memberSession repository "module caller
+interface Sized<n: nat>
+interface I:
+    def copy<spec e: nat>(x: bool) -> bool where (Self: Sized<e>)
+module M: I + Sized<1>:
+    def copy(x): x
+def evaluate(x: bool) -> bool: M::copy(x)"
+  expectTrue (admits sized) s!"a deployed call needs no proof-only size: {sized.renderDiagnostics}"
+  let selected (interfaces bound : String) := "module caller
+use zkc::algebra::{Group}
+use zkc::curves::bls12_381::{G1}
+interface Carrier:
+    type Element: Group
+module Points: Carrier:
+    type Element = G1
+interface A:
+    def copy<T: Group>(x: T) -> T
+interface B:
+    def copy<T: Group>(x: T) -> T where (T::Order <= 2)
+module M: " ++ interfaces ++ ":
+    def copy(x): x
+def selected<H: " ++ bound ++ ", C: Carrier>(x: C::Element) -> C::Element: H::copy(x)
+def evaluate(x: G1) -> G1: selected<M, Points>(x)"
+  for bound in ["A", "B"] do
+    let ab ← memberSession repository (selected "A + B" bound)
+    let ba ← memberSession repository (selected "B + A" bound)
+    let expected (session : Driver.Session) :=
+      if bound == "A" then admits session else refuses session "T::Order <= 2"
+    expectTrue (expected ab && expected ba)
+      s!"the bound {bound} selects copy in either module order: {ab.renderDiagnostics}, {ba.renderDiagnostics}"
+
+  let differentHeads (order : String) := "module caller
+interface A:
+    def copy(x: bool) -> bool
+interface B:
+    def copy(x: byte) -> byte
+module M: " ++ order ++ ":
+    def copy(x): x
+def one<H: A>(x: bool) -> bool: H::copy(x)
+def two<H: B>(x: byte) -> byte: H::copy(x)
+def evaluate(x: bool, y: byte) -> (bool, byte): (one<M>(x), two<M>(y))"
+  let ab ← memberSession repository (differentHeads "A + B")
+  let ba ← memberSession repository (differentHeads "B + A")
+  expectTrue (admits ab && admits ba)
+    s!"the same body implements both signatures: {ab.renderDiagnostics}, {ba.renderDiagnostics}"
+  let method (order bound : String) := "module caller
+use zkc::algebra::{Group}
+use zkc::curves::bls12_381::{G1}
+interface A:
+    type Element: Group
+    def copy<T: Group>(x: T) -> T
+interface B:
+    type Element: Group
+    def copy<T: Group>(x: T) -> T where (T::Order <= 2)
+module M: " ++ order ++ ":
+    type Element = G1
+    def copy(x): x
+def selected<H: " ++ bound ++ ">(x: H::Element) -> H::Element: x.copy()
+def evaluate(x: G1) -> G1: selected<M>(x)"
+  for bound in ["A", "B"] do
+    let ab ← memberSession repository (method "A + B" bound)
+    let ba ← memberSession repository (method "B + A" bound)
+    let expected (session : Driver.Session) :=
+      if bound == "A" then admits session else refuses session "T::Order <= 2"
+    expectTrue (expected ab && expected ba)
+      s!"the method selected on {bound} keeps its declaration: {ab.renderDiagnostics}, {ba.renderDiagnostics}"
+
 def memberRowSuite (repository : Repository) : TestM Unit := do
+  memberConditionSuite repository
   memberParameterSuite repository
   expectRow (← memberSession repository (caller "generic")) "evaluate" .pair
   let shake ← memberSession repository (caller "shake")

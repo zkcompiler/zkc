@@ -108,7 +108,7 @@ def checkTypingAssertions (label : String) (check : TypingCheck) (source : Strin
     let count := (emittedPackages check).foldl (fun n p => n + operationCount p operation) 0
     expectTrue (predicate count) (message count)
   let waits := check.packages.filterMap fun report => match report.outcome with
-    | .waiting reason => some reason
+    | .waiting reason => some reason.render
     | _ => none
   for line in source.splitOn "\n" do
     if line.startsWith "// uses " then

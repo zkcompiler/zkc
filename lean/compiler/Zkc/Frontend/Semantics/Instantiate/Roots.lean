@@ -600,11 +600,7 @@ def typeModuleMembers (inst : InstanceId) : CompileM Unit := do
     let some found := program.declarations[definition]? | continue
     unless found.kind == .functionDefinition do continue
     -- the member that an interface declares, and the values of its own static parameters
-    let declared := interfaces.findSome? fun (interface, args) => do
-      let inner ← (program.declarations[interface]?).bind (·.inner)
-      let .declaration member ← (program.namespaces[inner]?).bind (·.names[name]?) | none
-      return (interface, member, args)
-    let some (interface, member, args) := declared | continue
+    let some ⟨interface, member, args⟩ := appliedMember? program interfaces name | continue
     let some interfaceDeclaration := program.declarations[interface]? | continue
     let some memberDeclaration := program.declarations[member]? | continue
     let interfaceParameters := deployedParameters program interfaceDeclaration
@@ -625,7 +621,7 @@ def typeModuleMembers (inst : InstanceId) : CompileM Unit := do
       if holds then
         endItem do
           discard <| instantiate definition (entry.key.arguments ++ own)
-            { description := name, span := (found.name.map (·.span)).getD default }
+            { description := name, span := (found.name.map (·.span)).getD default } (member := some member)
 
 /-! ## The opaque typing (SP12) -/
 
@@ -667,14 +663,14 @@ def opaqueModule (reference : ParameterRef) (equated : Array String) (real : Ins
   let some entry := state.table.entries[real]? | throw .abandoned
   let key : InstanceKey := { entry.key with opaqueFor := some (reference, equated), owner := none }
   if let some existing := state.table.find? key then return existing
-  let some (.«module» interfaces members) := state.table.content? real
+  let some (.«module» interfaces members) ← evaluatedContent? real
     | throw (.waiting "a module whose members are not evaluated")
   let some scope := program.scopes[reference.scope]? | throw .abandoned
   let some parameter := scope.parameters[reference.index]? | throw .abandoned
   let required ← match parameter.bound with
     | some bound => requiredInterfaces { file := scope.file } bound
     | none => pure #[]
-  let kept := interfaces.filter fun (id, _) => required.contains id
+  let kept := required.flatMap fun id => interfaces.filter (·.1 == id)
   let inst ← modifyGetResults fun results =>
     let table := results.signatures
     let results := { results with signatures := {} }

@@ -93,12 +93,13 @@ inductive Signature where
   | function (signature : FunctionSignature)
   | protocol (signature : ProtocolSignature)
   /-- A signature with a type of a later layer: what refers to the instance waits. -/
-  | waiting (reason : String)
+  | waiting (reason : WaitReason)
   deriving Inhabited
 
 /-- The closed contents visible to ordinary static evaluation and body typing. -/
 def Signature.content? : Signature → Option InstanceContent
   | .data content => some content
+  | .waiting reason => some (.waits reason)
   | .viewRecord fields => some (.record false (fields.map fun f => (f.name, f.type)))
   | _ => none
 

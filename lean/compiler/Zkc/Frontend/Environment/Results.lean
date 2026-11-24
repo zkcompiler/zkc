@@ -78,6 +78,7 @@ def key? (store : ResultStore) (id : InstanceId) : Option InstanceKey :=
 def signature? (store : ResultStore) (id : InstanceId) : Option Typed.Signature :=
   match store.signatures.entries[id]? with
   | some { state := .done signature, .. } => some signature
+  | some { state := .waiting reason, .. } => some (.waiting reason)
   | _ => none
 
 /-- The content of an instance whose signature is done: a type, a static name, a module, or the

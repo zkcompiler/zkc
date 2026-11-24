@@ -83,8 +83,8 @@ def checkedFunction (inst : InstanceId) (description : String) (tree : Typed.Fun
     | .error (.defect message) => throw (.defect message)
     -- a form of a later layer in the body: its facts are not checked here, and the function
     -- waits for the form, so that no package holds it unchecked
-    | .error (.waiting reason) | .error (.noCoreForm reason) =>
-      pure (([] : List Finding), some reason)
+    | .error (.waiting reason) => pure (([] : List Finding), some reason)
+    | .error (.noCoreForm reason) => pure (([] : List Finding), some (.message reason))
   -- with an error node in the body, only what comes before it is reported
   let firstError := body.firstError?
   let reported := found.filter fun finding =>
@@ -103,40 +103,21 @@ def checkedFunction (inst : InstanceId) (description : String) (tree : Typed.Fun
   return { name := description, inputs := body.parameters.map (·.type), outputs := #[result]
            canStop := body.canStop stops, waiting }
 
-/-- The module instance whose member a member definition instance defines, and the interface
-member it defines. -/
-def memberOwner (found : Declaration) (values : Array StaticValue) :
-    CompileM (Option (InstanceId × DeclarationId × Declaration)) := do
-  let state ← get
-  let some ns := state.program.namespaces[found.namespace]? | return none
-  let some inst := state.table.find? { declaration := ns.owner, arguments := values } | return none
-  let some (.«module» interfaces _) := state.table.content? inst | return none
-  let name := (found.name.map (·.text)).getD ""
-  for (interface, _) in interfaces do
-    let some inner := (state.program.declarations[interface]?).bind (·.inner) | continue
-    if let some (.declaration member) := (state.program.namespaces[inner]?).bind (·.names[name]?) then
-      if let some memberDeclaration := state.program.declarations[member]? then
-        return some (inst, member, memberDeclaration)
-  return none
-
-/-- The interface that declares a member of a module instance, and its static arguments. -/
-def memberInterface (inst : InstanceId) (name : String) :
-    CompileM (DeclarationId × Declaration × Array StaticValue) := do
-  let state ← get
-  let some (.«module» interfaces _) := state.table.content? inst
+/-- The applied interface selected for a member body. The same source body can implement
+declarations with different signatures. -/
+def memberInterface (inst : InstanceId) (name : String) (selected : Option DeclarationId) :
+    CompileM AppliedMember := do
+  let some (.«module» interfaces _) ← evaluatedContent? inst
     | throw (.waiting "a module whose members are not evaluated")
-  for (interface, args) in interfaces do
-    let some inner := (state.program.declarations[interface]?).bind (·.inner) | continue
-    if let some (.declaration member) := (state.program.namespaces[inner]?).bind (·.names[name]?) then
-      if let some found := state.program.declarations[member]? then
-        return (interface, found, args)
-  throw (.waiting s!"the member `{name}` of a module")
+  let some applied := appliedMember? (← program) interfaces name selected
+    | throw (.waiting s!"the member `{name}` of a module")
+  return applied
 
 /-- The parameter types and the result type of a signature that is evaluated, or the wait for
 the first of its types that is not. -/
 def signatureTypes (inst : InstanceId) : CompileM (Array ClosedType × Option ClosedType) := do
   match (← get).table.content? inst with
-  | some (.signature parameters result) =>
+  | some (.signature parameters result _) =>
     if parameters.all (·.2.isSome) then
       return (parameters.map fun (_, type) => type.getD default, result)
     throw (.waiting (← Elab.signatureWait inst))
@@ -154,7 +135,7 @@ members of the parameter's interface (SP12). The code, and those places. -/
 def elaborateBody (inst : InstanceId) (description : String) (env : Env)
     (parameters : Array (Lowered.Binder × ClosedType)) (result : ClosedType) (body : Lowered.Expr)
     (specification : Bool) (locals : Nat) (typeBody : InstanceId → Span → CompileM Unit)
-    (resolutions : Std.HashMap Typing.ResolvedPlace ParameterRef := {}) («opaque» : Bool := false) :
+    (resolutions : Std.HashMap Typing.ResolvedPlace Typing.SelectedMember := {}) («opaque» : Bool := false) :
     CompileM (FunctionCode × Array Typing.PlaceTyping × Typed.FunctionBody × Nat) := do
   -- every refusal of the body is reported: a statement that is refused is an error node, and
   -- the statements after it are elaborated
@@ -212,8 +193,8 @@ def opaqueValues (found : Declaration) (values : Array StaticValue) :
 /-- What a typing of a place stands for at an instance: the module that its parameter stands
 for, or no member. Two parameters that stand for one module read the same. -/
 inductive PlaceReading where
-  | «module» (inst : InstanceId)
-  | parameter (reference : ParameterRef)
+  | «module» (inst : InstanceId) (member : DeclarationId)
+  | parameter (selection : Typing.SelectedMember)
   | noMember
   deriving BEq
 
@@ -225,34 +206,34 @@ read wrongly, and the definition waits: it is a valid definition that this elabo
 handle. `values` are the instance's values, in the order of the deployed parameters. -/
 def placeResolutions (name : String) (found : Declaration) (values : Array StaticValue)
     (typings : Array Typing.PlaceTyping) :
-    CompileM (Std.HashMap Typing.ResolvedPlace ParameterRef) := do
+    CompileM (Std.HashMap Typing.ResolvedPlace Typing.SelectedMember) := do
   let parameters := deployedParameters (← program) found
   let index (reference : ParameterRef) := parameters.findIdx? fun (other, _) => other == reference
-  let reading : Option ParameterRef → PlaceReading
+  let reading : Option Typing.SelectedMember → PlaceReading
     | none => .noMember
     | some reference =>
-      match (index reference).bind (values[·]?) with
-      | some (.«module» inst) => .«module» inst
+      match (index reference.parameter).bind (values[·]?) with
+      | some (.«module» inst) => .«module» inst reference.declaration
       | _ => .parameter reference
   let worded (typing : Typing.PlaceTyping) : String :=
-    match typing.parameter with
+    match typing.member with
     | none => "as no member of an interface"
     | some reference =>
-      let parameter := ((index reference).bind (parameters[·]?)).map (·.2.name.text)
+      let parameter := ((index reference.parameter).bind (parameters[·]?)).map (·.2.name.text)
       s!"as the member `{typing.function}` of `{parameter.getD "?"}`"
   let mut first : Std.HashMap Typing.ResolvedPlace Typing.PlaceTyping := {}
-  let mut resolutions : Std.HashMap Typing.ResolvedPlace ParameterRef := {}
+  let mut resolutions : Std.HashMap Typing.ResolvedPlace Typing.SelectedMember := {}
   for typing in typings do
     match first[typing.place]? with
     | none => first := first.insert typing.place typing
     | some earlier =>
-      unless reading earlier.parameter == reading typing.parameter do
+      unless reading earlier.member == reading typing.member do
         waitFor (s!"`{typing.function}` at {typing.span.file}:{typing.span.startLine}:" ++
           s!"{typing.span.startColumn} is typed more than once in the opaque typing of `{name}`: " ++
           s!"{worded earlier} and {worded typing}, which are not the same at this instance. " ++
           "One place of the text keeps one resolution (SP12): write the iterations apart, or " ++
           "name the module of the member")
-    if let some reference := typing.parameter then
+    if let some reference := typing.member then
       resolutions := resolutions.insert typing.place reference
   return resolutions
 
@@ -266,7 +247,7 @@ def opaqueResolutions (inst : InstanceId) (description name : String) (found : D
     (result : Option Lowered.TypeTerm) (resultDefault : ClosedType) (body : Lowered.Expr)
     (specification : Bool) (locals : Nat) (typeBody : InstanceId → Span → CompileM Unit)
     (signature : Array StaticValue → CompileM (Env × Env)) :
-    CompileM (Std.HashMap Typing.ResolvedPlace ParameterRef × Typed.FunctionBody) := do
+    CompileM (Std.HashMap Typing.ResolvedPlace Typing.SelectedMember × Typed.FunctionBody) := do
   let (opaqueArguments, over) ← opaqueValues found values
   let overText := ", ".intercalate over.toList
   let frame : ChainFrame :=
@@ -358,8 +339,11 @@ def functionBody (inst : InstanceId) (typeBody : InstanceId → Span → Compile
       let moduleCount := (deployedParameters state.program found).size
       let moduleValues := entry.key.arguments.extract 0 moduleCount
       let ownValues := entry.key.arguments.extract moduleCount entry.key.arguments.size
-      let some (moduleInst, memberId, member) ← memberOwner found moduleValues
+      let some ns := state.program.namespaces[found.namespace]? | throw .abandoned
+      let some moduleInst := state.table.find? { declaration := ns.owner, arguments := moduleValues }
         | throw (.waiting "a member definition whose module is not evaluated")
+      let ⟨interface, memberId, interfaceArgs⟩ ← memberInterface moduleInst name entry.key.member
+      let member ← declaration memberId
       let .member (.defMember _ modifier _ _ _ _ _) := member.node
         | throw (.waiting "a member definition of another kind")
       let some memberLowered := (← getModules).lowered? memberId
@@ -367,7 +351,6 @@ def functionBody (inst : InstanceId) (typeBody : InstanceId → Span → Compile
       let .function memberHead _ := memberLowered.content
         | throw (.waiting "a member definition of another kind")
       let own := ownParameters state.program member
-      let (interface, _, interfaceArgs) ← memberInterface moduleInst name
       let interfaceDeclaration ← declaration interface
       let ownEnv (env : Env) : Env :=
         { env with values := (own.zip ownValues).foldl (init := env.values) fun map (reference, value) =>
@@ -392,12 +375,11 @@ def functionBody (inst : InstanceId) (typeBody : InstanceId → Span → Compile
         -- a member definition generic over a module parameter of its module is elaborated twice:
         -- the opaque elaboration first, with `Self` the module at the parameter's opaque module
         let (resolutions, generic) ← if ← genericOverModule found then do
-            let some ns := state.program.namespaces[found.namespace]? | throw .abandoned
             let (resolutions, generic) ← opaqueResolutions inst description name found moduleValues binders
               (memberHead.parameters.map (·.type)) memberHead.result .unit expr node.spec lowered.locals
               typeBody fun values => do
                 let opaqueInst ← instantiate ns.owner values { description := "", span := place }
-                let (opaqueInterface, _, opaqueArgs) ← memberInterface opaqueInst name
+                let ⟨opaqueInterface, _, opaqueArgs⟩ ← memberInterface opaqueInst name memberId
                 let opaqueDeclaration ← declaration opaqueInterface
                 let signatureEnv : Env := ownEnv { instanceEnv state.program opaqueDeclaration opaqueArgs with
                   file := member.file, self? := some (.«module» opaqueInst) }

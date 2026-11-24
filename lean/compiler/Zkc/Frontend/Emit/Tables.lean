@@ -14,7 +14,7 @@ open Zkc.Vocabulary.Project
 open Static Emit
 
 inductive EmitFailure where
-  | waiting (reason : String)
+  | waiting (reason : WaitReason)
   | defect (message : String)
   | noCoreForm (reason : String)
   deriving Inhabited, Repr

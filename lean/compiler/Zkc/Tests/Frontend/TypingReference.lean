@@ -230,7 +230,7 @@ def libraryTypingSuite (repository : Repository) : TestM Unit := do
     for report in check.packages do
       match report.outcome with
       | .admitted _ => admitted := admitted + 1
-      | .waiting reason => unless waits.contains reason do waits := waits.push reason
+      | .waiting reason => unless waits.contains reason.render do waits := waits.push reason.render
       | _ => pure ()
     let required := admittedModules.contains stem && (path.parent.bind (·.fileName)) == some "zkc"
     if required then
@@ -283,7 +283,7 @@ def programTypingSuite (repository : Repository) : TestM Unit := do
     let mut waits : Array String := #[]
     for report in check.packages do
       if let .waiting reason := report.outcome then
-        unless waits.contains reason do waits := waits.push reason
+        unless waits.contains reason.render do waits := waits.push reason.render
     note s!"{stem}: {check.state.results.finished.size} function instances typed, {check.packages.size} packages, {admitted} admitted, {typedOnly} typed only{if waits.isEmpty then "" else s!", waiting for {", ".intercalate waits.toList}"}; {checked} functions in admitted packages; {protocolRoots} protocol roots admitted with {protocols} protocols checked; {check.state.results.obligations.size} obligations of laws"
 
 /-- The generated program of the measurements: its bodies type. -/

@@ -64,7 +64,7 @@ inductive PackageOutcome where
   /-- Emitted and refused by the core. -/
   | refused (package : SourcePackage) (refusals : List (Core.AdmissionRefusal package.bindings.vocabulary))
   /-- Not emitted: a form that is not typed yet. -/
-  | waiting (reason : String)
+  | waiting (reason : WaitReason)
   /-- Typed, and not emitted: a specification item whose types or operations have no form in
   the core (`rational`, a `spec type`). -/
   | typedOnly (reason : String)
@@ -87,7 +87,7 @@ inductive Lack where
   /-- Refused: by the frontend, with an error logged, or by the core. -/
   | refused (reason : String)
   /-- Not computed: it needs a form of a later layer. -/
-  | waiting (reason : String)
+  | waiting (reason : WaitReason)
   /-- Not checked to the end: a budget of the compiler ran out. It is not refused (SP10). -/
   | exhausted (exhaustion : Exhaustion)
   /-- Without a package of its own: a specification item, typed and without a form in the

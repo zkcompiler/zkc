@@ -183,7 +183,7 @@ def large(runs: Draw::Runs<2>) -> bool: true
   let some id := bounded.results.instance? {declaration := f, arguments := #[]}
     | throw (IO.userError "missing large-domain fork reader instance")
   let some (.done code) := bounded.results.body? id | throw (IO.userError "unfinished large-domain fork reader")
-  if let some why := code.waiting then throw (IO.userError why)
+  if let some why := code.waiting then throw (IO.userError why.render)
 
   for (type, limit, cardinality) in ([
       (.bool, 0, 0), (.bool, 9, 2), (.index 0, 1, 0),

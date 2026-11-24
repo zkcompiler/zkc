@@ -1,5 +1,6 @@
 module
 
+public import Zkc.Frontend.Basic.WaitReason
 public import Zkc.Frontend.Semantics.Static
 public import Zkc.Frontend.Semantics.Refusal
 
@@ -50,6 +51,8 @@ structure InstanceKey where
   parameter, and the type members that a `where` in scope equates with a type. Its other type
   members are fresh types. -/
   opaqueFor : Option (ParameterRef × Array String) := none
+  /-- The interface declaration supplying the signature of a member body (SP8). -/
+  member : Option DeclarationId := none
   /-- Generated records share the protocol arguments and have distinct identities (§8). -/
   view : Option ProtocolView := none
   deriving Inhabited, BEq, Hashable
@@ -83,9 +86,10 @@ inductive InstanceContent where
   /-- A function, a relation, an oracle function or a law: the types of its parameters and of
   its result. -/
   | signature (parameters : Array (String × Option ClosedType)) (result : Option ClosedType)
+      (waiting : Option WaitReason := none)
   /-- A protocol: the types of its ports and of its results. -/
   | protocol (ports : Array (String × Option ClosedType))
-      (results : Array (String × Option ClosedType))
+      (results : Array (String × Option ClosedType)) (waiting : Option WaitReason := none)
   /-- A module: the interfaces it names, at their static arguments, and its members by name. -/
   | «module» (interfaces : Array (DeclarationId × Array StaticValue))
       (members : Array (String × MemberValue))
@@ -93,7 +97,7 @@ inductive InstanceContent where
   | unevaluated
   /-- An instance that waits, with what it waits for: a constraint of its `where` that cannot be
   evaluated here, a form of a later layer. -/
-  | waits (reason : String)
+  | waits (reason : WaitReason)
   deriving Inhabited
 
 /-- The default instances of one declaration (SP7). -/

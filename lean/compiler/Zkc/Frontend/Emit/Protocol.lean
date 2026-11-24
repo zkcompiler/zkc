@@ -127,7 +127,7 @@ def reportProtocolFindings (body : Typed.ProtocolBody) (roles : Typed.Roles)
 order of their numbers, as the lowering of its check numbered them. -/
 def protocolSummary (description : String) (head : Lowered.ProtocolHead) (checked : Typed.Checked)
     (body : Typed.ProtocolBody) (origin : DefinitionOrigin)
-    (resolved : Array (Typing.ResolvedPlace × ParameterRef)) (waiting : Option String) :
+    (resolved : Array (Typing.ResolvedPlace × Typing.SelectedMember)) (waiting : Option WaitReason) :
     CompileM ProtocolCode := do
   -- one input per holder of each deployed port, numbered by its place among the deployed ports
   -- (`Typed.ProtocolBody.deployedPorts`); one output per holder of each result
@@ -211,7 +211,7 @@ it. Every refusal of the body is logged. -/
 def elaborateProtocol (inst : InstanceId) (description name : String) (env : Env)
     (head : Lowered.ProtocolHead) (statements : Array Lowered.Stmt)
     (returned : Option Lowered.Expr) (locals : Nat) (typeBody : InstanceId → Span → CompileM Unit)
-    (resolutions : Std.HashMap Typing.ResolvedPlace ParameterRef) («opaque» : Bool := false) :
+    (resolutions : Std.HashMap Typing.ResolvedPlace Typing.SelectedMember) («opaque» : Bool := false) :
     CompileM (Typed.Checked × Typed.ProtocolBody × Array Typing.PlaceTyping) := do
   let context : Elab.Context :=
     { env, «instance» := inst, name := description, typeBody
@@ -237,7 +237,7 @@ the state in which it runs. A clause that waits for a later layer is left out wh
 and makes the typing wait otherwise. -/
 def elaborateClauses (inst : InstanceId) (arguments : Array StaticValue) (specification : Array Nat)
     (typeBody : InstanceId → Span → CompileM Unit)
-    (resolutions : Std.HashMap Typing.ResolvedPlace ParameterRef) (lenient : Bool)
+    (resolutions : Std.HashMap Typing.ResolvedPlace Typing.SelectedMember) (lenient : Bool)
     («opaque» : Bool := false) (only : Option Nat := none) :
     CompileM (Array (Nat × Typed.Expr) × Array Typing.PlaceTyping) := do
   let state ← get
@@ -263,7 +263,7 @@ def elaborateClauses (inst : InstanceId) (arguments : Array StaticValue) (specif
 
 /-- The places of an instance's code that its opaque typing resolved to members of an interface
 (SP12), as the instance keeps them: those of its body and of its contract. -/
-def keptResolutions (inst : InstanceId) : CompileM (Std.HashMap Typing.ResolvedPlace ParameterRef) := do
+def keptResolutions (inst : InstanceId) : CompileM (Std.HashMap Typing.ResolvedPlace Typing.SelectedMember) := do
   match (← getResults).body? inst with
   | some (.protocol code) =>
     return code.resolved.foldl (init := {}) fun map (place, reference) => map.insert place reference
@@ -275,7 +275,7 @@ the instance's specification-only parameters, in the state in which it runs
 a goal types the contract of an instance whose body was typed before. -/
 def typedClauses (inst : InstanceId) (specification : Array Nat)
     (typeBody : InstanceId → Span → CompileM Unit)
-    (resolutions : Std.HashMap Typing.ResolvedPlace ParameterRef := {}) (lenient : Bool := true)
+    (resolutions : Std.HashMap Typing.ResolvedPlace Typing.SelectedMember := {}) (lenient : Bool := true)
     (only : Option Nat := none) : CompileM (Array (Nat × Typed.Expr)) := do
   let some entry := (← get).table.entries[inst]? | throw .abandoned
   let resolutions ← if resolutions.isEmpty then keptResolutions inst else pure resolutions
@@ -299,7 +299,7 @@ def aside {α : Type} (attempt : CompileM α) : CompileM α := do
 specification-only parameters, run aside. -/
 def typeClauses (inst : InstanceId) (specification : Array Nat)
     (typeBody : InstanceId → Span → CompileM Unit)
-    (resolutions : Std.HashMap Typing.ResolvedPlace ParameterRef := {}) : CompileM Unit :=
+    (resolutions : Std.HashMap Typing.ResolvedPlace Typing.SelectedMember := {}) : CompileM Unit :=
   discard <| aside (typedClauses inst specification typeBody resolutions)
 
 /-- The opaque typing of what the deciding clauses of the contract of a protocol generic over a
@@ -333,7 +333,7 @@ def protocolBody (inst : InstanceId) (typeBody : InstanceId → Span → Compile
   let env := instanceEnv state.program found entry.key.arguments entry.key.specification
   -- a protocol generic over a module parameter is elaborated twice: the opaque elaboration
   -- first, whose resolutions the elaboration at the instance uses (SP12)
-  let resolutions : Std.HashMap Typing.ResolvedPlace ParameterRef ←
+  let resolutions : Std.HashMap Typing.ResolvedPlace Typing.SelectedMember ←
     if ← genericOverModule found then do
       let (opaqueArguments, over) ← opaqueValues found entry.key.arguments
       let frame : ChainFrame :=
@@ -364,7 +364,8 @@ def protocolBody (inst : InstanceId) (typeBody : InstanceId → Span → Compile
     | .ok outcome => pure outcome
     | .error (.defect message) => throw (.defect message)
     -- a form of a later layer in the body: the instance waits for it
-    | .error (.waiting reason) | .error (.noCoreForm reason) => throw (.waiting reason)
+    | .error (.waiting reason) => throw (.waiting reason)
+    | .error (.noCoreForm reason) => throw (.waiting reason)
   unless outcome.findings.isEmpty do
     reportProtocolFindings body checked.roles outcome.findings
     throw .abandoned

@@ -110,10 +110,11 @@ root failures pending a decision on their verdict; each appears as a known failu
 failure or a listed diagnostic that disappears fails the driver. The function member `pair`
 of the catalogue's BLS12-381 module is the standard row `pairing.pair`. A module instance
 stores the row name of each function member. Calls use the member's interface for its mode,
-static arguments and operands. Each call checks the member's parameter bounds and `where`
-at the solved arguments. A concrete call checks the selected row against that signature.
-In a generic definition the opaque pass uses the interface. A member condition that needs a
-projection of an opaque type is checked when the type becomes concrete.
+static arguments and operands. Each deployed call checks the member's parameter bounds and
+deployed `where` conjuncts at the solved arguments. A concrete call checks the selected row
+against that signature. A call through a module parameter uses the member selected from its
+bound in both typings. A condition that needs a projection of an opaque type is checked when
+the type becomes concrete.
 
 Participant programs have no concrete executor and standard runtime model in this compiler.
 The historical commands to run, prove, verify and read trees have been removed. Derived

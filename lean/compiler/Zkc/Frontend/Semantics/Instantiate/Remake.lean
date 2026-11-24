@@ -67,7 +67,7 @@ mutual
     match key.opaqueFor with
     | none =>
       let real ← instantiate key.declaration arguments { description, span := place }
-        (specification := key.specification) (owner := owner)
+        (specification := key.specification) (owner := owner) (member := key.member)
       match key.view with
       | some view => protocolViewRecord real view place
       | none => return real
