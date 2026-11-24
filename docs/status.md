@@ -111,9 +111,12 @@ specification. The rational sum in `bound` and the quotient in `fragments::birth
 because the frontend cannot decide body facts across these operations. A reachable signature
 with a rational or a formal library type such as `MvPoly` can also leave a root waiting, as
 in `sumcheck::PartialSum` and the laws of `Round`. Indexing a sequence inside a rational
-quotient waits both with and without a bounds guard. The local typing fixtures and the Layer A reference suite compare every waiting or
+quotient waits both with and without a bounds guard, and so does every other fact of such a
+body: an index beyond a fixed length, or any fact of a natural body behind a signature with a
+formal type. The local typing fixtures and the Layer A reference suite compare every waiting or
 typed-only report with its expected instance or counted family, class and reason. This includes
-reports beside an admitted or refused root. A missing or unexpected report fails either suite.
+reports beside an admitted or refused root. A waiting or typed-only report that is missing or
+unexpected fails either suite; an admitted report that goes missing is not compared here.
 A required source refusal can be deferred only for its recorded block and rule. Only core
 admission counts as an admission. A function bound to a vocabulary row has no package report.
 The example and library suites report waits separately. Selected library modules also require

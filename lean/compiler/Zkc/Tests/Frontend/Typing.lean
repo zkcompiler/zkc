@@ -258,7 +258,9 @@ private def expectedFixtureRoots : List ExpectedRoot :=
    ⟨"rational", .one "t::small", .waiting "specification type in executable code"⟩,
    ⟨"mixed-roots", .one "t::half", quotient⟩,
    ⟨"guarded-rational-index", .one "t::half", quotient⟩,
-   ⟨"unguarded-rational-index", .one "t::half", quotient⟩]
+   ⟨"unguarded-rational-index", .one "t::half", quotient⟩,
+   ⟨"static-rational-index", .one "t::half", quotient⟩,
+   ⟨"formal-signature-facts", .one "t::r", .waiting "specification type in executable code"⟩]
 
 /-- These checks intentionally give the driver a stale or incomplete expectation. Check
 the diagnostics themselves, including the instance that moved in source order. -/

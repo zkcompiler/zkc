@@ -624,6 +624,17 @@ module t
 // Once facts are decided for a rational body, the unguarded access must be refused under TY7.
 spec def half(xs: [nat], i: nat) -> rational: xs[i] / 2
 
+=== static-rational-index | wait | an index beyond a fixed length inside a rational quotient
+module t
+// Once facts are decided for a rational body, the index 5 of three elements must be refused under TY7.
+spec def half(xs: [nat; 3]) -> rational: xs[5] / 2
+
+=== formal-signature-facts | wait | a formal type in the signature leaves the facts of a natural body undecided
+module t
+spec type Poly = external(\"poly\")
+// Once facts are decided for a body behind such a signature, the index 5 of three elements must be refused under TY7.
+spec def r(p: Poly, xs: [nat; 3]) -> nat: xs[5]
+
 === rational-remainder | refuse TY8 2 | `%` is not an operator of `rational` (TY8)
 module t
 spec def bound(e: nat) -> rational: e % 3
