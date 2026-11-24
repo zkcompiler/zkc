@@ -59,6 +59,7 @@ def frontendSuites : List (String × TestM Unit) := [
   ("names", nameCaseSuite),
   ("instances", instanceCaseSuite),
   ("typing", typingCaseSuite),
+  ("written statements for primitive bindings", writtenPrimitiveSuite),
   ("session", sessionSuite),
   ("libraries/ and examples/", corpusSuite repository),
   ("formatting keeps a program", formatCaseSuite repository),

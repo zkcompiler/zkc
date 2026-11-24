@@ -75,11 +75,10 @@ true, and a bound on every return is another claim.
 The model is named by a `ModelText`: the binders of what it is built from, the model, its
 samplers and its coverage as terms over them, and what the statement assumes of it. It is part
 of the claim, not of the proof, and no caller chooses it: `Statements.chosenModel` reads it
-from the package (the laws of the coins that the stored program draws). The choice is not
-trusted: every proof module states that its model covers the package (`covered`), and the
-kernel decides that. A module of statements without proofs and the module of a ceiling state no
-coverage. The
-bound of a statement is the total of the goal's table of caps (`<goal>Caps.total`): every
+from the package's bindings, rows and laws and from the caps of the goals. Every proof module
+states that its model covers the package (`covered`), and the kernel decides that. A module
+of claims alone and the module of a ceiling state no coverage. The bound of a statement is
+the total of the goal's table of caps (`<goal>Caps.total`): every
 charge that the root reaches at the goal's proof arguments, by use, read by `goalClaims`.
 -/
 
@@ -317,28 +316,58 @@ namespace Statements
 /-- The package of the claims. -/
 def package (s : Statements) : SourcePackage := s.claims.emission.package ⟨[], [], [], [], []⟩
 
-/-- **The class of models that the statements are about**, read from the package: the least of
-the descriptions whose samplers the package needs.
+/-- Equality and the test against zero use the equality decision. Refinement to the nonzero
+subtype and projection from it use the same distinguished zero. The other field, group
+and collection operations use their algebra, as does a pairing. Byte hashes use neither. -/
+def algebraicRow : Zkc.Vocabulary.RowKey → Bool
+  | .field .equal .. | .field .isNonzero .. | .field .nonzero .. | .field .fromNonzero ..
+  | .group .equal .. | .seq .equal .. | .hash _ => false
+  | .field .. | .group .. | .seq .. | .pair => true
 
-- A package whose coins are all positions (`index<n>`) is about the standard model over any
-  data: nothing is assumed of a field.
-- A package that draws anything else is about the arithmetic model over a field with at least
-  as many elements as the scalar field of the source: a uniform scalar of the source is one of
-  that many, and a charge that the source writes with that order bounds what a uniform scalar
-  of the model pays for only in such a field. That model has samplers for a position, a scalar
-  of that field and a sequence of such scalars. A package that draws something else again (a
-  truth value, a group element, a scalar of another field) gets this class too, and its module
-  is refused where the coverage is stated: no class has a sampler for it yet.
+/-- The draws for which the arithmetic model samples from the scalar field. A vector of
+length zero has a single possible value in every field. -/
+def samplesScalars : Zkc.Vocabulary.LawKey → Bool
+  | .uniform (.nominal (.field .bls12381Fr))
+  | .uniform (.seq (.nominal (.field .bls12381Fr)) (some (_ + 1))) => true
+  | _ => false
 
-No caller chooses the class. A class that covers too little is refused by the kernel where the
-module states the coverage; one that assumes more than a subject needs shows as a hypothesis of
-the statement. -/
-def chosenModel (s : Statements) : ModelText :=
-  let positions := s.package.named.laws.all fun (law, _) =>
-    match law with
-    | .uniform (.fin _) => true
-    | _ => false
-  if positions then standardModelText else scalarFieldModelText
+/-- Whether a reachable use charges a scalar draw at a positive cap below one. The key of a
+draw is local to its definition. Uses are in callee-first order, so this follows applications
+without expanding their paths. A zero allowance cannot buy a scalar reply at any field size;
+an allowance of one already covers every reply. -/
+def chargesScalars (package : SourcePackage) (table : CapTable) : Bool := Id.run do
+  let mut charged : Array Bool := #[]
+  for use in table.uses do
+    let callsScalar := use.calls.any fun call => call.count > 0 && charged[call.callee]?.getD false
+    let mut pays := callsScalar
+    if !pays && !use.draws.isEmpty then
+      if let some (.protocol _ _ _ _ body) := package.named.definitions.find? (·.key == use.definition) then
+        let coins := (body.counted (some 1)).filterMap fun (key, op, _) =>
+          if (op.law?.any fun (law, _) => samplesScalars law) then some key else none
+        pays := use.draws.any fun draw =>
+          draw.count > 0 && draw.numerator > 0 && draw.numerator < draw.denominator && coins.contains draw.key
+    charged := charged.push pays
+  return charged.back?.getD false
+
+/-- Select the class for a written statement, or explain why it cannot be issued. A linked
+project primitive has no model yet. For the standard vocabulary, position draws and rows
+independent of the algebra can be interpreted over arbitrary data. An algebraic row or a
+non-position draw requires the arithmetic class. Only a goal that charges scalar sampling
+at a nontrivial cap calls for the source field-size assumption. Coverage of the actual rows
+and laws is checked separately by the generated theorem. -/
+def chosenModel (s : Statements) : Except String ModelText := do
+  let package := s.package
+  unless package.bindings.rows.isEmpty do
+    throw "a written statement for a package that links a project primitive is not issued yet: there is no model of the primitive"
+  let positions := package.named.laws.all fun (law, _) => law matches .uniform (.fin _)
+  let algebra := package.named.rows.any fun row =>
+    match row with
+    | .inl key => algebraicRow key
+    | .inr _ => false -- An admitted package with no project bindings cannot call a project row.
+  if positions && !algebra then return standardModelText
+  if !positions && s.claims.goals.any (fun goal => chargesScalars package goal.caps) then
+    return scalarFieldModelText
+  return arithmeticModelText
 
 /-- The keys of the definitions of the package in order, and whether each is a protocol. -/
 def definitions (s : Statements) : List (Nat × Bool) :=
@@ -1031,9 +1060,10 @@ text that changes what it says there is refused by its statement.
 whose statements differ from its subject's keeps the subject's name space and has a module of
 statements of its own. -/
 def module (s : Statements) (name : String) (proof : ProofText)
-    (walks := true) (after : List Consumer := []) (model : ModelText := s.chosenModel)
+    (walks := true) (after : List Consumer := []) (model : Option ModelText := none)
     (statements : Option Lean.Name := none) :
     Except String Module := do
+  let model := model.getD (← s.chosenModel)
   let claims ← s.claimTexts model
   let ceilings ← s.ceilings
   let fees := proof.method == .fees
@@ -1064,23 +1094,26 @@ def module (s : Statements) (name : String) (proof : ProofText)
 
 /-- A module with the package of the claims and the propositions of the goals alone: the facts,
 the transfers and the propositions, with nothing proved. Lean elaborates the statements. -/
-def claimsModule (s : Statements) (name : String) (model : ModelText := s.chosenModel) :
+def claimsModule (s : Statements) (name : String) (model : Option ModelText := none) :
     Except String String := do
+  let model := model.getD (← s.chosenModel)
   return header (imports model false) ++ s!"namespace {name}\n" ++
     (Written.package s.package).text ++ opens ++ s.facts ++ "\n" ++ s.transfers ++
     (← s.claimTexts model) ++ s!"end {name}\n"
 
 /-- A module with the package of the claims and the one theorem that a model covers it. -/
-def coverageModule (s : Statements) (name : String) (model : ModelText := s.chosenModel) :
-    PlainModule :=
+def coverageModule (s : Statements) (name : String) (model : Option ModelText := none) :
+    Except String PlainModule := do
+  let model := model.getD (← s.chosenModel)
   let text := header (packageImports ++ ["ZkcFormal.Written.LawSamplers"] ++ model.imports) ++
     s!"namespace {name}\n" ++ (Written.package s.package).text ++ "open ZkcFormal.Written\n" ++
     coverage model ++ footer name ["covered"]
-  { text, theorems := ["covered"] }
+  return { text, theorems := ["covered"] }
 
 /-- A module with the package of the claims, its facts, and the comparison of each goal's total
 with the ceiling that it states. A goal whose ceiling is below its total gives no module. -/
 def ceilingModule (s : Statements) (name : String) : Except String PlainModule := do
+  discard s.chosenModel
   let ceilings ← s.ceilings
   let text := header (packageImports ++ ["ZkcFormal.Written.SiteCaps"]) ++
     s!"namespace {name}\n" ++ (Written.package s.package).text ++ opens ++ s.facts ++ "\n" ++

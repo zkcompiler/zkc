@@ -77,7 +77,8 @@ the inputs of the source, and refuse the same consumer where the clause names th
 
 An operand of a clause that is no port is not read yet. Where a relation links a primitive that
 no deployed definition links, the claims' package is over a larger vocabulary than the root's,
-and the two are not compared.
+and the two are not compared. Such a package can be admitted. Written soundness statements
+require a model, so a package linking any project primitive gets a diagnostic at issuance.
 
 ## The statements of goals
 

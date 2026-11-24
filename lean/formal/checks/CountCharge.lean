@@ -240,9 +240,11 @@ def run (corpus template : System.FilePath) (work : System.FilePath) : IO Unit :
       throw (IO.userError s!"a charge that is not on the draw of the root gave a cap: {repr ((tables control).map (·.2.2))}")
   -- A row outside the table of the model, inside the loop of the relation: the power of a field
   -- element, which the standard model gives a constant.
-  let uncovered ← read (← edit source "if xs[i] == 0 then 0 else 1" "if xs[i] ^ 2 == 0 then 0 else 1")
+  let uncovered ← WrittenSubject.read
+    (← edit source "if xs[i] == 0 then 0 else 1" "if xs[i] ^ 2 == 0 then 0 else 1")
+    { reading with model := arithmeticModelText }
   let uncoveredProof ← startLakeLean work "CoverageControl"
-    (uncovered.statements.coverageModule "CoverageControl").text
+    (← IO.ofExcept (uncovered.statements.coverageModule "CoverageControl")).text
 
   let proof : Proof := { text := template, theorems := ofText }
   -- Each of the three charges is refused where the text reads the cap of the draw from the
@@ -270,7 +272,7 @@ def run (corpus template : System.FilePath) (work : System.FilePath) : IO Unit :
     -- is refused and the text is not read.
     { title := "a row outside the table of the model", name := "UncoveredControl", subject := uncovered,
       text := template, refusal := .generated, unproved := ["covered"],
-      places := ["StandardModel.covers stored = true"] }]
+      places := ["ArithmeticModel.covers stored = true"] }]
   -- The roster reversed: the same text proves the same theorems.
   let turnedCount ← start work "CountTurned" turned proof
   let _ ← count.finish
@@ -280,7 +282,7 @@ def run (corpus template : System.FilePath) (work : System.FilePath) : IO Unit :
   -- The package with a row outside the table is not covered: the kernel decides it.
   let (ok, output) ← finishLean uncoveredProof
   if ok then throw (IO.userError "Lean accepted that the model covers a package with a row outside its table")
-  unless output.contains "StandardModel.covers stored = true" && output.contains "is false" do
+  unless output.contains "ArithmeticModel.covers stored = true" && output.contains "is false" do
     throw (IO.userError s!"the coverage control was refused for another reason\n{output}")
   let charges := ", ".intercalate ((tables written).map fun (name, arguments, caps) =>
     s!"{name} at tolerance {arguments[0]!} within {caps.ratio}")

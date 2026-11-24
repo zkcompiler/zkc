@@ -22,3 +22,4 @@ import Zkc.Tests.Frontend.ProtocolEmission
 import Zkc.Tests.Frontend.PrintedFixtureCoverage
 import Zkc.Tests.Frontend.PrintedPackageSupport
 import Zkc.Tests.Frontend.SourceClause
+import Zkc.Tests.Frontend.WrittenModels
