@@ -28,8 +28,12 @@ structure UnpackagedRoot where
   declaration : String
   instanceName : String
   outcome : UnpackagedOutcome
+  description : String := instanceName
 
-/-- An instance uses its qualified source description, including its arguments and owner.
+def describeExpectedInstance (id description : String) : String :=
+  if description == id then id else s!"{description} [{id}]"
+
+/-- An exact instance names its key, including qualified arguments and owner.
 A family counts reports of one qualified declaration in one block. -/
 inductive ExpectedInstances where
   | one (instanceName : String)
@@ -78,7 +82,7 @@ def checkExpectedRoots (expected : List ExpectedRoot) (blocks : Array String) : 
     if let some i := entries.findIdx? (fun (entry, left) => left > 0 && entry.matches root) then
       entries := entries.modify i fun (entry, left) => (entry, left - 1)
       pass
-    else failure s!"{root.block}: unexpected {root.instanceName}: {root.outcome.describe}"
+    else failure s!"{root.block}: unexpected {describeExpectedInstance root.instanceName root.description}: {root.outcome.describe}"
   for (entry, remaining) in entries do
     let name := match entry.instances with
       | .one instanceName => instanceName

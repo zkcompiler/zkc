@@ -71,11 +71,11 @@ private def externalRoots (block qualified : String) (naturals : List String) : 
   let assignments := naturals.foldr (init := [[]]) fun _ rest =>
     ["0", "1", "2", "3"].flatMap fun n => rest.map (n :: ·)
   assignments.map fun values =>
-    let args := ", ".intercalate ("koala-bear" :: values)
+    let args := ", ".intercalate ("row(\"koala-bear\")" :: values)
     let named := naturals.zipWith (fun k v => s!"{k} = {v}") values
     let name := (qualified.splitOn "::").getLast!
     let reason := s!"external function {name}<{", ".intercalate ("F = koala-bear" :: named)}>"
-    ⟨block, .one s!"default instance `{qualified}<{args}>`", .typedOnly reason⟩
+    ⟨block, .one s!"{qualified}<{args}>", .typedOnly reason⟩
 
 /-- PartialSum has four defaults for each of its three natural parameters. The laws are
 instantiated at Pairs, and also at Gate in GKR. A refused law has no waiting report. -/
@@ -86,11 +86,12 @@ private def sumcheckRoots (block : String) (owners : List String) (refusedLaw : 
   for owner in owners do
     for law in ["sent", "bound", "ends", "at_point"] do
       if refusedLaw == some law then continue
+      let field := "row(\"koala-bear\")"
       let arguments := if law == "sent" || law == "bound" then
-        ["koala-bear, 0", "koala-bear, 1", "koala-bear, 2", "koala-bear, 3"] else ["koala-bear"]
+        [0, 1, 2, 3].map fun (n : Nat) => s!"{field}, {n}" else [field]
       for args in arguments do
-        let name := s!"sumcheck::Round::{law}<{args}> at {owner}<koala-bear>"
-        roots := ⟨block, .one s!"default instance `{name}`", outcome⟩ :: roots
+        let name := s!"sumcheck::Round::{law}<{args}> at {owner}<{field}>"
+        roots := ⟨block, .one name, outcome⟩ :: roots
   return roots
 
 /-- Expected non-package reports, independent of the frozen program verdict. Sibling
@@ -106,22 +107,48 @@ def knownWaits : List ExpectedRoot :=
     "M-FRA21", "M-FRA22", "M-FRA23", "M-FRA24"].map fun block =>
     ⟨block, .one "fragments::birthday", .waiting "the quotient of `rational`s"⟩) ++
   (["M-SUM2", "M-SUM3", "M-SUM4", "M-SUM6", "M-SUM7", "M-SUM11", "M-SUM13"].flatMap fun block =>
-    sumcheckRoots block ["Pairs"] none) ++
-  sumcheckRoots "M-SUM1" ["Pairs"] (some "sent") ++ sumcheckRoots "M-SUM8" ["Pairs"] (some "at_point") ++
-  sumcheckRoots "M-SUM12" ["Pairs"] (some "ends") ++
+    sumcheckRoots block ["sumcheck::Pairs"] none) ++
+  sumcheckRoots "M-SUM1" ["sumcheck::Pairs"] (some "sent") ++ sumcheckRoots "M-SUM8" ["sumcheck::Pairs"] (some "at_point") ++
+  sumcheckRoots "M-SUM12" ["sumcheck::Pairs"] (some "ends") ++
   (["M-GKR1", "M-GKR2", "M-GKR3"].flatMap fun block =>
-    sumcheckRoots block ["Pairs", "Gate"] none ++ externalRoots block "circuits::layered::summand" ["d", "w"]) ++
+    sumcheckRoots block ["sumcheck::Pairs", "circuits::layered::Gate"] none ++ externalRoots block "circuits::layered::summand" ["d", "w"]) ++
   ([("cube", ["n"]), ("evaluate_at", ["n", "D"]), ("extension", ["v"]), ("first_variable", ["n", "D"]),
     ("line", []), ("of_coefficients", ["D"]), ("restrict", ["n", "D"]), ("restrict_prefix", ["n", "k", "D"]),
     ("value", ["D"])].flatMap fun (name, parameters) => externalRoots "L-POLY1" s!"zkc::polynomial::{name}" parameters)
 
+/-- A reference refusal deferred by a waiting body, identified by its block and rule. -/
+private def deferredRefusals : List (String × String) := []
+
+private def checkWaitingVerdict (block : Block) (deferred : List (String × String)) :
+    TestM (Option (String × String)) := do
+  if block.expect.startsWith "accept" then
+    pass
+    return none
+  if let some entry := deferred.find? fun (id, rule) => id == block.id && block.expect == s!"refuse {rule}" then
+    pass
+    note s!"{block.id}: a waiting root defers the reference refusal {entry.2}"
+    return some entry
+  failure s!"{block.id}: expects `{block.expect}`; roots wait and no source refusal was reported"
+  return none
+
+private def waitingVerdictControls : TestM Unit := do
+  let block : Block := ⟨"bound", "refuse TY7", "", #[]⟩
+  for (exceptions, allowed) in [([], false), ([("bound", "TY7")], true),
+      ([("bound", "TY5")], false), ([("other", "TY7")], false)] do
+    let (matched, result) ← (checkWaitingVerdict block exceptions).run {}
+    let ok := if allowed then matched == some ("bound", "TY7") && result.failures.isEmpty
+      else matched.isNone && result.failures.size == 1 && result.failures[0]!.contains "refuse TY7"
+    expectTrue ok s!"waiting block with reference refusal: {result.failures}"
+
 /-- The tests of layer A, from their instances to the core. -/
 def conformanceTypingSuite (repository : Repository) : TestM Unit := do
+  waitingVerdictControls
   let load ← cachedLoader #[repository.libraries]
   let mut total := 0
   let mut beforeThis := 0
   let mut refusedHere : Array String := #[]
   let mut waiting := 0
+  let mut deferred := #[]
   let mut accepted := 0
   let mut checkedTotal := 0
   let mut seen : Array String := #[]
@@ -174,7 +201,7 @@ def conformanceTypingSuite (repository : Repository) : TestM Unit := do
         failure s!"{block.id}: expects `{block.expect}`; refused by the typing of bodies: {first.span.file}: {first.render}"
       | none, none =>
         if check.packages.any (fun report => report.outcome matches .waiting _) then
-          pass
+          if let some entry ← checkWaitingVerdict block deferredRefusals then deferred := deferred.push entry
           waiting := waiting + 1
         else if check.packages.isEmpty && check.state.results.finished.isEmpty then
           -- nothing reaches a body: neither an acceptance nor a refusal by this check
@@ -187,6 +214,8 @@ def conformanceTypingSuite (repository : Repository) : TestM Unit := do
         else
           pass
           accepted := accepted + 1
+  for entry in deferredRefusals do
+    unless deferred.contains entry do failure s!"{entry.1}: missing deferred refusal {entry.2}"
   checkExpectedRoots knownWaits seen
   reportContradictions contradictions
   for (id, rule, _) in expectedTypingRefusals do
