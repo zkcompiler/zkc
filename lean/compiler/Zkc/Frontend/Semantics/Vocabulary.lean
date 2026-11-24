@@ -33,7 +33,8 @@ structure VocabularyModule where
   implements : Option String
   typeMembers : Array (String × ClosedType)
   naturalMembers : Array (String × Nat)
-  /-- Function members whose executable standard row differs from the module's naming convention. -/
+  /-- The row of each function member that the vocabulary gives the module, by the member's
+  name. A member that is not named here is the module's row, a dot and the member's name. -/
   standardFunctions : List (String × String) := []
   deriving Inhabited
 

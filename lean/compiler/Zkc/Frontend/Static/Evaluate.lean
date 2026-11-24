@@ -994,8 +994,13 @@ mutual
           (program.declarations[id]?).any (·.kind == .functionMember)
         for id in functions do
           let name := program.nameOf id
-          let mapped := catalogue.bind (·.standardFunctions.lookup name)
-          let binding := mapped.getD (if functions.size == 1 then row else s!"{row}.{name}")
+          -- a module of the vocabulary: the row that the catalogue names, and otherwise the
+          -- module's row, a dot and the member's name, whatever else the interface declares; a
+          -- module of a project: its row when the interface has one function, and that
+          -- otherwise
+          let binding := match catalogue with
+            | some entry => (entry.standardFunctions.lookup name).getD s!"{row}.{name}"
+            | none => if functions.size == 1 then row else s!"{row}.{name}"
           members := members.push (name, .row binding)
       return .«module» interfaces members
     | .asset _ => return .«module» interfaces members

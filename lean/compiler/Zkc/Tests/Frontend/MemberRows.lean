@@ -57,6 +57,9 @@ def memberRowSuite (repository : Repository) : TestM Unit := do
   let hash := "def hash(input: [byte]) -> [byte; Size]"
   let algebra (s : String) : Option HeaderChange := some ⟨"zkc/algebra.zkc", pair, s⟩
   let hashes (s : String) : Option HeaderChange := some ⟨"zkc/hash.zkc", hash, s⟩
+  -- a function added to the interface leaves the row of the member that was there
+  expectRow (← memberSession repository (caller "hash")
+    (hashes (hash ++ "\n    spec def helper(x: bool) -> bool"))) "evaluate" (.hash .sha256)
   let cases : List (String × Option HeaderChange × String × List String) := [
     ("pair-static", none, "SP5", ["pair"]),
     ("pair-static", algebra "def pair<n: nat>(a: G1, b: G2) -> Target", "SP8", ["pairing.pair", "static arguments"]),

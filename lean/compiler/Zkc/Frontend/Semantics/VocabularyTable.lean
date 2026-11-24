@@ -64,13 +64,13 @@ def sourceVocabulary : Vocabulary where
         ("G2", named "bls12-381.g2"), ("Target", named "bls12-381.gt")]
       naturalMembers := #[], standardFunctions := [("pair", "pairing.pair")] },
     { row := "hash.sha256", implements := some "zkc::hash::Hash", typeMembers := #[]
-      naturalMembers := #[("Size", 32)] },
+      naturalMembers := #[("Size", 32)], standardFunctions := [("hash", "hash.sha256")] },
     { row := "hash.keccak256", implements := some "zkc::hash::Hash", typeMembers := #[]
-      naturalMembers := #[("Size", 32)] },
+      naturalMembers := #[("Size", 32)], standardFunctions := [("hash", "hash.keccak256")] },
     { row := "hash.shake128", implements := some "zkc::hash::ExtendableOutput"
-      typeMembers := #[], naturalMembers := #[] },
+      typeMembers := #[], naturalMembers := #[], standardFunctions := [("output", "hash.shake128")] },
     { row := "hash.shake256", implements := some "zkc::hash::ExtendableOutput"
-      typeMembers := #[], naturalMembers := #[] },
+      typeMembers := #[], naturalMembers := #[], standardFunctions := [("output", "hash.shake256")] },
     { row := "suite.merlin3.bls12-381.fr64be/0", implements := some "zkc::construction::Suite"
       typeMembers := #[("Challenge", named "bls12-381.fr"),
         ("State", named "suite.merlin3.bls12-381.fr64be/0.state")]
