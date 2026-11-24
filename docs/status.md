@@ -104,11 +104,20 @@ The contract of a protocol generic over a module parameter is typed in both typi
 [language and frontend review](source-elaboration.md) describes the proposed boundary.
 
 The frontend driver checks locations in the reference tables, compares emitted programs across
-formatting, and runs independent conformance cases. It currently reports specification bodies
-without an executable core form as waiting. The test driver lists nine specification-only
-root failures pending a decision on their verdict; each appears as a known failure. A new
-failure or a listed diagnostic that disappears fails the driver. The function member `pair`
-of the catalogue's BLS12-381 module is the standard row `pairing.pair`. A module instance
+formatting, and runs independent conformance cases.
+
+A specification function, relation or instantiated law can wait for the checked form of a
+specification. The rational sum in `bound` and the quotient in `fragments::birthday` wait
+because the frontend cannot decide body facts across these operations. A reachable signature
+with a rational or a formal library type such as `MvPoly` can also leave a root waiting, as
+in `sumcheck::PartialSum` and the laws of `Round`. Indexing a sequence inside a rational
+quotient waits both with and without a bounds guard. The typing suites check each waiting
+instance or counted family and its reason, including siblings of admitted or refused roots.
+A missing or unexpected report fails the driver. An external function with a typed header
+counts as typed only. Only a package returned by core admission counts as admitted.
+
+The function member `pair` of the catalogue's BLS12-381 module is the standard row
+`pairing.pair`. A module instance
 stores the row name of each function member. Calls use the member's interface for its mode,
 static arguments and operands. A concrete call checks the selected row against that signature.
 In a generic definition the opaque pass uses the interface alone.

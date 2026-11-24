@@ -46,21 +46,7 @@ def checkLibraryImports : IO Unit := do
       unless imported.contains file || commands.contains file do
         throw (IO.userError s!"{root} does not import {file}")
 
-/-- These cases keep their original expectations until the frontend decides how to
-report specification-only roots. -/
-def knownFailures : List KnownFailure :=
-  let specification := "The specification-only root waits for an executable form, and its frontend verdict is undecided."
-  let waiting (caseName root reason : String) : KnownFailure :=
-    ⟨"typing: conformance of layer A", caseName, s!"a root waits, and no reason is recorded: {root}: {reason}", specification⟩
-  [⟨"typing", "rational", "expected to be admitted; bound waits for the sum of `rational`s", specification⟩,
-   ⟨"typing", "rational", "expected to be admitted; small waits for specification type in executable code", specification⟩,
-   waiting "M-GKR2" "default instance `PartialSum<koala-bear, 0, 0, 0>`" "specification type in executable code",
-   waiting "T-Z13" "r" "specification type in executable code",
-   waiting "R-SP3a" "loss" "the quotient of `rational`s",
-   waiting "R-NL9b" "check" "specification type in executable code",
-   waiting "R-TY8a" "bound" "the sum of `rational`s",
-   waiting "M-FRA3" "birthday" "the quotient of `rational`s",
-   waiting "M-FRA14" "birthday" "the quotient of `rational`s"]
+def knownFailures : List KnownFailure := []
 
 def frontendSuites : List (String × TestM Unit) := [
   ("rules of §3 and §5", ruleCaseSuite),

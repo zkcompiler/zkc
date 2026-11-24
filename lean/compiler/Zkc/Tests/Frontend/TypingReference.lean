@@ -9,8 +9,8 @@ core; every module of `libraries/` as a root at its default instances; the worke
 example files; the generated program of the measurements. Every package emitted is elaborated by
 the core, and every function of it passes the core's check of facts.
 
-A test of layer A has its expected outcome when typing decides it: a refusal by its rule on its
-line, or the admission of the packages of its roots. A test whose roots wait for a form that is
+Each block retains its expected program verdict. Source refusals name their rule and line.
+Package reports of its reached roots are counted separately as admitted, waiting or typed only. A test whose roots wait for a form that is
 not elaborated yet waits, with the reasons of its roots. A refusal by a rule that is neither the
 one a test expects nor its stated alternative is a contradiction: listed, and a failure unless the
 table of known contradictions gives its reason. A test of acceptance that no root reaches is
@@ -65,15 +65,55 @@ def expectedTypingRefusals : Array (String × String × Nat) := #[
   ("M-SUM6", "TY5", 65), ("M-SUM11", "TY5", 65), ("M-IPA2", "TY7", 56), ("M-IPA9", "TY5", 88),
   ("M-GKR1", "SP6", 36), ("M-GKR3", "TY8", 27)]
 
-/-- The waits that this check leaves, with the reason: a test whose packages wait for these and
-for forms not elaborated yet waits, and is listed apart. -/
-def knownWaits : Array (String × String) := #[]
+/-- External functions have a typed header at each default instance. Check the full reason,
+including the named arguments, against the field and natural parameters of the fixture. -/
+private def externalRoots (block qualified : String) (naturals : List String) : List ExpectedRoot :=
+  let assignments := naturals.foldr (init := [[]]) fun _ rest =>
+    ["0", "1", "2", "3"].flatMap fun n => rest.map (n :: ·)
+  assignments.map fun values =>
+    let args := ", ".intercalate ("koala-bear" :: values)
+    let named := naturals.zipWith (fun k v => s!"{k} = {v}") values
+    let name := (qualified.splitOn "::").getLast!
+    let reason := s!"external function {name}<{", ".intercalate ("F = koala-bear" :: named)}>"
+    ⟨block, .one s!"default instance `{qualified}<{args}>`", .typedOnly reason⟩
 
-/-- The forms that are not elaborated yet: a root that waits for one of them waits for it. -/
-def notElaborated : Array String := #[
-  "`attempt`", "an oracle send", "a `query`", "an `open`", "layer D",
-  "a law that is a tuple", "a law that is a collection", "the generated member",
-  "a row at a module argument"]
+/-- PartialSum has four defaults for each of its three natural parameters. The laws are
+instantiated at Pairs, and also at Gate in GKR. A refused law has no waiting report. -/
+private def sumcheckRoots (block : String) (owners : List String) (refusedLaw : Option String) :
+    List ExpectedRoot := Id.run do
+  let outcome := UnpackagedOutcome.waiting "specification type in executable code"
+  let mut roots := [⟨block, .family "sumcheck::PartialSum" 64, outcome⟩]
+  for owner in owners do
+    for law in ["sent", "bound", "ends", "at_point"] do
+      if refusedLaw == some law then continue
+      let arguments := if law == "sent" || law == "bound" then
+        ["koala-bear, 0", "koala-bear, 1", "koala-bear, 2", "koala-bear, 3"] else ["koala-bear"]
+      for args in arguments do
+        let name := s!"sumcheck::Round::{law}<{args}> at {owner}<koala-bear>"
+        roots := ⟨block, .one s!"default instance `{name}`", outcome⟩ :: roots
+  return roots
+
+/-- Expected non-package reports, independent of the frozen program verdict. Sibling
+declarations are compared even in a block which refuses its named source rule. -/
+def knownWaits : List ExpectedRoot :=
+  let specification := UnpackagedOutcome.waiting "specification type in executable code"
+  [⟨"V-K2", .one "t::at_one", specification⟩, ⟨"T-Z13", .one "t::r", specification⟩,
+   ⟨"R-NL9b", .one "t::check", specification⟩,
+   ⟨"R-TY8a", .one "t::bound", .waiting "the sum of `rational`s"⟩,
+   ⟨"R-SP3a", .one "t::loss", .waiting "the quotient of `rational`s"⟩] ++
+  (["M-FRA1", "M-FRA2", "M-FRA3", "M-FRA4", "M-FRA5", "M-FRA6", "M-FRA7", "M-FRA10",
+    "M-FRA12", "M-FRA14", "M-FRA15", "M-FRA16", "M-FRA17", "M-FRA18", "M-FRA19",
+    "M-FRA21", "M-FRA22", "M-FRA23", "M-FRA24"].map fun block =>
+    ⟨block, .one "fragments::birthday", .waiting "the quotient of `rational`s"⟩) ++
+  (["M-SUM2", "M-SUM3", "M-SUM4", "M-SUM6", "M-SUM7", "M-SUM11", "M-SUM13"].flatMap fun block =>
+    sumcheckRoots block ["Pairs"] none) ++
+  sumcheckRoots "M-SUM1" ["Pairs"] (some "sent") ++ sumcheckRoots "M-SUM8" ["Pairs"] (some "at_point") ++
+  sumcheckRoots "M-SUM12" ["Pairs"] (some "ends") ++
+  (["M-GKR1", "M-GKR2", "M-GKR3"].flatMap fun block =>
+    sumcheckRoots block ["Pairs", "Gate"] none ++ externalRoots block "circuits::layered::summand" ["d", "w"]) ++
+  ([("cube", ["n"]), ("evaluate_at", ["n", "D"]), ("extension", ["v"]), ("first_variable", ["n", "D"]),
+    ("line", []), ("of_coefficients", ["D"]), ("restrict", ["n", "D"]), ("restrict_prefix", ["n", "k", "D"]),
+    ("value", ["D"])].flatMap fun (name, parameters) => externalRoots "L-POLY1" s!"zkc::polynomial::{name}" parameters)
 
 /-- The tests of layer A, from their instances to the core. -/
 def conformanceTypingSuite (repository : Repository) : TestM Unit := do
@@ -81,16 +121,14 @@ def conformanceTypingSuite (repository : Repository) : TestM Unit := do
   let mut total := 0
   let mut beforeThis := 0
   let mut refusedHere : Array String := #[]
-  let mut waiting : Array String := #[]
+  let mut waiting := 0
   let mut accepted := 0
-  let mut admitted := 0
   let mut checkedTotal := 0
   let mut seen : Array String := #[]
   let mut contradictions : Array (String × String) := #[]
   let mut unreached : Array String := #[]
   let mut protocolRootsTotal := 0
   let mut protocolsTotal := 0
-  let mut left : Array String := #[]
   for path in ← sortedFiles (repository.conformance) "txt" do
     unless (path.fileName.getD "").startsWith "layer-a-" do continue
     for block in readBlocks (← IO.FS.readFile path) do
@@ -110,6 +148,7 @@ def conformanceTypingSuite (repository : Repository) : TestM Unit := do
         beforeThis := beforeThis + 1
         continue
       let check := checkTyping instances names
+      recordTypingRoots block.id check
       checkPackages block.id check
       let checked := checkedFunctions check
       checkedTotal := checkedTotal + checked
@@ -134,24 +173,9 @@ def conformanceTypingSuite (repository : Repository) : TestM Unit := do
       | none, some first =>
         failure s!"{block.id}: expects `{block.expect}`; refused by the typing of bodies: {first.span.file}: {first.render}"
       | none, none =>
-        let waitingPackages := check.packages.filterMap fun report => match report.outcome with
-          | .waiting reason => some s!"{report.description}: {reason}"
-          | _ => none
-        let mentions (text fragment : String) : Bool := (text.splitOn fragment).length > 1
-        let formWaits := waitingPackages.filter fun text => notElaborated.any (mentions text ·)
-        let leftWaits := waitingPackages.filter fun text =>
-          !formWaits.contains text && knownWaits.any (mentions text ·.1)
-        if !waitingPackages.isEmpty && formWaits.size + leftWaits.size == waitingPackages.size then
-          -- a form not elaborated yet, or a wait that this check leaves: the test waits, with what
-          -- it needs
+        if check.packages.any (fun report => report.outcome matches .waiting _) then
           pass
-          let reasons := (formWaits ++ leftWaits).foldl (init := #[]) fun acc text =>
-            let reason := (text.splitOn ": ").drop 1 |> ": ".intercalate
-            if acc.contains reason then acc else acc.push reason
-          waiting := waiting.push s!"{block.id}: {"; ".intercalate reasons.toList}"
-          unless leftWaits.isEmpty do left := left.push block.id
-        else if let some first := waitingPackages.find? (!formWaits.contains ·) then
-          failure s!"{block.id}: a root waits, and no reason is recorded: {first}"
+          waiting := waiting + 1
         else if check.packages.isEmpty && check.state.results.finished.isEmpty then
           -- nothing reaches a body: neither an acceptance nor a refusal by this check
           if accepts then
@@ -159,23 +183,19 @@ def conformanceTypingSuite (repository : Repository) : TestM Unit := do
             unreached := unreached.push block.id
           else failure s!"{block.id}: expects `{block.expect}`; no root reaches a body"
         else if !accepts then
-          failure s!"{block.id}: expects `{block.expect}`; the bodies type and are admitted"
+          failure s!"{block.id}: expects `{block.expect}`; there is no typing refusal or waiting root"
         else
           pass
           accepted := accepted + 1
-          admitted := admitted + check.packages.size
+  checkExpectedRoots knownWaits seen
   reportContradictions contradictions
   for (id, rule, _) in expectedTypingRefusals do
     unless seen.contains id do failure s!"{id}: expected to be refused by {rule}; not found"
-  note s!"{total} tests of layer A: {beforeThis} refused before this check, {refusedHere.size} refused by the typing of bodies as expected, {waiting.size} waiting, {accepted} accepted with {admitted} packages admitted by the core, {unreached.size} accepted with no root that reaches a body"
+  note s!"{total} tests of layer A: {beforeThis} refused before this check, {refusedHere.size} refused by the typing of bodies as expected, {waiting} with waiting roots, {accepted} accept cases with reached bodies and no waits, {unreached.size} accept cases with no reached body"
   note s!"no root reaches a body: {" ".intercalate unreached.toList}"
-  for (fragment, reason) in knownWaits do
-    note s!"a wait that this check leaves, `{fragment}`: {reason}"
-  note s!"tests that wait, among others, for it: {" ".intercalate left.toList}"
   note s!"functions in packages admitted by the core: {checkedTotal}"
   note s!"packages of protocol roots admitted with the check of facts of their protocols: {protocolRootsTotal}, holding {protocolsTotal} protocols"
   for entry in refusedHere do note s!"refused: {entry}"
-  for entry in waiting do note s!"waiting: {entry}"
 
 /-- The refusals of modules of `libraries/` that the reference names as its own: the root's file stem,
 the file refused, the rule and the line. `canonical::read_natural` of `zkc::layout` forms its

@@ -1,15 +1,14 @@
 /-!
 # Programs for the typing of bodies
 
-Programs over the library of `NameCases`, in the block format. `expect` is `accept` (no refusal,
-and the package of every root that is a function is admitted by the core), `refuse <rule>
-<line>[:<column>]` (the first refusal), or `wait` (no refusal, and a root waits for a form that is
-not typed yet). A line `// uses <name>` says that some emitted package applies the operation or the
+Programs over the library of `NameCases`, in the block format. `accept` expects no source
+refusal, `wait` also expects a waiting root, and `refuse <rule> <line>[:<column>]` gives
+the first refusal. The suite checks the instances and reasons of waiting and typed-only roots.
+A line `// sole package <qualified instance>` gives the only root with an admitted package.
+A line `// uses <name>` says that some emitted package applies the operation or the
 row of that name; `// not uses <name>` that none does; `// applies <name> <n>` that the packages
 name the operation `n` times, once for each application of an operation of the core;
-`// obligations <n>` that the laws typed leave `n` obligations; `// waits <text>` that a root
-waits for a reason that contains the text; `// says <text>` that a refusal has the text in its
-message.
+`// obligations <n>` that the laws typed leave `n` obligations; `// says <text>` and `// waits <text>` check a refusal or wait message.
 -/
 
 namespace Zkc.Tests.Frontend
@@ -572,7 +571,7 @@ module M:
         return ()
 // says `M` defines `b` as a member, and implements no interface
 
-=== rational | refuse TY1 2 | `rational` is a type of specifications (TY1)
+=== deployed-rational-result | refuse TY1 2 | `rational` is a type of specifications (TY1)
 module t
 def bound(e: nat) -> rational: e / 3
 
@@ -603,6 +602,27 @@ relation Small(x: nat): checked(x) == 0
 module t
 spec def bound(e: nat, k: nat) -> rational: (1 - e / 2^k)^3 + 2^-64
 spec def small(e: nat) -> bool: bound(e, 4) <= 1 / 2
+
+=== mixed-roots | accept | a deployed function alongside a specification without a checked form
+module t
+def run(x: nat) -> nat: x
+spec def half(x: nat) -> rational: x / 2
+// sole package t::run
+
+=== rational-denominator | refuse TY5 2 | a Boolean denominator has the wrong operand type
+module t
+spec def half(x: nat) -> rational: x / true
+
+=== guarded-rational-index | wait | the guard bounds the index in the specification
+module t
+spec def half(xs: [nat], i: nat) -> rational:
+    guard i < length(xs)
+    return xs[i] / 2
+
+=== unguarded-rational-index | wait | the specification waits before its body facts are decided
+module t
+// Once facts are decided for a rational body, the unguarded access must be refused under TY7.
+spec def half(xs: [nat], i: nat) -> rational: xs[i] / 2
 
 === rational-remainder | refuse TY8 2 | `%` is not an operator of `rational` (TY8)
 module t
