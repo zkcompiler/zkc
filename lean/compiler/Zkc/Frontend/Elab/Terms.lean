@@ -1671,14 +1671,21 @@ to the end makes the caller wait or not checked; a refused body abandons the cal
     let resultType ← match result with
       | some type => liftM (evalType memberEnv type : CompileM ClosedType)
       | none => pure ClosedType.unit
-    let functionMembers := (((program.declarations[interface]?).bind (·.inner)).map fun inner =>
-      (program.declarations.filter fun d => d.namespace == inner && d.kind == .functionMember).size).getD 1
-    let rowName := if functionMembers ≤ 1 then row else s!"{row}.{name}"
-    -- a row of the vocabulary has its type there; a row that a project binds, the interface's
-    let entry : Typing.Row := match Typing.rowOf? { name := rowName, statics } with
-      | some found => found
-      | none => { key := { name := rowName, statics }, kind := .pure, inputs := types,
-                  outputs := #[resultType] }
+    let standardFunction := ((← getVocabulary).module? row).bind (·.standardFunctions.lookup name)
+    let entry : Typing.Row ← match standardFunction with
+      | some target => do
+        let some found := Typing.executableRow? ⟨target, statics⟩
+          | throw (.defect s!"missing standard row {target} for {row}.{name}")
+        unless found.inputs == types && found.outputs == #[resultType] do
+          refuseHere "SP8" place s!"the signature of `{name}` does not match the standard row `{target}` of `{row}`"
+        pure found
+      | none => do
+        let functionMembers := (((program.declarations[interface]?).bind (·.inner)).map fun inner =>
+          (program.declarations.filter fun d => d.namespace == inner && d.kind == .functionMember).size).getD 1
+        let rowName := if functionMembers ≤ 1 then row else s!"{row}.{name}"
+        let request : Typing.RowRequest := ⟨rowName, statics⟩
+        pure <| (Typing.rowOf? request).getD
+          { key := request.key, kind := .pure, inputs := types, outputs := #[resultType] }
     let mut operands := #[]
     for (arg, type) in args.zip entry.inputs do operands := operands.push (← argumentAt arg type)
     let some resultType := entry.outputs[0]? | throw .abandoned

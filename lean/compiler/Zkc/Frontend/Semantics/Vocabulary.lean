@@ -33,6 +33,8 @@ structure VocabularyModule where
   implements : Option String
   typeMembers : Array (String × ClosedType)
   naturalMembers : Array (String × Nat)
+  /-- Function members whose executable standard row differs from the module's naming convention. -/
+  standardFunctions : List (String × String) := []
   deriving Inhabited
 
 structure Vocabulary where

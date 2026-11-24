@@ -62,7 +62,7 @@ def sourceVocabulary : Vocabulary where
     { row := "bls12-381", implements := some "zkc::algebra::Pairing"
       typeMembers := #[("Scalar", named "bls12-381.fr"), ("G1", named "bls12-381.g1"),
         ("G2", named "bls12-381.g2"), ("Target", named "bls12-381.gt")]
-      naturalMembers := #[] },
+      naturalMembers := #[], standardFunctions := [("pair", "pairing.pair")] },
     { row := "hash.sha256", implements := some "zkc::hash::Hash", typeMembers := #[]
       naturalMembers := #[("Size", 32)] },
     { row := "hash.keccak256", implements := some "zkc::hash::Hash", typeMembers := #[]
