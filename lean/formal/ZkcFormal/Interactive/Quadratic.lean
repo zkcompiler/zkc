@@ -98,5 +98,4 @@ theorem Verifier.reduce_quadratic {S : Sig} {H F Msg σ : Type} [Lean.Grind.Fiel
   apply Quadratic.collisions _ _ _ points distinct
   rwa [← messageBoundary,passes,← sum]
 
-#print axioms Verifier.reduce_quadratic
 end ZkcFormal.Interactive.Sumcheck

@@ -68,5 +68,4 @@ theorem PairLaws.round_bound {hs : Headers V} {ds : Defs V hs} {key state point 
   intro r s atR atS
   exact line_unique_collision _ honest r s (passed ▸ wrong) (of_decide_eq_true atR) (of_decide_eq_true atS)
 
-#print axioms PairLaws.round_bound
 end ZkcFormal.Interactive.Sumcheck.ReductionRound

@@ -195,6 +195,4 @@ theorem FunctionContracts.settingLawful (callees : Callees M table)
     (contracts.setting M table definition lemmas notes bounds guarantees).Lawful :=
   ⟨contracts.lawful M table callees _, sound, contracts.requiresDefined M table definition lemmas notes bounds guarantees⟩
 
-#print axioms FunctionContracts.settingLawful
-#print axioms FunctionContracts.readerLawful
 end Zkc.Core.BodyAnalysis

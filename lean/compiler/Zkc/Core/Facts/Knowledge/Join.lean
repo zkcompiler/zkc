@@ -143,5 +143,4 @@ theorem after_sound {before exit : BufferedFacts} {exits : List RegionExit} {res
   exact learnRanges_sound functional slots made 0 _ prior (fun j v r at_ found =>
     obtainRange at_ (by simpa using found))
 
-#print axioms after_sound
 end Zkc.Core.BodyAnalysis.Knowledge

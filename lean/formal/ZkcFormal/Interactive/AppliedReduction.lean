@@ -136,7 +136,4 @@ theorem AtSite.gate_sound (rows : ScalarRows V) {hdr : ProtocolHeader V} {root :
     path s hidden point claim x wrong
   exact atCall.linked.rounds.freshFromService M _ _ _ points positive fresh _ _ _
 
-#print axioms AtSite.gate_sound
-#print axioms Linked.applied_sound
-#print axioms atSite
 end ZkcFormal.Interactive.Sumcheck.ReductionRound

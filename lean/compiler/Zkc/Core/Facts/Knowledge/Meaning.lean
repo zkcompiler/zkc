@@ -180,7 +180,4 @@ theorem assume_sound {asks : Asks} {k : BufferedFacts} {id : Ident} {b : Bool} {
   simp only [assume, cached, Bool.false_or, beq_iff_eq, peer, ↓reduceIte]
   exact ⟨a, grounded, facts.addTruth actual⟩
 
-#print axioms withRead
-#print axioms leaves_sound
-#print axioms assume_sound
 end Zkc.Core.BodyAnalysis.Knowledge

@@ -67,5 +67,4 @@ theorem Located.process {Γ : Ctx (LTy V)} {mid : List (LTy V)} {events : Events
     (verifier round.members events (emptyPoint t) M fns roles boundary evaluate equalLaw ends atPoint
       path hidden [] claim round.sites)
 
-#print axioms Located.process
 end ZkcFormal.Interactive.Sumcheck.ReductionRound

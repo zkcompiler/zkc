@@ -144,6 +144,4 @@ example : refusals (loopWith [(missingSite, .invariant [] [])]) =
 example : (refusals (loopWith [(loopSite, .invariant [] [literalBool false])])).head? =
     some (.definition (.fn ⟨.loopInvariant, loopPlace, .invariant loopSite 0 false⟩)) := by decide +kernel
 
-#print axioms annotatedReplacement
-#print axioms associativeDifferenceAssured
 end Zkc.Core.BodyAnalysis.AnnotatedFunctionTests

@@ -214,8 +214,4 @@ theorem FunctionContracts.lawful (callees : Callees M fnTable)
     settle := fun _ _ _ => trivial
     stop := fun _ _ _ => nofun }
 
-#print axioms FunctionContracts.lawful
-#print axioms builtinRequired
-#print axioms localRequired
-#print axioms localEnsured
 end Zkc.Core.BodyAnalysis

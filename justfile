@@ -42,7 +42,7 @@ _charge-checks:
 
 # Build the public formal package and audit its dependencies and proof controls.
 test-formal:
-    cd lean/formal && lake build && lake test
+    cd lean/formal && lake build --iofail ZkcFormal && lake build && lake test
     just _charge-checks
 
 # Parse and format the reference corpus and check source contracts and generated view types.
@@ -62,8 +62,9 @@ test-written-knowledge: test-frontend
     cd lean/formal && lake build ZkcFormal.Written.GroupReplay ZkcFormal.Written.FiniteModel ZkcFormalTools.Policy
     cd lean/formal && lake env python3 checks/written_knowledge.py
 
-# Audit the compiler package: the kernel's replay of the core, the vocabulary and their tests, no `sorry`, no axiom beyond `propext` and `Quot.sound`, the import rules.
+# Audit the compiler package: the core, the vocabulary and the kernel's reader log nothing when they are built, the kernel's replay of the core, the vocabulary and their tests, no `sorry`, no axiom beyond `propext` and `Quot.sound`, the import rules.
 audit:
+    cd lean/compiler && lake build --iofail ZkcCore ZkcVocabulary ZkcKernel
     cd lean/compiler && lake exe zkc-audit
 
 # Run the checks that need no build: the public tree, the documents and the generated Unicode tables.

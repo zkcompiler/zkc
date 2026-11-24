@@ -270,16 +270,6 @@ theorem casesSound : CasesSoundStatement σ := by
     rw [BoundsApart, entry.2.2.1]
     exact fun q m bl key' place at_ => apart q m bl key' place (List.mem_cons_of_mem _ at_)
 
-#print axioms armsNilGrows
-#print axioms armsConsGrows
-#print axioms casesGrows
-#print axioms armsNilRuns
-#print axioms armsConsRuns
-#print axioms casesRuns
-#print axioms armsNilSound
-#print axioms armsConsSound
-#print axioms casesSound
-
 end
 
 end Zkc.Core.BodyAnalysis

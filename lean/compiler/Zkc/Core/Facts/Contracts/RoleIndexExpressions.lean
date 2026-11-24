@@ -74,8 +74,5 @@ theorem next_denotes (who : Holders) (i : Nat) :
     apply Expr.Denotes.arg
     simp [valueAt, roleSem, hide_out M (a := LTy.index who) held]
 
-#print axioms atIteration_denotes
-#print axioms fromCount_denotes
-#print axioms next_denotes
 end RoleIndex
 end Zkc.Core.BodyAnalysis

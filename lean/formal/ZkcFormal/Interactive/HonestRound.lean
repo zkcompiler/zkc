@@ -60,5 +60,4 @@ theorem roundReturns (M : Model V) [Lean.Grind.Field (rows.F M)] [DecidableEq (r
   rw [eval]
   exact ⟨r,rfl⟩
 
-#print axioms roundReturns
 end ZkcFormal.Interactive.Sumcheck.HonestPairs

@@ -72,6 +72,4 @@ example : (roleKnowledgeTypes V 0).empty ⟨.fin 0, [1]⟩ = false := rfl
 example : (roleKnowledgeTypes V 0).empty ⟨.fin 0, [0]⟩ = true := rfl
 example : (roleKnowledgeTypes V 0).range ⟨.nat, [1]⟩ = none := rfl
 
-#print axioms roleKnowledgeTypes_lawful
-#print axioms roleConditionsRead
 end Zkc.Core.BodyAnalysis

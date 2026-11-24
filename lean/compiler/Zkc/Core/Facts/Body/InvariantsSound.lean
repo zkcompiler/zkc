@@ -293,8 +293,4 @@ theorem learnInvariants_sound {Γ : Ctx D.Ty} {ρ : Leaves σ.sem.Dyn} {ids : Ct
 
 end
 
-#print axioms indexValue_sound
-#print axioms decideInvariants_sound
-#print axioms learnInvariants_sound
-
 end Zkc.Core.BodyAnalysis

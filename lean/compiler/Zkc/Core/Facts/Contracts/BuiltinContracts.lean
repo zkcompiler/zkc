@@ -122,5 +122,4 @@ theorem builtinClause_implies (distinct : (fns.map (·.key)).Nodup) (q : Require
       have size := number_read M table distinct dl rl
       exact ⟨[w,first],⟨operand_read M table dw,operand_read M table df,trivial⟩,y,z,rw,rf,by omega⟩
 
-#print axioms builtinClause_implies
 end Zkc.Core.BodyAnalysis

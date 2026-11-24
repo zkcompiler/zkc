@@ -117,8 +117,4 @@ private def getTogether : RoleOp V hs 0 [] [⟨.nat, Holders.ofList ([0,1] ++ []
   .get .nat [] .message 2 [0,1] (by simp)
 example : (roleChecks (V := V) (hs := hs) 0).sameOp getSplit getTogether = false := by rfl'
 
-#print axioms roleResultCount_written
-#print axioms roleResultCount_correct
-#print axioms roleChecks_exact
-#print axioms roleReturns_functional
 end Zkc.Core.BodyAnalysis

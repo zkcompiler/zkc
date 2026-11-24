@@ -384,7 +384,4 @@ example : ((translate (V := V) [.nat] [.nat] ⟨[.bounded (.arg 0)], [.bounded (
     (fun t => (t.preconditions.map ContractClause.staticBound, t.postconditions.map ContractClause.staticBound))) = some ([some (.arg 0)],[some (.arg 1)]) := by rfl'
 end
 
-#print axioms translate_stable
-#print axioms translate_exact
-#print axioms clause_exact
 end Zkc.Core.BodyAnalysis.HeaderContracts

@@ -134,7 +134,4 @@ theorem analyseCheckedFrom_safe [DecidableEq Raw] (reader : σ.cfg.assertions.La
     (fun expr m => AssertionTypes.assertionDefined reader (List.all_eq_true.mp guarantees expr m))
     distinct accepted recorded path values valid requires facts
 
-#print axioms checkAnnotations_defined
-#print axioms analyseCheckedFrom_safe
-
 end Zkc.Core.BodyAnalysis

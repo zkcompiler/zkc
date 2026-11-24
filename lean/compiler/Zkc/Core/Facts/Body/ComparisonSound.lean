@@ -122,11 +122,6 @@ theorem followsSound : FollowsSoundStatement σ := by
     lawful followed defined' guarantees nodup' recorded path values valid required facts'
     (Process.every_mono _ _ (fun _ _ => trivial) (fun _ h => h) first.1)
 
-#print axioms compareSame
-#print axioms followSafe
-#print axioms followsAssured
-#print axioms followsSound
-
 end
 
 end Zkc.Core.BodyAnalysis

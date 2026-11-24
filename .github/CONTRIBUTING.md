@@ -115,7 +115,9 @@ belongs in the pull request body, which is what survives the squash.
   nor an axiom beyond its library's stated policy. The active core, vocabulary and their
   tests permit only `propext` and `Quot.sound`; imports follow their library's rules.
   `just audit` checks these and the [toolchain boundary](../docs/lean-toolchain.md).
-  State what a theorem covers in the guide of its package.
+  A module of a library logs nothing when it is built: no `#print`, `#eval` or `#check`
+  stays in it, and the axioms of its declarations are the audit's to check, not the
+  build's to print. State what a theorem covers in the guide of its package.
 - **Formats and identities.** Version persisted or exchanged formats and
   cryptographic byte constructions. Before stabilization, all zkc-owned formats
   stay at version `0`, such as `zkc.core/0`. Publish a schema change in the

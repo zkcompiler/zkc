@@ -126,5 +126,4 @@ theorem afterLoop_sound {ops : KnowledgeOperations Raw} (laws : ops.Lawful R Run
     cases at_
     exact ⟨n,num,Range.afterSums_widen fits highOK⟩
 
-#print axioms afterLoop_sound
 end Zkc.Core.BodyAnalysis.Knowledge

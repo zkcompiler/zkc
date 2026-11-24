@@ -60,8 +60,4 @@ theorem Certificate.probability_one (cert : Certificate rows sums vectors events
     K.probability (protocolMeaning M p cert.root path (args rows M n xs claim)) s (fun _ _ => true) = 1 :=
   K.probability_one_of_every _ s (cert.everyRun M math path xs claim size valid) total
 
-#print axioms certify
-#print axioms Certificate.everyValid
-#print axioms Certificate.reaches
-#print axioms Certificate.probability_one
 end ZkcFormal.Interactive.Sumcheck.SourceCompleteness

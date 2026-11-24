@@ -47,8 +47,8 @@ Run every command from the root of the repository.
 | `just test-packages` | print every admitted root of eight examples as a Lean module in which the kernel elaborates the program by names, compare that program with what the frontend gave to admission, read a fixture with every constructor back, and refuse four controls |
 | `just test-written-knowledge` | compile both Schnorr and Chaum–Pedersen written clauses, check admission and extraction, consume the public theorems, replay their project imports, and test permitted forks, source mutations and diagnostics |
 | `just test-written-charge` | issue and audit the two source-bound probability endpoints, check depth-specific member laws, close the proof arguments of each use, read the clause of a goal and what its goals claim, judge the five subjects of a written soundness goal (`Count<8>`, Freivalds' check, `Guess<3>`, `Either`, `Twice`) within the tables of caps of their goals in generated modules, each with its controls, judge the accepted proof modules against their challenges in one run of `lake comparator`, check that use of the comparator on pairs that it must refuse, exercise independent fixed-table sampling and replay the charge issuer. The checks build their generated modules, and export what is judged, under `bwrap` (bubblewrap), which the host needs |
-| `just test-formal` | build and audit the formal library, its tests and the charge issuer together, then run the charge checks |
-| `just audit` | `lake exe zkc-audit` in `lean/compiler`: core, vocabulary and their tests |
+| `just test-formal` | build the formal library, which must log nothing, then build and audit it with its tests and the charge issuer, then run the charge checks |
+| `just audit` | `ZkcCore`, `ZkcVocabulary` and `ZkcKernel` built with `--iofail` (a library logs nothing), then `lake exe zkc-audit` in `lean/compiler`: core, vocabulary and their tests |
 | `just check` | the checks that need no build: `bash .github/scripts/public-tree-guard.sh`, `python3 scripts/check_docs.py --all`, and `python3 lean/compiler/scripts/generate_unicode_tables.py --check` |
 
 Lake builds incrementally, so `just build` after a change rebuilds only the modules that the
@@ -103,6 +103,12 @@ Beam does not replace either acceptance check.
 ### The audit
 
 `just audit` checks the core, vocabulary and their tests.
+
+It first builds `ZkcCore`, `ZkcVocabulary` and `ZkcKernel` with Lake's `--iofail`, under
+which a module that logs anything fails. Lake keeps what a module logs and replays it whenever a module that
+imports it is built or opened, so a library that prints (a `#print axioms` left after a
+theorem) puts those lines into every later build and every editor session. `just test-formal`
+builds the formal library the same way.
 
 - Every logical declaration is replayed through Lean's kernel, including its project import
   closure. Only Lean's own libraries are taken as built; unsafe declarations and compiled

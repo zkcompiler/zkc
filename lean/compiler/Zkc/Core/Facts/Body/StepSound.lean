@@ -273,14 +273,6 @@ theorem stepSound (σ : Setting D Raw) : StepSoundStatement σ := by
     · exact Recorded.before (B := []) recorded (fun a m => List.mem_append_right _ m)
         (fun _ _ m => nomatch m) ⟨[], rfl, fun _ m => nomatch m⟩
 
-#print axioms returnedBind
-#print axioms retGrows
-#print axioms retRuns
-#print axioms retSound
-#print axioms stepGrows
-#print axioms stepRuns
-#print axioms stepSound
-
 end
 
 end Zkc.Core.BodyAnalysis

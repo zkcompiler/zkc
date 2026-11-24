@@ -130,9 +130,5 @@ theorem affine_value {fns} (table : FnTable M fns) (k : Key) (a z r : rows.F M)
   rw [binary_value rows M table _ _ _ math.add, line_normalForm]
   rfl
 
-#print axioms boundary_value
-#print axioms evaluate_value
-#print axioms affine_value
-
 end ScalarRows
 end ZkcFormal.Interactive.Sumcheck

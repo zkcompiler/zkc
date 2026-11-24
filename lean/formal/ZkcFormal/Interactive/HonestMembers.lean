@@ -67,5 +67,4 @@ def readMembers (raw : ReductionRound.Operations V)
   let ⟨pl⟩ ← ReductionRound.certifyPairs rows ds unique ops evaluation
   return ⟨ops,⟨mk,ml,bk,bl,pl⟩⟩
 
-#print axioms readMembers
 end ZkcFormal.Interactive.Sumcheck.HonestPairs

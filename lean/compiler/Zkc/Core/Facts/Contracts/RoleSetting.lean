@@ -78,8 +78,4 @@ example (checked : FunctionContracts hs.fns) :
 
 end
 
-#print axioms requiresDefined
-#print axioms settingLawful
-#print axioms readerLawful
-
 end Zkc.Core.BodyAnalysis.RoleContracts

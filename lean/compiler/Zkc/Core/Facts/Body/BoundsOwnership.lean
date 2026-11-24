@@ -48,6 +48,4 @@ theorem followChecked_places (checks : SkelRules D) (candidateKey : Key)
   exact analyseFrom_places { cfg with definition := candidateKey } notes' summary inputs' body' _
     sourceWF q (List.mem_reverse.mp hq)
 
-#print axioms checkFacts_places
-#print axioms followChecked_places
 end Zkc.Core.BodyAnalysis

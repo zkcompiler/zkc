@@ -125,8 +125,4 @@ theorem follows_checked_assured (lawful : σ.Lawful) (conditions : ConditionsRea
     (checkAnnotations_defined candidateReader body' typedNotes)
     (fun g m => AssertionTypes.assertionDefined candidateReader (List.all_eq_true.mp (Bool.and_eq_true_iff.mp (Bool.and_eq_true_iff.mp typedSummary).1).2 g m))
 
-#print axioms follows_checked_assured
-#print axioms checkFacts_safe
-#print axioms checkFacts_ok_iff
-#print axioms follows_checked
 end Zkc.Core.BodyAnalysis

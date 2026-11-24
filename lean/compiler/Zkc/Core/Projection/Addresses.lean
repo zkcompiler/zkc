@@ -70,5 +70,4 @@ theorem projectedAddresses_nodup {Î“ outs} (body : Term (protocolDialect V hs) Î
   simp only [Term.Distinct, Bool.and_eq_true, decide_eq_true_eq] at ok
   exact (projectedAddresses r [] body).nodup ok.1
 
-#print axioms projectedAddresses_nodup
 end Zkc.Core.BodyAnalysis

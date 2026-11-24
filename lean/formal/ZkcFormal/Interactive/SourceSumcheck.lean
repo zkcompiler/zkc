@@ -127,8 +127,4 @@ theorem Certified.sound (cert : Certified rows vectors p rootKey red eval n even
   apply cert.soundFrom rows vectors M math (fun d _ => vectorMath d) equality K points distinct positive path s x claim wrong
   exact cert.linked.rounds.freshFromService M _ _ _ points positive fresh _ _ _
 
-#print axioms certify
-#print axioms Certified.soundValid
-#print axioms Certified.soundFrom
-#print axioms Certified.sound
 end ZkcFormal.Interactive.Sumcheck.TableVerifier

@@ -501,11 +501,6 @@ theorem chooseSound : ChooseSoundStatement σ := by
           (fun a m => List.mem_cons_of_mem _ (List.mem_append_right _ m)) (fun _ _ m => nomatch m)
           ⟨[], rfl, fun _ m => nomatch m⟩
 
-#print axioms walk_returned_length
-#print axioms chooseGrows
-#print axioms chooseRuns
-#print axioms chooseSound
-
 end
 
 end Zkc.Core.BodyAnalysis

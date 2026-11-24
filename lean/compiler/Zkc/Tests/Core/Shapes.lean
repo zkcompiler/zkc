@@ -435,6 +435,3 @@ example : (shapeOf attempt).fields.Fork plainModel (.key ⟨2⟩) ((3 : Nat), ()
     Shape.fields, EventClass.recorded, Fields.append]
 
 end Zkc.Core.Shapes
-
-#print axioms Zkc.Core.RoleMap.ofList_to
-#print axioms Zkc.Core.RoleMap.ofList_back

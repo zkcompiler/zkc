@@ -76,7 +76,4 @@ example : (roleAssertionTypes hs 0 allForms).signature (.absent [⟨.fin 0,[1]�
 example : (roleAssertionTypes hs 0 allForms).boolean ⟨.bool,[1]⟩ = false := by rfl'
 end
 
-#print axioms readRoleValue_prints
-#print axioms roleAssertionBool
-#print axioms roleAssertionTypes_lawful
 end Zkc.Core.BodyAnalysis

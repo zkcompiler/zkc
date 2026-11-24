@@ -48,5 +48,4 @@ theorem pairs_sound (rounds : Sequence hs events state running term count)
   · exact rounds.boundsOfMembers _ checked M _ _ _ points positive 1
       (fun _ laws => (PairLaws.interpret rows laws M math points distinct).reindex Fin.val) equalLaw K fresh path
 
-#print axioms pairs_sound
 end ZkcFormal.Interactive.Sumcheck.ReductionRound

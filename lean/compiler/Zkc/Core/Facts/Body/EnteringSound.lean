@@ -969,10 +969,4 @@ theorem atEntry_inv {Γ : Ctx D.Ty} {mid : List D.Ty} (cursor : StaticCursor) (k
 
 end
 
-#print axioms enterExpr_sound
-#print axioms decideAll_sound
-#print axioms learnAll_sound
-#print axioms atEntry_entered
-#print axioms atEntry_inv
-
 end Zkc.Core.BodyAnalysis

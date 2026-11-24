@@ -66,6 +66,4 @@ def Domain.Lawful.prod {A B : Domain T Raw} (a : A.Lawful Run R Typed) (b : B.La
 theorem prodLawful : ProdLawfulStatement :=
   fun _ _ _ _ _ a b => ⟨a.prod b, fun _ _ _ => Iff.rfl⟩
 
-#print axioms prodLawful
-
 end Zkc.Core.BodyAnalysis

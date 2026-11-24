@@ -544,10 +544,6 @@ theorem opRuns : OpRunsStatement σ := by
     (fun n above => scope.fresh n (by rw [← entry.2.1]; exact above)) entry.wf
     (ReadsAll.mono entry.1.1 (fun _ _ h => h) reads) sub notUndefined next
 
-#print axioms opGrows
-#print axioms opRuns
-#print axioms opSound
-
 end
 
 end Zkc.Core.BodyAnalysis

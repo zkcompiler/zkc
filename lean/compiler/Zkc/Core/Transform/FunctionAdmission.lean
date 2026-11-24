@@ -100,5 +100,4 @@ theorem FunctionContracts.checkFunction_assured (contracts : FunctionContracts h
     {bounds} (accepted : contracts.checkFunction f = .ok bounds) : f.Assured bounds :=
   contracts.checkAnnotated_assured f (contracts.emptyEvidence f) accepted
 
-#print axioms FunctionContracts.checkFunction_assured
 end Zkc.Core.BodyAnalysis

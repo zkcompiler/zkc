@@ -937,8 +937,5 @@ example : firstProtocolError ⟨[.protocol ⟨1⟩ 2 [Shapes.nat [1]] []
 example : elaborateProgram (erase (⟨_, Shapes.roundsProgram, by decide⟩ : Typed plain)) =
     .ok ⟨_, Shapes.roundsProgram, by decide⟩ := elaborateProgram_erase _
 
-#print axioms elaborateProgram_erase
-#print axioms erase_elab
-
 
 end Zkc.Core.Elaboration

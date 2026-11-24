@@ -150,10 +150,6 @@ theorem attemptSound : AttemptSoundStatement σ := by
     inv₃.valid (σ.domain.mono bodyGrew.1 le inv₁.means) (mem_live σ (σ.alive inv₃.means) _)
     inv₃.means reads₃
 
-#print axioms attemptGrows
-#print axioms attemptRuns
-#print axioms attemptSound
-
 end
 
 end Zkc.Core.BodyAnalysis

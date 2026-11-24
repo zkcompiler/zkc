@@ -110,7 +110,5 @@ theorem sound (rounds : Sequence hs events state claim term count) (path : List 
   exact rounds.soundFrom M fns roles K q cost path nonneg env s x
     (bounds env s x) wrong
 
-#print axioms sound
-#print axioms meaning
 end Sequence
 end ZkcFormal.Interactive.Sumcheck.ReductionRound

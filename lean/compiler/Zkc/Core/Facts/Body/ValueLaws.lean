@@ -640,12 +640,6 @@ theorem Count.Is.unique {sem : Semantics D} {Run : Raw → List sem.Dyn → List
 
 end
 
-#print axioms readsMono
-#print axioms readsFunctional
-#print axioms shareGrows
-#print axioms shareReads
-#print axioms selectReads
-
 section
 variable {Raw Val : Type} {Run : Raw → List Val → List Val → Prop} {R : Reading Val}
     {table : Table Raw} {ρ : Leaves Val}

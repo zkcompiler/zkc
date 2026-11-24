@@ -85,6 +85,5 @@ theorem transferRanges_sound {ops : KnowledgeOperations Raw} (laws : ops.Lawful 
     cases at_
     exact ⟨v, n, reading, val, fits⟩
 
-#print axioms transferRanges_sound
 end Knowledge
 end Zkc.Core.BodyAnalysis
