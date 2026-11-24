@@ -22,8 +22,8 @@ earlier design of the language and are not frozen; each of their sections says s
 Run `just test-frontend` from the repository root to check parsing and canonical printing
 of the libraries, examples and reference cases. The same command checks the diagnostics from
 assembly and name resolution against the reference and exercises the typed protocol views.
-Many negative cases need later phases to reach their expected refusal. The independent
-suite and the historical full frontend driver are described in the
+Many negative cases need later phases to reach their expected refusal. The frontend driver checks names, instances, typing, packages and formatting, including the
+independent conformance suite. Its commands are in the
 [frontend guide](../lean/compiler/Zkc/Frontend/README.md).
 
 `lake test` in `lean/compiler` selects the Core and vocabulary tests.
@@ -32,4 +32,4 @@ See the [development guide](../docs/development.md) for their scope.
 
 The independent suite keeps the expectations with which it was written. Where a later
 clarification of the reference changed an outcome, the frontend's harness lists the case and
-the reason (`Zkc.Tests.Frontend.Harness`).
+the reason (`Zkc.Tests.Frontend.SyntaxHarness`).

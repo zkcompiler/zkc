@@ -1,4 +1,4 @@
-import Zkc.Core.Package
+import Zkc.Frontend.Written.Package
 import Zkc.Tests.Frontend.Instances
 import Zkc.Tests.Frontend.TypingCases
 
@@ -15,63 +15,103 @@ namespace Zkc.Tests.Frontend
 open Zkc.Frontend
 open Zkc.Frontend.Syntax
 
-/-- The JSON text of every package a check emitted. -/
-def packageTexts (check : TypingCheck) : Array String :=
+/-- The source packages presented to core admission, including those it refused. -/
+def emittedPackages (check : TypingCheck) : Array SourcePackage :=
   check.packages.filterMap fun report => match report.outcome with
-    | .admitted package | .refused _ package | .unjustified _ package =>
-      some (Zkc.Core.Raw.printPackage package).render
+    | .admitted checked => some checked.toSourcePackage
+    | .refused _ source => some source
     | _ => none
 
-/-- Checks the packages of a check: none refused by the core, none not emitted, and every
-function passes the core's check of facts. -/
+def packageTexts (check : TypingCheck) : Array String :=
+  (emittedPackages check).map fun source => (Written.package source).text
+
+/-- Match the catalogue names in the test tables against operations in the emitted body. -/
+private def usesOperation (p : SourcePackage) (name : String) : Zkc.Core.LocalRaw p.bindings.vocabulary → Bool
+  | .row (.inl (.field op ..)) => Typing.StandardRow.fieldOp name == some op
+  | .row (.inl (.group op ..)) => Typing.StandardRow.groupOp name == some op
+  | .row (.inl (.seq op ..)) => Typing.StandardRow.seqOp name == some op
+  | .row (.inl op) => Typing.StandardRow.resolve ⟨name, #[]⟩ == some op
+  | .row (.inr key) => key.name == name
+  | .owned op .. =>
+    let spelling := match op with
+      | .natAdd => "nat.add" | .natSub => "nat.sub" | .natMul => "nat.mul"
+      | .natDiv => "nat.div" | .natRem => "nat.rem" | .natPow => "nat.pow"
+      | .natEqual => "nat.equal" | .natLess => "nat.less"
+      | .boolAnd => "bool.and" | .boolOr => "bool.or" | .boolNot => "bool.not" | .boolEqual => "bool.equal"
+      | .seqLength => "seq.length" | .seqAt => "seq.at" | .seqSlice => "seq.slice"
+      | .seqConcat => "seq.concat" | .seqFill => "seq.fill"
+      | .seqSized => "seq.sized" | .seqUnsized => "seq.unsized"
+      | .natBelow => "nat.below" | .finWiden => "fin.widen" | .finToNat => "fin.to_nat"
+      | .make => "make" | .get => "get" | .take => "take" | .variant => "variant"
+    spelling == name
+  | _ => false
+
+private partial def countBody {Op Who : Type} (matchesOp : Op → Bool) (loops : Bool)
+    (region : Zkc.Core.Region Op Who) : Nat :=
+  let .mk _ steps _ := region
+  let count := countBody matchesOp loops
+  steps.foldl (init := 0) fun total step => total + match step with
+    | .op _ _ op _ => (matchesOp op).toNat
+    | .guard .. => 0
+    | .choose _ _ _ _ yes no => count yes + count no
+    | .cases _ _ _ _ arms => (arms.map count).sum
+    | .loop _ _ _ _ _ body => loops.toNat + count body
+    | .block _ _ _ body | .attempt _ _ _ body => count body
+
+private def operationCount (p : SourcePackage) (name : String) : Nat :=
+  p.named.definitions.foldl (init := 0) fun total definition =>
+    total + match definition with
+      | .fn _ _ _ _ _ _ body _ => countBody (usesOperation p name) (name == "loop") body
+      | .protocol _ _ _ _ body => countBody (fun
+          | .compute _ op => usesOperation p name op
+          | _ => false) (name == "loop") body
+
+/-- Report core refusals, emission defects and exhausted checks. Individual cases specify
+which roots should be admitted or waiting. -/
 def checkPackages (label : String) (check : TypingCheck) : TestM Unit := do
   for report in check.packages do
     match report.outcome with
     | .refused reason _ => failure s!"{label}: the core refuses the package of {report.description}: {reason}"
-    | .unjustified functions _ =>
-      failure s!"{label}: the package of {report.description} does not pass the check of facts: {"; ".intercalate functions.toList}"
     | .defect message => failure s!"{label}: the package of {report.description} is not emitted: {message}"
     | .exhausted exhaustion =>
       failure s!"{label}: the package of {report.description} is not checked: {exhaustion.describe}"
     | _ => pure ()
 
-/-- The functions of the packages that the core elaborated, and those among them that do not
-pass the check of facts. -/
-def checkedFunctions (check : TypingCheck) : Nat × Nat :=
-  check.packages.foldl (init := (0, 0)) fun (checked, failing) report =>
+/-- Count functions in the programs returned by admission. -/
+def checkedFunctions (check : TypingCheck) : Nat :=
+  check.packages.foldl (init := 0) fun count report =>
     match report.outcome with
-    | .admitted package => (checked + package.functions.length, failing)
-    | .unjustified functions package => (checked + package.functions.length, failing + functions.size)
-    | _ => (checked, failing)
+    | .admitted p => count + p.admitted.program.headers.fns.length
+    | _ => count
 
 /-- The packages of protocol roots that the core admitted, with the check of facts of every
 protocol and function in them, and the protocols those packages hold. -/
 def checkedProtocols (check : TypingCheck) : Nat × Nat :=
   check.packages.foldl (init := (0, 0)) fun (roots, protocols) report =>
     match report.outcome, check.state.results.body? report.root with
-    | .admitted package, some (.protocol _) => (roots + 1, protocols + package.protocols.length)
+    | .admitted package, some (.protocol _) => (roots + 1, protocols + package.admitted.program.headers.protocols.length)
     | _, _ => (roots, protocols)
 
 /-- Checks the assertions `// uses`, `// not uses`, `// applies`, `// obligations`, `// waits` and
 `// says`. -/
 def checkTypingAssertions (label : String) (check : TypingCheck) (source : String) : TestM Unit := do
-  let texts := packageTexts check
+  let applications (name : String) := (emittedPackages check).foldl (fun n p => n + operationCount p name) 0
   let waits := check.packages.filterMap fun report => match report.outcome with
     | .waiting reason => some reason
     | _ => none
   for line in source.splitOn "\n" do
     if line.startsWith "// uses " then
       let name := String.ofList (line.toList.drop 8)
-      expectTrue (texts.any fun text => (text.splitOn s!"\"{name}\"").length > 1)
+      expectTrue (applications name > 0)
         s!"{label}: no package applies `{name}`"
     else if line.startsWith "// not uses " then
       let name := String.ofList (line.toList.drop 12)
-      expectTrue (texts.all fun text => (text.splitOn s!"\"{name}\"").length == 1)
+      expectTrue (applications name == 0)
         s!"{label}: a package applies `{name}`"
     else if line.startsWith "// applies " then
       match (String.ofList (line.toList.drop 11)).splitOn " " with
       | [name, count] =>
-        let found := texts.foldl (init := 0) fun total text => total + ((text.splitOn s!"\"{name}\"").length - 1)
+        let found := applications name
         expectTrue (some found == count.toNat?)
           s!"{label}: the packages apply `{name}` {found} times; {count} are expected"
       | _ => failure s!"{label}: unreadable assertion `{line}`"

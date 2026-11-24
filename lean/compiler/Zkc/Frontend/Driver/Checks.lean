@@ -9,7 +9,7 @@ set_option autoImplicit false
 /-!
 # The checks as views of a session
 
-The checks of names, of instances, of the typing of bodies and of schemes, as the tests and the
+The checks of names, of instances, of the typing of bodies and their packages, as the tests and the
 tools read them: each is a session after its phases, and what it gives is read off the session.
 The refusals of a check are the diagnostics of its phases, in source order.
 -/
@@ -120,26 +120,5 @@ protocol. -/
 def checkTyping (check : InstanceCheck) (inputs : Array String := #[]) : TypingCheck :=
   let session := if inputs.isEmpty then check.session else { check.session with inputNames := inputs }
   ⟨session.runAll #[Driver.defaultBodies, Driver.packages]⟩
-
-/-- The schemes of a program after the typing of bodies: a session after the phase of schemes. -/
-structure SchemeCheck where
-  session : Session
-  deriving Inhabited
-
-namespace SchemeCheck
-
-def reports (check : SchemeCheck) : Array SchemeReport := check.session.state.results.schemeReports
-
-/-- The diagnostics of the rules of schemes, in the order the schemes were made. -/
-def diagnostics (check : SchemeCheck) : Array Diagnostic := check.session.diagnosticsOf #["schemes"]
-
-/-- The refusals of the rules of schemes, in the order the schemes were made. -/
-def refusals (check : SchemeCheck) : Array Refusal :=
-  (check.diagnostics.filter (·.isError)).map (·.toRefusal Renderer.plain)
-
-end SchemeCheck
-
-/-- Constructs every scheme of a typed program. -/
-def checkSchemes (check : TypingCheck) : SchemeCheck := ⟨check.session.run Driver.schemes⟩
 
 end Zkc.Frontend

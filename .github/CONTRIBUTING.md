@@ -101,7 +101,7 @@ belongs in the pull request body, which is what survives the squash.
 ## Change requirements
 
 - **Tests.** Test at the level the change acts: programs through the
-  frontend's test driver for the source language, tests of the core for its
+  frontend's test driver with `just test-frontend` for the source language, tests of the core for its
   definitions, and a negative test for every refusal a change introduces.
 - **Semantics.** Update the owning document: the
   [language reference](../language/LANGUAGE.md) for the source language and

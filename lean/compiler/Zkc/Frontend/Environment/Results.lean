@@ -67,8 +67,6 @@ structure ResultStore where
   /-- The package of each root that is a function or a protocol, and what the core made of it,
   in the order of the roots. -/
   packageReports : Array PackageReport := #[]
-  /-- What became of each scheme, in the order of the schemes. -/
-  schemeReports : Array SchemeReport := #[]
   deriving Inhabited
 
 namespace ResultStore

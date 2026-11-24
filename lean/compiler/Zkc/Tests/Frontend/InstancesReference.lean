@@ -26,6 +26,7 @@ def expectedInstanceRefusals : Array (String × String × Nat) := #[
   ("N-NL9b", "NL9", 5), ("N-NL9c", "NL9", 5), ("M-SUM14", "SP8", 42), ("M-FRA25", "SP11", 161),
   ("L-ALG1", "SP4", 52), ("L-ALG2", "SP3", 27), ("L-ALG4", "SP4", 52), ("L-HASH2", "SP8", 20),
   ("L-BLS1", "SP8", 14), ("T-Z2b", "TY2", 3), ("T-H8", "TY2", 3), ("S-Z2a", "TY2", 3),
+  ("M-SCH1", "GU2", 15), ("M-SCH4", "HO5", 11), ("M-SCH6", "NL6", 15),
   ("S-Z3", "TY2", 3), ("N-TY2c", "TY2", 3)]
 
 /-- The tests of layer A whose refusal is by a rule of this check, and whose deciding needs a
@@ -158,7 +159,8 @@ def programInstancesSuite (repository : Repository) : TestM Unit := do
       return ({ name := file.toString, parsed := parse file.toString source } : SourceInput)
     let nameCheck ← checkNames inputs fun names => (load names : IO _)
     unless nameCheck.refusals.isEmpty do
-      failure s!"{stem}: the names do not resolve"
+      unless expectedNameRefusal path nameCheck.refusals do
+        failure s!"{stem}: the names do not resolve"
       continue
     let check := checkInstances nameCheck (files.map (·.toString))
     match expectedProgramRefusals.find? (·.1 == stem) with

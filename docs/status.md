@@ -94,7 +94,7 @@ Resolved goals and contracts retain declaration identity and named statement arg
 assembly and name resolution with the expected rules, takes every reference case through the typing of the program and fixes the counts of the outcomes, and checks generated views at closed
 protocol instances. It also checks that guarded indexing survives a send at its sender,
 requires local evidence at the receiver, and reports the role missing a bound at a shared
-binding. Positive cases emit a root and pass Core admission. Resolution checks the statement/witness split of a top-level relation in
+binding. The admission controls emit and check their positive roots. Resolution checks the statement/witness split of a top-level relation in
 `proves`, `reduces` and `through`, the form of knowledge branches, named algorithms and loop references.
 Where a `proves` clause or the source of a `reduces` clause applies a relation, the application is typed at the instance of the protocol as an application in an expression is: the static arguments of the relation are inferred from the operand types, a `where` on its head holds at the instance, the operands have the types of its parameters, and its body is typed. Where a goal or an application gives values to specification-only parameters, the `where` is checked at those values and the body of the relation is typed at them, so an index or a size that is a proof argument is checked against the value of each use. A relation or a specification function that a specification item calls is reached at the values of its own specification-only parameters, which it shares with the caller or is given in a specification argument; a call that leaves one out is refused (SP11). A definition generic over a module parameter waits where one place of its text is typed more than once and stands for different functions at an instance: members of two modules, as in a loop whose receiver goes from a value of one module's type member to a value of another's, or a member in one typing and a function of the type's own module in another. The typing at the instance reads one resolution for a place, and before this such a program was admitted and called one function for all (39 written out, 99 as a loop). `just test-formal` runs thirteen such programs, which wait, and nineteen written-out forms and places with one member, which mean what the source says (`ZkcFormalTests.MemberResolution`): dot calls and an operator, functions and a protocol, and module parameters among naturals and under a section. Not changed: a `where` that equates a type member with itself (`where X::T == X::T`) makes the member count as equated with a type, so an operator on a value of it is the function of the type's own module and not the member of the interface. A clause runs nowhere, so an operand or a body of a relation that waits for a later layer of the language leaves the clause untyped and the protocol unaffected; an operand that waits is met before the instance of the relation, so the `where` is then not checked, at a goal either. No clause of the examples is left so: each is typed with its body. The short application of a relation with witness parameters, at the top of a `proves` clause or of the source of a `reduces` clause, is typed on its statement operands (SX3); before this it was refused there.
 
@@ -103,12 +103,25 @@ What written soundness goals of one scheme claim is read as one package (`Writte
 The contract of a protocol generic over a module parameter is typed in both typings of SP12, as its body is: a clause reads of a type member what the interface declares, calls the members that a body may call, and the instance keeps the resolutions for the typing at a goal. A specification argument of an application that reads the index of a loop that is one loop for every iteration is refused (SP11); in a loop typed per iteration each application gives its own value. A sum of naturals over a static range is written term by term where its index is an operand of arithmetic in the term, which is TY8's condition, and is one loop where the index is read as a position or in a condition; before this every sum whose term named the index was written term by term, so that the count of a relation over a table of `n` entries was `n` blocks. No deployed function of an example changes. An operand that is no port is not read yet, and a claim whose relation links a primitive that no deployed definition links is not compared with the deployed package. Not typed yet: the relation of a `knowledge` clause, what a clause states under the results or under the index of a loop, a formula that applies no relation, and `requires`. Typing the full contract at each instance remains open. The
 [language and frontend review](source-elaboration.md) describes the proposed boundary.
 
+The frontend driver checks locations in the reference tables, compares emitted programs across
+formatting, and runs independent conformance cases. It currently reports specification bodies
+without an executable core form as waiting, and the primitive pairing module reports an
+incompatible binding. The test driver lists nine specification-only root failures pending a
+decision on their verdict, and two pairing failures pending a repair of the primitive binding.
+Each appears as a known failure. A new failure or a listed diagnostic that disappears fails
+the driver.
+
+Participant programs have no concrete executor and standard runtime model in this compiler.
+The historical commands to run, prove, verify and read trees have been removed. Derived
+construction awaits the constructed stage on the library's protocol objects. Written scheme
+selection checks roles and statement ports (SC3 and SC4). The construction-time check of draws
+(SC5) awaits that stage too.
+
 ## Earlier source and execution pipeline
 
-Use [the previous Lean compiler at `10ed903fc`](https://github.com/zkcompiler/zkc/tree/10ed903fc22d3f20b22ff2d1bbf607a740ef0718) for the working `.zkc` frontend,
-`zkc-check`, scheme construction and formal examples. The table records coverage at that revision.
+Use [the previous Lean compiler at `10ed903fc`](https://github.com/zkcompiler/zkc/tree/10ed903fc22d3f20b22ff2d1bbf607a740ef0718) for the historical execution commands, scheme construction and formal examples. The table records coverage at that revision.
 The current default targets build the redesigned Core, vocabulary, their tests and audit.
-The full frontend CLI is still being migrated. The earlier receipt suite is preserved with its original Core API in the [historical package](../lean/historical-formal/README.md).
+The earlier receipt suite is preserved with its original Core API in the [historical package](../lean/historical-formal/README.md).
 
 | Area | Coverage at `10ed903fc` |
 |---|---|

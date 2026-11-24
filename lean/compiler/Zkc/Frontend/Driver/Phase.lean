@@ -1,7 +1,7 @@
 module
 
 public import Zkc.Frontend.Driver.SourcePhases
-public import Zkc.Frontend.Semantics.Scheme
+public import Zkc.Frontend.Semantics.Typing
 public import Zkc.Frontend.Driver.Bodies
 
 @[expose] public section
@@ -21,8 +21,7 @@ The pipeline is that of the checker as it stands: assembly (the program, which l
 with the library files it reaches), names (resolution of every written name), instances (the
 checks of declarations and the roots), types (the bodies of what the roots reach), defaults
 (the default instances of what no root reaches), default bodies (their bodies), packages
-(the package of every root, admitted by the core) and schemes (the construction of every
-scheme). From instantiation on, a phase does not compute everything of its kind: it asks for
+(the package of every root, admitted by the core). From instantiation on, a phase does not compute everything of its kind: it asks for
 what the roots need, and the requests compute the rest on the way.
 -/
 
@@ -64,16 +63,9 @@ def packages : Phase where
   writes := #[.package]
   run := Typing.reportPackages
 
-/-- Every scheme is constructed by the core, or waits, or is refused. -/
-def schemes : Phase where
-  name := "schemes"
-  reads := #[.bodies]
-  writes := #[.package]
-  run := constructSchemes
-
 /-- The phases of a whole run, in order, for a program that loading assembled. -/
 def pipeline (assembly : Assembly) : Array Phase :=
-  sourcePhases assembly ++ #[types, defaults, defaultBodies, packages, schemes]
+  sourcePhases assembly ++ #[types, defaults, defaultBodies, packages]
 
 /-- The phases up to and including the one with a name. -/
 def upTo (phases : Array Phase) (name : String) : Array Phase :=

@@ -1,3 +1,4 @@
+import Lake.Load.Workspace
 import Zkc.Tools.Audit
 -- the controls are imported so that Lake builds them; the audit reads them from their files
 import Zkc.Tools.Audit.Controls.Axiom
@@ -27,4 +28,28 @@ def libraries (directory : System.FilePath) : Array Library := #[
   { name := "tests of the vocabulary", root := `Zkc.Tests.Vocabulary, kind := .tests,
     directory }]
 
-def main : IO UInt32 := run libraries
+/-- Compare the audit's inventory of source files with the modules Lake selects when
+building each library as a whole. Compare paths so library-specific source directories count. -/
+def checkLibraryCoverage (directory : System.FilePath) : IO Bool := do
+  let lean ← Lake.LeanInstall.get (← Lean.findSysroot)
+  let lakeEnv ← (Lake.Env.compute (.ofLean lean) lean none).toIO IO.userError
+  let some workspace ← (Lake.loadWorkspaceRoot { lakeEnv, wsDir := directory }).toBaseIO
+    | throw (IO.userError s!"could not load the Lake package at {directory}")
+  let mut selected : Std.HashSet System.FilePath := {}
+  for library in workspace.root.leanLibs do
+    let sourceDir ← IO.FS.realPath library.srcDir
+    for sourceModule in ← library.getModuleArray do
+      selected := selected.insert (Lean.modToFilePath sourceDir sourceModule.name "lean")
+  let files ← leanFiles directory (directory / "Zkc")
+  let mut missing := 0
+  for name in files do
+    let path := Lean.modToFilePath directory name "lean"
+    unless selected.contains path do
+      IO.eprintln s!"No Lean library selects {path}"
+      missing := missing + 1
+  IO.println s!"library coverage: {files.size} compiler modules, {workspace.root.leanLibs.size} library targets, {missing} unselected"
+  return missing == 0
+
+def main : IO UInt32 := do
+  unless ← checkLibraryCoverage (← IO.FS.realPath (← packageDirectory)) do return 1
+  run libraries

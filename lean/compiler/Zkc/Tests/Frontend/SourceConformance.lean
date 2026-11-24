@@ -239,7 +239,7 @@ private def checkProperties (repository : Repository) : TestM Unit := do
 
 def main : IO Unit := do
   let repository : Repository := ⟨"../../language", "../../libraries", "../../examples"⟩
-  let tally ← runSuite "Source conformance" do
+  let suite : TestM Unit := do
     checkProperties repository
     checkCertifiedFacts repository
     checkSendFacts repository
@@ -262,4 +262,5 @@ def main : IO Unit := do
     checkNames repository
     checkBodyTyping repository
     checkSchemeArguments repository
+  let tally ← runSuites [("Source conformance", suite)]
   if tally.failed > 0 then throw (IO.userError "source conformance failed")
