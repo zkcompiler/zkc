@@ -1,0 +1,37 @@
+
+namespace ThirdElement
+open Zkc.Core ZkcFormal ZkcFormal.Written ZkcFormal.ProbabilisticProcess
+theorem field_judged : soundJudged := by
+  claim_intro
+  have hcard : 2 < Fintype.card F := lt_of_lt_of_le (by decide : 2 < Zkc.Vocabulary.Field.bls12381Fr.order) large
+  have third : ∃ w : F, w ≠ 0 ∧ w ≠ 1 := by
+    classical
+    by_contra! no
+    have sub : (Finset.univ : Finset F) ⊆ {0, 1} := by
+      intro x _
+      by_cases h : x = 0
+      · simp [h]
+      · simp [no x h]
+    have hc := Finset.card_le_card sub
+    simp [zero_ne_one] at hc
+    omega
+  obtain ⟨w, h0, h1⟩ := third
+  have bfalse : input_b = false := by
+    cases e : input_b
+    · rfl
+    · have ev : functionResult (t := .bool) (fnMeaning (ArithmeticModel.model F G) installed soundMember (.cons true (.cons w .nil))) =
+          some true := by
+        apply functionResult_of_judged
+        walk
+        simp_all
+      have reject := rejected w trivial
+      rw [e, ev] at reject
+      simp at reject
+  subst input_b
+  walk
+  walk_free as unused
+  walk
+theorem field_claim : soundClaim := sound_claim_of_judged field_judged
+#print axioms field_judged
+#print axioms field_claim
+end ThirdElement

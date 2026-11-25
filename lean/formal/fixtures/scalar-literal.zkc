@@ -1,0 +1,12 @@
+module literal_test
+use zkc::security::{soundness}
+type F = primitive("bls12-381.fr")
+relation Holds(b: bool): b
+protocol Check roles(P,V)(b: bool @(P,V), x: F @(P,V)):
+    guard @V x == 0 and x == 1
+spec for Check:
+    proves @V Holds(b)
+scheme Checked = Check:
+    prover P
+    construction interactive
+goal sound = soundness(Checked)

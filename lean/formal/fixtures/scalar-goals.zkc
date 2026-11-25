@@ -1,0 +1,16 @@
+module mixed
+use zkc::security::{soundness}
+type F = primitive("bls12-381.fr")
+section <spec e: nat>:
+    relation Holds(b: bool): b
+    protocol Sample roles(P,V)(b: bool @(P,V)):
+        r <- draw F from V to P
+        guard @V b
+    spec for Sample:
+        proves @V Holds(b)
+        charge sites.r <= e / 2
+scheme Checked = Sample:
+    prover P
+    construction interactive
+goal free = soundness(Checked, spec e = 0)
+goal paid = soundness(Checked, spec e = 1)

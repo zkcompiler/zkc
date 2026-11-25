@@ -1,0 +1,8 @@
+module zero_rounds
+use zkc::curves::bls12_381::{Fr}
+use zkc::security::{soundness}
+use sumcheck<Fr>::{Sumcheck}
+scheme Checked = Sumcheck<0>:
+    prover P
+    construction interactive
+goal sound = soundness(Checked, stage = written)

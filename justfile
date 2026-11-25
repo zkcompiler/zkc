@@ -35,7 +35,7 @@ _charge-checks:
     export ZKC_SUBJECTS=$(mktemp -d "${TMPDIR:-/tmp}/zkc-subjects.XXXXXX")
     trap 'rm -rf "$ZKC_SUBJECTS"' EXIT
     cd lean/formal
-    for check in AuditCharge WrittenCharge OccurrenceDepth ProofArguments GoalClause GoalClaim GoalStatement \
+    for check in AuditCharge WrittenCharge OccurrenceDepth ProofArguments GoalClause GoalClaim WrittenModel GoalStatement \
         CountCharge FreivaldsCharge GuessCharge EitherCharge TwiceCharge OutsideReading FixedTableSampling Judgment; do
       lake lean "checks/$check.lean"
     done

@@ -1,0 +1,21 @@
+
+open ZkcFormal.Written
+namespace ZeroRounds
+noncomputable section
+
+theorem addition_not_constant (F G : Type) [Field F] [DecidableEq F]
+    [AddCommGroup G] [Module F G] [DecidableEq G] :
+    ¬ ∃ c : F, ∀ x y : F, (ArithmeticModel.data F G).scalarAdd x y = c := by
+  rintro ⟨c, h⟩
+  have eq := (h 0 0).trans (h 1 0).symm
+  change (0 : F) + 0 = 1 + 0 at eq
+  simp at eq
+
+example (_judged : soundJudged) : True := by
+  let data : StandardModel.Data Bool Bool := { FiniteModel.data with scalarAdd := fun _ _ => true }
+  fail_if_success have wrong := _judged data
+  trivial
+
+#print axioms addition_not_constant
+end
+end ZeroRounds

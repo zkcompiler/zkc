@@ -92,7 +92,7 @@ def read (text : String) (reading : Reading) : IO Subject := do
       (some reading.verifier, some reading.prover) do
     throw (IO.userError "the verifier and the prover of the scheme are not the roles asserted")
   let statements : Statements := ⟨claims, claims.functionsBeforeRoot⟩
-  let chosen := statements.chosenModel
+  let chosen ← IO.ofExcept statements.chosenModel
   unless chosen.model == reading.model.model && chosen.hypotheses == reading.model.hypotheses do
     throw (IO.userError s!"the statements are about another class of models: {chosen.model}")
   return ⟨text, statements⟩
@@ -114,7 +114,7 @@ def Subject.module (s : Subject) (name : String) (proof : Proof) (text : String 
     (model : Option ModelText := none) (statements : Option Lean.Name := none) : IO Module :=
   let written : ProofText := { text, theorems := proof.theorems, imports := proof.imports }
   IO.ofExcept (s.statements.module name written (after := proof.after)
-    (model := model.getD s.statements.chosenModel) (statements := statements))
+    (model := model) (statements := statements))
 
 
 /-- The axioms beyond which no theorem of a subject may rest. -/

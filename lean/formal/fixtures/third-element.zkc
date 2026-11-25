@@ -1,0 +1,16 @@
+module sizes
+use zkc::security::{soundness}
+type F = primitive("bls12-381.fr")
+relation HasThird(b: bool; w: F): b and w != 0 and w != 1
+protocol Check roles(P,V)(b: bool @(P,V), w: F @P):
+    if b:
+        guard @V b
+    else:
+        unused <- draw F from V to P
+        guard @V b
+spec for Check:
+    proves @V HasThird(b; w)
+scheme Checked = Check:
+    prover P
+    construction interactive
+goal sound = soundness(Checked)

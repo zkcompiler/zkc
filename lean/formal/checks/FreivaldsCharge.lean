@@ -167,7 +167,7 @@ a module were propositions defined ahead of the text, a text that defined the to
 again published a goal under its own name, and every check passed.) -/
 def shadowing (s : Subject) (template : String) : IO String := do
   let goal ← s.goal
-  let anew ← IO.ofExcept (s.statements.judgedAt s.statements.chosenModel goal)
+  let anew ← IO.ofExcept (s.statements.judgedAt (← IO.ofExcept s.statements.chosenModel) goal)
   let established ← replaceOnce template "theorem sound_judged : soundJudged := by"
     "theorem sound_established : soundJudged := by"
   -- what the text concludes from the judgment, it concludes from the judgment as it was stated
@@ -276,7 +276,7 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
   let rewrittenCheck ← start work "FreivaldsRewritten" rewritten proof
   -- The standard model has no sampler for a sequence of scalars.
   let uncoveredProof ← startLakeLean work "CoverageControl"
-    (written.statements.coverageModule "CoverageControl" (model := standardModelText)).text
+    (← IO.ofExcept (written.statements.coverageModule "CoverageControl" (model := standardModelText))).text
 
   let _ ← freivalds.finish
   -- The reading of Lean's output: a report of axioms that stands twice is not read.
