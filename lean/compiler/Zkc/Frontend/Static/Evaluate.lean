@@ -1053,13 +1053,18 @@ mutual
     if decideEligibility then
       try
         return ← withModuleConditions do
-          let prepared ← prepareModuleMembers (some <$> complete)
-          let receiver := prepared.getD (.checkingModule interfaces bindings)
-          check receiver demand
-          if let some c := conflict then reject c
-          if let some content := prepared then return content
-          modifyResults (·.modifySignatures (·.setState inst .inProgress))
-          complete
+          if let some content ← prepareModuleMembers (some <$> complete) then
+            check content demand
+            if let some c := conflict then reject c
+            return content
+          -- A dependency computed with a provisional Self may have crossed this very
+          -- instance. It cannot satisfy the actual formation or discharge its conditions.
+          checkIsolatedConditions (reserveKeys := true) do
+            check (.checkingModule interfaces bindings) demand
+            if let some c := conflict then reject c
+          let content ← complete
+          check content demand
+          return content
       catch
         | .waiting reason => return .waits reason true
         | failure => throw failure

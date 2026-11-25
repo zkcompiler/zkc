@@ -126,12 +126,14 @@ def prepareModuleMembers (make : CompileM (Option InstanceContent)) : CompileM (
   modifyResults (·.modifySignatures (·.reserveNewKeys checked.table))
   return none
 
-/-- A member's call-site conditions return only a judgment. Keep their diagnostics and budget
-observations while ensuring that proof-only signature requests do not renumber emitted code. -/
-def checkMemberApplication (check : CompileM Unit) : CompileM Unit := do
+/-- Export a judgment and its observations without publishing any query derived from the
+receiver. Module formation preserves its historical key allocations. Call-site preconditions
+introduce new queries whose numbers must stay private to the judgment. -/
+def checkIsolatedConditions (check : CompileM Unit) (reserveKeys : Bool := false) : CompileM Unit := do
   let saved ← get
   let (outcome, checked) := check.run (← read) saved
   let freeze ← restoreObservations saved checked
+  if reserveKeys then modifyResults (·.modifySignatures (·.reserveNewKeys checked.table))
   match outcome with
   | .ok () => pure ()
   | .error (.exhausted e) => throw (.exhausted (freeze e))

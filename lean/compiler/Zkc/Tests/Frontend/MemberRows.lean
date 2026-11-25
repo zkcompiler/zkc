@@ -327,6 +327,25 @@ private def checkCandidatePackageKeys (repository : Repository) : TestM Unit := 
     expectTrue ((Written.package package.toSourcePackage).text.contains s!"def {stored} : Definition")
       s!"skipping the first candidate changed the emitted key of choose<Good>, expected {stored}"
 
+/-- A bound or predicate can compute an alias through the provisional receiver. An actual
+member that uses that alias must still undergo the ordinary recursion check. -/
+private def checkRecursiveEligibility (repository : Repository) : TestM Unit := do
+  let intro := "module caller\ninterface J<T>\n"
+  let body := "    type Item\nmodule Gate: J<bool>:\n    nat Dummy = 0\n" ++
+    "type UseModule<H: I<Gate>> = bool\ntype Memo<n: nat> = UseModule<M<n>>\n" ++
+    "module M<n: nat>: I<Gate>:\n    type Item = Memo<n>\npub def choose<H: I<Gate>>(x: bool) -> bool: x\n"
+  for header in ["interface I<G: J<Memo<0>>>:\n", "interface I<G: J<bool>> where (Memo<0> == bool):\n"] do
+    let source := intro ++ header ++ body
+    for request in ["", "// instantiate: M<0>\n"] do
+      let session ← memberSession repository (source ++ request)
+      let errors := session.diagnostics.filter (·.isError)
+      expectTrue (errors.size == 1 && errors[0]?.any (·.rule == "NL1") &&
+        !(session.admitRoots none).complete.isOk) s!"recursive receiver admitted: {session.renderDiagnostics}"
+    let acyclic ← memberSession repository (source.replace " = UseModule<M<n>>" " = bool")
+    expectTrue (!acyclic.hasErrors && (acyclic.admitRoots none).complete.isOk &&
+      acyclic.state.results.packageReports.any (·.description.contains "choose<M<0>>"))
+      s!"acyclic receiver failed: {acyclic.renderDiagnostics}"
+
 /-- A generated protocol view can require a function of the provisional receiver through
 the opaque view of a generic parameter. An unrelated unavailable natural has no bearing. -/
 private def checkGeneratedEligibility (repository : Repository) : TestM Unit := do
@@ -517,6 +536,7 @@ def memberRowSuite (repository : Repository) : TestM Unit := do
   checkInferredModule repository
   checkCandidateBounds repository
   checkCandidatePackageKeys repository
+  checkRecursiveEligibility repository
   checkGeneratedEligibility repository
   checkSingleOwnerDependencies repository
   checkWaitingDefault repository

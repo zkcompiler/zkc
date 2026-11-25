@@ -98,9 +98,10 @@ Function calls on a concrete receiver check the selected member’s own static b
 and `where` conditions after resolving the static arguments, for both bodies and primitive rows.
 The default search chooses the first fully formed module that satisfies the required applications.
 It evaluates interface conditions with access to the members each predicate reads through `Self`.
-A successful check commits its dependencies. A skipped, waiting or failed check discards results
-that could depend on the provisional receiver, including indirect requests. Stable instance
-numbers, diagnostics, budget consumption and observations of project primitives survive the check.
+Eligibility checked with a provisional receiver produces a judgment. The frontend discards
+its direct and indirect query results even when the predicates hold. It forms the real module
+and checks its conditions before committing their dependencies. Stable instance numbers,
+diagnostics, budget consumption and observations of project primitives survive the eligibility check.
 A module reached only through a member selection can stay unformed and receive none of the
 checks of SP8, including when a signature uses its type or natural, a literal constructs its
 record or enum, a call uses its own `pub def` or its protocol member, a clause uses its

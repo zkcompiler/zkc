@@ -1566,7 +1566,7 @@ to the end makes the caller wait or not checked; a refused body abandons the cal
         if concrete then
           -- The receiver has already checked its interface conditions at module formation.
           let env := { instanceEnv program member values with self? := some (.«module» inst) }
-          liftM (checkMemberApplication do
+          liftM (checkIsolatedConditions do
             checkBounds env member name (ownOnly := true)
             checkWheres env member name false hasProofBoundArgument (ownOnly := true))
     let (types, result) ← memberSignature inst name ownValues
