@@ -25,6 +25,17 @@ def checkLinkedCeilings (work : System.FilePath) : IO Unit := do
   let (ok, output) ← checked
   acceptedOutput "LayerCeiling" ok output issued.theorems allowed
 
+/-- A subject of a check asks for every one of its goals: the harness refuses a subject one of
+whose goals is not issued, and does not judge the rest in its place. -/
+def checkEveryGoalIssued : IO Unit := do
+  let statements ← statementsFor (← source "fixtures/hash-relation.zkc" []) ["good", "bad"]
+  let subject : Subject := ⟨"", statements⟩
+  let attempt ← (subject.module "HashRelation" { text := "", theorems := [] }).toBaseIO
+  match attempt with
+  | .ok _ => throw (IO.userError "a subject with a refused goal was assembled")
+  | .error why =>
+    unless (toString why).contains "bad:" && (toString why).contains "sha256" do throw why
+
 /-- Elaborate the propositions issued for these goals with their proofs at the source field. -/
 def checkClaims (work : System.FilePath) (name fixture : String) (goals theorems : List String)
     (edits : List (String × String) := []) (refusedHash := false) : IO Unit := do
@@ -51,6 +62,7 @@ def checkClaims (work : System.FilePath) (name fixture : String) (goals theorems
   acceptedOutput name ok output (issued.stated ++ theorems) allowed
 
 #eval IO.FS.withTempDir checkLinkedCeilings
+#eval checkEveryGoalIssued
 #eval IO.FS.withTempDir fun w => checkClaims w "ThirdElement" "third-element" ["sound"]
   ["sound_judged", "field_claim", "hypotheses_met"]
 #eval IO.FS.withTempDir fun w => checkClaims w "Unguarded" "third-element" ["sound"]

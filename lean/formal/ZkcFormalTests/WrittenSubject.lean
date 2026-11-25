@@ -102,7 +102,8 @@ structure Proof where
   after : List Consumer := []
 
 /-- The two modules of a subject, as the generator assembles them: the module of the statements
-and the proof module, in the name space `name`. A control gives the text that it altered, and
+and the proof module, in the name space `name`. A goal of the subject that the generator
+refuses fails the assembly. A control gives the text that it altered, and
 `statements` names the module
 of the statements where it is not `<name>.Stated`. -/
 def Subject.module (s : Subject) (name : String) (proof : Proof) (text : String := proof.text)
@@ -110,7 +111,9 @@ def Subject.module (s : Subject) (name : String) (proof : Proof) (text : String 
   let written : ProofText := { text, theorems := proof.theorems, imports := proof.imports }
   let issued ← IO.ofExcept (s.statements.module name written (after := proof.after)
     (statements := statements))
-  for reason in issued.refusals do IO.eprintln reason
+  -- a subject asks for each of its goals: one that is not issued fails the subject
+  unless issued.refusals.isEmpty do
+    throw (IO.userError s!"{name}: not every goal is issued: {"; ".intercalate issued.refusals}")
   return issued
 
 /-- The axioms beyond which no theorem of a subject may rest. -/
