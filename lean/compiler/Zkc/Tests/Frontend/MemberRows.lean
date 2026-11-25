@@ -269,6 +269,37 @@ private def checkDefaultDependencies (repository : Repository) : TestM Unit := d
       expectTrue ((independent.admitRoots none).complete.isOk && roots == (Array.range 4).map (firstId + ·))
         s!"independent roots after a default probe: {roots}, {independent.renderDiagnostics}"
 
+/-- Project-binding reports discovered while checking a default reach the CLI. -/
+private def checkDefaultReports (repository : Repository) : TestM Unit := do
+  let source := "module caller\nuse support::{Ext}\n" ++
+    "interface I<n: nat> where (Ext == Ext, Self::Height == n):\n    nat Height\n" ++
+    "pub module M<n: nat>: I<n> + I<1> where (n == 0):\n    nat Height = 1\n" ++
+    "def evaluate(x: bool) -> bool: x\n"
+  let support := "module support\npub type Ext = primitive(\"project.observed\")\n"
+  let load ← cachedLoader #[repository.libraries]
+  let session ← Driver.Session.start.compile #[⟨"caller", Syntax.parseString "caller" source⟩] fun path => do
+    if path == #["support"] then return some ⟨"support", Syntax.parseString "support" support⟩
+    load path
+  let reports := session.state.results.reports.filter (·.contains "project.observed")
+  expectTrue (reports.size == 1 && (session.admitRoots (some #["evaluate"])).complete.isOk)
+    s!"project binding seen by a skipped default: {reports}, {session.renderDiagnostics}"
+
+/-- An empty collect can first request a record whose id was reserved before its
+body was typed apart. Reconstruct the record in the restored state. -/
+private def checkReservedCollect (repository : Repository) : TestM Unit := do
+  let source := "module caller\nstruct Safe<n: nat>:\n    flag: bool\n" ++
+    "interface I<n: nat> where (Safe<n> == Safe<n>, Self::Height == n):\n    nat Height\n" ++
+    "pub module M<n: nat>: I<n> + I<1> where (n == 0):\n    nat Height = 1\n" ++
+    "pub def force<k: nat>() -> bool:\n    for i in 0..0 collect (ys = Safe<0>{flag = true}):\n" ++
+    "        x = false\n    return true\n"
+  let session ← memberSession repository source
+  let some (_, decl) := session.state.program.declarations.zipIdx.find? (fun (d, _) => d.name.any (·.text == "Safe"))
+    | failure "missing Safe"
+  let results := session.state.results
+  let actual := (results.instance? {declaration := decl, arguments := #[.natural 0]}).bind results.content?
+  expectTrue (actual.isSome && (session.admitRoots none).complete.isOk)
+    s!"the collected type has a signature in the restored state: {session.renderDiagnostics}"
+
 /-- A probe can fill an older reservation and create new ones. Only a real request
 gets an entry and a place in the traversal order, even when its number is older. -/
 private def checkReservedRequests : TestM Unit := do
@@ -309,6 +340,8 @@ def memberRowSuite (repository : Repository) : TestM Unit := do
   checkReservedRequests
   checkWaitingDefault repository
   checkDefaultDependencies repository
+  checkDefaultReports repository
+  checkReservedCollect repository
   checkDefaultConditions repository
   checkDisjointRows repository
   checkConcreteApplications repository

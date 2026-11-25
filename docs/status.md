@@ -96,8 +96,10 @@ For each concrete module instance the frontend records the applied interface tha
 member. Signature elaboration, member-body checking and row emission read that binding.
 A default instance can read its own members to determine whether interface conditions hold.
 When two interfaces declare the same member, this eligibility check uses a private copy of
-the query results. It preserves the numbers used for emitted definitions. A later use checks
-the module and its dependencies again, including when the default condition was undecided.
+the query results. It preserves the numbers used for emitted definitions and reports any
+project primitive it encounters. The instance listing includes a dependency once the program
+requests it outside the provisional check. A later use checks the module and its dependencies
+again, including when the default condition was undecided.
 A module reached only through a member selection can stay unformed and receive none of the
 checks of SP8, including when a signature uses its type or natural, a literal constructs its
 record or enum, a call uses its own `pub def` or its protocol member, a clause uses its

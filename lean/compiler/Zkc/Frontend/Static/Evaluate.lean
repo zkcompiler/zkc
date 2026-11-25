@@ -293,7 +293,7 @@ def moduleMemberOwners (written : Array (AppliedInterface × Path)) :
   return .ok members
 
 /-- A conflicting default can inspect a provisional Self to decide its eligibility.
-Keep the signature numbers, diagnostics, traces and spent evaluation steps. Compute any
+Keep the signature numbers, reports, diagnostics, traces and spent evaluation steps. Compute any
 dependencies afresh on a later request, since even an indirect result can depend on that Self. -/
 def probeDefaultModule (check : CompileM Unit) : CompileM Unit := do
   let saved ← get
@@ -314,7 +314,8 @@ def probeDefaultModule (check : CompileM Unit) : CompileM Unit := do
   set { saved with log := { checked.log with entries }, traces, staticSteps := checked.staticSteps }
   -- Emitted definition keys use signature numbers. Keep their allocation order while
   -- requiring every query first seen in the probe to be computed again on demand.
-  modifyResults (·.modifySignatures (·.reserveNewKeys checked.table))
+  modifyResults fun results =>
+    { results.modifySignatures (·.reserveNewKeys checked.table) with reports := checked.results.reports }
   match outcome with
   | .ok () => pure ()
   | .error (.exhausted e) => throw (.exhausted (exhaustion e))
