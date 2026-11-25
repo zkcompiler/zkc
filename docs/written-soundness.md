@@ -116,7 +116,7 @@ theorem either_judged : eitherJudged := by
   exact differs (Nat.eq_of_beq_eq_true hit)
 ```
 
-**`claim_intro`** introduces the binders of the judgment under the names that the generator gave them: what the model is built from (`D`, or `F` and `G`), `path`, each input that the verifier holds as `input_<port>` with `valid_input_<port>` (`input_claim` here; the two positions are the prover's and have no binder), a hypothesis of the model by its name, and `rejected`, that the relation returns false.
+**`claim_intro`** introduces `path`, each verifier input as `input_<port>` with its validity hypothesis `valid_input_<port>`, and the premise `rejected` that the relation returns false. Here the verifier holds `input_claim` and the prover holds the two positions. The generated module opens the standard interpretation's `F`, `G`, `D`, `model`, `samplers`, `served` and `large` for the proof text.
 
 **`walk`** goes to the next effect, loop, call of a function by a role, or the end of the program. It goes into the arm of a choice and into a block as into a program. At the end, what is left is what the judgment asks there, stated in the inputs, the replies and the names of the text. `walk … at h` walks a hypothesis that judges a process. The two tactics of an effect walk to the effect themselves, so a text writes `walk` where it names a fork, before a loop or a call, and to reach the end.
 

@@ -226,6 +226,21 @@ namespace Statements
 /-- The package of the claims. -/
 def package (s : Statements) : SourcePackage := s.claims.emission.package ⟨[], [], [], [], []⟩
 
+/-- The goals of a statements module share one root. Compute a value for the first goal
+of each relation, retaining all the goals in source order. -/
+def perRelation {α : Type} (goals : List ClaimedGoal) (value : ClaimedGoal → α) :
+    Array (ClaimedGoal × α) := Id.run do
+  let mut results := #[]
+  let mut cache : Std.HashMap InstanceId α := {}
+  for g in goals do
+    if let some v := cache[g.relation]? then
+      results := results.push (g, v)
+    else
+      let v := value g
+      cache := cache.insert g.relation v
+      results := results.push (g, v)
+  return results
+
 /-- Issue covered goals of the package and retain a diagnostic for each uncovered goal.
 A project primitive requires a model of its binding, even if another goal does not use it. -/
 def coveredGoals (s : Statements) : Except String (List ClaimedGoal × List String) := do
@@ -234,8 +249,10 @@ def coveredGoals (s : Statements) : Except String (List ClaimedGoal × List Stri
     throw s!"a written statement for a package that links a project primitive {primitive.name} is not issued yet: there is no model of the primitive"
   let mut goals := #[]
   let mut refusals := #[]
-  for g in s.claims.goals do
-    match Coverage.missing (b := p.bindings) p.named ⟨s.claims.root⟩ ⟨g.relation⟩ with
+  let decisions := perRelation s.claims.goals fun g =>
+    Coverage.missing (b := p.bindings) p.named ⟨s.claims.root⟩ ⟨g.relation⟩
+  for (g, decision) in decisions do
+    match decision with
     | none => goals := goals.push g
     | some missing =>
       let reason := match missing with
@@ -613,10 +630,13 @@ draws within the samplers and answers only what is permitted (`Served`). -/
 def served : String :=
   "Served StandardInterpretation.samplers (Permitted StandardInterpretation.model)"
 
-/-- The kernel checks the reach of each goal in the stored program shared by the module. -/
-def coverage (goals : List ClaimedGoal) : String :=
-  String.join (goals.map fun g =>
-    s!"theorem {g.goal}_covered : StandardInterpretation.covers stored rootKey {g.goal}Key = true := by decide +kernel\n\n")
+/-- Each goal has a coverage theorem. Goals with the same entries reuse the first proof. -/
+def coverage (goals : List ClaimedGoal) : String := Id.run do
+  let mut text := ""
+  for (g, firstGoal) in perRelation goals (·.goal) do
+    let proof := if g.goal == firstGoal then "by decide +kernel" else s!"{firstGoal}_covered"
+    text := text ++ s!"theorem {g.goal}_covered : StandardInterpretation.covers stored rootKey {g.goal}Key = true := {proof}\n\n"
+  return text
 
 /-- What a goal claims of a program with its root and the relation of the goal's clause, as the
 text of a proposition: on valid inputs of the deciding role on which the relation returns false,

@@ -36,6 +36,23 @@ def checkEveryGoalIssued : IO Unit := do
   | .error why =>
     unless (toString why).contains "bad:" && (toString why).contains "sha256" do throw why
 
+/-- Interleaved goals reuse their relation's coverage decision. Refusals keep the
+name of each goal, including a second goal for the unsupported relation. -/
+def checkSharedCoverage : IO Unit := do
+  let bad := "goal bad = soundness(Checked, spec e = 1)"
+  let more := bad ++ "\ngoal again = soundness(Checked, spec e = 0)\ngoal alsoBad = soundness(Checked, spec e = 1)"
+  let input ← source "fixtures/hash-relation.zkc" [(bad, more)]
+  let statements ← statementsFor input ["good", "bad", "again", "alsoBad"]
+  let issued ← IO.ofExcept (statements.coverageModule "SharedCoverage")
+  unless issued.theorems == ["good_covered", "again_covered"] &&
+      issued.text.contains "rootKey goodKey = true := by decide +kernel" &&
+      issued.text.contains "rootKey againKey = true := good_covered" do
+    throw (IO.userError "expected two coverage names and one decision")
+  let [first, second] := issued.refusals | throw (IO.userError s!"unexpected refusals {issued.refusals}")
+  unless first.startsWith "bad:" && second.startsWith "alsoBad:" &&
+      first.contains "sha256" && second.contains "sha256" do
+    throw (IO.userError s!"unexpected refusals {issued.refusals}")
+
 /-- Elaborate the propositions issued for these goals with their proofs at the source field. -/
 def checkClaims (work : System.FilePath) (name fixture : String) (goals theorems : List String)
     (edits : List (String × String) := []) (refusedHash := false) : IO Unit := do
@@ -63,6 +80,7 @@ def checkClaims (work : System.FilePath) (name fixture : String) (goals theorems
 
 #eval IO.FS.withTempDir checkLinkedCeilings
 #eval checkEveryGoalIssued
+#eval checkSharedCoverage
 #eval IO.FS.withTempDir fun w => checkClaims w "ThirdElement" "third-element" ["sound"]
   ["sound_judged", "field_claim", "hypotheses_met"]
 #eval IO.FS.withTempDir fun w => checkClaims w "Unguarded" "third-element" ["sound"]

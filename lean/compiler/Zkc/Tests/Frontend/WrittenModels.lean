@@ -166,6 +166,29 @@ example : Coverage.missing (b := standardBindings) ⟨[caller, identityFunction,
 example : Coverage.missing (b := standardBindings) ⟨[identityFunction, rootProtocol]⟩
     ⟨2⟩ ⟨0⟩ = some (.definition ⟨1⟩) := rfl
 
+/-- Outstanding entries in the first page are reported independently of request order. -/
+example : Coverage.missing (b := standardBindings) ⟨[]⟩ ⟨3⟩ ⟨12⟩ =
+    some (.definition ⟨12⟩) := rfl
+example : Coverage.missing (b := standardBindings) ⟨[]⟩ ⟨12⟩ ⟨3⟩ =
+    some (.definition ⟨12⟩) := rfl
+
+/-- A sparse definition number takes a path through pages without allocating the intervening bits. -/
+private def sparseNumber : Nat := 2 ^ 100 + 37
+
+set_option maxRecDepth 8192 in
+example : Coverage.missing (b := standardBindings) ⟨[]⟩ ⟨sparseNumber⟩ ⟨sparseNumber⟩ =
+    some (.definition ⟨sparseNumber⟩) := rfl
+
+set_option maxRecDepth 8192 in
+example : Coverage.missing (b := standardBindings)
+    ⟨[.fn ⟨sparseNumber⟩ [.bool] [.bool] false none ⟨[], []⟩ (.mk [0] [] [0]) []]⟩
+    ⟨sparseNumber⟩ ⟨sparseNumber⟩ = none := rfl
+
+/-- A larger outstanding key also wins across page boundaries. -/
+example : Coverage.missing (b := standardBindings) ⟨[]⟩ ⟨16384⟩ ⟨8192⟩ =
+    some (.definition ⟨16384⟩) := rfl
+
+
 end
 
 /-- Package admission precedes statement issuance. Issuance diagnoses project primitives and
