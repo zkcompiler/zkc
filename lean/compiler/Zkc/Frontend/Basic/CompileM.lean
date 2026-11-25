@@ -87,16 +87,23 @@ inductive MemberTyping where
   | program | validation | receiverKeys
   deriving BEq, Inhabited
 
-/-- A discarded default signature schedule and its position in the ordinary body queue.
-The private results keep the signatures and their nominal dependencies together. -/
+/-- A slice of private signature requests at its position in the ordinary body queue. -/
 structure DefaultBodyBatch where
   afterRequests : Nat
-  firstPrivate : Nat
-  results : ResultStore
+  store : Nat
+  first : Nat
+  stop : Nat
+  deriving Inhabited
+
+/-- Suppressed defaults share their private checker results. A new store starts only when
+a default takes a nominal argument whose signature belongs to a later ordinary state. -/
+structure DefaultLayout where
+  stores : Array ResultStore := #[]
+  batches : Std.Queue DefaultBodyBatch := ∅
   deriving Inhabited
 
 structure State where
-  defaultBodyBatches : Std.Queue DefaultBodyBatch := ∅
+  defaultLayout : DefaultLayout := {}
   memberTyping : MemberTyping := .program
   /-- Reads of the current source computation, in encounter order. -/
   moduleReads : Array ModuleRead := #[]
@@ -106,10 +113,8 @@ structure State where
   schemeReads : Std.HashMap DeclarationId (Array ModuleRead) := {}
   /-- Settled outcomes at stable keys of this source environment, including propagated failures. -/
   checkedModules : Std.HashMap InstanceKey (Except Interrupt Unit) := {}
-  /-- Concrete module declarations visited by the owner check. -/
-  moduleDeclarations : Std.HashSet DeclarationId := {}
-  /-- Declarations whose signatures were used in a private member, contract or condition check. -/
-  detachedDeclarations : Std.HashSet DeclarationId := {}
+  /-- Concrete owners and declarations reached outside the public query table (SP7). -/
+  validationDeclarations : Std.HashSet DeclarationId := {}
   rootModuleFailures : Std.HashMap InstanceId Lack := {}
   env : Environment := {}
   log : Log := {}
@@ -203,10 +208,6 @@ namespace Compile.State
 def program (state : State) : Program := state.env.modules.program
 
 def results (state : State) : ResultStore := state.env.results
-
-/-- All declarations reached outside the public query table. -/
-def validationDeclarations (state : State) : Std.HashSet DeclarationId :=
-  state.moduleDeclarations.union state.detachedDeclarations
 
 def modules (state : State) : ModuleStore := state.env.modules
 

@@ -40,7 +40,8 @@ the selected roots and their required modules. An unused public declaration stil
 its eligible defaults under SP7. Each chosen member default checks its enclosing module.
 Instance numbers are part of the emitted package. When a formerly scheduled default drops
 out, the checker reserves the numbers its signature and body requests contribute before
-the next public request. Private layout work publishes only these numbers. A discarded
+the next public request. Suppressed defaults share private results, and their request order
+contains only new private requests. Private layout work publishes only these numbers. A discarded
 default contributes no root, diagnostic or law obligation.
 `zkc-check instances --contents` reports the signature and default-instance phases. Use
 `zkc-check types` for the verdict on member bodies and packages.

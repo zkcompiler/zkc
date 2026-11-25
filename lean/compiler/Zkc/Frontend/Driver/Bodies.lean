@@ -139,7 +139,7 @@ def checkKernels : CompileM Unit := do
         logError "FN5" kernel.span (.ofText "a kernel is attached to a `def` with a body") (origin := .instances)
     | _ => pure ()
 
-def typeRequestedBody (cursor : Nat) : CompileM Unit := do
+private def typeRequestedBody (cursor : Nat) : CompileM Unit := do
   let state ← get
   let index := state.table.requestedIds[cursor]!
   let entry := state.table.entryAt! index
@@ -155,35 +155,19 @@ def typeRequestedBody (cursor : Nat) : CompileM Unit := do
       endItem (moduleLaws index)
       endItem (typeModuleMembers index)
 
-/-- Both tables extend the same key prefix. Bring the private requests up to the latest
-allocation before evaluating them, then return only the extended prefix to the live table.
-Requests appended during this batch belong at the current tail of the combined queue. -/
-def layoutBodies (batch : Compile.DefaultBodyBatch) :
-    CompileM (Option Compile.DefaultBodyBatch) := do
-  let live ← get
-  let tail := batch.results.instanceCount
-  let results := batch.results.modifySignatures (·.reserveNewKeys live.table)
-  let work : CompileM Unit := do
-    for cursor in [batch.firstPrivate:tail] do typeRequestedBody cursor
-  let (_, trial) := work.run (← read) {env := {modules := live.modules, results}}
-  modifyResults (·.modifySignatures (·.reserveNewKeys trial.table))
-  if tail < trial.results.instanceCount then
-    return some ⟨live.results.instanceCount, tail, trial.results⟩
-  return none
-
 /-- Types the body of every instance of the table that is not typed yet, the instances that
 typing adds included. -/
-def typeBodies : CompileM Unit := do
+@[no_expose] def typeBodies : CompileM Unit := do
   let mut cursor := 0
-  if !(← get).defaultBodyBatches.isEmpty then
-    let mut batches ← modifyGet fun s => (s.defaultBodyBatches, {s with defaultBodyBatches := ∅})
-    while let some (batch, rest) := batches.dequeue? do
+  if !(← get).defaultLayout.batches.isEmpty then
+    let mut layout ← modifyGet fun s => (s.defaultLayout, {s with defaultLayout := {}})
+    while let some (batch, rest) := layout.batches.dequeue? do
       for i in [cursor:batch.afterRequests] do typeRequestedBody i
       cursor := batch.afterRequests
       -- A private tail cannot affect a package once all ordinary requests have run.
       if cursor == (← getResults).instanceCount then return
-      batches := rest
-      if let some more ← layoutBodies batch then batches := batches.enqueue more
+      layout ← reserveLayoutKeys {layout with batches := rest} batch.store do
+        for i in [batch.first:batch.stop] do typeRequestedBody i
   while cursor < (← getResults).instanceCount do
     typeRequestedBody cursor
     cursor := cursor + 1

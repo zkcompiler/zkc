@@ -561,16 +561,38 @@ where
           discard <| instanceContent key.declaration id key.arguments .defaultRoot
     discard <| formInstance key.declaration key.arguments ⟨"", place⟩ .defaultRoot
 
-/-- Reserve a discarded default's signature numbers now. Its new requests take their
-historical turns when the driver numbers callees in the default bodies. -/
-def reserveDefaultKeys {α : Type} (schedule : CompileM α) : CompileM Unit := do
-  let state ← get
-  let first := state.results.instanceCount
-  let (_, trial) := schedule.run (← read) state
+/-- All active stores share one append-only key prefix. Resume the private computation
+with the latest interner and publish only its extension. Any new requests take their turns
+at the current tail, even when the computation stops at a refusal or a budget. -/
+def reserveLayoutKeys {α : Type} (layout : Compile.DefaultLayout) (store : Nat)
+    (schedule : CompileM α) : CompileM Compile.DefaultLayout := do
+  let live ← get
+  let ⟨stores, batches⟩ := layout
+  let fresh := store == stores.size
+  let (prior, stores) := if fresh then
+    (live.results.modifySignatures (·.withFreshOrder), stores)
+  else stores.swapAt! store {}
+  let first := prior.instanceCount
+  let results := prior.modifySignatures (·.reserveNewKeys live.table)
+  let (_, trial) := schedule.run (← read) {env := {modules := live.modules, results}}
   modifyResults (·.modifySignatures (·.reserveNewKeys trial.table))
-  if first < trial.results.instanceCount then
-    modify fun s => {s with defaultBodyBatches :=
-      s.defaultBodyBatches.enqueue ⟨first, first, trial.results⟩}
+  let stop := trial.results.instanceCount
+  if first == stop && fresh then return {stores, batches}
+  let stores := if fresh then stores.push trial.results else stores.set! store trial.results
+  let batches := if first == stop then batches else
+    batches.enqueue ⟨live.results.instanceCount, store, first, stop⟩
+  return {stores, batches}
+
+/-- Default declarations compute their own arguments in the private store. An excluded
+specialization can already have arguments from the ordinary signature scheduler. -/
+def reserveDefaultKeys {α : Type} (schedule : CompileM α)
+    (arguments : Array StaticValue := #[]) : CompileM Unit := do
+  let layout ← modifyGet fun s => (s.defaultLayout, {s with defaultLayout := {}})
+  let reuse := layout.stores.back?.any fun results =>
+    arguments.all (sharedValue results.signatures results.signatures.allocatedCount)
+  let store := if reuse then layout.stores.size - 1 else layout.stores.size
+  let next ← reserveLayoutKeys layout store schedule
+  modify fun s => {s with defaultLayout := next}
 
 /-- The default instances of a public declaration that no root reaches (SP7), as many as the
 budget allows: past it, the check of the declaration is incomplete and refuses nothing. -/
@@ -605,7 +627,7 @@ def defaultInstances (declarationId : DeclarationId) (reserveOnly : Bool := fals
         else
           let owners ← enclosingModules declarationId ordered place
           if ← excludedByInterface owners place then
-            reserveDefaultKeys form
+            reserveDefaultKeys form ordered
             throw .skipped
           let (inst, reads) ← captureModuleReads form
           addMemberRoot inst .defaultInstance owners place
@@ -835,7 +857,7 @@ def defaultProgram : CompileM Unit := do
   let program ← program
   let own (declaration : Declaration) : Bool := inPackage program declaration.file
   let state ← get
-  let reached := state.results.reachedDeclarations state.moduleDeclarations
+  let reached := state.results.reachedDeclarations
   let mut pending := #[]
   for id in [0:program.declarations.size] do
     let declaration := program.declarations[id]!
@@ -844,11 +866,11 @@ def defaultProgram : CompileM Unit := do
       continue
     if (deployedParameters program declaration).isEmpty || reached.contains id then continue
     pending := pending.push id
-  unless pending.any (!state.detachedDeclarations.contains ·) do return
+  unless pending.any (!state.validationDeclarations.contains ·) do return
   for id in pending do
-    if state.detachedDeclarations.contains id then
-      -- The detached use suppresses this public default. Its position in the signature
-      -- schedule still numbers later emitted definitions.
+    if state.validationDeclarations.contains id then
+      -- A private use suppresses this default. Its signature and body requests
+      -- still determine the numbers of subsequent public definitions.
       reserveDefaultKeys (defaultInstances id (reserveOnly := true))
     else endItem (defaultInstances id)
 

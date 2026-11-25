@@ -127,13 +127,18 @@ private def callerChain (paths : Std.HashMap Dependency Selection) (key : Instan
   let state ← get
   let mut frames := #[]
   let mut node := Dependency.owner key
-  while let some (parent, _) := paths[node]? do
+  while let some (parent, place) := paths[node]? do
     let frame ← match parent with
       | .root id =>
         -- The root's own body or signature query already supplied its frame.
         if let .query ref := node then
           if ref.instance == id then break
-        pure (state.results.requested? ⟨.signature, id⟩)
+        let frame := state.results.requested? ⟨.signature, id⟩
+        -- An explicit module root and its owner edge can describe the same request.
+        if let .owner owner := node then
+          if state.table.allocatedKey? id == some owner && frame.any (fun f =>
+              f.span.file == place.file && f.span.startByte == place.startByte) then break
+        pure frame
       | .query ref => pure (state.results.requested? ref)
       | .owner owner => do
         let name ← describeInstance owner.declaration owner.arguments
@@ -201,7 +206,7 @@ private def ModuleWork.visit (work : ModuleWork) (saved : Compile.State)
       if reusableExhaustion e (← read) saved then
         return {work with failures := work.failures.push (node, .exhausted e)}
     | .error why => return {work with failures := work.failures.push (node, why)}
-  modify fun s => { s with moduleDeclarations := s.moduleDeclarations.insert key.declaration }
+  modify fun s => { s with validationDeclarations := s.validationDeclarations.insert key.declaration }
   if (← read).options.budgets.instantiationDepth ≤ saved.stack.size + depth then
     return {work with boundary := work.boundary.push (key, place)}
   if let some found := work.checks[key]? then return work.useCheck node found
@@ -320,9 +325,9 @@ private def validateReads (reads : Array Compile.ModuleRead) (roots : Array Inst
   let stable : Interrupt → Interrupt
     | .exhausted e => .exhausted (freeze e)
     | other => other
-  let reached := checked.results.reachedDeclarations checked.detachedDeclarations
+  let reached := checked.results.reachedDeclarations checked.validationDeclarations
     saved.table.requestedIds.size
-  modify fun s => {s with moduleDeclarations := checked.moduleDeclarations, detachedDeclarations := reached}
+  modify fun s => {s with validationDeclarations := reached}
   let (work, failed) ← match result with
     | .ok value => pure value
     | .error why => throw (stable why)

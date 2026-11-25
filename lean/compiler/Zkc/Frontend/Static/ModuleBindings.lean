@@ -148,10 +148,10 @@ def publishValidationObligations (saved checked : Compile.State) : CompileM Unit
 Keep those uses for default selection, including observations made in nested checks. -/
 def publishDetachedObservations (saved checked : Compile.State)
     (reads : Array Compile.ModuleRead) : CompileM Unit := do
-  let reached := checked.results.reachedDeclarations checked.detachedDeclarations
+  let reached := checked.results.reachedDeclarations checked.validationDeclarations
     saved.table.requestedIds.size
   let detached := detachedModuleReads saved checked reads
-  modify fun s => { s with detachedDeclarations := reached, moduleReads := s.moduleReads ++ detached }
+  modify fun s => { s with validationDeclarations := reached, moduleReads := s.moduleReads ++ detached }
   publishValidationObligations saved checked
 
 /-- Export a judgment and its observations without publishing any query derived from the

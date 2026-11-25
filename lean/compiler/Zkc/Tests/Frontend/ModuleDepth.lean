@@ -106,6 +106,11 @@ def common<n: nat>(x: bool) -> bool: x
 
   let cycle := header ++ owner "A" "B<n = n>::h(x)" ++
     owner "B" "if x then A<n = n>::h(x) else C<n = n>::h(x)" ++ owner "C" "(x,x)"
+  let directive := compileGraph (cycle ++ healthy ++ "// instantiate: B<1>\n") 32
+  let source := directive.renderDiagnostics
+  expectTrue (source.size == 1 && (source[0]!.splitOn "in B<n = 1>").length == 2 &&
+      source[0]!.contains "in C<n = 1>")
+    s!"expected one frame for the module directive and its failed child: {source}"
   let alpha := root "alpha" "A<1>::h(x)"
   let beta := root "beta" "B<1>::h(x)"
   for roots in [alpha ++ beta, beta ++ alpha] do
