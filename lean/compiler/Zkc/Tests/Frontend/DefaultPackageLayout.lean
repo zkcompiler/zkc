@@ -59,7 +59,7 @@ private def layoutCases : TestM Unit := do
       hidden.state.results.obligations.isEmpty && hidden.state.reports.isEmpty)
       s!"default body {body}, ordinary use {helper}: {names}, {hidden.renderDiagnostics}"
 
-  -- An ordinary body between two suppressed schedules buys its callees before the second
+  -- An ordinary body between two suppressed schedules requests its callees before the second
   -- schedule's callees. A final ordinary body also uses one of the second schedule's keys.
   let alternating (hidden : Bool) := (source "ghost<n>(x)" "step<n>(x)"
       (if hidden then "M<1>::Accepted" else "Holds")).replace "relation Holds" (

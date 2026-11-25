@@ -59,7 +59,7 @@ private def checkSameSite (early : Driver.Session) : TestM Unit := do
   let pending := early.run phase
   expectTrue (pending.state.log.incomplete == 3 && (pending.incompleteOf #[phase.name]).isEmpty)
     "early duplicate should be counted and displayed once at types"
-  let final := pending.runAll #[Driver.defaults, Driver.defaultBodies, Driver.packages]
+  let final := Id.run <| pending.runAllTimed (pure 0) #[Driver.defaults, Driver.defaultBodies, Driver.packages]
   expectTrue (final.admitRoots.held.map (·.1) == allHeld && !final.admitRoots.complete.isOk &&
       final.state.log.incomplete == 2 && (final.incompleteOf #["types", "default bodies"]).isEmpty &&
       budgets final #[phase.name] == #[.defaultInstances] &&
@@ -144,6 +144,11 @@ def phasedModuleChecksSuite : TestM Unit := do
   expectTrue (bad.admitRoots.held.map (·.1) == allHeld && bad.hasErrors && !bad.hasIncomplete &&
       !bad.admitRoots.complete.isOk && (bad.refusalsOf #["types"]).map (·.rule) == #["TY5"])
     s!"independent refusal: {bad.renderDiagnostics}"
+  let revealed := compile (shortcut.replace "then x else M" "then (x,x) else M") "packages"
+  expectTrue (revealed.admitRoots.held.map (·.1) == #["healthy"] && !revealed.hasIncomplete &&
+      revealed.state.rootModuleFailures.size == 5 && (revealed.refusalsOf #["types"]).isEmpty &&
+      (revealed.refusalsOf #["default bodies"]).map (·.rule) == #["TY5"])
+    s!"a newly reached refusal belongs to the retry: {revealed.renderDiagnostics}"
   let stopped := compile (shortcut ++ "def bad(x: bool) -> bool: (x,x)\n") "packages"
     {limited with stopAtErrors := true}
   expectTrue (stopped.hasErrors && !stopped.ran "defaults" &&
