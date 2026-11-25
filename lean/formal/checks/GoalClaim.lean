@@ -264,10 +264,18 @@ def run (corpus : System.FilePath) (work : System.FilePath) : IO Unit := do
     ((pairText.splitOn "∀ (witness0 : ").length == 3)
   let stated ← startLakeLean work "ClaimsWitness"
     (← IO.ofExcept (pairStated.claimsModule "ClaimsWitness")).text
+  -- An exposed public abbreviation must be able to refer to its lookup theorem.
+  let exposed ← startLakeLean work "ClaimsExposed"
+    ("module\n" ++ String.join ((Statements.imports false).map (s!"public import {·}\n")) ++
+      "\n@[expose] public section\nopen Zkc.Core\nnamespace ClaimsExposed\n" ++
+      subjectPackage pairStated.package ++ statementOpens ++ pairStated.facts ++
+      pairStated.transfers ++ pairText ++ "end ClaimsExposed\n") (text := false)
   let (ok, output) ← finishLean proof
   acceptedOutput "Claims" ok output theorems
   let (ok, output) ← finishLean stated
   acceptedOutput "ClaimsWitness" ok output []
+  let (ok, output) ← finishLean exposed
+  acceptedOutput "ClaimsExposed" ok output []
   let (ok, output) ← finishLean comparison
   acceptedOutput "ClaimsSource" ok output []
   let (ok, output) ← finishLean control

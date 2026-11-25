@@ -54,6 +54,8 @@ experiment of the statement is the one that a reader would write.
 
 - In the first module the source has a `spec` port in front of `flag` and its clause is
   `proves @V IsSet(flag)`. The published theorem and the consumer are proved.
+- The issued statements agree with that source. Switching only the verifier's guard to
+  `other` gives statements whose stored program the comparison with the original source refuses.
 - In the control the clause is `proves @V IsSet(other)`, with a verifier that guards `other`.
   The published theorem is proved, and it is about the other input: the consumer is refused,
   where it gives the published theorem its premise.
@@ -70,7 +72,8 @@ experiment of the statement is the one that a reader would write.
 open Zkc.Core Zkc.Frontend Zkc.Frontend.Written
 open Zkc.Subject (CapTable)
 open Zkc.Tests.Frontend Zkc.Tests.Frontend.PrintedPackageSupport
-open ZkcFormalTests.WrittenSubject (startModule startRefused refusedOutside startLakeLean finishLean expectUnproved expectPlaces)
+open ZkcFormalTests.WrittenSubject (startModule startRefused refusedOutside startLakeLean
+  addStated startSourceComparison finishLean expectUnproved expectPlaces)
 
 namespace GoalStatementCheck
 
@@ -285,7 +288,7 @@ def decided (ports guarded clause : String) : String :=
   s!"    guard @V {guarded}\n    for i in 0..0:\n        z <- draw index<1> from V to P\n" ++
   s!"spec for Flags:\n    {clause}\n    charge sites.z <= 0\n" ++
   "scheme Checked = Flags:\n    prover P\n    construction interactive\n" ++
-  "goal sound = soundness(Checked)\n"
+  "goal sound = soundness(Checked)\n\ngoal sibling = soundness(Checked, clause = absent)\n"
 
 /-- The text of the proofs of a module about `decided`: the verifier rejects where the guarded
 flag is false, which is where the relation is false of it; the hypotheses are met over the
@@ -352,18 +355,21 @@ def consumer : Consumer where
     "    ⟨serveLaws_follows _ _, serveLaws_permitted _ _ (ArithmeticModel.draws_permitted F G)⟩ ()"
   after := "\nend\n"
 
+/-- The statements issued for the selected goal beside its refused sibling. -/
+def issuedStatements (source : String) : IO Statements := do
+  let assembly := Id.run <| assemble #[⟨"source.zkc", Syntax.parseString "source.zkc" source⟩] fun _ => pure none
+  let #[bad, good] := issueSoundnessGoals assembly ["sibling", "t::sound"]
+    | throw (IO.userError "lost a requested goal")
+  unless !bad.outcome.isOk do throw (IO.userError "issued the absent clause")
+  return (← IO.ofExcept good.outcome).statements
+
 /-- The proof module of a source, as the generator assembles it for a text that does not walk:
 the package of its claims, what the generator writes around the proofs, the proofs and the
 consumer. -/
 def proofModule (name text guarded : String)
     (alter : Statements → String → Except String String := fun _ proof => pure proof) :
     IO Module := do
-  let source := text ++ "\ngoal sibling = soundness(Checked, clause = absent)\n"
-  let assembly := Id.run <| assemble #[⟨"source.zkc", Syntax.parseString "source.zkc" source⟩] fun _ => pure none
-  let #[bad, good] := issueSoundnessGoals assembly ["sibling", "t::sound"]
-    | throw (IO.userError "lost a requested goal")
-  unless !bad.outcome.isOk do throw (IO.userError "issued the absent clause")
-  let s := (← IO.ofExcept good.outcome).statements
+  let s ← issuedStatements text
   IO.ofExcept (s.module name
     { text := ← IO.ofExcept (alter s (proofText guarded))
       theorems := ["sound_installed", "sound_witnessed"]
@@ -563,6 +569,16 @@ def run (work : System.FilePath) : IO Unit := do
   let module ← proofModule "Operands" fronted "flag"
   let theorems := module.proved
   let proof ← startModule work "Operands" module
+  -- Both comparisons read the original source. The second module has the same namespace
+  -- and goal, but its verifier guards the other input.
+  let compare (name : String) (issued : Module) :=
+    startSourceComparison work name issued fronted ["t::sound"]
+  let matched ← compare "OperandsSource" module
+  let changed ← issuedStatements (← replaceOnce fronted "guard @V flag" "guard @V other")
+  let verifier ← IO.ofExcept (changed.module module.space {} (walks := false)
+    (statements := some `ChangedVerifier.Stated))
+  discard <| addStated work verifier
+  let mismatched ← compare "ChangedVerifierSource" verifier
   let shifted := fronted.replace "protocol Flags" ("protocol Prior roles(P,V)(x: bool @(P,V)):\n" ++
     "    guard @V x\nprotocol Flags")
   let shiftedProof ← startModule work "RenumberedOperands" (← proofModule "RenumberedOperands" shifted "flag")
@@ -585,6 +601,11 @@ def run (work : System.FilePath) : IO Unit := do
   -- accepted when its two modules are, the proof module by the judgment too
   let _ ← finishLean proof
   let _ ← finishLean shiftedProof
+  let (ok, output) ← matched
+  acceptedOutput "OperandsSource" ok output []
+  let (ok, output) ← mismatched
+  refusedOutput "changed verifier against the original source" ok output
+    ["the printed program differs from the stored program"] (only := true)
   -- The published theorem of the control is about the second input. It is proved; the consumer,
   -- which reads the first, is not, and is refused where it gives the theorem its premise.
   expectUnproved "a clause about the other input" "OperandsControl" theorems control ["consumer"]
@@ -603,7 +624,7 @@ def run (work : System.FilePath) : IO Unit := do
   IO.println ("The statement of a goal reads its operands in the deployed header, its deciding role " ++
     "in the goal's scheme and its event in the clause: a spec port that nothing uses leaves the " ++
     "claim as it is, another operand changes it, and a consumer written apart uses the published " ++
-    "theorem at the inputs of the source; 4 of 4 controls refused.")
+    "theorem at the inputs of the source; 5 of 5 controls refused.")
 
 end GoalStatementCheck
 

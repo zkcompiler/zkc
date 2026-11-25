@@ -1,7 +1,7 @@
 module
 
-public import Zkc.Core.Admission.Theorems
 public import Zkc.Frontend.Emit.Reports
+public import Zkc.Subject.Package
 public import Zkc.Subject.Print
 
 @[expose] public section
@@ -217,6 +217,9 @@ def vocabularyTerm (b : Zkc.Vocabulary.Project.Bindings) : String :=
 def packageImports : List String :=
   ["Zkc.Core.Admission.Theorems", "Zkc.Kernel", "Zkc.Vocabulary.Project"]
 
+/-- The additional library used by a written soundness package. -/
+def subjectPackageImports : List String := "Zkc.Subject.Package" :: packageImports
+
 /-- The declarations of a printed package and what a reader of them needs to refer to its
 definitions. -/
 structure PrintedPackage where
@@ -232,11 +235,15 @@ structure PrintedPackage where
 /-- The suffix of the names of what is stated before any definition. -/
 def baseSuffix := "Base"
 
-/-- A package as Lean declarations: the vocabulary (`V`), the program by names (`stored`) with
-its association, each definition elaborated by the kernel against the program before it, the
-program that results (`installed`), that the program of any admission of the program by names
-is that program (`readback`), and that there is such an admission (`admitted_exists`). -/
-def package (p : SourcePackage) : PrintedPackage :=
+/-- The keys and kinds used to locate definitions, in stored order. -/
+def definitionKeys {V : Core.Vocabulary} (named : NamedProgram V) : List (Key × Bool) :=
+  named.definitions.map fun
+    | .fn k .. => (k, false)
+    | .protocol k .. => (k, true)
+
+/-- The common declarations through the elaboration chain. The caller supplies the admission
+declarations and closes the noncomputable section containing the installation. -/
+def packageText (p : SourcePackage) (admission : List String) : String :=
   let named := p.named.definitions
   let suffix (d : Definition p.bindings.vocabulary) := toString d.key.number
   let storedLines := named.map fun d =>
@@ -255,22 +262,33 @@ def package (p : SourcePackage) : PrintedPackage :=
   let typed := ["noncomputable section", s!"def program{baseSuffix} : Typed V := Typed.empty"] ++ steps ++ [
     s!"def installed : Typed V := program{last}",
     "theorem elaborated : ElaboratedFrom Typed.empty stored.definitions installed :=",
-    s!"  {chain}",
+    s!"  {chain}"]
+  let vocabulary := s!"abbrev V : Zkc.Core.Vocabulary := {vocabularyTerm p.bindings}"
+  "\n".intercalate (vocabulary :: storedLines ++ storedProgram ++ typed ++ admission ++ [""])
+
+/-- A standalone package with a readback theorem and an admission witness. -/
+def package (p : SourcePackage) : PrintedPackage :=
+  let admission := [
     "theorem readback {a : Admitted V} (h : admit stored association = .ok a) :",
     "    a.program = installed := admitted_eq_of_elaborated h elaborated",
-    "end"]
-  let admitted := [
+    "end",
     "theorem admitted_exists : ∃ a, admit stored association = .ok a := by",
     "  have ok : (admit stored association).isOk = true := by decide +kernel",
     "  cases eq : admit stored association with",
     "  | ok a => exact ⟨a, rfl⟩",
     "  | error e => rw [eq] at ok; contradiction"]
-  let vocabulary := s!"abbrev V : Zkc.Core.Vocabulary := {vocabularyTerm p.bindings}"
-  let text := "\n".intercalate <|
-    vocabulary :: storedLines ++ storedProgram ++ typed ++ admitted ++ [""]
-  let definitions := named.map fun
-    | .fn k .. => (k, false)
-    | .protocol k .. => (k, true)
-  ⟨text, definitions⟩
+  ⟨packageText p admission, definitionKeys p.named⟩
+
+/-- A soundness package supplies one value for transporting an author's proof to an admitted
+program. Its stored program and association remain executable for comparison with the source. -/
+def subjectPackage (p : SourcePackage) : String :=
+  packageText p [
+    s!"abbrev subjectPackage : {``Zkc.Subject.Package} V :=",
+    "  ⟨stored, association, installed, elaborated, by decide +kernel⟩",
+    "theorem readback {a : Admitted V} (h : admit stored association = .ok a) :",
+    "    a.program = installed := subjectPackage.readback h",
+    "end",
+    "theorem admitted_exists : ∃ a, admit stored association = .ok a :=",
+    "  subjectPackage.admitted_exists"]
 
 end Zkc.Frontend.Written

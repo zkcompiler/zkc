@@ -11,8 +11,8 @@ Libraries:
   ([guide](Zkc/Core/README.md)).
 - `ZkcVocabulary` (`Zkc.Vocabulary`): the standard vocabulary of the core, its keys and its
   table ([guide](Zkc/Vocabulary/README.md)).
-- `ZkcSubject` (`Zkc.Subject`): charge tables, their lookups and totals, and Lean term printers
-  shared by the frontend and formal package.
+- `ZkcSubject` (`Zkc.Subject`) holds the stored package and its admission evidence, source
+  coverage, charge tables and Lean term printers shared by the frontend and formal package.
 - `ZkcCoreTests` (`Zkc.Tests.Core`): the checks of the core, which the kernel runs when they are
   built; the test driver of the package.
 - `ZkcVocabularyTests` (`Zkc.Tests.Vocabulary`): the checks of the vocabulary's table against
