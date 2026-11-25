@@ -53,6 +53,39 @@ def checkSharedCoverage : IO Unit := do
       first.contains "sha256" && second.contains "sha256" do
     throw (IO.userError s!"unexpected refusals {issued.refusals}")
 
+/-- Check both sides of issuance with exactly their declared imports. The shared package
+has two labels that used to collide with fixed declarations; a second source calls a
+helper whose old fallback label was itself the goal's name. -/
+private def checkPublicationNames (work : System.FilePath) : IO Unit := do
+  let goal (name : String) := s!"goal {name} = soundness(Checked, spec e = 0)"
+  let long := String.ofList (List.replicate 42 '가')
+  let input ← source "fixtures/hash-relation.zkc"
+    [(goal "good", "\n".intercalate (["root", "verifier", long].map goal))]
+  let shared ← statementsFor input ["root", "verifier"]
+  unless (shared.publicationPairs "SharedLabels").map (·.1.getString!) ==
+      ["root_installed", "root_sound", "root_result", "root_met",
+       "verifier_installed", "verifier_sound", "verifier_result", "verifier_met"] do
+    throw (IO.userError "the public challenge lost the source names")
+  let assembly ← Driver.assembleFiles input ["../../libraries"]
+  let #[result] := issueSoundnessGoals assembly [long] | throw (IO.userError "missing goal")
+  let issued ← IO.ofExcept result.outcome
+  let helper := "module calling\nuse zkc::security::{soundness}\ndef root(b: bool) -> bool: b\n" ++
+    "relation Holds(b: bool): b\nprotocol Check roles(P,V)(b: bool @(P,V)):\n    guard @V root(b)\n" ++
+    "spec for Check:\n    proves @V Holds(b)\nscheme Checked = Check:\n    prover P\n" ++
+    "    construction interactive\ngoal root0 = soundness(Checked)\n"
+  let called ← statementsFor ⟨"calling.zkc", Syntax.parseString "calling.zkc" helper⟩ ["root0"]
+  unless called.functions.map Prod.snd == [0] do throw (IO.userError "expected the helper at key zero")
+  let modules := [← IO.ofExcept (shared.module "SharedLabels" {}), issued.publication,
+    ← IO.ofExcept (called.module "HelperLabels" {})]
+  let pending ← modules.mapM fun publication => do
+    let stated ← addStated work publication
+    let challenge ← addChallenge work publication.space publication
+    return (stated, challenge)
+  for (stated, challenge) in pending do
+    stated.accepted stated.space
+    let (ok, output) ← leanOn work challenge
+    unless ok do throw (IO.userError s!"{challenge}: {output}")
+
 /-- Elaborate the propositions issued for these goals with their proofs at the source field. -/
 def checkClaims (work : System.FilePath) (name fixture : String) (goals theorems : List String)
     (edits : List (String × String) := []) (refusedHash := false) : IO Unit := do
@@ -81,6 +114,7 @@ def checkClaims (work : System.FilePath) (name fixture : String) (goals theorems
 #eval IO.FS.withTempDir checkLinkedCeilings
 #eval checkEveryGoalIssued
 #eval checkSharedCoverage
+#eval IO.FS.withTempDir checkPublicationNames
 #eval IO.FS.withTempDir fun w => checkClaims w "ThirdElement" "third-element" ["sound"]
   ["sound_judged", "field_claim", "hypotheses_met"]
 #eval IO.FS.withTempDir fun w => checkClaims w "Unguarded" "third-element" ["sound"]

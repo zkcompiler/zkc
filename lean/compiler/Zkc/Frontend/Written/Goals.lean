@@ -22,12 +22,19 @@ structure GoalResult where
 def allGoalsIssued (results : Array GoalResult) : Bool :=
   !results.isEmpty && results.all (·.outcome.isOk)
 
-/-- Encode a source path as one Lean module component. Escaping the escape character
-keeps underscores distinct from encoded punctuation, including the source path separator. -/
+/-- An injective spelling of the canonical path. Long spellings use bounded ASCII
+components. A terminal `Goal` component can never be an internal `Part_` component. -/
 private def goalNamespace (path : String) : String :=
   let segment (name : String) := String.join (name.toList.map fun c =>
-    if c.isAlphanum && c.toNat < 128 then String.singleton c else s!"_u{c.toNat}z")
-  "WrittenGoal_" ++ "__".intercalate ((path.splitOn "::").map segment)
+    if c.isAlphanum then String.singleton c else s!"_u{c.toNat}z")
+  let encoded := "__".intercalate ((path.splitOn "::").map segment)
+  let width := 120
+  if encoded.length ≤ width then "WrittenGoal_" ++ encoded
+  else
+    let chars := encoded.toList.toArray
+    let parts := (List.range ((chars.size + width - 1) / width)).map fun i =>
+      "Part_" ++ String.ofList (chars.extract (i * width) ((i + 1) * width)).toList
+    ".".intercalate ("WrittenLongGoal" :: parts ++ ["Goal"])
 
 private def issueGoal (root : AdmittedRoot) (id : DeclarationId) (path : String) :
     ExportM IssuedGoal := do
@@ -42,11 +49,12 @@ instance number. Each goal starts its relation elaboration from that admission. 
 private def issueSelectedGoals (state : Compile.State) (refusals : Std.HashMap Names.Owner Diagnostic)
     (selectors : List String) :
     Array GoalResult := Id.run do
+  let index := declarationIndex state .goal
   let mut roots : Std.HashMap DeclarationId (ExportM AdmittedRoot) := {}
   let mut decisions : Std.HashMap DeclarationId (ExportM IssuedGoal) := {}
   let mut results := #[]
   for selector in selectors do
-    match selectDeclaration state .goal selector "WK-GOAL" with
+    match index.select selector "WK-GOAL" with
     | .error reason => results := results.push ⟨selector, none, .error reason⟩
     | .ok (id, path) =>
       if let some prior := decisions[id]? then
@@ -55,7 +63,7 @@ private def issueSelectedGoals (state : Compile.State) (refusals : Std.HashMap N
       let selection : ExportM (Selection × Compile.State) := do
         if let some why := refusals[Names.Owner.declaration id]? then
           throw s!"{why.span.file}:{why.render state.env.renderer}"
-        selectNamedGoal state path .soundness
+        selectGoalId state id .soundness
       let (nextRoots, decision) := match selection with
         | .error reason => (roots, .error reason)
         | .ok (selected, closed) => Id.run do

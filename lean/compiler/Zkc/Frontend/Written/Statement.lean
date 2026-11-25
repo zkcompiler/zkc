@@ -205,7 +205,7 @@ def Module.challenge (m : Module) : String :=
 /-- The theorems of a pair that the judgment is of: the published ones and the consumers,
 under their full names (a name is its components, as in `publicationPairs`). -/
 def Module.judged (m : Module) : List Lean.Name :=
-  m.published.map (·.1) ++ m.consumers.map fun c => .str (.str .anonymous m.space) c.name
+  m.published.map (·.1) ++ m.consumers.map fun c => .str m.space.toName c.name
 
 /-- Requests for the axioms of the theorems of the proof module, by their full names: what a
 control appends to the proof module, to read from Lean's reports which theorems are left
@@ -279,9 +279,31 @@ last first: as many places after the head as definitions of its kind follow it. 
 def memberOf (s : Statements) (key : Nat) (isProtocol : Bool) : String :=
   memberAt (((s.definitions.dropWhile (·.1 != key)).drop 1).filter (·.2 == isProtocol)).length
 
-/-- The functions of the package of claims that stand before the root, each under the name of
-its declaration in the source: what the root may call. A name that two of them share, or that a
-goal has, is followed by the key. -/
+/-- Whether a name of the source can stand in a generated name as it is: letters of the basic
+alphabet, digits and underscores, not beginning with a digit. A name of the source may be any
+identifier of Unicode, of which Lean reads some as other tokens. -/
+def plainName (name : String) : Bool :=
+  !name.isEmpty && name.all (fun c => c.isAlphanum || c == '_') && !name.front.isDigit
+
+/-- Keep ordinary source labels readable. Escaped labels use an apostrophe, which cannot
+occur in a source identifier. The prefixes `at_` and `site_` introduce generated declarations. -/
+def usableSourceLabel (name : String) : Bool :=
+  plainName name && !name.startsWith "at_" && !name.startsWith "site_"
+
+/-- A goal keeps its source spelling for diagnostics and source readback. Its Lean label
+also has to coexist with the protocol root, the verifier walk and other generated names. -/
+def _root_.Zkc.Frontend.Written.ClaimedGoal.label (goal : ClaimedGoal) : String :=
+  if usableSourceLabel goal.goal && !goal.goal.contains "_cap_" && !goal.goal.endsWith "_claim_of" then goal.goal
+  else "goal'" ++ String.join (goal.goal.toList.map fun c =>
+    if c.isAlphanum || c == '_' then String.singleton c else s!"'{c.toNat}'")
+
+/-- The relation aliases and transfer lemma share a namespace with fixed protocol facts.
+Keep `root_sound` and `verifier_sound` under their source names in the public challenge. -/
+def _root_.Zkc.Frontend.Written.ClaimedGoal.relationLabel (goal : ClaimedGoal) : String :=
+  if goal.goal == "root" || goal.goal == "verifier" then "relation'" ++ goal.goal else goal.label
+
+/-- Functions before the root keep their source labels where unique. The key in a fallback
+label belongs to this package. Retain the ordinary numbered fallback when available. -/
 def _root_.Zkc.Frontend.Written.GoalClaims.functionsBeforeRoot (claims : GoalClaims) :
     List (String × Nat) :=
   let definitions := (Written.package (claims.emission.package ⟨[], [], [], [], []⟩)).definitions
@@ -290,11 +312,19 @@ def _root_.Zkc.Frontend.Written.GoalClaims.functionsBeforeRoot (claims : GoalCla
     let name := match claims.state.table.entries[key.number]? with
       | some entry => claims.state.program.nameOf entry.key.declaration
       | none => ""
-    (if name.isEmpty then "function" else name, key.number)
-  let taken := claims.goals.map (·.goal) ++ ["root", "callee", "verifier", "prover", "site"]
-  named.map fun (name, key) =>
-    if taken.contains name || (named.filter (·.1 == name)).length > 1 then (s!"{name}{key}", key)
-    else (name, key)
+    (name, key.number)
+  let reserved := claims.goals.foldl (fun names goal => names.insert goal.label)
+    (Std.HashSet.ofList ["root", "callee", "verifier", "prover", "site"])
+  let (sourceNames, taken) := named.foldl (init := (∅, reserved)) fun (seen, taken) (name, _) =>
+    ((seen : Std.HashSet String).insert name, if seen.contains name then taken.insert name else taken)
+  let (_, labels) := named.foldl (init := (reserved, #[])) fun (used, labels) (name, key) => Id.run do
+    let numbered := s!"{name}{key}"
+    let label :=
+      if usableSourceLabel name && !taken.contains name then name
+      else if usableSourceLabel name && !sourceNames.contains numbered && !used.contains numbered then numbered
+      else s!"function'{key}"
+    return (used.insert label, labels.push (label, key))
+  labels.toList
 
 /-- The place of a function among the functions of the program before the root, which stand
 last first. -/
@@ -386,17 +416,17 @@ def facts (s : Statements) (goals := s.claims.goals) : String :=
     s!"noncomputable abbrev {label}Member : Member calleeProgram.headers.fns header{key} :=\n" ++
     s!"  {s.calleeMember key}\n") ++
   String.join (goals.map fun goal =>
-    let name := goal.goal
+    let name := goal.label
     let relation := goal.relation
     s!"def {name}Caps : Zkc.Subject.CapTable := {capsTerm goal.caps}\n" ++
     String.join (goal.specification.toList.zipIdx.map fun (value, index) =>
       s!"def {name}Argument{index} : Nat := {value}\n") ++
-    s!"abbrev {name}Key : Key := ⟨{relation}⟩\n" ++
-    s!"noncomputable abbrev {name}Header := header{relation}\n" ++
-    s!"noncomputable abbrev {name}Names := names{relation}\n" ++
-    s!"noncomputable abbrev {name}Body := body{relation}\n" ++
-    s!"noncomputable abbrev {name}Before : Typed V := {s.programBefore relation}\n" ++
-    s!"noncomputable abbrev {name}Member : Member installed.headers.fns header{relation} :=\n" ++
+    s!"abbrev {goal.relationLabel}Key : Key := ⟨{relation}⟩\n" ++
+    s!"noncomputable abbrev {goal.relationLabel}Header := header{relation}\n" ++
+    s!"noncomputable abbrev {goal.relationLabel}Names := names{relation}\n" ++
+    s!"noncomputable abbrev {goal.relationLabel}Body := body{relation}\n" ++
+    s!"noncomputable abbrev {goal.relationLabel}Before : Typed V := {s.programBefore relation}\n" ++
+    s!"noncomputable abbrev {goal.relationLabel}Member : Member installed.headers.fns header{relation} :=\n" ++
     s!"  {s.memberOf relation false}\n")
 
 /-- Where the walks of a module start. The meanings of a program are closed to Lean's own
@@ -465,7 +495,7 @@ def entries (s : Statements) (goals := s.claims.goals) : String :=
   "noncomputable section\n\n" ++ role ++ appliedPrograms ++ appliedEntries ++
   String.join (s.functions.map fun (label, _) => function label s!"{label}Member" "calleeProgram") ++
   String.join (goals.map fun goal =>
-    function goal.goal s!"{goal.goal}Member" "installed") ++
+    function goal.relationLabel s!"{goal.relationLabel}Member" "installed") ++
   "end\n\n"
 
 /-- The names of the theorems that `entries` writes. -/
@@ -474,7 +504,7 @@ def entryNames (s : Statements) (goals := s.claims.goals) : List String :=
   ((s.appliedRoles.map fun a => (a.protocol, a.role)).eraseDups.map fun (key, played) =>
     s!"Applied.role{key}_{played}Program.eq") ++
   (s.appliedRoles.map fun a => s!"Applied.role{a.protocol}_{a.role}in{a.caller}_meaning") ++
-  s.functions.map (s!"{·.1}_meaning") ++ goals.map (s!"{·.goal}_meaning")
+  s.functions.map (s!"{·.1}_meaning") ++ goals.map (s!"{·.relationLabel}_meaning")
 
 /-- That what holds of the root, and of the root with a goal's relation, in the installed
 program holds of them in every admitted program, each found by its key. -/
@@ -491,7 +521,7 @@ def transfers (s : Statements) (goals := s.claims.goals) : String :=
   "  have same := readback admitted\n  generalize a.program = p at same\n  subst same\n" ++
   "  exact ⟨rootMember, by kernel_rfl, holds⟩\n\n" ++
   String.join (goals.map fun goal =>
-    let name := goal.goal
+    let name := goal.relationLabel
     s!"/-- What holds of the root and of the relation of `{name}` in the installed program holds of\n" ++
     "them in every admitted program, each found by its key. -/\n" ++
     s!"theorem at_{name} " ++ "{a : Admitted V} (admitted : admit stored association = .ok a)\n" ++
@@ -517,12 +547,6 @@ structure Parts where
   names : String
   inputs : String
   premise : String → String → String
-
-/-- Whether a name of the source can stand in a generated name as it is: letters of the basic
-alphabet, digits and underscores, not beginning with a digit. A name of the source may be any
-identifier of Unicode, of which Lean reads some as other tokens. -/
-def plainName (name : String) : Bool :=
-  !name.isEmpty && name.all (fun c => c.isAlphanum || c == '_') && !name.front.isDigit
 
 /-- The names of the inputs of the root in a statement: the name that the source gives the port,
 after `input_`, so that a reader of a statement sees which inputs the relation is applied to and
@@ -590,7 +614,7 @@ frontend computed (`<goal>_budget`), both decided by the kernel. The second ties
 statement to the number that GL4 compares with a ceiling and that a reader can write down. -/
 def counts (s : Statements) (goals := s.claims.goals) : String :=
   String.join (goals.map fun goal =>
-    let name := goal.goal
+    let name := goal.label
     let total := goal.total
     s!"/-- The table of caps of `{name}` adds up as the stored program does: its counts and its arms are the program's. -/\n" ++
     s!"theorem {name}_counted : {name}Caps.counted stored rootKey = true := by decide +kernel\n\n" ++
@@ -600,7 +624,7 @@ def counts (s : Statements) (goals := s.claims.goals) : String :=
 
 /-- The names of the theorems that `counts` writes. -/
 def countNames (s : Statements) (goals := s.claims.goals) : List String :=
-  goals.flatMap fun goal => [s!"{goal.goal}_counted", s!"{goal.goal}_budget"]
+  goals.flatMap fun goal => [s!"{goal.label}_counted", s!"{goal.label}_budget"]
 
 /-- For each goal with a ceiling, the theorem `<goal>_ceiling`: the total of the goal's table is
 within the ceiling, the comparison decided by the kernel. -/
@@ -609,7 +633,7 @@ def ceilings (s : Statements) (goals := s.claims.goals) : Except String String :
   let mut text := ""
   for goal in goals do
     let some ceiling := goal.ceiling | continue
-    let name := goal.goal
+    let name := goal.label
     text := text ++
       s!"/-- The total of the charges of `{name}` is within the ceiling that the goal states. -/\n" ++
       s!"theorem {name}_ceiling : {name}Caps.total ≤ (({ceiling.num.toNat} : ℕ) : ℝ≥0∞) / ({ceiling.den} : ℕ) :=\n" ++
@@ -633,9 +657,9 @@ def served : String :=
 /-- Each goal has a coverage theorem. Goals with the same entries reuse the first proof. -/
 def coverage (goals : List ClaimedGoal) : String := Id.run do
   let mut text := ""
-  for (g, firstGoal) in perRelation goals (·.goal) do
-    let proof := if g.goal == firstGoal then "by decide +kernel" else s!"{firstGoal}_covered"
-    text := text ++ s!"theorem {g.goal}_covered : StandardInterpretation.covers stored rootKey {g.goal}Key = true := {proof}\n\n"
+  for (g, firstGoal) in perRelation goals (·.label) do
+    let proof := if g.label == firstGoal then "by decide +kernel" else s!"{firstGoal}_covered"
+    text := text ++ s!"theorem {g.label}_covered : StandardInterpretation.covers stored rootKey {g.relationLabel}Key = true := {proof}\n\n"
   return text
 
 /-- What a goal claims of a program with its root and the relation of the goal's clause, as the
@@ -648,7 +672,7 @@ def claimAt (s : Statements) (goal : ClaimedGoal)
   return "∀ (path : List Frame),\n" ++
     parts.quantified ++
     s!"    {parts.premise program relation} →\n" ++
-    s!"      {returnsWithin program root parts.inputs s!"{goal.goal}Caps.total"}"
+    s!"      {returnsWithin program root parts.inputs s!"{goal.label}Caps.total"}"
 
 /-- For each goal, what is stated before any proof is written, so that no name defined by the
 text of a proof can change it:
@@ -666,7 +690,7 @@ text of a proof can change it:
 def claimTexts (s : Statements) (goals := s.claims.goals) : Except String String := do
   let mut text := ""
   for goal in goals do
-    let name := goal.goal
+    let name := goal.label
     let parts ← s.parts goal
     text := text ++
       s!"/-- What the goal `{name}` claims of a program with its root and the relation of the goal's\n" ++
@@ -674,31 +698,31 @@ def claimTexts (s : Statements) (goals := s.claims.goals) : Except String String
       "returns with probability at most the total of the goal's table of caps, against every service that\n" ++
       "draws within the samplers of the model and answers only what is permitted (`ReturnsWithin`). -/\n" ++
       s!"def {name}ClaimOf (p : Typed V) (root : Member p.headers.protocols rootHeader)\n" ++
-      s!"    (relation : Member p.headers.fns {name}Header) : Prop :=\n  " ++
+      s!"    (relation : Member p.headers.fns {goal.relationLabel}Header) : Prop :=\n  " ++
       (← s.claimAt goal "p" "root" "relation") ++ "\n\n" ++
       s!"/-- The claim of the goal `{name}` about the installed program. -/\n" ++
-      s!"def {name}Claim : Prop := {name}ClaimOf installed rootMember {name}Member\n\n" ++
+      s!"def {name}Claim : Prop := {name}ClaimOf installed rootMember {goal.relationLabel}Member\n\n" ++
       s!"/-- **The goal `{name}`.** In every program that admission gives for the package, the protocol\n" ++
       "and the relation of the goal's clause are found by their keys, and the claim holds of them. -/\n" ++
       s!"def {name}Goal : Prop :=\n" ++
       "  ∀ {a : Admitted V}, admit stored association = .ok a →\n" ++
       "    ∃ root : Member a.program.headers.protocols rootHeader,\n" ++
       "      a.program.findProtocol rootKey = some ⟨rootHeader, root⟩ ∧\n" ++
-      s!"      ∃ relation : Member a.program.headers.fns {name}Header,\n" ++
-      s!"        a.program.find {name}Key = some (.fn relation) ∧ {name}ClaimOf a.program root relation\n\n" ++
+      s!"      ∃ relation : Member a.program.headers.fns {goal.relationLabel}Header,\n" ++
+      s!"        a.program.find {goal.relationLabel}Key = some (.fn relation) ∧ {name}ClaimOf a.program root relation\n\n" ++
       s!"/-- **The result of the goal `{name}`**: the interpretation covers the goal’s reach, the counts of the goal's\n" ++
       "table of caps are those of the stored program, and the goal holds. A result over a model is\n" ++
       "about the program only where the model covers it, and a bound by a table is about the program\n" ++
       "only where the table has its counts. -/\n" ++
       s!"def {name}Result : Prop :=\n" ++
-      s!"  StandardInterpretation.covers stored rootKey {name}Key = true ∧ {name}Caps.counted stored rootKey = true ∧ {name}Goal\n\n" ++
+      s!"  StandardInterpretation.covers stored rootKey {goal.relationLabel}Key = true ∧ {name}Caps.counted stored rootKey = true ∧ {name}Goal\n\n" ++
       s!"/-- The hypotheses of the claim of `{name}` are met together: valid inputs on which the relation returns false,\n" ++
       "and a service with a state\n" ++
       "that draws within the samplers and answers only what is permitted (`Served`). -/\n" ++
       s!"def {name}Witnessed : Prop :=\n" ++
        parts.existential ++
       s!"    {served} ∧\n" ++
-      s!"      {parts.premise "installed" s!"{name}Member"}\n\n"
+      s!"      {parts.premise "installed" s!"{goal.relationLabel}Member"}\n\n"
   return text
 
 /-- The name of a draw of the root in a module: the name of its site in the source, with
@@ -753,9 +777,9 @@ def sites (s : Statements) (goals := s.claims.goals) : String :=
     s!"abbrev site_{label} : Key := ⟨{key.number}⟩\n\n") ++
   String.join (goals.map fun goal =>
     String.join (goal.siteCaps.map fun (label, cap) =>
-      s!"/-- The cap that the table of `{goal.goal}` gives the draw `{label}`. -/\n" ++
-      s!"@[walk_cap]\ntheorem {goal.goal}_cap_{label} :\n" ++
-      s!"    {goal.goal}Caps.capFrom {goal.goal}Caps.root [] site_{label} = " ++
+      s!"/-- The cap that the table of `{goal.label}` gives the draw `{label}`. -/\n" ++
+      s!"@[walk_cap]\ntheorem {goal.label}_cap_{label} :\n" ++
+      s!"    {goal.label}Caps.capFrom {goal.label}Caps.root [] site_{label} = " ++
       s!"{cap.numerator} / {cap.denominator} := by\n  decide +kernel\n\n")) ++
   -- the draws below applications: a draw is charged in the contract of the protocol that has
   -- it, and the table gives the root its cap through the applications that reach it
@@ -769,17 +793,17 @@ def sites (s : Statements) (goals := s.claims.goals) : String :=
     String.join ((goal.caps.sites.filter (!·.1.through.isEmpty)).map
       fun (site, numerator, denominator, _) =>
         let through := ", ".intercalate (site.through.map fun key => s!"⟨{key.number}⟩")
-        s!"/-- The cap that the table of `{goal.goal}` gives the draw `{appliedSite site}`. -/\n" ++
-        s!"@[walk_cap]\ntheorem {goal.goal}_cap_{appliedSite site} :\n" ++
-        s!"    {goal.goal}Caps.capFrom {goal.goal}Caps.root [{through}] {appliedSite site} = " ++
+        s!"/-- The cap that the table of `{goal.label}` gives the draw `{appliedSite site}`. -/\n" ++
+        s!"@[walk_cap]\ntheorem {goal.label}_cap_{appliedSite site} :\n" ++
+        s!"    {goal.label}Caps.capFrom {goal.label}Caps.root [{through}] {appliedSite site} = " ++
         s!"{numerator} / {denominator} := by\n  decide +kernel\n\n"))
 
 /-- The names of the theorems that `sites` writes. -/
 def siteNames (s : Statements) (goals := s.claims.goals) : List String :=
   goals.flatMap fun goal =>
-    (goal.siteCaps.map fun (label, _) => s!"{goal.goal}_cap_{label}") ++
+    (goal.siteCaps.map fun (label, _) => s!"{goal.label}_cap_{label}") ++
     ((goal.caps.sites.filter (!·.1.through.isEmpty)).map fun (site, _) =>
-      s!"{goal.goal}_cap_{appliedSite site}")
+      s!"{goal.label}_cap_{appliedSite site}")
 
 /-- What the method of fees has to establish for a goal, as the text of a proposition: on valid
 inputs of the deciding role on which the relation returns false, the role's process in the
@@ -787,9 +811,9 @@ installed program is judged never to return within the budget of the goal's tabl
 fee within what the table allows the effect that pays it. The binders are named: what the model
 is built from, `path`, the hypotheses of the model, each input with its validity, `rejected`. -/
 def judgedAt (s : Statements) (goal : ClaimedGoal) : Except String String := do
-  let name := goal.goal
+  let name := goal.label
   let parts ← s.parts goal
-  let premise := parts.premise "installed" s!"{name}Member"
+  let premise := parts.premise "installed" s!"{goal.relationLabel}Member"
   return s!"∀ (path : List Frame)\n" ++
      parts.binders ++
     s!"    (rejected : {premise}),\n" ++
@@ -813,9 +837,9 @@ follows from it:
 def judgments (s : Statements) (goals := s.claims.goals) : Except String String := do
   let mut text := ""
   for goal in goals do
-    let name := goal.goal
+    let name := goal.label
     let parts ← s.parts goal
-    let premise := parts.premise "installed" s!"{name}Member"
+    let premise := parts.premise "installed" s!"{goal.relationLabel}Member"
     let given := (parts.names.splitOn " ").filter (!·.isEmpty)
     text := text ++
       "set_option linter.unusedVariables false in\n" ++
@@ -839,19 +863,19 @@ def judgments (s : Statements) (goals := s.claims.goals) : Except String String 
 /-- The names of the theorems that `judgments` writes. -/
 def judgmentNames (s : Statements) (goals := s.claims.goals) : List String :=
   goals.flatMap fun goal =>
-    [s!"{goal.goal}_claim_of_judged", s!"{goal.goal}_witnessed_of"]
+    [s!"{goal.label}_claim_of_judged", s!"{goal.label}_witnessed_of"]
 
 /-- For each goal whose claim the text established by the judgment with fees, the claim about
 the installed program, from the theorem `<goal>_judged` of the text. -/
 def conclusions (s : Statements) (goals := s.claims.goals) : String :=
   String.join (goals.map fun goal =>
-    s!"/-- The claim of `{goal.goal}`, from the judgment that the text established. -/\n" ++
-    s!"theorem {goal.goal}_installed : {goal.goal}Claim :=\n" ++
-    s!"  {goal.goal}_claim_of_judged {goal.goal}_judged\n\n")
+    s!"/-- The claim of `{goal.label}`, from the judgment that the text established. -/\n" ++
+    s!"theorem {goal.label}_installed : {goal.label}Claim :=\n" ++
+    s!"  {goal.label}_claim_of_judged {goal.label}_judged\n\n")
 
 /-- The names of the theorems that `conclusions` writes. -/
 def conclusionNames (s : Statements) (goals := s.claims.goals) : List String :=
-  goals.map fun goal => s!"{goal.goal}_installed"
+  goals.map fun goal => s!"{goal.label}_installed"
 
 /-- For each goal, after the text of the proofs: the theorems `<goal>_sound : <goal>Goal`,
 `<goal>_result : <goal>Result` and `<goal>_met : <goal>Witnessed`, from the theorems
@@ -860,10 +884,10 @@ text's judgment) and `<goal>_witnessed : <goal>Witnessed` of the text. The state
 fixed before the text; only their proofs are written here. -/
 def closings (s : Statements) (goals := s.claims.goals) : String :=
   String.join (goals.map fun goal =>
-    let name := goal.goal
+    let name := goal.label
     s!"/-- The goal `{name}`, for every admitted program. -/\n" ++
     s!"theorem {name}_sound : {name}Goal :=\n" ++
-    s!"  fun admitted => at_{name} admitted {name}ClaimOf ({name}_installed : {name}Claim)\n\n" ++
+    s!"  fun admitted => at_{goal.relationLabel} admitted {name}ClaimOf ({name}_installed : {name}Claim)\n\n" ++
     s!"/-- The result of the goal `{name}`. -/\n" ++
     s!"theorem {name}_result : {name}Result := ⟨{name}_covered, {name}_counted, {name}_sound⟩\n\n" ++
     s!"/-- The hypotheses of the claim of `{name}` are met. -/\n" ++
@@ -872,11 +896,11 @@ def closings (s : Statements) (goals := s.claims.goals) : String :=
 /-- The names of the theorems that `closings` writes. -/
 def closingNames (s : Statements) (goals := s.claims.goals) : List String :=
   goals.flatMap fun goal =>
-    [s!"{goal.goal}_sound", s!"{goal.goal}_result", s!"{goal.goal}_met"]
+    [s!"{goal.label}_sound", s!"{goal.label}_result", s!"{goal.label}_met"]
 
 /-- The names of the theorems that `ceilings` writes. -/
 def ceilingNames (s : Statements) (goals := s.claims.goals) : List String :=
-  goals.filterMap fun goal => goal.ceiling.map fun _ => s!"{goal.goal}_ceiling"
+  goals.filterMap fun goal => goal.ceiling.map fun _ => s!"{goal.label}_ceiling"
 
 /-- The modules that a module of statements imports: those of the printed package, those of
 the library that the generated statements name, and the model's. A text that walks the program
@@ -904,8 +928,8 @@ def publicationPairs (s : Statements) (name : String) (goals := s.claims.goals) 
   goals.flatMap fun goal =>
     [("_installed", "Claim"), ("_sound", "Goal"), ("_result", "Result"), ("_met", "Witnessed")].map
       fun (theorem_, proposition) =>
-        (.str (.str .anonymous name) s!"{goal.goal}{theorem_}",
-          .str (.str .anonymous name) s!"{goal.goal}{proposition}")
+        (.str name.toName s!"{goal.label}{theorem_}",
+          .str name.toName s!"{goal.label}{proposition}")
 
 /-- The requests for the axioms of theorems, and the end of the module's name space. -/
 def footer (name : String) (theorems : List String) : String :=
@@ -962,14 +986,14 @@ def module (s : Statements) (name : String) (proof : ProofText)
   let ceilings ← s.ceilings goals
   let fees := proof.method == .fees
   let judgments ← if fees then s.judgments goals else pure ""
-  let stated := ["admitted_exists"] ++ goals.map (s!"{·.goal}_covered") ++ s.countNames goals ++ s.siteNames goals ++
+  let stated := ["admitted_exists"] ++ goals.map (s!"{·.label}_covered") ++ s.countNames goals ++ s.siteNames goals ++
     (if walks then s.entryNames goals else []) ++ (if fees then s.judgmentNames goals else []) ++
     s.ceilingNames goals
   let stating := header (imports walks) ++ s!"namespace {name}\n" ++
     (Written.package s.package).text ++ statementOpens ++ s.facts goals ++ "\n" ++ s.transfers goals ++ claims ++
     coverage goals ++ s.counts goals ++ s.sites goals ++ (if walks then s.entries goals else "") ++
     judgments ++ ceilings ++ footer name stated
-  let statementsName : Lean.Name := statements.getD (.str (.str .anonymous name) "Stated")
+  let statementsName : Lean.Name := statements.getD (.str name.toName "Stated")
   let proofImports := proof.imports ++ after.flatMap (·.imports)
   -- the proof module reopens the name space and the names that the statements were read with
   let opening := header (toString statementsName :: proofImports) ++ s!"namespace {name}\n" ++ statementOpens
@@ -1000,7 +1024,7 @@ def claimsModule (s : Statements) (name : String) :
 def coverageModule (s : Statements) (name : String) :
     Except String PlainModule := do
   let (goals, refusals) ← s.coveredGoals
-  let theorems := goals.map (s!"{·.goal}_covered")
+  let theorems := goals.map (s!"{·.label}_covered")
   let text := header (imports false) ++ s!"namespace {name}\n" ++
     (Written.package s.package).text ++ statementOpens ++ s.facts goals ++ "\n" ++
     coverage goals ++ footer name theorems

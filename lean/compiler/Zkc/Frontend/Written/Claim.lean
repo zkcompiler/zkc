@@ -69,8 +69,7 @@ def schemeVerifier (c : AdmittedRoot) (scheme : SchemeEntry) : ExportM Nat :=
 /-- The clause from which a written soundness goal forms its claim (GL3): the deciding clause
 that the goal names, or the only one of the contract, whose deciding role is the verifier of
 the scheme. -/
-def goalClause (c : AdmittedRoot) (goal : String) : ExportM DecidingClause := do
-  let (selected, _) ← selectNamedGoal c.state goal .soundness
+private def selectedClause (c : AdmittedRoot) (selected : Selection) : ExportM DecidingClause := do
   unless selected.scheme.protocol == c.id do throw "GL3: goal selects a different protocol"
   let some key := c.state.results.key? c.id | throw "missing the instance of the scheme's protocol"
   let place := (selected.goal.map (·.span)).getD selected.scheme.span
@@ -79,6 +78,10 @@ def goalClause (c : AdmittedRoot) (goal : String) : ExportM DecidingClause := do
   unless clause.role == some verifier do
     refuse clause.span "GL3" "the deciding role of the clause is the verifier of the scheme"
   return clause
+
+@[no_expose] def goalClause (c : AdmittedRoot) (goal : String) : ExportM DecidingClause := do
+  let (selected, _) ← selectNamedGoal c.state goal .soundness
+  selectedClause c selected
 
 /-- What one written soundness goal claims, in the package of its claims. It is made by
 `goalClaims` alone. -/
@@ -161,11 +164,9 @@ def operandPlace (body : Typed.ProtocolBody) (statement : Option (Nat × Nat))
 
 /-- What a goal claims, with its relation instantiated in `state` and the state after it, and
 the scheme that the goal names. -/
-@[no_expose] def claimedGoal (c : AdmittedRoot) (state : Compile.State) (goal : String) :
+private def readClaim (c : AdmittedRoot) (state : Compile.State) (goal : String) (selected : Selection) :
     ExportM (ClaimedGoal × SchemeEntry × Compile.State) := do
-  let (selected, _) ← selectNamedGoal c.state goal .soundness
-  unless selected.scheme.protocol == c.id do throw "GL3: goal selects a different protocol"
-  let clause ← goalClause c goal
+  let clause ← selectedClause c selected
   let some application := clause.application
     | refuse clause.span "WK-CLAUSE" "the clause applies no relation"
   let some checked := c.state.results.checked? c.id
@@ -173,6 +174,18 @@ the scheme that the goal names. -/
   let .protocol body := checked.definition.body
     | throw "the root of the scheme is no protocol"
   let parties ← schemeParties c selected.scheme
+  let some key := c.state.results.key? c.id | throw "missing protocol key"
+  let some {content := .protocol head .., ..} := c.state.env.modules.lowered? key.declaration
+    | throw "missing the source ports of the protocol"
+  -- SX7 omits a hypothesis that reads a port unavailable to the honest verifier.
+  -- Until hypotheses have a formal interpretation, issue only when such a read is certain.
+  for requirement in ← contractOf c.state key.declaration clause.span do
+    let .requires span _ condition := requirement | continue
+    let unavailable := condition.locals.any fun id => head.ports.any fun port =>
+      port.binder.id == id && !port.specification && !port.holders.contains parties.2 &&
+        !port.readers.any (·.contains parties.2)
+    unless unavailable do
+      refuse span "SX7" "written soundness does not yet interpret this contract hypothesis (`requires`)"
   let (typed, state) ← evaluate state clause.span
     (Typing.typedClauses c.id selected.specification (only := some clause.place))
   let some (_, tree) := typed.find? (·.1 == clause.place)
@@ -191,17 +204,24 @@ the scheme that the goal names. -/
   return ({ goal, clause, relation, statement, witness, specification := selected.specification,
             ceiling := selected.ceiling, caps, sites }, selected.scheme, state)
 
+@[no_expose] def claimedGoal (c : AdmittedRoot) (state : Compile.State) (goal : String) :
+    ExportM (ClaimedGoal × SchemeEntry × Compile.State) := do
+  let (selected, _) ← selectNamedGoal c.state goal .soundness
+  readClaim c state goal selected
+
 /-- What written soundness goals of one scheme claim (GL3), as one package: for each goal its
 clause, the relation that the clause applies as a definition at the proof values of the goal,
 and the ports that are its operands. The relations are instantiated one after another in one
 state, so each has a key of its own beside the deployed definitions, which are those of the
 root's own package, first and unchanged. -/
-private def collectClaims (c : AdmittedRoot) (goals : List (String × String)) : ExportM GoalClaims := do
+private def collectClaims (c : AdmittedRoot) (goals : List (String × ExportM (Selection × Compile.State))) :
+    ExportM GoalClaims := do
   let mut state := c.state
-  let mut claimed := []
+  let mut reversed := []
   let mut first : Option (String × SchemeEntry) := none
-  for (goal, label) in goals do
-    let (next, named, after) ← claimedGoal c state goal
+  for (goal, selection) in goals do
+    let (selected, _) ← selection
+    let (next, named, after) ← readClaim c state goal selected
     match first with
     | some (earlierGoal, earlier) =>
       unless earlier.declaration == named.declaration do
@@ -210,7 +230,8 @@ private def collectClaims (c : AdmittedRoot) (goals : List (String × String)) :
           "scheme; read the goals of each scheme apart")
     | none => first := some (goal, named)
     state := after
-    claimed := claimed ++ [{ next with goal := label }]
+    reversed := next :: reversed
+  let claimed := reversed.reverse
   let some (_, scheme) := first | throw "WK-GOAL: a package of claims has a goal"
   let (prover, verifier) ← schemeParties c scheme
   -- the header that is emitted has the deployed ports of the checked body, one for one
@@ -238,14 +259,15 @@ private def collectClaims (c : AdmittedRoot) (goals : List (String × String)) :
 
 /-- Read an explicitly shared package with the labels used by its proof text. -/
 @[no_expose] def goalClaims (c : AdmittedRoot) (goals : List String) : ExportM GoalClaims :=
-  collectClaims c (goals.map fun goal => (goal, goal))
+  let index := declarationIndex c.state .goal
+  collectClaims c (goals.map fun goal => (goal, do
+    let (id, _) ← index.select goal "WK-GOAL"
+    selectGoalId c.state id .soundness))
 
-/-- A separately issued goal is selected by its full path. Its declarations use the local
+/-- A separately issued goal is read by its resolved declaration ID. Its declarations use the local
 source name inside the goal's own Lean namespace where it is a safe declaration prefix. -/
 @[no_expose] def singleGoalClaims (c : AdmittedRoot) (id : DeclarationId) : ExportM GoalClaims :=
   let name := c.state.program.nameOf id
-  let label := if name != "root" && name.all (fun c => c.toNat < 128 && (c.isAlphanum || c == '_'))
-    then name else "sourceGoal"
-  collectClaims c [(Static.qualifiedName c.state.program id, label)]
+  collectClaims c [(name, selectGoalId c.state id .soundness)]
 
 end Zkc.Frontend.Written

@@ -11,9 +11,15 @@ private def writeGoal (directory : System.FilePath) (publication : Written.Modul
   let pending := directory / ".pending"
   IO.FS.createDir pending
   try
-    IO.FS.writeFile (pending / "Stated.lean") publication.statements
-    IO.FS.writeFile (pending / "Challenge.lean") publication.challenge
-    IO.FS.rename pending (directory / publication.space)
+    for (file, source) in [("Stated.lean", publication.statements),
+        ("Challenge.lean", publication.challenge)] do
+      let handle ← IO.FS.Handle.mk (pending / file) .write
+      handle.putStr source
+      -- A buffered final write can fail after putStr returns.
+      handle.flush
+    let target := (publication.space.splitOn ".").foldl (· / ·) directory
+    if let some parent := target.parent then IO.FS.createDirAll parent
+    IO.FS.rename pending target
   finally
     if ← pending.pathExists then IO.FS.removeDirAll pending
 
@@ -26,8 +32,9 @@ def writtenGoals (options : Names.Options) : IO UInt32 := do
   let inputs ← options.files.mapM Names.readInput
   let assembly ← assemble inputs (Names.libraryLoader options.libraries)
   let results := issueSoundnessGoals assembly options.goals.toList
-  if let some directory := options.output then IO.FS.createDir directory
-  let mut written : Std.HashSet String := {}
+  let ready ← (options.output.forM IO.FS.createDir).toBaseIO
+  let mut exports : Std.HashMap String (Except IO.Error Unit) := {}
+  let mut exported := true
   for result in results do
     let path := result.path.getD result.selector
     match result.outcome with
@@ -35,14 +42,21 @@ def writtenGoals (options : Names.Options) : IO UInt32 := do
     | .ok issued =>
       let publication := issued.publication
       if let some directory := options.output then
-        unless written.contains path do
-          writeGoal directory publication
-          written := written.insert path
+        let status ← match exports[path]? with
+          | some prior => pure prior
+          | none => match ready with
+            | .error why => pure (.error why)
+            | .ok () => (writeGoal directory publication).toBaseIO
+        exports := exports.insert path status
+        if let .error why := status then
+          IO.println s!"{result.selector} -> {path}: export failed: {why}"
+          exported := false
+          continue
       let claims := issued.statements.claims
       for goal in claims.goals do
         IO.println (s!"{result.selector} -> {path}: issued {publication.space}.Challenge " ++
           s!"(scheme {claims.schemeName}, root {claims.root}, relation {goal.relation}, " ++
           s!"spec {goal.specification})")
-  return if allGoalsIssued results then 0 else 1
+  return if exported && allGoalsIssued results then 0 else 1
 
 end Zkc.Tools.Frontend
