@@ -59,7 +59,8 @@ theorem atProtocolAndFunction {a : Admitted V} (admitted : admit pkg.stored pkg.
     (holds : P pkg.installed member relation) :
     ∃ root : Member a.program.headers.protocols header,
       a.program.findProtocol key = some ⟨header, root⟩ ∧
-      ∃ rel : Member a.program.headers.fns fn, a.program.find fnKey = some (.fn rel) ∧ P a.program root rel :=
+      ∃ rel : Member a.program.headers.fns fn,
+        a.program.find fnKey = some (.fn rel) ∧ P a.program root rel :=
   pkg.atProtocol admitted key member found (fun p root =>
     ∃ rel : Member p.headers.fns fn, p.find fnKey = some (.fn rel) ∧ P p root rel)
     ⟨relation, foundFn, holds⟩

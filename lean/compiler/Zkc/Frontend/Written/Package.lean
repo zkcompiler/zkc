@@ -283,7 +283,7 @@ def package (p : SourcePackage) : PrintedPackage :=
 program. Its stored program and association remain executable for comparison with the source. -/
 def subjectPackage (p : SourcePackage) : String :=
   packageText p [
-    "def subjectPackage : Zkc.Subject.Package V :=",
+    "abbrev subjectPackage : Zkc.Subject.Package V :=",
     "  ⟨stored, association, installed, elaborated, by decide +kernel⟩",
     "theorem readback {a : Admitted V} (h : admit stored association = .ok a) :",
     "    a.program = installed := subjectPackage.readback h",

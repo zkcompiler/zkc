@@ -191,6 +191,20 @@ def startLakeLean (work : System.FilePath) (name source : String) (text := true)
   discard <| SubjectProject.add (projectOf work) name.toName source (if text then .module else .statements)
   return leanOn work name.toName
 
+/-- Compare the named values in the issued statements with the frontend run on the original
+source and selectors. The same values must be the fields of the package used for admission. -/
+def startSourceComparison (work : System.FilePath) (name : String) (module : Module)
+    (source : String) (goals : List String) : IO Pending :=
+  startLakeLean work name
+    (s!"import {module.statementsName}\nimport Zkc.Tests.Frontend.PrintedPackageSupport\n\n" ++
+      s!"namespace {module.space}\n" ++
+      "example : subjectPackage.stored = stored := rfl\n" ++
+      "example : subjectPackage.association = association := rfl\n" ++
+      "example : subjectPackage.installed = installed := rfl\n" ++
+      s!"#eval Zkc.Tests.Frontend.PrintedPackageSupport.expectGoalClaims {literal source} " ++
+      s!"{reprStr goals} ⟨[], [], [], [], []⟩ stored association\nend {module.space}\n")
+    (text := false)
+
 /-- `expectUnprovedIn`, of a module that the check added. -/
 def expectUnproved (title name : String) (theorems : List String) (pending : Pending)
     (expected : List String) : IO Unit := do
@@ -516,9 +530,9 @@ def start (work : System.FilePath) (name : String) (subject : Subject) (proof : 
     let lean ← proved
     acceptedByLean name lean
     return lean
-  let comparison ← startLakeLean work s!"{name}Source"
-    (comparisonModule s!"{name}Source" subject.text (subject.goals.map (·.goal)) subject.package)
-    (text := false)
+  -- `read` checked these selectors against the requested goals, in order, before issuance.
+  let comparison ← startSourceComparison work s!"{name}Source" module subject.text
+    (subject.goals.map (·.goal))
   return ⟨name, work, honest, comparison, ← controls.mapM (·.start work name proof module stated)⟩
 
 /-- A subject judged: Lean accepts the module of its statements, with every theorem on the

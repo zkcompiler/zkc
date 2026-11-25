@@ -79,6 +79,10 @@ A `Reading` asserts the ports of the root, the clause that each goal reads, the 
 
 ## What stands before the text
 
+The source check imports the issued statements module and compares its stored program and
+association with a fresh reading of the original source and goal selectors. Its package
+must have those same fields and the installation used by the author's proof.
+
 The generator (`lean/compiler/Zkc/Frontend/Written/Statement.lean`) writes the printed package and, from what the frontend read, the names that a text uses. For a goal `either` of a root with the ports above:
 
 | Name | What it is |
