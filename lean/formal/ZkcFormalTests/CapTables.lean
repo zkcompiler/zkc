@@ -493,6 +493,24 @@ example (path : List Frame) :
   case weight => simpa using prEvent_drawPosition_eq_le 1 0
   walk_pay (1 / 2) excluding (fun drawn : ℕ => drawn = 0) as second keptToo
 
+/-- A text's own name for the allowances of a table at a path. -/
+abbrev steppedAllowance (path : List Frame) := steppedCaps.allowance (model D) path
+
+-- and so are the allowances under a text's own name for them
+/--
+error: walk_pay: the fee is not within what is left of the budget
+  1 / 2 ≤ 3 / 4 - 1 / 2
+-/
+#guard_msgs in
+example (path : List Frame) :
+    (roleMeaning (model D) steppedInstalled Member.head verifier path (steppedInputs D false)).interpret
+      (.charged (Permitted (model D)) (paysWithin (samplers D) (steppedAllowance D path)))
+      (fun _ _ => False) (fun _ _ => True) (3 / 4) := by
+  rw [stepped_meaning]
+  walk_pay (1 / 2) excluding (fun drawn : ℕ => drawn = 0) as first kept
+  case weight => simpa using prEvent_drawPosition_eq_le 1 0
+  walk_pay (1 / 2) excluding (fun drawn : ℕ => drawn = 0) as second keptToo
+
 end
 
 /--
