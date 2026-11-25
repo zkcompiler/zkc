@@ -98,8 +98,8 @@ theorem covered_rows {p : NamedProgram Standard} {root relation : Key}
     {d : Definition Standard} (stored : d ∈ p.definitions) (path : Coverage.Reachable p root relation d.key)
     {k : Standard.RowKey} (row : k ∈ d.rows) : respectsPointStructure k = true := by
   have ok := Option.isNone_iff_eq_none.mp covered
-  have member := (Coverage.closed_of_missing ok).mem_of_reachable
-    (fun _ hd _ he => List.inj_on_of_nodup_map distinct hd he) stored path
+  have member := (Coverage.selected_iff_reachable ok
+    (fun _ hd _ he => List.inj_on_of_nodup_map distinct hd he) stored).mpr path
   apply row_respectsPointStructure
   rw [StandardModel.interprets_iff_arm D, ← interpreted_iff_arm]
   exact Coverage.interpreted_of_missing ok k (List.mem_flatMap.mpr ⟨d, member, row⟩)
