@@ -1,7 +1,7 @@
 # Conformance tests
 
-These are the tests that an implementation of `../LANGUAGE.md` must pass: 524 programs, each
-with the outcome that the rules require. The 330 tests of layer A are frozen with that layer.
+These are the tests that an implementation of `../LANGUAGE.md` must pass: 529 programs, each
+with the outcome that the rules require. The 335 tests of layer A are frozen with that layer.
 The tests of the later layers (91 for layer B, 62 for C, 35 for D, 6 for E) are not frozen:
 their layers are carried, and an outcome that rests on a pending change says so in its note.
 
@@ -84,13 +84,13 @@ By file:
 | `layer-a-functions-specification.txt` | 15 | 3 | 12 | 0 |
 | `layer-a-interaction.txt` | 46 | 16 | 30 | 0 |
 | `layer-a-lexical-grammar.txt` | 26 | 12 | 14 | 0 |
-| `layer-a-names-static.txt` | 94 | 33 | 61 | 0 |
+| `layer-a-names-static.txt` | 99 | 34 | 65 | 0 |
 | `layer-a-types-facts.txt` | 149 | 67 | 82 | 0 |
 | `layer-b.txt` | 91 | 17 | 74 | 0 |
 | `layer-c.txt` | 62 | 17 | 45 | 0 |
 | `layer-d.txt` | 35 | 11 | 23 | 1 |
 | `layer-e.txt` | 6 | 2 | 4 | 0 |
-| total | 524 | 178 | 345 | 1 |
+| total | 529 | 179 | 349 | 1 |
 
 By prefix and layer:
 
@@ -102,7 +102,7 @@ By prefix and layer:
 | `V-` | 31 | 5 | 12 | 5 | 0 | 53 |
 | `M-` | 48 | 32 | 13 | 0 | 0 | 93 |
 | `L-` | 18 | 0 | 0 | 0 | 0 | 18 |
-| `N-`, `X-` | 100 | 33 | 1 | 2 | 6 | 142 |
+| `N-`, `X-` | 105 | 33 | 1 | 2 | 6 | 147 |
 
 Layer A, by the family of the rule that a test is about (for a refusal, the rule that refuses;
 for an acceptance, the rule that its note names):
@@ -113,7 +113,7 @@ for an acceptance, the rule that its note names):
 | GR | 13 |
 | FM | 2 |
 | NL | 28 |
-| SP | 66 |
+| SP | 71 |
 | TY | 149 |
 | HO | 16 |
 | EV | 14 |
@@ -176,11 +176,11 @@ By the rule that refuses:
 | SC3 | 0 | 4 |
 | SC4 | 0 | 1 |
 | SC5 | 0 | 17 |
-| SP3 | 5 | 6 |
-| SP4 | 8 | 11 |
+| SP3 | 7 | 8 |
+| SP4 | 9 | 12 |
 | SP5 | 0 | 2 |
 | SP6 | 4 | 4 |
-| SP8 | 5 | 7 |
+| SP8 | 6 | 8 |
 | SP9 | 2 | 2 |
 | SP10 | 1 | 1 |
 | SP11 | 6 | 7 |

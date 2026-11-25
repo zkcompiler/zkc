@@ -182,6 +182,7 @@ def elabApplication (span : Span) (event : EventId) (binder : Option Lowered.Bin
   let (values, states) ← inferArguments id assigned found.file
     (ports.map fun port => (port.binder.name, port.type)) none paired none span
   let description ← liftM (describeInstance id values : CompileM String)
+  liftM (checkSelectedModules steps values span : CompileM Unit)
   let inst ← liftM (instantiate id values { description, span } : CompileM InstanceId)
   if let some closure := proofArguments then
     liftM (closure.checkApplication inst span)

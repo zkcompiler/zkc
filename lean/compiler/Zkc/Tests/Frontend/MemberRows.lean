@@ -48,6 +48,40 @@ private def expectRow (session : Driver.Session) (root : String) (row : Zkc.Voca
       | _ => false
     | _ => false) s!"{root}: missing standard row or unexpected project binding"
 
+/-- Distinct types and modules from different files can have the same last name. -/
+private def checkQualifiedOwners : TestM Unit := do
+  let declarations := "pub module Box: UnitM:\n    nat dummy = 0\npub struct Item:\n    x: bool\n"
+  for (bound, argument) in [("T", "Item"), ("H: UnitM", "Box")] do
+    let source := "module caller\nuse left\nuse right\nuse common::{UnitM}\n" ++
+      s!"interface I<{bound}>:\n    type Pick\n" ++
+      s!"module M: I<left::{argument}> + I<right::{argument}>:\n    type Pick = bool\n"
+    let session ← Driver.Session.start.compile #[⟨"caller", Syntax.parseString "caller" source⟩] fun path => do
+      let #[file] := path | return none
+      let text := if file == "common" then "module common\npub interface UnitM\n"
+        else s!"module {file}\n" ++ "use common::{UnitM}\n" ++ declarations
+      return some ⟨file, Syntax.parseString file text⟩
+    let refused := (session.diagnostics.find? (·.isError)).any fun diag =>
+      let message := diag.render session.state.env.renderer
+      diag.rule == "SP8" && diag.span.startLine == 7 &&
+        [s!"I<left::{argument}>::Pick", s!"I<right::{argument}>::Pick"].all (message.contains ·)
+    expectTrue refused s!"qualified {argument}: {session.renderDiagnostics}"
+
+/-- Observe the witnesses before the diagnostic log coalesces errors at one bound. -/
+private def checkFirstOwner (repository : Repository) : TestM Unit := do
+  let session ← memberSession repository ("module caller\n" ++
+    "interface A:\n    type T\ninterface B:\n    type T\ninterface C:\n    type T\n")
+  let program := session.state.program
+  let owners := program.declarations.zipIdx.filterMap fun (decl, i) =>
+    if decl.kind == .interface && ["A", "B", "C"].contains (program.nameOf i) then some i else none
+  let witness (name : String) (first second : DeclarationId) : CompileM Unit := do
+    let some site := program.declarations[second]?.bind (·.name) | throw .abandoned
+    logError "SP3" site.span (.ofText s!"{program.nameOf first}::{name} and {program.nameOf second}::{name}")
+  let visit : CompileM Unit := Static.checkMemberNames owners id witness
+  let (.ok (), state) := visit.run session.context session.state | failure "member witnesses unavailable"
+  let messages := ({session with state} : Driver.Session).renderDiagnostics
+  expectTrue (messages.size == 1 && messages[0]?.any (·.contains "A::T and B::T"))
+    s!"expected one witness for T: {messages}"
+
 /-- Calls through one bound, through the module and through a projection. Each module
 header is checked in both orders, whether the body is used or not. -/
 private def checkMemberBindings (repository : Repository) : TestM Unit := do
@@ -108,6 +142,8 @@ private def checkMemberBindings (repository : Repository) : TestM Unit := do
           s!"{text}expected SP8 at M, got {session.renderDiagnostics}"
 
 def memberRowSuite (repository : Repository) : TestM Unit := do
+  checkQualifiedOwners
+  checkFirstOwner repository
   checkMemberBindings repository
   let cases : List (String × String × String × Nat × List String) := [
     ("type members", "module caller\ninterface A:\n    type T\ninterface B:\n    type T\nmodule M: A + B:\n    type T = bool\ndef evaluate(x: bool) -> bool: x\n", "SP8", 6, ["A::T", "B::T"]),
@@ -116,20 +152,29 @@ def memberRowSuite (repository : Repository) : TestM Unit := do
     ("module members", "module caller\ninterface K\nmodule UnitModule: K:\n    nat dummy = 0\ninterface A:\n    module Child: K\ninterface B:\n    module Child: K\nmodule M: A + B:\n    module Child = UnitModule\ndef evaluate(x: bool) -> bool: x\n", "SP8", 9, ["A::Child", "B::Child"]),
     ("written bound", "module caller\ninterface A:\n    type T\ninterface B:\n    type T\ndef unused<H: A + B>(x: bool) -> bool: x\ndef evaluate(x: bool) -> bool: x\n", "SP3", 6, ["A::T", "B::T"]),
     ("different applications", "module caller\ninterface I<n: nat>:\n    type T\nmodule M: I<1> + I<2>:\n    type T = bool\ndef evaluate(x: bool) -> bool: x\n", "SP8", 4, ["I<1>::T", "I<2>::T"]),
-    ("closed bound", "module caller\ninterface I<n: nat>:\n    type T\ndef unused<H: I<1> + I<2>>(x: bool) -> bool: x\ndef evaluate(x: bool) -> bool: x\n", "SP3", 4, ["I<1>::T", "I<2>::T"]),
+    ("closed bound", "module caller\ninterface I<n: nat>:\n    type T\ndef unused<H: I<1> + I<2>>(x: bool) -> bool: x\ndef evaluate(x: bool) -> bool: x\n", "", 0, []),
     ("empty interface", "module caller\ninterface I<n: nat>\nmodule M: I<1> + I<2>:\n    nat dummy = 0\ndef evaluate(x: bool) -> bool: x\n", "", 0, []),
     ("same application", "module caller\ninterface I<n: nat>:\n    type T\nmodule M: I<2> + I<1 + 1>:\n    type T = bool\ndef evaluate(x: bool) -> bool: x\n", "", 0, []),
     ("default application", "module caller\ninterface I<n: nat>:\n    type T\npub module M<n: nat>: I<n> + I<2>:\n    type T = bool\ndef evaluate(x: bool) -> bool: x\n", "SP8", 4, ["I<0>::T", "I<2>::T"]),
     ("shared requirement", "module caller\ninterface C<k: nat>:\n    def keep(x: bool) -> bool\ninterface A<n: nat> where (Self: C<n>)\ninterface B<m: nat> where (Self: C<m>)\nmodule M: A<1> + B<1> + C<1>:\n    def keep(x): x\ndef evaluate(x: bool) -> bool: x\n", "", 0, []),
-    ("inherited collision", "module caller\ninterface C<k: nat>:\n    def keep(x: bool) -> bool\ninterface A<n: nat> where (Self: C<n>)\ninterface B<m: nat> where (Self: C<m>)\nmodule M: A<1> + B<2> + C<1>:\n    def keep(x): x\ndef evaluate(x: bool) -> bool: x\n", "SP8", 6, ["C<1>::keep", "C<2>::keep"]),
+    ("inherited collision", "module caller\ninterface C<k: nat>:\n    def keep(x: bool) -> bool\ninterface A<n: nat> where (Self: C<n>)\ninterface B<m: nat> where (Self: C<m>)\nmodule M: A<1> + B<2> + C<1>:\n    def keep(x): x\ndef evaluate(x: bool) -> bool: x\n", "SP4", 5, ["`M` requires", "Self: C<m>"]),
     ("opaque use", "module caller\ninterface C<k: nat>:\n    def keep(x: bool) -> bool\ninterface A<n: nat> where (Self: C<n>)\ninterface B<m: nat> where (Self: C<m>)\ndef choose<n: nat, m: nat, H: A<n> + B<m>>(x: bool) -> bool: H::keep(x)\ndef evaluate(x: bool) -> bool: x\n", "", 0, []),
     ("inherited expression", "module caller\ninterface C<k: nat>:\n    def keep(x: bool) -> bool\ninterface A<k: nat> where (Self: C<k + 1>)\ninterface B<k: nat> where (Self: C<k + 1>)\ndef choose<n: nat, m: nat, H: A<n> + B<m>>(x: bool) -> bool: H::keep(x)\ndef evaluate(x: bool) -> bool: x\n", "", 0, []),
     ("opaque bound unused", "module caller\ninterface C<k: nat>:\n    def keep(x: bool) -> bool\ninterface A<n: nat> where (Self: C<n>)\ninterface B<m: nat> where (Self: C<m>)\ndef choose<n: nat, m: nat, H: A<n> + B<m>>(x: bool) -> bool: x\ndef evaluate(x: bool) -> bool: x\n", "", 0, []),
     ("same open application", "module caller\ninterface C<k: nat>:\n    def keep(x: bool) -> bool\ninterface A<n: nat> where (Self: C<n>)\ninterface B<m: nat> where (Self: C<m>)\nmodule M: A<1> + B<1> + C<1>:\n    def keep(x): x\ndef choose<n: nat, H: A<n> + B<n>>(x: bool) -> bool: H::keep(x)\ndef use_it(x: bool) -> bool: choose<1, M>(x)\ndef evaluate(x: bool) -> bool: x\n", "", 0, []),
     ("different inherited declarations", "module caller\ninterface C<k: nat>:\n    type T\ninterface D<k: nat>:\n    type T\ninterface A<n: nat> where (Self: C<n>)\ninterface B<m: nat> where (Self: D<m>)\ndef unused<n: nat, m: nat, H: A<n> + B<m>>(x: bool) -> bool: x\ndef evaluate(x: bool) -> bool: x\n", "SP3", 8, ["C::T", "D::T"]),
-    ("closed inherited applications", "module caller\ninterface C<k: nat>:\n    type T\ninterface A<n: nat> where (Self: C<1>)\ninterface B<m: nat> where (Self: C<2>)\ndef unused<n: nat, m: nat, H: A<n> + B<m>>(x: bool) -> bool: x\ndef evaluate(x: bool) -> bool: x\n", "SP3", 6, ["C<1>::T", "C<2>::T"]),
+    ("closed inherited applications", "module caller\ninterface C<k: nat>:\n    type T\ninterface A<n: nat> where (Self: C<1>)\ninterface B<m: nat> where (Self: C<2>)\ndef unused<n: nat, m: nat, H: A<n> + B<m>>(x: bool) -> bool: x\ndef evaluate(x: bool) -> bool: x\n", "", 0, []),
     ("equal projected types", "module caller\ninterface K:\n    type T\ninterface C<T>:\n    def keep(x: bool) -> bool\ninterface A<T> where (Self: C<T>)\ninterface B<T> where (Self: C<T>)\nmodule P: K:\n    type T = bool\nmodule Q: K:\n    type T = bool\nmodule M: A<bool> + B<bool> + C<bool>:\n    def keep(x): x\ndef choose<U: K, V: K, H: A<U::T> + B<V::T>>(x: bool) -> bool: H::keep(x)\ndef evaluate(x: bool) -> bool: choose<P, Q, M>(x)\n", "", 0, []),
     ("other uses stay opaque", "module caller\ninterface K:\n    type T\ninterface C<T>:\n    def keep(x: bool) -> bool\ninterface A<T> where (Self: C<T>)\ninterface B<T> where (Self: C<T>)\nmodule P: K:\n    type T = bool\nmodule Q: K:\n    type T = bool\nmodule M: A<bool> + B<bool> + C<bool>:\n    def keep(x): x\ndef choose<U: K, V: K, H: A<U::T> + B<V::T>>(x: bool, y: U::T) -> bool: H::keep(x) and y\ndef evaluate(x: bool) -> bool: choose<P, Q, M>(x, x)\n", "SP12", 14, ["U::T", "opaque"]),
+    ("constraint on a parameter", "module caller\ninterface A:\n    type T\ninterface B:\n    type T\ndef unused<H: A>(x: bool) -> bool where (H: B): x\ndef evaluate(x: bool) -> bool: x\n", "SP3", 6, ["the bound of `H`", "A::T", "B::T"]),
+    ("module member bound", "module caller\ninterface A:\n    type T\ninterface B:\n    type T\ninterface X:\n    module K: A + B\ndef evaluate(x: bool) -> bool: x\n", "SP3", 7, ["the bound of `K`", "A::T", "B::T"]),
+    ("cyclic requirements", "module caller\ninterface C<n: nat>:\n    type T\ninterface A<n: nat> where (Self: B<n> + C<n>)\ninterface B<m: nat> where (Self: A<1>)\ndef unused<H: A<2> + A<1>>(x: bool) -> bool: x\ndef evaluate(x: bool) -> bool: x\n", "", 0, []),
+    ("qualified type", "module caller\ninterface A:\n    type T\ninterface B:\n    type T\nmodule M<n: nat>: A + B:\n    type T = bool\ndef evaluate(x: M<n = 1>::T) -> M<n = 1>::T: x\n", "SP8", 6, ["module `M`", "A::T", "B::T"]),
+    ("qualified natural", "module caller\ninterface A:\n    nat N\ninterface B:\n    nat N\nmodule M<n: nat>: A + B:\n    nat N = 2\ndef evaluate(x: [bool; M<n = 1>::N]) -> bool: x[0]\n", "SP8", 6, ["A::N", "B::N"]),
+    ("qualified protocol", "module caller\ninterface Signals<n: nat>:\n    protocol Test roles(P, V)(x: bool @(P, V))\nmodule Relay<n: nat>: Signals<0> + Signals<n / 76>:\n    protocol Test roles(P, V)(x: bool @(P, V)):\n        guard @V x\nprotocol Client roles(P, V)(x: bool @(P, V)):\n    Relay<76>::Test(x)\ndef evaluate(x: bool) -> bool: x\n", "SP8", 4, ["module `Relay`", "Signals<0>::Test", "Signals<1>::Test"]),
+    ("type in a specification", "module caller\ninterface A:\n    type T\ninterface B:\n    type T\nmodule M<n: nat>: A + B:\n    type T = bool\nspec def s(x: M<n = 1>::T) -> bool: x\nlaw l(x: M<n = 1>::T):\n    s(x) == x\ndef evaluate(x: bool) -> bool: x\n", "SP8", 6, ["A::T", "B::T"]),
+    ("receiver missing a function", "module caller\ninterface A:\n    type T\n    def f(x: bool) -> bool\nmodule M<n: nat>: A:\n    type T = bool\ndef evaluate(x: M<n = 1>::T) -> bool: x\n", "SP8", 5, ["`M` does not define `f` of `A`"]),
+    ("receiver condition", "module caller\ninterface A:\n    type T\nmodule M<n: nat>: A where (n <= 0):\n    type T = bool\ndef evaluate(x: M<n = 1>::T) -> bool: x\n", "SP4", 4, ["`M` requires", "1 <= 0"]),
     ("prior error", "module caller\ndef earlier(x: bool) -> bool: unknown_name\ninterface A:\n    type T\ninterface B:\n    type T\nmodule M: A + B:\n    type T = bool\ndef evaluate(x: bool) -> bool: x\n", "NL3", 2, ["unknown_name"])]
   for (label, source, rule, line, names) in cases do
     let session ← memberSession repository source
@@ -160,9 +205,9 @@ def memberRowSuite (repository : Repository) : TestM Unit := do
       else
         let atModule := (session.diagnostics.find? (·.isError)).any fun d =>
           let message := d.render session.state.env.renderer
-          d.rule == "SP8" && d.span.startLine == 6 &&
-            [s!"C<{1 + increment}>::keep", s!"C<{2 + increment}>::keep"].all (message.contains ·)
-        expectTrue (atModule && !admitted.isOk) s!"expected SP8 at M: {session.renderDiagnostics}"
+          d.rule == "SP4" && d.span.startLine == 5 &&
+            message.contains "`M` requires" && message.contains s!"Self: C<{expression}>"
+        expectTrue (atModule && !admitted.isOk) s!"expected M's unsatisfied requirement: {session.renderDiagnostics}"
   for bound in ["A + B", "B + A"] do
     let source := "module caller\ninterface A:\n    def copy(x: bool) -> bool\n" ++
       "interface B:\n    def copy(x: nat) -> nat\n" ++

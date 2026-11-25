@@ -219,58 +219,34 @@ def appliedMemberName {α : Type} (program : Program) (applied : AppliedInterfac
   let receiver := if args.isEmpty then name else s!"{name}<{", ".intercalate args}>"
   s!"{receiver}::{member}"
 
-/-- The interface applications required directly of this interface's Self. -/
-def selfRequirements (interface : DeclarationId) : CompileM (Array Lowered.Reference) := do
-  let some scope := (← declaration interface).ownScope | return #[]
-  let some lowered := (← getModules).loweredScope? scope | return #[]
-  let mut refs := #[]
-  for constraint in lowered.constraints do
-    if let .bound _ (.reference (.reference _ #[.segment (.self _) _ _])) sorts := constraint then
-      for sort in sorts do
-        if let .reference ref := sort then refs := refs.push ref
-  return refs
-
-/-- Walk every application once. A cycle in the interface declarations cannot give an
-unbounded succession of new arguments during this walk. -/
-def appliedClosure {α : Type} [BEq α] (roots : Array (AppliedInterface α))
-    (required : AppliedInterface α → Lowered.Reference → CompileM (Option (AppliedInterface α))) :
-    CompileM (Array (AppliedInterface α)) := do
-  let mut seen := #[]
-  let mut pending := roots.toList.map (fun r => (r, ([] : List DeclarationId)))
-  while let (app, path) :: rest := pending do
-    pending := rest
-    if seen.contains app then continue
-    seen := seen.push app
-    if path.contains app.1 then continue
-    for ref in ← selfRequirements app.1 do
-      if let some child ← required app ref then pending := pending ++ [(child, app.1 :: path)]
-  return seen
-
-/-- Visit pairs of different applications that declare a common member. -/
-def memberCollisions {α : Type} [BEq α] (interfaces : Array (AppliedInterface α)) :
-    CompileM (Array (String × AppliedInterface α × AppliedInterface α)) := do
-  if interfaces.size < 2 then return #[]
-  let mut collisions := #[]
+/-- Report one witness for each name shared by distinct owners, in declaration order. -/
+def checkMemberNames {α : Type} [BEq α] (owners : Array α) (interface : α → DeclarationId)
+    (collision : String → α → α → CompileM Unit) : CompileM Unit := do
+  if owners.size < 2 then return
   let state ← get
-  let mut owners : Std.HashMap String (List (AppliedInterface α)) := {}
-  for app in interfaces do
-    let some ns := (← declaration app.1).inner | continue
+  let mut first : Std.HashMap String α := {}
+  let mut reported : Std.HashSet String := {}
+  for owner in owners do
+    let some ns := (← declaration (interface owner)).inner | continue
     for id in state.members[ns]?.getD #[] do
       unless (← declaration id).node matches .member _ do continue
       let name := state.program.nameOf id
-      let previous := owners.getD name []
-      for other in previous do
-        if app != other then collisions := collisions.push (name, other, app)
-      owners := owners.insert name (app :: previous)
-  return collisions
+      if let some prior := first[name]? then
+        if prior != owner && !reported.contains name then
+          collision name prior owner
+          reported := reported.insert name
+      else first := first.insert name owner
 
 def checkModuleMemberNames (moduleName : Syntax.Name)
     (interfaces : Array (AppliedInterface (Array StaticValue))) : CompileM Unit := do
   let state ← get
-  for (member, first, second) in ← memberCollisions interfaces do
-    let display app := appliedMemberName state.program app (renderValue state) member
+  checkMemberNames interfaces Prod.fst fun member first second => do
+    let display qualified app := appliedMemberName state.program app (renderValueWith state qualified) member
+    let left := display false first
+    let right := display false second
+    let (left, right) := if left == right then (display true first, display true second) else (left, right)
     refuse "SP8" moduleName.span
-      s!"module `{moduleName.text}` has two declarations of `{member}`: `{display first}` and `{display second}`"
+      s!"module `{moduleName.text}` has two declarations of `{member}`: `{left}` and `{right}`"
 
 /-- The applied interface that declares a member, with the member's declaration. The
 applications are those of a module that passed SP8, or of the stand-in of a module parameter,
@@ -527,6 +503,20 @@ mutual
     | .«module», _ => return .«module» inst
     | _, _ => throw (.waiting "an instance without a value")
 
+  /-- A path selects a member from a checked module instance. Its enclosing scopes
+  precede the member's own parameters. A file namespace has no module instance. -/
+  partial def checkSelectedModules (steps : Array (DeclarationId × Option (Array Lowered.StaticArgument)))
+      (values : Array StaticValue) (place : Span) : CompileM Unit := do
+    for (id, _) in steps.pop do
+      let found ← declaration id
+      unless found.kind == .«module» do continue
+      let arguments := values.extract 0 (deployedParameters (← program) found).size
+      let inst ← instantiate id arguments ⟨"", place⟩
+      match (← get).table.content? inst with
+      | some (.«module» ..) => pure ()
+      | some (.waits why) => throw (.waiting why)
+      | _ => throw (.waiting "a module whose members are being formed")
+
   /-- The values that a reference gives the parameters of the declaration it names (SP2, SP5):
   the scopes that the place shares with it at the place's values, then the written arguments of
   each segment, positional then named, to the parameters of the scopes that segment covers. A
@@ -548,6 +538,7 @@ mutual
       | none =>
         refuse "SP6" place
           s!"cannot infer `{parameter.name.text}` of `{name}`; write `{name}<{parameter.name.text} = …>`"
+    checkSelectedModules steps values place
     return values
 
   /-- The values that a reference gives the parameters of the declaration it names, without
@@ -751,24 +742,6 @@ mutual
   partial def writtenInterface (env : Env) (path : Path) : CompileM (DeclarationId × Array StaticValue) := do
     let some reference ← lowerWritten (Names.Written.pathReference env.file path) | throw .abandoned
     evalInterface env reference
-
-  /-- Read a requirement if its arguments already have values. The ordinary check of
-  the condition reports any error in those arguments. -/
-  partial def availableApplication (env : Env) (ref : Lowered.Reference) :
-      CompileM (Option (AppliedInterface (Array StaticValue))) := do
-    let saved ← get
-    try return some (← evalInterface env ref)
-    catch interrupt =>
-      match interrupt with
-      | .abandoned | .waiting _ => set saved; return none
-      | other => throw other
-
-  partial def requiredApplications (inst : InstanceId) (roots : Array (AppliedInterface (Array StaticValue))) :
-      CompileM (Array (AppliedInterface (Array StaticValue))) := do
-    let program ← program
-    appliedClosure roots fun (parent, args) ref => do
-      let env := { instanceEnv program (← declaration parent) args with self? := some (.«module» inst) }
-      availableApplication env ref
 
   /-- Whether a module instance names an interface at these static arguments (SP3, SP8). -/
   partial def implements (inst : InstanceId) (interface : DeclarationId)
@@ -1045,7 +1018,7 @@ mutual
     | _ => return false
 
   /-- The member table of a module instance, with the checks of SP8 and NL9 that need no value. -/
-  partial def moduleContent (inst : InstanceId) (found : Declaration)
+  partial def moduleContent (_inst : InstanceId) (found : Declaration)
       (node : Module) (env : Env) : CompileM InstanceContent := do
     let state ← get
     let program := state.program
@@ -1059,7 +1032,7 @@ mutual
           if state.sortNames.contains interface then
             refuse "SP3" path.span s!"`{name}` names the sort `{program.nameOf interface}`: only the vocabulary implements a sort"
           unless interfaces.contains (interface, args) do interfaces := interfaces.push (interface, args)
-    checkModuleMemberNames moduleName (← requiredApplications inst interfaces)
+    checkModuleMemberNames moduleName interfaces
     let mut members : Array (String × MemberValue) := #[]
     -- the members that its `where` defines, for a module without a body
     if Names.hasNoBody found then
@@ -1196,8 +1169,6 @@ mutual
     let program ← program
     let some (.«module» interfaces _) := (← get).table.content? inst | return
     let moduleName := ((found.name.map (·.text)).getD "")
-    if let some site := found.name then
-      checkModuleMemberNames site (← requiredApplications inst interfaces)
     for (interface, args) in interfaces do
       let interfaceDeclaration ← declaration interface
       let interfaceEnv : Env :=
@@ -1215,47 +1186,6 @@ mutual
           if isDefault then throw .skipped
           refuse "SP4" (constraintSpan constraint) message
 end
-
-/-- Follow the interfaces of a written bound even when evaluating an argument needs
-a value from the enclosing definition. Only the ordinary evaluator supplies arguments. -/
-def boundApplications (env : Env) (bound : Lowered.Bound) :
-    CompileM (Array (AppliedInterface (Option (Array StaticValue)))) := do
-  let state ← get
-  let application (scope : Env) (ref : Lowered.Reference) := do
-    let some id := ref.declaration? | return none
-    if state.sortNames.contains id || (← declaration id).kind != .interface then return none
-    return some (id, (← availableApplication scope ref).map (·.2))
-  let roots ← bound.sorts.filterMapM fun
-    | .reference ref => application env ref
-    | _ => pure none
-  appliedClosure roots fun (parent, args) ref => do
-    let scope := instanceEnv state.program (← declaration parent) (args.getD #[])
-    application scope ref
-
-/-- Different declarations sharing a name always collide. For two applications of one
-declaration the arguments of both must have values to decide a collision here. -/
-def checkBoundMemberNames (file : FileId) (parameter : StaticParam) (bound : Lowered.Bound) :
-    CompileM Unit := do
-  let refs := bound.sorts.filterMap fun | .reference r => some r | _ => none
-  if refs.isEmpty then return
-  if let #[ref] := refs then
-    let some id := ref.declaration? | return
-    if (← get).sortNames.contains id || (← selfRequirements id).isEmpty then return
-  let saved ← get
-  let applications ← boundApplications { file } bound
-  let collisions ← memberCollisions applications
-  let state ← get
-  set saved
-  let program := state.program
-  for (name, left, right) in collisions do
-    let pair ← if left.1 != right.1 then
-        pure (qualifiedName program left.1 ++ "::" ++ name, qualifiedName program right.1 ++ "::" ++ name)
-      else
-        let (some a, some b) := (left.2, right.2) | continue
-        let render := renderValue state
-        pure (appliedMemberName program (left.1, a) render name, appliedMemberName program (right.1, b) render name)
-    logError "SP3" parameter.name.span (.ofText
-      s!"the bound of `{parameter.name.text}` has two declarations of `{name}`: `{pair.1}` and `{pair.2}`") (origin := .instances)
 
 /-! ## The terms that typing reads from the syntax
 

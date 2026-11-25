@@ -63,14 +63,66 @@ def scopeOwnerName (state : Compile.State) (scope : ScopeId) : String :=
       | none => "?"
     | none => "?"
 
+/-- The interfaces that a bound names, with those that their `where` requires of `Self`. -/
+def interfaceClosure (roots : Array DeclarationId) : CompileM (Array DeclarationId) := do
+  let program ← program
+  let mut result : Array DeclarationId := #[]
+  let mut pending := roots
+  while !pending.isEmpty do
+    let id := pending.back!
+    pending := pending.pop
+    if result.contains id then continue
+    result := result.push id
+    let some found := program.declarations[id]? | continue
+    let some whereClause := (found.ownScope.bind fun scope => program.scopes[scope]?).bind (·.whereClause)
+      | continue
+    for constraint in whereClause.constraints do
+      if let .bound _ (.path _ subject) required := constraint then
+        let steps ← recover (stepsOf { file := found.file } subject) (pure #[])
+        let kinds : List Step := (steps.map (·.step)).toList
+        if kinds matches [Step.self _] then
+          for (other, _) in ← boundInterfaces { file := found.file } required do
+            pending := pending.push other
+  return result
+
+def requiredInterfaces (env : Env) (bound : Bound) : CompileM (Array DeclarationId) := do
+  interfaceClosure ((← boundInterfaces env bound).map (·.1))
+
+def interfaceIds (sorts : Array Lowered.SortTerm) : Array DeclarationId :=
+  sorts.filterMap fun | .reference r => r.declaration? | _ => none
+
+def checkBoundNames (name : String) (site : Span) (ids : Array DeclarationId) : CompileM Unit := do
+  let state ← get
+  let roots := ids.filter fun id => !state.sortNames.contains id
+  checkMemberNames (← interfaceClosure roots.reverse) id fun member first second =>
+    logError "SP3" site (.ofText s!"the bound of `{name}` has two declarations of `{member}`: `{qualifiedName state.program first}::{member}` and `{qualifiedName state.program second}::{member}`") (origin := .instances)
+
 /-- Member names in parameter bounds (SP3), and the SP4 and SP11 checks of package scopes. -/
 def checkScopes : CompileM Unit := do
   let program ← program
+  let mut effective : Std.HashMap ScopeId (Std.HashMap ParameterRef (Array DeclarationId)) := {}
+  for decl in program.declarations do
+    if let .member (.moduleMember _ name bound) := decl.node then
+      let ids ← recover (boundInterfaces { file := decl.file } bound) (pure #[])
+      checkBoundNames name.text name.span (ids.map (·.1))
   for scopeId in [0:program.scopes.size] do
     let scope := program.scopes[scopeId]!
     if let some lowered := (← getModules).loweredScope? scopeId then
-      for (parameter, bound) in scope.parameters.zip lowered.bounds do
-        if let some b := bound then checkBoundMemberNames scope.file parameter b
+      let mut bounds := (scope.parent.bind (effective[·]?)).getD {}
+      for i in [0:scope.parameters.size] do
+        let some b := (lowered.bounds[i]?).join | continue
+        let param := scope.parameters[i]!
+        let ids := interfaceIds b.sorts
+        bounds := bounds.insert ⟨scopeId, i⟩ ids
+        checkBoundNames param.name.text param.name.span ids
+      for constraint in lowered.constraints do
+        let .bound site (.reference ref) sorts := constraint | continue
+        let some p := ref.parameter? | continue
+        let some param := (program.scopes[p.scope]?).bind (·.parameters[p.index]?) | continue
+        let ids := bounds.getD p #[] ++ interfaceIds sorts
+        bounds := bounds.insert p ids
+        checkBoundNames param.name.text site ids
+      effective := effective.insert scopeId bounds
     unless inPackage program scope.file do continue
     let owner := scopeOwnerName (← get) scopeId
     -- the specification-only parameters stand last (SP11)
@@ -626,28 +678,6 @@ def typeModuleMembers (inst : InstanceId) : CompileM Unit := do
             { description := name, span := (found.name.map (·.span)).getD default }
 
 /-! ## The opaque typing (SP12) -/
-
-/-- The interfaces that a bound names, with those that their `where` requires of `Self`. -/
-partial def requiredInterfaces (env : Env) (bound : Bound) : CompileM (Array DeclarationId) := do
-  let program ← program
-  let mut result : Array DeclarationId := #[]
-  let mut pending := (← boundInterfaces env bound).map (·.1)
-  while !pending.isEmpty do
-    let id := pending.back!
-    pending := pending.pop
-    if result.contains id then continue
-    result := result.push id
-    let some found := program.declarations[id]? | continue
-    let some whereClause := (found.ownScope.bind fun scope => program.scopes[scope]?).bind (·.whereClause)
-      | continue
-    for constraint in whereClause.constraints do
-      if let .bound _ (.path _ subject) required := constraint then
-        let steps ← recover (stepsOf { file := found.file } subject) (pure #[])
-        let kinds : List Step := (steps.map (·.step)).toList
-        if kinds matches [Step.self _] then
-          for (other, _) in ← boundInterfaces { file := found.file } required do
-            pending := pending.push other
-  return result
 
 /-- The sorts of a bound, with those that a sort's `where` requires of `Self` (SP12 item 1). -/
 def boundSorts (env : Env) (bound : Bound) : CompileM (Array String) := do

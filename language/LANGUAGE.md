@@ -1199,13 +1199,12 @@ only by the first form.
 **SP3. Static things.** A static parameter is a type, a natural or a module. Its bound says
 which: no bound (a type of freely copied data), `linear` (a type of any use mark), a sort (a
 type), `nat` (a natural), an interface that is not a sort (a module that implements it). `A + B`
-requires both. Different applied interfaces in the bound of a module parameter declare distinct
-member names (SP8), including the interfaces required of `Self`. A collision is refused at the
-parameter: “the bound of `H` has two declarations of `T`: `A::T` and `B::T`”. Two different interface declarations that declare one name collide whatever their
-arguments. Two applications of the same declaration collide here if both argument lists have
-values and differ. Otherwise the module supplied for the parameter determines the arguments.
-The member is one at every instance. A use that needs those arguments is typed at the
-instance. A parameter written with `spec` is a natural that only the specification reads
+requires both. In a module bound, different interface declarations reachable through
+requirements on `Self` declare distinct member names. This holds for a parameter, additional
+bounds on it in a `where`, and the bound of a module member. A collision is refused at the
+bound: “the bound of `H` has two declarations of `T`: `A::T` and `B::T`”. This check
+does not evaluate arguments. Two references to the same interface declaration stand together;
+SP8 checks the applications at the module instance. A parameter written with `spec` is a natural that only the specification reads
 (SP11).
 
 A *sort* is the interface `zkc::algebra::Group`, or an interface whose `where` requires
@@ -1395,12 +1394,13 @@ n = 0>>`".
 
 **SP8. Interfaces.** A module `M<A>: I<B>` defines every member of `I` and no member that `I`
 lacks; it may hold other declarations, which are its own. An applied interface is an interface
-with its evaluated static arguments. Count the same application once, whether named twice
-or required of `Self` along several paths. Different applications of the interfaces of a
-module declare distinct member names, including laws and members of different kinds.
-The check is made at each instance, before its member bodies are typed. A collision at a
-default instance is a refusal (SP7). The message at the module names both declarations:
-“module `M` has two declarations of `copy`: `I<1>::copy` and `I<2>::copy`”.
+with its evaluated static arguments. Among the interfaces the module names, count the same
+application once. Different applications declare distinct member names, including laws and
+members of different kinds. A module must also implement each interface required of `Self`
+(SP4). The module instance is checked before a member is selected, including a type, a natural
+or a protocol. A collision at a default instance is a refusal (SP7). The message names the
+first two declarations that share the name, with qualified arguments when needed to tell them
+apart: “module `M` has two declarations of `copy`: `I<1>::copy` and `I<2>::copy`”.
 
 A type member is defined by a type
 with the member's parameters, and satisfies the member's bound; a natural member by a static name

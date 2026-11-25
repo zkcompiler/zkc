@@ -158,58 +158,81 @@ def textAt (place : Span) : CompileM String := do
   | .ok expr => return exprText (withoutParentheses expr)
   | .error _ => return (String.fromUTF8? bytes).getD "?"
 
+/-- The kind and the qualified path of an interface, `zkc::hash::Hash`. -/
+def qualifiedName (program : Program) (id : DeclarationId) : String := Id.run do
+  let mut names : Array String := #[program.nameOf id]
+  let mut current := (program.declarations[id]?).map (·.namespace)
+  for _ in [0:program.namespaces.size] do
+    let some ns := current | break
+    let some entry := program.namespaces[ns]? | break
+    let some owner := program.declarations[entry.owner]? | break
+    if owner.kind == .fileModule then
+      names := names.push (program.nameOf entry.owner)
+      break
+    names := names.push (program.nameOf entry.owner)
+    current := entry.parent
+  return "::".intercalate names.reverse.toList
+
 mutual
   /-- A closed type as a message writes it. -/
-  partial def renderType (state : Compile.State) : ClosedType → String
+  partial def renderTypeWith (state : Compile.State) (qualified : Bool) : ClosedType → String
     | .bool => "bool"
     | .nat => "nat"
     | .rational => "rational"
     | .index bound => s!"index<{bound}>"
-    | .nonzero field => s!"nonzero<{renderType state field}>"
-    | .seq element (some size) => s!"[{renderType state element}; {size}]"
-    | .seq element none => s!"[{renderType state element}]"
+    | .nonzero field => s!"nonzero<{renderTypeWith state qualified field}>"
+    | .seq element (some size) => s!"[{renderTypeWith state qualified element}; {size}]"
+    | .seq element none => s!"[{renderTypeWith state qualified element}]"
     | .tuple components names =>
       let parts := (components.zip names).map fun (component, name) =>
         match name with
-        | some name => s!"{name}: {renderType state component}"
-        | none => renderType state component
+        | some name => s!"{name}: {renderTypeWith state qualified component}"
+        | none => renderTypeWith state qualified component
       s!"({", ".intercalate parts.toList})"
     | .nominal row arguments =>
-      let name := (state.rowNames[row]?).getD row
+      let name := if qualified then row else (state.rowNames[row]?).getD row
       if arguments.isEmpty then name
-      else s!"{name}<{", ".intercalate (arguments.toList.map (renderValue state))}>"
-    | .record id | .variant id | .specification id => renderInstance state id
+      else s!"{name}<{", ".intercalate (arguments.toList.map (renderValueWith state qualified))}>"
+    | .record id | .variant id | .specification id => renderInstanceWith state qualified id
     | .opaque «module» member arguments _ =>
       -- `X::T`: the parameter that the module stands for, and the member
       let parameter := ((state.table.entries[«module»]?).bind (·.key.opaqueFor)).bind fun (reference, _) =>
         ((state.program.scopes[reference.scope]?).bind (·.parameters[reference.index]?)).map (·.name.text)
-      let base := s!"{parameter.getD "?"}::{member}"
+      let base := if qualified then s!"{renderInstanceWith state qualified «module»}::{member}" else s!"{parameter.getD "?"}::{member}"
       if arguments.isEmpty then base
-      else s!"{base}<{", ".intercalate (arguments.toList.map (renderValue state))}>"
+      else s!"{base}<{", ".intercalate (arguments.toList.map (renderValueWith state qualified))}>"
 
-  partial def renderValue (state : Compile.State) : StaticValue → String
-    | .type type => renderType state type
+  partial def renderValueWith (state : Compile.State) (qualified : Bool) : StaticValue → String
+    | .type type => renderTypeWith state qualified type
     | .natural value => toString value
-    | .module id => renderInstance state id
+    | .module id => renderInstanceWith state qualified id
 
   /-- An instance as `name<values>`, positionally, then its specification-only values by name. -/
-  partial def renderInstance (state : Compile.State) (id : InstanceId)
+  partial def renderInstanceWith (state : Compile.State) (qualified : Bool) (id : InstanceId)
       (declarationName : Option String := none) : String :=
     match state.table.entries[id]? with
     | some entry =>
-      let name := declarationName.getD (state.program.nameOf entry.key.declaration)
+      let name := declarationName.getD (if qualified then qualifiedName state.program entry.key.declaration else state.program.nameOf entry.key.declaration)
       let specNames := ((state.program.declarations[entry.key.declaration]?).map fun found =>
         ((state.program.parameters found).filter (·.2.spec)).map (·.2.name.text)).getD #[]
-      let parts := entry.key.arguments.toList.map (renderValue state) ++
+      let parts := entry.key.arguments.toList.map (renderValueWith state qualified) ++
         (specNames.zip entry.key.specification).toList.map fun (parameter, value) =>
           s!"spec {parameter} = {value}"
       let base := if parts.isEmpty then name else s!"{name}<{", ".intercalate parts}>"
       let base := entry.key.view.elim base fun view => base ++ "::" ++ view.member
       match entry.key.owner with
-      | some owner => s!"{base} at {renderInstance state owner}"
+      | some owner => s!"{base} at {renderInstanceWith state qualified owner}"
       | none => base
     | none => "?"
 end
+
+def renderType (state : Compile.State) := renderTypeWith state false
+
+def renderValue (state : Compile.State) := renderValueWith state false
+
+def renderInstance (state : Compile.State) (id : InstanceId) (declarationName : Option String := none) :=
+  renderInstanceWith state false id declarationName
+
 
 def renderTypeM (type : ClosedType) : CompileM String := return renderType (← get) type
 
@@ -297,21 +320,6 @@ def describeInstance (declarationId : DeclarationId) (values : Array StaticValue
   match owner with
   | some inst => return s!"{base} at {renderInstance state inst}"
   | none => return base
-
-/-- The kind and the qualified path of an interface, `zkc::hash::Hash`. -/
-def qualifiedName (program : Program) (id : DeclarationId) : String := Id.run do
-  let mut names : Array String := #[program.nameOf id]
-  let mut current := (program.declarations[id]?).map (·.namespace)
-  for _ in [0:program.namespaces.size] do
-    let some ns := current | break
-    let some entry := program.namespaces[ns]? | break
-    let some owner := program.declarations[entry.owner]? | break
-    if owner.kind == .fileModule then
-      names := names.push (program.nameOf entry.owner)
-      break
-    names := names.push (program.nameOf entry.owner)
-    current := entry.parent
-  return "::".intercalate names.reverse.toList
 
 /-- The resolution of a path, read from the table of the file of the environment. -/
 def stepsOf (env : Env) (path : Path) : CompileM (Array ResolvedSegment) := do

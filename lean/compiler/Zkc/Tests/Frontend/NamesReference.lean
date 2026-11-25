@@ -156,7 +156,7 @@ def conformanceNamesSuite (repository : Repository) : TestM Unit := do
   for entry in waiting do note s!"waiting for typing: {entry}"
   for (id, rule, _) in expectedNameRefusals do
     unless seen.contains id do failure s!"{id}: expected to be refused by {rule}; not found"
-  expectTrue (total == 330) s!"expected the 330 tests of layer A, found {total}"
+  expectTrue (total == 335) s!"expected the 335 tests of layer A, found {total}"
 
 /-- Every module of `libraries/` as a root resolves, with every module it reaches. -/
 def libraryNamesSuite (repository : Repository) : TestM Unit := do

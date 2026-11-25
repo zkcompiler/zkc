@@ -70,7 +70,7 @@ private def checkBodyTyping (repository : Repository) : TestM Unit := do
       else if errors.any (rules.contains ·) then listed := listed + 1
       else other := other + 1
   note s!"Through body typing: {clean} positive cases without an error and {refused} refused; {listed} negative cases refused by a listed rule, {other} by another rule, {silent} without an error"
-  expectTrue ((clean, refused, listed, other, silent) == (176, 2, 199, 2, 144))
+  expectTrue ((clean, refused, listed, other, silent) == (177, 2, 203, 2, 144))
     "the outcomes of the reference cases through body typing differ from the recorded counts"
 
 /-- SC1 and SP11 distinguish a scheme's deployment arguments from the goal's spec values. -/
