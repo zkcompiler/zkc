@@ -513,13 +513,13 @@ def transfers (s : Statements) (goals := s.claims.goals) : String := Id.run do
   let admitted := "{a : Admitted V} (admitted : admit stored association = .ok a)"
   let root := "rootKey rootMember found'root"
   let mut text :=
-    "private theorem found'root : installed.findProtocol rootKey = some ⟨rootHeader, rootMember⟩ := by kernel_rfl\n" ++
+    "theorem found'root : installed.findProtocol rootKey = some ⟨rootHeader, rootMember⟩ := by kernel_rfl\n" ++
     s!"abbrev at_root {admitted} :=\n  subjectPackage.atProtocol admitted {root}\n\n"
   for (goal, first) in perRelation goals (·.relationLabel) do
     let name := goal.relationLabel
     let found := s!"found'fn{goal.relation}"
     if name == first then
-      text := text ++ s!"private theorem {found} : installed.find {name}Key = some (.fn {name}Member) := by kernel_rfl\n"
+      text := text ++ s!"theorem {found} : installed.find {name}Key = some (.fn {name}Member) := by kernel_rfl\n"
     text := text ++ s!"abbrev at_{name} {admitted} :=\n" ++
       s!"  subjectPackage.atProtocolAndFunction admitted {root} {name}Key {name}Member {found}\n\n"
   return text
