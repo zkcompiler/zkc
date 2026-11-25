@@ -1,6 +1,7 @@
 import Zkc.Core.Admission.Theorems
 import Zkc.Kernel
 import Zkc.Vocabulary.Project
+import Zkc.Frontend.Written.Charge
 import ZkcFormal.Walk
 import ZkcFormal.Written.SiteCaps
 import ZkcFormal.Written.WalkFees
@@ -36,7 +37,7 @@ unlike shapes are read here.
 -/
 
 open Zkc.Core ZkcFormal ZkcFormal.ProbabilisticProcess ZkcFormal.Written OracleComp ProbComp
-open Zkc.Frontend.Written (CapTable UseCaps DrawCap CallCap)
+open Zkc.Subject (CapTable UseCaps DrawCap CallCap)
 open scoped NNRat ENNReal
 
 namespace ZkcFormalTests.CapTables
@@ -284,7 +285,7 @@ def quarter : DrawCap := ⟨⟨2⟩, 1, 4, 1⟩
 def half : DrawCap := ⟨⟨3⟩, 1, 2, 1⟩
 
 /-- A table of `chosen` with one use. -/
-def chosenTable (caps : Zkc.Core.Tally Zkc.Frontend.Written.Cap) : CapTable := ⟨[⟨⟨2⟩, caps⟩]⟩
+def chosenTable (caps : Zkc.Core.Tally Zkc.Subject.Cap) : CapTable := ⟨[⟨⟨2⟩, caps⟩]⟩
 
 -- the table as the program has it: the larger arm and the draw after it
 example : (chosenTable (.choice (.item (.draw eighth) .nil) (.item (.draw quarter) .nil)

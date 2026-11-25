@@ -68,6 +68,7 @@ experiment of the statement is the one that a reader would write.
 -/
 
 open Zkc.Core Zkc.Frontend Zkc.Frontend.Written
+open Zkc.Subject (CapTable)
 open Zkc.Tests.Frontend Zkc.Tests.Frontend.PrintedPackageSupport
 open ZkcFormalTests.WrittenSubject (startModule startRefused refusedOutside startLakeLean finishLean expectUnproved expectPlaces)
 

@@ -3,7 +3,7 @@ module
 public import ZkcFormal.Written.Tactics
 public import ZkcFormal.Written.FunctionMeaning
 public meta import ZkcFormal.Written.Source
-public meta import Zkc.Frontend.Written.LeanTerms
+public meta import Zkc.Subject.Print
 public meta import Lean.Elab.Eval
 
 public meta section
@@ -19,10 +19,10 @@ private structure ReplayPlan where
   steps : Array ReplayStep := #[]
   guards : Array String := #[]
 
-open Zkc.Frontend.Written (numbers consList component)
+open Zkc.Subject.Print (numbers consList component)
 
 private def typeTerm (t : Standard.Ty) : Except String String :=
-  pure (Zkc.Frontend.Written.ty (b := Zkc.Vocabulary.Project.Bindings.mk [] (by decide)) t)
+  pure (Zkc.Subject.Print.ty (b := Zkc.Vocabulary.Project.Bindings.mk [] (by decide)) t)
 
 private def valueStep (role : Nat) (who : List Role) (types : List Standard.Ty) (values : List String) (proof := "rfl") :
     Except String String := do
@@ -97,7 +97,7 @@ private def plan (program : NamedProgram Standard) (role : Role) (replies : List
         else do
           unless owner == role do throw "expected the verifier to own the observed draw"
           let x :: _ := remaining | throw "missing trace reply"
-          let kind := s!"(.coin {Zkc.Frontend.Written.lawKey law})"
+          let kind := s!"(.coin {Zkc.Subject.Print.lawKey law})"
           let ty ← typeTerm t
           pure (replyStep role ((owner :: peers).mergeSort) ty s!".own {kind} {numbers peers} {atKey k} [] .nil {ty}" x)
       plan := {plan with steps := plan.steps.push (.instruction step)}

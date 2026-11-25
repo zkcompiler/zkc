@@ -99,7 +99,7 @@ owning port have none where the event is heard, so a role that hears pays no fee
 excludes no reply. -/
 
 section
-open Zkc.Frontend.Written (DrawCharge)
+open Zkc.Subject (DrawCharge)
 variable {V : Vocabulary} (N : Model V) (kind : GivenKind V) (peers : List Role) (owner : Role)
   (at_ : Occurrence) (ty : V.Ty)
 

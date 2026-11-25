@@ -87,6 +87,7 @@ statement.
 -/
 
 open Zkc.Core Zkc.Frontend Zkc.Frontend.Written
+open Zkc.Subject (CapTable)
 open Zkc.Tests.Frontend Zkc.Tests.Frontend.PrintedPackageSupport
 open ZkcFormalTests ZkcFormalTests.WrittenSubject
 

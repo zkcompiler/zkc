@@ -1,15 +1,19 @@
 module
 
-public import Zkc.Frontend.Written.ChargeData
+public import Zkc.Subject.Charges
 public import Zkc.Frontend.Written.Selection
 public import Zkc.Frontend.Written.Root
 
 @[expose] public section
 namespace Zkc.Frontend.Written
+open Zkc.Subject
 
 structure DeclaredDraw where
   event : Nat
   ceiling : Rat
+
+/-- The rational total at the root, compared with a source ceiling under GL4. -/
+def _root_.Zkc.Subject.CapTable.ratio (table : CapTable) : Rat := table.totalAt Rat table.root
 
 /-- Resolve the authored clause in its closed instance, before looking up realized addresses. -/
 def declaredDraw (s : Compile.State) (owner : Core.Key) (name : String)

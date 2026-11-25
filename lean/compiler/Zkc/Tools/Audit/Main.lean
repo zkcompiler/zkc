@@ -15,7 +15,7 @@ import Zkc.Tools.Audit.Controls.Unreached
 import Zkc.Tools.Audit.Controls.Unreached.Apart
 import Zkc.Tools.Audit.Controls.Layers
 
-/-! `zkc-audit`: the audit of the core, the vocabulary and their tests (`Zkc.Tools.Audit`). -/
+/-! `zkc-audit`: the audit of the core, vocabulary, subject library, and core and vocabulary tests (`Zkc.Tools.Audit`). -/
 
 open Zkc.Tools.Audit
 
@@ -24,6 +24,7 @@ def libraries (directory : System.FilePath) : Array Library := #[
   { name := "core", root := `Zkc.Core, imports := some coreImports, directory,
     generic := coreGeneric, concrete := coreConcrete },
   { name := "vocabulary", root := `Zkc.Vocabulary, imports := some vocabularyImports, directory },
+  { name := "subject", root := `Zkc.Subject, imports := some (vocabularyImports.push `Zkc.Vocabulary), directory },
   { name := "tests of the core", root := `Zkc.Tests.Core, kind := .tests, directory },
   { name := "tests of the vocabulary", root := `Zkc.Tests.Vocabulary, kind := .tests,
     directory }]

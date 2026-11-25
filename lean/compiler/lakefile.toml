@@ -1,6 +1,6 @@
 name = "zkc_compiler"
 version = "0.0.0"
-defaultTargets = ["ZkcCore", "ZkcVocabulary", "ZkcCoreTests", "ZkcVocabularyTests", "ZkcAudit",
+defaultTargets = ["ZkcCore", "ZkcVocabulary", "ZkcSubject", "ZkcCoreTests", "ZkcVocabularyTests", "ZkcAudit",
   "zkc-audit"]
 # the tests are checks that run when their libraries are built: building the tests of the core,
 # which need the tests of the vocabulary, is the test
@@ -20,6 +20,12 @@ requiresModuleSystem = true
 name = "ZkcVocabulary"
 roots = ["Zkc.Vocabulary"]
 globs = ["Zkc.Vocabulary", "Zkc.Vocabulary.+"]
+requiresModuleSystem = true
+
+[[lean_lib]]
+name = "ZkcSubject"
+roots = ["Zkc.Subject"]
+globs = ["Zkc.Subject", "Zkc.Subject.+"]
 requiresModuleSystem = true
 
 # A command that asks the kernel to compute. Meta code, outside the audited libraries: what it
@@ -87,7 +93,7 @@ allowNonModules = true
 name = "zkc-audit"
 root = "Zkc.Tools.Audit.Main"
 allowNonModules = true
-needs = ["ZkcCore", "ZkcVocabulary", "ZkcCoreTests", "ZkcVocabularyTests"]
+needs = ["ZkcCore", "ZkcVocabulary", "ZkcSubject", "ZkcCoreTests", "ZkcVocabularyTests"]
 
 [[lean_exe]]
 name = "zkc-knowledge"

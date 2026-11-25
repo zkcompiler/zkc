@@ -474,9 +474,9 @@ kernel runs when they are built:
   one whose key is no definition, refused by the rule `association`; a protocol refused. The headers
 are compared whole, by the kernel.
 
-In `lean/compiler`, `lake build` builds the core, the vocabulary, their tests and the audit;
+In `lean/compiler`, `lake build` builds the core, vocabulary, subject library, core and vocabulary tests, and audit;
 `lake test` builds the tests of the core (the library is the test driver), which need those of
-the vocabulary; and `lake exe zkc-audit` audits the core, the vocabulary and their tests: no
+the vocabulary; and `lake exe zkc-audit` audits the core, vocabulary, subject library, and core and vocabulary tests: no
 axiom beyond `propext` and `Quot.sound` in any declaration, the replay of every declaration
 through the kernel, and four rules on imports (a module of the core imports only the core,
 `Init` and `Std`; no module of the core imports a module of the tests or of the tools; the root

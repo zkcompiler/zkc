@@ -10,6 +10,7 @@ public import Zkc.Frontend.Written.Root
 set_option autoImplicit false
 
 namespace Zkc.Frontend.Written
+open Zkc.Subject.Print
 open Core
 
 def preamble (withProof : Bool) (scope : String) : String :=

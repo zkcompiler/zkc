@@ -1,12 +1,12 @@
 module
 
-public import Zkc.Frontend.Written.ChargeData
+public import Zkc.Subject.Charges
 public import ZkcFormal.FiniteService
 
 @[expose] public section
 namespace ZkcFormal.Written
 open Zkc.Core Interactive FiniteService ProbabilisticProcess OracleComp
-open Zkc.Frontend.Written (DrawCharge)
+open Zkc.Subject (DrawCharge)
 open scoped NNReal ENNReal
 
 noncomputable def total (charge : DrawCharge) : ℝ≥0∞ :=

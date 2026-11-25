@@ -30,7 +30,7 @@ and what a charge allows there is not stated here.
 
 namespace ZkcFormal.Written
 open Zkc.Core ProbabilisticProcess
-open Zkc.Frontend.Written (DrawCharge)
+open Zkc.Subject (DrawCharge)
 open scoped NNRat ENNReal
 
 /-- What a charge allows one of its draws. -/

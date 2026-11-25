@@ -63,7 +63,7 @@ test-written-knowledge: test-frontend
     cd lean/formal && lake build --iofail ZkcFormal.Written.GroupReplay ZkcFormal.Written.FiniteModel ZkcFormalTools.Policy
     cd lean/formal && lake env python3 checks/written_knowledge.py
 
-# Check compiler library coverage and audit the package: the kernel's replay of the core, the vocabulary and their tests, no `sorry`, no axiom beyond `propext` and `Quot.sound`, the import rules.
+# Check compiler library coverage and audit the package: the kernel's replay of the core, the vocabulary, the subject library and the tests of the first two, no `sorry`, no axiom beyond `propext` and `Quot.sound`, the import rules.
 audit:
     cd lean/compiler && lake exe zkc-audit
 

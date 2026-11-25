@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Frontend.Written.Package
+public import Zkc.Frontend.Written.Diagnostic
 public import Zkc.Frontend.Semantics.StandardTypes
 public import Zkc.Frontend.Syntax.Spans
 
@@ -8,6 +9,7 @@ public import Zkc.Frontend.Syntax.Spans
 set_option autoImplicit false
 
 namespace Zkc.Frontend.Written
+open Zkc.Subject.Print
 open Syntax
 
 inductive ValueSort where | point | scalar | boolean | runs | tuple (items : List ValueSort)
