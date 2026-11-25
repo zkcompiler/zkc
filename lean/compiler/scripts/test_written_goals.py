@@ -155,7 +155,18 @@ def check(work):
         src.write_text(private_port.replace("spec for Check:", f"spec for Check:\n    requires {expr}"))
         rows, files = run([src], ["first"], work / f"requires-{case}", code)
         if code == 0:
-            assert files == bare
+            # The private requirement moves the deciding clause one place in the source
+            # contract. Every other issued byte, including the challenge, stays the same.
+            expected = bare.copy()
+            stated = next(name for name in bare if name.endswith("/Stated.lean"))
+            before = "  ⟨0, written'fn1, ".encode()
+            after = "  ⟨1, written'fn1, ".encode()
+            assert bare[stated].count(before) == 1
+            expected[stated] = bare[stated].replace(before, after)
+            assert files == expected
+            src.write_text(private_port.replace("    proves @V secondary:", f"    requires {expr}\n    proves @V secondary:"))
+            _, after_primary = run([src], ["first"], work / "requires-after-primary", 0)
+            assert after_primary == bare
         else:
             assert "SX7" in rows[0] and not files
     src.write_text(original)

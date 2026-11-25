@@ -12,6 +12,7 @@ public import ZkcFormal.Application
 public import ZkcFormal.ComputedTypes
 public import ZkcFormal.Walk
 public import ZkcFormal.Written.ClaimIntro
+public import ZkcFormal.Written.GoalPresentation
 public import ZkcFormal.Written.WalkFees
 public import ZkcFormal.Written.Blind
 public import ZkcFormal.Written.PortSamplers

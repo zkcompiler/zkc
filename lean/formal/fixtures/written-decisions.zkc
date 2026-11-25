@@ -1,0 +1,18 @@
+module operands
+use zkc::security::{soundness}
+relation Holds(value: bool; witness: bool): value == witness
+protocol Check roles(P,V)(private_bit: bool @P, other_secret: bool @P, x: bool @(P,V), y: bool @(P,V)):
+    guard @V x
+spec for Check:
+    proves @V first: Holds(x; private_bit)
+    proves @V second: Holds(y; private_bit)
+    proves @V short: Holds(x)
+    proves @V hidden: Holds(x; other_secret)
+scheme Checked = Check:
+    prover P
+    construction interactive
+goal left = soundness(Checked, clause = first)
+goal right = soundness(Checked, clause = second)
+goal left_again = soundness(Checked, clause = first)
+goal implicit_witness = soundness(Checked, clause = short)
+goal other_witness = soundness(Checked, clause = hidden)

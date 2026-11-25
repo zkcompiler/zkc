@@ -258,18 +258,20 @@ def run (corpus : System.FilePath) (work : System.FilePath) : IO Unit := do
   -- the bound of its statement is zero; Lean elaborates the statement.
   let (_, pairClaims) ← read pair ["sound"]
   let pairStated : Statements := { claims := pairClaims }
-  let pairText ← IO.ofExcept (pairStated.claimTexts)
-  -- The premise stands in the claim and in the statement that its hypotheses are met.
-  expect "the statement of a relation with a witness does not quantify the witness"
-    ((pairText.splitOn "∀ (witness0 : ").length == 3)
-  let stated ← startLakeLean work "ClaimsWitness"
-    (← IO.ofExcept (pairStated.claimsModule "ClaimsWitness")).text
-  -- An exposed public abbreviation must be able to refer to its lookup theorem.
+  let module ← IO.ofExcept (pairStated.claimsModule "ClaimsWitness")
+  let client := "\nnamespace ClaimsWitness\n" ++ statementOpens ++
+    "open Zkc.Core\nexample (h : soundWitnessed) : ∃ x, functionResult (t := .bool)\n" ++
+    "    (fnMeaning StandardInterpretation.model installed soundMember (.cons x (.cons x .nil))) = some false := by\n" ++
+    "  obtain ⟨x, valid, _, rejected⟩ := h\n  exact ⟨x, rejected (witness0 := x) valid⟩\nend ClaimsWitness\n"
+  let stated ← startLakeLean work "ClaimsWitness" (module.text ++ client)
+  -- Public definitions in an exposed module must be able to refer to the same library terms.
+  let publicModule ← IO.ofExcept (pairStated.claimsModule "ClaimsExposed")
+  let opening := Statements.header (Statements.imports false)
+  unless publicModule.text.startsWith opening do throw (IO.userError "missing generated imports")
   let exposed ← startLakeLean work "ClaimsExposed"
     ("module\n" ++ String.join ((Statements.imports false).map (s!"public import {·}\n")) ++
-      "\n@[expose] public section\nopen Zkc.Core\nnamespace ClaimsExposed\n" ++
-      subjectPackage pairStated.package ++ statementOpens ++ pairStated.facts ++
-      pairStated.transfers ++ pairText ++ "end ClaimsExposed\n") (text := false)
+      "\n@[expose] public section\nopen Zkc.Core\n" ++ (publicModule.text.dropPrefix opening).toString)
+    (text := false)
   let (ok, output) ← finishLean proof
   acceptedOutput "Claims" ok output theorems
   let (ok, output) ← finishLean stated

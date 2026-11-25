@@ -159,9 +159,14 @@ written anew is not the judgment that was stated before the text, so the text is
 the claim is concluded from it. (An audit found the same of the claim: before the statements of
 a module were propositions defined ahead of the text, a text that defined the total of a charge
 again published a goal under its own name, and every check passed.) -/
-def shadowing (s : Subject) (template : String) : IO String := do
-  let goal ← s.goal
-  let anew ← IO.ofExcept (s.statements.judgedAt goal)
+def shadowing (template : String) : IO String := do
+  let anew := "∀ (path : List Frame) (a : StandardInterpretation.model.Val matrixTy), StandardInterpretation.model.Valid matrixTy a →\n" ++
+    "    ∀ b : StandardInterpretation.model.Val matrixTy, StandardInterpretation.model.Valid matrixTy b →\n" ++
+    "    ∀ c : StandardInterpretation.model.Val matrixTy, StandardInterpretation.model.Valid matrixTy c →\n" ++
+    "    functionResult (t := .bool) (fnMeaning StandardInterpretation.model installed soundMember (.cons a (.cons b (.cons c .nil)))) = some false →\n" ++
+    "    (roleMeaning StandardInterpretation.model installed rootMember verifierRole path (.cons a (.cons b (.cons c .nil)))).interpret\n" ++
+    "      (.charged (Permitted StandardInterpretation.model) (paysWithin StandardInterpretation.samplers (soundCaps.allowance StandardInterpretation.model path)))\n" ++
+    "      (fun _ _ => False) (fun _ _ => True) soundCaps.budget"
   let established ← replaceOnce template "theorem sound_judged : soundJudged := by"
     "theorem sound_established : soundJudged := by"
   -- what the text concludes from the judgment, it concludes from the judgment as it was stated
@@ -256,7 +261,7 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
     -- A name of the library defined again by the text: the claim that the text then proves is
     -- not the claim that was stated before it, and the goal is not concluded from it.
     { title := "a name of the statement defined again", name := "ShadowControl", subject := written,
-      text := ← shadowing written template,
+      text := ← shadowing template,
       unproved := ["sound_installed", "sound_sound", "sound_result"], only := true,
       places := ["sound_judged\nhas type"] }]
   -- The same text on the product computed another way: every theorem is proved.
