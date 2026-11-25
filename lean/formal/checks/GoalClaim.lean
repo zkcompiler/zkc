@@ -52,6 +52,7 @@ elaborates it.
 -/
 
 open Zkc.Core Zkc.Frontend Zkc.Frontend.Written
+open Zkc.Subject.Print (memberAt)
 open Zkc.Tests.Frontend Zkc.Tests.Frontend.PrintedPackageSupport
 open ZkcFormalTests.WrittenSubject (startLakeLean finishLean)
 

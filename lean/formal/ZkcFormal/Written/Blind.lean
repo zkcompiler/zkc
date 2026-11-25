@@ -23,7 +23,7 @@ not among them: under it the goal in a callee is stated under `ProcessJudgment.r
 
 namespace ZkcFormal.Written
 open Zkc.Core ProbabilisticProcess OracleComp
-open Zkc.Frontend.Written (CapTable)
+open Zkc.Subject (CapTable)
 open scoped NNRat ENNReal
 
 variable {V : Vocabulary} {M : Model V}

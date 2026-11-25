@@ -726,7 +726,8 @@ the running executable's package); prints the findings, what was done for each l
 counts and the controls. The exit code is 0 only when the libraries and generated-helper
 fixture pass and the audit refuses every negative control by its rule. -/
 def run (libraries : System.FilePath → Array Library)
-    (compilerDirectory : System.FilePath → System.FilePath := id) (policy : Policy := {}) : IO UInt32 := do
+    (compilerDirectory : System.FilePath → System.FilePath := id) (policy : Policy := {})
+    (additionalControls : Array Control := #[]) : IO UInt32 := do
   initSearchPath (← findSysroot)
   let directory ← packageDirectory
   let libraries := libraries directory
@@ -740,7 +741,7 @@ def run (libraries : System.FilePath → Array Library)
   for line in report.lines do IO.println line
   IO.println s!"{report.declarations} declarations, which reach {report.reached} constants and the axioms {", ".intercalate (report.axioms.toList.map toString)}"
   -- the controls: the environment has the modules of their roots that are built
-  let controls := controls (compilerDirectory directory)
+  let controls := controls (compilerDirectory directory) ++ additionalControls
   let mut controlModules : Array Import := #[]
   for control in controls do
     let module := control.library.root

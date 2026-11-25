@@ -9,6 +9,7 @@ namespace ZkcFormalTools
 open Zkc.Core ZkcFormal.Interactive.Sumcheck.ReductionRound
 open ZkcFormal.Written.RoundCharge
 open Zkc.Frontend Zkc.Frontend.Written
+open Zkc.Subject (DrawCharge)
 
 variable {V : Zkc.Core.Vocabulary} {p : Zkc.Core.Typed V} {owner : Key}
     {state t residual : V.Ty} {prefixSize rounds : Nat} {events : Events t}

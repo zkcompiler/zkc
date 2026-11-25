@@ -1,19 +1,17 @@
 module
 
 public import Zkc.Core.Program.Dialects
-public import Zkc.Frontend.Written.Diagnostic
-public import Zkc.Frontend.Emit.Bindings
+public import Zkc.Vocabulary.Project
+public import Zkc.Subject.Charges
 
 @[expose] public section
 set_option autoImplicit false
 
 /-! Lean source text for values that a generated module states: lists, numbers, keys, and the
-types of a linked vocabulary. -/
+types of a linked vocabulary, charge tables and membership proofs. -/
 
-namespace Zkc.Frontend.Written
+namespace Zkc.Subject.Print
 open Core
-
-def unsupported {α : Type} (what : String) : ExportM α := .error ("WK-CORE: unsupported " ++ what)
 
 def list (xs : List String) := "[" ++ ", ".intercalate xs ++ "]"
 def numbers (xs : List Nat) := list (xs.map toString)
@@ -63,4 +61,22 @@ def tys {b : Zkc.Vocabulary.Project.Bindings} (ts : Tys b.vocabulary.TypeKey) : 
 def lawKey : Zkc.Vocabulary.LawKey → String
   | .uniform t => s!"(.uniform {coreTy (fun k => s!"({reprStr k})") t})"
 
-end Zkc.Frontend.Written
+/-- A table of caps as a term. -/
+def capsTerm (table : CapTable) : String :=
+  let draw (d : DrawCap) := s!"⟨⟨{d.key.number}⟩, {d.numerator}, {d.denominator}, {d.count}⟩"
+  let call (c : CallCap) := s!"⟨⟨{c.key.number}⟩, {c.count}, {c.callee}⟩"
+  -- what adds up along a run: an item then the rest, or a choice of two arms then the rest
+  let rec tally : Core.Tally Cap → String
+    | .nil => ".nil"
+    | .item (.draw d) rest => s!"(.item (.draw {draw d}) {tally rest})"
+    | .item (.call c) rest => s!"(.item (.call {call c}) {tally rest})"
+    | .choice left right rest => s!"(.choice {tally left} {tally right} {tally rest})"
+  let use (u : UseCaps) := s!"⟨⟨{u.definition.number}⟩, {tally u.caps}⟩"
+  s!"⟨[{", ".intercalate (table.uses.map use)}]⟩"
+
+/-- The member of a list of headers that is `depth` places after its head. -/
+def memberAt : Nat → String
+  | 0 => "Member.head"
+  | depth + 1 => s!"(Member.tail {memberAt depth})"
+
+end Zkc.Subject.Print

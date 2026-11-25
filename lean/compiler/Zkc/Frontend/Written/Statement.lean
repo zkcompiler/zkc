@@ -83,6 +83,7 @@ charge that the root reaches at the goal's proof arguments, by use, read by `goa
 -/
 
 namespace Zkc.Frontend.Written
+open Zkc.Subject Zkc.Subject.Print
 open Core
 
 /-- How the module of a statement names the model that the statement is about. -/
@@ -199,7 +200,7 @@ structure ProofText where
 /-- The names that a text, and a consumer after it, may use. -/
 def opens : String :=
   "open ZkcFormal ZkcFormal.ProbabilisticProcess ZkcFormal.Written OracleComp ProbComp\n" ++
-  "open Zkc.Frontend.Written (CapTable UseCaps DrawCap CallCap)\n" ++
+  "open Zkc.Subject (CapTable UseCaps DrawCap CallCap)\n" ++
   "open scoped NNRat ENNReal\n"
 
 /-- A theorem that a check writes after the closing theorems of a proof module: a consumer of
@@ -292,24 +293,6 @@ the module states them. -/
 structure PlainModule where
   text : String
   theorems : List String
-
-/-- A table of caps as a term. -/
-def capsTerm (table : CapTable) : String :=
-  let draw (d : DrawCap) := s!"⟨⟨{d.key.number}⟩, {d.numerator}, {d.denominator}, {d.count}⟩"
-  let call (c : CallCap) := s!"⟨⟨{c.key.number}⟩, {c.count}, {c.callee}⟩"
-  -- what adds up along a run: an item then the rest, or a choice of two arms then the rest
-  let rec tally : Core.Tally Cap → String
-    | .nil => ".nil"
-    | .item (.draw d) rest => s!"(.item (.draw {draw d}) {tally rest})"
-    | .item (.call c) rest => s!"(.item (.call {call c}) {tally rest})"
-    | .choice left right rest => s!"(.choice {tally left} {tally right} {tally rest})"
-  let use (u : UseCaps) := s!"⟨⟨{u.definition.number}⟩, {tally u.caps}⟩"
-  s!"⟨[{", ".intercalate (table.uses.map use)}]⟩"
-
-/-- The member of a list of headers that is `depth` places after its head. -/
-def memberAt : Nat → String
-  | 0 => "Member.head"
-  | depth + 1 => s!"(Member.tail {memberAt depth})"
 
 namespace Statements
 
@@ -487,7 +470,7 @@ def facts (s : Statements) : String :=
   String.join (s.claims.goals.map fun goal =>
     let name := goal.goal
     let relation := goal.relation
-    s!"def {name}Caps : Zkc.Frontend.Written.CapTable := {capsTerm goal.caps}\n" ++
+    s!"def {name}Caps : Zkc.Subject.CapTable := {capsTerm goal.caps}\n" ++
     String.join (goal.specification.toList.zipIdx.map fun (value, index) =>
       s!"def {name}Argument{index} : Nat := {value}\n") ++
     s!"abbrev {name}Key : Key := ⟨{relation}⟩\n" ++

@@ -14,12 +14,12 @@ private def clauseText {Raw : Type} (op : Raw → String) (clause : BodyAnalysis
 
 private def detailText {T Raw : Type} (ty : T → String) (op : Raw → String) : Detail T Raw → String
   | .name n => s!"name {n}"
-  | .types expected found => s!"expected {Written.list (expected.map ty)}, found {Written.list (found.map ty)}"
+  | .types expected found => s!"expected {Subject.Print.list (expected.map ty)}, found {Subject.Print.list (found.map ty)}"
   | .type t => ty t
   | .number expected found => s!"expected {expected}, found {found}"
   | .operation written => op written
   | .callee key found => s!"callee {key.number} has {found} preceding definitions"
-  | .given ts => s!"given {Written.list (ts.map ty)}"
+  | .given ts => s!"given {Subject.Print.list (ts.map ty)}"
   | .key k => s!"key {k.number}"
   | .stops header body => s!"stops in header {header}, in body {body}"
   | .uses n found | .around n found => s!"{found} uses of name {n}"
@@ -58,9 +58,9 @@ def SourcePackage.describeRefusals (p : SourcePackage)
     if detail.isEmpty then place else s!"{place}: {detail}"
   let located := fun t => Written.located (b := p.bindings) [t]
   "; ".intercalate <| errors.map fun
-    | .definition (.fn r) => describe "function" Written.linkedTy (Written.localRaw (b := p.bindings)) r
+    | .definition (.fn r) => describe "function" Subject.Print.linkedTy (Written.localRaw (b := p.bindings)) r
     | .definition (.protocol r) => describe "protocol" located (Written.protocolRaw (b := p.bindings)) r
     | .projection r => describe "projection" located (roleText (b := p.bindings)) r
-    | .association r => describe "association" Written.linkedTy (Written.localRaw (b := p.bindings)) r
+    | .association r => describe "association" Subject.Print.linkedTy (Written.localRaw (b := p.bindings)) r
 
 end Zkc.Frontend

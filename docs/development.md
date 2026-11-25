@@ -11,7 +11,7 @@
 
 | Path | Content |
 |---|---|
-| `lean/compiler/` | the Lake package of the compiler: the core (`Zkc/Core`), the frontend (`Zkc/Frontend`), their tests (`Zkc/Tests`) and tools (`Zkc/Tools`) |
+| `lean/compiler/` | the Lake package of the compiler: the core (`Zkc/Core`), the vocabulary (`Zkc/Vocabulary`), the subject (`Zkc/Subject`), the frontend (`Zkc/Frontend`), their tests (`Zkc/Tests`) and tools (`Zkc/Tools`) |
 | `lean/formal/` | the Lake package of statements and proofs over the meaning of the core; it requires `../compiler`. Its modules have roots of their own: the library (`ZkcFormal`), its tests (`ZkcFormalTests`) and its tools (`ZkcFormalTools`) |
 | `language/` | the reference of the source language and its conformance tests |
 | `libraries/zkc/` | the library of the source language, in source |
@@ -27,7 +27,7 @@ Both packages pin Lean 4.36.0. See the [toolchain guide](lean-toolchain.md) for 
 feature choices and upgrade checks. Rebuild artifacts for the exact toolchain; do not reuse
 4.35 `.olean` files.
 
-The default targets build the core, vocabulary, their tests and the audit. The separate
+The default targets build the core, vocabulary, subject library, core and vocabulary tests, and audit. The separate
 interactive suite checks selected source protocols through admission and replays their formal
 proofs. The formal package builds its public root and test modules with the pinned Mathlib and VCVio dependencies. The historical receipt suite is preserved with its original Core revision.
 
@@ -46,7 +46,7 @@ Run every command from the root of the repository.
 | `just test-written-knowledge` | compile both Schnorr and Chaum–Pedersen written clauses, check admission and extraction, consume the public theorems, replay their project imports, and test permitted forks, source mutations and diagnostics |
 | `just test-written-charge` | issue and audit the two source-bound probability endpoints, check depth-specific member laws, close the proof arguments of each use, read the clause of a goal and what its goals claim, judge the five subjects of a written soundness goal (`Count<8>`, Freivalds' check, `Guess<3>`, `Either`, `Twice`) within the tables of caps of their goals in generated modules, each with its controls, judge the accepted proof modules against their challenges in one run of `lake comparator`, check that use of the comparator on pairs that it must refuse, exercise independent fixed-table sampling and replay the charge issuer. The checks build their generated modules, and export what is judged, under `bwrap` (bubblewrap), which the host needs |
 | `just test-formal` | build and audit the formal library, its tests and the charge issuer together, then run the charge checks |
-| `just audit` | `lake exe zkc-audit` in `lean/compiler`: compiler module coverage and the audit of the core, vocabulary and their tests |
+| `just audit` | `lake exe zkc-audit` in `lean/compiler`: compiler module coverage and the audit of the core, vocabulary, subject library, and core and vocabulary tests |
 | `just check` | the checks that need no build: `bash .github/scripts/public-tree-guard.sh`, `python3 scripts/check_docs.py --all`, and `python3 lean/compiler/scripts/generate_unicode_tables.py --check` |
 
 Every recipe builds with Lake's `--iofail`, under which a module that logs anything fails
@@ -112,7 +112,7 @@ Beam does not replace either acceptance check.
 `just audit`, also run by `just test`, checks that every Lean source file under
 `lean/compiler/Zkc` is selected by exactly one whole library target. It reads the module
 list from Lake for each library declared by the compiler package. The audit also checks
-the core, vocabulary and their tests.
+the core, vocabulary, subject library, and core and vocabulary tests.
 
 - Every logical declaration is replayed through Lean's kernel, including its project import
   closure. Only Lean's own libraries are taken as built; unsafe declarations and compiled
@@ -123,8 +123,8 @@ the core, vocabulary and their tests.
   Lean's recursive implementations retain their exception. The new constructor-index native
   replacements must match both generated bodies exactly. Their execution remains a compiler
   and runtime trust assumption, and their counts are reported separately.
-- The core imports only itself, `Init` and `Std`; the vocabulary may also import the core.
-  Neither imports tests or tools. Root imports cover every library source file, and every
+- The core imports only itself, `Init` and `Std`. The vocabulary may also import the core,
+  and the subject library may import both. These libraries are independent of the frontend. Root imports cover every library source file, and every
   test source is built and loaded.
 
 The audit accepts a positive fixture of generated helpers, refuses all 16 negative controls
@@ -132,7 +132,9 @@ and fails if any expected result changes. Private declarations are loaded from
 `.olean.private`; the controls also check private native attributes. The
 [compiler guide](../lean/compiler/README.md#build-test-and-audit) describes the entry points.
 
-The formal audit adds `ZkcFormalTools.DrawCharge` as a replay root. Both
+The formal audit checks that `ZkcFormal` uses only the core, vocabulary and subject libraries
+from the compiler package. The rule covers meta imports, and a control exercises it with a
+frontend meta import. The audit also adds `ZkcFormalTools.DrawCharge` as a replay root. Both
 `lake test` in the formal package and `just test-written-charge` check the issuer and its
 project import closure through the kernel. The formal policy takes Lean and the pinned
 Mathlib and VCVio import closures as built, checks for project modules in the upstream

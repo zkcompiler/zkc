@@ -7,7 +7,7 @@ public import ZkcFormal.Interactive.SourceSumcheck
 @[expose] public section
 namespace ZkcFormal.Written.RoundCharge
 open Zkc.Core Interactive Sumcheck ReductionRound FiniteService ProbabilisticProcess OracleComp
-open Zkc.Frontend.Written (DrawCharge)
+open Zkc.Subject (DrawCharge)
 open scoped NNReal ENNReal
 
 variable {V : Vocabulary} {p : Zkc.Core.Typed V} {key : Key} {t state residual : V.Ty}

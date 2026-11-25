@@ -4,7 +4,7 @@ public import Zkc.Core.Program.Identity
 public import Zkc.Core.Program.Links
 
 @[expose] public section
-namespace Zkc.Frontend.Written
+namespace Zkc.Subject
 
 /-- A normalized nonnegative source ceiling and the ordered, definition-relative locations of its draw.
 The model supplies the challenge alphabet and the formal consumer checks the locations. -/
@@ -152,22 +152,35 @@ cap, and its count. -/
 def sites (table : CapTable) : List (Site × Nat × Nat × Nat) :=
   table.sitesFrom table.uses.length table.root [] 1
 
-/-- The totals of uses in their order, as rationals, after the totals `done` of the uses before
-them: what the frontend compares with a ceiling (GL4). The total of a use is what one run of
-its definition can be charged at most: its draws at their caps and its calls at the totals of
-their callees, each times its count, in sequence, and at a choice the larger of the two arms
-(`Core.Tally.total`). It is the computation of the formal
-library's `CapTable.totals`, and a generated module states that the two give one number. -/
-def ratiosAfter : List UseCaps → List Rat → List Rat
-  | [], done => done
-  | use :: rest, done =>
-    ratiosAfter rest (done ++ [use.caps.total fun
-      | .draw draw => (draw.count : Rat) * ((draw.numerator : Rat) / draw.denominator)
-      | .call call => (call.count : Rat) * done.getD call.callee 0])
+/-- The call of a use at an application. -/
+def callAt (table : CapTable) (place : Nat) (application : Key) : Option CallCap :=
+  (table.uses[place]?).bind fun use => use.calls.find? fun call => call.key = application
 
-/-- The total of a table as a rational: that of the root's use. -/
-def ratio (table : CapTable) : Rat := (ratiosAfter table.uses []).getLastD 0
+/-- The use reached by following the application keys from a place in the table. -/
+def useAtPath (table : CapTable) : Nat → List Key → Option UseCaps
+  | place, [] => table.uses[place]?
+  | place, application :: through =>
+    (table.callAt place application).bind fun call => table.useAtPath call.callee through
+
+/-- The total for each use, in callee-first order. A draw pays its fraction and an
+application pays its callee's total, each multiplied by the occurrence count. The tally
+adds consecutive instructions and takes the larger arm of a choice. -/
+def totalsIn (table : CapTable) (α : Type) [NatCast α] [Zero α] [Add α] [Mul α]
+    [Div α] [Max α] : List α :=
+  totalsAfter table.uses []
+where
+  totalsAfter : List UseCaps → List α → List α
+    | [], done => done
+    | use :: rest, done =>
+      totalsAfter rest (done ++ [use.caps.total fun
+        | .draw draw => (draw.count : α) * ((draw.numerator : α) / draw.denominator)
+        | .call call => (call.count : α) * done.getD call.callee 0])
+
+/-- The total at a place, or zero if the table has no such use. -/
+def totalAt (table : CapTable) (α : Type) [NatCast α] [Zero α] [Add α] [Mul α]
+    [Div α] [Max α] (place : Nat) : α :=
+  (table.totalsIn α).getD place 0
 
 end CapTable
 
-end Zkc.Frontend.Written
+end Zkc.Subject

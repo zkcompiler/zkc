@@ -2,7 +2,7 @@ module
 
 public import Zkc.Core.Admission.Theorems
 public import Zkc.Frontend.Emit.Reports
-public import Zkc.Frontend.Written.LeanTerms
+public import Zkc.Subject.Print
 
 @[expose] public section
 set_option autoImplicit false
@@ -33,6 +33,7 @@ import it.
 -/
 
 namespace Zkc.Frontend.Written
+open Zkc.Subject.Print
 open Core
 
 /-! ## Small values -/

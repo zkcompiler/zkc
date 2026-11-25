@@ -36,7 +36,7 @@ unlike shapes are read here.
 -/
 
 open Zkc.Core ZkcFormal ZkcFormal.ProbabilisticProcess ZkcFormal.Written OracleComp ProbComp
-open Zkc.Frontend.Written (CapTable UseCaps DrawCap CallCap)
+open Zkc.Subject (CapTable UseCaps DrawCap CallCap)
 open scoped NNRat ENNReal
 
 namespace ZkcFormalTests.CapTables
@@ -260,7 +260,7 @@ example : choiceCaps.sites =
 -- an arm that is empty adds nothing, and the frontend's number is the library's
 example : (⟨[⟨⟨2⟩, .choice (.item (.draw ⟨⟨0⟩, 3, 8, 1⟩) .nil) .nil .nil⟩]⟩ : CapTable).budget = 3 / 8 := by
   decide +kernel
-example : choiceCaps.ratio = 1 := by decide +kernel
+example : choiceCaps.totalAt Rat choiceCaps.root = 1 := by decide +kernel
 
 /-! ### The arms of a table are the program's
 
@@ -284,7 +284,7 @@ def quarter : DrawCap := ⟨⟨2⟩, 1, 4, 1⟩
 def half : DrawCap := ⟨⟨3⟩, 1, 2, 1⟩
 
 /-- A table of `chosen` with one use. -/
-def chosenTable (caps : Zkc.Core.Tally Zkc.Frontend.Written.Cap) : CapTable := ⟨[⟨⟨2⟩, caps⟩]⟩
+def chosenTable (caps : Zkc.Core.Tally Zkc.Subject.Cap) : CapTable := ⟨[⟨⟨2⟩, caps⟩]⟩
 
 -- the table as the program has it: the larger arm and the draw after it
 example : (chosenTable (.choice (.item (.draw eighth) .nil) (.item (.draw quarter) .nil)

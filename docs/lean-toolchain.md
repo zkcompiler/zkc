@@ -6,7 +6,7 @@ dependency; the formal package requires only `../compiler`. Install the pins thr
 use the [development commands](development.md). Keep package pins identical and rebuild
 artifacts for the selected compiler; build caches from different Lean versions are incompatible.
 
-The active default targets are the redesigned core, vocabulary, their tests and audit.
+The active default targets are the core, vocabulary, subject library, core and vocabulary tests, and audit.
 The separate `just test-interactive` target uses the same pins for selected source entries
 and their proofs. The full CLI and historical formal suite still await migration.
 

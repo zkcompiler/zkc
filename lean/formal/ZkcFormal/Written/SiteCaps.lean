@@ -3,7 +3,7 @@ module
 public import ZkcFormal.ChargedProbability
 public import Zkc.Core.World.Stack
 public import Zkc.Core.Program.Links
-public import Zkc.Frontend.Written.ChargeData
+public import Zkc.Subject.Charges
 public import ZkcFormal.WalkLabels
 
 @[expose] public section
@@ -40,90 +40,70 @@ the second at a draw of the table, and the frame moves a judgment to a larger bu
 
 namespace ZkcFormal.Written
 open Zkc.Core ProbabilisticProcess OracleComp
-open Zkc.Frontend.Written (CapTable UseCaps DrawCap CallCap)
+open Zkc.Subject (CapTable UseCaps DrawCap CallCap)
 open scoped NNRat NNReal ENNReal
 
 /-- The cap of a draw: its numerator over its denominator. -/
-def _root_.Zkc.Frontend.Written.DrawCap.cap (draw : DrawCap) : ℚ≥0 :=
+def _root_.Zkc.Subject.DrawCap.cap (draw : DrawCap) : ℚ≥0 :=
   (draw.numerator : ℚ≥0) / draw.denominator
-
-/-- The call of a use at an application. -/
-def _root_.Zkc.Frontend.Written.CapTable.callAt (table : CapTable) (place : Nat)
-    (application : Key) : Option CallCap :=
-  (table.uses[place]?).bind fun use => use.calls.find? fun call => call.key = application
 
 /-- The cap of a draw below the use at a place, through applications: nothing where the use has
 no cap for the draw, or no call at an application. -/
-def _root_.Zkc.Frontend.Written.CapTable.capFrom (table : CapTable) : Nat → List Key → Key → ℚ≥0
-  | place, [], key =>
-    ((table.uses[place]?).bind fun use => use.draws.find? fun draw => draw.key = key).elim 0
-      DrawCap.cap
-  | place, application :: through, key =>
-    match table.callAt place application with
-    | some call => table.capFrom call.callee through key
-    | none => 0
+def _root_.Zkc.Subject.CapTable.capFrom (table : CapTable) (place : Nat) (through : List Key)
+    (key : Key) : ℚ≥0 :=
+  ((table.useAtPath place through).bind fun use => use.draws.find? fun draw => draw.key = key).elim 0
+    DrawCap.cap
 
 /-- Below a call, the caps are those of the callee's use. -/
-theorem _root_.Zkc.Frontend.Written.CapTable.capFrom_call (table : CapTable) (place : Nat)
+theorem _root_.Zkc.Subject.CapTable.capFrom_call (table : CapTable) (place : Nat)
     (application : Key) (through : List Key) (key : Key) (call : CallCap)
     (has : table.callAt place application = some call) :
     table.capFrom place (application :: through) key = table.capFrom call.callee through key := by
-  simp [CapTable.capFrom, has]
+  simp [CapTable.capFrom, CapTable.useAtPath, has]
 
 /-- The cap of a site in a table, from the root's use. -/
-def _root_.Zkc.Frontend.Written.CapTable.cap (table : CapTable) (site : Site) : ℚ≥0 :=
+def _root_.Zkc.Subject.CapTable.cap (table : CapTable) (site : Site) : ℚ≥0 :=
   table.capFrom table.root site.through site.key
 
 /-- What a table allows an effect of a run of the use at `place` that starts at `start`: the cap
 of the site of the effect below `start`. -/
-def _root_.Zkc.Frontend.Written.CapTable.allowanceFrom {V : Vocabulary} (M : Model V)
+def _root_.Zkc.Subject.CapTable.allowanceFrom {V : Vocabulary} (M : Model V)
     (table : CapTable) (place : Nat) (start : List Frame) (op : ROp M) : ℚ≥0 :=
   ((ROp.occurrence M op).siteBelow start).elim 0 fun site =>
     table.capFrom place site.through site.key
 
 /-- What a table allows an effect of a run of the root that starts at `start`. -/
-abbrev _root_.Zkc.Frontend.Written.CapTable.allowance {V : Vocabulary} (M : Model V)
+abbrev _root_.Zkc.Subject.CapTable.allowance {V : Vocabulary} (M : Model V)
     (table : CapTable) (start : List Frame) (op : ROp M) : ℚ≥0 :=
   table.allowanceFrom M table.root start op
 
 /-- **The allowance at an occurrence.** An effect that occurs at the start's path and a rest is
 allowed the cap of the site with the applications of the rest: under iterations alone, the cap
 of the use's own draw, whatever their numbers. -/
-theorem _root_.Zkc.Frontend.Written.CapTable.allowanceFrom_at {V : Vocabulary} (M : Model V)
+theorem _root_.Zkc.Subject.CapTable.allowanceFrom_at {V : Vocabulary} (M : Model V)
     (table : CapTable) (place : Nat) (start rest : List Frame) (key : Key) (op : ROp M)
     (occurs : ROp.occurrence M op = ⟨start ++ rest, key⟩) :
     table.allowanceFrom M place start op = table.capFrom place (Frame.applications rest) key := by
   simp [CapTable.allowanceFrom, occurs, Occurrence.siteBelow_append]
 
-/-- The totals of uses in their order, after the totals `done` of the uses before them. The
-total of a use is what one run of its definition can be charged at most: each draw at its cap
-and each call at the total of the callee's use, times its count, in sequence, and at a choice
-the larger of the two arms, of which a run takes one (`Core.Tally.total`). -/
-def totalsAfter : List UseCaps → List ℚ≥0 → List ℚ≥0
-  | [], done => done
-  | use :: rest, done =>
-    totalsAfter rest (done ++ [use.caps.total fun
-      | .draw draw => (draw.count : ℚ≥0) * draw.cap
-      | .call call => (call.count : ℚ≥0) * done.getD call.callee 0])
-
 /-- The total of each use of a table. -/
-def _root_.Zkc.Frontend.Written.CapTable.totals (table : CapTable) : List ℚ≥0 :=
-  totalsAfter table.uses []
+def _root_.Zkc.Subject.CapTable.totals (table : CapTable) : List ℚ≥0 :=
+  table.totalsIn ℚ≥0
 
 /-- The budget of the use at a place: its total. -/
-def _root_.Zkc.Frontend.Written.CapTable.budgetAt (table : CapTable) (place : Nat) : ℚ≥0 :=
-  table.totals.getD place 0
+def _root_.Zkc.Subject.CapTable.budgetAt (table : CapTable) (place : Nat) : ℚ≥0 :=
+  table.totalAt ℚ≥0 place
 
 /-- The budget of a table: the total of the root's use. -/
-def _root_.Zkc.Frontend.Written.CapTable.budget (table : CapTable) : ℚ≥0 :=
+def _root_.Zkc.Subject.CapTable.budget (table : CapTable) : ℚ≥0 :=
   table.budgetAt table.root
 
 /-- The total of a table, as a probability. -/
-noncomputable def _root_.Zkc.Frontend.Written.CapTable.total (table : CapTable) : ℝ≥0∞ :=
+noncomputable def _root_.Zkc.Subject.CapTable.total (table : CapTable) : ℝ≥0∞ :=
   toProbability table.budget
 
 /-- A table whose budget is within a ratio of naturals has its total within that ratio. -/
-theorem _root_.Zkc.Frontend.Written.CapTable.total_le_div (table : CapTable) (numerator denominator : ℕ)
+theorem _root_.Zkc.Subject.CapTable.total_le_div (table : CapTable) (numerator denominator : ℕ)
     (positive : 0 < denominator)
     (within : table.budget ≤ (numerator : ℚ≥0) / denominator) :
     table.total ≤ (numerator : ℝ≥0∞) / denominator := by

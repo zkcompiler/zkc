@@ -20,7 +20,7 @@ theorem primeSumcheck {width n : Nat} [Fact (Nat.Prime (width+1))]
     (cert : TableVerifier.Certified ArithmeticModel.scalarRows ArithmeticModel.vectors p root red eval n ArithmeticModel.events)
     {σ : Type} (advance : Occurrence → ZMod (width+1) → σ → σ)
     (other : Slots (RSig (ArithmeticModel.model (ZMod (width+1)) (ZMod (width+1)))) σ)
-    (charge : Zkc.Frontend.Written.DrawCharge) (binding : Matches charge cert.linked 1 (width+1))
+    (charge : Zkc.Subject.DrawCharge) (binding : Matches charge cert.linked 1 (width+1))
     (path : List Frame) (s : σ) (x : Cube (ZMod (width+1)) n) (claim : ZMod (width+1))
     (wrong : claim ≠ Cube.sum n x) :
     let M := ArithmeticModel.model (ZMod (width+1)) (ZMod (width+1))

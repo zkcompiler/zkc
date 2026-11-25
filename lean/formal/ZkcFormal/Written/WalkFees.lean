@@ -106,14 +106,14 @@ elab "walk_pay " fee:term:max &" excluding " set:term:max " as " reply:ident kep
     throwError "walk_pay: the fees are not those within allowances{indentExpr pays}"
   let allowance := pays.appArg!
   let allowance ← do
-    if allowance.isAppOf ``Zkc.Frontend.Written.CapTable.allowance ||
-        allowance.isAppOf ``Zkc.Frontend.Written.CapTable.allowanceFrom then pure allowance
+    if allowance.isAppOf ``Zkc.Subject.CapTable.allowance ||
+        allowance.isAppOf ``Zkc.Subject.CapTable.allowanceFrom then pure allowance
     else whnfR allowance
   let a := allowance.getAppArgs
   let (model, table, place, start) ←
-    if allowance.isAppOfArity ``Zkc.Frontend.Written.CapTable.allowance 4 then
-      pure (a[1]!, a[2]!, ← mkAppM ``Zkc.Frontend.Written.CapTable.root #[a[2]!], a[3]!)
-    else if allowance.isAppOfArity ``Zkc.Frontend.Written.CapTable.allowanceFrom 5 then
+    if allowance.isAppOfArity ``Zkc.Subject.CapTable.allowance 4 then
+      pure (a[1]!, a[2]!, ← mkAppM ``Zkc.Subject.CapTable.root #[a[2]!], a[3]!)
+    else if allowance.isAppOfArity ``Zkc.Subject.CapTable.allowanceFrom 5 then
       pure (a[1]!, a[2]!, a[3]!, a[4]!)
     else throwError "walk_pay: the allowances are not those of a table of caps{indentExpr allowance}"
   -- where the effect occurs: the start's path, then the frames of the loops and applications

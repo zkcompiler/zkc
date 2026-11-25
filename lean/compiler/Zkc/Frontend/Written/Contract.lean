@@ -8,6 +8,7 @@ public import Zkc.Frontend.Written.Package
 set_option autoImplicit false
 
 namespace Zkc.Frontend.Written
+open Zkc.Subject.Print
 open Syntax
 
 /-- Match ordered ordinary fields of the selected closed instance by source occurrence,

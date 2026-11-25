@@ -46,6 +46,7 @@ about a goal has one fact of admission and names the protocol and the relation b
 -/
 
 namespace Zkc.Frontend.Written
+open Zkc.Subject
 open Syntax
 
 /-- The prover and the verifier of a scheme at its written stage, by their places in the
