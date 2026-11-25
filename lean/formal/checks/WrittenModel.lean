@@ -73,3 +73,23 @@ def checkClaims (work : System.FilePath) (name fixture : String) (goals theorems
 #eval IO.FS.withTempDir fun w => checkClaims w "Siblings" "sibling-relations" ["zero"] ["zero_checked", "zero_met"]
 #eval IO.FS.withTempDir fun w => checkClaims w "Siblings" "sibling-relations" ["zero", "one"] ["zero_checked", "zero_met"]
 #eval IO.FS.withTempDir fun w => checkClaims w "HashRelation" "hash-relation" ["good", "bad"] ["result"] (refusedHash := true)
+
+/-- Submit the surviving target from a mixed request to the same comparator as all other
+written subjects. The proof consumes the exact trusted module that the batch issued. -/
+private def judgeIssuedGoal (work : System.FilePath) : IO Unit := do
+  let assembly ← Driver.assembleFiles (← source "fixtures/hash-relation.zkc" []) ["../../libraries"]
+  let results := issueSoundnessGoals assembly ["bad", "mixed::good", "good"]
+  let #[bad, good, alias_] := results | throw (IO.userError "lost a requested goal")
+  unless bad.outcome.isOk == false && !allGoalsIssued results && good.path == alias_.path do
+    throw (IO.userError "unexpected mixed issuance")
+  let issued ← IO.ofExcept good.outcome
+  let proof ← IO.FS.readFile "checks/HashRelation.lean.in"
+  let publication ← IO.ofExcept (issued.statements.module issued.publication.space
+    { text := proof, theorems := ["good_judged", "good_witnessed"] })
+  unless publication.statements == issued.publication.statements &&
+      publication.challenge == issued.publication.challenge do
+    throw (IO.userError "the submission changed the issued challenge")
+  let finish ← startModule work publication.space publication
+  discard finish
+
+#eval IO.FS.withTempDir judgeIssuedGoal

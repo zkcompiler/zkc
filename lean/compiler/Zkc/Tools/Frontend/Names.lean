@@ -30,6 +30,8 @@ def libraryLoader (directories : Array System.FilePath) (names : Array String) :
 
 structure Options where
   libraries : Array System.FilePath := #[]
+  goals : Array String := #[]
+  output : Option System.FilePath := none
   repetitions : Nat := 5
   files : Array String := #[]
   /-- `instances` prints every instance with what it holds. -/
@@ -39,6 +41,12 @@ structure Options where
 def readOptions : List String → Options → Except String Options
   | "--library" :: directory :: rest, options =>
     readOptions rest { options with libraries := options.libraries.push directory }
+  | "--goal" :: goal :: rest, options =>
+    if goal.startsWith "--" then .error "--goal requires a selector"
+    else readOptions rest { options with goals := options.goals.push goal }
+  | "--output" :: directory :: rest, options =>
+    if options.output.isSome || directory.startsWith "--" then .error "--output requires one directory"
+    else readOptions rest { options with output := some directory }
   | "--contents" :: rest, options => readOptions rest { options with contents := true }
   | "--repeat" :: count :: rest, options =>
     match count.toNat? with

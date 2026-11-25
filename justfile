@@ -51,6 +51,7 @@ test-frontend:
     cd lean/compiler && lake env lean --run Zkc/Tests/Frontend/SourceConformance.lean
     cd lean/compiler && lake env lean --run Zkc/Tests/Frontend/ProtocolViews.lean
     cd lean/compiler && lake exe zkc-frontend-tests
+    cd lean/compiler && python3 scripts/test_written_goals.py
 
 # Print every admitted example root as a Lean module in which the kernel elaborates the program, compare each with its source, read a fixture back, and refuse four controls.
 test-packages:

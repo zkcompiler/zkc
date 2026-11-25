@@ -196,11 +196,11 @@ clause, the relation that the clause applies as a definition at the proof values
 and the ports that are its operands. The relations are instantiated one after another in one
 state, so each has a key of its own beside the deployed definitions, which are those of the
 root's own package, first and unchanged. -/
-@[no_expose] def goalClaims (c : AdmittedRoot) (goals : List String) : ExportM GoalClaims := do
+private def collectClaims (c : AdmittedRoot) (goals : List (String × String)) : ExportM GoalClaims := do
   let mut state := c.state
   let mut claimed := []
   let mut first : Option (String × SchemeEntry) := none
-  for goal in goals do
+  for (goal, label) in goals do
     let (next, named, after) ← claimedGoal c state goal
     match first with
     | some (earlierGoal, earlier) =>
@@ -210,7 +210,7 @@ root's own package, first and unchanged. -/
           "scheme; read the goals of each scheme apart")
     | none => first := some (goal, named)
     state := after
-    claimed := claimed ++ [next]
+    claimed := claimed ++ [{ next with goal := label }]
   let some (_, scheme) := first | throw "WK-GOAL: a package of claims has a goal"
   let (prover, verifier) ← schemeParties c scheme
   -- the header that is emitted has the deployed ports of the checked body, one for one
@@ -235,5 +235,17 @@ root's own package, first and unchanged. -/
     return { root := c.id, scheme := scheme.declaration, schemeName := scheme.name, prover, verifier
              inputs := body.deployedPorts.map (·.binder.name)
              goals := claimed, state, emission, emitted, evidence }
+
+/-- Read an explicitly shared package with the labels used by its proof text. -/
+@[no_expose] def goalClaims (c : AdmittedRoot) (goals : List String) : ExportM GoalClaims :=
+  collectClaims c (goals.map fun goal => (goal, goal))
+
+/-- A separately issued goal is selected by its full path. Its declarations use the local
+source name inside the goal's own Lean namespace where it is a safe declaration prefix. -/
+@[no_expose] def singleGoalClaims (c : AdmittedRoot) (id : DeclarationId) : ExportM GoalClaims :=
+  let name := c.state.program.nameOf id
+  let label := if name != "root" && name.all (fun c => c.toNat < 128 && (c.isAlphanum || c == '_'))
+    then name else "sourceGoal"
+  collectClaims c [(Static.qualifiedName c.state.program id, label)]
 
 end Zkc.Frontend.Written
