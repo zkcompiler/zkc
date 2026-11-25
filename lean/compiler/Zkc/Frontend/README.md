@@ -49,6 +49,10 @@ default contributes no root, diagnostic or law obligation.
 If a phase stops at the instantiation-depth limit, a session ending there reports the
 incomplete check. A newly selected default can give a shorter path to the same module.
 When the later phase completes that check, the full session reports the settled result.
+An exhaustion reached while reserving numbers for a discarded default also stays private.
+If a shallow public call now succeeds, it can request a definition that the incomplete run
+never reached. That first request can move the numbers of later definitions, including in a
+package returned by both runs. Use the definition numbers from the package being checked.
 
 A written goal requires the modules used by its deployed protocol, its selected relation,
 and the evaluation of its proof arguments, ceiling and charges. Two goals of the same scheme
@@ -56,10 +60,9 @@ can therefore receive different results. Admission by instance number checks all
 that root. Admission by scheme checks the selected scheme, even when another scheme closes
 to the same protocol instance. A generated input record depends on the protocol
 signature. Records derived from protocol events also depend on the checked body, including
-when the record is already cached. Module validation uses a private instance table so its
-additional checks preserve the numbering of emitted definitions. The frontend checks the
-types of applicable laws under SP10 and reports their proof obligations. The formal library
-owns proofs that those laws hold.
+when the record is already cached. Module validation elaborates additional bodies in a private
+instance table. The frontend checks the types of applicable laws under SP10 and reports their
+proof obligations. The formal library owns proofs that those laws hold.
 
 ## Proof arguments at a written goal
 

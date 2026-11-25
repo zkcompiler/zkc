@@ -182,6 +182,21 @@ private def isolation : TestM Unit := do
     expectTrue (s.state.defaultLayout.stores.isEmpty && !(requested s).contains "ghost")
       s!"unnecessary suspended body schedule: {s.renderDiagnostics}"
 
+/-- A cutoff in a discarded default cannot decide the same call at a shallow public root. -/
+private def depthRecovery : TestM Unit := do
+  let hops := String.join <| (List.range 7).map fun i =>
+    let next := if i == 6 then "shared" else s!"hop{i + 1}"
+    s!"def hop{i}<k: nat>(x: bool) -> bool: {next}<k>(x)\n"
+  let text := source "if n == 1 then x else hop0<n>(x)" "shared<n>(x)" "M<1>::Accepted"
+  let text := text.replace "def ghost" (hops ++
+    "def shared<k: nat>(x: bool) -> bool: leaf<k>(x)\ndef leaf<k: nat>(x: bool) -> bool: x\ndef ghost")
+  let opts : Options := {budgets.instantiationDepth := 8}
+  let ordinary := compile (text.replace "M<1>::Accepted(x)" "Holds(x)") opts
+  let hidden := compile text opts
+  expectTrue (ordinary.hasIncomplete && (packages ordinary).size == 1 &&
+      hidden.admitRoots.complete.isOk && !hidden.hasIncomplete && (packages hidden).size == 4)
+    s!"a discarded cutoff affected a shallow helper: {ordinary.renderDiagnostics}, {hidden.renderDiagnostics}"
+
 private def namedOwnership : TestM Unit := do
   let ordinary := source "if n == 1 then x else (x,x)" "step<n>(x)" "M<1>::Accepted"
   let scheme (name target goal : String) := s!"scheme {name} = {target}:
@@ -210,6 +225,7 @@ def defaultPackageLayoutSuite : TestM Unit := do
   DefaultPackageLayout.nominalInput
   DefaultPackageLayout.publicOwner
   DefaultPackageLayout.isolation
+  DefaultPackageLayout.depthRecovery
   DefaultPackageLayout.namedOwnership
 
 end Zkc.Tests.Frontend
