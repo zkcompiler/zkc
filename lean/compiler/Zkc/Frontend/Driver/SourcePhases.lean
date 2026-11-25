@@ -160,6 +160,7 @@ def instances : Phase where
     reportSilentRefusals
 
 /-- The shared prefix through selection of roots and instantiation of their signatures. -/
-def sourcePhases (assembly : Assembly) : Array Phase := #[assemble assembly, resolve, instances]
+def sourcePhases (assembly : Assembly) (names : Phase := resolve) : Array Phase :=
+  #[assemble assembly, names, instances]
 
 end Zkc.Frontend.Driver

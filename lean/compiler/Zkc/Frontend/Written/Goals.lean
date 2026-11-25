@@ -81,7 +81,7 @@ A shared source-phase failure is reported for every request. -/
     | .declaration id => !(assembly.program.declarations[id]?).any (·.kind == .goal)
     | _ => true
   let names := { Driver.resolve with run := Driver.installResolution { resolved with refusalsByOwner := shared } }
-  match runSourcePhases #[Driver.assemble assembly, names, Driver.instances] with
+  match sourceState assembly names with
   | .ok state => issueSelectedGoals state resolved.refusalsByOwner selectors
   | .error reason => selectors.toArray.map fun selector => ⟨selector, none, .error reason⟩
 

@@ -6,18 +6,15 @@ public import Zkc.Frontend.Driver.SourcePhases
 @[expose] public section
 namespace Zkc.Frontend.Written
 
-def runSourcePhases (phases : Array Driver.Phase) : ExportM Compile.State := do
+def sourceState (assembly : Assembly) (names : Driver.Phase := Driver.resolve) : ExportM Compile.State := do
   let mut state : Compile.State := {}
-  for phase in phases do
+  for phase in Driver.sourcePhases assembly names do
     let (report, next) := phase.runIn sourceContext state
     state := next
     if let some diag := state.log.entries.find? (fun d => d.isError || d.isIncomplete) then
       throw s!"{diag.span.file}:{diag.render state.env.renderer}"
     if let some skipped := report.interrupted then throw s!"WK-FRONTEND: {skipped}"
   return state
-
-def sourceState (assembly : Assembly) : ExportM Compile.State :=
-  runSourcePhases (Driver.sourcePhases assembly)
 
 structure AdmittedRoot where
   id : InstanceId
