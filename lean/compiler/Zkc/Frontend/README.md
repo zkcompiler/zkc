@@ -126,8 +126,9 @@ from nothing that a caller gives. A
 statement names the inputs of the root as the source names its ports (`input_flag`), so that a
 reader sees which inputs the relation is applied to and which the deciding role is run on. A goal
 whose clause is a `reduces` gets no statement yet: the statement of a reduction is about a
-return on which the reduced statement is true. The `requires` of a contract are not hypotheses
-of a statement, which is then the stronger one. The checks of the four subjects
+return on which the reduced statement is true. Under SX7, a requirement that reads an input inaccessible to the deciding role is outside
+the soundness experiment. An available requirement currently prevents issuance until the claim
+and its satisfiability witness can represent the hypothesis. The checks of the four subjects
 (`lean/formal/checks/CountCharge.lean`, `FreivaldsCharge.lean`, `GuessCharge.lean`,
 `EitherCharge.lean`, on the library `lean/formal/ZkcFormalTests/WrittenSubject.lean`) are its users;
 [the page for authors](../../../../docs/written-soundness.md) says how a subject is written.
