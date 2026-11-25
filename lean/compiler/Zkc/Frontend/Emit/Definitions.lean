@@ -37,6 +37,7 @@ def bodyContext (b : Bindings) : EmitM (Named.Context b) := do
       return .row (← Typing.rowKey b row)
     | some (.done _) => return .call ⟨inst⟩
     | some (.waiting reason) => throw (.waiting reason)
+    | some (.exhausted exhaustion) => throw (.exhausted exhaustion)
     | _ => throw (.waiting s!"function {inst} has no checked body")
   return {callees := {stops, restricted}, apply}
 
@@ -54,6 +55,7 @@ def calleeHeaders (b : Bindings) (calls : Array InstanceId) : EmitM (Core.Header
     | some (.row _) => pure ()
     | some (.done code) => fns := (← functionHeader b inst code) :: fns
     | some (.waiting reason) => throw (.waiting reason)
+    | some (.exhausted exhaustion) => throw (.exhausted exhaustion)
     | _ => throw (.waiting s!"function {inst} has no checked body")
   return ⟨fns,[]⟩
 

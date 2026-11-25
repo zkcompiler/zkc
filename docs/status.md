@@ -94,12 +94,13 @@ Resolved goals and contracts retain declaration identity and named statement arg
 
 For each concrete module instance the frontend records the applied interface that declares each
 member. Signature elaboration, member-body checking and row emission read that binding.
-A default instance can read its own members to determine whether interface conditions hold.
-When two interfaces declare the same member, this eligibility check uses a private copy of
-the query results. It preserves the numbers used for emitted definitions and reports any
-project primitive it encounters. The instance listing includes a dependency once the program
-requests it outside the provisional check. A later use checks the module and its dependencies
-again, including when the default condition was undecided.
+Function calls on a concrete receiver check the selected member’s own static bounds
+and `where` conditions after resolving the static arguments, for both bodies and primitive rows.
+The default search chooses the first fully formed module that satisfies the required applications.
+It evaluates interface conditions with access to the members each predicate reads through `Self`.
+A successful check commits its dependencies. A skipped, waiting or failed check discards results
+that could depend on the provisional receiver, including indirect requests. Stable instance
+numbers, diagnostics, budget consumption and observations of project primitives survive the check.
 A module reached only through a member selection can stay unformed and receive none of the
 checks of SP8, including when a signature uses its type or natural, a literal constructs its
 record or enum, a call uses its own `pub def` or its protocol member, a clause uses its

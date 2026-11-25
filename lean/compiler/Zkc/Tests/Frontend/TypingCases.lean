@@ -687,6 +687,74 @@ def g(xs: [byte; 6]) -> bool:
     h = Front::half<n = 3>(xs)
     return h[0] == xs[0]
 
+=== member-call-body-where | accept | inferred and written arguments satisfy the conditions of a member with a body
+module t
+interface Bounded<cap: nat>:
+    nat Limit
+    def f<n: nat>(xs: [nat; n]) -> nat where (n <= cap, n <= Self::Limit)
+module Body: Bounded<4>:
+    nat Limit = 3
+    def f(xs): n
+def inferred(xs: [nat; 3]) -> nat: Body::f(xs)
+def written(xs: [nat; 2]) -> nat: Body::f<2>(xs)
+
+=== member-call-row-accept | accept | a primitive member is emitted when its own bound and where hold
+module t
+use zkc::algebra::{Group}
+type G = primitive(\"bls12-381.g1\")
+interface Equality:
+    def equal<T: Group>(a: T, b: T) -> bool where (2 <= T::Order)
+module Row: Equality = primitive(\"group.equal\")
+def use_it(a: G, b: G) -> bool: Row::equal<G>(a, b)
+// uses group.equal
+
+=== member-call-receiver-where | refuse SP4 4 | the same inferred argument is accepted by one receiver and exceeds the other receiver's limit
+module t
+interface Bounded<cap: nat>:
+    nat Limit
+    def f<n: nat>(xs: [nat; n]) -> nat where (n <= cap, n <= Self::Limit)
+module Wide: Bounded<4>:
+    nat Limit = 3
+    def f(xs): n
+module Narrow: Bounded<4>:
+    nat Limit = 2
+    def f(xs): n
+def select<H: Bounded<4>>(xs: [nat; 3]) -> nat: H::f(xs)
+def wide(xs: [nat; 3]) -> nat: select<Wide>(xs)
+def narrow(xs: [nat; 3]) -> nat: select<Narrow>(xs)
+// sole package t::wide
+// says 3 <= 2
+
+=== member-call-row-where | refuse SP4 3 | a primitive member must satisfy its own where using the applied interface arguments
+module t
+interface Bounded<cap: nat>:
+    def f<n: nat>(xs: [nat; n]) -> nat where (n <= cap)
+module Wide: Bounded<4> = primitive(\"project.wide\")
+module Narrow: Bounded<2> = primitive(\"project.narrow\")
+def use_it(xs: [nat; 3]) -> nat:
+    first = Wide::f<3>(xs)
+    return first + Narrow::f<3>(xs)
+// says 3 <= 2
+
+=== member-call-proof-bound | accept | a deployed call defers an interface bound that contains a proof-only argument
+module t
+interface Sized<n: nat>
+interface I:
+    def copy<spec e: nat>(x: bool) -> bool where (Self: Sized<e>)
+module M: I + Sized<1>:
+    def copy(x): x
+def evaluate(x: bool) -> bool: M::copy(x)
+
+=== member-call-bound | refuse SP3 4 | a concrete member enforces its own sort bound
+module t
+use zkc::algebra::{PrimeField}
+interface Bounded:
+    def f<T: PrimeField>(x: T) -> T
+module Body: Bounded:
+    def f(x): x
+def use_it(x: nat) -> nat: Body::f(x)
+// says is not of sort
+
 === nested-payload | accept | a pattern inside a payload: a tuple, and the alternative of a variant with one alternative (TY13)
 module t
 enum Wrapped:

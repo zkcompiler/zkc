@@ -86,6 +86,8 @@ structure State where
 structure Context where
   options : Options := {}
   vocabulary : Vocabulary
+  /-- Members being read through a provisional receiver while deciding its interface conditions. -/
+  checkingMembers : List (InstanceId × String) := []
   /-- A generated source type can depend on the checked body of another instance. The driver
   supplies the same memoized body request used by ordinary protocol applications. -/
   protocolBody : InstanceId → Span → ExceptT Interrupt (StateM State) Unit :=
@@ -339,7 +341,7 @@ is recorded with the request being computed, whatever its state. -/
       let results := query.setTable results {}
       query.setTable results (table.setState id outcome)
   unless isNew do
-    let found := ((query.table (← getResults)).entries[id]?).map (·.state)
+    let found := ((query.table (← getResults)).entryAt? id).map (·.state)
     return (id, found.getD .failed)
   if (← read).options.budgets.instantiationDepth ≤ depth then
     let exhaustion ← logExhaustion .instantiationDepth requested
@@ -376,7 +378,6 @@ item wait; one that is exhausted leaves the item that asks not checked either. -
 @[inline] def ask (query : Query κ ρ) (key : κ) (requested : ChainFrame) : CompileM (Nat × ρ) := do
   match ← request query key requested with
   | (id, .done result) => return (id, result)
-  | (_, .reserved) => throw (.defect "a request returned an unclaimed signature number")
   | (_, .inProgress) =>
     refuseRecursion (requested.subject.renderWith Renderer.plain false) requested.span
   | (_, .failed) => throw .abandoned

@@ -310,8 +310,8 @@ def _root_.Zkc.Frontend.Written.GoalClaims.functionsBeforeRoot (claims : GoalCla
   let definitions := (Written.package (claims.emission.package ⟨[], [], [], [], []⟩)).definitions
   let before := (definitions.takeWhile (·.1.number != claims.root)).filter (!·.2)
   let named : List (String × Nat) := before.map fun (key, _) =>
-    let name := match claims.state.table.entries[key.number]? with
-      | some entry => claims.state.program.nameOf entry.key.declaration
+    let name := match claims.state.table.allocatedKey? key.number with
+      | some instanceKey => claims.state.program.nameOf instanceKey.declaration
       | none => ""
     (name, key.number)
   let reserved := claims.goals.foldl (fun names goal => names.insert goal.label)

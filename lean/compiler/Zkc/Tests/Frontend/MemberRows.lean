@@ -206,7 +206,8 @@ private def checkDefaultConditions (repository : Repository) : TestM Unit := do
   let root := "def evaluate(x: M<1>::T) -> bool: x\n"
   for condition in ["n == 1", "Self::Height == n"] do
     let session ← memberSession repository (source condition ++ root)
-    let skipped := session.state.table.entries.any fun e =>
+    let skipped := session.state.table.requestedIds.any fun id =>
+      let e := session.state.table.entryAt! id
       session.state.program.nameOf e.key.declaration == "M" && e.key.arguments == #[.natural 0] &&
         (e.state matches .skipped)
     expectTrue (skipped && !session.hasErrors && (session.admitRoots (some #["evaluate"])).complete.isOk)
@@ -221,6 +222,107 @@ private def checkDefaultConditions (repository : Repository) : TestM Unit := do
   expectTrue ((eligible.diagnostics.find? (·.isError)).any (·.rule == "SP8") &&
     !(eligible.admitRoots (some #["evaluate"])).complete.isOk)
     s!"eligible colliding default: {eligible.renderDiagnostics}"
+
+/-- A default needs only the values read by its interface predicates. An unprovided
+primitive member can wait while a different predicate already decides the candidate. -/
+private def checkEligibilityReads (repository : Repository) : TestM Unit := do
+  let header := "module caller\ninterface Unknown:\n    nat Limit\n" ++
+    "module External: Unknown = primitive(\"project.external\")\n"
+  for (condition, outcome) in [("n <= 1", "SP8"), ("Self::Known == 1", "SP8"),
+      ("n == 1", "skipped"), ("Self::Known == 2", "skipped"), ("Self::Height == n", "waits")] do
+    let source := header ++ s!"interface I<n: nat> where ({condition}):\n    nat Height\n    nat Known\n" ++
+      "pub module M<n: nat>: I<n> + I<1> where (n == 0):\n" ++
+      "    nat Height = External::Limit\n    nat Known = 1\ndef evaluate(x: bool) -> bool: x\n"
+    let session ← memberSession repository source
+    let state := session.state
+    let observed := state.table.requestedIds.any fun id =>
+      let entry := state.table.entryAt! id
+      state.program.nameOf entry.key.declaration == "M" && entry.key.arguments == #[.natural 0] &&
+        match outcome with
+        | "skipped" => (entry.state matches .skipped)
+        | "waits" => (entry.state matches .done (.data (.waits _ true)))
+        | _ => (entry.state matches .failed)
+    let error := session.diagnostics.find? (·.isError)
+    expectTrue (observed && (if outcome == "SP8" then error.any (·.rule == "SP8")
+      else error.isNone && (session.admitRoots (some #["evaluate"])).complete.isOk))
+      s!"eligibility of {condition}: {session.renderDiagnostics}"
+
+/-- Default argument inference selects the first fully formed implementation. A skipped
+or waiting candidate cannot supply a module by its header alone. -/
+private def checkInferredModule (repository : Repository) : TestM Unit := do
+  let intro := "module caller\ninterface Unknown:\n    nat Limit\n" ++
+    "module External: Unknown = primitive(\"project.external\")\n" ++
+    "interface I<n: nat> where (Self::Height == n):\n    nat Height\n"
+  let good := "module Good: I<0>:\n    nat Height = 0\n"
+  let choose := "pub def choose<H: I<0>>(x: bool) -> bool: x\ndef evaluate(x: bool) -> bool: x\n"
+  for value in ["1", "External::Limit"] do
+    let candidate := "module M<n: nat>: I<n> + I<1> where (n == 0):\n    nat Height = " ++ value ++ "\n"
+    for body in [candidate ++ good, good ++ candidate, candidate] do
+      let session ← memberSession repository (intro ++ body ++ choose)
+      let state := session.state
+      let chosen := state.table.requestedIds.filterMap fun id => do
+        let entry := state.table.entryAt! id
+        guard (state.program.nameOf entry.key.declaration == "choose" && entry.key.opaqueFor.isNone)
+        let #[.module receiver] := entry.key.arguments | none
+        return state.program.nameOf (← state.table.allocatedKey? receiver).declaration
+      let expected := if body == candidate then #[] else #["Good"]
+      expectTrue (chosen == expected && (session.admitRoots none).complete.isOk)
+        s!"inferred module at {value}: expected {expected}, got {chosen}: {session.renderDiagnostics}"
+
+/-- A module can implement the right interface at different values, or require a sort
+that the inferred argument does not have. Neither candidate belongs to this search. -/
+private def checkCandidateBounds (repository : Repository) : TestM Unit := do
+  let intro := "module caller\ninterface I<n: nat>:\n    nat Height\n" ++
+    "module Wrong<k: nat>: I<1> + I<2>:\n    nat Height = 7\nmodule Good: I<0>:\n    nat Height = 0\n"
+  let first := "pub def choose<H: I<0>>(x: bool) -> bool: x\n"
+  let matching := "pub def again<H: I<1>>(x: bool) -> bool: x\n"
+  let root := "def evaluate(x: bool) -> bool: x\n"
+  let filtered ← memberSession repository (intro ++ first ++ root)
+  expectTrue ((filtered.admitRoots none).complete.isOk &&
+    filtered.state.results.packageReports.any (·.description.contains "choose<Good>"))
+    s!"wrong interface arguments: {filtered.renderDiagnostics}"
+  for searches in [first ++ matching, matching ++ first] do
+    let session ← memberSession repository (intro ++ searches ++ root)
+    expectTrue ((session.diagnostics.find? (·.isError)).any (·.rule == "SP8"))
+      s!"matching application should report the collision: {session.renderDiagnostics}"
+  let sorts := "module caller\nuse zkc::algebra::{PrimeField}\ninterface I<T>:\n    def ok(x: bool) -> bool\n" ++
+    "module NeedsField<T: PrimeField>: I<T>:\n    def ok(x): x\nmodule Good: I<bool>:\n    def ok(x): x\n" ++
+    "pub def choose<H: I<bool>>(x: bool) -> bool: x\n"
+  let session ← memberSession repository (sorts ++ root)
+  expectTrue ((session.admitRoots none).complete.isOk &&
+    session.state.results.packageReports.any (·.description.contains "choose<Good>"))
+    s!"inferred argument outside the candidate's sort: {session.renderDiagnostics}"
+
+/-- A generated protocol view can require a function of the provisional receiver through
+the opaque view of a generic parameter. An unrelated unavailable natural has no bearing. -/
+private def checkGeneratedEligibility (repository : Repository) : TestM Unit := do
+  let intro := "module caller\ninterface Unknown:\n    nat Limit\n" ++
+    "module External: Unknown = primitive(\"project.external\")\ninterface Callable:\n    def ok(x: bool) -> bool\n" ++
+    "protocol Echo<H: Callable> roles(P, V)(x: bool @(P, V)):\n    guard @V H::ok(x)\n" ++
+    "interface I<n: nat> where (Echo<Self>::Run == Echo<Self>::Run):\n    nat Height\n"
+  for value in ["1", "External::Limit"] do
+    let source := intro ++ "pub module M<n: nat>: Callable + I<n> + I<1> where (n == 0):\n" ++
+      s!"    def ok(x): x\n    nat Height = {value}\ndef evaluate(x: bool) -> bool: x\n"
+    let session ← memberSession repository source
+    expectTrue ((session.diagnostics.find? (·.isError)).any (·.rule == "SP8"))
+      s!"eligibility through a protocol view at {value}: {session.renderDiagnostics}"
+
+/-- A single-owner candidate can also close other queries through its provisional Self.
+A later explicit dependency must recompute them after a skip or wait. -/
+private def checkSingleOwnerDependencies (repository : Repository) : TestM Unit := do
+  let head := "module caller\ninterface Unknown:\n    nat Limit\n" ++
+    "module External: Unknown = primitive(\"project.external\")\n"
+  for gate in ["Self::Height", "Self::Gate::Limit"] do
+    let intro := head ++ s!"interface I<n: nat> where (Memo<n> == Memo<n>, {gate} == n):\n" ++
+      "    nat Height\n    module Gate: Unknown\ntype Buffer<H: I<0>> = [bool; H::Height]\n" ++
+      "struct Memo<n: nat>:\n    entries: Buffer<M<n>>\n"
+    let owner := "pub module M<n: nat>: I<n> where (n == 0):\n    nat Height = 1\n    module Gate = External\n"
+    let useSite := "pub def force<k: nat>(b: Memo<0>) -> bool: b.entries[0]\n"
+    for body in [owner ++ useSite, useSite ++ owner] do
+      let session ← memberSession repository (intro ++ body)
+      expectTrue ((session.diagnostics.find? (·.isError)).any (·.rule == "NL1") &&
+        !(session.admitRoots none).complete.isOk)
+        s!"a transitive request after {gate}: {session.renderDiagnostics}"
 
 /-- A wait from testing an ineligible or as-yet undecided default cannot satisfy a
 later demand for a module with two member owners. Exercise both request orders. -/
@@ -303,24 +405,51 @@ private def checkReservedCollect (repository : Repository) : TestM Unit := do
 /-- A probe can fill an older reservation and create new ones. Only a real request
 gets an entry and a place in the traversal order, even when its number is older. -/
 private def checkReservedRequests : TestM Unit := do
-  let empty : QueryTable String Nat := {}
+  let empty : SignatureTable String Nat := default
   let (base, first, _) := empty.intern "present" default none
   let base := base.setState first (.done 11)
-  let (trial, early, _) := base.intern "early" default none
-  let trial := (trial.setState early (.done 22)).addRequest "present" ⟨.signature, early⟩
+  let trialFrame : ChainFrame := { subject := .ofText "trial", span := { (default : Syntax.Span) with startLine := 1 } }
+  let (trial, early, _) := base.intern "early" trialFrame (some ⟨.signature, first⟩)
+  let trial := (trial.setState early (.done 22)).addRequest first ⟨.signature, early⟩
   let saved := base.reserveNewKeys trial
-  let (again_, _, _) := saved.intern "early" default none
-  let (again_, late, _) := again_.intern "late" default none
-  let saved := saved.reserveNewKeys again_
+  expectTrue (saved.allocatedCount == 2 && saved.allocatedKey? early == some "early" &&
+    saved.requestedIds == #[first] && saved.find? "early" == none && (saved.entryAt? early).isNone &&
+    saved.result? "present" == some 11 && (saved.entryAt? first).any (·.requests.isEmpty))
+    "rollback retains only the allocation from a new trial request"
+  let (retried, retriedEarly, freshRetry) := saved.intern "early" trialFrame none
+  let unchanged := saved.reserveNewKeys retried
+  expectTrue (freshRetry && retriedEarly == early &&
+    unchanged.requestedIds == #[first] && (unchanged.entryAt? early).isNone)
+    "rollback discards requests even when the trial allocates no new keys"
+  let (nested, late, _) := retried.intern "late" trialFrame none
+  let saved := saved.reserveNewKeys (retried.reserveNewKeys nested)
   let (saved, actualLate, freshLate) := saved.intern "late" default none
   let requester := some (⟨.signature, actualLate⟩ : QueryRef)
-  let (final, actualEarly, freshEarly) := saved.intern "early" default requester
-  let (_, same, freshAgain) := final.intern "early" default none
-  expectTrue (saved.find? "early" == none && (saved.entryAt? early).isNone &&
-    (saved.entry? "present").any (·.requests.isEmpty) && saved.result? "present" == some 11 &&
+  let actualFrame : ChainFrame := { subject := .ofText "actual", span := { (default : Syntax.Span) with startLine := 2 } }
+  let (final, actualEarly, freshEarly) := saved.intern "early" actualFrame requester
+  let (final, same, freshAgain) := final.intern "early" trialFrame none
+  expectTrue (saved.find? "early" == none && saved.allocatedCount == 3 &&
     actualEarly == early && actualLate == late && freshLate && freshEarly && same == early && !freshAgain &&
-    final.requestedIds == #[first, late, early] && (final.entryAt? early).any (·.requestedBy == requester) &&
-    (final.result? "early").isNone) "reserved signature numbers or first-request order"
+    final.requestedIds == #[first, late, early] &&
+    (final.entryAt? early).any (fun entry => entry.requestedBy == requester &&
+      entry.requested.span.startLine == 2 && (entry.state matches .inProgress) && entry.requests.isEmpty) &&
+    (final.result? "early").isNone) "real requests reuse stable numbers and determine request order and frames"
+
+/-- Evaluating a member precondition can instantiate an otherwise unused alias. The check
+returns no emitted value, so it must not shift the keys of the member body or a following call. -/
+private def checkMemberConditionBytes (repository : Repository) : TestM Unit := do
+  let source := "module caller\ntype Identity<T> = T\ninterface I:\n" ++
+    "    def copy<T, n: nat>(x: T) -> T where (n == 9, T == T)\nmodule M: I:\n    def copy(x): x\n" ++
+    "def twice<T>(x: T) -> T: M::copy<T, 9>(M::copy<T, 9>(x))\ndef evaluate(x: bool) -> bool: twice(x)\n"
+  let package (text : String) : TestM String := do
+    let session ← memberSession repository text
+    let .ok roots := (session.admitRoots (some #["evaluate"])).complete
+      | do failure s!"{session.renderDiagnostics}"; return ""
+    let some root := roots.find? "evaluate" | do failure "missing evaluate"; return ""
+    return (Written.package root.toSourcePackage).text
+  let plain ← package source
+  let throughAlias ← package (source.replace "T == T" "Identity<T> == T")
+  expectTrue (plain == throughAlias) "a member precondition changed the emitted package"
 
 /-- A third declaration of the same name leaves one diagnostic naming the first two owners. -/
 private def checkCollisionWitness (repository : Repository) : TestM Unit := do
@@ -338,6 +467,12 @@ def memberRowSuite (repository : Repository) : TestM Unit := do
   checkQualifiedOwners
   checkOwnerLocations
   checkReservedRequests
+  checkMemberConditionBytes repository
+  checkEligibilityReads repository
+  checkInferredModule repository
+  checkCandidateBounds repository
+  checkGeneratedEligibility repository
+  checkSingleOwnerDependencies repository
   checkWaitingDefault repository
   checkDefaultDependencies repository
   checkDefaultReports repository

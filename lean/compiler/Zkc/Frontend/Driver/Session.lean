@@ -132,8 +132,8 @@ def admitRoots (session : Session) (requested : Option (Array String) := none) :
         | #[] => (name, .error .absent)
         | candidates =>
           let places := candidates.map fun (root, _, full) => Id.run do
-            let some entry := state.table.entries[root]? | return full
-            let some decl := state.program.declarations[entry.key.declaration]? | return full
+            let some instanceKey := state.table.allocatedKey? root | return full
+            let some decl := state.program.declarations[instanceKey.declaration]? | return full
             let some written := decl.name | return full
             return s!"{full} at {written.span.file}:{written.span.render}"
           (name, .error (.ambiguous places))

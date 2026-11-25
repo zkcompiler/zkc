@@ -246,7 +246,7 @@ def schemeSuite (env : Env) (node : Syntax.Scheme) : CompileM (Except String Str
     | .«module» (.«module» _ _ _ _ _ _ (.primitive primitive)) =>
       let .«module» inst ← evalWrittenAny env (.path path.span path) | notSuite path.span
       let state ← get
-      let some { state := .done (.data (.«module» interfaces _)), .. } := state.table.entries[inst]?
+      let some { state := .done (.data (.«module» interfaces _)), .. } := state.table.entryAt? inst
         | return .error s!"the suite `{exprText (.path path.span path)}` is not evaluated"
       unless interfaces.applications.any (fun (id, _) => qualifiedName state.program id == "zkc::construction::Suite") do
         let _ ← notSuite path.span
@@ -375,13 +375,15 @@ partial def defaultModule (env : Env) (bound : Option Bound) : CompileM (Option 
           | some value => values := values.push value
           | none => complete := false
     unless complete do continue
-    let found ← recover (waits := true) (fallback := pure none) do
-      let inst ← instantiate index values
-        { description := "", span := (candidate.name.map (·.span)).getD default }
-      let mut meets := true
-      for (id, args) in required do
-        unless ← implements inst id args do meets := false
-      return if meets then some (StaticValue.«module» inst) else none
+    -- A mismatch with this particular bound is local to this search. Another request
+    -- may accept the same key, so keep its query results only when the candidate is chosen.
+    let found ← recover (skipped := true) (waits := true) (fallback := pure none) <|
+      withModuleConditions do
+        let inst ← instantiate index values
+          { description := "", span := (candidate.name.map (·.span)).getD default } (.candidate required)
+        let some (.«module» interfaces _) := (← get).table.content? inst | throw .skipped
+        unless required.all interfaces.applications.contains do throw .skipped
+        return some (StaticValue.«module» inst)
     if let some value := found then return some value
   return none
 end
@@ -526,7 +528,7 @@ def defaultInstances (declarationId : DeclarationId) : CompileM Unit := do
         throw (.exhausted exhaustion)
       let description ← describeInstance declarationId ordered specification
       try
-        let inst ← instantiate declarationId ordered { description, span := place } (isDefault := true)
+        let inst ← instantiate declarationId ordered { description, span := place } (demand := .defaultRoot)
           specification
         addRoot inst .defaultInstance
         count := count + 1
@@ -556,7 +558,7 @@ def lawInstances (lawId : DeclarationId) (fixed : StaticEnvironment) (owner : Op
       let description ← describeInstance lawId ordered specification owner
       try
         let inst ← instantiate lawId ordered
-          { description, span := (law.name.map (·.span)).getD default } (isDefault := true)
+          { description, span := (law.name.map (·.span)).getD default } (demand := .defaultRoot)
           specification owner
         unless (← get).roots.contains inst do addRoot inst .defaultInstance
       catch failure =>
@@ -569,9 +571,9 @@ implements, with `Self` the instance, and every law of its own, at its values. -
 def moduleLaws (inst : InstanceId) : CompileM Unit := do
   let state ← get
   let program := state.program
-  let some entry := state.table.entries[inst]? | return
+  let some instanceKey := state.table.allocatedKey? inst | return
   let some (.«module» interfaces _) := state.table.content? inst | return
-  let some found := program.declarations[entry.key.declaration]? | return
+  let some found := program.declarations[instanceKey.declaration]? | return
   let lawsOf (namespaceId : Option NamespaceId) (kind : DeclarationKind) : Array DeclarationId :=
     match namespaceId.bind (state.members[·]?) with
     | some members => members.filter fun id => (program.declarations[id]?).any (·.kind == kind)
@@ -582,7 +584,7 @@ def moduleLaws (inst : InstanceId) : CompileM Unit := do
       (init := {}) fun map ((reference, _), value) => map.insert reference value
     for law in lawsOf interfaceDeclaration.inner .lawMember do
       endItem (lawInstances law fixed (some inst))
-  let fixed : StaticEnvironment := ((deployedParameters program found).zip entry.key.arguments).foldl
+  let fixed : StaticEnvironment := ((deployedParameters program found).zip instanceKey.arguments).foldl
     (init := {}) fun map ((reference, _), value) => map.insert reference value
   for law in lawsOf found.inner .law do
     endItem (lawInstances law fixed none)
@@ -593,7 +595,7 @@ member's `where` holds. -/
 def typeModuleMembers (inst : InstanceId) : CompileM Unit := do
   let state ← get
   let program := state.program
-  let some entry := state.table.entries[inst]? | return
+  let some instanceKey := state.table.allocatedKey? inst | return
   let some (.«module» interfaces members) := state.table.content? inst | return
   for (name, value) in members do
     let .definition definition := value | continue
@@ -619,7 +621,7 @@ def typeModuleMembers (inst : InstanceId) : CompileM Unit := do
         pure true
       if holds then
         endItem do
-          discard <| instantiate definition (entry.key.arguments ++ own)
+          discard <| instantiate definition (instanceKey.arguments ++ own)
             { description := name, span := (found.name.map (·.span)).getD default }
 
 /-! ## The opaque typing (SP12) -/
@@ -659,11 +661,18 @@ def opaqueModule (reference : ParameterRef) (equated : Array String) (real : Ins
     CompileM InstanceId := do
   let state ← get
   let program := state.program
-  let some entry := state.table.entries[real]? | throw .abandoned
-  let key : InstanceKey := { entry.key with opaqueFor := some (reference, equated), owner := none }
+  let some instanceKey := state.table.allocatedKey? real | throw .abandoned
+  let key : InstanceKey := { instanceKey with opaqueFor := some (reference, equated), owner := none }
   if let some existing := state.table.find? key then return existing
-  let some (.«module» interfaces members) := state.table.content? real
-    | throw (.waiting "a module whose members are not evaluated")
+  let some actual := state.table.content? real | throw (.waiting "a module whose members are not evaluated")
+  let some interfaces := actual.moduleInterfaces? | throw (.waiting "a module whose members are not evaluated")
+  let members : Array (String × MemberValue) := match actual with
+    | .«module» _ members => members
+    | .checkingModule _ bindings => bindings.entries.filterMap fun b => do
+      let decl ← program.declarations[b.declaration]?
+      guard (decl.kind != .lawMember)
+      return (program.nameOf b.declaration, .fromReceiver real)
+    | _ => #[]
   let some scope := program.scopes[reference.scope]? | throw .abandoned
   let some parameter := scope.parameters[reference.index]? | throw .abandoned
   let required ← match parameter.bound with
@@ -672,11 +681,11 @@ def opaqueModule (reference : ParameterRef) (equated : Array String) (real : Ins
   let kept := interfaces.applications.filter fun (id, _) => required.contains id
   let inst ← modifyGetResults fun results =>
     let table := results.signatures
-    let results := { results with signatures := {} }
+    let results := { results with signatures := default }
     let (table, inst, _) := table.intern key { subject := .ofText "", span := default } none
     (inst, { results with signatures := table })
   -- the type members of the interfaces kept, with the sorts of their bounds
-  let mut typeMembers : Array (String × Array String) := #[]
+  let mut typeMembers : Array (String × (Array String × Bool)) := #[]
   for (interface, _) in kept do
     let some inner := (program.declarations[interface]?).bind (·.inner) | continue
     for member in ((← get).members[inner]?).getD #[] do
@@ -685,14 +694,16 @@ def opaqueModule (reference : ParameterRef) (equated : Array String) (real : Ins
       let sorts ← match bound with
         | some bound => boundSorts { file := found.file } bound
         | none => pure #[]
-      typeMembers := typeMembers.push (name.text, sorts)
+      typeMembers := typeMembers.push (name.text, sorts, !(ownParameters program found).isEmpty)
   let opaqueMembers := members.map fun (name, value) =>
     match (typeMembers.find? (·.1 == name)).map (·.2) with
-    | some sorts =>
+    | some (sorts, parameterized) =>
       if equated.contains name then (name, value)
       else match value with
         | .type _ => (name, .type (.opaque inst name #[] sorts))
         | .definition _ => (name, .opaqueType sorts)
+        | .fromReceiver _ => if parameterized then (name, .opaqueType sorts)
+          else (name, .type (.opaque inst name #[] sorts))
         | other => (name, other)
     | none => (name, value)
   modifyResults (·.modifySignatures (·.setState inst (.done (.data (.«module» (.ordered kept) opaqueMembers)))))

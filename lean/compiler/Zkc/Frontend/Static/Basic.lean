@@ -40,7 +40,7 @@ The entry points:
 namespace Zkc.Frontend.Compile.State
 
 /-- The table of signatures, whose entries are the instances. -/
-def table (state : Compile.State) : QueryTable InstanceKey Typed.Signature := state.env.results.signatures
+def table (state : Compile.State) : SignatureTable InstanceKey Typed.Signature := state.env.results.signatures
 
 def resolutions (state : Compile.State) : Resolutions := state.env.modules.resolutions
 
@@ -69,16 +69,16 @@ def defaults (state : Compile.State) : Array DefaultReport := state.env.results.
 
 end Zkc.Frontend.Compile.State
 
-namespace Zkc.Frontend.QueryTable
+namespace Zkc.Frontend.SignatureTable
 
 /-- The content of an instance whose signature is done. -/
-def content? (table : QueryTable InstanceKey Typed.Signature) (id : InstanceId) :
+def content? (table : SignatureTable InstanceKey Typed.Signature) (id : InstanceId) :
     Option InstanceContent :=
-  match table.entries[id]? with
+  match table.entryAt? id with
   | some { state := .done signature, .. } => signature.content?
   | _ => none
 
-end Zkc.Frontend.QueryTable
+end Zkc.Frontend.SignatureTable
 
 namespace Zkc.Frontend.Static
 
@@ -196,7 +196,7 @@ mutual
     | .record id | .variant id | .specification id => renderInstanceWith state qualified id
     | .opaque «module» member arguments _ =>
       -- `X::T`: the parameter that the module stands for, and the member
-      let parameter := ((state.table.entries[«module»]?).bind (·.key.opaqueFor)).bind fun (reference, _) =>
+      let parameter := ((state.table.allocatedKey? «module»).bind (·.opaqueFor)).bind fun (reference, _) =>
         ((state.program.scopes[reference.scope]?).bind (·.parameters[reference.index]?)).map (·.name.text)
       let base := if qualified then s!"{renderInstanceWith state qualified «module»}::{member}" else s!"{parameter.getD "?"}::{member}"
       if arguments.isEmpty then base
@@ -210,17 +210,17 @@ mutual
   /-- An instance as `name<values>`, positionally, then its specification-only values by name. -/
   partial def renderInstanceWith (state : Compile.State) (qualified : Bool) (id : InstanceId)
       (declarationName : Option String := none) : String :=
-    match state.table.entries[id]? with
-    | some entry =>
-      let name := declarationName.getD (if qualified then qualifiedName state.program entry.key.declaration else state.program.nameOf entry.key.declaration)
-      let specNames := ((state.program.declarations[entry.key.declaration]?).map fun found =>
+    match state.table.allocatedKey? id with
+    | some key =>
+      let name := declarationName.getD (if qualified then qualifiedName state.program key.declaration else state.program.nameOf key.declaration)
+      let specNames := ((state.program.declarations[key.declaration]?).map fun found =>
         ((state.program.parameters found).filter (·.2.spec)).map (·.2.name.text)).getD #[]
-      let parts := entry.key.arguments.toList.map (renderValueWith state qualified) ++
-        (specNames.zip entry.key.specification).toList.map fun (parameter, value) =>
+      let parts := key.arguments.toList.map (renderValueWith state qualified) ++
+        (specNames.zip key.specification).toList.map fun (parameter, value) =>
           s!"spec {parameter} = {value}"
       let base := if parts.isEmpty then name else s!"{name}<{", ".intercalate parts}>"
-      let base := entry.key.view.elim base fun view => base ++ "::" ++ view.member
-      match entry.key.owner with
+      let base := key.view.elim base fun view => base ++ "::" ++ view.member
+      match key.owner with
       | some owner => s!"{base} at {renderInstanceWith state qualified owner}"
       | none => base
     | none => "?"

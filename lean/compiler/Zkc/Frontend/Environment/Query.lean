@@ -42,8 +42,6 @@ structure QueryRef where
 
 inductive QueryState (ρ : Type) where
   | inProgress
-  /-- This number was allocated during an isolated check. A first real request computes it. -/
-  | reserved
   | done (result : ρ)
   /-- Refused; the diagnostic is logged. A later request finds it failed and reports nothing. -/
   | failed
@@ -74,8 +72,6 @@ instance {κ ρ : Type} [Inhabited κ] : Inhabited (QueryEntry κ ρ) :=
 structure QueryTable (κ ρ : Type) [BEq κ] [Hashable κ] where
   entries : Array (QueryEntry κ ρ) := #[]
   index : Std.HashMap κ Nat := {}
-  /-- The ids in first-request order. A reserved id joins this order when actually requested. -/
-  requestedIds : Array Nat := #[]
 
 namespace QueryTable
 
@@ -83,15 +79,10 @@ variable {κ ρ : Type} [BEq κ] [Hashable κ]
 
 instance : Inhabited (QueryTable κ ρ) := ⟨{}⟩
 
-/-- A request by number. Reserved numbers have no request yet. -/
-def entryAt? (table : QueryTable κ ρ) (id : Nat) : Option (QueryEntry κ ρ) := do
-  let entry ← table.entries[id]?
-  if entry.state matches .reserved then none else some entry
+def entryAt? (table : QueryTable κ ρ) (id : Nat) : Option (QueryEntry κ ρ) :=
+  table.entries[id]?
 
-def find? (table : QueryTable κ ρ) (key : κ) : Option Nat := do
-  let id ← table.index[key]?
-  guard (table.entryAt? id).isSome
-  return id
+def find? (table : QueryTable κ ρ) (key : κ) : Option Nat := table.index[key]?
 
 def entry? (table : QueryTable κ ρ) (key : κ) : Option (QueryEntry κ ρ) :=
   table.index[key]?.bind table.entryAt?
@@ -108,39 +99,16 @@ in place. -/
 def intern (table : QueryTable κ ρ) (key : κ) (requested : ChainFrame)
     (requestedBy : Option QueryRef) : QueryTable κ ρ × Nat × Bool :=
   match table.index[key]? with
-  | some id =>
-    if (table.entries[id]?).any (fun e => e.state matches .reserved) then
-      let entry := { key, state := .inProgress, requested, requestedBy }
-      ({ table with entries := table.entries.setIfInBounds id entry
-                    requestedIds := table.requestedIds.push id }, id, true)
-    else (table, id, false)
+  | some id => (table, id, false)
   | none =>
-    let ⟨entries, index, requestedIds⟩ := table
+    let ⟨entries, index⟩ := table
     let id := entries.size
     ({ entries := entries.push { key, state := .inProgress, requested, requestedBy }
-       index := index.insert key id, requestedIds := requestedIds.push id }, id, true)
-
-/-- Keep new key numbers allocated by a computation on a copy of this table. Results
-and request edges stay private to that computation. Existing entries keep their state. -/
-def reserveNewKeys (table trial : QueryTable κ ρ) : QueryTable κ ρ := Id.run do
-  if table.entries.size == trial.entries.size then return table
-  let mut entries := table.entries
-  for e in trial.entries[entries.size...*] do
-    entries := entries.push { key := e.key, state := .reserved, requested := default }
-  return { table with entries, index := trial.index }
+       index := index.insert key id }, id, true)
 
 def setState (table : QueryTable κ ρ) (id : Nat) (state : QueryState ρ) : QueryTable κ ρ :=
-  let ⟨entries, index, requestedIds⟩ := table
-  { entries := entries.modify id fun entry => { entry with state }, index, requestedIds }
-
-/-- An entry that is computed again for a request other than its first: in progress, with what
-asks for it now and from where. -/
-def reenter (table : QueryTable κ ρ) (id : Nat) (requested : ChainFrame)
-    (requestedBy : Option QueryRef) : QueryTable κ ρ :=
-  let ⟨entries, index, requestedIds⟩ := table
-  { entries := entries.modify id fun entry =>
-      { entry with state := .inProgress, requested, requestedBy }
-    index, requestedIds }
+  let ⟨entries, index⟩ := table
+  { entries := entries.modify id fun entry => { entry with state }, index }
 
 /-- The entry of a key in a state. -/
 def setStateOf (table : QueryTable κ ρ) (key : κ) (state : QueryState ρ) : QueryTable κ ρ :=
@@ -152,11 +120,11 @@ def setStateOf (table : QueryTable κ ρ) (key : κ) (state : QueryState ρ) : Q
 def addRequest (table : QueryTable κ ρ) (key : κ) (request : QueryRef) : QueryTable κ ρ :=
   match table.find? key with
   | some id =>
-    let ⟨entries, index, requestedIds⟩ := table
+    let ⟨entries, index⟩ := table
     { entries := entries.modify id fun entry =>
         if entry.requests.contains request then entry
         else { entry with requests := entry.requests.push request }
-      index, requestedIds }
+      index }
   | none => table
 
 /-- An entry with its result replaced: for a result that a later pass refines. -/

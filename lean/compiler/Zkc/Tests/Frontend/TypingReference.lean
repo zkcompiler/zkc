@@ -306,7 +306,7 @@ def libraryTypingSuite (repository : Repository) : TestM Unit := do
         let name := program.nameOf index
         let found := check.packages.any fun report =>
           (report.outcome matches .admitted _) &&
-            (check.state.table.entries[report.root]?).any (·.key.declaration == index)
+            (check.state.table.allocatedKey? report.root).any (·.declaration == index)
         expectTrue found s!"{stem}: `{name}` has no admitted package"
     let typedOnly := (check.packages.filter fun report => report.outcome matches .typedOnly _).size
     note s!"{stem}: {check.packages.size} packages, {admitted} admitted, {typedOnly} typed only{if waits.isEmpty then "" else s!", waiting for {", ".intercalate waits.toList}"}; {checked} functions in admitted packages; {check.state.results.obligations.size} obligations of laws"

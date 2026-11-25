@@ -241,17 +241,17 @@ def elaborateClauses (inst : InstanceId) (arguments : Array StaticValue) (specif
     («opaque» : Bool := false) (only : Option Nat := none) :
     CompileM (Array (Nat × Typed.Expr) × Array Typing.PlaceTyping) := do
   let state ← get
-  let some entry := state.table.entries[inst]? | throw .abandoned
+  let some instanceKey := state.table.allocatedKey? inst | throw .abandoned
   let modules ← getModules
-  let some contract := modules.indexes.contracts[entry.key.declaration]? | return (#[], #[])
+  let some contract := modules.indexes.contracts[instanceKey.declaration]? | return (#[], #[])
   let some clauses := modules.lowered? contract | return (#[], #[])
   let .contract node := clauses.content | return (#[], #[])
   if clauses.refused || (Elab.decidingApplications node.clauses).isEmpty then return (#[], #[])
-  let some lowered := modules.lowered? entry.key.declaration | return (#[], #[])
+  let some lowered := modules.lowered? instanceKey.declaration | return (#[], #[])
   let .protocol head _ _ := lowered.content | return (#[], #[])
-  let found ← declaration entry.key.declaration
-  let description ← describeInstance entry.key.declaration entry.key.arguments specification
-    entry.key.owner
+  let found ← declaration instanceKey.declaration
+  let description ← describeInstance instanceKey.declaration instanceKey.arguments specification
+    instanceKey.owner
   let env := instanceEnv state.program found arguments specification
   let context : Elab.Context :=
     { env, «instance» := inst, name := description, typeBody, specification := true
@@ -277,9 +277,9 @@ def typedClauses (inst : InstanceId) (specification : Array Nat)
     (typeBody : InstanceId → Span → CompileM Unit)
     (resolutions : Std.HashMap Typing.ResolvedPlace ParameterRef := {}) (lenient : Bool := true)
     (only : Option Nat := none) : CompileM (Array (Nat × Typed.Expr)) := do
-  let some entry := (← get).table.entries[inst]? | throw .abandoned
+  let some instanceKey := (← get).table.allocatedKey? inst | throw .abandoned
   let resolutions ← if resolutions.isEmpty then keptResolutions inst else pure resolutions
-  let (typed, _) ← elaborateClauses inst entry.key.arguments specification typeBody resolutions
+  let (typed, _) ← elaborateClauses inst instanceKey.arguments specification typeBody resolutions
     lenient (only := only)
   return typed
 
@@ -320,32 +320,32 @@ callee from the place of a call or of an application. -/
 def protocolBody (inst : InstanceId) (typeBody : InstanceId → Span → CompileM Unit) :
     CompileM BodyState := do
   let state ← get
-  let some entry := state.table.entries[inst]? | throw .abandoned
-  let found ← declaration entry.key.declaration
-  let name := state.program.nameOf entry.key.declaration
-  let description ← describeInstance entry.key.declaration entry.key.arguments
-    entry.key.specification entry.key.owner
-  let some lowered := (← getModules).lowered? entry.key.declaration
+  let some instanceKey := state.table.allocatedKey? inst | throw .abandoned
+  let found ← declaration instanceKey.declaration
+  let name := state.program.nameOf instanceKey.declaration
+  let description ← describeInstance instanceKey.declaration instanceKey.arguments
+    instanceKey.specification instanceKey.owner
+  let some lowered := (← getModules).lowered? instanceKey.declaration
     | throw (.defect "a declaration without its lowered form")
   let .protocol head statements returned := lowered.content
     | throw (.defect "a protocol instance of a declaration that is no protocol")
   let place := (found.name.map (·.span)).getD default
-  let env := instanceEnv state.program found entry.key.arguments entry.key.specification
+  let env := instanceEnv state.program found instanceKey.arguments instanceKey.specification
   -- a protocol generic over a module parameter is elaborated twice: the opaque elaboration
   -- first, whose resolutions the elaboration at the instance uses (SP12)
   let resolutions : Std.HashMap Typing.ResolvedPlace ParameterRef ←
     if ← genericOverModule found then do
-      let (opaqueArguments, over) ← opaqueValues found entry.key.arguments
+      let (opaqueArguments, over) ← opaqueValues found instanceKey.arguments
       let frame : ChainFrame :=
         { subject := .ofText s!"the opaque typing of `{name}` over {", ".intercalate over.toList}"
           span := place }
       withChainFrame frame do
-        let opaqueEnv := instanceEnv state.program found opaqueArguments entry.key.specification
+        let opaqueEnv := instanceEnv state.program found opaqueArguments instanceKey.specification
         let (_, _, typings) ← elaborateProtocol inst description name opaqueEnv head
           statements returned[0]? lowered.locals typeBody {} («opaque» := true)
         -- the contract in the opaque typing too: its places are resolved as the body's are
-        let clauseTypings ← opaqueClauseTypings inst opaqueArguments entry.key.specification typeBody
-        placeResolutions name found entry.key.arguments (typings ++ clauseTypings)
+        let clauseTypings ← opaqueClauseTypings inst opaqueArguments instanceKey.specification typeBody
+        placeResolutions name found instanceKey.arguments (typings ++ clauseTypings)
     else pure {}
   let errors := (← get).log.errors
   if let .protocol node := found.node then Passes.checkSiteNames node
@@ -358,11 +358,12 @@ def protocolBody (inst : InstanceId) (typeBody : InstanceId → Span → Compile
     trees := (results.trees.intern inst requested none).1.setStateOf inst (.done checked.definition) }
   if (← get).log.errors > errors || checked.definition.body.hasError then throw .abandoned
   -- what the contract applies, at the values of the instance
-  typeClauses inst entry.key.specification typeBody resolutions
+  typeClauses inst instanceKey.specification typeBody resolutions
   -- the facts of the body, by the core, each role with its own
   let outcome ← match checkProtocol (← get) inst with
     | .ok outcome => pure outcome
     | .error (.defect message) => throw (.defect message)
+    | .error (.exhausted exhaustion) => throw (.exhausted exhaustion)
     -- a form of a later layer in the body: the instance waits for it
     | .error (.waiting reason) | .error (.noCoreForm reason) => throw (.waiting reason)
   unless outcome.findings.isEmpty do

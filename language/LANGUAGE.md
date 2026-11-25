@@ -1373,7 +1373,8 @@ instances are:
   representative has all of them; when none has, the declaration has no default instance;
 - each module parameter at the first module of the program, the package's own files first, that
   implements its bound, with that module's static arguments solved against the bound (SP6) and
-  its others at their defaults.
+  its others at their defaults. A candidate whose conditions fail or cannot yet be decided
+  is passed over. The selected module must have been formed.
 
 A default instance whose `where` does not hold is skipped; a law whose own `where` does not hold
 at a default instance is skipped there (SP10). A specification-only static parameter takes the
@@ -1391,7 +1392,10 @@ n = 0>>`".
 lacks; it may hold other declarations, which are its own. When a concrete instance of the module is formed,
 including a default that satisfies its module and interface conditions (SP7), each member
 name belongs to at most one of the interface applications in its header. This includes laws and members of different kinds. Applications
-of the same declaration at equal static values count once. Two interfaces can require a shared
+of the same declaration at equal static values count once. A module checks its own parameter bounds and
+`where` first. On an explicit request it reports competing declarations before using a member
+to check interface conditions. For an optional default those conditions determine eligibility:
+only values its predicates read through `Self` are needed for that decision. Two interfaces can require a shared
 member by each requiring `Self` to implement the interface that declares it. The module names
 that common interface in its header. In opaque typing (SP12), a module parameter or a fresh
 type member anywhere in the instance arguments defers this check.

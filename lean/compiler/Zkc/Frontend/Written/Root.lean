@@ -29,6 +29,7 @@ def admitInstance (state : Compile.State) (id : InstanceId) (place : Syntax.Span
     throw s!"{diag.span.file}:{diag.render s.env.renderer}"
   let .ok _ := result | refuse place "WK-ROOT" "protocol did not typecheck"
   match emitted : Typing.emitRoot s id with
+  | .error (.exhausted exhaustion) => refuse place "WK-CORE" s!"not checked: {exhaustion.describe}"
   | .error _ => refuse place "WK-CORE" "protocol did not emit"
   | .ok emission =>
     let .ok evidence := (emission.package ⟨[],[],[],[],[]⟩).checkEvidence

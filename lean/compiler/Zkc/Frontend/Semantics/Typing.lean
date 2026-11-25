@@ -17,8 +17,8 @@ def functionRoots (state : Compile.State) : Array InstanceId := Id.run do
   for root in state.roots do
     if seen.contains root then continue
     seen := seen.insert root
-    let some entry := state.table.entries[root]? | continue
-    let some found := state.program.declarations[entry.key.declaration]? | continue
+    let some instanceKey := state.table.allocatedKey? root | continue
+    let some found := state.program.declarations[instanceKey.declaration]? | continue
     if found.kind == .function || found.kind == .relation || found.kind == .law
         || found.kind == .lawMember || found.kind == .protocol then
       result := result.push root
@@ -26,7 +26,7 @@ def functionRoots (state : Compile.State) : Array InstanceId := Id.run do
 
 /-- A root as source writes it, with the words of a default instance. -/
 def rootDescription (state : Compile.State) (root : InstanceId) (qualified : Bool := false) : String :=
-  let name := if qualified then (state.table.entries[root]?).map (qualifiedName state.program ·.key.declaration) else none
+  let name := if qualified then (state.table.allocatedKey? root).map (qualifiedName state.program ·.declaration) else none
   let description := renderInstance state root name
   if state.results.isDefault root then s!"default instance `{description}`" else description
 
@@ -65,6 +65,7 @@ def admit (state : Compile.State) (root : InstanceId) : Option PackageOutcome :=
     | .error (.waiting reason) => some (.waiting reason)
     | .error (.defect message) => some (.defect message)
     | .error (.noCoreForm reason) => some (.typedOnly reason)
+    | .error (.exhausted exhaustion) => some (.exhausted exhaustion)
   | some (.waiting reason) => some (.waiting reason)
   | some (.exhausted exhaustion) => some (.exhausted exhaustion)
   | _ => none
@@ -85,8 +86,8 @@ def Typing.reportPackages : CompileM Unit := do
       | .defect message => some ("defect", .emission, s!"a defect of the frontend: {message}")
       | _ => none
     if let some (rule, origin, message) := diagnostic then
-      let span := (((state.table.entries[report.root]?).bind fun entry =>
-        state.program.declarations[entry.key.declaration]?).bind (·.name)).map (·.span)
+      let span := (((state.table.allocatedKey? report.root).bind fun key =>
+        state.program.declarations[key.declaration]?).bind (·.name)).map (·.span)
       logError rule (span.getD default) (.ofText s!"{report.description}: {message}") (origin := origin)
 
 end Zkc.Frontend

@@ -26,7 +26,7 @@ def runCheck {α : Type} (state : Compile.State) (action : CompileM α) : Option
 def describedInstances (check : InstanceCheck) : Array (String × String) := Id.run do
   let mut result := #[]
   for id in check.state.table.requestedIds do
-    let entry := check.state.table.entries[id]!
+    let entry := check.state.table.entryAt! id
     let description := (runCheck check.state
       (describeInstance entry.key.declaration entry.key.arguments)).getD "?"
     let content := match entry.state with
@@ -34,7 +34,6 @@ def describedInstances (check : InstanceCheck) : Array (String × String) := Id.
       | .done _ => "a signature"
       | .failed => "failed"
       | .skipped => "skipped"
-      | .reserved => "unrequested"
       | .inProgress => "in progress"
       | .waiting reason => s!"waiting for {reason}"
       | .exhausted exhaustion => s!"not checked: {exhaustion.describe}"

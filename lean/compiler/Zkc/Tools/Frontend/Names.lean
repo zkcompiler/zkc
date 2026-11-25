@@ -150,7 +150,7 @@ def instances (options : Options) : IO UInt32 := do
   IO.println s!"{verdict false result.incomplete}: {result.state.results.instanceCount} instances ({", ".intercalate counts})"
   if options.contents then
     for id in result.state.table.requestedIds do
-      let entry := result.state.table.entries[id]!
+      let entry := result.state.table.entryAt! id
       let description := match ((Static.describeInstance entry.key.declaration
           entry.key.arguments).run result.context result.state).1 with
         | .ok text => text

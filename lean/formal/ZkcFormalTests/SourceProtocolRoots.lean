@@ -36,7 +36,7 @@ private partial def applications {V : Zkc.Core.Vocabulary} (region : Region (Pro
     | _ => []
 
 private def instanceName (s : Compile.State) (id : InstanceId) : String :=
-  (s.table.entries[id]?.map fun e => s.program.nameOf e.key.declaration).getD ""
+  ((s.table.allocatedKey? id).map fun key => s.program.nameOf key.declaration).getD ""
 
 abbrev CheckedRoot := Written.AdmittedRoot
 

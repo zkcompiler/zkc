@@ -18,8 +18,8 @@ def _root_.Zkc.Subject.CapTable.ratio (table : CapTable) : Rat := table.totalAt 
 /-- Resolve the authored clause in its closed instance, before looking up realized addresses. -/
 def declaredDraw (s : Compile.State) (owner : Core.Key) (name : String)
     (specification : Array Nat := #[]) : ExportM DeclaredDraw := do
-  let some entry := s.table.entries[owner.number]? | throw "missing charge instance"
-  let id := entry.key.declaration
+  let some instanceKey := s.table.allocatedKey? owner.number | throw "missing charge instance"
+  let id := instanceKey.declaration
   let some decl := s.program.declarations[id]? | throw "missing charge declaration"
   let some {content := .protocol head .., ..} := s.env.modules.lowered? id
     | throw "expected a resolved protocol"
@@ -31,7 +31,7 @@ def declaredDraw (s : Compile.State) (owner : Core.Key) (name : String)
     | _ => none) | throw s!"expected one charge on sites.{name}"
   unless (Static.specificationParameters s.program decl).size == specification.size do
     refuse bound.span "SP11" "the selected charge requires its proof arguments"
-  let env := Static.instanceEnv s.program decl entry.key.arguments specification
+  let env := Static.instanceEnv s.program decl instanceKey.arguments specification
   let (result, after) := (Static.evalRational env bound).run sourceContext s
   let .ok amount := result | do
     let diagnostics := after.log.entries.extract s.log.entries.size after.log.entries.size
@@ -74,19 +74,19 @@ def ProofSubject.child (parent : ProofSubject) (c : AdmittedRoot) (site : Core.K
 the place of its clause, and the name and the place of the declaration. -/
 def chargedSites (s : Compile.State) (owner : InstanceId) :
     ExportM (Array (Array String × Syntax.Span) × String × Syntax.Span) := do
-  let some entry := s.table.entries[owner]? | throw "missing charge instance"
-  let some declaration := s.program.declarations[entry.key.declaration]?
+  let some instanceKey := s.table.allocatedKey? owner | throw "missing charge instance"
+  let some declaration := s.program.declarations[instanceKey.declaration]?
     | throw "missing charge declaration"
   let place := (declaration.name.map (·.span)).getD default
-  let charged := (← contractOf s entry.key.declaration place).filterMap fun
+  let charged := (← contractOf s instanceKey.declaration place).filterMap fun
     | .charge span site _ => some (site.names.map (·.text), span)
     | _ => none
-  return (charged, s.program.nameOf entry.key.declaration, place)
+  return (charged, s.program.nameOf instanceKey.declaration, place)
 
 /-- Whether the one event of a declaration that a site names is a draw. -/
 def namesDraw (s : Compile.State) (owner : InstanceId) (name : String) : ExportM Bool := do
-  let some entry := s.table.entries[owner]? | throw "missing charge instance"
-  let some {content := .protocol head .., ..} := s.env.modules.lowered? entry.key.declaration
+  let some instanceKey := s.table.allocatedKey? owner | throw "missing charge instance"
+  let some {content := .protocol head .., ..} := s.env.modules.lowered? instanceKey.declaration
     | throw "expected a resolved protocol"
   let #[(source, _)] := head.events.zipIdx.filter (fun (e, _) => e.name == some name)
     | throw s!"expected one source event named {name}"
@@ -186,8 +186,8 @@ text: a goal is not refused for a draw that has none, and a charge on such a dra
 where the charge is read (`drawCharge`). -/
 def drawSites (c : AdmittedRoot) : ExportM SiteKeys := do
   let s := c.state
-  let some entry := s.table.entries[c.id]? | throw "missing root instance"
-  let some {content := .protocol head .., ..} := s.env.modules.lowered? entry.key.declaration
+  let some instanceKey := s.table.allocatedKey? c.id | throw "missing root instance"
+  let some {content := .protocol head .., ..} := s.env.modules.lowered? instanceKey.declaration
     | throw "expected a resolved protocol"
   let some (.protocol code) := s.results.body? c.id | throw "missing elaborated root"
   let some addresses := Emit.SiteAddresses.forProtocol c.evidence.admitted.program ⟨c.id⟩

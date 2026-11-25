@@ -171,8 +171,8 @@ def elabUnpack (span : Span) (shape : Lowered.UnpackShape) (binders : Array (Opt
     let .reference typeSpan segments := reference
     -- the pattern names the record's declaration, or an alias of its type (TY3)
     let found ← liftM (declaration declarationId : CompileM Declaration)
-    let entry := (← getThe Compile.State).table.entries[inst]!
-    let same ← if found.kind == .record then pure (entry.key.declaration == declarationId)
+    let instanceKey := (← getThe Compile.State).table.allocatedKey! inst
+    let same ← if found.kind == .record then pure (instanceKey.declaration == declarationId)
       else do
         let env ← staticEnv
         let value ← speculate do
@@ -214,8 +214,8 @@ def caseAlternative (inst : InstanceId) (alternatives : Array (String × Array C
   | .alternative _ (.reference referenceSpan segments) _ =>
     match segments.back? with
     | some (.segment (.alternative «variant» index) _ _) =>
-      let entry := (← getThe Compile.State).table.entries[inst]!
-      unless entry.key.declaration == «variant» do
+      let instanceKey := (← getThe Compile.State).table.allocatedKey! inst
+      unless instanceKey.declaration == «variant» do
         refuseHere "TY13" span s!"`{← textOf referenceSpan}` is not an alternative of `{typeText}`"
       return some index
     | some (.segment (.bareAlternative name) _ _) => byName name
@@ -282,9 +282,9 @@ partial def payloadBinder (pattern : Lowered.CasePattern) (type : ClosedType) (s
     let .record inst := type
       | refuseHere "TY13" patternSpan s!"the pattern is a record; the value is a `{typeText}`"
     -- the pattern names the record's declaration, or an alias of its type (TY3)
-    let entry := (← getThe Compile.State).table.entries[inst]!
+    let instanceKey := (← getThe Compile.State).table.allocatedKey! inst
     let named : Bool := match segments.back? with
-      | some (.segment (.declaration id) _ _) => id == entry.key.declaration
+      | some (.segment (.declaration id) _ _) => id == instanceKey.declaration
       | _ => false
     let same ← if named then pure true else do
       let env ← staticEnv
@@ -471,7 +471,7 @@ mutual
         match typed with
         | some (statements, values) =>
           let types ← values.mapM fun value =>
-            liftM (Instances.remakeType discarded savedState.table.entries.size span value.type : CompileM ClosedType)
+            liftM (Instances.remakeType discarded savedState.table.allocatedCount span value.type : CompileM ClosedType)
           pure (types, Typed.LoopBody.empty statements values)
         | none => pure (collected.map fun _ => ClosedType.unit, Typed.LoopBody.empty #[] #[])
       let (index, item) ← inSuite (bindItem domain none)
