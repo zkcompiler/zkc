@@ -203,7 +203,8 @@ private def checkDefaultConditions (repository : Repository) : TestM Unit := do
   let source (condition : String) := "module caller\n" ++
     s!"interface I<n: nat> where ({condition}):\n    nat Height\n    type T\n" ++
     "pub module M<n: nat>: I<n> + I<1>:\n    nat Height = 1\n    type T = bool\n"
-  let root := "def evaluate(x: M<1>::T) -> bool: x\n"
+  let root := "def evaluate(x: bool) -> bool: x\n"
+  let used := "def evaluate(x: M<1>::T) -> bool: x\n"
   for condition in ["n == 1", "Self::Height == n"] do
     let session ← memberSession repository (source condition ++ root)
     let skipped := session.state.table.requestedIds.any fun id =>
@@ -222,6 +223,82 @@ private def checkDefaultConditions (repository : Repository) : TestM Unit := do
   expectTrue ((eligible.diagnostics.find? (·.isError)).any (·.rule == "SP8") &&
     !(eligible.admitRoots (some #["evaluate"])).complete.isOk)
     s!"eligible colliding default: {eligible.renderDiagnostics}"
+
+  let reached ← memberSession repository (source "Self::Height == 1" ++ used)
+  expectTrue (!reached.hasErrors && (reached.admitRoots (some #["evaluate"])).complete.isOk &&
+    !reached.state.results.defaults.any (fun row => reached.state.program.nameOf row.declaration == "M"))
+    "selecting M<1>::T reaches the public module before default discovery"
+
+/-- A value path may terminate even when the complete modules depend on each other.
+A refusal in the second module reaches the selecting root and leaves an independent root usable. -/
+private def checkTransitiveSelection (repository : Repository) : TestM Unit := do
+  let source := "module caller
+interface I:
+    type T
+    type U
+    def f(x: bool) -> bool
+module M<n: nat>: I:
+    type T = bool
+    type U = N<n = n>::T
+    def f(x): x
+module N<n: nat>: I:
+    type T = M<n = n>::T
+    type U = bool
+def selected(x: M<1>::U) -> bool: x
+def independent(x: bool) -> bool: x
+"
+  let session ← memberSession repository source
+  let held := (session.admitRoots none).held
+  expectTrue (session.diagnostics.any (·.rule == "SP8") && !held.any (·.1 == "selected") &&
+    held.any (·.1 == "independent")) s!"transitive module refusal: {session.renderDiagnostics}"
+  let repaired := source.replace "def selected" "    def f(x): x\ndef selected"
+  let valid ← memberSession repository repaired
+  expectTrue (!valid.hasErrors && (valid.admitRoots none).complete.isOk)
+    s!"terminating member values: {valid.renderDiagnostics}"
+  let recursive ← memberSession repository (repaired.replace "type T = bool" "type T = N<n = n>::T")
+  expectTrue (recursive.diagnostics.any (·.rule == "NL1"))
+    s!"recursive member value: {recursive.renderDiagnostics}"
+
+/-- A contract checks its own table of nominal instances. Its module obligation must
+survive even when the enclosing program has no signature for that record instance. -/
+private def checkContractModuleArgument (repository : Repository) : TestM Unit := do
+  let source := "module caller
+interface A:
+    def f(x: bool) -> bool
+struct Box<n: nat>:
+    flag: bool
+module M<T>: A:
+    pub relation Accepted(x: bool): x
+protocol Check roles(P,V)(x: bool @(P,V)):
+    guard @V x
+spec for Check:
+    proves @V M<Box<1>>::Accepted(x)
+"
+  let bad ← memberSession repository source
+  expectTrue (bad.diagnostics.any (·.rule == "SP8") &&
+    !(bad.admitRoots none).held.any (·.1 == "Check"))
+    s!"module of a contract-local record: {bad.renderDiagnostics}"
+  let good ← memberSession repository (source.replace "    pub relation" "    def f(x): x\n    pub relation")
+  expectTrue (!good.hasErrors && (good.admitRoots (some #["Check"])).complete.isOk)
+    s!"complete module of a contract-local record: {good.renderDiagnostics}"
+
+/-- Completing a member checks the shape of an interface application even when its value
+depends on a proof argument that the deployed module does not have. -/
+private def checkMemberProofBound (repository : Repository) : TestM Unit := do
+  let source (interfaces constraint applied : String) := "module caller\n" ++ interfaces ++
+    "    def copy<spec e: nat>(x: bool) -> bool where (Self: " ++ constraint ++ ")\n" ++
+    "module M: " ++ applied ++ ":\n    def copy(x): x\n"
+  let valid := source "interface Sized<n: nat>\ninterface I:\n" "Sized<e>" "I + Sized<1>"
+  let fixed := source "interface I<n: nat>:\n" "I<e>" "I<1>"
+  for call in ["M::copy(x)", "M::copy<spec e = 1>(x)"] do
+    let root := "def evaluate(x: bool) -> bool: " ++ call ++ "\n"
+    let ok ← memberSession repository (valid ++ root)
+    expectTrue (!ok.hasErrors && (ok.admitRoots (some #["evaluate"])).complete.isOk)
+      s!"valid proof argument in a bound: {ok.renderDiagnostics}"
+    let bad ← memberSession repository (fixed ++ root)
+    expectTrue (bad.diagnostics.any (·.rule == "SP5") &&
+      !(bad.admitRoots (some #["evaluate"])).complete.isOk)
+      s!"fixed interface arguments: {bad.renderDiagnostics}"
 
 /-- A default needs only the values read by its interface predicates. An unprovided
 primitive member can wait while a different predicate already decides the candidate. -/
@@ -544,6 +621,9 @@ def memberRowSuite (repository : Repository) : TestM Unit := do
   checkDefaultReports repository
   checkReservedCollect repository
   checkDefaultConditions repository
+  checkTransitiveSelection repository
+  checkMemberProofBound repository
+  checkContractModuleArgument repository
   checkDisjointRows repository
   checkConcreteApplications repository
   checkCollisionWitness repository

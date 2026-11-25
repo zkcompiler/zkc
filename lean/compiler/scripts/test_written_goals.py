@@ -242,7 +242,60 @@ goal good = soundness(CleanScheme)
         assert not files and all("SP8" in row for row in rows), rows
 
 
+def check_selected_module(work):
+    src = work / "selected.zkc"
+    source = """module selected
+use zkc::security::{soundness}
+interface Carrier:
+    def required(x: bool) -> bool
+module M<n: nat>: Carrier:
+    pub nat Width = n
+    pub def helper(x: bool) -> bool: x
+section <spec e: nat>:
+    relation Holds(x: bool): if e == 0 then x else M<1>::helper(x)
+    protocol Check roles(P,V)(x: bool @(P,V)):
+        guard @V x
+    spec for Check:
+        proves @V Holds(x)
+scheme Checked = Check:
+    prover P
+    construction interactive
+goal good = soundness(Checked, spec e = 0)
+goal bad = soundness(Checked, spec e = 1)
+"""
+    repaired = source.replace("    pub nat Width", "    def required(x): x\n    pub nat Width")
+    src.write_text(repaired)
+    _, healthy = run([src], ["good"], work / "selected-healthy", 0)
+    for index, (text, rule) in enumerate([
+        (source, "SP8"),
+        (repaired.replace("def required(x): x", "def required(x): (x,x)"), "TY5"),
+        (repaired.replace("def required(x): x", "def required(x): (x,x)")
+         .replace("section <spec", "def pass<H: Carrier>(x: bool) -> bool: x\nsection <spec")
+         .replace("M<1>::helper(x)", "pass<M<1>>(x)"), "TY5"),
+        (source.replace("spec e = 1)", "spec e = M<1>::Width)")
+               .replace("if e == 0 then x else M<1>::helper(x)", "x"), "SP8"),
+        (source.replace("spec e = 1)", "spec e = 1) <= M<1>::Width")
+               .replace("if e == 0 then x else M<1>::helper(x)", "x"), "SP8"),
+    ]):
+        src.write_text(text)
+        for order, names in enumerate([["bad", "good"], ["good", "bad"]]):
+            rows, files = run([src], names, work / f"selected-{index}-{order}", 1)
+            assert rule in rows[names.index("bad")] and files == healthy, rows
+
+    # Every goal that uses this deployed guard or charge needs the source module.
+    for label, text in [
+        ("guard", source.replace("guard @V x", "guard @V M<1>::helper(x)")),
+        ("charge", source.replace("section <spec", 'type F = primitive("bls12-381.fr")\nsection <spec')
+         .replace("guard @V x", "r <- draw F from V to P\n        guard @V x")
+         .replace("proves @V Holds(x)", "proves @V Holds(x)\n        charge sites.r <= M<1>::Width / 2")),
+    ]:
+        src.write_text(text)
+        rows, files = run([src], ["good", "bad"], work / f"selected-{label}", 1)
+        assert all("SP8" in row for row in rows) and not files, rows
+
+
 if __name__ == "__main__":
     with TemporaryDirectory() as folder:
         check(Path(folder))
         check_member_ownership(Path(folder))
+        check_selected_module(Path(folder))

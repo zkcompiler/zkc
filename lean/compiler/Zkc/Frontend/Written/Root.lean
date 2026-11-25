@@ -14,7 +14,8 @@ def sourceState (assembly : Assembly) (names : Driver.Phase := Driver.resolve) :
     if let some diag := state.log.entries.find? (fun d => d.isError || d.isIncomplete) then
       throw s!"{diag.span.file}:{diag.render state.env.renderer}"
     if let some skipped := report.interrupted then throw s!"WK-FRONTEND: {skipped}"
-  return state
+  let (_, checked) ← evaluate state default (Typing.checkModuleReads state.directiveReads)
+  return checked
 
 structure AdmittedRoot where
   id : InstanceId
@@ -24,10 +25,12 @@ structure AdmittedRoot where
   evidence : (emission.package ⟨[],[],[],[],[]⟩).Admission
 
 def admitInstance (state : Compile.State) (id : InstanceId) (place : Syntax.Span) : ExportM AdmittedRoot := do
-  let (result, s) := (Typing.typeBody id place).run sourceContext state
+  let (_, s) ← evaluate state place do
+    Static.observeApplication id place
+    useQueryReads ⟨.signature, id⟩
+    Typing.typeBody id place
   if let some diag := s.log.entries.find? (fun d => d.isError || d.isIncomplete) then
     throw s!"{diag.span.file}:{diag.render s.env.renderer}"
-  let .ok _ := result | refuse place "WK-ROOT" "protocol did not typecheck"
   match emitted : Typing.emitRoot s id with
   | .error (.exhausted exhaustion) => refuse place "WK-CORE" s!"not checked: {exhaustion.describe}"
   | .error _ => refuse place "WK-CORE" "protocol did not emit"

@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Frontend.Static.Basic
+public import Zkc.Frontend.Static.ModuleReads
 
 @[expose] public section
 
@@ -77,7 +77,7 @@ def bindModuleMembers (written : Array (AppliedInterface × Path)) :
 
 /-- Retain observations while forgetting the query results from a trial. Messages are
 rendered against the environment in which they were issued. -/
-def restoreObservations (saved checked : Compile.State) : CompileM (Exhaustion → Exhaustion) := do
+def restoreObservations (saved checked : Compile.State) (reports : Bool := true) : CompileM (Exhaustion → Exhaustion) := do
   let renderer := checked.env.renderer
   let frame (f : ChainFrame) := { f with subject := .ofText (f.subject.renderWith renderer false) }
   let exhaustion (e : Exhaustion) := { e with request := frame e.request }
@@ -92,7 +92,7 @@ def restoreObservations (saved checked : Compile.State) : CompileM (Exhaustion �
   for entry in checked.traces[saved.traces.size...*] do
     traces := traces.push { entry with message := .ofText (entry.message.render renderer) }
   set { saved with log := { checked.log with entries }, traces, staticSteps := checked.staticSteps }
-  modifyResults fun results => { results with reports := checked.results.reports }
+  if reports then modifyResults fun results => { results with reports := checked.results.reports }
   return exhaustion
 
 /-- A provisional receiver can be reached through signatures, bodies and generated views.
@@ -131,11 +131,13 @@ receiver. Module formation preserves its historical key allocations. Call-site p
 introduce new queries whose numbers must stay private to the judgment. -/
 def checkIsolatedConditions (check : CompileM Unit) (reserveKeys : Bool := false) : CompileM Unit := do
   let saved ← get
-  let (outcome, checked) := check.run (← read) saved
+  let (outcome, checked) := (captureModuleReads check).run (← read) saved
   let freeze ← restoreObservations saved checked
   if reserveKeys then modifyResults (·.modifySignatures (·.reserveNewKeys checked.table))
   match outcome with
-  | .ok () => pure ()
+  | .ok (_, reads) =>
+    unless reserveKeys do
+      modify fun s => {s with moduleReads := s.moduleReads ++ detachedModuleReads saved checked reads}
   | .error (.exhausted e) => throw (.exhausted (freeze e))
   | .error failure => throw failure
 

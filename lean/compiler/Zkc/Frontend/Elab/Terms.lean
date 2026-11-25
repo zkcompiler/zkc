@@ -88,7 +88,7 @@ out leaves the body not checked, and a defect goes on. -/
 def speculate {α : Type} (action : ElabM α) : ElabM (Option α) := do
   let saved ← getThe Compile.State
   recover (some <$> action) (skipped := true) (waits := true) do
-    modifyThe Compile.State fun state => { state with log := saved.log, stack := saved.stack }
+    modifyThe Compile.State fun state => { state with log := saved.log, stack := saved.stack, moduleReads := saved.moduleReads }
     return none
 
 /-- The value of an expression written as a size, when it evaluates to a natural. With

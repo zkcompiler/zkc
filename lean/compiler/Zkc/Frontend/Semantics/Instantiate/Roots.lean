@@ -210,16 +210,25 @@ def inInterface (program : Program) (declaration : Declaration) : Bool :=
 
 /-- The instance that a comment `// instantiate: m<args>` asks for. -/
 def instantiateDirective (file : FileId) (term : Expr) : CompileM Unit := do
-  let env : Env := { file }
-  let .path span path := term
-    | refuse "GR5" (Syntax.Expr.span term) s!"`{exprText term}` names no declaration to instantiate"
-  match ← evalWrittenPath env path with
-  | .declarations steps scopes =>
-    let some (id, _) := steps.back? | throw .abandoned
-    let values ← bindArguments env steps scopes span
-    let inst ← instantiate id values { description := s!"instantiate: {exprText term}", span }
-    addRoot inst .directive
-  | _ => refuse "GR5" span s!"`{exprText term}` names no declaration to instantiate"
+  let (inst, reads) ← captureModuleReads resolveInstance
+  addRoot inst .directive
+  modify fun s => { s with
+    directiveReads := s.directiveReads ++ reads
+    rootSelectionReads := s.rootSelectionReads.alter inst (fun old => some (old.getD #[] ++ reads)),
+    moduleReads := s.moduleReads ++ reads }
+where
+  resolveInstance : CompileM InstanceId := do
+    let env : Env := { file }
+    let .path span path := term
+      | refuse "GR5" (Syntax.Expr.span term) s!"`{exprText term}` names no declaration to instantiate"
+    match ← evalWrittenPath env path with
+    | .declarations steps scopes =>
+      let some (id, _) := steps.back? | throw .abandoned
+      let values ← bindArguments env steps scopes span
+      let inst ← instantiate id values { description := s!"instantiate: {exprText term}", span }
+      observeMember inst span (receiver := true)
+      return inst
+    | _ => refuse "GR5" span s!"`{exprText term}` names no declaration to instantiate"
 
 /-- The suite of the `construction` line of a scheme (SC5): a scheme has one `construction` line,
 and the suite of `derived(S)` is a module that implements `zkc::construction::Suite`. A suite of
@@ -291,25 +300,34 @@ def schemeWaits (env : Env) (node : Syntax.Scheme) : CompileM (Option String) :=
 /-- The protocol instance that a scheme names: a root of the package; and the scheme, with the
 suite of its `construction` line (`schemeSuite`) and the first line that waits (`schemeWaits`). -/
 def schemeProtocol (declaration : DeclarationId) (file : FileId) (node : Syntax.Scheme) : CompileM Unit := do
-  let env : Env := { file }
-  let path := node.protocol
-  match ← evalWrittenPath env path with
-  | .declarations steps scopes =>
-    let some (id, _) := steps.back? | throw .abandoned
-    for (_, written) in steps do
-      for arg in written.getD #[] do
-        if let .spec span name _ := arg then
-          refuse "SC1" span s!"the scheme cannot close the specification-only argument `{name}`; supply it in the goal"
-    let values ← bindArguments env steps scopes path.span
-    let text := exprText (.path path.span path)
-    let inst ← instantiate id values { description := s!"scheme {node.name.text} = {text}", span := path.span }
-    addRoot inst
-    let suite ← schemeSuite env node
-    let waits ← schemeWaits env node
-    let scheme : SchemeEntry :=
-      { declaration, name := node.name.text, span := node.span, protocol := inst, lines := node.lines, suite, waits }
+  let (closed, reads) ← captureModuleReads closeScheme
+  if let some scheme := closed then
     modifyResults fun results => { results with schemes := results.schemes.push scheme }
-  | _ => pure ()
+    modify fun s => { s with
+      schemeReads := s.schemeReads.insert declaration reads
+      rootSelectionReads := s.rootSelectionReads.alter scheme.protocol (fun old => some (old.getD #[] ++ reads)),
+      moduleReads := s.moduleReads ++ reads }
+where
+  closeScheme : CompileM (Option SchemeEntry) := do
+    let env : Env := { file }
+    let path := node.protocol
+    match ← evalWrittenPath env path with
+    | .declarations steps scopes =>
+      let some (id, _) := steps.back? | throw .abandoned
+      for (_, written) in steps do
+        for arg in written.getD #[] do
+          if let .spec span name _ := arg then
+            refuse "SC1" span s!"the scheme cannot close the specification-only argument `{name}`; supply it in the goal"
+      let values ← bindArguments env steps scopes path.span
+      let text := exprText (.path path.span path)
+      let inst ← instantiate id values { description := s!"scheme {node.name.text} = {text}", span := path.span }
+      addRoot inst
+      let suite ← schemeSuite env node
+      let waits ← schemeWaits env node
+      let scheme : SchemeEntry :=
+        { declaration, name := node.name.text, span := node.span, protocol := inst, lines := node.lines, suite, waits }
+      return some scheme
+    | _ => return none
 
 /-- The values of a sort's default representative (SP7), for a type parameter with this bound. -/
 def defaultType (env : Env) (bound : Option Bound) : CompileM (Option ClosedType) := do
@@ -548,27 +566,25 @@ def defaultInstances (declarationId : DeclarationId) : CompileM Unit := do
 instance gives them; its own static parameters at their default values (SP7); `Self` the module
 instance, for a law of an interface. A law whose `where` does not hold at an instance is not typed
 there. The instances are roots. -/
-def lawInstances (lawId : DeclarationId) (fixed : StaticEnvironment) (owner : Option InstanceId) :
-    CompileM Unit := do
+def lawInstances (lawId : DeclarationId) (fixed : StaticEnvironment) (owner : Option InstanceId)
+    (visit : InstanceId → CompileM Unit) (handle : CompileM Unit → CompileM Unit) : CompileM Unit := do
   let program ← program
   let law ← declaration lawId
   let .ok valueCombinations ← defaultCombinations lawId fixed | return
   for ordered in valueCombinations do
     for specification in specificationChoices program law do
       let description ← describeInstance lawId ordered specification owner
-      try
-        let inst ← instantiate lawId ordered
+      handle do
+        let inst ← formInstance lawId ordered
           { description, span := (law.name.map (·.span)).getD default } (demand := .defaultRoot)
           specification owner
-        unless (← get).roots.contains inst do addRoot inst .defaultInstance
-      catch failure =>
-        match failure with
-        | .skipped | .waiting _ | .staticIndex _ | .abandoned | .exhausted _ => pure ()
-        | .defect _ => throw failure
+        visit inst
 
 /-- The laws typed at a module instance (SP7 item 7, SP10): every law of the interfaces it
 implements, with `Self` the instance, and every law of its own, at its values. -/
-def moduleLaws (inst : InstanceId) : CompileM Unit := do
+def moduleLaws (inst : InstanceId) (visit : InstanceId → CompileM Unit := fun id => do
+    unless (← get).roots.contains id do addRoot id .defaultInstance)
+    (handle : CompileM Unit → CompileM Unit := endItem) : CompileM Unit := do
   let state ← get
   let program := state.program
   let some instanceKey := state.table.allocatedKey? inst | return
@@ -583,16 +599,17 @@ def moduleLaws (inst : InstanceId) : CompileM Unit := do
     let fixed : StaticEnvironment := ((deployedParameters program interfaceDeclaration).zip args).foldl
       (init := {}) fun map ((reference, _), value) => map.insert reference value
     for law in lawsOf interfaceDeclaration.inner .lawMember do
-      endItem (lawInstances law fixed (some inst))
+      handle (lawInstances law fixed (some inst) visit handle)
   let fixed : StaticEnvironment := ((deployedParameters program found).zip instanceKey.arguments).foldl
     (init := {}) fun map ((reference, _), value) => map.insert reference value
   for law in lawsOf found.inner .law do
-    endItem (lawInstances law fixed none)
+    handle (lawInstances law fixed none visit handle)
 
 /-- The function members of a module instance, instantiated whether or not anything calls them
 (SP7 item 7): a member with static parameters of its own at their default values where the
 member's `where` holds. -/
-def typeModuleMembers (inst : InstanceId) : CompileM Unit := do
+def typeModuleMembers (inst : InstanceId) (visit : InstanceId → CompileM Unit := fun _ => pure ())
+    (handle : CompileM Unit → CompileM Unit := endItem) : CompileM Unit := do
   let state ← get
   let program := state.program
   let some instanceKey := state.table.allocatedKey? inst | return
@@ -616,13 +633,11 @@ def typeModuleMembers (inst : InstanceId) : CompileM Unit := do
       -- a default value at which the member's `where` does not hold is skipped (SP7)
       let env : Env :=
         { instanceEnv program memberDeclaration (args ++ own) with self? := some (.«module» inst) }
-      let holds ← recover (skipped := true) (waits := true) (fallback := pure false) do
-        checkWheres env memberDeclaration name true (fun _ => pure false)
-        pure true
-      if holds then
-        endItem do
-          discard <| instantiate definition (instanceKey.arguments ++ own)
-            { description := name, span := (found.name.map (·.span)).getD default }
+      handle do
+        checkWheres env memberDeclaration name true (fun _ => pure false) (deferProofArguments := true)
+        let member ← formInstance definition (instanceKey.arguments ++ own)
+          { description := name, span := (found.name.map (·.span)).getD default }
+        visit member
 
 /-! ## The opaque typing (SP12) -/
 
@@ -727,7 +742,7 @@ def checkProgram (instantiations : Array (FileId × Expr)) : CompileM Unit := do
     unless (deployedParameters program declaration).isEmpty do continue
     for specification in specificationChoices program declaration do
       endItem do
-        let inst ← instantiate id #[]
+        let inst ← formInstance id #[]
           { description := ← describeInstance id #[] specification
             span := (declaration.name.map (·.span)).getD default } (specification := specification)
         addRoot inst
@@ -751,7 +766,7 @@ def defaultProgram : CompileM Unit := do
     unless own declaration && declaration.pub && hasInstances declaration.kind &&
         !inInterface program declaration do
       continue
-    if (deployedParameters program declaration).isEmpty || reached.contains id then continue
+    if (deployedParameters program declaration).isEmpty || reached.contains id || (← get).reachedModules.contains id then continue
     endItem (defaultInstances id)
 
 end Zkc.Frontend.Instances

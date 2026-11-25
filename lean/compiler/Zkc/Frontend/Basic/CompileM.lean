@@ -71,7 +71,25 @@ structure TraceEntry where
   message : Message
   deriving Inhabited
 
+/-- A source selection needs the concrete modules enclosing that instance. A cached
+signature or body contributes the selections made when it was computed. -/
+inductive ModuleRead where
+  | owner (key : InstanceKey) (place : Span)
+      (source : Option (Nat × SignatureTable InstanceKey Typed.Signature) := none)
+  | query (reference : QueryRef)
+  deriving Inhabited
+
 structure State where
+  /-- Reads of the current source computation, in encounter order. -/
+  moduleReads : Array ModuleRead := #[]
+  readsOfQuery : Std.HashMap QueryRef (Array ModuleRead) := {}
+  directiveReads : Array ModuleRead := #[]
+  rootSelectionReads : Std.HashMap InstanceId (Array ModuleRead) := {}
+  schemeReads : Std.HashMap DeclarationId (Array ModuleRead) := {}
+  /-- Settled outcomes at stable keys of this source environment, including propagated failures. -/
+  checkedModules : Std.HashMap InstanceKey (Except Interrupt Unit) := {}
+  reachedModules : Std.HashSet DeclarationId := {}
+  rootModuleFailures : Std.HashMap InstanceId Lack := {}
   env : Environment := {}
   log : Log := {}
   /-- What is being computed, outermost first. -/
@@ -86,6 +104,8 @@ structure State where
 structure Context where
   options : Options := {}
   vocabulary : Vocabulary
+  /-- The ordinary driver checks all reached contract clauses. A named issuer selects its clause. -/
+  allClauseReads : Bool := true
   /-- Members being read through a provisional receiver while deciding its interface conditions. -/
   checkingMembers : List (InstanceId × String) := []
   /-- A generated source type can depend on the checked body of another instance. The driver
@@ -187,12 +207,34 @@ def currentRequest? : CompileM (Option QueryRef) := do
     | .request reference => some reference
     | .frame _ => none
 
+/-- Capture just the successful source computation's reads, including reads of cached queries.
+The caller decides whether they belong to its result, a separate goal or a tentative trial. -/
+def captureModuleReads {α : Type} (action : CompileM α) : CompileM (α × Array Compile.ModuleRead) := do
+  let saved ← modifyGet fun s => (s.moduleReads, { s with moduleReads := #[] })
+  try
+    let result ← action
+    let reads ← modifyGet fun s => (s.moduleReads, { s with moduleReads := saved })
+    return (result, reads)
+  catch interrupt =>
+    modify fun s => { s with moduleReads := saved }
+    throw interrupt
+
+def useQueryReads (reference : QueryRef) : CompileM Unit := do
+  if (← get).readsOfQuery.contains reference then
+    modify fun s => { s with moduleReads := s.moduleReads.push (.query reference) }
+
 /-- Runs the computation of a request with the request on the stack. -/
 def withRequest {α : Type} (reference : QueryRef) (action : CompileM α) : CompileM α := do
   modify fun state => { state with stack := state.stack.push (.request reference) }
   try
-    let result ← action
+    let (result, reads) ← captureModuleReads action
     modify fun state => { state with stack := state.stack.pop }
+    if reads.isEmpty then
+      if (← get).readsOfQuery.contains reference then
+        modify fun s => { s with readsOfQuery := s.readsOfQuery.erase reference }
+    else
+      modify fun s => { s with readsOfQuery := s.readsOfQuery.insert reference reads }
+      useQueryReads reference
     return result
   catch interrupt =>
     modify fun state => { state with stack := state.stack.pop }

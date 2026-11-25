@@ -32,11 +32,7 @@ def declaredDraw (s : Compile.State) (owner : Core.Key) (name : String)
   unless (Static.specificationParameters s.program decl).size == specification.size do
     refuse bound.span "SP11" "the selected charge requires its proof arguments"
   let env := Static.instanceEnv s.program decl instanceKey.arguments specification
-  let (result, after) := (Static.evalRational env bound).run sourceContext s
-  let .ok amount := result | do
-    let diagnostics := after.log.entries.extract s.log.entries.size after.log.entries.size
-    let messages := diagnostics.toList.map (·.render after.env.renderer)
-    throw s!"{location bound.span}: cannot close the rational ceiling: {String.intercalate "; " messages}"
+  let (amount, _) ← evaluate s bound.span (Static.evalRational env bound)
   if amount.num < 0 then throw "a draw ceiling must be nonnegative"
   return ⟨event, amount⟩
 

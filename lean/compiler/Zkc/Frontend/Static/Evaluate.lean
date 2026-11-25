@@ -91,6 +91,9 @@ def hasProofBoundArgument : Lowered.Constraint → CompileM Bool
     | _ => pure false
   | .compare .. => pure false
 
+/-- The static evaluator needs the specification argument of a deployed declaration. -/
+def unboundSpecificationParameter := "a specification-only parameter"
+
 /-- The source text at a place of the file of an environment: what a message quotes, and the
 name of a local name. -/
 def sourceText (env : Env) (place : Span) : CompileM String := do
@@ -212,33 +215,6 @@ def powerOfTwo (value : Nat) : Option Nat := Id.run do
     exponent := exponent + 1
   return if current == 1 then some exponent else none
 
-mutual
-  /-- A real instance contains neither a module stand-in nor a fresh type, including
-  inside the arguments of a type or another instance (SP12). -/
-  partial def realInstance (state : Compile.State) (id : InstanceId) :
-      StateM (Std.HashSet InstanceId) Bool := do
-    if (← get).contains id then return true
-    let some instanceKey := state.table.allocatedKey? id | return false
-    if instanceKey.opaqueFor.isSome then return false
-    modify (·.insert id)
-    instanceKey.arguments.allM (realValue state)
-
-  partial def realValue (state : Compile.State) :
-      StaticValue → StateM (Std.HashSet InstanceId) Bool
-    | .natural _ => pure true
-    | .«module» id => realInstance state id
-    | .type ty => realType state ty
-
-  partial def realType (state : Compile.State) :
-      ClosedType → StateM (Std.HashSet InstanceId) Bool
-    | .opaque .. => pure false
-    | .nonzero t | .seq t _ => realType state t
-    | .tuple ts _ => ts.allM (realType state)
-    | .nominal _ args => args.allM (realValue state)
-    | .record id | .variant id | .specification id => realInstance state id
-    | .bool | .nat | .rational | .index _ => pure true
-end
-
 /-- An inferred module argument is an optional candidate. Only a default root is
 reported as such in the chains produced when its body is typed. -/
 inductive InstanceDemand where
@@ -269,7 +245,7 @@ mutual
           let state ← get
           let spec := ((state.program.scopes[reference.scope]?).bind
             (·.parameters[reference.index]?)).any (·.spec)
-          throw (.waiting (if spec then "a specification-only parameter"
+          throw (.waiting (if spec then unboundSpecificationParameter
             else "a parameter outside the instance"))
       | .self _ =>
         match env.self? with
@@ -360,6 +336,12 @@ mutual
   the opaque parameter view used to elaborate a generic body. -/
   partial def lookupModuleMember (inst : InstanceId) (name : String) (place : Span) :
       CompileM (Option MemberValue) := do
+    let result ← resolveModuleMember inst name place
+    if result.isSome then observeMember inst place (receiver := true)
+    return result
+
+  partial def resolveModuleMember (inst : InstanceId) (name : String) (place : Span) :
+      CompileM (Option MemberValue) := do
     let state ← get
     let members : Array (String × MemberValue) ← match state.table.content? inst with
       | some (.«module» _ members) => pure members
@@ -377,7 +359,7 @@ mutual
       | _ => throw (.waiting "a member of a module whose members are being formed")
     let found : Option MemberValue := (members.find? (·.1 == name)).map (·.2)
     match found with
-    | some (.fromReceiver receiver) => lookupModuleMember receiver name place
+    | some (.fromReceiver receiver) => resolveModuleMember receiver name place
     | member => return member
 
   /-- A member of a static thing at an instance: of a type, from the vocabulary and from TY11;
@@ -459,7 +441,7 @@ mutual
   /-- The value of what a path stands for, of the class expected when one is. `text` is what a
   message calls it. -/
   partial def thingValue (env : Env) (thing : Thing) (expected : Option Class) (place : Span)
-      (text : CompileM String) : CompileM StaticValue := do
+      (text : CompileM String) (selected : Bool := true) : CompileM StaticValue := do
     match thing with
     | .value value => checkClass value expected place text
     | .runtime localName =>
@@ -475,7 +457,8 @@ mutual
       match found.kind with
       | .alias | .vocabularyType | .specType | .record | .«variant» | .staticName | .«module» =>
         let values ← bindArguments env steps scopes place
-        let inst ← instantiate id values { description := "", span := place }
+        let inst ← formInstance id values { description := "", span := place }
+        if selected then observeApplication inst place
         let value ← valueOfInstance id inst
         checkClass value expected place text
       | kind => refuse "GR5" place s!"`{← text}` is {kindWord kind}; a static term is a type, a natural or a module"
@@ -808,7 +791,7 @@ mutual
   /-- Whether a constraint holds at an instance; the text of the failure when it does not
   (SP4). Check specification conjuncts only when closing proof arguments (SP11). -/
   partial def checkConstraint (env : Env) (constraint : Lowered.Constraint) (owner : String)
-      (specification : Bool := false) : CompileM (Option String) := do
+      (specification : Bool := false) (deferProofArguments : Bool := false) : CompileM (Option String) := do
     let state ← get
     let constraintText ← sourceText env (constraintSpan constraint)
     let failed (here : String) : String :=
@@ -818,7 +801,16 @@ mutual
       if (← mentionsSpecParameter subject) != specification then return none
       let value ← evalAny env subject
       for sort in sorts do
-        if let some _ ← meetsSort env value sort then
+        -- A deployed member has no proof arguments. Still check the interface application
+        -- itself and every other sort in the bound before deciding applicability.
+        let mismatch ← try meetsSort env value sort catch
+          | .waiting why => do
+            let .reference ref := sort | throw (.waiting why)
+            unless deferProofArguments && why == unboundSpecificationParameter &&
+                (← mentionsSpecParameter (.reference ref)) do throw (.waiting why)
+            pure none
+          | other => throw other
+        if mismatch.isSome then
           return some (failed s!"{renderValue state value}: {← sourceText env (sortSpan sort)}")
       return none
     | .compare span operator left right =>
@@ -846,7 +838,7 @@ mutual
   instance a constraint that does not hold skips the instance (SP7). -/
   partial def checkWheres (env : Env) (found : Declaration) (owner : String) (isDefault : Bool)
       (skip : Lowered.Constraint → CompileM Bool) (specification : Bool := false)
-      (ownOnly : Bool := false) : CompileM Unit := do
+      (ownOnly : Bool := false) (deferProofArguments : Bool := false) : CompileM Unit := do
     let modules ← getModules
     let program ← program
     let scopes := if ownOnly then found.ownScope.toArray else found.scopes
@@ -857,7 +849,7 @@ mutual
         if ← skip constraint then continue
         -- a constraint that cannot be evaluated here (it reads a member that a later layer
         -- gives) is not taken to hold: the instance waits for it (SP4)
-        let outcome ← try checkConstraint scopeEnv constraint owner specification
+        let outcome ← try checkConstraint scopeEnv constraint owner specification deferProofArguments
           catch failure => match failure with
             | .waiting reason => throw (.waiting s!"a constraint of its `where`: {reason}")
             | other => throw other
@@ -867,6 +859,14 @@ mutual
 
   /-- The instance of a declaration at values, made once (SP7). -/
   partial def instantiate (id : DeclarationId) (values : Array StaticValue) (requested : Frame)
+      (demand : InstanceDemand := .required) (specification : Array Nat := #[])
+      (owner : Option InstanceId := none) : CompileM InstanceId := do
+    let inst ← formInstance id values requested demand specification owner
+    if demand == .required then observeApplication inst requested.span
+    return inst
+
+  /-- Form a signature without making the scheduler's enumeration an external member use. -/
+  partial def formInstance (id : DeclarationId) (values : Array StaticValue) (requested : Frame)
       (demand : InstanceDemand := .required) (specification : Array Nat := #[])
       (owner : Option InstanceId := none) : CompileM InstanceId := do
     let isDefault := demand != .required
@@ -897,7 +897,7 @@ mutual
           defaultInstances := results.defaultInstances.erase inst }
       match found with
       | some (.done (.data (.waits _ true))) => if isDefault then return inst else demand
-      | some (.done _) => return inst
+      | some (.done _) => useQueryReads ⟨.signature, inst⟩; return inst
       | some .inProgress => refuseRecursion description requested.span
       | some (.exhausted exhaustion) => throw (.exhausted exhaustion)
       | some .skipped => if isDefault then throw .skipped else demand
@@ -1151,14 +1151,14 @@ mutual
           unless memberParameters == definitionParameters do
             refuse "SP8" site s!"`{name}::{memberName}` has {definitionParameters} static parameters; `{interfaceName}` declares {memberParameters}"
           if memberParameters == 0 then
-            let value ← thingValue env (.declarations #[(definition, none)] {}) (some .type) site (pure memberName)
+            let value ← thingValue env (.declarations #[(definition, none)] {}) (some .type) site (pure memberName) (selected := false)
             match value with
             | .type type => members := members.push (memberName, .type type)
             | _ => pure ()
           else members := members.push (memberName, .definition definition)
         | .naturalMember =>
           unless definitionDeclaration.kind == .staticName do wrong "a natural member"
-          match ← thingValue env (.declarations #[(definition, none)] {}) (some .natural) site (pure memberName) with
+          match ← thingValue env (.declarations #[(definition, none)] {}) (some .natural) site (pure memberName) (selected := false) with
           | .natural value => members := members.push (memberName, .natural value)
           | _ => pure ()
         | .moduleMember =>
@@ -1166,7 +1166,7 @@ mutual
             | .moduleMember moduleNode =>
               let term ← lowerWritten (Names.Written.pathExpr env.file moduleNode.path.span moduleNode.path)
               evalTerm env term .«module»
-            | .«module» _ => thingValue env (.declarations #[(definition, none)] {}) (some .«module») site (pure memberName)
+            | .«module» _ => thingValue env (.declarations #[(definition, none)] {}) (some .«module») site (pure memberName) (selected := false)
             | _ => do wrong "a module member"; throw .abandoned
           if let .«module» other := value then
             if let .member (.moduleMember _ _ memberBound) := memberDeclaration.node then

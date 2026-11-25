@@ -47,7 +47,7 @@ mutual
       let description ← describeInstance instanceKey.declaration instanceKey.arguments
         instanceKey.specification instanceKey.owner
       refuseRecursion description place
-    | some _ => return
+    | some _ => useQueryReads ⟨.body, inst⟩; return
     | none => pure ()
     let some entry := state.table.entryAt? inst | return
     let .done _ := entry.state | return

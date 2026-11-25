@@ -18,6 +18,21 @@ for the written group proofs. The previous execution commands and derived scheme
 at [revision `10ed903fc`](https://github.com/zkcompiler/zkc/tree/10ed903fc22d3f20b22ff2d1bbf607a740ef0718).
 See the [compiler status](../../../../docs/status.md) for current limits.
 
+## Checking selected module members
+
+Selecting a member such as `M<1>::helper` requires the enclosing instance `M<1>` to satisfy
+its module bounds, interface conditions, applicable member definitions and laws. The frontend
+records the concrete arguments after inference. Passing a formed module as an argument also
+requires its applicable members and laws. Before choosing public defaults, the ordinary checker
+counts that instance as a use of `M`. An unused public module still receives its
+eligible default instances under SP7.
+
+A written goal requires the modules used by its deployed protocol, its selected relation,
+and the evaluation of its proof arguments, ceiling and charges. Two goals of the same scheme
+can therefore receive different results. Module validation runs in a private instance table
+so that its additional checks preserve the numbering of emitted definitions. The frontend
+checks the types of laws under SP10. The formal library owns proofs that those laws hold.
+
 ## Proof arguments at a written goal
 
 A scheme selects a deployed protocol instance. A named goal binds that instance's

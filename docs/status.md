@@ -144,6 +144,11 @@ admission counts as an admission. A function bound to a vocabulary row has no pa
 The example and library suites report waits separately. Selected library modules also require
 admitted default instances of their public functions with bodies.
 
+Selecting a member of an applied module checks its interface conditions, applicable member
+bodies and laws. Ordinary checking counts the module as reached before choosing public
+defaults. Written issuance checks the modules used by each selected goal, including uses
+in its proof arguments, clause, charges and ceiling. See the [frontend guide](../lean/compiler/Zkc/Frontend/README.md#checking-selected-module-members).
+
 The function member `pair` of the catalogue's BLS12-381 module is the standard row
 `pairing.pair`. A module instance
 stores the row name of each function member. Calls use the member's interface for its mode,
