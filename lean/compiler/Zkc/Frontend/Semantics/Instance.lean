@@ -112,8 +112,9 @@ inductive InstanceContent where
   /-- A declaration whose content is not evaluated here: a specification type. -/
   | unevaluated
   /-- An instance that waits, with what it waits for: a constraint of its `where` that cannot be
-  evaluated here, a form of a later layer. -/
-  | waits (reason : String)
+  evaluated here, a form of a later layer. A default that waited on eligibility with a
+  known member conflict still owes an explicit request its SP8 check. -/
+  | waits (reason : String) (defaultOnly : Bool := false)
   deriving Inhabited
 
 /-- The default instances of one declaration (SP7). -/

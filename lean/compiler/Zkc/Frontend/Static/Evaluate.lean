@@ -243,10 +243,17 @@ def appliedMemberName (state : Compile.State) (qualified : Bool)
   let receiver := if args.isEmpty then name else s!"{name}<{", ".intercalate args}>"
   s!"{receiver}::{member}"
 
+/-- The first two distinct applications declaring a member in a module header. -/
+structure MemberConflict where
+  member : String
+  first : AppliedInterface × Path
+  second : AppliedInterface × Path
+
 /-- Two distinct declarations or static values can have the same fully qualified name.
 In that case point to the two applications as the module author wrote them. -/
-def collisionMessage (state : Compile.State) (moduleName member : String)
-    (first second : AppliedInterface) (firstPath secondPath : Path) : String := Id.run do
+def MemberConflict.message (conflict : MemberConflict) (state : Compile.State)
+    (moduleName : String) : String := Id.run do
+  let ⟨member, (first, firstPath), (second, secondPath)⟩ := conflict
   let display qualified app := appliedMemberName state qualified app member
   let mut left := display false first
   let mut right := display false second
@@ -268,8 +275,8 @@ def interfaceConstraints (state : Compile.State) (interface : DeclarationId) : A
 
 /-- Bind the distinct, directly named applications in header order. Typing and emission
 share this index. Source paths live only until the instance has been checked. -/
-def moduleMemberOwners (moduleName : Syntax.Name)
-    (written : Array (AppliedInterface × Path)) : CompileM (Std.HashMap String InterfaceMember) := do
+def moduleMemberOwners (written : Array (AppliedInterface × Path)) :
+    CompileM (Except MemberConflict (Std.HashMap String InterfaceMember)) := do
   let state ← get
   let mut members : Std.HashMap String InterfaceMember := {}
   for (app, path) in written do
@@ -279,12 +286,11 @@ def moduleMemberOwners (moduleName : Syntax.Name)
       unless decl.node matches .member _ do continue
       let name := state.program.nameOf id
       if let some prior := members[name]? then
-        let some (_, firstPath) := written.find? (·.1 == prior.application)
+        let some first := written.find? (·.1 == prior.application)
           | throw (.defect "missing source of a bound interface application")
-        refuse "SP8" moduleName.span
-          (collisionMessage state moduleName.text name prior.application app firstPath path)
+        return .error ⟨name, first, (app, path)⟩
       members := members.insert name ⟨app, id⟩
-  return members
+  return .ok members
 
 /-- Resolve a concrete member through its bound owner. The opaque typing of SP12
 reads the first declaration of the name from its ordered interfaces. -/
@@ -916,17 +922,15 @@ mutual
     unless isNew do
       let found : Option (QueryState Typed.Signature) :=
         ((← getResults).signatures.entries[inst]?).map (·.state)
+      let demand := modifyResults fun results =>
+        { results.modifySignatures (·.reenter inst frame requester) with
+          defaultInstances := results.defaultInstances.erase inst }
       match found with
+      | some (.done (.data (.waits _ true))) => if isDefault then return inst else demand
       | some (.done _) => return inst
       | some .inProgress => refuseRecursion description requested.span
       | some (.exhausted exhaustion) => throw (.exhausted exhaustion)
-      | some .skipped =>
-        -- skipped as a default instance: skipped again as one; asked for by the program, it is
-        -- an instance like any other, computed now and refused where its `where` fails (SP4)
-        if isDefault then throw .skipped
-        modifyResults fun results =>
-          { results.modifySignatures (·.reenter inst frame requester) with
-            defaultInstances := results.defaultInstances.erase inst }
+      | some .skipped => if isDefault then throw .skipped else demand
       | _ => throw .abandoned
     -- a request deeper than the budget of the chain is not computed: it is exhausted (SP10)
     if ← beyondDepth then
@@ -1052,20 +1056,27 @@ mutual
             seen := seen.insert app
           written := written.push (app, path)
     let applications := written.map Prod.fst
-    let afterConditions := concrete && isDefault && applications.size > 1 &&
-      applications.any fun app => !(interfaceConstraints state app.1).isEmpty
-    let bind : CompileM ModuleInterfaces := do
-      return .concrete applications (← moduleMemberOwners moduleName written)
-    let interfaces ← if concrete && !afterConditions then bind else pure (.ordered applications)
-    let members ← moduleMemberValues found moduleName body env applications
-    let content := InstanceContent.«module» interfaces members
-    unless applications.isEmpty do
-      -- Conditions such as Self::Height == n read the values of this candidate.
-      -- The enclosing signature request records a skip, wait or failure on exit.
-      modifyResults (·.modifySignatures (·.setState inst (.done (.data content))))
-      moduleConditions inst moduleName.text applications isDefault
-    if afterConditions then return .«module» (← bind) members
-    return content
+    let (interfaces, pending) ← if concrete then do
+      match ← moduleMemberOwners written with
+      | .ok owners => pure (.concrete applications owners, none)
+      | .error conflict =>
+        unless isDefault && applications.any (fun app => !(interfaceConstraints state app.1).isEmpty) do
+          refuse "SP8" moduleName.span (conflict.message (← get) moduleName.text)
+        pure (.ordered applications, some conflict)
+    else pure (ModuleInterfaces.ordered applications, none)
+    try
+      let members ← moduleMemberValues found moduleName body env applications
+      let content := InstanceContent.«module» interfaces members
+      unless applications.isEmpty do
+        -- Give interface conditions access to Self's values while deciding eligibility.
+        modifyResults (·.modifySignatures (·.setState inst (.done (.data content))))
+        moduleConditions inst moduleName.text applications isDefault
+      if let some conflict := pending then
+        refuse "SP8" moduleName.span (conflict.message (← get) moduleName.text)
+      return content
+    catch
+      | .waiting reason => return .waits reason pending.isSome
+      | failure => throw failure
 
   /-- The values defined by a module body or supplied by its primitive binding. -/
   partial def moduleMemberValues (found : Declaration) (moduleName : Syntax.Name)

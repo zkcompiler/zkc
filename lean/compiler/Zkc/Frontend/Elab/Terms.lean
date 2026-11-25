@@ -337,7 +337,7 @@ that is not evaluated (a generated member, a specification-only parameter). -/
 def signatureWait (inst : InstanceId) : CompileM String := do
   let state ← get
   let some entry := state.table.entries[inst]? | return "a signature that is not evaluated here"
-  if let some (.waits reason) := state.table.content? inst then return reason
+  if let some (.waits reason _) := state.table.content? inst then return reason
   let some lowered := (← getModules).lowered? entry.key.declaration
     | return "a signature that is not evaluated here"
   let types : Array Lowered.TypeTerm := match lowered.content with
@@ -425,14 +425,14 @@ inductive CalleeOf where
 def recordFields (inst : InstanceId) : ElabM (Array (String × ClosedType)) := do
   match (← getThe Compile.State).table.content? inst with
   | some (.record _ fields) => return fields
-  | some (.waits reason) => waitFor reason
+  | some (.waits reason _) => waitFor reason
   | _ => waitFor "a record whose fields are not evaluated"
 
 /-- The alternatives of a variant instance. -/
 def variantAlternatives (inst : InstanceId) : ElabM (Array (String × Array ClosedType)) := do
   match (← getThe Compile.State).table.content? inst with
   | some (.«variant» alternatives) => return alternatives
-  | some (.waits reason) => waitFor reason
+  | some (.waits reason _) => waitFor reason
   | _ => waitFor "a variant whose alternatives are not evaluated"
 
 /-- The lowered form of a declaration. -/

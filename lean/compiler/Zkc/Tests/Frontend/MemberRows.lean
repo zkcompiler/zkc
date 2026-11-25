@@ -222,6 +222,27 @@ private def checkDefaultConditions (repository : Repository) : TestM Unit := do
     !(eligible.admitRoots (some #["evaluate"])).complete.isOk)
     s!"eligible colliding default: {eligible.renderDiagnostics}"
 
+/-- A wait from testing an ineligible or as-yet undecided default cannot satisfy a
+later demand for a module with two member owners. Exercise both request orders. -/
+private def checkWaitingDefault (repository : Repository) : TestM Unit := do
+  let intro := "module caller\ninterface I<n: nat> where (Self::Height == n):\n    nat Height\n"
+  let owner := "pub module M<n: nat>: I<n> + I<1> = primitive(\"project.unknown\")\n"
+  let useSite := "struct Box<H: I<0>>:\n    flag: bool\n" ++
+    "pub def force<k: nat>(b: Box<M<0>>) -> bool: b.flag\n"
+  let alone ← memberSession repository (intro ++ owner ++ "def evaluate() -> bool: true\n")
+  expectTrue (!alone.hasErrors && (alone.admitRoots (some #["evaluate"])).complete.isOk)
+    s!"independent root while a default waits: {alone.renderDiagnostics}"
+  for body in [owner ++ useSite, useSite ++ owner] do
+    let conflict ← memberSession repository (intro ++ body)
+    let refused := (conflict.diagnostics.find? (·.isError)).any fun d =>
+      let message := d.render conflict.state.env.renderer
+      d.rule == "SP8" && message.contains "I<0>::Height" && message.contains "I<1>::Height"
+    expectTrue (refused && !(conflict.admitRoots none).complete.isOk)
+      s!"demand after default wait: {conflict.renderDiagnostics}"
+    let equal ← memberSession repository (intro ++ body.replace "I<n> + I<1>" "I<n> + I<n + 0>")
+    expectTrue (!equal.hasErrors && (equal.admitRoots none).complete.isOk)
+      s!"equal owners with an unavailable value: {equal.renderDiagnostics}"
+
 /-- A third declaration of the same name leaves one diagnostic naming the first two owners. -/
 private def checkCollisionWitness (repository : Repository) : TestM Unit := do
   let source := "module caller\ninterface A:\n    type T\ninterface B:\n    type T\n" ++
@@ -237,6 +258,7 @@ private def checkCollisionWitness (repository : Repository) : TestM Unit := do
 def memberRowSuite (repository : Repository) : TestM Unit := do
   checkQualifiedOwners
   checkOwnerLocations
+  checkWaitingDefault repository
   checkDefaultConditions repository
   checkDisjointRows repository
   checkConcreteApplications repository

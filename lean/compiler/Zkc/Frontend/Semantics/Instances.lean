@@ -111,7 +111,7 @@ def renderContent (state : Compile.State) : InstanceContent → String
       | .opaqueType _ => s!"{entry.1} opaque"
     s!"{" + ".intercalate named}: {", ".intercalate (members.toList.map member)}"
   | .unevaluated => "not evaluated"
-  | .waits reason => s!"waits for {reason}"
+  | .waits reason _ => s!"waits for {reason}"
 
 end Instances
 

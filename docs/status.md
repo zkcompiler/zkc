@@ -94,7 +94,8 @@ Resolved goals and contracts retain declaration identity and named statement arg
 
 For each concrete module instance the frontend records the applied interface that declares each
 member. Signature elaboration, member-body checking and row emission read that binding.
-A default instance can read its own members to check interface conditions before binding owners.
+A default instance can read its own members to determine whether interface conditions hold.
+If it waits with a member conflict, a later explicit request checks ownership at that use.
 A module reached only through a member selection can stay unformed and receive none of the
 checks of SP8, including when a signature uses its type or natural, a literal constructs its
 record or enum, a call uses its own `pub def` or its protocol member, a clause uses its
