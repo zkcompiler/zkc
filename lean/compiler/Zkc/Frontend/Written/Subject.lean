@@ -156,12 +156,15 @@ private def tableTerm (row : Nat → String) (count : Nat) : String :=
 /-- Close the typed subject over the package, physical members, role facts and lookup proofs
 already in scope. Mathematical issuance supports deciding proofs of soundness. -/
 def text (layout : SubjectLayout owner) : Except String String := do
+  let program := owner.state.program
+  let some scheme := program.declarations[owner.scheme]? | throw "missing source scheme declaration"
+  let some file := program.files[scheme.file]? | throw "missing defining file of the source scheme"
   let mut lines := #[
     "noncomputable def written'root : Zkc.Subject.WrittenRoot subjectPackage :=\n" ++
       "  ⟨⟨rootHeader, rootMember, found'root⟩, ⟨proverRole, by decide +kernel⟩,\n" ++
       "   ⟨verifierRole, by decide +kernel⟩, by decide +kernel⟩\n",
     "noncomputable def written'origins : Zkc.Subject.RootOrigins written'root :=\n" ++
-      s!"  ⟨{reprStr (Static.qualifiedName owner.state.program owner.scheme)}, #{list (owner.inputs.toList.map reprStr)}, rfl⟩\n"]
+      s!"  ⟨{reprStr file.path}, {reprStr (Static.qualifiedName program owner.scheme)}, #{list (owner.inputs.toList.map reprStr)}, rfl⟩\n"]
   for k in layout.functions do
     lines := lines.push (s!"noncomputable def written'fn{k} : " ++
       s!"Zkc.Subject.FunctionEntry subjectPackage := ⟨header{k}, member'fn{k}, found'fn{k}⟩\n")

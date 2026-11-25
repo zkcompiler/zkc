@@ -82,6 +82,8 @@ def WrittenSubject.goalAt {V : Vocabulary} {pkg : Package V} {root : WrittenRoot
 
 /-- Source names for readers, aligned before dropping any verifier-invisible inputs. -/
 structure RootOrigins {V : Vocabulary} {pkg : Package V} (root : WrittenRoot pkg) where
+  /-- The defining file module distinguishes a nested module from an imported module of the same name. -/
+  schemeFileModule : Array String
   schemePath : String
   inputNames : Array String
   aligned : inputNames.size = root.entry.header.ins.length

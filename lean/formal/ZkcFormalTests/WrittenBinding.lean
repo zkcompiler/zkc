@@ -60,19 +60,26 @@ private def checkLeaf (table : Expr) (i : Nat) (expected : Name) : MetaM Unit :=
 
 /-- Follow the actual aggregate and public declarations. The expected indices and label
 are chosen by the client from the original source, independently of the layout issuer. -/
-def checkReferences (space : Name) (label : String) (goal clause : Nat) (fees : Bool) (arguments := 0) :
+def checkReferences (space : Name) (label : String) (goal clause relation : Nat) (fees : Bool) (arguments := 0) :
     CommandElabM Unit := liftTermElabM do
   let localName := Name.str space
   let row := localName s!"written'goal{goal}"
   let fields := localName s!"written'fields{goal}"
   let caps := localName s!"written'caps{goal}"
   let decision := localName s!"written'decision{clause}"
+  let fnEntry := localName s!"written'fn{relation}"
+  let fnMember := localName s!"member'fn{relation}"
   let slot := localName s!"written'slot{goal}"
   let subject := localName "written'subject"
   let aggregate ← bodyOf subject
   let clauses ← operand aggregate ``WrittenSubject.mk 1
   named clauses (localName "written'clauses")
   checkLeaf (← bodyOf (localName "written'clauses")) clause decision
+  named (← operand (← bodyOf decision) ``Decision.mk 4) fnEntry
+  let entry ← bodyOf fnEntry
+  named (← operand entry ``FunctionEntry.mk 2) (localName s!"header{relation}")
+  named (← operand entry ``FunctionEntry.mk 1) fnMember
+  named (← operand entry ``FunctionEntry.mk 0) (localName s!"found'fn{relation}")
   checkLeaf (← operand aggregate ``WrittenSubject.mk 0) goal slot
   named (← operand (← bodyOf slot) ``GoalSlot.mk 0) fields
   let selected ← bodyOf row
@@ -108,9 +115,14 @@ def checkReferences (space : Name) (label : String) (goal clause : Nat) (fees : 
         throwError "{publicName suffix_} must expose {expected} to the author"
   let publicCap := publicName "Caps"
   let publicMember := localName (memberLabel ++ "Member")
+  named (← bodyOf publicMember) fnMember
   view "ClaimOf" "ClaimOf" 4 [publicCap]
   view "Witnessed" "Witnessed" 1 [publicMember]
-  inspect "Claim" fun e => named e.getAppFn (publicName "ClaimOf")
+  inspect "Claim" fun e => do
+    named e.getAppFn (publicName "ClaimOf")
+    named (← operand e (publicName "ClaimOf") 0) publicMember
+    named (← operand e (publicName "ClaimOf") 1) (localName "rootMember")
+    named (← operand e (publicName "ClaimOf") 2) (localName "installed")
   inspect "Goal" fun e => do
     named (← operand e (semantic "admittedAt") 1) row
     named (← operand e (semantic "admittedAt") 0) (publicName "ClaimOf")

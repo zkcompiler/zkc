@@ -59,8 +59,8 @@ private def coordinates (i place key : Nat) (xs : List Nat) (ws : Option (List N
   eqn s!"ZkcFormalTests.WrittenBinding.operands {atGoal i}"
     s!"({place}, {key}, {xs.length}, {reprStr xs}, {reprStr ws})"
 
-private def refs (label : String) (i d : Nat) (fees : Bool) :=
-  s!"run_cmd ZkcFormalTests.WrittenBinding.checkReferences (← Lean.getCurrNamespace) {reprStr label} {i} {d} {fees}\n"
+private def refs (label : String) (i d relation : Nat) (fees : Bool) :=
+  s!"run_cmd ZkcFormalTests.WrittenBinding.checkReferences (← Lean.getCurrNamespace) {reprStr label} {i} {d} {relation} {fees}\n"
 
 private def sizes (goals decisions : Nat) :=
   eqn "written'subject.goals.size" (toString goals) ++
@@ -117,7 +117,7 @@ private def aliasCase (work : System.FilePath) (src : String) (reverse : Bool) :
   let gold := sizes 3 2 ++ roles 1 0 1 ++ String.join (ports.zipIdx.map fun ((p,x),i) =>
     coordinates i p 0 [x] (some [0]) ++ fields i [] (flat 1) "none")
   let (m, check) ← full work space src req
-    (gold ++ String.join (selections.map fun (l,i,d) => refs l i d true))
+    (gold ++ String.join (selections.map fun (l,i,d) => refs l i d 0 true))
   let s ← readSource src req
   let labels := selections.map Prod.fst
   checkLayout m.statements labels 3 1
@@ -318,6 +318,33 @@ goal target = soundness(Left::S)
   acceptedOutput "qualified source selectors" ok log [] allowed
   crossed
 
+/-- The file module catalog::Pair and a nested Pair in catalog both contain S. Both
+schemes select exactly the same protocol, roles and goal spelling through real imports. -/
+private def importedScheme (work : System.FilePath) : IO Unit := do
+  let issue (tag selector : String) (definingModule : Array String) := do
+    let entry := "module catalog\nuse catalog::Pair::{C, S}\nuse zkc::security::{soundness}\n" ++
+      "module Pair:\n    pub scheme S = C:\n        prover P\n        construction interactive\n" ++
+      s!"goal target = soundness({selector})\n"
+    let assembly ← Driver.assembleFiles ⟨"catalog.zkc", Syntax.parseString "catalog.zkc" entry⟩
+      ["fixtures/scheme-origin", "../../libraries"]
+    let #[result] := issueSoundnessGoals assembly ["target"] | throw (IO.userError "expected one issue")
+    expect "original goal" result.path (some "catalog::target")
+    let m := (← IO.ofExcept result.outcome).publication
+    let original ← IO.ofExcept (admitSoundnessGoal assembly "target")
+    let readback ← IO.ofExcept (ZkcFormalTests.WrittenSource.consumerAt original [("target", "target")] true)
+    let check ← issued work tag m.space m.statements m.stated
+    let gold := eqn "written'origins.schemeFileModule" (reprStr definingModule) ++
+      eqn "written'origins.schemePath" (reprStr "catalog::Pair::S")
+    let observed ← issued work (tag ++ "Client") m.space (client tag m.space (readback ++ gold))
+    return (m, readback, check *> observed)
+  let (nested, nestedSource, checkNested) ← issue "NestedIssued" "Pair::S" #["catalog"]
+  let (flat, flatSource, checkFlat) ← issue "ImportedIssued" "S" #["catalog", "Pair"]
+  expect "canonical goal namespace" nested.space flat.space
+  let mismatch := [("written'origins.schemeFileModule =", "Type mismatch")]
+  let crossNested ← checkMutant work nested "ExpectImported" nested.statements flatSource mismatch
+  let crossFlat ← checkMutant work flat "ExpectNested" flat.statements nestedSource mismatch
+  [checkNested, checkFlat, crossNested, crossFlat].forM id
+
 private def countSource : IO String := do
   let blocks := readBlocks (← IO.FS.readFile "../../language/conformance/layer-b.txt")
   let some src := (blocks.find? (·.id == "N-GL2a")).bind (·.files[0]?)
@@ -338,7 +365,7 @@ private def coordinateChecks (work : System.FilePath) : IO Unit := do
     (sizes 4 3 ++ roles 1 1 0 ++ String.join ([
       (0,0,[2,1,1],[0,3]), (1,1,[1,2,1],[3,0]), (2,2,[2,1,1],[0,3]),
       (3,0,[2,1,1],[0,3])].map fun (i,p,x,w) => coordinates i p 0 x (some w)) ++
-      refs "again" 3 0 true)
+      refs "again" 3 0 0 true)
   let short ← add "ShortWitness" occurrences ["short"] (coordinates 0 3 0 [2,1,1] none)
   let slots ← IO.FS.readFile "fixtures/written-decisions.zkc"
   let mapped ← add "WitnessPorts" slots ["left","other_witness","implicit_witness"]
@@ -389,6 +416,19 @@ private def capChecks (work : System.FilePath) : IO Unit := do
   check
   bad
   wrongArg
+
+/-- Two clauses select one function. Inlining an equal entry in only the second clause
+still proves the same propositions, but loses the reference to the shared function. -/
+private def sharedFunction (work : System.FilePath) : IO Unit := do
+  let req := simple ["a", "b", "c"]
+  let s ← readSource tenancy req
+  let m ← IO.ofExcept (s.module "SharedFunction" {})
+  let changed ← replaceOnce m.statements "⟨2, written'fn0, ⟨1, by decide +kernel⟩"
+    "⟨2, ⟨header0, member'fn0, found'fn0⟩, ⟨1, by decide +kernel⟩"
+  let original ← IO.ofExcept (ZkcFormalTests.WrittenSource.consumer tenancy req true)
+  let bad ← checkMutant work m "InlineFunction" changed original
+    [("checkReferences (← Lean.getCurrNamespace) \"c\"", "expected the reference SharedFunction.written'fn0")]
+  bad
 
 private def reduction := "module reduceexample
 use zkc::security::{soundness}
@@ -505,7 +545,7 @@ private def mixedChecks (work : System.FilePath) : IO Unit := do
   let ceilings ← factModule work "MixedCeilings" ceil labels 2 0
   let mut clients := []
   for (mod,space,fees) in [(m.statementsName.toString,m.space,true), ("MixedClaims","MixedClaims",false)] do
-    let data := sizes 1 1 ++ roles 6 0 1 ++ refs "good" 0 0 fees ++
+    let data := sizes 1 1 ++ roles 6 0 1 ++ refs "good" 0 0 2 fees ++
       coordinates 0 0 2 [0,1] (some []) ++ fields 0 [0] (flat 6) "none"
     let standard := s!"StandardInterpretation.model {atGoal 0} StandardInterpretation.draws"
     let properties := ["ClaimOf","Claim","Goal","Result","Witnessed"] ++ (if fees then ["Judged"] else [])
@@ -531,7 +571,9 @@ private def mixedChecks (work : System.FilePath) : IO Unit := do
 #eval IO.FS.withTempDir aliasChecks
 #eval IO.FS.withTempDir coordinateChecks
 #eval IO.FS.withTempDir schemeOwners
+#eval IO.FS.withTempDir importedScheme
 #eval IO.FS.withTempDir capChecks
+#eval IO.FS.withTempDir sharedFunction
 #eval IO.FS.withTempDir routeEdges
 #eval IO.FS.withTempDir mixedChecks
 #eval do

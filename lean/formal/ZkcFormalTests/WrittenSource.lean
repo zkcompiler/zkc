@@ -18,17 +18,20 @@ private def equation (lhs rhs : String) := s!"example : {lhs} = {rhs} := rfl\n"
 /-- Each request gives the selector to resolve and the public spelling the client expects.
 Two distinct spellings may belong to one source declaration. The ordinary charge subjects
 have simple public names. Fixtures for escaped labels specify the expected spelling literally. -/
-def consumer (source : String) (requests : List (String × String)) (fees : Bool) :
+def consumerAt (root : AdmittedRoot) (requests : List (String × String)) (fees : Bool) :
     Except String String := do
   let some (first, _) := requests.head? | throw "expected a goal"
-  let root ← goalRoot source first
   let compiled ← goalClaims root (requests.map Prod.fst)
   let head ← SourceClause.rootHead root
   let ports := head.ports.filter (!·.specification)
   let (selected, _) ← root.goalSource.selectNamed first .soundness
+  let some scheme := root.state.program.declarations[selected.scheme.declaration]?
+    | throw "unknown selected scheme"
+  let some file := root.state.program.files[scheme.file]? | throw "unknown defining module"
   let (prover, verifier) ← schemeParties root selected.scheme
   let mut text := equation "written'root.entry.header.key.number" (toString root.id) ++
     equation "(written'root.prover.val, written'root.verifier.val)" s!"({prover}, {verifier})" ++
+    equation "written'origins.schemeFileModule" (reprStr file.path) ++
     equation "written'origins.schemePath" (reprStr selected.schemePath) ++
     equation "written'origins.inputNames" (reprStr (ports.map (·.binder.name)))
   let mut declarations : Array DeclarationId := #[]
@@ -69,7 +72,7 @@ def consumer (source : String) (requests : List (String × String)) (fees : Bool
       equation s!"{atIndex}.fields.specification" (reprStr goal.specification.toList) ++
       equation s!"{atIndex}.fields.caps" (Zkc.Subject.Print.capsTerm caps) ++
       equation s!"{atIndex}.fields.ceiling" ceiling ++
-      s!"run_cmd ZkcFormalTests.WrittenBinding.checkReferences (← Lean.getCurrNamespace) {reprStr label} {index} {d} {fees} {goal.specification.size}\n"
+      s!"run_cmd ZkcFormalTests.WrittenBinding.checkReferences (← Lean.getCurrNamespace) {reprStr label} {index} {d} {relation} {fees} {goal.specification.size}\n"
     for (argument, i) in goal.specification.toList.zipIdx do
       text := text ++ equation s!"{label}Argument{i}" (toString argument)
     let standard := s!"StandardInterpretation.model {atIndex} StandardInterpretation.draws"
@@ -80,5 +83,11 @@ def consumer (source : String) (requests : List (String × String)) (fees : Bool
     if fees then text := text ++ equation s!"{label}Judged" s!"ZkcFormal.Written.Goal.Judged {standard}"
   return text ++ equation "written'subject.clauses.size" (toString decisions.size) ++
     equation "written'subject.goals.size" (toString declarations.size)
+
+/-- Assemble the original single-file source before observing the issued module. -/
+def consumer (source : String) (requests : List (String × String)) (fees : Bool) :
+    Except String String := do
+  let some (first, _) := requests.head? | throw "expected a goal"
+  consumerAt (← goalRoot source first) requests fees
 
 end ZkcFormalTests.WrittenSource
