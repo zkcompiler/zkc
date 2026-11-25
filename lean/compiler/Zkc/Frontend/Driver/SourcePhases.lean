@@ -101,6 +101,20 @@ def assemble (assembly : Assembly) : Phase where
     modify fun state =>
       { state with log := assembly.log.entries.foldl (init := state.log) fun log entry => log.add entry }
 
+/-- Install one resolution pass and report the refusals that belong to this compilation. -/
+def installResolution (resolved : Resolved) : CompileM Unit := do
+  let modules ← getModules
+  modifyModules fun _ => (ModuleStore.ofProgram modules.program resolved.resolutions
+    modules.unreadable resolved.instantiations).withLowered resolved.lowered resolved.loweredScopes
+    resolved.loweredUses resolved.loweredInstantiations
+  modify fun state =>
+    { state with log := resolved.refusals.foldl (init := state.log) fun log entry => log.add entry }
+  unless resolved.conflicts.isEmpty do
+    let places := (resolved.conflicts.toList.take 5).map fun (file, byte) => s!"{file}@{byte}"
+    logError "defect" default (.ofText
+      s!"a defect of the frontend: the lowered form says two things at {resolved.conflicts.size} places: {", ".intercalate places}")
+      (origin := .names)
+
 /-- Every written name of the program is resolved and lowered in one walk: the lowered form of
 every declaration, scope, `use` and comment `// instantiate:`, the table of resolutions of each
 file read off it, and the first refusal of each declaration. Two nodes of the lowered form that
@@ -112,16 +126,7 @@ def resolve : Phase where
   run := do
     let modules ← getModules
     let resolved := resolveProgram { program := modules.program, log := {}, unreadable := modules.unreadable }
-    modifyModules fun _ => (ModuleStore.ofProgram modules.program resolved.resolutions
-      modules.unreadable resolved.instantiations).withLowered resolved.lowered resolved.loweredScopes
-      resolved.loweredUses resolved.loweredInstantiations
-    modify fun state =>
-      { state with log := resolved.refusals.foldl (init := state.log) fun log entry => log.add entry }
-    unless resolved.conflicts.isEmpty do
-      let places := (resolved.conflicts.toList.take 5).map fun (file, byte) => s!"{file}@{byte}"
-      logError "defect" default (.ofText
-        s!"a defect of the frontend: the lowered form says two things at {resolved.conflicts.size} places: {", ".intercalate places}")
-        (origin := .names)
+    installResolution resolved
 
 /-- A refusal is always reported. An instance whose signature or body is refused has a
 diagnostic in the log; when the log has no error and an instance is refused all the same, the
@@ -155,6 +160,7 @@ def instances : Phase where
     reportSilentRefusals
 
 /-- The shared prefix through selection of roots and instantiation of their signatures. -/
-def sourcePhases (assembly : Assembly) : Array Phase := #[assemble assembly, resolve, instances]
+def sourcePhases (assembly : Assembly) (names : Phase := resolve) : Array Phase :=
+  #[assemble assembly, names, instances]
 
 end Zkc.Frontend.Driver

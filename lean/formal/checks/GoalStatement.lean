@@ -358,7 +358,12 @@ consumer. -/
 def proofModule (name text guarded : String)
     (alter : Statements → String → Except String String := fun _ proof => pure proof) :
     IO Module := do
-  let s ← IO.ofExcept (statementsOf text ["sound"])
+  let source := text ++ "\ngoal sibling = soundness(Checked, clause = absent)\n"
+  let assembly := Id.run <| assemble #[⟨"source.zkc", Syntax.parseString "source.zkc" source⟩] fun _ => pure none
+  let #[bad, good] := issueSoundnessGoals assembly ["sibling", "t::sound"]
+    | throw (IO.userError "lost a requested goal")
+  unless !bad.outcome.isOk do throw (IO.userError "issued the absent clause")
+  let s := (← IO.ofExcept good.outcome).statements
   IO.ofExcept (s.module name
     { text := ← IO.ofExcept (alter s (proofText guarded))
       theorems := ["sound_installed", "sound_witnessed"]
@@ -486,6 +491,9 @@ def run (work : System.FilePath) : IO Unit := do
         steppedDraws, [("r_0", 0), ("r_1", 2), ("r_2", 4)]),
       ("two draws that would share a name are not told apart by their keys",
         clashingSites, [("r_0_key0", 0), ("r_1", 2), ("r_0_key4", 4)]),
+      ("a source site collides with the numbered label of a stepped draw",
+        clashingSites.replace "    guard @V" "    r_0_key0 <- draw index<4> from V to P\n    guard @V",
+        [("r_0_key0", 0), ("r_1", 2), ("r_0_key4", 4), ("draw'5", 5)]),
       ("a charged draw has not its site's name beside a draw without a charge that would share it",
         clashingUncharged, [("r_0_key0", 0), ("r_1", 2), ("r_0", 4)]),
       ("a site whose name is no plain identifier is not named by its key",
@@ -555,6 +563,9 @@ def run (work : System.FilePath) : IO Unit := do
   let module ← proofModule "Operands" fronted "flag"
   let theorems := module.proved
   let proof ← startModule work "Operands" module
+  let shifted := fronted.replace "protocol Flags" ("protocol Prior roles(P,V)(x: bool @(P,V)):\n" ++
+    "    guard @V x\nprotocol Flags")
+  let shiftedProof ← startModule work "RenumberedOperands" (← proofModule "RenumberedOperands" shifted "flag")
   let control ← startRefused work "OperandsControl"
     (← proofModule "OperandsControl" aboutOther "other")
   let assumed ← proofModule "AssumedControl" fronted "flag" assuming
@@ -573,6 +584,7 @@ def run (work : System.FilePath) : IO Unit := do
       (output.splitOn "error").length == 4)
   -- accepted when its two modules are, the proof module by the judgment too
   let _ ← finishLean proof
+  let _ ← finishLean shiftedProof
   -- The published theorem of the control is about the second input. It is proved; the consumer,
   -- which reads the first, is not, and is refused where it gives the theorem its premise.
   expectUnproved "a clause about the other input" "OperandsControl" theorems control ["consumer"]

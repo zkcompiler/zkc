@@ -1,5 +1,5 @@
 import Lean.Data.Json
-import Zkc.Frontend.Written.Statement
+import Zkc.Frontend.Written.Goals
 import Zkc.Tests.Frontend.SourceClause
 import Zkc.Tests.Frontend.PrintedPackageSupport
 import ZkcFormalTests.SubjectProject

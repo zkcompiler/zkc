@@ -405,7 +405,7 @@ off it, and the first refusal of each declaration in source order (in the order 
 refusals). -/
 structure Resolved where
   resolutions : Resolutions
-  refusals : Array Diagnostic
+  refusalsByOwner : Std.HashMap Names.Owner Diagnostic
   instantiations : Array (FileId × Expr)
   lowered : Array Lowered.Declaration
   loweredScopes : Array Lowered.Scope
@@ -417,13 +417,17 @@ structure Resolved where
   none on a sound walk. -/
   conflicts : Array (String × UInt32)
 
+/-- The first refusal of each owner, in the order of the resolver's refusal table. -/
+def Resolved.refusals (resolved : Resolved) : Array Diagnostic :=
+  resolved.refusalsByOwner.fold (init := #[]) fun entries _ refusal => entries.push refusal
+
 /-- Resolves and lowers the names of an assembled program. -/
 def resolveProgram (assembly : Assembly) : Resolved :=
   let (walked, state) := Names.run.run (Names.initialState assembly)
   let instantiations := state.instantiations.map fun (file, _, lowered) => (file, lowered)
   let (resolutions, conflicts) := Names.project assembly.program walked instantiations
   { resolutions
-    refusals := state.refusals.fold (init := #[]) fun refusals _ refusal => refusals.push refusal
+    refusalsByOwner := state.refusals
     instantiations := state.instantiations.map fun (file, term, _) => (file, term)
     lowered := walked.declarations, loweredScopes := walked.scopes, loweredUses := walked.uses
     loweredInstantiations := instantiations

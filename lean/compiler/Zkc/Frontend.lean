@@ -93,4 +93,5 @@ public import Zkc.Frontend.Emit.Application
 public import Zkc.Frontend.Written.Charge
 public import Zkc.Frontend.Driver.Files
 public import Zkc.Frontend.Written.Export
+public import Zkc.Frontend.Written.Goals
 public import Zkc.Frontend.Written.Statement

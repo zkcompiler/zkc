@@ -285,30 +285,55 @@ def selectedGoal (state : Compile.State) (goal : Lowered.Goal) (path : String)
   return (⟨scheme, label, Static.qualifiedName s.program scheme.declaration,
     some goal, some path, specification, ceiling⟩, s)
 
-/-- A bare name must be unique among input declarations. A qualified name selects the
-canonical path, or a path relative to an input file module. -/
-def selectDeclaration (s : Compile.State) (kind : DeclarationKind) (name rule : String) :
-    ExportM (DeclarationId × String) := do
-  let mut candidates := #[]
+/-- Exact and file-relative spellings of input declarations of one kind. Two files can
+contribute the same qualified path through a nested module and a file module. -/
+structure DeclarationIndex where
+  exact : Std.HashMap String (Array DeclarationId) := {}
+  aliases : Std.HashMap String (Array String) := {}
+  deriving Inhabited
+
+def declarationIndex (s : Compile.State) (kind : DeclarationKind) : DeclarationIndex := Id.run do
+  let mut index : DeclarationIndex := {}
   for (d, id) in s.program.declarations.zipIdx do
     unless d.kind == kind && Static.inPackage s.program d.file do continue
     let path := Static.qualifiedName s.program id
-    if path == name then return (id, path)
+    index := { index with exact := index.exact.alter path (fun ids => some ((ids.getD #[]).push id)) }
     let root := pathText s.program.files[d.file]!.path
-    if s.program.nameOf id == name || (path.dropPrefix (root ++ "::")).toString == name then
-      candidates := candidates.push (id, path)
-  match candidates with
-  | #[(id, path)] => return (id, path)
-  | #[] => throw s!"{rule}: no matching declaration named {name} in the input modules"
-  | many => throw s!"{rule}: ambiguous {name}; select one of {", ".intercalate (many.toList.map Prod.snd)}"
+    let relative := (path.dropPrefix (root ++ "::")).toString
+    for alias_ in [s.program.nameOf id, relative].eraseDups do
+      let aliases := index.aliases.alter alias_ fun paths => some ((paths.getD #[]).push path)
+      index := { index with aliases }
+  return index
 
-def selectNamedGoal (s : Compile.State) (name : String) (kind : GoalKind) :
+/-- A selector must identify one declaration, including when its relative spelling picks
+one file but its canonical path could name a second declaration in another file. -/
+def DeclarationIndex.select (index : DeclarationIndex) (name rule : String) :
+    ExportM (DeclarationId × String) := do
+  let path ← if index.exact.contains name then pure name else
+    match index.aliases[name]?.getD #[] with
+    | #[path] => pure path
+    | #[] => throw s!"{rule}: no matching declaration named {name} in the input modules"
+    | many => throw s!"{rule}: ambiguous {name}: {", ".intercalate many.toList}"
+  match index.exact[path]?.getD #[] with
+  | #[id] => return (id, path)
+  | _ => throw s!"{rule}: ambiguous canonical path {path} in the input modules"
+
+def selectDeclaration (s : Compile.State) (kind : DeclarationKind) (name rule : String) :
+    ExportM (DeclarationId × String) :=
+  (declarationIndex s kind).select name rule
+
+/-- After selection, read the declaration by ID throughout elaboration. -/
+def selectGoalId (s : Compile.State) (id : DeclarationId) (kind : GoalKind) :
     ExportM (Selection × Compile.State) := do
-  let (id, path) ← selectDeclaration s .goal name "WK-GOAL"
   let some decl := s.program.declarations[id]? | throw "WK-GOAL: missing goal"
   let some {content := .goal goal, ..} := s.env.modules.lowered? id
     | throw "WK-GOAL: missing resolved goal"
-  selectedGoal s goal path decl.file kind
+  selectedGoal s goal (Static.qualifiedName s.program id) decl.file kind
+
+def selectNamedGoal (s : Compile.State) (name : String) (kind : GoalKind) :
+    ExportM (Selection × Compile.State) := do
+  let (id, _) ← selectDeclaration s .goal name "WK-GOAL"
+  selectGoalId s id kind
 
 def select (s : Compile.State) : Request → ExportM (Selection × Compile.State)
   | .scheme name label => do

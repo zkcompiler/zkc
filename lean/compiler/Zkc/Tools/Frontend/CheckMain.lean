@@ -1,4 +1,4 @@
-import Zkc.Tools.Frontend.Names
+import Zkc.Tools.Frontend.WrittenGoals
 
 open Zkc.Tools.Frontend
 
@@ -7,6 +7,7 @@ def usage : String :=
        zkc-check resolutions [--library <dir>]… <files>…
        zkc-check instances [--library <dir>]… [--contents] <files>…
        zkc-check types [--library <dir>]… <files>…
+       zkc-check written-goals (--goal NAME)… [--output NEW_DIR] [--library <dir>]… <files>…
        zkc-check bench [--library <dir>]… [--repeat <n>] <files>…
 a module `zkc::a::b` that no given file has is read from `<dir>/zkc/a/b.zkc`"
 
@@ -15,6 +16,7 @@ def optionsOf : String → Array String
   | "names" | "resolutions" => #["--library"]
   | "instances" => #["--library", "--contents"]
   | "types" => #["--library"]
+  | "written-goals" => #["--library", "--goal", "--output"]
   | "bench" => #["--library", "--repeat"]
   | _ => #[]
 
@@ -36,6 +38,7 @@ def main (args : List String) : IO UInt32 := do
   | "resolutions" :: rest => run "resolutions" Names.resolutions rest
   | "instances" :: rest => run "instances" Names.instances rest
   | "types" :: rest => run "types" Names.types rest
+  | "written-goals" :: rest => run "written-goals" writtenGoals rest
   | "bench" :: rest => run "bench" Names.bench rest
   | [] => wrong ""
   | command :: _ => wrong s!"no command `{command}`"

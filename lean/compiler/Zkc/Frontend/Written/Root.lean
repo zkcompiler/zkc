@@ -6,9 +6,9 @@ public import Zkc.Frontend.Driver.SourcePhases
 @[expose] public section
 namespace Zkc.Frontend.Written
 
-def sourceState (assembly : Assembly) : ExportM Compile.State := do
+def sourceState (assembly : Assembly) (names : Driver.Phase := Driver.resolve) : ExportM Compile.State := do
   let mut state : Compile.State := {}
-  for phase in Driver.sourcePhases assembly do
+  for phase in Driver.sourcePhases assembly names do
     let (report, next) := phase.runIn sourceContext state
     state := next
     if let some diag := state.log.entries.find? (fun d => d.isError || d.isIncomplete) then

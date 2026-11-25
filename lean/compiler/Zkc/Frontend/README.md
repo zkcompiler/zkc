@@ -35,6 +35,18 @@ caller. The interface has no iteration coordinate for an argument that needs the
 uniform loop. These values describe the authored charge. Certifying a false-acceptance
 probability also requires a theorem for the admitted verifier.
 
+## Issuing written soundness goals
+
+Run the command from `lean/compiler`. Give one `--goal` for each required goal and an optional new directory for the trusted Lean sources.
+
+```sh
+lake exe zkc-check written-goals --library ../../libraries --goal good --goal bad --output issued ../formal/fixtures/hash-relation.zkc
+```
+
+The command prints one result per selector in request order and exits with status 1 if any goal was refused. Short and qualified names that select the same declaration share one issuance. Each issued goal has a separate namespace and a pair of files, `Stated.lean` for the admitted package, its members and propositions, and `Challenge.lean` for the comparator. For this example the directory contains the pair for `mixed::good`, and the diagnostic identifies the hash reached by `mixed::bad`. The output directory must be new. Long canonical paths use nested module components. Each distinct goal publishes its two files together. If writing one pair fails, its selectors report the export error, later goals are still processed, and the command exits with status 1. Issuance fixes a target. Checking a submitted proof against it is a further step.
+
+`Written.issueSoundnessGoals` exposes the same ordered results in memory. It resolves names in one assembly, keeps name-resolution failures owned by a goal with that goal, and shares the deployed admission between goals selecting the same scheme. Each goal then instantiates its own relation and emits the package reachable from that relation and the protocol. A parse error, an invalid shared namespace or a failure of shared source compilation is reported on each request. The issued result retains the actual package, root, relation member and proof arguments. The CLI reports the canonical source path and the keys within that package. If two declarations have the same canonical path, selection reports the ambiguity for every spelling. A contract hypothesis (`requires`) can be omitted under SX7 when it reads a port inaccessible to the honest verifier. Other requirements currently receive an SX7 diagnostic because the formal claim and its satisfiability witness do not yet represent them. `Written.allGoalsIssued` computes the aggregate result.
+
 ## What goals claim, as one package
 
 `Written.goalClaims` reads what written soundness goals of one scheme claim. It gives the
@@ -114,8 +126,9 @@ from nothing that a caller gives. A
 statement names the inputs of the root as the source names its ports (`input_flag`), so that a
 reader sees which inputs the relation is applied to and which the deciding role is run on. A goal
 whose clause is a `reduces` gets no statement yet: the statement of a reduction is about a
-return on which the reduced statement is true. The `requires` of a contract are not hypotheses
-of a statement, which is then the stronger one. The checks of the four subjects
+return on which the reduced statement is true. Under SX7, a requirement that reads an input inaccessible to the deciding role is outside
+the soundness experiment. An available requirement currently prevents issuance until the claim
+and its satisfiability witness can represent the hypothesis. The checks of the four subjects
 (`lean/formal/checks/CountCharge.lean`, `FreivaldsCharge.lean`, `GuessCharge.lean`,
 `EitherCharge.lean`, on the library `lean/formal/ZkcFormalTests/WrittenSubject.lean`) are its users;
 [the page for authors](../../../../docs/written-soundness.md) says how a subject is written.

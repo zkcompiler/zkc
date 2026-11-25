@@ -53,6 +53,46 @@ def checkSharedCoverage : IO Unit := do
       first.contains "sha256" && second.contains "sha256" do
     throw (IO.userError s!"unexpected refusals {issued.refusals}")
 
+/-- Check both sides of issuance with exactly their declared imports. The shared package
+has two labels that used to collide with fixed declarations; a second source calls a
+helper whose old fallback label was itself the goal's name. -/
+private def checkPublicationNames (work : System.FilePath) : IO Unit := do
+  let goal (name : String) := s!"goal {name} = soundness(Checked, spec e = 0)"
+  let long := String.ofList (List.replicate 42 '가')
+  let input ← source "fixtures/hash-relation.zkc"
+    [(goal "good", "\n".intercalate (["root", "verifier", long].map goal))]
+  let shared ← statementsFor input ["root", "verifier"]
+  unless (shared.publicationPairs "SharedLabels").map (·.1.getString!) ==
+      ["root_installed", "root_sound", "root_result", "root_met",
+       "verifier_installed", "verifier_sound", "verifier_result", "verifier_met"] do
+    throw (IO.userError "the public challenge lost the source names")
+  let assembly ← Driver.assembleFiles input ["../../libraries"]
+  let #[result] := issueSoundnessGoals assembly [long] | throw (IO.userError "missing goal")
+  let issued ← IO.ofExcept result.outcome
+  let helper := "module calling\nuse zkc::security::{soundness}\ndef root(b: bool) -> bool: b\n" ++
+    "def sound_cap_r(b: bool) -> bool: b\nrelation Holds(b: bool): b\n" ++
+    "protocol Check roles(P,V)(b: bool @(P,V)):\n    covered <- draw index<2> from V to P\n" ++
+    "    rKey <- draw index<2> from V to P\n    guard @V sound_cap_r(root(b))\n" ++
+    "spec for Check:\n    proves @V Holds(b)\n    charge sites.rKey <= 1 / 2\n" ++
+    "scheme Checked = Check:\n    prover P\n    construction interactive\n" ++
+    "goal root0 = soundness(Checked)\ngoal sound = soundness(Checked)\ngoal site = soundness(Checked)\n"
+  let called ← statementsFor ⟨"calling.zkc", Syntax.parseString "calling.zkc" helper⟩ ["root0", "sound", "site"]
+  unless (called.functions.map Prod.snd).contains 0 do throw (IO.userError "expected the helper at key zero")
+  let binders ← source "fixtures/hash-relation.zkc" [(goal "good", goal "input_b"),
+    ("(b: bool @(P,V), xs:", "(bCaps: bool @(P,V), xs:"),
+    ("guard @V b", "guard @V bCaps"), ("Holds(b, xs)", "Holds(bCaps, xs)")]
+  let binderStatements ← statementsFor binders ["input_b"]
+  let modules := [← IO.ofExcept (shared.module "SharedLabels" {}), issued.publication,
+    ← IO.ofExcept (called.module "HelperLabels" {}), ← IO.ofExcept (binderStatements.module "InputLabels" {})]
+  let pending ← modules.mapM fun publication => do
+    let stated ← addStated work publication
+    let challenge ← addChallenge work publication.space publication
+    return (stated, challenge)
+  for (stated, challenge) in pending do
+    stated.accepted stated.space
+    let (ok, output) ← leanOn work challenge
+    unless ok do throw (IO.userError s!"{challenge}: {output}")
+
 /-- Elaborate the propositions issued for these goals with their proofs at the source field. -/
 def checkClaims (work : System.FilePath) (name fixture : String) (goals theorems : List String)
     (edits : List (String × String) := []) (refusedHash := false) : IO Unit := do
@@ -81,6 +121,7 @@ def checkClaims (work : System.FilePath) (name fixture : String) (goals theorems
 #eval IO.FS.withTempDir checkLinkedCeilings
 #eval checkEveryGoalIssued
 #eval checkSharedCoverage
+#eval IO.FS.withTempDir checkPublicationNames
 #eval IO.FS.withTempDir fun w => checkClaims w "ThirdElement" "third-element" ["sound"]
   ["sound_judged", "field_claim", "hypotheses_met"]
 #eval IO.FS.withTempDir fun w => checkClaims w "Unguarded" "third-element" ["sound"]
@@ -91,3 +132,23 @@ def checkClaims (work : System.FilePath) (name fixture : String) (goals theorems
 #eval IO.FS.withTempDir fun w => checkClaims w "Siblings" "sibling-relations" ["zero"] ["zero_checked", "zero_met"]
 #eval IO.FS.withTempDir fun w => checkClaims w "Siblings" "sibling-relations" ["zero", "one"] ["zero_checked", "zero_met"]
 #eval IO.FS.withTempDir fun w => checkClaims w "HashRelation" "hash-relation" ["good", "bad"] ["result"] (refusedHash := true)
+
+/-- Submit the surviving target from a mixed request to the same comparator as all other
+written subjects. The proof consumes the exact trusted module that the batch issued. -/
+private def judgeIssuedGoal (work : System.FilePath) : IO Unit := do
+  let assembly ← Driver.assembleFiles (← source "fixtures/hash-relation.zkc" []) ["../../libraries"]
+  let results := issueSoundnessGoals assembly ["bad", "mixed::good", "good"]
+  let #[bad, good, alias_] := results | throw (IO.userError "lost a requested goal")
+  unless bad.outcome.isOk == false && !allGoalsIssued results && good.path == alias_.path do
+    throw (IO.userError "unexpected mixed issuance")
+  let issued ← IO.ofExcept good.outcome
+  let proof ← IO.FS.readFile "checks/HashRelation.lean.in"
+  let publication ← IO.ofExcept (issued.statements.module issued.publication.space
+    { text := proof, theorems := ["good_judged", "good_witnessed"] })
+  unless publication.statements == issued.publication.statements &&
+      publication.challenge == issued.publication.challenge do
+    throw (IO.userError "the submission changed the issued challenge")
+  let finish ← startModule work publication.space publication
+  discard finish
+
+#eval IO.FS.withTempDir judgeIssuedGoal
