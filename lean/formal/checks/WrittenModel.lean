@@ -70,13 +70,20 @@ private def checkPublicationNames (work : System.FilePath) : IO Unit := do
   let #[result] := issueSoundnessGoals assembly [long] | throw (IO.userError "missing goal")
   let issued ← IO.ofExcept result.outcome
   let helper := "module calling\nuse zkc::security::{soundness}\ndef root(b: bool) -> bool: b\n" ++
-    "relation Holds(b: bool): b\nprotocol Check roles(P,V)(b: bool @(P,V)):\n    guard @V root(b)\n" ++
-    "spec for Check:\n    proves @V Holds(b)\nscheme Checked = Check:\n    prover P\n" ++
-    "    construction interactive\ngoal root0 = soundness(Checked)\n"
-  let called ← statementsFor ⟨"calling.zkc", Syntax.parseString "calling.zkc" helper⟩ ["root0"]
-  unless called.functions.map Prod.snd == [0] do throw (IO.userError "expected the helper at key zero")
+    "def sound_cap_r(b: bool) -> bool: b\nrelation Holds(b: bool): b\n" ++
+    "protocol Check roles(P,V)(b: bool @(P,V)):\n    covered <- draw index<2> from V to P\n" ++
+    "    rKey <- draw index<2> from V to P\n    guard @V sound_cap_r(root(b))\n" ++
+    "spec for Check:\n    proves @V Holds(b)\n    charge sites.rKey <= 1 / 2\n" ++
+    "scheme Checked = Check:\n    prover P\n    construction interactive\n" ++
+    "goal root0 = soundness(Checked)\ngoal sound = soundness(Checked)\ngoal site = soundness(Checked)\n"
+  let called ← statementsFor ⟨"calling.zkc", Syntax.parseString "calling.zkc" helper⟩ ["root0", "sound", "site"]
+  unless (called.functions.map Prod.snd).contains 0 do throw (IO.userError "expected the helper at key zero")
+  let binders ← source "fixtures/hash-relation.zkc" [(goal "good", goal "input_b"),
+    ("(b: bool @(P,V), xs:", "(bCaps: bool @(P,V), xs:"),
+    ("guard @V b", "guard @V bCaps"), ("Holds(b, xs)", "Holds(bCaps, xs)")]
+  let binderStatements ← statementsFor binders ["input_b"]
   let modules := [← IO.ofExcept (shared.module "SharedLabels" {}), issued.publication,
-    ← IO.ofExcept (called.module "HelperLabels" {})]
+    ← IO.ofExcept (called.module "HelperLabels" {}), ← IO.ofExcept (binderStatements.module "InputLabels" {})]
   let pending ← modules.mapM fun publication => do
     let stated ← addStated work publication
     let challenge ← addChallenge work publication.space publication

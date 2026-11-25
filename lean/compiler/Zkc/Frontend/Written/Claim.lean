@@ -214,13 +214,13 @@ clause, the relation that the clause applies as a definition at the proof values
 and the ports that are its operands. The relations are instantiated one after another in one
 state, so each has a key of its own beside the deployed definitions, which are those of the
 root's own package, first and unchanged. -/
-private def collectClaims (c : AdmittedRoot) (goals : List (String × ExportM (Selection × Compile.State))) :
+private def collectClaims (c : AdmittedRoot) (goals : List (String × ExportM DeclarationId)) :
     ExportM GoalClaims := do
   let mut state := c.state
   let mut reversed := []
   let mut first : Option (String × SchemeEntry) := none
-  for (goal, selection) in goals do
-    let (selected, _) ← selection
+  for (goal, resolution) in goals do
+    let (selected, _) ← selectGoalId c.state (← resolution) .soundness
     let (next, named, after) ← readClaim c state goal selected
     match first with
     | some (earlierGoal, earlier) =>
@@ -260,14 +260,12 @@ private def collectClaims (c : AdmittedRoot) (goals : List (String × ExportM (S
 /-- Read an explicitly shared package with the labels used by its proof text. -/
 @[no_expose] def goalClaims (c : AdmittedRoot) (goals : List String) : ExportM GoalClaims :=
   let index := declarationIndex c.state .goal
-  collectClaims c (goals.map fun goal => (goal, do
-    let (id, _) ← index.select goal "WK-GOAL"
-    selectGoalId c.state id .soundness))
+  collectClaims c (goals.map fun goal => (goal, Prod.fst <$> index.select goal "WK-GOAL"))
 
 /-- A separately issued goal is read by its resolved declaration ID. Its declarations use the local
 source name inside the goal's own Lean namespace where it is a safe declaration prefix. -/
 @[no_expose] def singleGoalClaims (c : AdmittedRoot) (id : DeclarationId) : ExportM GoalClaims :=
   let name := c.state.program.nameOf id
-  collectClaims c [(name, selectGoalId c.state id .soundness)]
+  collectClaims c [(name, .ok id)]
 
 end Zkc.Frontend.Written

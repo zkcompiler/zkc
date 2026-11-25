@@ -29,9 +29,12 @@ def writtenGoals (options : Names.Options) : IO UInt32 := do
   if options.goals.isEmpty then
     IO.eprintln "written-goals requires at least one --goal"
     return 2
-  let inputs ← options.files.mapM Names.readInput
-  let assembly ← assemble inputs (Names.libraryLoader options.libraries)
-  let results := issueSoundnessGoals assembly options.goals.toList
+  let source ← (do
+    let inputs ← options.files.mapM Names.readInput
+    assemble inputs (Names.libraryLoader options.libraries)).toBaseIO
+  let results := match source with
+    | .ok assembly => issueSoundnessGoals assembly options.goals.toList
+    | .error why => options.goals.map fun selector => ⟨selector, none, .error (toString why)⟩
   let ready ← (options.output.forM IO.FS.createDir).toBaseIO
   let mut exports : Std.HashMap String (Except IO.Error Unit) := {}
   let mut exported := true

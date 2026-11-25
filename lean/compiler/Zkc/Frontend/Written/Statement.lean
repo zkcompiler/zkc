@@ -288,14 +288,15 @@ def plainName (name : String) : Bool :=
 /-- Keep ordinary source labels readable. Escaped labels use an apostrophe, which cannot
 occur in a source identifier. The prefixes `at_` and `site_` introduce generated declarations. -/
 def usableSourceLabel (name : String) : Bool :=
-  plainName name && !name.startsWith "at_" && !name.startsWith "site_"
+  plainName name && name != "at" && !name.startsWith "at_" && name != "site" &&
+    !name.startsWith "site_" && !name.contains "_cap_" && !name.endsWith "_cap"
 
 /-- A goal keeps its source spelling for diagnostics and source readback. Its Lean label
 also has to coexist with the protocol root, the verifier walk and other generated names. -/
 def _root_.Zkc.Frontend.Written.ClaimedGoal.label (goal : ClaimedGoal) : String :=
-  if usableSourceLabel goal.goal && !goal.goal.contains "_cap_" && !goal.goal.endsWith "_claim_of" then goal.goal
+  if usableSourceLabel goal.goal && !goal.goal.endsWith "_claim_of" then goal.goal
   else "goal'" ++ String.join (goal.goal.toList.map fun c =>
-    if c.isAlphanum || c == '_' then String.singleton c else s!"'{c.toNat}'")
+    if c.isAlphanum then String.singleton c else s!"'{c.toNat}'")
 
 /-- The relation aliases and transfer lemma share a namespace with fixed protocol facts.
 Keep `root_sound` and `verifier_sound` under their source names in the public challenge. -/
@@ -551,18 +552,21 @@ structure Parts where
 /-- The names of the inputs of the root in a statement: the name that the source gives the port,
 after `input_`, so that a reader of a statement sees which inputs the relation is applied to and
 which the deciding role is run on. An input whose name in the source is no plain identifier, or
-is the name of another input, is named by its place. -/
-def inputNames (s : Statements) : List String :=
+would shadow a declaration used under these binders, is named by its place. -/
+def inputNames (s : Statements) (globals : List String := []) : List String :=
   let names := s.claims.inputs.toList
   names.zipIdx.map fun (name, index) =>
-    if plainName name && (names.filter (· == name)).length == 1 then s!"input_{name}" else s!"port{index}"
+    let localName := s!"input_{name}"
+    if plainName name && (names.filter (· == name)).length == 1 &&
+        !globals.contains localName && !globals.contains s!"valid_{localName}" then localName
+    else s!"port{index}"
 
 def parts (s : Statements) (goal : ClaimedGoal) : Except String Parts := do
   unless goal.clause.kind == .proves do
     throw (s!"{goal.goal}: the goal reads a `reduces` clause. The statement of a reduction " ++
       "is about a return on which the reduced statement is true, and is not issued yet")
   let ports ← s.ports
-  let named := s.inputNames
+  let named := s.inputNames [s!"{goal.label}Caps", s!"{goal.relationLabel}Member", s!"{goal.label}Witnessed"]
   unless named.length == ports.length do
     throw s!"{goal.goal}: the inputs of the deployed header are not those that the claims name"
   let name (index : Nat) := named.getD index s!"port{index}"
@@ -739,15 +743,25 @@ draw without a charge whose name another draw has is the one that is followed by
 def _root_.Zkc.Frontend.Written.ClaimedGoal.siteLabels (goal : ClaimedGoal) :
     List (String × String × Core.Key) :=
   let capped := (goal.caps.uses.getLast?.map (·.draws)).getD []
-  let charged (key : Core.Key) : Bool := capped.any (·.key == key)
+  let charged := Std.HashSet.ofList (capped.map (·.key.number))
   let draws := goal.sites.flatMap fun (site, keys) =>
     keys.zipIdx.map fun (key, index) =>
-      (site, if plainName site then siteLabel site index keys.length else s!"key{key.number}", key)
-  draws.map fun (site, label, key) =>
-    let sharing := draws.filter fun other => other.2.1 == label && other.2.2 != key
-    let shared :=
-      if charged key then sharing.any fun other => charged other.2.2 else !sharing.isEmpty
-    if shared then (site, s!"{label}_key{key.number}", key) else (site, label, key)
+      let label := if plainName site then siteLabel site index keys.length else s!"key{key.number}"
+      -- Applied sites reserve labels beginning with site_ and a numeric address.
+      let reserved := label.startsWith "site_" && (label.drop 5).front?.any Char.isDigit
+      (site, if reserved then s!"draw'{key.number}" else label, key)
+  let disambiguate (draws : List (String × String × Core.Key)) (fallback : String → Nat → String) :=
+    let counts := draws.foldl (init := ({} : Std.HashMap String (Nat × Nat))) fun counts (_, label, key) =>
+      let (all, paid) := counts[label]?.getD (0, 0)
+      counts.insert label (all + 1, paid + (if charged.contains key.number then 1 else 0))
+    draws.map fun (site, label, key) =>
+      let (all, paid) := counts[label]?.getD (0, 0)
+      let shared := (if charged.contains key.number then paid else all) > 1
+      (site, if shared then fallback label key.number else label, key)
+  -- A source site can itself be called r_0_key0. The final fallback is disjoint from
+  -- every source spelling and unique by instruction key.
+  let numbered := disambiguate draws fun label key => s!"{label}_key{key}"
+  disambiguate numbered fun _ key => s!"draw'{key}"
 
 /-- The draws of a goal's root that its table of caps gives a cap, each with its name
 in a module and that cap. -/

@@ -38,7 +38,12 @@ def run(files, selectors, output, code, *, file_limit=None):
     assert result.returncode == code, (args, result.stdout, result.stderr)
     lines = result.stdout.splitlines()
     # Diagnostics may continue on subsequent lines.
-    rows = [line for line in lines if " -> " in line]
+    rows = []
+    for line in lines:
+        if " -> " in line:
+            rows.append(line)
+        elif rows:
+            rows[-1] += "\n" + line
     assert [line.split(" -> ", 1)[0] for line in rows] == selectors, lines
     artifacts = {str(f.relative_to(output)): f.read_bytes() for f in output.rglob("*.lean")}
     return rows, artifacts
@@ -141,12 +146,16 @@ def check(work):
     src.write_text(original.replace("spec for Check:", "spec for Check:\n    requires false"))
     rows, files = run([src, other], ["sibling::first", "other::first"], work / "hypothesis", 1)
     assert "SX7" in rows[0] and "requires" in rows[0] and "issued" in rows[1] and len(files) == 2
-    private_port = original.replace("x: bool @(P,V)):", "x: bool @(P,V), hidden: bool @P):")
-    for case, expr, code in [("private", "hidden and x", 0), ("shared", "x", 1)]:
+    private_port = original.replace("x: bool @(P,V)):", "x: bool @(P,V), hidden: bool @P, "
+                                    "localFlag: bool @V private, spec note: bool):")
+    src.write_text(private_port)
+    _, bare = run([src], ["first"], work / "no-hypothesis", 0)
+    for case, expr, code in [("private", "hidden and x", 0), ("shared", "x", 1),
+                             ("verifier", "localFlag", 1), ("spec", "note", 1)]:
         src.write_text(private_port.replace("spec for Check:", f"spec for Check:\n    requires {expr}"))
         rows, files = run([src], ["first"], work / f"requires-{case}", code)
         if code == 0:
-            assert len(files) == 2
+            assert files == bare
         else:
             assert "SX7" in rows[0] and not files
     src.write_text(original)
@@ -169,6 +178,8 @@ goal broken = soundness(Unusable)
     src.write_text("module broken\nthis is not a declaration\n")
     rows, files = run([src], ["first", "second"], work / "parse", 1)
     assert not files and all(": refused:" in row for row in rows)
+    rows, files = run([work / "absent.zkc"], ["first", "second"], work / "read", 1)
+    assert not files and all("absent.zkc" in row and "refused" in row for row in rows)
     run([src], [], work / "empty", 2)
 
 
