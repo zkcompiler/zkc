@@ -66,7 +66,7 @@ The rest of a check file is frame that the five checks share word for word: the 
 
 A subject is accepted when Lean accepts the proof module; the judgment accepts it, where its published theorems have the statements of the challenge and pass the kernel (below, "A check does not rest on Lean's acceptance"); every theorem of the statements, and every published theorem, rests on `propext`, `Classical.choice` and `Quot.sound` at most; Lean accepts the module in which the package is compared with what the frontend gives to admission (`<Name>Source`); and every control is refused as it says.
 
-A `Reading` asserts the ports of the root, the clause that each goal reads, the inputs of the deployed header that the relation is applied to, the number of proof arguments, the roles of the scheme, and the class of models (`model`, the standard model unless said). A reading that is not what the check asserts is an error: the text is written against it. A relation with witness parameters is not a subject yet. What else a check asserts of the reading is its own; the five checks assert the table of caps and the names of the draws:
+A `Reading` asserts the ports of the root, the clause that each goal reads, the inputs of the deployed header that the relation is applied to, the number of proof arguments, the roles of the scheme. A reading that is not what the check asserts is an error: the text is written against it. A relation with witness parameters is not a subject yet. What else a check asserts of the reading is its own; the five checks assert the table of caps and the names of the draws:
 
 ```lean
   let goal ← written.goal
@@ -95,7 +95,7 @@ The generator (`lean/compiler/Zkc/Frontend/Written/Statement.lean`) writes the p
 | `eitherClaim`, `eitherGoal`, `eitherResult`, `eitherWitnessed` | the published propositions: the claim about the installed program, the goal for every admitted program, the result with the coverage, and that the hypotheses are met |
 | `either_installed`, `either_sound`, `either_result`, `either_met` | their theorems, written after the text from `either_judged` and `either_witnessed` |
 
-The generator selects the model class from the claims package. With only position draws, no algebraic rows, and no positive scalar numerals, it quantifies over arbitrary standard data (`D : StandardModel.Data F G`). Such data fixes the value of scalar zero. A scalar sequence sum, for example, requires field addition even without a draw. An algebraic row, a positive scalar numeral or a non-position draw selects the arithmetic model over a finite sampleable field, with the hypothesis `large` that its cardinality is at least the source scalar field's order. Both a relation and a sampling bound can use this hypothesis. Neither class is the source's own field and group: arbitrary data can have two scalars and one point, and the arithmetic class fixes neither the field's characteristic nor the group. A claim whose truth depends on those (three distinct scalars, a point that is not zero, `2 != 0`) is true of the source and can be false in such a model; its statement then has no proof. The coverage theorem checks that the model interprets the linked rows and samples the draws. A project primitive needs its own interpretation before the frontend can issue statements over a model. The comparison of a total charge with a ceiling only uses the table and the bounds.
+Each claim uses the standard interpretation. `F` is the BLS12-381 scalar field, `G` is its additive group, and `D`, `model` and `samplers` name its algebra, meaning and laws. The library proves `large` and supplies a service with `served`. Generic readback equations still allow a proof to establish a family lemma and specialize it at the source field. The kernel checks coverage from the root and relation of each issued goal. A diagnostic identifies an uncovered sort, row or law. Linked project primitives require a model before issuance.
 
 To see a generated module, keep the working directory of a check: replace `IO.FS.withTempDir fun work =>` by a function that passes a directory of yours, and read `project/<Name>.lean` there, with Lake's logs (`stated.log`, `build.log`) and what each judgment said (`<label>.judgment.log`). The directory is empty at the start: a project is not used twice.
 
@@ -116,7 +116,7 @@ theorem either_judged : eitherJudged := by
   exact differs (Nat.eq_of_beq_eq_true hit)
 ```
 
-**`claim_intro`** introduces the binders of the judgment under the names that the generator gave them: what the model is built from (`D`, or `F` and `G`), `path`, each input that the verifier holds as `input_<port>` with `valid_input_<port>` (`input_claim` here; the two positions are the prover's and have no binder), a hypothesis of the model by its name, and `rejected`, that the relation returns false.
+**`claim_intro`** introduces `path`, each verifier input as `input_<port>` with its validity hypothesis `valid_input_<port>`, and the premise `rejected` that the relation returns false. Here the verifier holds `input_claim` and the prover holds the two positions. The generated module opens the standard interpretation's `F`, `G`, `D`, `model`, `samplers`, `served` and `large` for the proof text.
 
 **`walk`** goes to the next effect, loop, call of a function by a role, or the end of the program. It goes into the arm of a choice and into a block as into a program. At the end, what is left is what the judgment asks there, stated in the inputs, the replies and the names of the text. `walk … at h` walks a hypothesis that judges a process. The two tactics of an effect walk to the effect themselves, so a text writes `walk` where it names a fork, before a loop or a call, and to reach the end.
 
@@ -157,11 +157,11 @@ case after => …   -- the rest, from `invariant_i` after the last
 
 **At the end** the operations of a model are read as its library says: over the arithmetic model a goal is stated with `+`, `*`, `List.sum` and numerals, and `ring` proves an equation of the field. A text that ends a step with the mathematics and `ring` is accepted unchanged when the source computes the same value another way.
 
-**The witness** gives an input on which the relation returns false, over a model at which the hypotheses hold:
+**The witness** gives an input on which the relation returns false, at the standard interpretation:
 
 ```lean
 theorem either_witnessed : eitherWitnessed :=
-  either_witnessed_of ZkcFormal.Written.FiniteModel.data false trivial (either_relation _ false)
+  either_witnessed_of false trivial (either_relation StandardInterpretation.D false)
 ```
 
 ## Controls

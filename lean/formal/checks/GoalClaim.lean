@@ -258,12 +258,12 @@ def run (corpus : System.FilePath) (work : System.FilePath) : IO Unit := do
   -- the bound of its statement is zero; Lean elaborates the statement.
   let (_, pairClaims) ← read pair ["sound"]
   let pairStated : Statements := { claims := pairClaims }
-  let pairText ← IO.ofExcept (pairStated.claimTexts standardModelText)
+  let pairText ← IO.ofExcept (pairStated.claimTexts)
   -- The premise stands in the claim and in the statement that its hypotheses are met.
   expect "the statement of a relation with a witness does not quantify the witness"
     ((pairText.splitOn "∀ (witness0 : ").length == 3)
   let stated ← startLakeLean work "ClaimsWitness"
-    (← IO.ofExcept (pairStated.claimsModule "ClaimsWitness"))
+    (← IO.ofExcept (pairStated.claimsModule "ClaimsWitness")).text
   let (ok, output) ← finishLean proof
   acceptedOutput "Claims" ok output theorems
   let (ok, output) ← finishLean stated

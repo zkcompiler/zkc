@@ -81,8 +81,7 @@ def source (first second : String) : String :=
 
 /-- What the check asserts of what the frontend read of a source of the subject: the goal
 selects the root; it reads the clause `proves @V Holds(claim)` on the first of the three ports,
-decided by the verifier of the scheme; it gives no proof argument; and its coins are positions,
-so the statements are about the standard model. -/
+decided by the verifier of the scheme; it gives no proof argument; and its coins are positions. -/
 def reading : Reading where
   goals := ["either"]
   ports := #["claim", "first", "second"]
@@ -125,8 +124,8 @@ def steppedText : String :=
   "  walk as secondKept\n  walk_free as third\n" ++
   "  walk as thirdKept\n\n" ++
   "theorem stepped_witnessed : steppedWitnessed :=\n" ++
-  "  stepped_witnessed_of ZkcFormal.Written.FiniteModel.data false trivial\n" ++
-  "    (stepped_relation _ false)\n\nend\n"
+  "  stepped_witnessed_of false trivial\n" ++
+  "    (stepped_relation StandardInterpretation.D false)\n\nend\n"
 
 /-- A text that turns the kernel's check off and proves the judgment from a false equation.
 Lean accepts the module; the kernel of the judgment refuses the equation. -/
@@ -144,8 +143,8 @@ def uncheckedText : String :=
   "  exact absurd h (by decide)\n\n" ++
   "theorem either_judged_forked : eitherJudged := either_judged\n\n" ++
   "theorem either_witnessed : eitherWitnessed :=\n" ++
-  "  either_witnessed_of ZkcFormal.Written.FiniteModel.data false trivial\n" ++
-  "    (either_relation _ false)\n\nend\n"
+  "  either_witnessed_of false trivial\n" ++
+  "    (either_relation StandardInterpretation.D false)\n\nend\n"
 
 /-- The theorems of the text of the proofs. -/
 def ofText : List String :=

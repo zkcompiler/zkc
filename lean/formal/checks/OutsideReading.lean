@@ -99,8 +99,7 @@ def consumed : Module :=
   let text := "theorem g_proof : gGoal := rfl\nset_option debug.skipKernelTC true\n" ++
     "macro_rules | `(tactic| decide) => `(tactic| decide +kernel)"
   let consumer : Consumer :=
-    { name := "consumer", signature := "theorem consumer : mark = 1", proof := "by decide",
-      imports := ["ZkcFormal.Written.WalkFees", "ZkcFormal.Written.FiniteModel"] }
+    { name := "consumer", signature := "theorem consumer : mark = 1", proof := "by decide" }
   let plain := pair "Consumed" text
   { plain with
     proof := s!"import Consumed.Stated\nnamespace Consumed\n{text}\n" ++

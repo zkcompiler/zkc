@@ -1,0 +1,15 @@
+module mixed
+use zkc::security::{soundness}
+use zkc::hash::{Sha256}
+def equal_hash(x: [byte; 4]) -> bool: Sha256::hash(x) == Sha256::hash(x)
+section <spec e: nat>:
+    relation Holds(b: bool, xs: [byte; 4]): if e == 0 then b else b and equal_hash(xs)
+    protocol Check roles(P,V)(b: bool @(P,V), xs: [byte; 4] @(P,V)):
+        guard @V b
+    spec for Check:
+        proves @V Holds(b, xs)
+scheme Checked = Check:
+    prover P
+    construction interactive
+goal good = soundness(Checked, spec e = 0)
+goal bad = soundness(Checked, spec e = 1)

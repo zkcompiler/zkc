@@ -84,10 +84,10 @@ require a model, so a package linking any project primitive gets a diagnostic at
 
 `Written.Statements` (`Written/Statement.lean`) writes the module of the goals of a scheme
 (`Statements.module`: its imports, the order of its parts and the names of the theorems whose
-axioms it asks for and the class of models, read from the package by `Statements.chosenModel`, are decided there, and a check gives the text of the proofs).
+axioms it asks for are decided there, and a check gives the text of the proofs).
 Around the proofs stands, with the claims' package: the facts (keys, headers and places of the root, of the
 functions before it that the text names and of each goal's relation, the verifier and the prover
-of the claims' scheme, each goal's proof arguments and charge), that the model covers the package, where the walks of the module
+of the claims' scheme, each goal's proof arguments and charge), that the standard interpretation covers each goal’s reach, where the walks of the module
 start (the meaning of the deciding role, of each named function and of each goal's relation as
 the sealed denotation of its body), the transfers of a statement from the installed program to
 every admitted one, and for each goal four propositions that are defined before any proof: the
@@ -103,9 +103,7 @@ follows from it and the theorem that the hypotheses of the claim are met at inpu
 relation returns false, and the key of each named draw of the root under the name of its site
 (`site_<name>`), with its cap where the contract charges it; the text proves the judgment, and the claim is concluded after it.
 After the text of the proofs it writes the theorems of the last three from the claim and a
-witness, and the comparison of a goal's total with its ceiling. A statement names the model through a `ModelText`: the model,
-its samplers, its coverage, and what the statement assumes of it (`scalarFieldModelText` is
-the arithmetic model on a field with at least the order of the source's scalar field). It is
+witness, and the comparison of a goal's total with its ceiling. A statement uses the standard interpretation. It is
 bounded by the total of the goal's table of caps (`<goal>Caps.total`), which `goalClaims` reads
 with the claim (`goalCaps`): the uses that the root reaches at the goal's proof arguments, each
 with the caps that the contract of its definition gives its charged draws and with its calls.

@@ -21,13 +21,18 @@ structure Data (F G : Type) extends Operations F G where
 
 variable {F G : Type} (D : Data F G) [DecidableEq F] [DecidableEq G]
 
-/-- An interpretation of the rows used by the written group and multilinear protocols.
-Unspecified nominal types have one value. Refined scalars carry a proof of nonzeroness. -/
-abbrev Carrier : Standard.TypeKey → Type
-  | .inl (.field .bls12381Fr) => F
-  | .inl (.nonzero .bls12381Fr) => { x : F // x ≠ D.zero }
-  | .inl (.group .g1) => G
-  | _ => Unit
+/-- The carriers implemented by the standard model. Refined scalars carry their proof. -/
+abbrev carrierEntry : Standard.TypeKey → Option Type
+  | .inl (.field .bls12381Fr) => some F
+  | .inl (.nonzero .bls12381Fr) => some { x : F // x ≠ D.zero }
+  | .inl (.group .g1) => some G
+  | _ => none
+
+/-- The total interpretation uses a singleton for a nominal sort without a carrier entry. -/
+abbrev Carrier (k : Standard.TypeKey) : Type :=
+  match carrierEntry D k with
+  | some ty => ty
+  | none => Unit
 
 /-- The small test fields may have a different characteristic from the source field.
 The scalar literals used by the examples are 0 and 1. Every admitted refined literal must

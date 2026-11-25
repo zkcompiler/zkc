@@ -7,7 +7,7 @@ what the frontend read: the facts (`rootKey` with `rootHeader`, `rootNames`, `ro
 `rootMember` and `calleeProgram`, the program before the root; `verifierRole`, `proverRole`; for
 each goal `looseArgument0`, `looseCaps`, `looseKey` with `looseHeader`, `looseNames`,
 `looseBody`, `looseBefore`, the program before the relation, and `looseMember`), that the
-standard model covers the package (`covered`), that the counts of each goal's table of caps are
+standard interpretation covers both goals’ reachable definitions, that the counts of each goal's table of caps are
 the program's and what its budget is (`loose_counted`, `loose_budget`), where the walks start (`verifierProgram` with
 `verifier_meaning`, `loose_meaning`, `strict_meaning`), the transfers `at_root`, `at_loose` and
 `at_strict`, and for each goal the propositions `looseClaim`, `looseGoal`, `looseResult` and
@@ -66,42 +66,9 @@ def coinAt (at_ : Occurrence) : InputPort V :=
 /-- The draw of the position in a run that starts at `path`. -/
 abbrev coin (path : List Frame) : InputPort V := coinAt ⟨path, site_z⟩
 
-/-- The samplers of the statement: at each coin, the sampler of its law in the model. -/
-abbrev samplers : Samplers (RSig (model D)) := lawSamplers (model D) (StandardModel.draws D)
-
-/-- The fees of a table of caps in a run of the root: each coin is drawn by the sampler of its
-law, and each fee is within what the table allows the effect that pays it. -/
-abbrev fees (caps : CapTable) (path : List Frame) :=
-  paysWithin (samplers D) (caps.allowance (model D) path)
-
 /-- The verifier's process in a run of the installed program. -/
 abbrev process (path : List Frame) (xs : List F) :=
   roleMeaning (model D) installed rootMember verifierRole path (inputs D xs)
-
-/-- The verifier is judged never to return on a table outside the relation, within the budget of
-a table of caps whose cap of the root's draw covers the bound: the fee of the draw pays for the
-positions at which the table is zero. -/
-theorem walked_within (path : List Frame) (xs : List F) (tolerance : ℕ) (caps : CapTable)
-    (length : xs.length = 8) (far : tolerance < xs.countP (· ≠ D.zero))
-    (within : drawCap caps ≤ caps.budget)
-    (covers : ((7 - tolerance : ℕ) : ℚ≥0) / (8 : ℕ) ≤ drawCap caps) :
-    (process D path xs).interpret (.charged (Permitted (model D)) (fees D caps path))
-      (fun _ _ => False) (fun _ _ => True) caps.budget := by
-  walk_pay (drawCap caps) excluding (fun z : ℕ => xs[z]? = some D.zero) as z kept
-  case weight =>
-    rw [prEvent_drawPosition_entry xs 7 length]
-    refine le_trans ?_ (toProbability_mono covers)
-    rw [toProbability_natCast_div _ 8 (by norm_num)]
-    have all := count_add_countP_ne xs D.zero
-    have few : xs.count D.zero ≤ 7 - tolerance := by omega
-    have counted : (xs.count D.zero : ℝ≥0∞) ≤ ((7 - tolerance : ℕ) : ℝ≥0∞) := by exact_mod_cast few
-    have eight : ((7 : ℕ) : ℝ≥0∞) + 1 = ((8 : ℕ) : ℝ≥0∞) := by norm_num
-    rw [eight]
-    exact ENNReal.div_le_div_right counted _
-  -- the entry at the position drawn, and the guard that it is zero
-  walk as ⟨entry, found⟩, passed
-  have zero : entry = D.zero := by simpa using passed
-  exact kept (found.trans (congrArg some zero))
 
 /-- What every judgment of the verifier that lets no run return pays for: a fee at the coin, for
 every position at which the table is zero. -/
@@ -250,7 +217,33 @@ theorem strict_far (xs : List F) (length : xs.length = 8)
 end
 
 section
-variable {F G : Type} (D : StandardModel.Data F G) [DecidableEq F] [DecidableEq G]
+
+/-- The verifier is judged never to return on a table outside the relation, within the budget of
+a table of caps whose cap of the root's draw covers the bound: the fee of the draw pays for the
+positions at which the table is zero. -/
+theorem walked_within (path : List Frame) (xs : List F) (tolerance : ℕ) (caps : CapTable)
+    (length : xs.length = 8) (far : tolerance < xs.countP (· ≠ (0 : F)))
+    (within : drawCap caps ≤ caps.budget)
+    (covers : ((7 - tolerance : ℕ) : ℚ≥0) / (8 : ℕ) ≤ drawCap caps) :
+    (process D path xs).interpret (.charged (Permitted (model D)) (paysWithin StandardInterpretation.samplers (caps.allowance (model D) path)))
+      (fun _ _ => False) (fun _ _ => True) caps.budget := by
+  walk_pay (drawCap caps) excluding (fun z : ℕ => xs[z]? = some (0 : F)) as z kept
+  case weight =>
+    rw [prEvent_drawPosition_entry xs 7 length]
+    refine le_trans ?_ (toProbability_mono covers)
+    rw [toProbability_natCast_div _ 8 (by norm_num)]
+    have all := count_add_countP_ne xs (0 : F)
+    have few : xs.count (0 : F) ≤ 7 - tolerance := by omega
+    have counted : (xs.count (0 : F) : ℝ≥0∞) ≤ ((7 - tolerance : ℕ) : ℝ≥0∞) := by exact_mod_cast few
+    have eight : ((7 : ℕ) : ℝ≥0∞) + 1 = ((8 : ℕ) : ℝ≥0∞) := by norm_num
+    rw [eight]
+    exact ENNReal.div_le_div_right counted _
+  -- the entry at the position drawn, and the guard that it is zero
+  walk as ⟨entry, found⟩, passed
+  have zero : (entry : F) = 0 := by
+    change (!decide ((entry : F) ≠ 0)) = true at passed
+    simpa using passed
+  exact kept (found.trans (congrArg some zero))
 
 /-- The probability, at the root of the installed program. -/
 theorem returns_installed (caps : CapTable) (tolerance : ℕ)
@@ -259,7 +252,7 @@ theorem returns_installed (caps : CapTable) (tolerance : ℕ)
     (path : List Frame) (xs : List F) (length : xs.length = 8)
     (far : tolerance < xs.countP (· ≠ D.zero))
     {σ : Type} (service : Service (RSig (model D)) σ)
-    (follows : service.Follows (samplers D))
+    (follows : service.Follows StandardInterpretation.samplers)
     (permitted : ∀ op s reply t, (some reply, t) ∈ support (service op s) →
       Permitted (model D) op reply) (s : σ) :
     Pr{let out ← (simulateQ (handlerOf service) (embed
@@ -269,7 +262,7 @@ theorem returns_installed (caps : CapTable) (tolerance : ℕ)
   rw [prEvent_simulation_returns, CapTable.total]
   refine allowed_bounds_return service _ (caps.allowance (model D) path)
     (Permitted (model D)) permitted follows _ caps.budget s ?_
-  exact walked_within D path xs tolerance caps length far within covers
+  exact walked_within path xs tolerance caps length far within covers
 
 end
 
@@ -280,32 +273,32 @@ goal says how many of its entries are not zero. -/
 theorem loose_judged : looseJudged := by
   claim_intro
   have length : (input_xs : List F).length = 8 := valid_input_xs.2 8 rfl
-  exact walked_within D path input_xs looseTolerance looseCaps length
+  exact walked_within path input_xs looseTolerance looseCaps length
     (loose_far D input_xs length rejected) loose_within loose_exact.ge
 
 /-- The judgment of `strict`, as `loose`. -/
 theorem strict_judged : strictJudged := by
   claim_intro
   have length : (input_xs : List F).length = 8 := valid_input_xs.2 8 rfl
-  exact walked_within D path input_xs strictTolerance strictCaps length
+  exact walked_within path input_xs strictTolerance strictCaps length
     (strict_far D input_xs length rejected) strict_within strict_exact.ge
 
 /-! ## The hypotheses are met, and the bound is reached -/
 
 namespace Witness
-open ZkcFormal.Written.FiniteModel (data)
+noncomputable abbrev data := StandardInterpretation.D
 
-/-- A table over the field of two elements, outside the relation at the tolerance of `loose`:
+/-- A table over the source field, outside the relation at the tolerance of `loose`:
 five entries are not zero, three are. -/
-def looseTable : List Bool := [true, true, true, true, true, false, false, false]
+def looseTable : List StandardInterpretation.F := [1, 1, 1, 1, 1, 0, 0, 0]
 
 /-- A table outside the relation at the tolerance of `strict`: two entries are not zero. -/
-def strictTable : List Bool := [true, true, false, false, false, false, false, false]
+def strictTable : List StandardInterpretation.F := [1, 1, 0, 0, 0, 0, 0, 0]
 
 /-- The service of the laws: it answers each coin by the sampler of its law, and nothing
 else. -/
 abbrev service : Service (RSig (model data)) Unit :=
-  serveLaws (model data) (StandardModel.draws data)
+  serveLaws (model data) StandardInterpretation.draws
 
 /-- A position below eight is what the coin may give. -/
 theorem position_permitted (path : List Frame) (z : ℕ) (below : z < 8) :
@@ -315,12 +308,12 @@ theorem position_permitted (path : List Frame) (z : ℕ) (below : z < 8) :
 theorem service_permitted (op : ROp (model data)) (s : Unit)
     (reply : (RSig (model data)).Reply op) (t : Unit)
     (reached : (some reply, t) ∈ support (service op s)) : Permitted (model data) op reply :=
-  serveLaws_permitted _ _ (StandardModel.draws_permitted data) op s reply t reached
+  serveLaws_permitted _ _ (ArithmeticModel.draws_permitted F G) op s reply t reached
 
 /-- The probability that the simulation of the verifier of a program returns at a table, against
 the service. -/
 abbrev returnsAt (p : Typed V) (root : Member p.headers.protocols rootHeader) (path : List Frame)
-    (xs : List Bool) : ℝ≥0∞ :=
+    (xs : List StandardInterpretation.F) : ℝ≥0∞ :=
   Pr{let out ← (simulateQ (handlerOf service) (embed
       (roleMeaning (model data) p root verifierRole path (inputs data xs)))).run.run ()}[
     ∃ results, out.1 = some (.inl results)]
@@ -344,7 +337,7 @@ theorem loose_at_table {a : Admitted V} (admitted : admit stored association = .
     (have rejected : functionResult (t := .bool)
         (fnMeaning (model data) installed looseMember (.cons looseTable .nil)) = some false :=
       (loose_relation data looseTable rfl).trans (by decide)
-    ⟨rejected, returns_installed data looseCaps looseTolerance loose_within
+    ⟨rejected, returns_installed looseCaps looseTolerance loose_within
       loose_exact.ge path looseTable rfl (loose_far data looseTable rfl rejected)
       service (serveLaws_follows _ _) service_permitted ()⟩)
 
@@ -365,7 +358,7 @@ theorem strict_at_table {a : Admitted V} (admitted : admit stored association = 
     (have rejected : functionResult (t := .bool)
         (fnMeaning (model data) installed strictMember (.cons strictTable .nil)) = some false :=
       (strict_relation data strictTable rfl).trans (by decide)
-    ⟨rejected, returns_installed data strictCaps strictTolerance strict_within
+    ⟨rejected, returns_installed strictCaps strictTolerance strict_within
       strict_exact.ge path strictTable rfl (strict_far data strictTable rfl rejected)
       service (serveLaws_follows _ _) service_permitted ()⟩)
 
@@ -380,30 +373,30 @@ theorem strict_valid : (model data).Valid (.seq scalarTy (some 8)) strictTable :
 /-! ### The probability at the tables -/
 
 /-- What follows the draw of a position. -/
-abbrev afterDraw (path : List Frame) (xs : List Bool) (z : ℕ) :=
+abbrev afterDraw (path : List Frame) (xs : List StandardInterpretation.F) (z : ℕ) :=
   afterFirst (walked data path xs) z
 
 /-- The verifier begins with the draw. -/
-theorem begins (path : List Frame) (xs : List Bool) :
+theorem begins (path : List Frame) (xs : List StandardInterpretation.F) :
     walked data path xs = .call ((coin path).operation (model data)) (afterDraw path xs) := by
   kernel_rfl
 
 /-- How the run ends in which the position `i` is drawn: the verifier returns when the entry
 there is zero, and the guard rejects when it is not. -/
-def outcomeAt (path : List Frame) (xs : List Bool) (i : Fin 8) :
+def outcomeAt (path : List Frame) (xs : List StandardInterpretation.F) (i : Fin 8) :
     ProbabilisticProcess.Outcome Stop (HList (RV (model data) verifierRole) rootHeader.outs) :=
   if xs[i.val]? = some data.zero then .returned .nil
   else .halted (.declared .reject ⟨path, ⟨5⟩⟩)
 
 /-- When each run ends as `outcomeAt` says, the verifier returns with the probability of the
 entries that are zero. -/
-theorem returns_exactly (path : List Frame) (xs : List Bool) (length : xs.length = 8)
+theorem returns_exactly (path : List Frame) (xs : List StandardInterpretation.F) (length : xs.length = 8)
     (ends : ∀ i : Fin 8,
       run service (afterDraw path xs i.val) () = pure (outcomeAt path xs i, ())) :
     Pr{let out ← run service (walked data path xs) ()}[
         ∃ results, out.1 = .returned results] = (xs.count data.zero : ℝ≥0∞) / ((7 : ℕ) + 1) := by
   rw [begins]
-  have drawn := prEvent_run_serveLaws (model data) (StandardModel.draws data)
+  have drawn := prEvent_run_serveLaws (model data) StandardInterpretation.draws
     ((coin path).operation (model data)) ($ᵗ (Fin (7 + 1))) (fun i : Fin 8 => (i : ℕ)) rfl
     (afterDraw path xs) (outcomeAt path xs) ends
     (fun outcome => ∃ results, outcome = .returned results)
@@ -489,12 +482,12 @@ theorem unallowed_judges_nothing (caps : CapTable) (path : List Frame)
       a.program.findProtocol rootKey = some ⟨rootHeader, root⟩ ∧
       ¬ (roleMeaning (model data) a.program root verifierRole path
           (inputs data looseTable)).interpret
-        (.charged (Permitted (model data)) (fees data caps path)) (fun _ _ => False)
+        (.charged (Permitted (model data)) (paysWithin StandardInterpretation.samplers (caps.allowance (model data) path))) (fun _ _ => False)
         (fun _ _ => True) any :=
   at_root admitted
     (fun p root => ¬ (roleMeaning (model data) p root verifierRole path
         (inputs data looseTable)).interpret
-      (.charged (Permitted (model data)) (fees data caps path)) (fun _ _ => False)
+      (.charged (Permitted (model data)) (paysWithin StandardInterpretation.samplers (caps.allowance (model data) path))) (fun _ _ => False)
       (fun _ _ => True) any)
     (by
       intro judged
@@ -504,7 +497,7 @@ theorem unallowed_judges_nothing (caps : CapTable) (path : List Frame)
       rcases paid with ⟨_, none⟩ | ⟨draw, has, weight⟩
       · exact none (5 : ℕ) (zeros 5 (position_permitted path 5 (by decide)) rfl)
       · obtain rfl : drawPosition 7 = draw := Option.some.inj
-          ((show samplers data ((coin path).operation (model data)) = some (drawPosition 7) from
+          ((show StandardInterpretation.samplers ((coin path).operation (model data)) = some (drawPosition 7) from
             rfl).symm.trans has)
         have absurd : (3 : ℝ≥0∞) / 8 ≤ 0 := by
           simpa [free, toProbability] using (excluded_weighs path excluded zeros).trans weight
@@ -524,7 +517,7 @@ theorem misplaced_judges_nothing {a : Admitted V} (admitted : admit stored assoc
       a.program.findProtocol rootKey = some ⟨rootHeader, root⟩ ∧
       ¬ (roleMeaning (model data) a.program root verifierRole path
           (inputs data looseTable)).interpret
-        (.charged (Permitted (model data)) (fees data misplaced path)) (fun _ _ => False)
+        (.charged (Permitted (model data)) (paysWithin StandardInterpretation.samplers (misplaced.allowance (model data) path))) (fun _ _ => False)
         (fun _ _ => True) any :=
   unallowed_judges_nothing misplaced path
     ((CapTable.allowanceFrom_at (model data) misplaced misplaced.root path [] site_z _
@@ -544,7 +537,7 @@ theorem foreign_not_counted : foreign.counted stored rootKey = false := by decid
 gives the position 5, where the table of `loose` is zero, does not follow the samplers: the
 bound is claimed of services that draw the position by the law of the coin, and of no other. -/
 theorem fixed_position_does_not_follow (path : List Frame) :
-    ¬ (serveAt (model data) (coin path) (pure (5 : ℕ))).Follows (samplers data) := by
+    ¬ (serveAt (model data) (coin path) (pure (5 : ℕ))).Follows (StandardInterpretation.samplers) := by
   intro follows
   have bound : Pr{let out ← (fun answer : ℕ => (some answer, ())) <$> (pure 5 : ProbComp ℕ)}[
       ∃ v, out.1 = some v ∧ v = 5] ≤ Pr{let v ← drawPosition 7}[v = 5] := by
@@ -565,15 +558,15 @@ theorem fixed_position_does_not_follow (path : List Frame) :
 
 end Witness
 
-/-- **The hypotheses of the claim of `loose` are met** over the field of two elements: its
+/-- **The hypotheses of the claim of `loose` are met** over the source field: its
 table is valid, the relation returns false on it, and the service of the laws draws within the
 samplers and answers what is permitted. -/
 theorem loose_witnessed : looseWitnessed :=
-  loose_witnessed_of ZkcFormal.Written.FiniteModel.data Witness.looseTable Witness.loose_valid
+  loose_witnessed_of Witness.looseTable Witness.loose_valid
     ((loose_relation _ Witness.looseTable rfl).trans (by decide))
 
 /-- **The hypotheses of the claim of `strict` are met.** -/
 theorem strict_witnessed : strictWitnessed :=
-  strict_witnessed_of ZkcFormal.Written.FiniteModel.data Witness.strictTable Witness.strict_valid
+  strict_witnessed_of Witness.strictTable Witness.strict_valid
     ((strict_relation _ Witness.strictTable rfl).trans (by decide))
 end

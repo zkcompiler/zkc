@@ -10,38 +10,6 @@ private def statementsFor (input : SourceInput) (goals : List String) : IO State
   let claims ← IO.ofExcept (goalClaims root goals)
   return ⟨claims, claims.functionsBeforeRoot⟩
 
-private def requireArithmetic (s : Statements) : IO Unit := do
-  let chosen ← IO.ofExcept s.chosenModel
-  unless chosen.model == scalarFieldModelText.model &&
-      chosen.hypotheses == scalarFieldModelText.hypotheses do
-    throw (IO.userError "expected arithmetic with the source field-size hypothesis")
-
-/-- The length of a sequence and the index of a variant are not field numerals.
-Only the payload of the chosen alternative is read. -/
-def checkLiteralData : IO Unit := do
-  let bindings : Zkc.Vocabulary.Project.Bindings := {}
-  let field : bindings.vocabulary.Ty := .nominal (.inl (.field .bls12381Fr))
-  let refined : bindings.vocabulary.Ty := .nominal (.inl (.nonzero .bls12381Fr))
-  let variant : bindings.vocabulary.Ty := .variant ⟨0⟩ (.cons field (.cons .bool .nil))
-  for (ty, data, expected) in [(field, [0], false), (field, [1], true), (refined, [2], true),
-      (.seq field none, [2,0,0], false), (.seq field none, [2,0,1], true),
-      (variant, [1,1], false), (variant, [0,1], true)] do
-    unless Statements.usesFieldNumeral bindings (.literal ty data) == expected do
-      throw (IO.userError s!"unexpected classification of literal data {data}")
-
-/-- Compare the public definition of the first goal with and without a second goal that
-charges the same scalar draw. -/
-def checkGoalIndependent : IO Unit := do
-  let input ← source "fixtures/scalar-goals.zkc"
-  let definition (goals : List String) : IO String := do
-    let s ← statementsFor input goals
-    let issued ← IO.ofExcept (s.module "Sampling" {})
-    let some claim := (issued.statements.splitOn "\n\n").find? (·.contains "def freeClaimOf ") |
-      throw (IO.userError "missing the definition of freeClaimOf")
-    return claim
-  unless (← definition ["free"]) == (← definition ["free", "paid"]) do
-    throw (IO.userError "the free claim changed when a second goal was issued")
-
 def checkLinkedCeilings (work : System.FilePath) : IO Unit := do
   let file := "../../examples/gkr_example.zkc"
   let scheme ← IO.FS.readFile file
@@ -57,44 +25,69 @@ def checkLinkedCeilings (work : System.FilePath) : IO Unit := do
   let (ok, output) ← checked
   acceptedOutput "LayerCeiling" ok output issued.theorems allowed
 
-/-- In a field large enough for the source relation there is a third element. -/
-def checkFieldSize (work : System.FilePath) : IO Unit := do
-  let s ← statementsFor (← source "fixtures/third-element.zkc") ["sound"]
-  let issued ← IO.ofExcept (s.module "ThirdElement" {})
-  let proof ← IO.FS.readFile "checks/ThirdElement.lean.in"
-  let checked ← startLakeLean work "ThirdElement" (issued.statements ++ proof) (text := false)
-  let (ok, output) ← checked
-  acceptedOutput "ThirdElement" ok output (issued.stated ++ ["field_judged", "field_claim"]) allowed
+/-- A subject of a check asks for every one of its goals: the harness refuses a subject one of
+whose goals is not issued, and does not judge the rest in its place. -/
+def checkEveryGoalIssued : IO Unit := do
+  let statements ← statementsFor (← source "fixtures/hash-relation.zkc" []) ["good", "bad"]
+  let subject : Subject := ⟨"", statements⟩
+  let attempt ← (subject.module "HashRelation" { text := "", theorems := [] }).toBaseIO
+  match attempt with
+  | .ok _ => throw (IO.userError "a subject with a refused goal was assembled")
+  | .error why =>
+    unless (toString why).contains "bad:" && (toString why).contains "sha256" do throw why
 
-/-- Scalar equality itself works on arbitrary data. It is the literal one that requires
-arithmetic, even though the verifier never samples. -/
-def checkLiteral (work : System.FilePath) : IO Unit := do
-  let fixture := "fixtures/scalar-literal.zkc"
-  let s ← statementsFor (← source fixture) ["sound"]
-  requireArithmetic s
-  let issued ← IO.ofExcept (s.module "ScalarLiteral" {})
-  let proof ← IO.FS.readFile "checks/ScalarLiteral.lean.in"
-  let checked ← startLakeLean work "ScalarLiteral" (issued.statements ++ proof) (text := false)
-  let (ok, output) ← checked
-  acceptedOutput "ScalarLiteral" ok output (issued.stated ++ ["literal_claim"]) allowed
-  let zero ← statementsFor (← source fixture [("x == 1", "x == 0")]) ["sound"]
-  let chosen ← IO.ofExcept zero.chosenModel
-  unless chosen.model == standardModelText.model do throw (IO.userError "scalar zero required arithmetic")
+/-- Interleaved goals reuse their relation's coverage decision. Refusals keep the
+name of each goal, including a second goal for the unsupported relation. -/
+def checkSharedCoverage : IO Unit := do
+  let bad := "goal bad = soundness(Checked, spec e = 1)"
+  let more := bad ++ "\ngoal again = soundness(Checked, spec e = 0)\ngoal alsoBad = soundness(Checked, spec e = 1)"
+  let input ← source "fixtures/hash-relation.zkc" [(bad, more)]
+  let statements ← statementsFor input ["good", "bad", "again", "alsoBad"]
+  let issued ← IO.ofExcept (statements.coverageModule "SharedCoverage")
+  unless issued.theorems == ["good_covered", "again_covered"] &&
+      issued.text.contains "rootKey goodKey = true := by decide +kernel" &&
+      issued.text.contains "rootKey againKey = true := good_covered" do
+    throw (IO.userError "expected two coverage names and one decision")
+  let [first, second] := issued.refusals | throw (IO.userError s!"unexpected refusals {issued.refusals}")
+  unless first.startsWith "bad:" && second.startsWith "alsoBad:" &&
+      first.contains "sha256" && second.contains "sha256" do
+    throw (IO.userError s!"unexpected refusals {issued.refusals}")
 
-/-- A field interprets the sum at zero rounds. Constant addition is outside this class. -/
-def checkZeroRounds (work : System.FilePath) : IO Unit := do
-  let statements ← statementsFor (← source "fixtures/zero-round-sumcheck.zkc") ["sound"]
-  requireArithmetic statements
-  let issued ← IO.ofExcept (statements.module "ZeroRounds" {text := "", theorems := []})
-  let consumer ← IO.FS.readFile "checks/ZeroRounds.lean.in"
-  let file := "import ZkcFormal.Written.FiniteModel\n" ++ issued.statements ++ consumer
-  let checked ← startLakeLean work "ZeroRoundModel" file (text := false)
+/-- Elaborate the propositions issued for these goals with their proofs at the source field. -/
+def checkClaims (work : System.FilePath) (name fixture : String) (goals theorems : List String)
+    (edits : List (String × String) := []) (refusedHash := false) : IO Unit := do
+  let statements ← statementsFor (← source s!"fixtures/{fixture}.zkc" edits) goals
+  let issued ← IO.ofExcept (statements.module name {})
+  match issued.refusals with
+  | [] => if refusedHash then throw (IO.userError "issued the goal that reaches SHA-256")
+  | [why] => unless refusedHash && why.contains "bad:" && why.contains "sha256" do
+      throw (IO.userError why)
+  | other => throw (IO.userError s!"unexpected refusals {other}")
+  let proof ← IO.FS.readFile s!"checks/{name}.lean.in"
+  if refusedHash then
+    let publication ← IO.ofExcept (statements.module name
+      {text := proof, theorems := ["good_judged", "good_witnessed"]})
+    unless publication.published.map (·.1.getString!) ==
+        ["good_installed", "good_sound", "good_result", "good_met"] do
+      throw (IO.userError s!"unexpected publication {publication.published}")
+    let checked ← startLakeLean work name (asOne [publication])
+    let (ok, output) ← checked
+    acceptedOutput name ok output (publication.stated ++ publication.proved) allowed
+    return
+  let checked ← startLakeLean work name (issued.statements ++ proof)
   let (ok, output) ← checked
-  acceptedOutput "ZeroRounds" ok output (issued.stated ++ ["addition_not_constant"]) allowed
+  acceptedOutput name ok output (issued.stated ++ theorems) allowed
 
-#eval checkLiteralData
-#eval checkGoalIndependent
-#eval IO.FS.withTempDir checkLiteral
-#eval IO.FS.withTempDir checkFieldSize
 #eval IO.FS.withTempDir checkLinkedCeilings
-#eval IO.FS.withTempDir checkZeroRounds
+#eval checkEveryGoalIssued
+#eval checkSharedCoverage
+#eval IO.FS.withTempDir fun w => checkClaims w "ThirdElement" "third-element" ["sound"]
+  ["sound_judged", "field_claim", "hypotheses_met"]
+#eval IO.FS.withTempDir fun w => checkClaims w "Unguarded" "third-element" ["sound"]
+  ["false_at_source"] [("        guard @V b\nspec", "spec")]
+#eval IO.FS.withTempDir fun w => checkClaims w "ScalarLiteral" "scalar-literal" ["sound"] ["literal_claim"]
+#eval IO.FS.withTempDir fun w => checkClaims w "ZeroRounds" "zero-round-sumcheck" ["sound"] ["evaluate_one", "sum_claim"]
+#eval IO.FS.withTempDir fun w => checkClaims w "PointSum" "point-sum" ["sound"] ["checked", "hypotheses_met"]
+#eval IO.FS.withTempDir fun w => checkClaims w "Siblings" "sibling-relations" ["zero"] ["zero_checked", "zero_met"]
+#eval IO.FS.withTempDir fun w => checkClaims w "Siblings" "sibling-relations" ["zero", "one"] ["zero_checked", "zero_met"]
+#eval IO.FS.withTempDir fun w => checkClaims w "HashRelation" "hash-relation" ["good", "bad"] ["result"] (refusedHash := true)
