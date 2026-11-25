@@ -104,11 +104,13 @@ elab "walk_pay " fee:term:max &" excluding " set:term:max " as " reply:ident kep
   let pays ← whnfR judgment.appArg!
   unless pays.isAppOf ``ZkcFormal.ProbabilisticProcess.paysWithin do
     throwError "walk_pay: the fees are not those within allowances{indentExpr pays}"
-  let allowance := pays.appArg!
+  -- a function of the effect that only applies the table's allowances is those allowances,
+  -- as written and as a name that abbreviates them unfolds
+  let allowance := pays.appArg!.eta
   let allowance ← do
     if allowance.isAppOf ``Zkc.Subject.CapTable.allowance ||
         allowance.isAppOf ``Zkc.Subject.CapTable.allowanceFrom then pure allowance
-    else whnfR allowance
+    else pure (← whnfR allowance).eta
   let a := allowance.getAppArgs
   let (model, table, place, start) ←
     if allowance.isAppOfArity ``Zkc.Subject.CapTable.allowance 4 then
