@@ -147,7 +147,7 @@ def instances (options : Options) : IO UInt32 := do
     return 1
   printIncomplete result.incomplete
   let counts := result.countsByKind.toList.map fun (kind, count) => s!"{count} {kind}"
-  IO.println s!"{verdict false result.incomplete}: {result.state.results.instanceCount} instances ({", ".intercalate counts})"
+  IO.println s!"{verdict false result.incomplete}: {result.state.results.instanceCount} instances ({", ".intercalate counts}) from signature and default checks"
   if options.contents then
     for id in result.state.table.requestedIds do
       let entry := result.state.table.entryAt! id

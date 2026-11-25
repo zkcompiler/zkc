@@ -47,7 +47,7 @@ mutual
       let description ← describeInstance instanceKey.declaration instanceKey.arguments
         instanceKey.specification instanceKey.owner
       refuseRecursion description place
-    | some _ => return
+    | some _ => useQueryReads ⟨.body, inst⟩; return
     | none => pure ()
     let some entry := state.table.entryAt? inst | return
     let .done _ := entry.state | return
@@ -139,25 +139,37 @@ def checkKernels : CompileM Unit := do
         logError "FN5" kernel.span (.ofText "a kernel is attached to a `def` with a body") (origin := .instances)
     | _ => pure ()
 
+private def typeRequestedBody (cursor : Nat) : CompileM Unit := do
+  let state ← get
+  let index := state.table.requestedIds[cursor]!
+  let entry := state.table.entryAt! index
+  if let (none, some found) := (entry.key.view, state.program.declarations[entry.key.declaration]?) then
+    if found.kind == .function || found.kind == .functionDefinition || found.kind == .relation
+        || found.kind == .law || found.kind == .lawMember || found.kind == .protocol then
+      let place := (found.name.map (·.span)).getD default
+      endItem (typeBody index place)
+    -- the laws of a module instance are typed at it (SP10); a module that a parameter stands
+    -- for in an opaque typing (SP12) is no instance of the program, and has no laws of its own
+    -- and its function members, called or not (SP7 item 7)
+    if found.kind == .«module» && entry.key.opaqueFor.isNone then
+      endItem (moduleLaws index)
+      endItem (typeModuleMembers index)
+
 /-- Types the body of every instance of the table that is not typed yet, the instances that
 typing adds included. -/
-def typeBodies : CompileM Unit := do
+@[no_expose] def typeBodies : CompileM Unit := do
   let mut cursor := 0
-  while cursor < (← get).table.requestedIds.size do
-    let state ← get
-    let index := state.table.requestedIds[cursor]!
-    let entry := state.table.entryAt! index
-    if let (none, some found) := (entry.key.view, state.program.declarations[entry.key.declaration]?) then
-      if found.kind == .function || found.kind == .functionDefinition || found.kind == .relation
-          || found.kind == .law || found.kind == .lawMember || found.kind == .protocol then
-        let place := (found.name.map (·.span)).getD default
-        endItem (typeBody index place)
-      -- the laws of a module instance are typed at it (SP10); a module that a parameter stands
-      -- for in an opaque typing (SP12) is no instance of the program, and has no laws of its own
-      -- and its function members, called or not (SP7 item 7)
-      if found.kind == .«module» && entry.key.opaqueFor.isNone then
-        endItem (moduleLaws index)
-        endItem (typeModuleMembers index)
+  if !(← get).defaultLayout.batches.isEmpty then
+    let mut layout ← modifyGet fun s => (s.defaultLayout, {s with defaultLayout := {}})
+    while let some (batch, rest) := layout.batches.dequeue? do
+      for i in [cursor:batch.afterRequests] do typeRequestedBody i
+      cursor := batch.afterRequests
+      -- A private tail cannot affect a package once all ordinary requests have run.
+      if cursor == (← getResults).instanceCount then return
+      layout ← reserveLayoutKeys {layout with batches := rest} batch.store do
+        for i in [batch.first:batch.stop] do typeRequestedBody i
+  while cursor < (← getResults).instanceCount do
+    typeRequestedBody cursor
     cursor := cursor + 1
 
 /-- The phase of types: the checks of kernels, and the body of every instance that the roots

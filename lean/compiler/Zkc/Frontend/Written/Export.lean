@@ -248,12 +248,16 @@ def exportSelected (assembly : Assembly) (request : Request) (withProof : Bool) 
       moduleNamespace.toList.head!.isAlpha do
     throw "WK-NAMESPACE: expected one identifier starting with a letter"
   let scope := if moduleNamespace == "WrittenKnowledge" then moduleNamespace else "«" ++ moduleNamespace ++ "»"
-  let (selection, resolved) ← select (← sourceState assembly) request
+  let (selection, resolved) ← match request with
+    | .goal name => (← resolveGoals assembly).selectNamed name .fork
+    | .scheme .. => do
+      let (selection, state) ← select (← sourceState assembly) request
+      pure (selection, {state : GoalSource})
   let scheme := selection.scheme
-  let ⟨_,s,emission,_,evidence⟩ ← admitInstance resolved scheme.protocol scheme.span
-  let c ← declarations s selection
-  let pkg := emission.package ⟨[],[],[],[],[]⟩
-  let historyType ← checkPorts pkg evidence c
+  let root ← resolved.admitScheme scheme
+  let c ← declarations root.state selection
+  let pkg := root.emission.package ⟨[],[],[],[],[]⟩
+  let historyType ← checkPorts pkg root.evidence c
   unless pkg.bindings.rows.isEmpty do unsupported "external primitive binding"
   let printed := package pkg
   let [(root, true)] := printed.definitions | unsupported "multi-definition root"

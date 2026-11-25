@@ -32,11 +32,7 @@ def declaredDraw (s : Compile.State) (owner : Core.Key) (name : String)
   unless (Static.specificationParameters s.program decl).size == specification.size do
     refuse bound.span "SP11" "the selected charge requires its proof arguments"
   let env := Static.instanceEnv s.program decl instanceKey.arguments specification
-  let (result, after) := (Static.evalRational env bound).run sourceContext s
-  let .ok amount := result | do
-    let diagnostics := after.log.entries.extract s.log.entries.size after.log.entries.size
-    let messages := diagnostics.toList.map (·.render after.env.renderer)
-    throw s!"{location bound.span}: cannot close the rational ceiling: {String.intercalate "; " messages}"
+  let (amount, _) ← evaluate s bound.span (Static.evalRational env bound)
   if amount.num < 0 then throw "a draw ceiling must be nonnegative"
   return ⟨event, amount⟩
 
@@ -212,13 +208,13 @@ def goalCaps (c : AdmittedRoot) (specification : Array Nat) : ExportM (CapTable 
 
 /-- The named request selects the deployed root even in an assembly with several schemes. -/
 def admitSoundnessGoal (assembly : Assembly) (name : String) : ExportM AdmittedRoot := do
-  let (selected, state) ← selectNamedGoal (← sourceState assembly) name .soundness
-  admitInstance state selected.scheme.protocol selected.scheme.span
+  let (selected, closed) ← (← resolveGoals assembly).selectNamed name .soundness
+  closed.admitScheme selected.scheme
 
 /-- Read the charge at a path of application instructions from the named goal's root. -/
 def goalDrawCharge (c : AdmittedRoot) (goal : String) (path : List Core.Key) (draw : String) :
     ExportM DrawCharge := do
-  let (selected, _) ← selectNamedGoal c.state goal .soundness
+  let (selected, _) ← c.goalSource.selectNamed goal .soundness
   unless selected.scheme.protocol == c.id do throw "GL3: goal selects a different protocol"
   let root := ProofSubject.mk c.id selected.specification
   let subject ← path.foldlM (fun parent site => parent.child c site) root

@@ -268,7 +268,11 @@ def Definition.print (definition : Definition) (renderer : Renderer := .plain)
     | some reason => s!"\nwaiting: {reason}"
     | none => ""
   match definition.generic with
-  | some generic => s!"{head}{waiting}\ngeneric:\n{generic.print renderer allTypes}"
+  | some generic =>
+    let text := match generic with
+      | .tree body => body.print renderer allTypes
+      | .printed normal detailed => if allTypes then detailed else normal
+    s!"{head}{waiting}\ngeneric:\n{text}"
   | none => head ++ waiting
 
 end Zkc.Frontend.Typed

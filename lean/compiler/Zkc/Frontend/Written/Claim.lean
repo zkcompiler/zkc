@@ -80,7 +80,7 @@ private def selectedClause (c : AdmittedRoot) (selected : Selection) : ExportM D
   return clause
 
 @[no_expose] def goalClause (c : AdmittedRoot) (goal : String) : ExportM DecidingClause := do
-  let (selected, _) ← selectNamedGoal c.state goal .soundness
+  let (selected, _) ← c.goalSource.selectNamed goal .soundness
   selectedClause c selected
 
 /-- What one written soundness goal claims, in the package of its claims. It is made by
@@ -206,7 +206,7 @@ private def readClaim (c : AdmittedRoot) (state : Compile.State) (goal : String)
 
 @[no_expose] def claimedGoal (c : AdmittedRoot) (state : Compile.State) (goal : String) :
     ExportM (ClaimedGoal × SchemeEntry × Compile.State) := do
-  let (selected, _) ← selectNamedGoal c.state goal .soundness
+  let (selected, _) ← c.goalSource.selectNamed goal .soundness
   readClaim c state goal selected
 
 /-- What written soundness goals of one scheme claim (GL3), as one package: for each goal its
@@ -220,7 +220,7 @@ private def collectClaims (c : AdmittedRoot) (goals : List (String × ExportM De
   let mut reversed := []
   let mut first : Option (String × SchemeEntry) := none
   for (goal, resolution) in goals do
-    let (selected, _) ← selectGoalId c.state (← resolution) .soundness
+    let (selected, _) ← c.goalSource.selectId (← resolution) .soundness
     let (next, named, after) ← readClaim c state goal selected
     match first with
     | some (earlierGoal, earlier) =>

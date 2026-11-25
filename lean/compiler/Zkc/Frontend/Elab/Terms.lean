@@ -88,7 +88,7 @@ out leaves the body not checked, and a defect goes on. -/
 def speculate {α : Type} (action : ElabM α) : ElabM (Option α) := do
   let saved ← getThe Compile.State
   recover (some <$> action) (skipped := true) (waits := true) do
-    modifyThe Compile.State fun state => { state with log := saved.log, stack := saved.stack }
+    modifyThe Compile.State fun state => { state with log := saved.log, stack := saved.stack, moduleReads := saved.moduleReads }
     return none
 
 /-- The value of an expression written as a size, when it evaluates to a natural. With
@@ -1344,6 +1344,10 @@ mutual
               | .span span => textOf span
               | .text text => pure text
             refuseHere "TY5" arg.span s!"`{text}` is a `{← renderTypeE xs.type}`; `length` takes a collection"
+          let (parameters, result) ← signatureOf id
+          let (values, _) ← inferArguments id assigned found.file parameters result
+            #[.typed xs arg.span arg.quote] expected place
+          liftM (observeDeclarationApplication id values place : CompileM Unit)
           return ← lengthNode place xs
     else if found.kind != .relation then
       unless found.kind == .function do

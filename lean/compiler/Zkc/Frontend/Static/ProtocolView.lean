@@ -14,6 +14,7 @@ def checkedViewProtocol (inst : InstanceId) (place : Span) : CompileM Typing.Pro
   let known := (← getResults).body? inst
   if known.isNone || (known matches some .inProgress) then
     liftM ((← read).protocolBody inst place)
+  else useQueryReads ⟨.body, inst⟩
   let results ← getResults
   match results.body? inst with
   | some (.protocol code) =>
@@ -82,6 +83,7 @@ def deriveViewFields (inst : InstanceId) (view : ProtocolView) (place : Span) :
     let some id := head.roster.idxOf? r | refuse "SX9" place s!"unknown role `{r}` in a generated view"
     pure id
   if let (.inputs _, some owner) := (view, role) then
+    useQueryReads ⟨.signature, inst⟩
     let some (.protocol ports _) := state.results.content? inst | throw (.waiting "the closed protocol signature")
     unless ports.size == head.ports.size do throw (.defect "port arity changed during typing")
     let mut fields := #[]
@@ -105,8 +107,10 @@ def protocolViewRecord (inst : InstanceId) (view : ProtocolView) (place : Span) 
   let some protocol := (← getResults).key? inst | throw .abandoned
   let key := {protocol with view := some view}
   let requester ← currentRequest?
+  let dependency := match view with | .inputs _ => QueryKind.signature | _ => .body
   if let some record := (← getResults).instance? key then
     if let some from_ := requester then modifyResults (·.addRequest from_ ⟨.signature, record⟩)
+    useQueryReads ⟨dependency, inst⟩
     return record
   let fields ← deriveViewFields inst view place
   let frame := { subject := Message.ofText view.member, span := place : ChainFrame }
@@ -115,7 +119,6 @@ def protocolViewRecord (inst : InstanceId) (view : ProtocolView) (place : Span) 
     let table := table.setState record (.done (.viewRecord fields))
     let results := {results with signatures := table}
     let recordRef := ⟨.signature, record⟩
-    let dependency := match view with | .inputs _ => QueryKind.signature | _ => .body
     let results := results.addRequest recordRef ⟨dependency, inst⟩
     (record, requester.elim results fun from_ => results.addRequest from_ recordRef)
 

@@ -12,6 +12,15 @@ import Zkc.Tests.Frontend.Instances
 import Zkc.Tests.Frontend.TypingCases
 import Zkc.Tests.Frontend.Typing
 import Zkc.Tests.Frontend.TypingReference
+import Zkc.Tests.Frontend.MemberFormation
+import Zkc.Tests.Frontend.OpenProtocolHeads
+import Zkc.Tests.Frontend.MemberParameters
+import Zkc.Tests.Frontend.ModuleDepth
+import Zkc.Tests.Frontend.PhasedModuleChecks
+import Zkc.Tests.Frontend.DefaultMemberRoots
+import Zkc.Tests.Frontend.DefaultPackageLayout
+import Zkc.Tests.Frontend.ModuleObservations
+import Zkc.Tests.Frontend.WrittenSelectionReads
 import Zkc.Tests.Frontend.MemberRows
 import Zkc.Tests.Frontend.Independent
 import Zkc.Tests.Frontend.Session
