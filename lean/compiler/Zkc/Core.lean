@@ -88,9 +88,12 @@ public import Zkc.Core.World.Runs
 public import Zkc.Core.World.Stack
 public import Zkc.Core.Scheme.Declaration
 public import Zkc.Core.Scheme.Deployed
+public import Zkc.Core.Scheme.Deploy
 public import Zkc.Core.Scheme.Roles
 public import Zkc.Core.Run.Run
+public import Zkc.Core.Run.Execute
 public import Zkc.Core.Format.Format
+public import Zkc.Core.Format.Canonical
 public import Zkc.Core.Functions
 public import Zkc.Core.Statements
 

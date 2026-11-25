@@ -27,12 +27,25 @@ layout, a commitment scheme): the definition of each member that a handler appli
 key of the member in its interface. The definitions are functions of the admitted program. -/
 structure ModuleRef where
   members : List (Key × Key)
+deriving DecidableEq, Repr
 
-/-- How a scheme is made from its protocol: run as it is, between online roles, or derived
-with a suite. -/
+/-- Named Fiat-Shamir deployment suites from the built-in catalogue. -/
+inductive CatalogueSuite where
+  /-- Merlin 3.0 transcript over BLS12-381 scalar and curve encodings. -/
+  | merlin3Bls12381
+  /-- CFRG-style SHAKE128 sponge transcript. -/
+  | cfrgShake128
+  /-- Poseidon2 algebraic sponge transcript over KoalaBear. -/
+  | poseidon2KoalaBear
+deriving DecidableEq, Repr
+
+/-- How a scheme is made from its protocol: run as it is, between online roles, derived
+with a module suite, or derived with a named catalogue suite. -/
 inductive Construction where
   | interactive
   | derived (suite : ModuleRef)
+  | catalogue (suite : CatalogueSuite) (sessionTag : Option String := none)
+deriving DecidableEq, Repr
 
 /-- The layout of a proof: its module, the sites whose values the proof carries, and the
 sites whose values are recovered, each by a member of the module. -/
@@ -40,11 +53,13 @@ structure Layout where
   module : ModuleRef
   carry : List Site
   recover : List (Site × Key)
+deriving DecidableEq, Repr
 
 /-- A grind: the number of bits, at the sites that it guards. -/
 structure Grind where
   bits : Nat
   sites : List Site
+deriving DecidableEq, Repr
 
 /-- A commitment: its kind, its scheme, and the sites of the keys of the prover and of the
 verifier when they are values of the run. -/
@@ -53,12 +68,14 @@ structure Commitment where
   scheme : ModuleRef
   proverKey : Option Site
   verifierKey : Option Site
+deriving DecidableEq, Repr
 
 /-- A value pinned at a site: the hash and its digest. -/
 structure Pin where
   site : Site
   hash : Key
   digest : List Nat
+deriving DecidableEq, Repr
 
 /-- The declaration of a scheme: the entry, the kind of each role, the construction (one), the
 prover when it is written, the layout, the retry (its bound and the site of its attempt), the
@@ -77,5 +94,6 @@ structure Declaration where
   grinds : List Grind
   commits : List Commitment
   pins : List Pin
+deriving DecidableEq, Repr
 
 end Zkc.Core

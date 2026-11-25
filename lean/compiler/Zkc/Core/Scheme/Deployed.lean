@@ -58,7 +58,8 @@ commitments, those that recover values, and the one that derives the samples. -/
 def Declaration.definitions (declaration : Declaration) : List Key :=
   (match declaration.construction with
     | .interactive => []
-    | .derived suite => suite.definitions) ++
+    | .derived suite => suite.definitions
+    | .catalogue _ _ => []) ++
   (match declaration.layout with
     | none => []
     | some layout => layout.module.definitions ++ layout.recover.map (·.2)) ++

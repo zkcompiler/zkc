@@ -19,6 +19,7 @@ def Declaration.interactive (declaration : Declaration) : Bool :=
   match declaration.construction with
   | .interactive => true
   | .derived _ => false
+  | .catalogue _ _ => false
 
 /-- Who proves and who verifies: exactly two roles are online. For an interactive scheme
 nothing is inferred: the prover is the one written, the verifier the other online role. For
