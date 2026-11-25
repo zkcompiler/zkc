@@ -1,6 +1,7 @@
 import Zkc.Core.Admission.Theorems
 import Zkc.Kernel
 import Zkc.Vocabulary.Project
+import Zkc.Frontend.Written.Charge
 import ZkcFormal.Walk
 import ZkcFormal.Written.SiteCaps
 import ZkcFormal.Written.WalkFees
@@ -260,7 +261,7 @@ example : choiceCaps.sites =
 -- an arm that is empty adds nothing, and the frontend's number is the library's
 example : (⟨[⟨⟨2⟩, .choice (.item (.draw ⟨⟨0⟩, 3, 8, 1⟩) .nil) .nil .nil⟩]⟩ : CapTable).budget = 3 / 8 := by
   decide +kernel
-example : choiceCaps.totalAt Rat choiceCaps.root = 1 := by decide +kernel
+example : choiceCaps.ratio = 1 := by decide +kernel
 
 /-! ### The arms of a table are the program's
 
