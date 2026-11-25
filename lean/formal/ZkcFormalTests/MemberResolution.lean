@@ -71,6 +71,7 @@ parameters, whose value is read. -/
 private def rootOutcome (state : Compile.State) (id : InstanceId) (evaluate : Bool) : Outcome :=
   match Typing.emitRoot state id with
   | .error (.waiting reason) => .waits reason
+  | .error (.exhausted exhaustion) => .failed exhaustion.describe
   | .error (.defect reason) => .failed s!"defect: {reason}"
   | .error (.noCoreForm reason) => .failed s!"no core form: {reason}"
   | .ok emission =>

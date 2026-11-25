@@ -1373,8 +1373,9 @@ instances are:
   representative has all of them; when none has, the declaration has no default instance;
 - each module parameter at the first module of the program, the package's own files first, that
   implements its bound, with that module's static arguments solved against the bound (SP6) and
-  its others at their defaults. A candidate whose conditions fail or cannot yet be decided
-  is passed over. The selected module must have been formed.
+  its others at their defaults. The candidate must satisfy its own bounds and conditions
+  and those of each applied interface. The search passes over a mismatch or an undecided
+  candidate and selects a fully formed module.
 
 A default instance whose `where` does not hold is skipped; a law whose own `where` does not hold
 at a default instance is skipped there (SP10). A specification-only static parameter takes the

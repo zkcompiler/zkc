@@ -1027,8 +1027,6 @@ mutual
             seen := seen.insert app
           written := written.push (app, path)
     let applications := written.map Prod.fst
-    if let .candidate required := demand then
-      unless required.all applications.contains do throw .skipped
     let (bindings, conflict) ← bindModuleMembers written
     let conflict := if concrete then conflict else none
     let reject (c : MemberConflict) : CompileM Unit := do
@@ -1038,15 +1036,26 @@ mutual
     let complete := do
       let members ← moduleMemberValues found moduleName body env applications bindings
       return InstanceContent.«module» interfaces members
+    let check (receiver : InstanceContent) (mode : InstanceDemand) := do
+      modifyResults (·.modifySignatures (·.setState inst (.done (.data receiver))))
+      moduleConditions inst moduleName.text applications mode
+    if let .candidate required := demand then
+      unless required.all applications.contains do
+        -- Formation historically allocated the keys of members and interface conditions
+        -- before testing the requested bound. Preserve those numbers for later packages.
+        discard <| prepareModuleMembers do
+          check (← complete) .required
+          return none
+        throw .skipped
+    let decideEligibility := isDefault && (constrained || demand matches .candidate _)
     if let some c := conflict then
-      unless isDefault && constrained do reject c
-    if isDefault && constrained then
+      unless decideEligibility do reject c
+    if decideEligibility then
       try
         return ← withModuleConditions do
-          let prepared ← prepareModuleMembers complete
+          let prepared ← prepareModuleMembers (some <$> complete)
           let receiver := prepared.getD (.checkingModule interfaces bindings)
-          modifyResults (·.modifySignatures (·.setState inst (.done (.data receiver))))
-          moduleConditions inst moduleName.text applications true
+          check receiver demand
           if let some c := conflict then reject c
           if let some content := prepared then return content
           modifyResults (·.modifySignatures (·.setState inst .inProgress))
@@ -1056,10 +1065,7 @@ mutual
         | failure => throw failure
     let content ← complete
     unless applications.isEmpty do
-      let check := do
-        modifyResults (·.modifySignatures (·.setState inst (.done (.data content))))
-        moduleConditions inst moduleName.text applications isDefault
-      if constrained then withModuleConditions check else check
+      if constrained then withModuleConditions (check content demand) else check content demand
     return content
 
   /-- The values defined by a suite or supplied by its binding. During default eligibility
@@ -1200,7 +1206,7 @@ mutual
   /-- The conditions that the interfaces of a module instance put on it: the bounds of their
   parameters and their `where` (SP3, SP4). -/
   partial def moduleConditions (inst : InstanceId) (moduleName : String)
-      (interfaces : Array AppliedInterface) (isDefault : Bool) : CompileM Unit := do
+      (interfaces : Array AppliedInterface) (demand : InstanceDemand) : CompileM Unit := do
     let state ← get
     let program := state.program
     for (interface, args) in interfaces do
@@ -1208,6 +1214,7 @@ mutual
       let interfaceEnv : Env :=
         { instanceEnv program interfaceDeclaration args with self? := some (.«module» inst) }
       checkBounds interfaceEnv interfaceDeclaration (program.nameOf interface)
+        (skipMismatch := demand matches .candidate _)
       for constraint in interfaceConstraints state interface do
         -- a constraint of an interface that cannot be evaluated here is not taken to hold:
         -- the module instance waits for it (SP4)
@@ -1216,7 +1223,7 @@ mutual
             | .waiting reason => throw (.waiting s!"a constraint of `{program.nameOf interface}`: {reason}")
             | other => throw other
         if let some message := outcome then
-          if isDefault then throw .skipped
+          if demand != .required then throw .skipped
           refuse "SP4" (constraintSpan constraint) message
 end
 

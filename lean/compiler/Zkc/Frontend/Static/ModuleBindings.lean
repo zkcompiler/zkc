@@ -109,15 +109,14 @@ def withModuleConditions {α : Type} (check : CompileM α) : CompileM α := do
     | .exhausted e => throw (.exhausted (freeze e))
     | other => throw other
 
-/-- Form the receiver in the usual source order if its members are available. This retains
-the allocation order of definitions in existing packages. Otherwise use demand-driven member
-reads for the eligibility decision. A failed preparation supplies only stable key numbers:
-an eligible receiver later materializes in full, reporting any actual errors or exhaustion. -/
-def prepareModuleMembers (make : CompileM InstanceContent) : CompileM (Option InstanceContent) := do
+/-- A preparation can offer a receiver to keep, or decline it after allocating signature keys.
+Only a successful offer commits the checked state. All other preparations contribute their
+key numbers to the enclosing search, without publishing a request, diagnostic or budget result. -/
+def prepareModuleMembers (make : CompileM (Option InstanceContent)) : CompileM (Option InstanceContent) := do
   let saved ← get
   let (outcome, checked) := make.run (← read) saved
   match outcome with
-  | .ok value =>
+  | .ok (some value) =>
     if checked.log.errors == saved.log.errors && checked.log.incomplete == saved.log.incomplete then
       set checked
       return some value

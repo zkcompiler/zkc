@@ -292,6 +292,40 @@ private def checkCandidateBounds (repository : Repository) : TestM Unit := do
   expectTrue ((session.admitRoots none).complete.isOk &&
     session.state.results.packageReports.any (·.description.contains "choose<Good>"))
     s!"inferred argument outside the candidate's sort: {session.renderDiagnostics}"
+  let intro := "module caller\nuse zkc::algebra::{PrimeField}\ninterface NeedsField<T: PrimeField>\n" ++
+    "interface Unknown:\n    nat Limit\nmodule External: Unknown = primitive(\"project.external\")\n" ++
+    "interface I<n: nat>:\n    nat Height\n"
+  let good := "module Good: I<0>:\n    nat Height = 0\n"
+  for height in ["0", "External::Limit"] do
+    for extra in ["", " + I<1>"] do
+      let wrong := "module M<n: nat>: NeedsField<bool> + I<n>" ++ extra ++ ":\n    nat Height = " ++ height ++ "\n"
+      for declarations in [wrong ++ good, good ++ wrong] do
+        let session ← memberSession repository (intro ++ declarations ++ first ++ root)
+        expectTrue ((session.admitRoots none).complete.isOk && !session.hasErrors &&
+          session.state.results.packageReports.any (·.description.contains "choose<Good>"))
+          s!"a bound on an applied interface must skip this candidate: {session.renderDiagnostics}"
+  let explicit := intro ++ "module M<n: nat>: NeedsField<bool> + I<n>:\n    nat Height = 0\n" ++
+    first ++ "def evaluate(x: bool) -> bool: choose<M<0>>(x)\n"
+  let session ← memberSession repository explicit
+  expectTrue ((session.diagnostics.find? (·.isError)).any (·.rule == "SP3"))
+    s!"an explicitly requested module must discharge the interface bound: {session.renderDiagnostics}"
+
+/-- The members of an otherwise valid candidate with different interface arguments used to
+allocate definition numbers before the next candidate was selected. Pin the emitted key of that
+selection, including when a member's type instantiates another declaration. -/
+private def checkCandidatePackageKeys (repository : Repository) : TestM Unit := do
+  let intro := "module caller\ninterface I<n: nat>:\n    nat Height\n" ++
+    "module Wrong<k: nat>: I<1>:\n    nat Height = 7\nmodule Good: I<0>:\n    nat Height = 0\n"
+  let computed := "module caller\ntype Alias<T> = T\ninterface I<n: nat>:\n    type Value\n    nat Height\n" ++
+    "module Wrong<k: nat>: I<1>:\n    type Value = Alias<bool>\n    nat Height = 7\n" ++
+    "module Good: I<0>:\n    type Value = bool\n    nat Height = 0\n"
+  let root := "pub def choose<H: I<0>>(x: bool) -> bool: x\ndef evaluate(x: bool) -> bool: x\n"
+  for (declarations, stored) in [(intro, "stored5"), (computed, "stored8")] do
+    let session ← memberSession repository (declarations ++ root)
+    let .ok roots := (session.admitRoots none).complete | failure s!"{session.renderDiagnostics}"
+    let some package := roots.find? "default instance `choose<Good>`" | failure "missing chosen candidate"
+    expectTrue ((Written.package package.toSourcePackage).text.contains s!"def {stored} : Definition")
+      s!"skipping the first candidate changed the emitted key of choose<Good>, expected {stored}"
 
 /-- A generated protocol view can require a function of the provisional receiver through
 the opaque view of a generic parameter. An unrelated unavailable natural has no bearing. -/
@@ -471,6 +505,7 @@ def memberRowSuite (repository : Repository) : TestM Unit := do
   checkEligibilityReads repository
   checkInferredModule repository
   checkCandidateBounds repository
+  checkCandidatePackageKeys repository
   checkGeneratedEligibility repository
   checkSingleOwnerDependencies repository
   checkWaitingDefault repository
