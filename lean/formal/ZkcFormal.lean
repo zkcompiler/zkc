@@ -25,3 +25,4 @@ public import ZkcFormal.Written.ReductionModel
 public import ZkcFormal.Written.UniformChallenge
 public import ZkcFormal.Written.ScalarField
 public import ZkcFormal.Written.PrimeFieldCharge
+public import ZkcFormal.Written.StandardInterpretation

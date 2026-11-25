@@ -1,0 +1,31 @@
+noncomputable section
+theorem good_judged : goodJudged := by
+  claim_intro
+  have b : input_b = false := by
+    cases hb : input_b
+    · rfl
+    · have yes : functionResult (t := .bool)
+            (fnMeaning StandardInterpretation.model installed goodMember (.cons true (.cons input_xs .nil))) = some true := by
+        apply functionResult_of_judged; walk
+      rw [hb, yes] at rejected
+      contradiction
+  subst input_b
+  walk
+theorem good_witnessed : goodWitnessed := by
+  let xs : List Nat := [0, 0, 0, 0]
+  apply good_witnessed_of false trivial xs
+  · constructor
+    · intro x hx
+      have zero : x = 0 := by simpa [xs] using hx
+      subst x
+      change 0 < 256
+      decide
+    · intro n size
+      cases size
+      rfl
+  · apply functionResult_of_judged
+    walk
+run_cmd
+  if (← Lean.getEnv).contains `HashRelation.badClaim then
+    throwError "the uncovered goal has a claim"
+end

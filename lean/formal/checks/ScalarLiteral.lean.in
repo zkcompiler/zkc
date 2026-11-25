@@ -1,9 +1,15 @@
 namespace ScalarLiteral
-open Zkc.Core ZkcFormal ZkcFormal.Written ZkcFormal.ProbabilisticProcess
-theorem literal_judged : soundJudged := by
+open Zkc.Core ZkcFormal ZkcFormal.Written ZkcFormal.ProbabilisticProcess OracleComp ProbComp
+open StandardInterpretation (F G D large)
+open scoped ScalarField ENNReal NNRat
+noncomputable section
+theorem sound_judged : soundJudged := by
   claim_intro
   walk
   simp_all
-theorem literal_claim : soundClaim := sound_claim_of_judged literal_judged
+  exact (by decide : (0 : F) ≠ 1) (by assumption)
+theorem literal_claim : soundClaim := sound_claim_of_judged sound_judged
+
 #print axioms literal_claim
+end
 end ScalarLiteral

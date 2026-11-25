@@ -1,0 +1,12 @@
+module points
+use zkc::security::{soundness}
+type G = primitive("bls12-381.g1")
+relation Two(b: bool; p: G, q: G): b and p + q != q
+protocol Check roles(P,V)(b: bool @(P,V), p: G @P, q: G @P):
+    guard @V b
+spec for Check:
+    proves @V Two(b; p, q)
+scheme Checked = Check:
+    prover P
+    construction interactive
+goal sound = soundness(Checked)

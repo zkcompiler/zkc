@@ -170,9 +170,14 @@ elab "walk_pay " fee:term:max &" excluding " set:term:max " as " reply:ident kep
     | none => pure []
     | some cap => cap.withContext do
       let stated ← instantiateMVars (← cap.getType)
-      let applications ← mkAppM ``Zkc.Core.Frame.applications #[rest]
-      let computed ← Meta.reduce applications (skipTypes := true) (skipProofs := true)
-      let stated := stated.replace fun e => if e == applications then some computed else none
+      -- Normalize the path in the elaborated cap. Re-elaborating the rule's arguments can
+      -- give its frames different annotations from the expression read out of the process.
+      let rhs := stated.appArg!
+      let stated ← if rhs.isAppOfArity ``Zkc.Subject.CapTable.capFrom 4 then do
+          let args := rhs.getAppArgs
+          let through ← Meta.reduce args[2]! (skipTypes := true) (skipProofs := true)
+          pure (mkApp stated.appFn! (mkAppN rhs.getAppFn (args.set! 2 through)))
+        else pure stated
       let cap ← cap.replaceTargetDefEq stated
       -- where the module states the cap of this site, the fee is compared with what it states,
       -- and the site has its name

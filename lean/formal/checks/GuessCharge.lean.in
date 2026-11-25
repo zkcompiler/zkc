@@ -4,8 +4,7 @@ The verifier of `Guess<3>` within the charges of its goal.
 Before this text the check writes the printed package of what the goal claims and, generated
 from what the frontend read: the facts (`rootKey` with `rootHeader`, `rootNames`, `rootBody`,
 `rootMember`; `verifierRole`, `proverRole`; `guessingCaps`, the table of caps of the goal;
-`guessingKey` with `guessingHeader` and `guessingMember`), that the standard model covers the
-package (`covered`), that the counts of the table are the program's and what its budget is
+`guessingKey` with `guessingHeader` and `guessingMember`), that the standard interpretation covers the goal’s reach, that the counts of the table are the program's and what its budget is
 (`guessing_counted`, `guessing_budget`), where the walks start (`verifierProgram` with
 `verifier_meaning`, `guessing_meaning`), the key of the charged draw under the name of its site (`site_r`) with its
 cap (`guessing_cap_r`), the transfers, the propositions `guessingClaim`, `guessingGoal`,
@@ -58,10 +57,10 @@ theorem guessing_judged : guessingJudged := by
     obtain ⟨rfl, _⟩ := invariant_i
     walk
 
-/-- **The hypotheses of the claim are met**: over the field of two elements, on the false claim,
+/-- **The hypotheses of the claim are met**: at the source field, on the false claim,
 with the service of the laws. -/
 theorem guessing_witnessed : guessingWitnessed :=
-  guessing_witnessed_of ZkcFormal.Written.FiniteModel.data false trivial
-    (guessing_relation _ false)
+  guessing_witnessed_of false trivial
+    (guessing_relation StandardInterpretation.D false)
 
 end

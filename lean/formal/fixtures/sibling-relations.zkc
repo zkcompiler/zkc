@@ -1,0 +1,14 @@
+module relations
+use zkc::security::{soundness}
+type F = primitive("bls12-381.fr")
+section <spec e: nat>:
+    relation HasOther(b: bool, x: F; w: F): if e == 0 then b and w != 0 and w != x else b and w != 1
+    protocol Check roles(P,V)(b: bool @(P,V), x: F @(P,V), w: F @P):
+        guard @V b
+    spec for Check:
+        proves @V HasOther(b, x; w)
+scheme Checked = Check:
+    prover P
+    construction interactive
+goal zero = soundness(Checked, spec e = 0)
+goal one = soundness(Checked, spec e = 1)

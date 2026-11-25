@@ -57,9 +57,8 @@ The check reads the source with the frontend and writes two modules, on which Le
   in the context says that it is in the table: the read is a fork, whose open side the text
   names (the entry found, and that it was found); a text that named a fork where the walk
   meets none would be refused.
-- The proof module also states that the standard model covers the package (`covered`): it
-  interprets every row of the vocabulary that the package links, read from the stored program
-  through its loops and arms, and has a sampler for the law of every coin that it draws.
+- The statements module proves coverage separately for both goals. The frontend names the
+  field power when it occurs in a relation, and the kernel refuses coverage there.
 - The comparison module has the same printed package and the frontend: the program by names
   and the association that Lean reads from the package are those that the frontend gives to
   admission for the claims, and its first definitions are those of the root's own package.
@@ -72,9 +71,8 @@ proves the same theorems. With `<=` of the relation changed to `<`, the deployed
 and both tables are what they were and the relation is another function: Lean refuses the
 theorems that say what the relation computes and those that rest on them.
 
-Five controls are refused by Lean, each for the theorems that depend on what it changes: a row
-outside the table of the model inside the loop of the relation (the model does not cover that
-package), the relation changed, and three charges, each written in the source, since no caller
+Six controls are refused by Lean: coverage for each of the two relations with a power in
+its loop, the relation changed, and three charges, each written in the source, since no caller
 gives a statement its table: a charge below the bound of its tolerance, a charge on the draw of
 a loop that does not run, and a charge in another protocol. The last two give the root no cap,
 which is asserted of the tables that the frontend reads. The deciding role of a statement is the
@@ -96,7 +94,7 @@ namespace CountCharge
 /-- What the check asserts of what the frontend read of a source of the subject: both goals
 select one root; each reads the clause `proves @V NearZero(xs)`, decided by the verifier of the
 scheme, on the only port of the protocol; each gives one proof argument, the tolerance; and
-the coins are positions, so the statements are about the standard model. What the two claim is
+the coins draw uniform positions. What the two claim is
 one package, and the table of caps of each goal is read with its claim. -/
 def reading : Reading where
   goals := ["loose", "strict"]
@@ -243,10 +241,21 @@ def run (corpus template : System.FilePath) (work : System.FilePath) : IO Unit :
   -- element, which the standard model gives a constant.
   let uncovered ← WrittenSubject.read
     (← edit source "if xs[i] == 0 then 0 else 1" "if xs[i] ^ 2 == 0 then 0 else 1")
-    { reading with model := scalarFieldModelText }
-  let uncoveredProof ← startLakeLean work "CoverageControl"
-    (← IO.ofExcept (uncovered.statements.coverageModule "CoverageControl")).text
+    reading
+  for issue in [(uncovered.statements.coverageModule "CoverageControl").map (fun _ => ()),
+      (uncovered.statements.module "UncoveredControl" {}).map (fun _ => ())] do
+    match issue with
+    | .ok _ => throw (IO.userError "issued a statement for an uninterpreted power")
+    | .error why => unless why.contains "pow" && why.contains "loose" && why.contains "strict" do
+        throw (IO.userError why)
 
+  -- Independently ask the kernel about the actual program, including the power in the relation.
+  let testCoverage (goal : ClaimedGoal) := Statements.header (Statements.imports false) ++ "namespace CoverageControl\n" ++
+    (Written.package uncovered.statements.package).text ++ statementOpens ++ uncovered.statements.facts ++
+    Statements.coverage [goal] ++ "end CoverageControl\n"
+  let coverageChecks ← uncovered.goals.mapM fun goal => do
+    let checked ← startLakeLean work (goal.goal ++ "CoverageControl") (testCoverage goal) (text := false)
+    return (goal.goal, checked)
   let proof : Proof := { text := template, theorems := ofText }
   -- Each of the three charges is refused where the text reads the cap of the draw from the
   -- table.
@@ -267,30 +276,23 @@ def run (corpus template : System.FilePath) (work : System.FilePath) : IO Unit :
     { title := "a charge on a loop that does not run", name := "SiteControl", subject := elsewhere,
       text := template, unproved := ofCharge, places := atCap },
     { title := "a charge of another protocol", name := "OwnerControl", subject := foreign,
-      text := template, unproved := ofCharge, places := atCap },
-    -- A row outside the table of the model: what is generated before the text does not hold
-    -- of this source (the model does not cover its package), so the module of the statements
-    -- is refused and the text is not read.
-    { title := "a row outside the table of the model", name := "UncoveredControl", subject := uncovered,
-      text := template, refusal := .generated, unproved := ["covered"],
-      places := ["ArithmeticModel.covers stored = true"] }]
+      text := template, unproved := ofCharge, places := atCap }]
   -- The roster reversed: the same text proves the same theorems.
   let turnedCount ← start work "CountTurned" turned proof
   let _ ← count.finish
   let _ ← turnedCount.finish
   let (ok, output) ← finishLean ceilingProof
   acceptedOutput "CeilingAtTotal" ok output ["loose_ceiling"] allowed
-  -- The package with a row outside the table is not covered: the kernel decides it.
-  let (ok, output) ← finishLean uncoveredProof
-  if ok then throw (IO.userError "Lean accepted that the model covers a package with a row outside its table")
-  unless output.contains "ArithmeticModel.covers stored = true" && output.contains "is false" do
-    throw (IO.userError s!"the coverage control was refused for another reason\n{output}")
+  for (goal, checked) in coverageChecks do
+    let (covered, reason) ← finishLean checked
+    if covered then throw (IO.userError s!"accepted the power in the relation of {goal}")
+    unless reason.contains s!"covers stored rootKey {goal}Key = true" && reason.contains "is false" do
+      throw (IO.userError reason)
   let charges := ", ".intercalate ((tables written).map fun (name, arguments, caps) =>
     s!"{name} at tolerance {arguments[0]!} within {caps.ratio}")
   IO.println (s!"Count<8> is judged within the tables of caps of its goals ({charges}), " ++
     "on the tables on which the admitted relation returns false, in either order of the roster; " ++
-    "6 of 6 controls refused, one of them in what is generated before the text (the model does " ++
-    "not cover a row of its package), and a scheme whose prover decides the clause is refused " ++
+    "6 of 6 controls refused, including coverage of the power in each relation, and a scheme whose prover decides the clause is refused " ++
     "by the frontend.")
 
 end CountCharge

@@ -7,8 +7,7 @@ from what the frontend read: the facts (`rootKey` with `rootHeader`, `rootNames`
 `rootMember` and `calleeProgram`, the program before the root; `verifierRole`, `proverRole`; for
 the function that the root calls `applyKey`, `applyHeader`, `applyNames`, `applyBody`,
 `applyBefore` and `applyMember`; for the goal `soundCaps`, `soundKey` with `soundHeader`,
-`soundNames`, `soundBody`, `soundBefore` and `soundMember`), that the arithmetic model covers
-the package (`covered`), where the walks start (`verifierProgram` with `verifier_meaning`,
+`soundNames`, `soundBody`, `soundBefore` and `soundMember`), that the standard interpretation covers the goal’s reach, where the walks start (`verifierProgram` with `verifier_meaning`,
 `apply_meaning`, `sound_meaning`), the transfers `at_root` and `at_sound`, and the propositions
 `soundClaim`, `soundGoal`, `soundResult` and `soundWitnessed`, with the judgment that the
 method of fees establishes (`soundJudged`), the theorem that the claim follows from it
@@ -334,9 +333,9 @@ goal says that the product differs, and the field of the model has at least the 
 charge is written with. -/
 theorem sound_judged : soundJudged := by
   claim_intro
-  obtain ⟨A, ha⟩ := rows_of_valid G input_a valid_input_a
-  obtain ⟨B, hb⟩ := rows_of_valid G input_b valid_input_b
-  obtain ⟨C, hc⟩ := rows_of_valid G input_c valid_input_c
+  obtain ⟨A, ha⟩ := rows_of_valid (F := F) G input_a valid_input_a
+  obtain ⟨B, hb⟩ := rows_of_valid (F := F) G input_b valid_input_b
+  obtain ⟨C, hc⟩ := rows_of_valid (F := F) G input_c valid_input_c
   exact walked_within (F := F) (G := G) path input_a input_b input_c A B C ha hb hc soundCaps
     (sound_far (F := F) G input_a input_b input_c A B C ha hb hc rejected) sound_within
     (large_covers large)
@@ -395,7 +394,7 @@ theorem sound_at_corner (path : List Frame) :
         (roleMeaning (model Scalars Scalars) installed rootMember verifierRole path
           (.cons (rows none) (.cons (rows none) (.cons (rows corner) .nil)))))).run.run ()}[
       ∃ results, out.1 = some (.inl results)] ≤ soundCaps.total :=
-  (sound_claim_of_judged sound_judged (F := Scalars) (G := Scalars) path large (rows none) (rows_valid none)
+  (sound_claim_of_judged sound_judged path (rows none) (rows_valid none)
     (rows none) (rows_valid none) (rows corner) (rows_valid corner) rejected).returns
     (serveLaws (model Scalars Scalars) (ArithmeticModel.draws Scalars Scalars))
     ⟨serveLaws_follows _ _,
@@ -422,7 +421,7 @@ matrices and the matrix with a corner are valid, the relation returns false on t
 has the order of the charge, and the service of the laws draws within the samplers and answers
 what is permitted. -/
 theorem sound_witnessed : soundWitnessed :=
-  sound_witnessed_of (F := Witness.Scalars) (G := Witness.Scalars) Witness.large
+  sound_witnessed_of
     (rows Witness.none) (Witness.rows_valid Witness.none) (rows Witness.none)
     (Witness.rows_valid Witness.none) (rows Witness.corner) (Witness.rows_valid Witness.corner)
     Witness.rejected

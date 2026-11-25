@@ -90,7 +90,7 @@ scheme Checked = Twice:
 goal twice = soundness(Checked, stage = written)
 
 
-=== nominal input with a local implementation | issue | sound
+=== nominal input with a local implementation | sort | sound
 module t
 use zkc::security::{soundness}
 type Token = primitive("project.token")
@@ -104,10 +104,40 @@ scheme Checked = Check:
     prover P
     construction interactive
 goal sound = soundness(Checked)
+=== sending a point without a carrier | g2 | sound
+module send_g2
+use zkc::security::{soundness}
+type G2 = primitive("bls12-381.g2")
+relation Holds(x: bool): x
+protocol Check roles(P,V)(x: bool @(P,V), a: G2 @P):
+    m <- send a from P to V
+    guard @V x
+spec for Check:
+    proves @V Holds(x)
+scheme Checked = Check:
+    prover P
+    construction interactive
+goal sound = soundness(Checked)
+
+
+=== drawing a Boolean without a sampler | law | sound
+module draw_bit
+use zkc::security::{soundness}
+relation Holds(x: bool): x
+protocol Check roles(P,V)(x: bool @(P,V)):
+    b <- draw bool from V to P
+    guard @V x
+spec for Check:
+    proves @V Holds(x)
+scheme Checked = Check:
+    prover P
+    construction interactive
+goal sound = soundness(Checked)
+
 "#
 
-/-- Package admission precedes statement issuance. A control may change the model used in a
-module, but cannot supply a meaning for a project's primitive. -/
+/-- Package admission precedes statement issuance. Issuance diagnoses project primitives and
+unsupported nominal sorts at the admitted package. -/
 def writtenPrimitiveSuite : TestM Unit := do
   for block in readBlocks primitiveCases do
     let result : Except String Statements := do
@@ -121,18 +151,21 @@ def writtenPrimitiveSuite : TestM Unit := do
       let proof : ProofText := {text := "", theorems := []}
       let check (issue : Except String Unit) : TestM Unit :=
         match block.expect, issue with
-        | "issue", .ok () => pass
+        | "sort", .error message => expectTrue (message.contains "no carrier for sort") message
+        | "g2", .error message =>
+          expectTrue (message.contains "no carrier for sort" && message.contains "g2") message
+        | "law", .error message =>
+          expectTrue (message.contains "no sampler for law" && message.contains "bool") message
         | "refuse", .error message =>
           expectTrue (message.contains "links a project primitive" && message.contains "no model")
             s!"{block.id}: unexpected diagnostic: {message}"
         | _, .error why => failure s!"{block.id}: {why}"
         | _, .ok () => failure s!"{block.id}: issued a statement for a project primitive"
       check ((statements.module "Check" proof).map fun _ => ())
-      check ((statements.module "Check" proof (model := standardModelText)).map fun _ => ())
       match statements.ceilingModule "Check" with
       | .ok _ => pass
       | .error why => failure s!"{block.id}: could not issue the ceiling: {why}"
       check ((statements.claimsModule "Check").map fun _ => ())
-      check ((statements.coverageModule "Check" (model := arithmeticModelText)).map fun _ => ())
+      check ((statements.coverageModule "Check").map fun _ => ())
 
 end Zkc.Tests.Frontend

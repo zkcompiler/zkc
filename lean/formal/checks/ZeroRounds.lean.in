@@ -1,21 +1,30 @@
-
-open ZkcFormal.Written
 namespace ZeroRounds
+open Zkc.Core ZkcFormal ZkcFormal.Written ZkcFormal.ProbabilisticProcess OracleComp ProbComp
+open StandardInterpretation (F G D large)
+open scoped ScalarField ENNReal NNRat
 noncomputable section
+theorem evaluate_one (F G : Type) [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] (v : F) :
+    fnMeaning (ArithmeticModel.model F G) calleeProgram evaluateMember (.cons [v] (.cons ([] : List F) .nil)) =
+      .done (.cons v .nil) := by
+  apply done_of_judged
+  walk
+theorem zero_rounds_judged : soundJudged := by
+  claim_intro
+  have len : (input_values : List F).length = 1 := valid_input_values.2 1 rfl
+  obtain ⟨v, rfl⟩ := List.length_eq_one_iff.mp len
+  have ev : functionResult (t := .bool) (fnMeaning (ArithmeticModel.model F G) installed soundMember (.cons [v] (.cons input_claim .nil))) = some (decide (v = input_claim)) := by
+    apply functionResult_of_judged
+    walk
+    change decide (input_claim = v + 0) = decide (v = input_claim)
+    simp [eq_comm]
+  have neq : v ≠ input_claim := of_decide_eq_false (Option.some.inj (ev.symm.trans rejected))
+  walk
+  walk_law evaluate_one F G v
+  walk
+  simp_all [eq_comm]
 
-theorem addition_not_constant (F G : Type) [Field F] [DecidableEq F]
-    [AddCommGroup G] [Module F G] [DecidableEq G] :
-    ¬ ∃ c : F, ∀ x y : F, (ArithmeticModel.data F G).scalarAdd x y = c := by
-  rintro ⟨c, h⟩
-  have eq := (h 0 0).trans (h 1 0).symm
-  change (0 : F) + 0 = 1 + 0 at eq
-  simp at eq
-
-example (_judged : soundJudged) : True := by
-  let data : StandardModel.Data Bool Bool := { FiniteModel.data with scalarAdd := fun _ _ => true }
-  fail_if_success have wrong := _judged data
-  trivial
-
-#print axioms addition_not_constant
+theorem sum_claim : soundClaim := sound_claim_of_judged zero_rounds_judged
+#print axioms evaluate_one
+#print axioms sum_claim
 end
 end ZeroRounds

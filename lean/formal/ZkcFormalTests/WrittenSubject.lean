@@ -14,8 +14,7 @@ reading (`Reading`, `read`), how the two modules of a subject are assembled (`Su
 how the modules of a check are built and its proof modules judged (`start`, `judged`), and how
 a control is stated and judged (`Control`).
 
-A control is the subject with its source or its text altered, or under a description of the
-model that the control gives, in a module that must be refused: by Lean in the text, by Lean in
+A control is the subject with its source or its text altered, in a module that must be refused: by Lean in the text, by Lean in
 what is generated before the text, or by the judgment where Lean accepts it. It names the
 theorems that are then left unproved and the texts of the places at which it is refused; with
 `only` the module is refused at those places and at no other. A text is altered with
@@ -50,7 +49,7 @@ end Subject
 /-- What a check asserts of what the frontend read of a source. Each is a fact that the proof
 module takes as given: the ports of the root, the clause that every goal reads and the inputs
 that its relation is applied to, the number of proof arguments of a goal, the roles of the
-scheme, and the class of models that the generator chose for the statements. A relation with
+scheme. A relation with
 witness parameters is not a subject yet: `read` asserts that the clause gives none. -/
 structure Reading where
   /-- The goals, the first of which selects the root. -/
@@ -66,8 +65,7 @@ structure Reading where
   /-- The verifier and the prover of the scheme, by the names of their roles. -/
   verifier : String := "V"
   prover : String := "P"
-  /-- The class of models that the generator chooses for the statements. -/
-  model : ModelText := standardModelText
+
 
 /-- A source read, with what the check asserts of the reading. A reading that is not what the
 check asserts is an error of the check: the text of the proofs is written against it. -/
@@ -92,9 +90,6 @@ def read (text : String) (reading : Reading) : IO Subject := do
       (some reading.verifier, some reading.prover) do
     throw (IO.userError "the verifier and the prover of the scheme are not the roles asserted")
   let statements : Statements := ⟨claims, claims.functionsBeforeRoot⟩
-  let chosen ← IO.ofExcept statements.chosenModel
-  unless chosen.model == reading.model.model && chosen.hypotheses == reading.model.hypotheses do
-    throw (IO.userError s!"the statements are about another class of models: {chosen.model}")
   return ⟨text, statements⟩
 
 /-- The text of a subject's proofs: the text, the theorems that it proves, what it imports
@@ -107,15 +102,16 @@ structure Proof where
   after : List Consumer := []
 
 /-- The two modules of a subject, as the generator assembles them: the module of the statements
-and the proof module, in the name space `name`. A control gives the text that it altered, and a
-description of the model where its claim is about another class; `statements` names the module
+and the proof module, in the name space `name`. A control gives the text that it altered, and
+`statements` names the module
 of the statements where it is not `<name>.Stated`. -/
 def Subject.module (s : Subject) (name : String) (proof : Proof) (text : String := proof.text)
-    (model : Option ModelText := none) (statements : Option Lean.Name := none) : IO Module :=
+    (statements : Option Lean.Name := none) : IO Module := do
   let written : ProofText := { text, theorems := proof.theorems, imports := proof.imports }
-  IO.ofExcept (s.statements.module name written (after := proof.after)
-    (model := model) (statements := statements))
-
+  let issued ← IO.ofExcept (s.statements.module name written (after := proof.after)
+    (statements := statements))
+  for reason in issued.refusals do IO.eprintln reason
+  return issued
 
 /-- The axioms beyond which no theorem of a subject may rest. -/
 def allowed : List String := ["propext", "Classical.choice", "Quot.sound"]
@@ -400,7 +396,7 @@ inductive Refusal where
   /-- By Lean, in the proof module: the statements are accepted. -/
   | text
   /-- By Lean, in the module of the statements: what is generated before the text does not
-  hold of the altered source or model, and the proof module is not read. -/
+  hold of the altered source, and the proof module is not read. -/
   | generated
   /-- By the judgment: Lean accepts both modules. -/
   | outside
@@ -416,8 +412,7 @@ structure Control where
   subject : Subject
   /-- The text of the proofs, altered where the control alters the text. -/
   text : String
-  /-- The description of the model, where the control states a claim about another class. -/
-  model : Option ModelText := none
+
   /-- Where it is refused. -/
   refusal : Refusal := .text
   /-- The theorems that are left unproved, themselves or by what they use, and no other: of the
@@ -455,10 +450,10 @@ imports the subject's module of statements; another has a module of statements o
 theorems appended, from which the unproved ones are read. -/
 def Control.start (work : System.FilePath) (space : String) (proof : Proof) (honest : Module)
     (honestStated : Stated) (control : Control) : IO Running := do
-  let plain ← control.subject.module space proof control.text control.model
+  let plain ← control.subject.module space proof control.text
   let own := plain.statements != honest.statements
   let module ← if own then
-      control.subject.module space proof control.text control.model
+      control.subject.module space proof control.text
         (statements := some (.str control.name.toName "Stated"))
     else pure plain
   let stated ← if own then addStated work module else pure honestStated

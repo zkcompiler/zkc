@@ -99,7 +99,7 @@ header, and the text of its claim about the installed program. -/
 def claimOf (text : String) : Except String (Array Nat × String) := do
   let s ← statementsOf text ["sound"]
   let [goal] := s.claims.goals | throw "not one goal"
-  return (goal.statement, ← s.claimAt standardModelText goal "installed" "rootMember" "soundMember")
+  return (goal.statement, ← s.claimAt goal "installed" "rootMember" "soundMember")
 
 /-- A source whose goal is refused, for a reason that the refusal states. -/
 def refused (title text : String) (reasons : List String) : IO Unit :=
@@ -300,28 +300,27 @@ def proofText (guarded : String) : String :=
   let (first, second) := if guarded == "flag" then ("false", "other") else ("flag", "false")
   "noncomputable section\n" ++
   "open ZkcFormal.Written.StandardModel\n" ++
-  "open ZkcFormal.Written.FiniteModel (data)\n\n" ++
+  "\n" ++
   "theorem sound_installed : soundClaim := by\n" ++
-  "  intro F G D _ _ path flag _ other _ premise σ service conforms state\n" ++
+  "  intro path flag _ other _ premise σ service conforms state\n" ++
   s!"  have declined : {guarded} = false := by\n" ++
   "    have computed : functionResult (t := .bool)\n" ++
-  s!"        (fnMeaning (model D) installed soundMember (.cons {guarded} .nil)) = some {guarded} := by\n" ++
+  s!"        (fnMeaning StandardInterpretation.model installed soundMember (.cons {guarded} .nil)) = some {guarded} := by\n" ++
   "      kernel_rfl\n" ++
   "    rw [computed] at premise\n    exact Option.some.inj premise\n" ++
   "  subst declined\n" ++
-  "  have rejected : roleMeaning (model D) installed rootMember verifierRole path\n" ++
+  "  have rejected : roleMeaning StandardInterpretation.model installed rootMember verifierRole path\n" ++
   s!"      (.cons {first} (.cons {second} .nil)) = .halt (.declared .reject ⟨path, ⟨0⟩⟩) := by\n" ++
   "    kernel_rfl\n" ++
   "  have never : Pr{let out ← (simulateQ (handlerOf service) (embed\n" ++
-  "      (roleMeaning (model D) installed rootMember verifierRole path\n" ++
+  "      (roleMeaning StandardInterpretation.model installed rootMember verifierRole path\n" ++
   s!"        (.cons {first} (.cons {second} .nil))))).run.run state}[\n" ++
   "      ∃ results, out.1 = some (.inl results)] ≤ soundCaps.total := by\n" ++
   "    rw [prEvent_simulation_returns, rejected]\n    simp [run, Process.interpret]\n" ++
   "  simpa using never\n\n" ++
   "theorem sound_witnessed : soundWitnessed :=\n" ++
-  "  ⟨_, _, data, inferInstance, inferInstance, false, trivial, false, trivial,\n" ++
-  "    ⟨Unit, serveLaws (model data) (draws data), ⟨()⟩, serveLaws_follows _ _,\n" ++
-  "      serveLaws_permitted _ _ (StandardModel.draws_permitted data)⟩, by kernel_rfl⟩\n\n" ++
+  "  ⟨false, trivial, false, trivial,\n" ++
+  "    StandardInterpretation.served, by kernel_rfl⟩\n\n" ++
   "end\n"
 
 def consumer : Consumer where
@@ -329,7 +328,7 @@ def consumer : Consumer where
   before :=
     "noncomputable section\n" ++
     "open ZkcFormal.Written.StandardModel\n" ++
-    "open ZkcFormal.Written.FiniteModel (data)\n\n"
+    "\n"
   signature :=
     "theorem consumer {a : Admitted V} (admitted : admit stored association = .ok a) :\n" ++
     "    ∃ root : Member a.program.headers.protocols rootHeader,\n" ++
@@ -337,9 +336,9 @@ def consumer : Consumer where
     "      ∃ relation : Member a.program.headers.fns soundHeader,\n" ++
     "        a.program.find soundKey = some (.fn relation) ∧\n" ++
     "        (functionResult (t := .bool)\n" ++
-    "            (fnMeaning (model data) a.program relation (.cons false .nil)) = some false →\n" ++
-    "          Pr{let out ← (simulateQ (handlerOf (serveLaws (model data) (draws data))) (embed\n" ++
-    "              (roleMeaning (model data) a.program root 1 []\n" ++
+    "            (fnMeaning StandardInterpretation.model a.program relation (.cons false .nil)) = some false →\n" ++
+    "          Pr{let out ← (simulateQ (handlerOf (serveLaws StandardInterpretation.model StandardInterpretation.draws)) (embed\n" ++
+    "              (roleMeaning StandardInterpretation.model a.program root 1 []\n" ++
     "                (.cons false (.cons true .nil))))).run.run ()}[\n" ++
     "            ∃ results, out.1 = some (.inl results)] ≤ 0)"
   proof :=
@@ -349,8 +348,8 @@ def consumer : Consumer where
     "  obtain ⟨root, found, relation, foundRelation, claim⟩ := sound_sound admitted\n" ++
     "  refine ⟨root, found, relation, foundRelation, fun rejected => ?_⟩\n" ++
     "  rw [← free]\n" ++
-    "  simpa using claim data [] false trivial true trivial rejected _ (serveLaws (model data) (draws data))\n" ++
-    "    ⟨serveLaws_follows _ _, serveLaws_permitted _ _ (StandardModel.draws_permitted data)⟩ ()"
+    "  simpa using claim [] false trivial true trivial rejected _ (serveLaws StandardInterpretation.model StandardInterpretation.draws)\n" ++
+    "    ⟨serveLaws_follows _ _, serveLaws_permitted _ _ (ArithmeticModel.draws_permitted F G)⟩ ()"
   after := "\nend\n"
 
 /-- The proof module of a source, as the generator assembles it for a text that does not walk:
@@ -391,7 +390,7 @@ claim written anew under it. The claim written anew is not the claim that was st
 text. -/
 def shadowing (s : Statements) (proof : String) : Except String String := do
   let [goal] := s.claims.goals | throw "the statements are not of one goal"
-  let anew ← s.claimAt standardModelText goal "installed" "rootMember" "soundMember"
+  let anew ← s.claimAt goal "installed" "rootMember" "soundMember"
   return (← established proof) ++ "\n" ++
     "def ReturnsWithin {S : Sig} {H A : Type} (_ : Process S H A) (_ : Samplers S)\n" ++
     "    (_ : ∀ op, S.Reply op → Prop) (_ : A → Prop) (_ : ℝ≥0∞) : Prop := True\n\n" ++
@@ -440,7 +439,7 @@ def run (work : System.FilePath) : IO Unit := do
     let root ← goalRoot schemes goals.head!
     let s : Statements := { claims := ← goalClaims root goals }
     s.claims.goals.mapM fun goal => do
-      return (goal.goal, ← s.claimAt standardModelText goal "installed" "rootMember" s!"{goal.goal}Member")
+      return (goal.goal, ← s.claimAt goal "installed" "rootMember" s!"{goal.goal}Member")
   let together ← IO.ofExcept (claimsOf ["a", "d"])
   expect "the claims of two goals of one scheme are not their claims read alone"
     (together == (← IO.ofExcept (claimsOf ["a"])) ++ (← IO.ofExcept (claimsOf ["d"])))
@@ -536,8 +535,8 @@ def run (work : System.FilePath) : IO Unit := do
   let reduced ← IO.ofExcept (statementsOf reduction ["sound"])
   let [reducedGoal] := reduced.claims.goals | throw (IO.userError "the reduction has not one goal")
   expect "the clause of the reduction is not read as a reduction" (reducedGoal.clause.kind == .reduces)
-  for written in [reduced.claimTexts standardModelText,
-      reduced.claimAt standardModelText reducedGoal "installed" "rootMember" "soundMember"] do
+  for written in [reduced.claimTexts,
+      reduced.claimAt reducedGoal "installed" "rootMember" "soundMember"] do
     match written with
     | .ok _ => throw (IO.userError "a statement was written for a `reduces` clause")
     | .error why => expect s!"the reduction was refused for another reason: {why}" (why.contains "reduces")

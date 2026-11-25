@@ -111,7 +111,7 @@ def consumer : Consumer where
   before :=
     "noncomputable section\n" ++
     "open ZkcFormal.Written.StandardModel\n" ++
-    "open ZkcFormal.Written.FiniteModel (data)\n\n"
+    "\n"
   signature :=
     "theorem consumer {a : Admitted V} (admitted : admit stored association = .ok a) :\n" ++
     "    ∃ root : Member a.program.headers.protocols rootHeader,\n" ++
@@ -119,9 +119,9 @@ def consumer : Consumer where
     "      ∃ relation : Member a.program.headers.fns guessingHeader,\n" ++
     "        a.program.find guessingKey = some (.fn relation) ∧\n" ++
     "        (functionResult (t := .bool)\n" ++
-    "            (fnMeaning (StandardModel.model data) a.program relation (.cons false .nil)) = some false →\n" ++
-    "          Pr{let out ← (simulateQ (handlerOf (serveLaws (StandardModel.model data) (draws data))) (embed\n" ++
-    "              (roleMeaning (StandardModel.model data) a.program root 1 []\n" ++
+    "            (fnMeaning StandardInterpretation.model a.program relation (.cons false .nil)) = some false →\n" ++
+    "          Pr{let out ← (simulateQ (handlerOf (serveLaws StandardInterpretation.model StandardInterpretation.draws)) (embed\n" ++
+    "              (roleMeaning StandardInterpretation.model a.program root 1 []\n" ++
     "                (.cons false (.cons () .nil))))).run.run ()}[\n" ++
     "            ∃ results, out.1 = some (.inl results)] ≤ 3 / 8)"
   proof :=
@@ -132,8 +132,8 @@ def consumer : Consumer where
     "  obtain ⟨root, found, relation, foundRelation, claim⟩ := guessing_sound admitted\n" ++
     "  refine ⟨root, found, relation, foundRelation, fun rejected => ?_⟩\n" ++
     "  rw [← total]\n" ++
-    "  simpa using claim data [] false trivial rejected _ (serveLaws (StandardModel.model data) (draws data))\n" ++
-    "    ⟨serveLaws_follows _ _, serveLaws_permitted _ _ (StandardModel.draws_permitted data)⟩ ()"
+    "  simpa using claim [] false trivial rejected _ (serveLaws StandardInterpretation.model StandardInterpretation.draws)\n" ++
+    "    ⟨serveLaws_follows _ _, serveLaws_permitted _ _ (ArithmeticModel.draws_permitted F G)⟩ ()"
   after := "\nend\n"
 
 def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do

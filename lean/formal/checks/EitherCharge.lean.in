@@ -64,10 +64,10 @@ theorem either_judged_forked : eitherJudged := by
   · -- the arm of a true claim
     exact absurd (chosen.symm.trans isFalse) (by decide)
 
-/-- **The hypotheses of the claim are met**: over the field of two elements, on the false claim,
+/-- **The hypotheses of the claim are met**: at the source field, on the false claim,
 with the service of the laws. -/
 theorem either_witnessed : eitherWitnessed :=
-  either_witnessed_of ZkcFormal.Written.FiniteModel.data false trivial
-    (either_relation _ false)
+  either_witnessed_of false trivial
+    (either_relation StandardInterpretation.D false)
 
 end
