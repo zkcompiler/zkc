@@ -292,6 +292,34 @@ def moduleMemberOwners (written : Array (AppliedInterface × Path)) :
       members := members.insert name ⟨app, id⟩
   return .ok members
 
+/-- A conflicting default can inspect a provisional Self to decide its eligibility.
+Keep the signature numbers, diagnostics, traces and spent evaluation steps. Compute any
+dependencies afresh on a later request, since even an indirect result can depend on that Self. -/
+def probeDefaultModule (check : CompileM Unit) : CompileM Unit := do
+  let saved ← get
+  let (outcome, checked) := check.run (← read) saved
+  let renderer := checked.env.renderer
+  let frame (f : ChainFrame) := { f with subject := .ofText (f.subject.renderWith renderer false) }
+  let exhaustion (e : Exhaustion) := { e with request := frame e.request }
+  let mut entries := saved.log.entries
+  for d in checked.log.entries[saved.log.entries.size...*] do
+    entries := entries.push { d with
+      message := .ofText (d.message.render renderer)
+      chain := d.chain.map frame
+      exhaustion := d.exhaustion.map exhaustion
+      notes := d.notes.map fun note => { note with message := .ofText (note.message.render renderer) } }
+  let mut traces := saved.traces
+  for entry in checked.traces[saved.traces.size...*] do
+    traces := traces.push { entry with message := .ofText (entry.message.render renderer) }
+  set { saved with log := { checked.log with entries }, traces, staticSteps := checked.staticSteps }
+  -- Emitted definition keys use signature numbers. Keep their allocation order while
+  -- requiring every query first seen in the probe to be computed again on demand.
+  modifyResults (·.modifySignatures (·.reserveNewKeys checked.table))
+  match outcome with
+  | .ok () => pure ()
+  | .error (.exhausted e) => throw (.exhausted (exhaustion e))
+  | .error failure => throw failure
+
 /-- Resolve a concrete member through its bound owner. The opaque typing of SP12
 reads the first declaration of the name from its ordered interfaces. -/
 def declaredMember? (program : Program) (interfaces : ModuleInterfaces) (name : String) :
@@ -899,11 +927,6 @@ mutual
       (owner : Option InstanceId := none) : CompileM InstanceId := do
     let key : InstanceKey := { declaration := id, arguments := values, specification, owner }
     let description ← describeInstance id values specification owner
-    -- an instance first asked for as a default instance is one (SP7)
-    if isDefault && ((← getResults).signatures.find? key).isNone then
-      modifyResults fun results =>
-        let next := results.signatures.entries.size
-        { results with defaultInstances := results.defaultInstances.insert next }
     let frame : ChainFrame :=
       { subject := .ofText (if isDefault then s!"default instance `{description}`" else description)
         span := requested.span }
@@ -915,6 +938,8 @@ mutual
       let results := { results with signatures := {} }
       let (table, inst, isNew) := table.intern key frame requester
       let results := { results with signatures := table }
+      let results := if isNew && isDefault then
+        { results with defaultInstances := results.defaultInstances.insert inst } else results
       let results := match requester with
         | some requester => results.addRequest requester ⟨.signature, inst⟩
         | none => results
@@ -1064,19 +1089,18 @@ mutual
           refuse "SP8" moduleName.span (conflict.message (← get) moduleName.text)
         pure (.ordered applications, some conflict)
     else pure (ModuleInterfaces.ordered applications, none)
-    try
+    let check : CompileM InstanceContent := do
       let members ← moduleMemberValues found moduleName body env applications
       let content := InstanceContent.«module» interfaces members
       unless applications.isEmpty do
-        -- Give interface conditions access to Self's values while deciding eligibility.
         modifyResults (·.modifySignatures (·.setState inst (.done (.data content))))
         moduleConditions inst moduleName.text applications isDefault
-      if let some conflict := pending then
-        refuse "SP8" moduleName.span (conflict.message (← get) moduleName.text)
       return content
-    catch
-      | .waiting reason => return .waits reason pending.isSome
+    let some conflict := pending | check
+    try probeDefaultModule (discard check) catch
+      | .waiting reason => return .waits reason true
       | failure => throw failure
+    refuse "SP8" moduleName.span (conflict.message (← get) moduleName.text)
 
   /-- The values defined by a module body or supplied by its primitive binding. -/
   partial def moduleMemberValues (found : Declaration) (moduleName : Syntax.Name)

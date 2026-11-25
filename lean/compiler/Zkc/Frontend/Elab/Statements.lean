@@ -471,7 +471,7 @@ mutual
         match typed with
         | some (statements, values) =>
           let types ← values.mapM fun value =>
-            liftM (Instances.remakeType discarded savedState.results.instanceCount span value.type : CompileM ClosedType)
+            liftM (Instances.remakeType discarded savedState.table.entries.size span value.type : CompileM ClosedType)
           pure (types, Typed.LoopBody.empty statements values)
         | none => pure (collected.map fun _ => ClosedType.unit, Typed.LoopBody.empty #[] #[])
       let (index, item) ← inSuite (bindItem domain none)

@@ -147,9 +147,10 @@ def instances (options : Options) : IO UInt32 := do
     return 1
   printIncomplete result.incomplete
   let counts := result.countsByKind.toList.map fun (kind, count) => s!"{count} {kind}"
-  IO.println s!"{verdict false result.incomplete}: {result.state.table.entries.size} instances ({", ".intercalate counts})"
+  IO.println s!"{verdict false result.incomplete}: {result.state.results.instanceCount} instances ({", ".intercalate counts})"
   if options.contents then
-    for entry in result.state.table.entries do
+    for id in result.state.table.requestedIds do
+      let entry := result.state.table.entries[id]!
       let description := match ((Static.describeInstance entry.key.declaration
           entry.key.arguments).run result.context result.state).1 with
         | .ok text => text
@@ -265,8 +266,8 @@ def bench (options : Options) : IO UInt32 := do
   IO.println (Bench.report "resolve" resolveMeasure)
   let (instances, instanceMeasure) ← Bench.measure options.repetitions
     (fun i => pure (checkRoots (if i == 999999999 then default else check)))
-    (fun result => if result.state.table.entries.isEmpty then IO.println "no instance" else pure ())
-  IO.println s!"instances of the roots: {instances.state.table.entries.size}, refusals: {instances.refusals.size}"
+    (fun result => if result.state.table.requestedIds.isEmpty then IO.println "no instance" else pure ())
+  IO.println s!"instances of the roots: {instances.state.results.instanceCount}, refusals: {instances.refusals.size}"
   IO.println (Bench.report "instantiate" instanceMeasure)
   -- the typing of bodies with the default instances, then with the emission of the packages and
   -- their admission

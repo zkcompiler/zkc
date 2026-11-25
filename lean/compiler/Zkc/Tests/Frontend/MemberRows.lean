@@ -243,6 +243,54 @@ private def checkWaitingDefault (repository : Repository) : TestM Unit := do
     expectTrue (!equal.hasErrors && (equal.admitRoots none).complete.isOk)
       s!"equal owners with an unavailable value: {equal.renderDiagnostics}"
 
+/-- A skipped or waiting default can compute Memo and its field type through its
+provisional Self. A later consumer must request both again. An independent function
+keeps the definition numbers emitted for each declaration order. -/
+private def checkDefaultDependencies (repository : Repository) : TestM Unit := do
+  let external := "interface Unknown:\n    nat Limit\nmodule External: Unknown = primitive(\"review.unbound\")\n"
+  for waits in [false, true] do
+    let gate := if waits then "    module Gate: Unknown\n" else ""
+    let value := if waits then "    module Gate = External\n" else ""
+    let condition := if waits then "Self::Gate::Limit" else "Self::Height"
+    let intro := "module caller\n" ++ (if waits then external else "") ++
+      s!"interface I<n: nat> where (Memo<n> == Memo<n>, {condition} == n):\n    nat Height\n" ++ gate ++
+      "type Buffer<H: I<1>> = [bool; H::Height]\nstruct Memo<n: nat>:\n    entries: Buffer<M<n>>\n"
+    let owner := "pub module M<n: nat>: I<n> + I<1> where (n == 0):\n    nat Height = 1\n" ++ value
+    for ownerFirst in [true, false] do
+      let program (useSite : String) := intro ++ (if ownerFirst then owner ++ useSite else useSite ++ owner)
+      let consumer ← memberSession repository (program "pub def force<k: nat>(b: Memo<0>) -> bool: b.entries[0]\n")
+      let first := consumer.diagnostics.find? (·.isError)
+      expectTrue (first.any (·.rule == "SP8") && !(consumer.admitRoots none).complete.isOk)
+        s!"transitive demand, waiting={waits}, owner first={ownerFirst}: {consumer.renderDiagnostics}"
+      let independent ← memberSession repository (program "pub def force<k: nat>(b: bool) -> bool: b\n")
+      let roots := independent.state.results.packageReports.filterMap fun report =>
+        if report.outcome matches .admitted _ then some report.root else none
+      let firstId := (if ownerFirst then 7 else 0) + (if waits then 1 else 0)
+      expectTrue ((independent.admitRoots none).complete.isOk && roots == (Array.range 4).map (firstId + ·))
+        s!"independent roots after a default probe: {roots}, {independent.renderDiagnostics}"
+
+/-- A probe can fill an older reservation and create new ones. Only a real request
+gets an entry and a place in the traversal order, even when its number is older. -/
+private def checkReservedRequests : TestM Unit := do
+  let empty : QueryTable String Nat := {}
+  let (base, first, _) := empty.intern "present" default none
+  let base := base.setState first (.done 11)
+  let (trial, early, _) := base.intern "early" default none
+  let trial := (trial.setState early (.done 22)).addRequest "present" ⟨.signature, early⟩
+  let saved := base.reserveNewKeys trial
+  let (again_, _, _) := saved.intern "early" default none
+  let (again_, late, _) := again_.intern "late" default none
+  let saved := saved.reserveNewKeys again_
+  let (saved, actualLate, freshLate) := saved.intern "late" default none
+  let requester := some (⟨.signature, actualLate⟩ : QueryRef)
+  let (final, actualEarly, freshEarly) := saved.intern "early" default requester
+  let (_, same, freshAgain) := final.intern "early" default none
+  expectTrue (saved.find? "early" == none && (saved.entryAt? early).isNone &&
+    (saved.entry? "present").any (·.requests.isEmpty) && saved.result? "present" == some 11 &&
+    actualEarly == early && actualLate == late && freshLate && freshEarly && same == early && !freshAgain &&
+    final.requestedIds == #[first, late, early] && (final.entryAt? early).any (·.requestedBy == requester) &&
+    (final.result? "early").isNone) "reserved signature numbers or first-request order"
+
 /-- A third declaration of the same name leaves one diagnostic naming the first two owners. -/
 private def checkCollisionWitness (repository : Repository) : TestM Unit := do
   let source := "module caller\ninterface A:\n    type T\ninterface B:\n    type T\n" ++
@@ -258,7 +306,9 @@ private def checkCollisionWitness (repository : Repository) : TestM Unit := do
 def memberRowSuite (repository : Repository) : TestM Unit := do
   checkQualifiedOwners
   checkOwnerLocations
+  checkReservedRequests
   checkWaitingDefault repository
+  checkDefaultDependencies repository
   checkDefaultConditions repository
   checkDisjointRows repository
   checkConcreteApplications repository

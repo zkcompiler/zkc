@@ -127,7 +127,7 @@ def libraryInstancesSuite (repository : Repository) : TestM Unit := do
     if check.refusals.isEmpty then pass
     for refusal in check.refusals do
       failure s!"{path}: {refusal.span.file}: {refusal.render}"
-    instances := instances + check.state.table.entries.size
+    instances := instances + check.state.results.instanceCount
     for entry in check.state.defaults do
       let declaration := nameCheck.program.declarations[entry.declaration]!
       if (nameCheck.program.files[declaration.file]?).any (·.name == path.toString) then
@@ -181,7 +181,7 @@ def programInstancesSuite (repository : Repository) : TestM Unit := do
         pass
         let described := describedInstances check
         let unevaluated := (described.filter fun (_, content) => content.contains '?').size
-        note s!"{stem}: {check.state.table.entries.size} instances, {unevaluated} with a type not evaluated here"
+        note s!"{stem}: {check.state.results.instanceCount} instances, {unevaluated} with a type not evaluated here"
         for (program, description, expected) in programContents do
           if program != stem then continue
           match described.find? (·.1 == description) with
@@ -200,7 +200,7 @@ def generatedInstancesSuite (repository : Repository) : TestM Unit := do
   if nameCheck.refusals.isEmpty && check.refusals.isEmpty then pass
   for refusal in (nameCheck.refusals ++ check.refusals).extract 0 5 do
     failure s!"the generated program: {refusal.span.file}: {refusal.render}"
-  note s!"generated program: {check.state.table.entries.size} instances"
+  note s!"generated program: {check.state.results.instanceCount} instances"
 
 /-- An instance whose `where` cannot be evaluated here waits, and says for what (SP4): a
 constraint over a member that a module bound to the vocabulary does not give. -/

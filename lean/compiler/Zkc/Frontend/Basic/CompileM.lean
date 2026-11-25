@@ -376,6 +376,7 @@ item wait; one that is exhausted leaves the item that asks not checked either. -
 @[inline] def ask (query : Query κ ρ) (key : κ) (requested : ChainFrame) : CompileM (Nat × ρ) := do
   match ← request query key requested with
   | (id, .done result) => return (id, result)
+  | (_, .reserved) => throw (.defect "a request returned an unclaimed signature number")
   | (_, .inProgress) =>
     refuseRecursion (requested.subject.renderWith Renderer.plain false) requested.span
   | (_, .failed) => throw .abandoned

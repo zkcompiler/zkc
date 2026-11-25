@@ -73,7 +73,7 @@ namespace ResultStore
 
 /-- The key of an instance. -/
 def key? (store : ResultStore) (id : InstanceId) : Option InstanceKey :=
-  (store.signatures.entries[id]?).map (·.key)
+  (store.signatures.entryAt? id).map (·.key)
 
 def signature? (store : ResultStore) (id : InstanceId) : Option Typed.Signature :=
   match store.signatures.entries[id]? with
@@ -90,7 +90,7 @@ def instance? (store : ResultStore) (key : InstanceKey) : Option InstanceId :=
   store.signatures.find? key
 
 /-- The number of instances asked for. -/
-def instanceCount (store : ResultStore) : Nat := store.signatures.entries.size
+def instanceCount (store : ResultStore) : Nat := store.signatures.requestedIds.size
 
 /-- Whether an instance was first asked for as a default instance. -/
 def isDefault (store : ResultStore) (id : InstanceId) : Bool := store.defaultInstances.contains id
@@ -101,7 +101,7 @@ def body? (store : ResultStore) (id : InstanceId) : Option Typing.BodyState :=
   | some { state := .inProgress, .. } => some .inProgress
   | some { state := .done body, .. } => some body
   | some { state := .failed, .. } => some .failed
-  | some { state := .skipped, .. } => none
+  | some { state := .skipped, .. } | some { state := .reserved, .. } => none
   | some { state := .waiting reason, .. } => some (.waiting reason)
   | some { state := .exhausted exhaustion, .. } => some (.exhausted exhaustion)
   | none => none
@@ -128,7 +128,7 @@ def checked? (store : ResultStore) (id : InstanceId) : Option Typed.Checked :=
 /-- The requests that the computation of a request made. -/
 def requestsOf (store : ResultStore) (request : QueryRef) : Array QueryRef :=
   match request.kind with
-  | .signature => ((store.signatures.entries[request.instance]?).map (·.requests)).getD #[]
+  | .signature => ((store.signatures.entryAt? request.instance).map (·.requests)).getD #[]
   | .body => ((store.bodies.entry? request.instance).map (·.requests)).getD #[]
   | .tree => ((store.trees.entry? request.instance).map (·.requests)).getD #[]
   | .checked => ((store.checked.entry? request.instance).map (·.requests)).getD #[]
@@ -136,7 +136,7 @@ def requestsOf (store : ResultStore) (request : QueryRef) : Array QueryRef :=
 /-- What was asked and where it was first asked from. -/
 def requested? (store : ResultStore) (request : QueryRef) : Option ChainFrame :=
   match request.kind with
-  | .signature => (store.signatures.entries[request.instance]?).map (·.requested)
+  | .signature => (store.signatures.entryAt? request.instance).map (·.requested)
   | .body => (store.bodies.entry? request.instance).map (·.requested)
   | .tree => (store.trees.entry? request.instance).map (·.requested)
   | .checked => (store.checked.entry? request.instance).map (·.requested)
@@ -218,8 +218,8 @@ def reachedInstances (store : ResultStore) (start : Array InstanceId) : Std.Hash
 /-- The declarations that have an instance. After the roots are elaborated these are the
 declarations that a root reached (SP7). -/
 def reachedDeclarations (store : ResultStore) : Std.HashSet DeclarationId :=
-  store.signatures.entries.foldl (init := {}) fun reached entry =>
-    reached.insert entry.key.declaration
+  store.signatures.requestedIds.foldl (init := {}) fun reached id =>
+    reached.insert store.signatures.entries[id]!.key.declaration
 
 end ResultStore
 

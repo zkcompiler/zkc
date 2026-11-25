@@ -734,8 +734,7 @@ instance. -/
 def defaultProgram : CompileM Unit := do
   let program ← program
   let own (declaration : Declaration) : Bool := inPackage program declaration.file
-  let reached : Std.HashSet DeclarationId :=
-    (← get).table.entries.foldl (init := {}) fun set entry => set.insert entry.key.declaration
+  let reached := (← getResults).reachedDeclarations
   for id in [0:program.declarations.size] do
     let declaration := program.declarations[id]!
     unless own declaration && declaration.pub && hasInstances declaration.kind &&

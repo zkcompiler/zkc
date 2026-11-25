@@ -57,7 +57,7 @@ mutual
   has. -/
   partial def remakeInstance (discarded : Compile.State) (sharedPrefix : Nat) (place : Span) (inst : InstanceId) :
       CompileM InstanceId := do
-    if inst < sharedPrefix then return inst
+    if inst < sharedPrefix && ((← get).table.entryAt? inst).isSome then return inst
     let some entry := discarded.table.entries[inst]?
       | throw (.defect "a type names an instance that no state holds")
     let key := entry.key

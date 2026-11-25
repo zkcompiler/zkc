@@ -142,9 +142,10 @@ def checkKernels : CompileM Unit := do
 /-- Types the body of every instance of the table that is not typed yet, the instances that
 typing adds included. -/
 def typeBodies : CompileM Unit := do
-  let mut index := 0
-  while index < (← get).table.entries.size do
+  let mut cursor := 0
+  while cursor < (← get).table.requestedIds.size do
     let state ← get
+    let index := state.table.requestedIds[cursor]!
     let entry := state.table.entries[index]!
     if let (none, some found) := (entry.key.view, state.program.declarations[entry.key.declaration]?) then
       if found.kind == .function || found.kind == .functionDefinition || found.kind == .relation
@@ -157,7 +158,7 @@ def typeBodies : CompileM Unit := do
       if found.kind == .«module» && entry.key.opaqueFor.isNone then
         endItem (moduleLaws index)
         endItem (typeModuleMembers index)
-    index := index + 1
+    cursor := cursor + 1
 
 /-- The phase of types: the checks of kernels, and the body of every instance that the roots
 reach. -/

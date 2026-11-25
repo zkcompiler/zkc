@@ -135,7 +135,8 @@ def kindLabel : DeclarationKind → String
 def countsByKind (state : Compile.State) : Array (String × Nat) := Id.run do
   let program := state.program
   let mut counts : Array (String × Nat) := #[]
-  for entry in state.table.entries do
+  for id in state.table.requestedIds do
+    let entry := state.table.entries[id]!
     let some declaration := program.declarations[entry.key.declaration]? | continue
     let kind := kindLabel declaration.kind
     match counts.findIdx? (·.1 == kind) with
