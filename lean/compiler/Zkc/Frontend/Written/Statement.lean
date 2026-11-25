@@ -74,8 +74,8 @@ true, and a bound on every return is another claim.
 
 The model is named by a `ModelText`: the binders of what it is built from, the model, its
 samplers and its coverage as terms over them, and what the statement assumes of it. It is part
-of the claim, not of the proof, and no caller chooses it: `Statements.chosenModel` reads it
-from the package's bindings, rows and laws and from the caps of the goals. Every proof module
+of the claim. The statements, claims and coverage modules get their default class from
+`Statements.chosenModel`, which reads it from the package's bindings, draws, rows and stored literals. Every proof module
 states that its model covers the package (`covered`), and the kernel decides that. A module
 of claims alone and the module of a ceiling state no coverage. The bound of a statement is
 the total of the goal's table of caps (`<goal>Caps.total`): every
@@ -324,37 +324,33 @@ def algebraicRow : Zkc.Vocabulary.RowKey → Bool
   | .group .equal .. | .seq .equal .. | .hash _ => false
   | .field .. | .group .. | .seq .. | .pair => true
 
-/-- The draws for which the arithmetic model samples from the scalar field. A vector of
-length zero has a single possible value in every field. -/
-def samplesScalars : Zkc.Vocabulary.LawKey → Bool
-  | .uniform (.nominal (.field .bls12381Fr))
-  | .uniform (.seq (.nominal (.field .bls12381Fr)) (some (_ + 1))) => true
+/-- In an admitted program every literal reads at its stored type. Read it again with
+positive field numerals excluded. The core scanner also handles fields nested inside
+literal data and distinguishes them from sequence lengths, variant tags and indices. -/
+def usesFieldNumeral (bindings : Zkc.Vocabulary.Project.Bindings) :
+    LocalRaw bindings.vocabulary → Bool
+  | .literal ty data =>
+    let zeroOnly : Core.Vocabulary := { bindings.vocabulary with literal := fun key n =>
+      match key with
+      | .inl (.field _) | .inl (.nonzero _) => n == 0
+      | _ => bindings.vocabulary.literal key n }
+    (Ty.scan zeroOnly ty data).isNone
   | _ => false
 
-/-- Whether a reachable use charges a scalar draw at a positive cap below one. The key of a
-draw is local to its definition. Uses are in callee-first order, so this follows applications
-without expanding their paths. A zero allowance cannot buy a scalar reply at any field size;
-an allowance of one already covers every reply. -/
-def chargesScalars (package : SourcePackage) (table : CapTable) : Bool := Id.run do
-  let mut charged : Array Bool := #[]
-  for use in table.uses do
-    let callsScalar := use.calls.any fun call => call.count > 0 && charged[call.callee]?.getD false
-    let mut pays := callsScalar
-    if !pays && !use.draws.isEmpty then
-      if let some (.protocol _ _ _ _ body) := package.named.definitions.find? (·.key == use.definition) then
-        let coins := (body.counted (some 1)).filterMap fun (key, op, _) =>
-          if (op.law?.any fun (law, _) => samplesScalars law) then some key else none
-        pays := use.draws.any fun draw =>
-          draw.count > 0 && draw.numerator > 0 && draw.numerator < draw.denominator && coins.contains draw.key
-    charged := charged.push pays
-  return charged.back?.getD false
+/-- All stored definitions participate, including relations added by the goals. -/
+def hasFieldNumeral (package : SourcePackage) : Bool :=
+  package.named.definitions.any fun
+    | .fn _ _ _ _ _ _ body _ => body.operations.any (usesFieldNumeral package.bindings)
+    | .protocol _ _ _ _ body => body.operations.any fun
+      | .compute _ op => usesFieldNumeral package.bindings op
+      | _ => false
 
-/-- Select the class for a written statement, or explain why it cannot be issued. A linked
-project primitive has no model yet. For the standard vocabulary, position draws and rows
-independent of the algebra can be interpreted over arbitrary data. An algebraic row or a
-non-position draw requires the arithmetic class. Only a goal that charges scalar sampling
-at a nontrivial cap calls for the source field-size assumption. Coverage of the actual rows
-and laws is checked separately by the generated theorem. -/
+/-- The statements, claims and coverage modules consult this chooser, including when a
+check supplies an explicit model. The fragment renderers take a model directly. A ceiling
+compares numbers. For an admitted package with standard bindings, position draws, rows
+independent of the algebra and scalar zero have meanings over arbitrary data. Other draws,
+algebraic rows and positive scalar numerals require the arithmetic class with the source
+field-size hypothesis. A project primitive still needs a model. -/
 def chosenModel (s : Statements) : Except String ModelText := do
   let package := s.package
   unless package.bindings.rows.isEmpty do
@@ -364,10 +360,8 @@ def chosenModel (s : Statements) : Except String ModelText := do
     match row with
     | .inl key => algebraicRow key
     | .inr _ => false -- An admitted package with no project bindings cannot call a project row.
-  if positions && !algebra then return standardModelText
-  if !positions && s.claims.goals.any (fun goal => chargesScalars package goal.caps) then
-    return scalarFieldModelText
-  return arithmeticModelText
+  if positions && !algebra && !hasFieldNumeral package then return standardModelText
+  return scalarFieldModelText
 
 /-- The keys of the definitions of the package in order, and whether each is a protocol. -/
 def definitions (s : Statements) : List (Nat × Bool) :=
@@ -1030,9 +1024,9 @@ space of the statements: the author's text; the claim of each goal from the text
 for the method of fees; the closing theorems; and what a check writes after them (`after`: a
 consumer of the published theorems).
 
-The order of the parts, the imports, the names of the generated theorems and the class of
-models (`chosenModel`) are decided here and by no caller; a control that states a claim about
-another class gives its own description (`model`).
+This function fixes the order of the parts, the imports and the names of the generated
+theorems. It obtains the class of models from `chosenModel`. A control that states a claim
+about another class gives its own description (`model`) after the package qualifies.
 
 **What a check rests on.** A text is arbitrary Lean: it can turn off the kernel's check of its
 declarations, write into the kernel's environment, and declare a variable that becomes a
@@ -1113,7 +1107,6 @@ def coverageModule (s : Statements) (name : String) (model : Option ModelText :=
 /-- A module with the package of the claims, its facts, and the comparison of each goal's total
 with the ceiling that it states. A goal whose ceiling is below its total gives no module. -/
 def ceilingModule (s : Statements) (name : String) : Except String PlainModule := do
-  discard s.chosenModel
   let ceilings ← s.ceilings
   let text := header (packageImports ++ ["ZkcFormal.Written.SiteCaps"]) ++
     s!"namespace {name}\n" ++ (Written.package s.package).text ++ opens ++ s.facts ++ "\n" ++

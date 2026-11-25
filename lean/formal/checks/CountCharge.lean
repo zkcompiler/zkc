@@ -242,7 +242,7 @@ def run (corpus template : System.FilePath) (work : System.FilePath) : IO Unit :
   -- element, which the standard model gives a constant.
   let uncovered ← WrittenSubject.read
     (← edit source "if xs[i] == 0 then 0 else 1" "if xs[i] ^ 2 == 0 then 0 else 1")
-    { reading with model := arithmeticModelText }
+    { reading with model := scalarFieldModelText }
   let uncoveredProof ← startLakeLean work "CoverageControl"
     (← IO.ofExcept (uncovered.statements.coverageModule "CoverageControl")).text
 

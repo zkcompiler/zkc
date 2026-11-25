@@ -1,0 +1,9 @@
+namespace ScalarLiteral
+open Zkc.Core ZkcFormal ZkcFormal.Written ZkcFormal.ProbabilisticProcess
+theorem literal_judged : soundJudged := by
+  claim_intro
+  walk
+  simp_all
+theorem literal_claim : soundClaim := sound_claim_of_judged literal_judged
+#print axioms literal_claim
+end ScalarLiteral

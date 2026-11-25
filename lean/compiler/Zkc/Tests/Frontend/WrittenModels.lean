@@ -5,9 +5,7 @@ import Zkc.Tests.Frontend.SyntaxHarness
 namespace Zkc.Tests.Frontend
 open Zkc.Frontend.Written PrintedPackageSupport
 
-/-- Sources with a written soundness goal: five whose package links a primitive of a project,
-and three counterparts that link none. -/
-private def writtenPrimitiveCases : String := r#"=== direct Boolean primitive | refuse | sound
+private def primitiveCases := r#"=== direct Boolean primitive | refuse | sound
 module t
 use zkc::security::{soundness}
 def test(x: bool) -> bool = primitive("project.test")
@@ -111,7 +109,7 @@ goal sound = soundness(Checked)
 /-- Package admission precedes statement issuance. A control may change the model used in a
 module, but cannot supply a meaning for a project's primitive. -/
 def writtenPrimitiveSuite : TestM Unit := do
-  for block in readBlocks writtenPrimitiveCases do
+  for block in readBlocks primitiveCases do
     let result : Except String Statements := do
       let #[source] := block.files | throw "expected one source file"
       let root ← goalRoot source block.note
@@ -131,7 +129,9 @@ def writtenPrimitiveSuite : TestM Unit := do
         | _, .ok () => failure s!"{block.id}: issued a statement for a project primitive"
       check ((statements.module "Check" proof).map fun _ => ())
       check ((statements.module "Check" proof (model := standardModelText)).map fun _ => ())
-      check ((statements.ceilingModule "Check").map fun _ => ())
+      match statements.ceilingModule "Check" with
+      | .ok _ => pass
+      | .error why => failure s!"{block.id}: could not issue the ceiling: {why}"
       check ((statements.claimsModule "Check").map fun _ => ())
       check ((statements.coverageModule "Check" (model := arithmeticModelText)).map fun _ => ())
 
