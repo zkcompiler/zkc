@@ -248,7 +248,7 @@ def schemeSuite (env : Env) (node : Syntax.Scheme) : CompileM (Except String Str
       let state ← get
       let some { state := .done (.data (.«module» interfaces _)), .. } := state.table.entries[inst]?
         | return .error s!"the suite `{exprText (.path path.span path)}` is not evaluated"
-      unless interfaces.any (fun (id, _) => qualifiedName state.program id == "zkc::construction::Suite") do
+      unless interfaces.applications.any (fun (id, _) => qualifiedName state.program id == "zkc::construction::Suite") do
         let _ ← notSuite path.span
       return .ok primitive.row.content
     | .«module» _ =>
@@ -576,7 +576,7 @@ def moduleLaws (inst : InstanceId) : CompileM Unit := do
     match namespaceId.bind (state.members[·]?) with
     | some members => members.filter fun id => (program.declarations[id]?).any (·.kind == kind)
     | none => #[]
-  for (interface, args) in interfaces do
+  for (interface, args) in interfaces.applications do
     let some interfaceDeclaration := program.declarations[interface]? | continue
     let fixed : StaticEnvironment := ((deployedParameters program interfaceDeclaration).zip args).foldl
       (init := {}) fun map ((reference, _), value) => map.insert reference value
@@ -600,13 +600,8 @@ def typeModuleMembers (inst : InstanceId) : CompileM Unit := do
     let some found := program.declarations[definition]? | continue
     unless found.kind == .functionDefinition do continue
     -- the member that an interface declares, and the values of its own static parameters
-    let declared := interfaces.findSome? fun (interface, args) => do
-      let inner ← (program.declarations[interface]?).bind (·.inner)
-      let .declaration member ← (program.namespaces[inner]?).bind (·.names[name]?) | none
-      return (interface, member, args)
-    let some (interface, member, args) := declared | continue
+    let some (interface, member, memberDeclaration, args) := declaredMember? program interfaces name | continue
     let some interfaceDeclaration := program.declarations[interface]? | continue
-    let some memberDeclaration := program.declarations[member]? | continue
     let interfaceParameters := deployedParameters program interfaceDeclaration
     let fixed : StaticEnvironment := (interfaceParameters.zip args).foldl (init := {})
       fun map ((reference, _), value) => map.insert reference value
@@ -674,7 +669,7 @@ def opaqueModule (reference : ParameterRef) (equated : Array String) (real : Ins
   let required ← match parameter.bound with
     | some bound => requiredInterfaces { file := scope.file } bound
     | none => pure #[]
-  let kept := interfaces.filter fun (id, _) => required.contains id
+  let kept := interfaces.applications.filter fun (id, _) => required.contains id
   let inst ← modifyGetResults fun results =>
     let table := results.signatures
     let results := { results with signatures := {} }
@@ -700,7 +695,7 @@ def opaqueModule (reference : ParameterRef) (equated : Array String) (real : Ins
         | .definition _ => (name, .opaqueType sorts)
         | other => (name, other)
     | none => (name, value)
-  modifyResults (·.modifySignatures (·.setState inst (.done (.data (.«module» kept opaqueMembers)))))
+  modifyResults (·.modifySignatures (·.setState inst (.done (.data (.«module» (.ordered kept) opaqueMembers)))))
   return inst
 
 /-- The checks of declarations, the roots, and the instances that comments ask for. -/

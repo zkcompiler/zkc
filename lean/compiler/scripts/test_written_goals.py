@@ -183,6 +183,66 @@ goal broken = soundness(Unusable)
     run([src], [], work / "empty", 2)
 
 
+def check_member_ownership(work):
+    src = work / "owners.zkc"
+    prelude = "module owners\nuse zkc::security::{soundness}\n"
+    protocol = """relation Holds(x: bool): x
+protocol Check roles(P,V)(x: bool @(P,V)):
+    guard @V via<M<1>>(x)
+spec for Check:
+    proves @V Holds(x)
+scheme Checked = Check:
+    prover P
+    construction interactive
+goal tested = soundness(Checked)
+"""
+    # A common interface supplies a single declaration through both arms of a diamond.
+    diamond = """interface Common:
+    def pick(x: bool) -> bool
+interface A where (Self: Common)
+interface B where (Self: Common)
+module M: A + B + Common:
+    def pick(x): x
+def via<H: B>(x: bool) -> bool: H::pick(x)
+"""
+    shared = prelude + diamond + protocol.replace("via<M<1>>", "via<M>")
+    src.write_text(shared)
+    _, original = run([src], ["tested"], work / "diamond", 0)
+    src.write_text(shared.replace("A + B + Common", "Common + B + A"))
+    _, reversed_header = run([src], ["tested"], work / "diamond-reversed", 0)
+    assert len(original) == 2 and original == reversed_header
+
+    # A selected instance can fail while an independent goal still issues.
+    generic = """interface I<n: nat>:
+    def pick(x: bool) -> bool
+module M<n: nat>: I<n> + I<0>:
+    def pick(x): x
+def via<H: I<0>>(x: bool) -> bool: H::pick(x)
+"""
+    clean = """protocol Clean roles(P,V)(x: bool @(P,V)):
+    guard @V x
+spec for Clean:
+    proves @V Holds(x)
+scheme CleanScheme = Clean:
+    prover P
+    construction interactive
+goal good = soundness(CleanScheme)
+"""
+    shared = prelude + generic + protocol + clean
+    src.write_text(shared)
+    _, good = run([src], ["good"], work / "owner-good", 0)
+    rows, kept = run([src], ["tested", "good"], work / "owner-local", 1)
+    assert "SP8" in rows[0] and ": issued " in rows[1] and len(good) == 2 and kept == good
+
+    # A parameterless module is a shared compilation root even when only good is requested.
+    src.write_text(shared.replace("module M<n: nat>: I<n>", "module M: I<1>")
+                   .replace("via<M<1>>", "via<M>"))
+    for selectors in [["good"], ["tested", "good"]]:
+        rows, files = run([src], selectors, work / f"owner-default-{len(selectors)}", 1)
+        assert not files and all("SP8" in row for row in rows), rows
+
+
 if __name__ == "__main__":
     with TemporaryDirectory() as folder:
         check(Path(folder))
+        check_member_ownership(Path(folder))

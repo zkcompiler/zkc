@@ -70,6 +70,26 @@ inductive MemberValue where
   | opaqueType (sorts : Array String)
   deriving Inhabited
 
+/-- An interface declaration at its evaluated static arguments. -/
+abbrev AppliedInterface := DeclarationId × Array StaticValue
+
+/-- The interface application and declaration that supply a module member's signature. -/
+structure InterfaceMember where
+  application : AppliedInterface
+  declaration : DeclarationId
+  deriving Inhabited
+
+/-- A concrete module binds each member name once (SP8). Ordered applications serve
+opaque typing (SP12) and the provisional value of `Self` in a default instance whose
+interface conditions have yet to establish its eligibility (SP7). -/
+inductive ModuleInterfaces where
+  | concrete (applications : Array AppliedInterface) (members : Std.HashMap String InterfaceMember)
+  | ordered (applications : Array AppliedInterface)
+  deriving Inhabited
+
+def ModuleInterfaces.applications : ModuleInterfaces → Array AppliedInterface
+  | .concrete apps _ | .ordered apps => apps
+
 /-- What an instance is once elaborated, as far as a signature goes; the typing of bodies adds
 to it. A type of a signature that is not evaluated here (it names a generated member, or a
 specification-only parameter) is absent. -/
@@ -87,7 +107,7 @@ inductive InstanceContent where
   | protocol (ports : Array (String × Option ClosedType))
       (results : Array (String × Option ClosedType))
   /-- A module: the interfaces it names, at their static arguments, and its members by name. -/
-  | «module» (interfaces : Array (DeclarationId × Array StaticValue))
+  | «module» (interfaces : ModuleInterfaces)
       (members : Array (String × MemberValue))
   /-- A declaration whose content is not evaluated here: a specification type. -/
   | unevaluated

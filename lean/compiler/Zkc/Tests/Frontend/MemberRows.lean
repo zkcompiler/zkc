@@ -48,7 +48,216 @@ private def expectRow (session : Driver.Session) (root : String) (row : Zkc.Voca
       | _ => false
     | _ => false) s!"{root}: missing standard row or unexpected project binding"
 
+/-- Distinct types and modules from different files can have the same last name. -/
+private def checkQualifiedOwners : TestM Unit := do
+  let declarations := "pub module Box: UnitM:\n    nat dummy = 0\npub struct Item:\n    x: bool\n"
+  for (bound, argument) in [("T", "Item"), ("H: UnitM", "Box")] do
+    let source := "module caller\nuse left\nuse right\nuse common::{UnitM}\n" ++
+      s!"interface I<{bound}>:\n    type Pick\n" ++
+      s!"module M: I<left::{argument}> + I<right::{argument}>:\n    type Pick = bool\n"
+    let session ← Driver.Session.start.compile #[⟨"caller", Syntax.parseString "caller" source⟩] fun path => do
+      let #[file] := path | return none
+      let text := if file == "common" then "module common\npub interface UnitM\n"
+        else s!"module {file}\n" ++ "use common::{UnitM}\n" ++ declarations
+      return some ⟨file, Syntax.parseString file text⟩
+    let refused := (session.diagnostics.find? (·.isError)).any fun diag =>
+      let message := diag.render session.state.env.renderer
+      diag.rule == "SP8" && diag.span.startLine == 7 &&
+        [s!"I<left::{argument}>::Pick", s!"I<right::{argument}>::Pick"].all (message.contains ·)
+    expectTrue refused s!"qualified {argument}: {session.renderDiagnostics}"
+
+/-- A nested module and a file module can have the same qualified path. Keep the
+applications in the refusal even when their interface or their argument renders identically. -/
+private def checkOwnerLocations : TestM Unit := do
+  let leafText := "module a::b\npub struct T:\n    pub q: bool\npub type Leaf = T\n" ++
+    "pub interface Pick:\n    def choose(x: bool) -> bool\n"
+  let leaf : SourceInput := ⟨"leaf.zkc", Syntax.parseString "leaf.zkc" leafText⟩
+  let direct := "module a\nuse a::b::{Pick}\npub module b:\n" ++
+    "    pub interface Pick:\n        def choose(x: bool) -> bool\n" ++
+    "module M: b::Pick + Pick:\n    def choose(x): x\n"
+  let argument := "module a\nuse a::b::{Leaf}\npub module b:\n" ++
+    "    pub struct T:\n        pub p: bool\n" ++
+    "interface I<T>:\n    def pick(x: bool) -> bool\n" ++
+    "module M: I<b::T> + I<Leaf>:\n    def pick(x): x\n"
+  for (source, line, left, right) in [(direct, 6, "b::Pick", "Pick"), (argument, 8, "I<b::T>", "I<Leaf>")] do
+    let outer : SourceInput := ⟨"outer.zkc", Syntax.parseString "outer.zkc" source⟩
+    for files in [#[outer, leaf], #[leaf, outer]] do
+      let session ← Driver.Session.start.compile files fun _ => pure none
+      let first := session.diagnostics.find? (·.isError)
+      let correct := first.any fun diag =>
+        let refusal := diag.toRefusal session.state.env.renderer
+        diag.rule == "SP8" && diag.span.file == "outer.zkc" && diag.span.startLine.toNat == line &&
+          refusal.message.contains s!"from `{left}` at outer.zkc:{line}:11" &&
+          refusal.message.contains s!"from `{right}` at outer.zkc:{line}:21"
+      expectTrue correct s!"two written origins for {left} and {right}: {session.renderDiagnostics}"
+
+/-- Calls through one bound, through the module and through a projection. Each module
+header is checked in both orders, whether the body is used or not. -/
+private def checkMemberBindings (repository : Repository) : TestM Unit := do
+  let programs : List (String × String × String × String × String × List String) := [
+    ("module caller\ninterface A:\n    def copy<n: nat>(x: bool) -> bool\ninterface B:\n    def copy<n: nat>(x: bool) -> bool where (2 <= n)\n", "A", "B", ":", "copy", [
+      "    def copy(x): x\ndef byA<H: A>(x: bool) -> bool: H::copy<n = 1>(x)\ndef evaluate(x: bool) -> bool: byA<M>(x)\n",
+      "    def copy(x): x\ndef byB<H: B>(x: bool) -> bool: H::copy<n = 1>(x)\ndef evaluate(x: bool) -> bool: byB<M>(x)\n",
+      "    def copy(x): x\ndef evaluate(x: bool) -> bool: M::copy<n = 1>(x)\n",
+      "    def copy(x): x\ndef useIt<H: A>(x: bool) -> bool: H::copy<n = 1>(x)\ndef evaluate(x: bool) -> bool: useIt<M>(x)\n",
+      "    def copy(x): x\ndef useIt<H: A>(x: bool) -> bool: H::copy<n = 2>(x)\ndef evaluate(x: bool) -> bool: useIt<M>(x)\n",
+      "    def copy(x): x\ndef useIt<H: B>(x: bool) -> bool: H::copy<n = 1>(x)\ndef evaluate(x: bool) -> bool: useIt<M>(x)\n",
+      "    def copy(x): x\ndef useIt<H: B>(x: bool) -> bool: H::copy<n = 2>(x)\ndef evaluate(x: bool) -> bool: useIt<M>(x)\n"]),
+    ("module caller\nuse zkc::algebra::{Group}\nuse zkc::curves::bls12_381::{G1}\ninterface Carrier:\n    type Element: Group\nmodule Points: Carrier:\n    type Element = G1\ninterface A:\n    def copy<T: Group>(x: T) -> T\ninterface B:\n    def copy<T: Group>(x: T) -> T where (2 <= T::Order)\n", "A", "B", ":", "copy", [
+      "    def copy(x): x\ndef selected<H: B, C: Carrier>(x: C::Element) -> C::Element: H::copy(x)\ndef evaluate(x: G1) -> G1: selected<M, Points>(x)\n"]),
+    ("module caller\nuse zkc::algebra::{Group}\nuse zkc::curves::bls12_381::{G1}\ninterface Carrier:\n    type Element: Group\nmodule Points: Carrier:\n    type Element = G1\ninterface A:\n    def copy<T: Group>(x: T) -> T\ninterface B:\n    def copy<T: Group>(x: T) -> T where (T::Order <= 2)\n", "A", "B", ":", "copy", [
+      "    def copy(x): x\ndef selected<H: B, C: Carrier>(x: C::Element) -> C::Element: H::copy(x)\ndef evaluate(x: G1) -> G1: selected<M, Points>(x)\n"]),
+    ("module caller\ninterface A:\n    def copy(x: bool) -> bool\ninterface B:\n    def copy(x: nat) -> nat\n", "A", "B", ":", "copy", [
+      "    def copy(x): true\ndef call<H: B>(x: nat) -> nat: H::copy(x)\ndef evaluate(x: nat) -> nat: call<M>(x)\n",
+      "    def copy(x): true\ndef evaluate(x: bool) -> bool: x\n",
+      "    def copy(x): x\ndef evaluate(x: bool) -> bool: x\n"]),
+    ("module caller\ninterface I<n: nat>:\n    def copy(x: [byte; n]) -> [byte; n]\n", "I<1>", "I<2>", ":", "copy", [
+      "    def copy(x): x\ndef select<H: I<1>>(x: [byte; 1]) -> [byte; 1]: H::copy(x)\ndef evaluate(x: [byte; 1]) -> [byte; 1]: select<M>(x)\n",
+      "    def copy(x): x\ndef select<H: I<2>>(x: [byte; 2]) -> [byte; 2]: H::copy(x)\ndef evaluate(x: [byte; 2]) -> [byte; 2]: select<M>(x)\n"]),
+    ("module caller\ninterface A:\n    def width<n: nat>(x: bool) -> nat\ninterface B:\n    def width<n: nat>(x: bool) -> nat\n", "A", "B", ":", "width", [
+      "    def width(x): 7\ndef readWidth<H: B>(x: bool) -> nat: H::width<n = 7>(x)\ndef evaluate(x: bool) -> nat: readWidth<M>(x)\n",
+      "    def width(x): n\ndef readWidth<H: A>(x: bool) -> nat: H::width<n = 7>(x)\ndef evaluate(x: bool) -> nat: readWidth<M>(x)\n",
+      "    def width(x): n\ndef readWidth<H: B>(x: bool) -> nat: H::width<n = 7>(x)\ndef evaluate(x: bool) -> nat: readWidth<M>(x)\n"]),
+    ("module caller\ninterface A:\n    def copy(x: bool) -> bool\ninterface B:\n    def copy(x: bool) -> bool\n", "A", "B", ":", "copy", [
+      "    def copy(x): x\ndef one<H: A>(x: bool) -> bool: H::copy(x)\ndef two<H: B>(x: bool) -> bool: H::copy(x)\ndef evaluate(x: bool) -> (bool, bool): (one<M>(x), two<M>(x))\n"]),
+    ("module caller\ninterface I<minimum: nat>:\n    def copy<n: nat>(x: bool) -> bool where (minimum <= n)\n", "I<1>", "I<2>", ":", "copy", [
+      "    def copy(x): x\ndef select<H: I<1>>(x: bool) -> bool: H::copy<n = 1>(x)\ndef evaluate(x: bool) -> bool: select<M>(x)\n",
+      "    def copy(x): x\ndef select<H: I<1>>(x: bool) -> bool: H::copy<n = 2>(x)\ndef evaluate(x: bool) -> bool: select<M>(x)\n",
+      "    def copy(x): x\ndef select<H: I<2>>(x: bool) -> bool: H::copy<n = 1>(x)\ndef evaluate(x: bool) -> bool: select<M>(x)\n",
+      "    def copy(x): x\ndef select<H: I<2>>(x: bool) -> bool: H::copy<n = 2>(x)\ndef evaluate(x: bool) -> bool: select<M>(x)\n"]),
+    ("module caller\nuse zkc::algebra::{Group}\nuse zkc::curves::bls12_381::{G1}\ninterface A:\n    def eq<T: Group>(a: T, b: T) -> bool\ninterface B:\n    def eq<T: Group>(a: T, b: T) -> bool\n    def other(x: bool) -> bool\n", "A", "B", " = primitive(\"group.equal\")", "eq", [
+      "def choose<H: A>(a: G1, b: G1) -> bool: H::eq<G1>(a,b)\ndef evaluate(a: G1, b: G1) -> bool: choose<M>(a,b)\n",
+      "def choose<H: B>(a: G1, b: G1) -> bool: H::eq<G1>(a,b)\ndef evaluate(a: G1, b: G1) -> bool: choose<M>(a,b)\n"]),
+    ("module caller\ninterface A:\n    def pick<n: nat>(a: bool, b: bool) -> bool where (2 <= n)\ninterface B:\n    def pick<n: nat>(a: bool, b: bool) -> bool where (2 <= n)\n", "A", "B", ":", "pick", [
+      "    def pick(a, b): a\ndef choose<H: B>(a: bool, b: bool) -> bool: H::pick<n = 2>(b = b, a = a)\ndef evaluate(a: bool, b: bool) -> bool: choose<M>(a, b)\n",
+      "    def pick(a, b): b\ndef choose<H: B>(a: bool, b: bool) -> bool: H::pick<n = 2>(b = b, a = a)\ndef evaluate(a: bool, b: bool) -> bool: choose<M>(a, b)\n"]),
+    ("module caller\ninterface A:\n    def pick(x: bool) -> bool\ninterface B:\n    def pick(x: bool) -> bool\n    def other(x: bool) -> bool\n", "A", "B", " = primitive(\"example.project\")", "pick", [
+      "def choose<H: A>(x: bool) -> bool: H::pick(x)\ndef evaluate(x: bool) -> bool: choose<M>(x)\n",
+      "def choose<H: B>(x: bool) -> bool: H::pick(x)\ndef evaluate(x: bool) -> bool: choose<M>(x)\n",
+      "def first(x: bool) -> bool = primitive(\"example.project\")\ndef second(x: bool) -> bool = primitive(\"example.project.pick\")\ndef choose<H: A>(x: bool) -> (bool, bool, bool): (H::pick(x), first(x), second(x))\ndef evaluate(x: bool) -> (bool, bool, bool): choose<M>(x)\n",
+      "def first(x: bool) -> bool = primitive(\"example.project\")\ndef second(x: bool) -> bool = primitive(\"example.project.pick\")\ndef choose<H: B>(x: bool) -> (bool, bool, bool): (H::pick(x), first(x), second(x))\ndef evaluate(x: bool) -> (bool, bool, bool): choose<M>(x)\n"])]
+  for (interfaces, left, right, implementation, name, callers) in programs do
+    let line := (interfaces.splitOn "\n").length
+    for bound in [s!"{left} + {right}", s!"{right} + {left}"] do
+      for caller in callers do
+        let text := interfaces ++ s!"module M: {bound}" ++ implementation ++ "\n" ++ caller
+        let session ← memberSession repository text
+        let first := session.diagnostics.find? (·.isError)
+        let atBinding := first.any fun d =>
+          let message := d.render session.state.env.renderer
+          d.rule == "SP8" && d.span.startLine.toNat == line &&
+            message.contains s!"{left}::{name}" && message.contains s!"{right}::{name}"
+        expectTrue (atBinding && !(session.admitRoots (some #["evaluate"])).complete.isOk)
+          s!"{text}expected SP8 at M, got {session.renderDiagnostics}"
+
+/-- In the opaque typing the argument of N contains a stand-in or a fresh type.
+At concrete values the two applications can coincide or give a collision. -/
+private def checkConcreteApplications (repository : Repository) : TestM Unit := do
+  let cases : List (String × String × String × String × String) := [
+    ("module caller\ninterface Carrier:\n    type Element\nmodule Bits: Carrier:\n    type Element = bool\nmodule Naturals: Carrier:\n    type Element = nat\ninterface I<U>:\n    def keep(x: bool) -> bool\nmodule N<U>: I<U> + I<[bool; 2]>:\n    def keep(x): x\ndef pick<C: Carrier>(x: bool) -> bool: N<U = [C::Element; 2]>::keep(x)\n", "Bits", "Naturals", "I<[nat; 2]>::keep", "I<[bool; 2]>::keep"),
+    ("module caller\ninterface K\ninterface I<H: K>:\n    def keep(x: bool) -> bool\nmodule P: K:\n    nat dummy = 0\nmodule Other: K:\n    nat dummy = 0\nmodule N<X: K>: I<X> + I<P>:\n    def keep(x): x\ndef pick<H: K>(x: bool) -> bool: N<X = H>::keep(x)\n", "P", "Other", "I<Other>::keep", "I<P>::keep")]
+  for (source, same, different, left, right) in cases do
+    let root (argument : String) := source ++ s!"def evaluate(x: bool) -> bool: pick<{argument}>(x)\n"
+    let equal ← memberSession repository (root same)
+    let distinct ← memberSession repository (root different)
+    let error := distinct.diagnostics.find? (·.isError)
+    let atBinding := error.any fun d =>
+      let message := d.render distinct.state.env.renderer
+      d.rule == "SP8" && message.contains "module `N`" && message.contains left && message.contains right
+    expectTrue (!equal.hasErrors && (equal.admitRoots (some #["evaluate"])).complete.isOk &&
+      atBinding && !(distinct.admitRoots (some #["evaluate"])).complete.isOk)
+      s!"{same} and {different}: {equal.renderDiagnostics} / {distinct.renderDiagnostics}"
+
+/-- Members of two disjoint interfaces retain their respective project operations at emission. -/
+private def checkDisjointRows (repository : Repository) : TestM Unit := do
+  let source := "module disjoint
+interface A:
+    def first(x: bool) -> bool
+interface B:
+    def middle(x: bool) -> bool
+    def last(x: bool) -> bool
+module Ops: A + B = primitive(\"project.ops\")
+def one(x: bool) -> bool = primitive(\"project.ops\")
+def two(x: bool) -> bool = primitive(\"project.ops.middle\")
+def three(x: bool) -> bool = primitive(\"project.ops.last\")
+def apply<H: A + B>(x: bool) -> (bool, bool, bool): (H::first(one(x)), H::middle(two(x)), H::last(three(x)))
+def evaluate(x: bool) -> (bool, bool, bool): apply<Ops>(x)
+"
+  let expected := ["project.ops", "project.ops", "project.ops.middle", "project.ops.middle",
+    "project.ops.last", "project.ops.last"]
+  for header in ["A + B", "B + A"] do
+    let session ← memberSession repository (source.replace "Ops: A + B" ("Ops: " ++ header))
+    let .ok roots := (session.admitRoots (some #["evaluate"])).complete
+      | failure s!"disjoint interfaces {header}: {session.renderDiagnostics}"
+    let some p := roots.find? "evaluate" | failure "missing evaluate"
+    let rows := p.named.definitions.flatMap fun
+      | .fn _ _ _ _ _ _ body _ => body.operations.filterMap fun
+        | .row (.inr key) => some key.name
+        | _ => none
+      | _ => []
+    expectTrue (rows == expected) s!"disjoint interfaces {header}: expected {expected}, got {rows}"
+
+/-- SP7 checks the eligibility of a default before reporting competing member owners.
+An explicit request for those arguments must still be checked. -/
+private def checkDefaultConditions (repository : Repository) : TestM Unit := do
+  let source (condition : String) := "module caller\n" ++
+    s!"interface I<n: nat> where ({condition}):\n    nat Height\n    type T\n" ++
+    "pub module M<n: nat>: I<n> + I<1>:\n    nat Height = 1\n    type T = bool\n"
+  let root := "def evaluate(x: M<1>::T) -> bool: x\n"
+  for condition in ["n == 1", "Self::Height == n"] do
+    let session ← memberSession repository (source condition ++ root)
+    let skipped := session.state.table.entries.any fun e =>
+      session.state.program.nameOf e.key.declaration == "M" && e.key.arguments == #[.natural 0] &&
+        (e.state matches .skipped)
+    expectTrue (skipped && !session.hasErrors && (session.admitRoots (some #["evaluate"])).complete.isOk)
+      s!"ineligible default under {condition}: {session.renderDiagnostics}"
+    let demanded := source condition ++ "def via<H: I<1>>(x: bool) -> bool: x\n" ++
+      "def evaluate(x: bool) -> bool: via<M<0>>(x)\n"
+    let explicit ← memberSession repository demanded
+    expectTrue ((explicit.diagnostics.find? (·.isError)).any (·.rule == "SP8") &&
+      !(explicit.admitRoots (some #["evaluate"])).complete.isOk)
+      s!"explicit colliding instance under {condition}: {explicit.renderDiagnostics}"
+  let eligible ← memberSession repository (source "Self::Height == 1" ++ root)
+  expectTrue ((eligible.diagnostics.find? (·.isError)).any (·.rule == "SP8") &&
+    !(eligible.admitRoots (some #["evaluate"])).complete.isOk)
+    s!"eligible colliding default: {eligible.renderDiagnostics}"
+
+/-- A third declaration of the same name leaves one diagnostic naming the first two owners. -/
+private def checkCollisionWitness (repository : Repository) : TestM Unit := do
+  let source := "module caller\ninterface A:\n    type T\ninterface B:\n    type T\n" ++
+    "interface C:\n    type T\nmodule M: A + B + C:\n    type T = bool\ndef evaluate() -> bool: true\n"
+  let session ← memberSession repository source
+  let errors := session.diagnostics.filter (·.isError)
+  let firstPair := errors[0]?.any fun d =>
+    let message := d.render session.state.env.renderer
+    d.rule == "SP8" && d.span.startLine == 8 && message.contains "A::T" && message.contains "B::T" &&
+      !message.contains "C::T"
+  expectTrue (errors.size == 1 && firstPair) s!"three declarations of T: {session.renderDiagnostics}"
+
 def memberRowSuite (repository : Repository) : TestM Unit := do
+  checkQualifiedOwners
+  checkOwnerLocations
+  checkDefaultConditions repository
+  checkDisjointRows repository
+  checkConcreteApplications repository
+  checkCollisionWitness repository
+  checkMemberBindings repository
+  let cases : List (String × String × Nat × List String) := [
+    ("type members", "module caller\ninterface A:\n    type T\ninterface B:\n    type T\nmodule M: A + B:\n    type T = bool\ndef evaluate(x: bool) -> bool: x\n", 6, ["A::T", "B::T"]),
+    ("natural members", "module caller\ninterface A:\n    nat N\ninterface B:\n    nat N\nmodule M: B + A:\n    nat N = 0\ndef evaluate(x: bool) -> bool: x\n", 6, ["B::N", "A::N"]),
+    ("function and law", "module caller\ninterface A:\n    def ok(x: bool) -> bool\ninterface B:\n    law ok(x: bool): x == x\nmodule M: A + B:\n    def ok(x): x\ndef evaluate(x: bool) -> bool: x\n", 6, ["A::ok", "B::ok"]),
+    ("module members", "module caller\ninterface K\nmodule UnitModule: K:\n    nat dummy = 0\ninterface A:\n    module Child: K\ninterface B:\n    module Child: K\nmodule M: A + B:\n    module Child = UnitModule\ndef evaluate(x: bool) -> bool: x\n", 9, ["A::Child", "B::Child"]),
+    ("different applications", "module caller\ninterface I<n: nat>:\n    type T\nmodule M: I<1> + I<2>:\n    type T = bool\ndef evaluate(x: bool) -> bool: x\n", 4, ["I<1>::T", "I<2>::T"]),
+    ("default application", "module caller\ninterface I<n: nat>:\n    type T\npub module M<n: nat>: I<n> + I<2>:\n    type T = bool\ndef evaluate(x: bool) -> bool: x\n", 4, ["I<0>::T", "I<2>::T"]),
+    ("protocol member", "module caller\ninterface Signals<n: nat>:\n    protocol Test roles(P, V)(x: bool @(P, V))\nmodule Relay: Signals<1> + Signals<2>:\n    protocol Test roles(P, V)(x: bool @(P, V)):\n        guard @V x\nprotocol Client roles(P, V)(x: bool @(P, V)):\n    Relay::Test(x)\ndef evaluate() -> bool: true\n", 4, ["Signals<1>::Test", "Signals<2>::Test"])]
+  for (label, source, line, names) in cases do
+    let session ← memberSession repository source
+    let errors := session.diagnostics.filter (·.isError)
+    let admitted := (session.admitRoots (some #["evaluate"])).complete.isOk
+    let matchesFirst := errors[0]?.any fun d => d.rule == "SP8" && d.span.startLine.toNat == line &&
+      names.all ((d.render session.state.env.renderer).contains ·)
+    expectTrue (!admitted && matchesFirst)
+      s!"{label}: expected SP8 {names} at line {line}, admitted={admitted}: {session.renderDiagnostics}"
   expectRow (← memberSession repository (caller "generic")) "evaluate" .pair
   let shake ← memberSession repository (caller "shake")
   expectRow shake "written" (.hash (.shake128 5))

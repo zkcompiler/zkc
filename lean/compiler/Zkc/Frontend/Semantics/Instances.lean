@@ -98,7 +98,7 @@ def renderContent (state : Compile.State) : InstanceContent → String
       s!"{entry.1}: {(entry.2.map (renderType state)).getD "?"}"
     s!"({", ".intercalate (ports.toList.map typed)}) -> ({", ".intercalate (results.toList.map typed)})"
   | .«module» interfaces members =>
-    let named := interfaces.toList.map fun (id, args) =>
+    let named := interfaces.applications.toList.map fun (id, args) =>
       let name := state.program.nameOf id
       if args.isEmpty then name else s!"{name}<{", ".intercalate (args.toList.map (renderValue state))}>"
     let member (entry : String × MemberValue) : String :=

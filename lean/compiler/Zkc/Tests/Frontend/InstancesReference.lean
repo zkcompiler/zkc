@@ -23,6 +23,7 @@ refusal, in the first module of the test. -/
 def expectedInstanceRefusals : Array (String × String × Nat) := #[
   ("T-Z1b", "SP4", 3), ("S-Z2b", "SP4", 3), ("V-W1", "SP4", 4), ("N-SP4a", "SP4", 4),
   ("N-SP11b", "SP11", 2), ("N-SP11f", "SP11", 2), ("N-SP8a", "SP8", 5), ("N-SP8b", "SP8", 5),
+  ("N-SP8c", "SP8", 6), ("N-SP8f", "SP8", 6),
   ("N-NL9b", "NL9", 5), ("N-NL9c", "NL9", 5), ("M-SUM14", "SP8", 42), ("M-FRA25", "SP11", 161),
   ("L-ALG1", "SP4", 52), ("L-ALG2", "SP3", 27), ("L-ALG4", "SP4", 52), ("L-HASH2", "SP8", 20),
   ("L-BLS1", "SP8", 14), ("T-Z2b", "TY2", 3), ("T-H8", "TY2", 3), ("S-Z2a", "TY2", 3),

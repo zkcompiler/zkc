@@ -112,12 +112,7 @@ def memberOwner (found : Declaration) (values : Array StaticValue) :
   let some inst := state.table.find? { declaration := ns.owner, arguments := values } | return none
   let some (.«module» interfaces _) := state.table.content? inst | return none
   let name := (found.name.map (·.text)).getD ""
-  for (interface, _) in interfaces do
-    let some inner := (state.program.declarations[interface]?).bind (·.inner) | continue
-    if let some (.declaration member) := (state.program.namespaces[inner]?).bind (·.names[name]?) then
-      if let some memberDeclaration := state.program.declarations[member]? then
-        return some (inst, member, memberDeclaration)
-  return none
+  return (declaredMember? state.program interfaces name).map fun (_, member, decl, _) => (inst, member, decl)
 
 /-- The interface that declares a member of a module instance, and its static arguments. -/
 def memberInterface (inst : InstanceId) (name : String) :
@@ -125,11 +120,8 @@ def memberInterface (inst : InstanceId) (name : String) :
   let state ← get
   let some (.«module» interfaces _) := state.table.content? inst
     | throw (.waiting "a module whose members are not evaluated")
-  for (interface, args) in interfaces do
-    let some inner := (state.program.declarations[interface]?).bind (·.inner) | continue
-    if let some (.declaration member) := (state.program.namespaces[inner]?).bind (·.names[name]?) then
-      if let some found := state.program.declarations[member]? then
-        return (interface, found, args)
+  if let some (interface, _, member, args) := declaredMember? state.program interfaces name then
+    return (interface, member, args)
   throw (.waiting s!"the member `{name}` of a module")
 
 /-- The parameter types and the result type of a signature that is evaluated, or the wait for

@@ -1388,7 +1388,15 @@ default instances miss costs a late message and never soundness.
 n = 0>>`".
 
 **SP8. Interfaces.** A module `M<A>: I<B>` defines every member of `I` and no member that `I`
-lacks; it may hold other declarations, which are its own. A type member is defined by a type
+lacks; it may hold other declarations, which are its own. When a concrete instance of the module is formed,
+including a default that satisfies its module and interface conditions (SP7), each member
+name belongs to at most one of the interface applications in its header. This includes laws and members of different kinds. Applications
+of the same declaration at equal static values count once. Two interfaces can require a shared
+member by each requiring `Self` to implement the interface that declares it. The module names
+that common interface in its header. In opaque typing (SP12), a module parameter or a fresh
+type member anywhere in the instance arguments defers this check.
+
+A type member is defined by a type
 with the member's parameters, and satisfies the member's bound; a natural member by a static name
 (`nat Degree = 1`); a module member by a module that implements the member's bound; a function
 member by its binders and a body, a row or, for a `spec def`, an external name (`def f(x…): e`,
@@ -1405,6 +1413,7 @@ the opaque typing of a module parameter (SP12), the interface supplies the signa
 `Self` in an interface is the implementing module (in a sort, the type). A
 member's own name is not in scope in its definition. `M<A>::T` is its definition to every reader. An interface is satisfied only by a module that names it: a module
 that implements `Rows<T, n>`, whose `where` requires `Self: Kind`, names both. **Messages:**
+"module `M` has two declarations of `copy`: `I<1>::copy` and `I<2>::copy`" (the first two owners of the name, with qualified arguments and, if needed, the two written applications and their source locations);
 "`<M>` does not define `<member>` of `<I>`"; "`<M>` defines `<member>`, which `<I>` does not
 have"; "`<M>` defines `<member>` as a member, and implements no interface"; "`<I>` declares
 `<write_natural>` as a `def`: `<M>` defines it as deployed code, not as a `spec def`"; "`<I>`

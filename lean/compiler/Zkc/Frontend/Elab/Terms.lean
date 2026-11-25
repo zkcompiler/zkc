@@ -222,7 +222,7 @@ mutual
             ((state.program.scopes[entry.1.scope]?).bind (·.parameters[entry.1.index]?)).map (·.name.text)
         let interface : Option String := match state.table.content? «module» with
           | some (.«module» interfaces _) =>
-            (interfaces[0]?).map fun (entry : DeclarationId × Array StaticValue) =>
+            (interfaces.applications[0]?).map fun (entry : DeclarationId × Array StaticValue) =>
               state.program.nameOf entry.1
           | _ => none
         refuseHere "SP12" place
@@ -535,11 +535,7 @@ def interfaceMember (inst : InstanceId) (name : String) :
   let state ← getThe Compile.State
   let some (.«module» interfaces _) := state.table.content? inst
     | waitFor "a module whose members are not evaluated"
-  for (interface, args) in interfaces do
-    let some inner := (state.program.declarations[interface]?).bind (·.inner) | continue
-    if let some (.declaration member) := (state.program.namespaces[inner]?).bind (·.names[name]?) then
-      if let some found := state.program.declarations[member]? then
-        return (interface, member, found, args)
+  if let some result := declaredMember? state.program interfaces name then return result
   refuseHere "SP3" default s!"`{renderInstance state inst}` has no member `{name}`"
 
 /-- The parameters of a function member of a module, from the interface that declares it. -/
@@ -1517,13 +1513,13 @@ to the end makes the caller wait or not checked; a refused body abandons the cal
     let some (reference, _) := (state.table.entries[«module»]?).bind (·.key.opaqueFor) | noMember
     let some (.«module» interfaces _) := state.table.content? «module» | noMember
     let program := state.program
-    let declared := interfaces.any fun (interface, _) =>
+    let declared := interfaces.applications.any fun (interface, _) =>
       (((program.declarations[interface]?).bind (·.inner)).bind fun inner =>
         (program.namespaces[inner]?).bind (·.names[function]?)).any fun
           | .declaration id => (program.declarations[id]?).any (·.kind == .functionMember)
           | _ => false
     unless declared do
-      let interface := ((interfaces[0]?).map fun (id, _) => program.nameOf id).getD "?"
+      let interface := ((interfaces.applications[0]?).map fun (id, _) => program.nameOf id).getD "?"
       let parameter := ((program.scopes[reference.scope]?).bind (·.parameters[reference.index]?)).map
         (·.name.text)
       let typeText ← renderTypeE type
