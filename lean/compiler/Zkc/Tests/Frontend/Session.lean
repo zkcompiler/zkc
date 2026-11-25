@@ -116,7 +116,8 @@ def budgetSuite : TestM Unit := do
       s!"budgets: the request that ran out is `{request}`"
   | none => failure "budgets: the incomplete check carries no budget"
   let results := session.state.results
-  let failed := (results.signatures.entries.filter (·.state matches .failed)).size +
+  let failed := (results.signatures.requestedIds.filter fun id =>
+    (results.signatures.entryAt! id).state matches .failed).size +
     (results.bodies.entries.filter (·.state matches .failed)).size
   expectTrue (failed == 0) s!"budgets: {failed} requests on the chain are failed, not exhausted"
   expectTrue (results.bodies.entries.any (isExhausted ·.state))
@@ -254,6 +255,71 @@ def admissionSession (text : String) : Driver.Session :=
   let input : SourceInput := { name := "admitted", parsed := parseString "admitted" text }
   Id.run ((Driver.Session.start).compile #[input] (memoryLoader nameLibrary) "packages")
 
+/-- Keep a typed caller while seeding an exhausted transitive dependency in its body store. -/
+private def emissionBudgetSuite : TestM Unit := do
+  let session := admissionSession "module admitted
+def helper(x: nat) -> nat: x
+def wrapper(x: nat) -> nat: helper(x)
+protocol Transfer roles(P, V)(x: nat @P) -> got: nat @V:
+    m <- send wrapper(x) to V
+    return m
+"
+  let some helper := session.state.results.packageReports.find? (·.description == "helper")
+    | failure "emission budget: missing helper report"
+  let some wrapper := session.state.results.packageReports.find? (·.description == "wrapper")
+    | failure "emission budget: missing wrapper report"
+  let some root := session.state.results.packageReports.find? (·.description == "Transfer")
+    | failure "emission budget: missing protocol report"
+  let .admitted _ := root.outcome | failure "emission budget: control protocol did not admit"
+  let place := Span.make "admitted" ⟨3, 29, 70⟩ ⟨3, 35, 76⟩
+  let request : ChainFrame := ⟨.ofText "helper", place⟩
+  let context : Compile.Context := { Written.sourceContext with
+    options := { budgets := { instantiationDepth := 7 } } }
+  let (seed, seeded) := (do
+    let exhaustion ← logExhaustion .instantiationDepth request
+    Typing.setBody helper.root (.exhausted exhaustion)
+    pure exhaustion : CompileM Exhaustion).run context session.state
+  let .ok exhaustion := seed | failure "emission budget: could not seed the dependency"
+  let same := fun (actual : Exhaustion) =>
+    actual.budget == exhaustion.budget && actual.limit == exhaustion.limit &&
+      actual.request.subject.render Renderer.plain == request.subject.render Renderer.plain &&
+      actual.request.span.file == place.file && actual.request.span.start == place.start &&
+      actual.request.span.stop == place.stop
+  match Typing.emitRoot seeded root.root with
+  | .error (.exhausted actual) => expectTrue (same actual) "emission budget: changed the exhaustion"
+  | _ => failure "emission budget: emission lost the dependency exhaustion"
+  match Written.admitInstance { seeded with log := {} } root.root place with
+  | .error message =>
+    expectTrue (message == s!"{Written.location place}: WK-CORE: not checked: {exhaustion.describe}")
+      s!"emission budget: unexpected written emission diagnostic: {message}"
+  | .ok _ => failure "emission budget: written admission succeeded with an exhausted dependency"
+  let (_, reported) := Typing.reportPackages.run context seeded
+  match Typing.rootPackage reported root.root with
+  | .error (.exhausted actual) => expectTrue (same actual) "emission budget: changed the package lack"
+  | _ => failure "emission budget: protocol package lacks for a reason other than exhaustion"
+  -- Retype the protocol with the wrapper still cached, so the Core check encounters the
+  -- exhausted helper while walking the dependency closure.
+  let (_, rechecked) := (do
+    modifyResults fun results => { results with bodies := {} }
+    Typing.typeBody helper.root place
+    Typing.typeBody wrapper.root place
+    Typing.setBody helper.root (.exhausted exhaustion)
+    Typing.typeBody root.root place).run context seeded
+  match rechecked.results.body? root.root with
+  | some (.exhausted actual) => expectTrue (same actual) "emission budget: changed the protocol exhaustion"
+  | _ => failure "emission budget: protocol body did not retain the exhaustion"
+  match (Static.checkedViewProtocol root.root place).run context rechecked with
+  | (.error (.exhausted actual), _) => expectTrue (same actual) "emission budget: changed the view exhaustion"
+  | _ => failure "emission budget: checked view lost the protocol exhaustion"
+  expectTrue (!rechecked.log.hasErrors && rechecked.log.incomplete == 1 &&
+      !reported.log.hasErrors && reported.log.incomplete == 1)
+    "emission budget: propagation logged a refusal or repeated the incomplete check"
+  match Written.evaluate rechecked place (Static.checkedViewProtocol root.root place) with
+  | .error message =>
+    expectTrue (message == s!"{Written.location place}: WK-TYPE: not checked: {exhaustion.describe}")
+      s!"emission budget: unexpected written view diagnostic: {message}"
+  | .ok _ => failure "emission budget: written view succeeded with an exhausted protocol"
+
 def isWaiting : Lack → Bool
   | .waiting _ => true
   | _ => false
@@ -336,6 +402,7 @@ def recoverySuite : TestM Unit := do
 def sessionSuite : TestM Unit := do
   logSuite
   budgetSuite
+  emissionBudgetSuite
   referenceSuite
   rootSelectionSuite
   admissionSuite

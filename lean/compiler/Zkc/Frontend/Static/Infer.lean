@@ -233,35 +233,33 @@ mutual
   partial def matchReference (problem : Problem) (context : Context) (reference : Lowered.Reference)
       (actual : StaticValue) : CompileM Problem := do
     let state ← get
-    let .reference _ segments := reference
+    let .reference place segments := reference
     let steps : List Step := segments.toList.map fun (.segment step _ _) => step
     let lastArguments : Option (Array Lowered.StaticArgument) :=
       segments.back?.bind fun (.segment _ arguments _) => arguments
     -- a type member of the module that `Self` or a known module parameter stands for: its
     -- definition, an alias or a record with the member's parameters (SP8, TY3)
-    let memberDefinition (inst : InstanceId) (name : String) : Option DeclarationId :=
-      match state.table.content? inst with
-      | some (.«module» _ members) =>
-        match (members.find? (·.1 == name)).map (·.2) with
-        | some (MemberValue.definition id) => some id
-        | _ => none
-      | _ => none
+    let memberDefinition (inst : InstanceId) (name : String) : CompileM (Option DeclarationId) := do
+      unless ((state.table.content? inst).bind InstanceContent.moduleInterfaces?).isSome do return none
+      if let some (.definition id) ← lookupModuleMember inst name place then return some id
+      return none
     -- the declaration that the reference names, with the segments that give it arguments: its
     -- own, and before it those of the declarations on the path (a module that an import fixed)
-    let target : Option (DeclarationId × Array (DeclarationId × Option (Array Lowered.StaticArgument))) :=
+    let target : Option (DeclarationId × Array (DeclarationId × Option (Array Lowered.StaticArgument))) ←
       match steps with
-      | [.self _, .member name _] =>
-        (problem.self?.bind (memberDefinition · name)).map fun id => (id, #[(id, lastArguments)])
+      | [.self _, .member name _] => do
+        let some inst := problem.self? | pure none
+        pure ((← memberDefinition inst name).map fun id => (id, #[(id, lastArguments)]))
       | [.parameter reference, .member name _] =>
         match problem.known[reference]? with
-        | some (.«module» inst) => (memberDefinition inst name).map fun id => (id, #[(id, lastArguments)])
-        | _ => none
+        | some (.«module» inst) => do pure ((← memberDefinition inst name).map fun id => (id, #[(id, lastArguments)]))
+        | _ => pure none
       | _ => match segments.back? with
         | some (.segment (.declaration id) _ _) =>
-          some (id, segments.filterMap fun
+          pure (some (id, segments.filterMap fun
             | .segment (.declaration segmentId) arguments _ => some (segmentId, arguments)
-            | _ => none)
-        | _ => none
+            | _ => none))
+        | _ => pure none
     -- two applications of one fresh type member are matched argument by argument (SP12)
     let moduleOf : Option InstanceId := match steps with
       | [.self _, .member ..] => problem.self?
@@ -310,11 +308,11 @@ mutual
         return problem
       | _, .type (.record inst) | _, .type (.«variant» inst) | _, .type (.specification inst)
       | _, .«module» inst =>
-        let some entry := state.table.entries[inst]? | return problem
-        if entry.key.declaration != id then return problem
+        let some instanceKey := state.table.allocatedKey? inst | return problem
+        if instanceKey.declaration != id then return problem
         let parameters := deployedParameters state.program found
         let mut problem := problem
-        for ((reference, _), value) in parameters.zip entry.key.arguments do
+        for ((reference, _), value) in parameters.zip instanceKey.arguments do
           match written.find? (·.1 == reference) with
           | some (_, term) => problem ← matchTerm problem context term value
           | none =>

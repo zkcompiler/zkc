@@ -80,11 +80,11 @@ def protocolSignatureIn (head : Lowered.ProtocolHead) (env : Env) :
 /-- The closed signature of a protocol instance: its head at the values of the instance. -/
 def protocolSignatureOf (inst : InstanceId) : CompileM Typed.ProtocolSignature := do
   let state ← get
-  let some entry := state.table.entries[inst]? | throw .abandoned
-  let found ← declaration entry.key.declaration
-  let some lowered := (← getModules).lowered? entry.key.declaration | throw .abandoned
+  let some instanceKey := state.table.allocatedKey? inst | throw .abandoned
+  let found ← declaration instanceKey.declaration
+  let some lowered := (← getModules).lowered? instanceKey.declaration | throw .abandoned
   let .protocol head _ _ := lowered.content | throw .abandoned
-  protocolSignatureIn head (instanceEnv state.program found entry.key.arguments entry.key.specification)
+  protocolSignatureIn head (instanceEnv state.program found instanceKey.arguments instanceKey.specification)
 
 def protocolSignature (inst : InstanceId) : ElabM Typed.ProtocolSignature :=
   liftM (protocolSignatureOf inst : CompileM Typed.ProtocolSignature)
@@ -138,7 +138,7 @@ def elabApplication (span : Span) (event : EventId) (binder : Option Lowered.Bin
   -- with the callee is the caller's own
   let state ← getThe Compile.State
   let context ← getContext
-  let caller := state.program.declarations[state.table.entries[context.instance]!.key.declaration]!
+  let caller := state.program.declarations[(state.table.allocatedKey! context.instance).declaration]!
   let supplied := steps.flatMap fun (_, args) => (args.getD #[]).filterMap fun
     | .spec at_ name term => some (at_, name, term)
     | _ => none

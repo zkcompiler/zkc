@@ -23,6 +23,7 @@ refusal, in the first module of the test. -/
 def expectedInstanceRefusals : Array (String × String × Nat) := #[
   ("T-Z1b", "SP4", 3), ("S-Z2b", "SP4", 3), ("V-W1", "SP4", 4), ("N-SP4a", "SP4", 4),
   ("N-SP11b", "SP11", 2), ("N-SP11f", "SP11", 2), ("N-SP8a", "SP8", 5), ("N-SP8b", "SP8", 5),
+  ("N-SP8c", "SP8", 6), ("N-SP8f", "SP8", 6),
   ("N-NL9b", "NL9", 5), ("N-NL9c", "NL9", 5), ("M-SUM14", "SP8", 42), ("M-FRA25", "SP11", 161),
   ("L-ALG1", "SP4", 52), ("L-ALG2", "SP3", 27), ("L-ALG4", "SP4", 52), ("L-HASH2", "SP8", 20),
   ("L-BLS1", "SP8", 14), ("T-Z2b", "TY2", 3), ("T-H8", "TY2", 3), ("S-Z2a", "TY2", 3),
@@ -126,7 +127,7 @@ def libraryInstancesSuite (repository : Repository) : TestM Unit := do
     if check.refusals.isEmpty then pass
     for refusal in check.refusals do
       failure s!"{path}: {refusal.span.file}: {refusal.render}"
-    instances := instances + check.state.table.entries.size
+    instances := instances + check.state.results.instanceCount
     for entry in check.state.defaults do
       let declaration := nameCheck.program.declarations[entry.declaration]!
       if (nameCheck.program.files[declaration.file]?).any (·.name == path.toString) then
@@ -180,7 +181,7 @@ def programInstancesSuite (repository : Repository) : TestM Unit := do
         pass
         let described := describedInstances check
         let unevaluated := (described.filter fun (_, content) => content.contains '?').size
-        note s!"{stem}: {check.state.table.entries.size} instances, {unevaluated} with a type not evaluated here"
+        note s!"{stem}: {check.state.results.instanceCount} instances, {unevaluated} with a type not evaluated here"
         for (program, description, expected) in programContents do
           if program != stem then continue
           match described.find? (·.1 == description) with
@@ -199,7 +200,7 @@ def generatedInstancesSuite (repository : Repository) : TestM Unit := do
   if nameCheck.refusals.isEmpty && check.refusals.isEmpty then pass
   for refusal in (nameCheck.refusals ++ check.refusals).extract 0 5 do
     failure s!"the generated program: {refusal.span.file}: {refusal.render}"
-  note s!"generated program: {check.state.table.entries.size} instances"
+  note s!"generated program: {check.state.results.instanceCount} instances"
 
 /-- An instance whose `where` cannot be evaluated here waits, and says for what (SP4): a
 constraint over a member that a module bound to the vocabulary does not give. -/

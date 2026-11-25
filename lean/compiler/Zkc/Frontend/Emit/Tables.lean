@@ -13,10 +13,14 @@ open Zkc.Vocabulary.Project
 
 open Static Emit
 
+local instance : Repr Exhaustion where
+  reprPrec exhaustion prec := reprPrec exhaustion.describe prec
+
 inductive EmitFailure where
   | waiting (reason : String)
   | defect (message : String)
   | noCoreForm (reason : String)
+  | exhausted (exhaustion : Exhaustion)
   deriving Inhabited, Repr
 
 abbrev EmitM := ReaderT Compile.State (Except EmitFailure)

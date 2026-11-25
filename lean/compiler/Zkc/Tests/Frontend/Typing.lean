@@ -104,7 +104,7 @@ private def parameterName (state : Compile.State) (param : ParameterRef) : Strin
 
 mutual
   private partial def instanceName (state : Compile.State) (root : InstanceId) : String := Id.run do
-    let key := state.table.entries[root]!.key
+    let key := state.table.allocatedKey! root
     let name := Static.qualifiedName state.program key.declaration
     let args := key.arguments.toList.map (valueName state) ++ key.specification.toList.map (s!"spec {·}")
     let mut result := withArguments name args
@@ -146,7 +146,7 @@ def recordTypingRoots (label : String) (check : TypingCheck) : TestM Unit := do
       | .waiting reason => pure (.waiting reason)
       | .typedOnly reason => pure (.typedOnly reason)
       | _ => continue -- checkPackages reports refusals, emission defects and exhaustion.
-    let declaration := Static.qualifiedName check.state.program check.state.table.entries[report.root]!.key.declaration
+    let declaration := Static.qualifiedName check.state.program (check.state.table.allocatedKey! report.root).declaration
     let root : UnpackagedRoot := {
       block := label, declaration, instanceName := instanceName check.state report.root, outcome
       description := Typing.rootDescription check.state report.root true }

@@ -136,8 +136,8 @@ def reportSilentRefusals : CompileM Unit := do
   let state ← get
   if state.log.errors != 0 then return
   let mut silent : Array String := #[]
-  for index in [0:state.table.entries.size] do
-    let entry := state.table.entries[index]!
+  for index in state.table.requestedIds do
+    let entry := state.table.entryAt! index
     let refused := match entry.state, state.results.body? index with
       | .failed, _ | _, some .failed => true
       | _, _ => false

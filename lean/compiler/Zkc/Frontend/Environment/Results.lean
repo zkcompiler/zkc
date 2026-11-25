@@ -1,8 +1,7 @@
 module
 
 public import Std.Data.HashSet
-public import Zkc.Frontend.Environment.Intern
-public import Zkc.Frontend.Environment.Query
+public import Zkc.Frontend.Environment.SignatureTable
 public import Zkc.Frontend.Typed.Signature
 public import Zkc.Frontend.Typed.Checked
 public import Zkc.Frontend.Typed.Summary
@@ -20,7 +19,7 @@ An instance belongs to no file: an instance of a declaration of a library at the
 program is reached from the program. So these tables are of the program, not of a file:
 
 - `signatures`: a declaration at static values gives its closed signature. The number of the
-  entry is the number of the instance;
+  allocated key is the number of the instance. The requests are kept in first-request order;
 - `bodies`: an instance gives what its body came to and what is kept of it beside its tree
   (`Typing.BodyState`): the summary that callers, packages, schemes and tools read;
 - `trees`: an instance gives the typed tree of its body, which emission reads;
@@ -40,7 +39,7 @@ namespace Zkc.Frontend
 structure ResultStore where
   types : Interner ClosedType := {}
   values : Interner StaticValue := {}
-  signatures : QueryTable InstanceKey Typed.Signature := {}
+  signatures : SignatureTable InstanceKey Typed.Signature := default
   bodies : QueryTable InstanceId Typing.BodyState := {}
   /-- The typed tree of each instance: what the passes, the check of its facts and the
   emission of a package read. -/
@@ -71,12 +70,12 @@ structure ResultStore where
 
 namespace ResultStore
 
-/-- The key of an instance. -/
+/-- The key of an instance that has been requested. -/
 def key? (store : ResultStore) (id : InstanceId) : Option InstanceKey :=
-  (store.signatures.entries[id]?).map (·.key)
+  (store.signatures.entryAt? id).map (·.key)
 
 def signature? (store : ResultStore) (id : InstanceId) : Option Typed.Signature :=
-  match store.signatures.entries[id]? with
+  match store.signatures.entryAt? id with
   | some { state := .done signature, .. } => some signature
   | _ => none
 
@@ -90,7 +89,7 @@ def instance? (store : ResultStore) (key : InstanceKey) : Option InstanceId :=
   store.signatures.find? key
 
 /-- The number of instances asked for. -/
-def instanceCount (store : ResultStore) : Nat := store.signatures.entries.size
+def instanceCount (store : ResultStore) : Nat := store.signatures.requestedIds.size
 
 /-- Whether an instance was first asked for as a default instance. -/
 def isDefault (store : ResultStore) (id : InstanceId) : Bool := store.defaultInstances.contains id
@@ -128,7 +127,7 @@ def checked? (store : ResultStore) (id : InstanceId) : Option Typed.Checked :=
 /-- The requests that the computation of a request made. -/
 def requestsOf (store : ResultStore) (request : QueryRef) : Array QueryRef :=
   match request.kind with
-  | .signature => ((store.signatures.entries[request.instance]?).map (·.requests)).getD #[]
+  | .signature => ((store.signatures.entryAt? request.instance).map (·.requests)).getD #[]
   | .body => ((store.bodies.entry? request.instance).map (·.requests)).getD #[]
   | .tree => ((store.trees.entry? request.instance).map (·.requests)).getD #[]
   | .checked => ((store.checked.entry? request.instance).map (·.requests)).getD #[]
@@ -136,7 +135,7 @@ def requestsOf (store : ResultStore) (request : QueryRef) : Array QueryRef :=
 /-- What was asked and where it was first asked from. -/
 def requested? (store : ResultStore) (request : QueryRef) : Option ChainFrame :=
   match request.kind with
-  | .signature => (store.signatures.entries[request.instance]?).map (·.requested)
+  | .signature => (store.signatures.entryAt? request.instance).map (·.requested)
   | .body => (store.bodies.entry? request.instance).map (·.requested)
   | .tree => (store.trees.entry? request.instance).map (·.requested)
   | .checked => (store.checked.entry? request.instance).map (·.requested)
@@ -145,10 +144,10 @@ def requested? (store : ResultStore) (request : QueryRef) : Option ChainFrame :=
 holds is changed in place rather than copied. -/
 
 @[inline] def modifySignatures (store : ResultStore)
-    (change : QueryTable InstanceKey Typed.Signature → QueryTable InstanceKey Typed.Signature) :
+    (change : SignatureTable InstanceKey Typed.Signature → SignatureTable InstanceKey Typed.Signature) :
     ResultStore :=
   let table := store.signatures
-  let store := { store with signatures := {} }
+  let store := { store with signatures := default }
   { store with signatures := change table }
 
 @[inline] def modifyBodies (store : ResultStore)
@@ -187,10 +186,7 @@ def addFinished (store : ResultStore) (inst : InstanceId) : ResultStore :=
 /-- One more request made by the computation of `requester`. -/
 def addRequest (store : ResultStore) (requester request : QueryRef) : ResultStore :=
   match requester.kind with
-  | .signature =>
-    match store.key? requester.instance with
-    | some key => store.modifySignatures (·.addRequest key request)
-    | none => store
+  | .signature => store.modifySignatures (·.addRequest requester.instance request)
   | .body => store.modifyBodies (·.addRequest requester.instance request)
   | .tree => store.modifyTrees (·.addRequest requester.instance request)
   | .checked => store.modifyChecked (·.addRequest requester.instance request)
@@ -218,8 +214,8 @@ def reachedInstances (store : ResultStore) (start : Array InstanceId) : Std.Hash
 /-- The declarations that have an instance. After the roots are elaborated these are the
 declarations that a root reached (SP7). -/
 def reachedDeclarations (store : ResultStore) : Std.HashSet DeclarationId :=
-  store.signatures.entries.foldl (init := {}) fun reached entry =>
-    reached.insert entry.key.declaration
+  store.signatures.requestedIds.foldl (init := {}) fun reached id =>
+    reached.insert (store.signatures.entryAt! id).key.declaration
 
 end ResultStore
 

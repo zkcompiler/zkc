@@ -41,9 +41,9 @@ open Static
 private def members : CompileM (Array (String × InstanceId × ClosedType × Typed.FunctionBody)) := do
   let s ← get
   let #[root] := s.roots | throw (.defect "missing Sumcheck root")
-  let some entry := s.table.entries[root]? | throw .abandoned
-  let some field := entry.key.arguments[0]? | throw .abandoned
-  let some ns := s.program.declarations[entry.key.declaration]? | throw .abandoned
+  let some rootKey := s.table.allocatedKey? root | throw .abandoned
+  let some field := rootKey.arguments[0]? | throw .abandoned
+  let some ns := s.program.declarations[rootKey.declaration]? | throw .abandoned
   let some (.declaration pairs) := s.program.namespaces[ns.namespace]!.names["Pairs"]? | throw .abandoned
   let instanceId ← instantiate pairs #[field] ⟨"Pairs from Sumcheck", default⟩
   let some inner := s.program.declarations[pairs]!.inner | throw .abandoned

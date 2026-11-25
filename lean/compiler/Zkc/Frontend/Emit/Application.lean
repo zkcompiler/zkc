@@ -57,8 +57,8 @@ The consumer supplies the interpretation of that symbol. -/
 def RootEmission.externalApplicationAt? (e : RootEmission) (state : Compile.State)
     (caller site callee : Core.Key) (roles : List Nat) (port symbol : String) : Option LocalApplication := do
   let application ← e.localApplicationAt? state caller site callee roles port
-  let target ← state.table.entries[application.target]?
-  let declaration ← state.program.declarations[target.key.declaration]?
+  let target ← state.table.allocatedKey? application.target
+  let declaration ← state.program.declarations[target.declaration]?
   let .«def» definition := declaration.node | none
   let some (.spec _) := definition.modifier | none
   let .external binding := definition.binding | none

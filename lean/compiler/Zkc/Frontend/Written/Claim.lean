@@ -239,6 +239,7 @@ private def collectClaims (c : AdmittedRoot) (goals : List (String × ExportM De
   let .protocol body := checked.definition.body | throw "the root of the scheme is no protocol"
   match emitted : Typing.emitRoots state (c.id :: claimed.map (·.relation)) with
   | .error (.waiting why) => throw s!"WK-CORE: a relation of the claims waits: {why}"
+  | .error (.exhausted exhaustion) => throw s!"WK-CORE: not checked: {exhaustion.describe}"
   | .error (.noCoreForm why) => throw s!"WK-CORE: a relation of the claims has no core form: {why}"
   | .error (.defect why) => throw s!"WK-CORE: the claims did not emit: {why}"
   | .ok emission =>

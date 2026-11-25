@@ -25,7 +25,8 @@ def runCheck {α : Type} (state : Compile.State) (action : CompileM α) : Option
 /-- The descriptions of the instances of a check, with their contents. -/
 def describedInstances (check : InstanceCheck) : Array (String × String) := Id.run do
   let mut result := #[]
-  for entry in check.state.table.entries do
+  for id in check.state.table.requestedIds do
+    let entry := check.state.table.entryAt! id
     let description := (runCheck check.state
       (describeInstance entry.key.declaration entry.key.arguments)).getD "?"
     let content := match entry.state with

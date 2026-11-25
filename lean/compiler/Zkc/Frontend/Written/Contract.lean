@@ -77,6 +77,7 @@ def checkedClause (label : String) (s : Compile.State) (id : DeclarationId) (arg
   validate s inputs result
   let (_, s) ← evaluate s at_ (Typing.typeBody inst at_)
   let emitted ← (Typing.emitRoot s inst).mapError fun
+    | .exhausted exhaustion => s!"{location at_}: WK-FUNCTION: not checked: {exhaustion.describe}"
     | .defect why | .waiting why | .noCoreForm why => s!"{at_.file}:{at_.render}: WK-FUNCTION: {why}"
   let package := emitted.package ⟨[],[],[],[],[]⟩
   let .ok _ := package.checkEvidence | refuse at_ "WK-FUNCTION" "admission refused the selected function"

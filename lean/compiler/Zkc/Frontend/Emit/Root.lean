@@ -27,7 +27,7 @@ def runtimeBody (inst : InstanceId) : EmitM ReachableBody := do
   let results := (← read).results
   match results.body? inst with
   | some (.waiting reason) => throw (.waiting reason)
-  | some (.exhausted e) => throw (.waiting e.describe)
+  | some (.exhausted exhaustion) => throw (.exhausted exhaustion)
   | some .failed => throw (.waiting s!"rejected source instance {inst}")
   | some (.done fn) =>
     if let some why := fn.waiting then throw (.waiting why)

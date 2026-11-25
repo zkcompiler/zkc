@@ -217,12 +217,12 @@ mutual
           | _, _ => none) then
         let .«opaque» «module» _ _ _ := fresh | mismatch source target place quote ""
         let state ← getThe Compile.State
-        let parameter : Option String := ((state.table.entries[«module»]?).bind (·.key.opaqueFor)).bind
+        let parameter : Option String := ((state.table.allocatedKey? «module»).bind (·.opaqueFor)).bind
           fun (entry : ParameterRef × Array String) =>
             ((state.program.scopes[entry.1.scope]?).bind (·.parameters[entry.1.index]?)).map (·.name.text)
         let interface : Option String := match state.table.content? «module» with
           | some (.«module» interfaces _) =>
-            (interfaces[0]?).map fun (entry : DeclarationId × Array StaticValue) =>
+            (interfaces.applications[0]?).map fun (entry : DeclarationId × Array StaticValue) =>
               state.program.nameOf entry.1
           | _ => none
         refuseHere "SP12" place
@@ -336,9 +336,9 @@ def isDeclared : ClosedType → Bool
 that is not evaluated (a generated member, a specification-only parameter). -/
 def signatureWait (inst : InstanceId) : CompileM String := do
   let state ← get
-  let some entry := state.table.entries[inst]? | return "a signature that is not evaluated here"
-  if let some (.waits reason) := state.table.content? inst then return reason
-  let some lowered := (← getModules).lowered? entry.key.declaration
+  let some instanceKey := state.table.allocatedKey? inst | return "a signature that is not evaluated here"
+  if let some (.waits reason _) := state.table.content? inst then return reason
+  let some lowered := (← getModules).lowered? instanceKey.declaration
     | return "a signature that is not evaluated here"
   let types : Array Lowered.TypeTerm := match lowered.content with
     | .function head _ => head.parameters.map (·.type) ++ head.result.toArray
@@ -346,8 +346,8 @@ def signatureWait (inst : InstanceId) : CompileM String := do
       | .type type => some type
       | _ => none
     | _ => #[]
-  let found ← declaration entry.key.declaration
-  let env := instanceEnv state.program found entry.key.arguments entry.key.specification
+  let found ← declaration instanceKey.declaration
+  let env := instanceEnv state.program found instanceKey.arguments instanceKey.specification
   for type in types do
     let waits ← recoverWith (do discard (evalType env type); pure none)
       (fun | .waiting reason => pure (some reason) | _ => pure none) (waits := true)
@@ -425,14 +425,14 @@ inductive CalleeOf where
 def recordFields (inst : InstanceId) : ElabM (Array (String × ClosedType)) := do
   match (← getThe Compile.State).table.content? inst with
   | some (.record _ fields) => return fields
-  | some (.waits reason) => waitFor reason
+  | some (.waits reason _) => waitFor reason
   | _ => waitFor "a record whose fields are not evaluated"
 
 /-- The alternatives of a variant instance. -/
 def variantAlternatives (inst : InstanceId) : ElabM (Array (String × Array ClosedType)) := do
   match (← getThe Compile.State).table.content? inst with
   | some (.«variant» alternatives) => return alternatives
-  | some (.waits reason) => waitFor reason
+  | some (.waits reason _) => waitFor reason
   | _ => waitFor "a variant whose alternatives are not evaluated"
 
 /-- The lowered form of a declaration. -/
@@ -492,8 +492,8 @@ def homeOf (type : ClosedType) : ElabM (Option (NamespaceId × String)) := do
   let program := state.program
   match type with
   | .record inst | .variant inst =>
-    let some entry := state.table.entries[inst]? | return none
-    let some declaration := program.declarations[entry.key.declaration]? | return none
+    let some instanceKey := state.table.allocatedKey? inst | return none
+    let some declaration := program.declarations[instanceKey.declaration]? | return none
     let owner := (program.namespaces[declaration.namespace]?).map (·.owner)
     return some (declaration.namespace, (owner.map program.nameOf).getD "")
   | .nominal row _ =>
@@ -519,27 +519,23 @@ body is in its module. -/
 def visibleHere (declaration : Declaration) : ElabM Bool := do
   if declaration.pub then return true
   let state ← getThe Compile.State
-  let here := ((state.table.entries[(← getContext).instance]?).bind fun entry =>
-    state.program.declarations[entry.key.declaration]?).map (·.namespace)
+  let here := ((state.table.allocatedKey? (← getContext).instance).bind fun key =>
+    state.program.declarations[key.declaration]?).map (·.namespace)
   return (here.map (state.program.within · declaration.namespace)).getD true
 
 /-- The declaration of a record instance. -/
 def recordDeclaration (inst : InstanceId) : ElabM (Option Declaration) := do
   let state ← getThe Compile.State
-  return (state.table.entries[inst]?).bind fun entry => state.program.declarations[entry.key.declaration]?
+  return (state.table.allocatedKey? inst).bind fun key => state.program.declarations[key.declaration]?
 
 /-- The interface of a module instance that declares a member, the member and its number, and
 the interface's static arguments. -/
 def interfaceMember (inst : InstanceId) (name : String) :
     ElabM (DeclarationId × DeclarationId × Declaration × Array StaticValue) := do
   let state ← getThe Compile.State
-  let some (.«module» interfaces _) := state.table.content? inst
+  let some interfaces := (state.table.content? inst).bind InstanceContent.moduleInterfaces?
     | waitFor "a module whose members are not evaluated"
-  for (interface, args) in interfaces do
-    let some inner := (state.program.declarations[interface]?).bind (·.inner) | continue
-    if let some (.declaration member) := (state.program.namespaces[inner]?).bind (·.names[name]?) then
-      if let some found := state.program.declarations[member]? then
-        return (interface, member, found, args)
+  if let some result := declaredMember? state.program interfaces name then return result
   refuseHere "SP3" default s!"`{renderInstance state inst}` has no member `{name}`"
 
 /-- The parameters of a function member of a module, from the interface that declares it. -/
@@ -574,8 +570,8 @@ def callProofArguments (steps : Array (DeclarationId × Option (Array Lowered.St
     (found : Declaration) (place : Span) : ElabM (Option SpecificationClosure) := do
   let state ← getThe Compile.State
   if (specificationParameters state.program found).isEmpty then return none
-  let some entry := state.table.entries[(← getContext).instance]? | throw .abandoned
-  let owner ← liftM (declaration entry.key.declaration : CompileM Declaration)
+  let some instanceKey := state.table.allocatedKey? (← getContext).instance | throw .abandoned
+  let owner ← liftM (declaration instanceKey.declaration : CompileM Declaration)
   let supplied := steps.flatMap fun (_, args) => (args.getD #[]).filterMap fun
     | .spec at_ name term => some (at_, name, term)
     | _ => none
@@ -1271,10 +1267,7 @@ mutual
         | _ => refuseHere "GR5" span s!"`{text}` names no function"
       match value with
       | .«module» inst =>
-        let members ← match (← getThe Compile.State).table.content? inst with
-          | some (.«module» _ members) => pure members
-          | _ => waitFor "a member of a module whose members are not evaluated"
-        let found : Option MemberValue := (members.find? (·.1 == name)).map (·.2)
+        let found ← liftM (lookupModuleMember inst name span : CompileM _)
         match found with
         | some impl@(.definition _) | some impl@(.row _) => return .member inst impl name lastArgs
         | _ => refuseHere "SP3" span s!"`{text}` is no function"
@@ -1514,16 +1507,16 @@ to the end makes the caller wait or not checked; a refused body abandons the cal
     -- is no member of the interface either
     if function == "mul" && sorts.contains "Group" then return ← noMember
     let state ← getThe Compile.State
-    let some (reference, _) := (state.table.entries[«module»]?).bind (·.key.opaqueFor) | noMember
-    let some (.«module» interfaces _) := state.table.content? «module» | noMember
+    let some (reference, _) := (state.table.allocatedKey? «module»).bind (·.opaqueFor) | noMember
+    let some interfaces := (state.table.content? «module»).bind InstanceContent.moduleInterfaces? | noMember
     let program := state.program
-    let declared := interfaces.any fun (interface, _) =>
+    let declared := interfaces.applications.any fun (interface, _) =>
       (((program.declarations[interface]?).bind (·.inner)).bind fun inner =>
         (program.namespaces[inner]?).bind (·.names[function]?)).any fun
           | .declaration id => (program.declarations[id]?).any (·.kind == .functionMember)
           | _ => false
     unless declared do
-      let interface := ((interfaces[0]?).map fun (id, _) => program.nameOf id).getD "?"
+      let interface := ((interfaces.applications[0]?).map fun (id, _) => program.nameOf id).getD "?"
       let parameter := ((program.scopes[reference.scope]?).bind (·.parameters[reference.index]?)).map
         (·.name.text)
       let typeText ← renderTypeE type
@@ -1540,12 +1533,9 @@ to the end makes the caller wait or not checked; a refused body abandons the cal
   partial def callModuleMember (inst : InstanceId) (name : String) (args : Array Arg)
       (expected : Option ClosedType) (place : Span)
       (staticArgs : Option (Array Lowered.StaticArgument)) : ElabM Typed.Expr := do
-    match (← getThe Compile.State).table.content? inst with
-    | some (.«module» _ members) =>
-      let some (_, impl) := members.find? (·.1 == name)
-        | refuseHere "SP3" place s!"`{renderInstance (← getThe Compile.State) inst}` has no function `{name}`"
-      callMember inst impl name staticArgs args expected place
-    | _ => waitFor "a module whose members are not evaluated"
+    let some impl ← liftM (lookupModuleMember inst name place : CompileM _)
+      | refuseHere "SP3" place s!"`{renderInstance (← getThe Compile.State) inst}` has no function `{name}`"
+    callMember inst impl name staticArgs args expected place
 
   /-- Type a member call against its interface, then select its concrete implementation.
   In the opaque pass the interface member itself is the callee (SP12). -/
@@ -1558,7 +1548,7 @@ to the end makes the caller wait or not checked; a refused body abandons the cal
         refuseHere "SX2" place s!"`{name}` is a specification function; deployed code cannot call it"
     let state ← getThe Compile.State
     let program := state.program
-    let some entry := state.table.entries[inst]? | throw .abandoned
+    let some instanceKey := state.table.allocatedKey? inst | throw .abandoned
     let own := (deployedParameters program member).filter fun (ref, _) => some ref.scope == member.ownScope
     let interfaceDecl ← liftM (declaration interface : CompileM Declaration)
     let base := (instanceEnv program interfaceDecl interfaceArgs).values
@@ -1568,10 +1558,21 @@ to the end makes the caller wait or not checked; a refused body abandons the cal
       let (parameters, result) ← memberSignatureOf memberId
       let (allValues, states) ← inferArguments memberId assigned member.file parameters result args expected place (some inst)
       pure (allValues.extract (allValues.size - own.size) allValues.size, states)
+    if member.ownScope.isSome && !(← getContext).«opaque» then
+      let resolved ← getThe Compile.State
+      if let some (.concrete ..) := (resolved.table.content? inst).bind InstanceContent.moduleInterfaces? then
+        let values := interfaceArgs ++ ownValues
+        let concrete : Bool := (values.allM (realValue resolved)).run' {}
+        if concrete then
+          -- The receiver has already checked its interface conditions at module formation.
+          let env := { instanceEnv program member values with self? := some (.«module» inst) }
+          liftM (checkIsolatedConditions do
+            checkBounds env member name (ownOnly := true)
+            checkWheres env member name false hasProofBoundArgument (ownOnly := true))
     let (types, result) ← memberSignature inst name ownValues
     let operands ← finishArguments args states types
     applyAfterArguments operands (targetsOf args types) fun vs => do
-      let callee ← if entry.key.opaqueFor.isSome then
+      let callee ← if instanceKey.opaqueFor.isSome then
           pure (Typed.Callee.member inst name memberId)
         else match implementation with
           | .row row => do
@@ -1581,7 +1582,7 @@ to the end makes the caller wait or not checked; a refused body abandons the cal
           | .definition definition => do
             let assignments := (own.zip ownValues).map fun ((_, p), v) => s!"{p.name.text} = {renderValue state v}"
             let description := if assignments.isEmpty then name else s!"{name}<{", ".intercalate assignments.toList}>"
-            let id ← liftM (instantiate definition (entry.key.arguments ++ ownValues) {description, span := place} : CompileM _)
+            let id ← liftM (instantiate definition (instanceKey.arguments ++ ownValues) {description, span := place} : CompileM _)
             pure (.instance id)
           | _ => refuseHere "SP3" place s!"`{name}` is no function"
       if let .instance id := callee then reachCallee id place
@@ -1715,9 +1716,9 @@ to the end makes the caller wait or not checked; a refused body abandons the cal
     let found ← liftM (declaration «variant» : CompileM Declaration)
     let program := (← getThe Compile.State).program
     if let some (.«variant» inst) := expected then
-      if let some entry := (← getThe Compile.State).table.entries[inst]? then
-        if entry.key.declaration == «variant» then
-          for ((reference, _), value) in (deployedParameters program found).zip entry.key.arguments do
+      if let some instanceKey := (← getThe Compile.State).table.allocatedKey? inst then
+        if instanceKey.declaration == «variant» then
+          for ((reference, _), value) in (deployedParameters program found).zip instanceKey.arguments do
             unless assigned.contains reference do assigned := assigned.insert reference value
     let .«variant» alternatives := (← loweredOf «variant»).content | throw .abandoned
     let some (_, payload) := alternatives[index]? | throw .abandoned
@@ -1889,9 +1890,9 @@ to the end makes the caller wait or not checked; a refused body abandons the cal
           let program := (← getThe Compile.State).program
           let mut assigned ← liftM (assignArguments env steps scopes typeSpan : CompileM _)
           if let some (.record inst) := expected then
-            if let some entry := (← getThe Compile.State).table.entries[inst]? then
-              if entry.key.declaration == id then
-                for ((reference, _), value) in (deployedParameters program found).zip entry.key.arguments do
+            if let some instanceKey := (← getThe Compile.State).table.allocatedKey? inst then
+              if instanceKey.declaration == id then
+                for ((reference, _), value) in (deployedParameters program found).zip instanceKey.arguments do
                   unless assigned.contains reference do assigned := assigned.insert reference value
           let .record _ declaredFields := (← loweredOf id).content | throw .abandoned
           let mut parameters := #[]

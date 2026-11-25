@@ -1,5 +1,6 @@
 module
 
+public import Zkc.Frontend.Static.ModuleBindings
 public import Zkc.Frontend.Static.ProtocolView
 
 @[expose] public section
@@ -82,6 +83,14 @@ def specParametersOf (term : Lowered.Expr) : CompileM (Array ParameterRef) := do
 def mentionsSpecParameter (term : Lowered.Expr) : CompileM Bool :=
   return !(← specParametersOf term).isEmpty
 
+/-- A deployed member call has no proof arguments. A bound can mention one inside
+an interface application even when its subject is a concrete receiver. -/
+def hasProofBoundArgument : Lowered.Constraint → CompileM Bool
+  | .bound _ _ sorts => sorts.anyM fun
+    | .reference reference => mentionsSpecParameter (.reference reference)
+    | _ => pure false
+  | .compare .. => pure false
+
 /-- The source text at a place of the file of an environment: what a message quotes, and the
 name of a local name. -/
 def sourceText (env : Env) (place : Span) : CompileM String := do
@@ -136,12 +145,6 @@ def lowerSteps (env : Env) (steps : Array (DeclarationId × Option StaticArgs)) 
   lowerWritten (steps.mapM fun (id, args) => do
     return (id, ← args.mapM (Names.Written.staticArguments env.file)))
 
-
-/-- The members of the interfaces of a module instance, or nothing when it has none yet. -/
-def moduleMembers (inst : InstanceId) : CompileM (Option (Array (String × MemberValue))) := do
-  match (← get).table.content? inst with
-  | some (.«module» _ members) => return some members
-  | _ => return none
 
 /-- Whether a type is linear: a linear record, or a collection, a tuple or a variant with a
 linear component (LN1). -/
@@ -208,6 +211,40 @@ def powerOfTwo (value : Nat) : Option Nat := Id.run do
     current := current / 2
     exponent := exponent + 1
   return if current == 1 then some exponent else none
+
+mutual
+  /-- A real instance contains neither a module stand-in nor a fresh type, including
+  inside the arguments of a type or another instance (SP12). -/
+  partial def realInstance (state : Compile.State) (id : InstanceId) :
+      StateM (Std.HashSet InstanceId) Bool := do
+    if (← get).contains id then return true
+    let some instanceKey := state.table.allocatedKey? id | return false
+    if instanceKey.opaqueFor.isSome then return false
+    modify (·.insert id)
+    instanceKey.arguments.allM (realValue state)
+
+  partial def realValue (state : Compile.State) :
+      StaticValue → StateM (Std.HashSet InstanceId) Bool
+    | .natural _ => pure true
+    | .«module» id => realInstance state id
+    | .type ty => realType state ty
+
+  partial def realType (state : Compile.State) :
+      ClosedType → StateM (Std.HashSet InstanceId) Bool
+    | .opaque .. => pure false
+    | .nonzero t | .seq t _ => realType state t
+    | .tuple ts _ => ts.allM (realType state)
+    | .nominal _ args => args.allM (realValue state)
+    | .record id | .variant id | .specification id => realInstance state id
+    | .bool | .nat | .rational | .index _ => pure true
+end
+
+/-- An inferred module argument is an optional candidate. Only a default root is
+reported as such in the chains produced when its body is typed. -/
+inductive InstanceDemand where
+  | required | candidate (requiredInterfaces : Array AppliedInterface) | defaultRoot
+  deriving BEq
+
 
 mutual
   /-- What a reference stands for, step by step. -/
@@ -319,6 +356,30 @@ mutual
     | .runtime localName => refuse "TY2" place s!"`{localName}` is a run-time value; it has no member `{name}`"
     | .other what => refuse "GR5" place s!"`{name}` is reached through {what}"
 
+  /-- Read one implementation from a complete or provisional module, including through
+  the opaque parameter view used to elaborate a generic body. -/
+  partial def lookupModuleMember (inst : InstanceId) (name : String) (place : Span) :
+      CompileM (Option MemberValue) := do
+    let state ← get
+    let members : Array (String × MemberValue) ← match state.table.content? inst with
+      | some (.«module» _ members) => pure members
+      | some (.checkingModule interfaces bindings) => do
+        let key := (inst, name)
+        if (← read).checkingMembers.contains key then
+          refuseRecursion s!"{renderInstance state inst}::{name}" place
+        let keyOfModule := state.table.allocatedKey! inst
+        let owner ← declaration keyOfModule.declaration
+        let .«module» (.«module» _ _ moduleName _ _ _ body) := owner.node
+          | throw (.defect "a provisional receiver is not a module")
+        let defining := instanceEnv state.program owner keyOfModule.arguments keyOfModule.specification
+        withReader (fun ctx => { ctx with checkingMembers := key :: ctx.checkingMembers }) <|
+          moduleMemberValues owner moduleName body defining interfaces.applications bindings (some name)
+      | _ => throw (.waiting "a member of a module whose members are being formed")
+    let found : Option MemberValue := (members.find? (·.1 == name)).map (·.2)
+    match found with
+    | some (.fromReceiver receiver) => lookupModuleMember receiver name place
+    | member => return member
+
   /-- A member of a static thing at an instance: of a type, from the vocabulary and from TY11;
   of a module instance, from its member table. -/
   partial def memberOfValue (env : Env) (value : StaticValue) (name : String)
@@ -326,18 +387,17 @@ mutual
     let state ← get
     match value with
     | .«module» inst =>
-      let some members ← moduleMembers inst
-        | throw (.waiting "a member of a module whose members are being formed")
-      let found : Option MemberValue := (members.find? (·.1 == name)).map (·.2)
+      let found ← lookupModuleMember inst name place
       match found with
       | some (.type type) => return .value (.type type)
       | some (.natural number) => return .value (.natural number)
       | some (.«module» other) => return .value (.«module» other)
       | some (.definition id) =>
-        let entry := state.table.entries[inst]!
-        let owner ← declaration entry.key.declaration
-        return .declarations #[(id, args)] (instanceEnv state.program owner entry.key.arguments).values
+        let instanceKey := state.table.allocatedKey! inst
+        let owner ← declaration instanceKey.declaration
+        return .declarations #[(id, args)] (instanceEnv state.program owner instanceKey.arguments).values
       | some (.row _) => return .other "a function"
+      | some (.fromReceiver _) => throw (.defect "an unresolved module member projection")
       | some (.opaqueType sorts) =>
         -- an application of a type member that is opaque (SP12): a fresh type per arguments
         let mut values := #[]
@@ -347,8 +407,8 @@ mutual
       | none =>
         -- a module bound to the vocabulary or to an asset has the members that its row or its
         -- asset gives: one that they do not give is not known here
-        let entry := state.table.entries[inst]!
-        if let some owner := state.program.declarations[entry.key.declaration]? then
+        let instanceKey := state.table.allocatedKey! inst
+        if let some owner := state.program.declarations[instanceKey.declaration]? then
           if Names.hasNoBody owner then
             throw (.waiting s!"the member `{name}` of a module bound to the vocabulary or to an asset")
         refuse "SP3" place s!"`{renderInstance state inst}` has no member `{name}`"
@@ -675,13 +735,14 @@ mutual
   partial def implements (inst : InstanceId) (interface : DeclarationId)
       (args : Array StaticValue) : CompileM Bool := do
     match (← get).table.content? inst with
-    | some (.«module» interfaces _) => return interfaces.any fun (id, values) => id == interface && values == args
+    | some (.«module» interfaces _) => return interfaces.applications.any fun (id, values) => id == interface && values == args
+    | some (.checkingModule interfaces _) => return interfaces.applications.contains (interface, args)
     | _ =>
       -- a module whose members are being formed names what its declaration's bound names
-      let entry := (← get).table.entries[inst]!
-      let found ← declaration entry.key.declaration
+      let instanceKey := (← get).table.allocatedKey! inst
+      let found ← declaration instanceKey.declaration
       let some bound := Names.implementing? found | return false
-      let moduleEnv := instanceEnv (← program) found entry.key.arguments
+      let moduleEnv := instanceEnv (← program) found instanceKey.arguments
       for (id, path) in ← boundInterfaces moduleEnv bound do
         if id == interface then
           let (_, values) ← writtenInterface moduleEnv path
@@ -717,11 +778,14 @@ mutual
           return some s!"`{renderInstance state inst}` does not implement `{← sourceText env place}`"
         | _ => return some s!"`{renderValue state value}` is not a module"
 
-  /-- The bound of every parameter of an instance, outermost scope first (SP3). -/
-  partial def checkBounds (env : Env) (found : Declaration) (name : String) : CompileM Unit := do
+  /-- The bounds of an instance, outermost scope first (SP3). A member call can check just
+  the parameters introduced by the member. -/
+  partial def checkBounds (env : Env) (found : Declaration) (name : String)
+      (ownOnly : Bool := false) (skipMismatch : Bool := false) : CompileM Unit := do
     let state ← get
     let modules ← getModules
     for (reference, parameter) in deployedParameters state.program found do
+      if ownOnly && some reference.scope != found.ownScope then continue
       let some value := env.values[reference]? | continue
       let some scope := modules.loweredScope? reference.scope
         | throw (.defect "a scope without its lowered form")
@@ -730,12 +794,14 @@ mutual
       | none =>
         if let .type type := value then
           if isLinear (← get) type then
+            if skipMismatch then throw .skipped
             refuse "SP3" parameter.name.span
               s!"`{renderType (← get) type}` is linear; `{parameter.name.text}` of `{name}` takes freely copied data: bound it `linear`"
       | some bound =>
         let scopeEnv := { env with file := (state.program.scopes[reference.scope]?).map (·.file) |>.getD env.file }
         for sort in bound.sorts do
           if let some failure ← meetsSort scopeEnv value sort then
+            if skipMismatch then throw .skipped
             refuse "SP3" bound.span
               s!"{failure}, which `{parameter.name.text}` of `{name}` requires"
 
@@ -779,10 +845,12 @@ mutual
   /-- The `where` constraints of the scopes of an instance, outermost first (SP4). At a default
   instance a constraint that does not hold skips the instance (SP7). -/
   partial def checkWheres (env : Env) (found : Declaration) (owner : String) (isDefault : Bool)
-      (skip : Lowered.Constraint → CompileM Bool) (specification : Bool := false) : CompileM Unit := do
+      (skip : Lowered.Constraint → CompileM Bool) (specification : Bool := false)
+      (ownOnly : Bool := false) : CompileM Unit := do
     let modules ← getModules
     let program ← program
-    for scope in found.scopes do
+    let scopes := if ownOnly then found.ownScope.toArray else found.scopes
+    for scope in scopes do
       let some lowered := modules.loweredScope? scope | continue
       let scopeEnv := { env with file := (program.scopes[scope]?).map (·.file) |>.getD env.file }
       for constraint in lowered.constraints do
@@ -799,44 +867,40 @@ mutual
 
   /-- The instance of a declaration at values, made once (SP7). -/
   partial def instantiate (id : DeclarationId) (values : Array StaticValue) (requested : Frame)
-      (isDefault : Bool := false) (specification : Array Nat := #[])
+      (demand : InstanceDemand := .required) (specification : Array Nat := #[])
       (owner : Option InstanceId := none) : CompileM InstanceId := do
+    let isDefault := demand != .required
     let key : InstanceKey := { declaration := id, arguments := values, specification, owner }
     let description ← describeInstance id values specification owner
-    -- an instance first asked for as a default instance is one (SP7)
-    if isDefault && ((← getResults).signatures.find? key).isNone then
-      modifyResults fun results =>
-        let next := results.signatures.entries.size
-        { results with defaultInstances := results.defaultInstances.insert next }
     let frame : ChainFrame :=
-      { subject := .ofText (if isDefault then s!"default instance `{description}`" else description)
+      { subject := .ofText (if demand == .defaultRoot then s!"default instance `{description}`" else description)
         span := requested.span }
     -- the request for the signature: entered in progress when it is new, and recorded with the
     -- request that makes it
     let requester ← currentRequest?
     let (inst, isNew) ← modifyGetResults fun results =>
       let table := results.signatures
-      let results := { results with signatures := {} }
+      let results := { results with signatures := default }
       let (table, inst, isNew) := table.intern key frame requester
       let results := { results with signatures := table }
+      let results := if isNew && demand == .defaultRoot then
+        { results with defaultInstances := results.defaultInstances.insert inst } else results
       let results := match requester with
         | some requester => results.addRequest requester ⟨.signature, inst⟩
         | none => results
       ((inst, isNew), results)
     unless isNew do
       let found : Option (QueryState Typed.Signature) :=
-        ((← getResults).signatures.entries[inst]?).map (·.state)
+        ((← getResults).signatures.entryAt? inst).map (·.state)
+      let demand := modifyResults fun results =>
+        { results.modifySignatures (·.reenter inst frame requester) with
+          defaultInstances := results.defaultInstances.erase inst }
       match found with
+      | some (.done (.data (.waits _ true))) => if isDefault then return inst else demand
       | some (.done _) => return inst
       | some .inProgress => refuseRecursion description requested.span
       | some (.exhausted exhaustion) => throw (.exhausted exhaustion)
-      | some .skipped =>
-        -- skipped as a default instance: skipped again as one; asked for by the program, it is
-        -- an instance like any other, computed now and refused where its `where` fails (SP4)
-        if isDefault then throw .skipped
-        modifyResults fun results =>
-          { results.modifySignatures (·.reenter inst frame requester) with
-            defaultInstances := results.defaultInstances.erase inst }
+      | some .skipped => if isDefault then throw .skipped else demand
       | _ => throw .abandoned
     -- a request deeper than the budget of the chain is not computed: it is exhausted (SP10)
     if ← beyondDepth then
@@ -845,11 +909,8 @@ mutual
       throw (.exhausted exhaustion)
     try
       withRequest ⟨.signature, inst⟩ do
-        let content ← instanceContent id inst values isDefault specification owner
+        let content ← instanceContent id inst values demand specification owner
         modifyResults (·.modifySignatures (·.setState inst (.done (.data content))))
-        let found ← declaration id
-        if found.kind == .«module» then
-          moduleConditions inst found values isDefault
       return inst
     catch failure =>
       match failure with
@@ -870,7 +931,7 @@ mutual
   /-- What an instance holds: bounds and `where` first, then the types of its signature, read
   from its lowered declaration. -/
   partial def instanceContent (id : DeclarationId) (inst : InstanceId)
-      (values : Array StaticValue) (isDefault : Bool) (specification : Array Nat := #[])
+      (values : Array StaticValue) (demand : InstanceDemand) (specification : Array Nat := #[])
       (owner : Option InstanceId := none) : CompileM InstanceContent := do
     let program ← program
     let found ← declaration id
@@ -882,8 +943,8 @@ mutual
     | .typeDecl (.type _ _ _ _ (.primitive _)) | .«module» (.«module» _ _ _ _ _ _ (.primitive _))
     | .«module» (.«module» _ _ _ _ _ _ (.asset _)) => checkBindings id
     | _ => pure ()
-    checkBounds env found name
-    checkWheres env found name isDefault (hostDefinition env found)
+    checkBounds env found name (skipMismatch := demand matches .candidate _)
+    checkWheres env found name (demand != .required) (hostDefinition env found)
     let optional (type : Lowered.TypeTerm) : CompileM (Option ClosedType) := do
       try return some (← evalType env type)
       catch failure => match failure with
@@ -932,7 +993,7 @@ mutual
       let results ← head.results.mapM fun result => do return (result.name.text, ← optional result.type)
       return .protocol ports results
     | .staticName _, .staticName value => return .staticName (← evalSize env value)
-    | .«module» node, _ => moduleContent inst found node env
+    | .«module» node, _ => moduleContent inst found node env demand
     | _, _ => return .unevaluated
 
   /-- Whether a constraint of a module without a body defines one of its members (`Member == T`,
@@ -945,21 +1006,82 @@ mutual
     | [.declaration _, .member _ _] => return true
     | _ => return false
 
-  /-- The member table of a module instance, with the checks of SP8 and NL9 that need no value. -/
-  partial def moduleContent (_inst : InstanceId) (found : Declaration)
-      (node : Module) (env : Env) : CompileM InstanceContent := do
+  /-- Build the module's values and discharge the interface conditions that can read
+  them through `Self`. An ineligible SP7 default skips before committing an SP8 owner. -/
+  partial def moduleContent (inst : InstanceId) (found : Declaration)
+      (node : Module) (env : Env) (demand : InstanceDemand) : CompileM InstanceContent := do
+    let isDefault := demand != .required
     let state ← get
-    let program := state.program
     let .«module» _ _ moduleName _ bound _ body := node
-    let name := moduleName.text
-    let mut interfaces : Array (DeclarationId × Array StaticValue) := #[]
+    let concrete : Bool := (realInstance state inst).run' {}
+    let mut written : Array (AppliedInterface × Path) := #[]
+    let mut seen : Std.HashSet AppliedInterface := {}
     if let some bound := bound then
       for sort in bound.sorts do
         if let .path path := sort then
-          let (interface, args) ← writtenInterface env path
-          if state.sortNames.contains interface then
-            refuse "SP3" path.span s!"`{name}` names the sort `{program.nameOf interface}`: only the vocabulary implements a sort"
-          interfaces := interfaces.push (interface, args)
+          let app ← writtenInterface env path
+          if state.sortNames.contains app.1 then
+            refuse "SP3" path.span s!"`{moduleName.text}` names the sort `{state.program.nameOf app.1}`: only the vocabulary implements a sort"
+          if concrete then
+            if seen.contains app then continue
+            seen := seen.insert app
+          written := written.push (app, path)
+    let applications := written.map Prod.fst
+    let (bindings, conflict) ← bindModuleMembers written
+    let conflict := if concrete then conflict else none
+    let reject (c : MemberConflict) : CompileM Unit := do
+      refuse "SP8" moduleName.span (c.message (← get) moduleName.text)
+    let constrained := applications.any fun app => !(interfaceConstraints state app.1).isEmpty
+    let interfaces := if concrete then ModuleInterfaces.concrete applications bindings else .ordered applications
+    let complete := do
+      let members ← moduleMemberValues found moduleName body env applications bindings
+      return InstanceContent.«module» interfaces members
+    let check (receiver : InstanceContent) (mode : InstanceDemand) := do
+      modifyResults (·.modifySignatures (·.setState inst (.done (.data receiver))))
+      moduleConditions inst moduleName.text applications mode
+    if let .candidate required := demand then
+      unless required.all applications.contains do
+        -- Formation historically allocated the keys of members and interface conditions
+        -- before testing the requested bound. Preserve those numbers for later packages.
+        discard <| prepareModuleMembers do
+          check (← complete) .required
+          return none
+        throw .skipped
+    let decideEligibility := isDefault && (constrained || demand matches .candidate _)
+    if let some c := conflict then
+      unless decideEligibility do reject c
+    if decideEligibility then
+      try
+        return ← withModuleConditions do
+          if let some content ← prepareModuleMembers (some <$> complete) then
+            check content demand
+            if let some c := conflict then reject c
+            return content
+          -- A dependency computed with a provisional Self may have crossed this very
+          -- instance. It cannot satisfy the actual formation or discharge its conditions.
+          checkIsolatedConditions (reserveKeys := true) do
+            check (.checkingModule interfaces bindings) demand
+            if let some c := conflict then reject c
+          let content ← complete
+          check content demand
+          return content
+      catch
+        | .waiting reason => return .waits reason true
+        | failure => throw failure
+    let content ← complete
+    unless applications.isEmpty do
+      if constrained then withModuleConditions (check content demand) else check content demand
+    return content
+
+  /-- The values defined by a suite or supplied by its binding. During default eligibility
+  only the member requested through Self is read. Completed modules materialize every member. -/
+  partial def moduleMemberValues (found : Declaration) (moduleName : Syntax.Name)
+      (body : ModuleBody) (env : Env) (interfaces : Array AppliedInterface)
+      (bindings : ModuleMemberBindings) (onlyMember : Option String := none) :
+      CompileM (Array (String × MemberValue)) := do
+    let state ← get
+    let program := state.program
+    let name := moduleName.text
     let mut members : Array (String × MemberValue) := #[]
     -- the members that its `where` defines, for a module without a body
     if Names.hasNoBody found then
@@ -970,10 +1092,15 @@ mutual
               let memberName := match segments.back? with
                 | some (.segment (.member member _) _ _) => member
                 | _ => ""
+              if onlyMember.any (· != memberName) then continue
               match ← evalAny env right with
               | .type type => members := members.push (memberName, .type type)
               | .natural value => members := members.push (memberName, .natural value)
               | .«module» other => members := members.push (memberName, .«module» other)
+    if onlyMember.any (fun sought => members.any (·.1 == sought)) then return members
+    let selected := match onlyMember with
+      | some sought => (bindings.find? sought).toList.toArray
+      | none => bindings.entries
     match body with
     | .primitive primitive =>
       let row := primitive.row.content
@@ -985,124 +1112,115 @@ mutual
             refuse "SP8" moduleName.span
               s!"`{name}` is bound to the row `{row}`, which implements `{implemented}`, not `{", ".intercalate named.toList}`"
         for (memberName, type) in entry.typeMembers do
-          members := members.push (memberName, .type type)
+          if onlyMember.all (· == memberName) then members := members.push (memberName, .type type)
         for (memberName, value) in entry.naturalMembers do
-          members := members.push (memberName, .natural value)
-      for (interface, _) in interfaces do
-        let declared := (state.members[(← declaration interface).inner.getD 0]?).getD #[]
-        let functions := declared.filter fun id =>
-          (program.declarations[id]?).any (·.kind == .functionMember)
-        for id in functions do
-          let name := program.nameOf id
-          -- a module of the vocabulary: the row that the catalogue names, and otherwise the
-          -- module's row, a dot and the member's name, whatever else the interface declares; a
-          -- module of a project: its row when the interface has one function, and that
-          -- otherwise
-          let binding := match catalogue with
-            | some entry => (entry.standardFunctions.lookup name).getD s!"{row}.{name}"
-            | none => if functions.size == 1 then row else s!"{row}.{name}"
-          members := members.push (name, .row binding)
-      return .«module» interfaces members
-    | .asset _ => return .«module» interfaces members
+          if onlyMember.all (· == memberName) then members := members.push (memberName, .natural value)
+      for binding in selected do
+        unless (← declaration binding.declaration).kind == .functionMember do continue
+        let name := program.nameOf binding.declaration
+        let primitive := match catalogue with
+          | some entry => (entry.standardFunctions.lookup name).getD s!"{row}.{name}"
+          | none => if bindings.functionCounts[binding.application]! == 1 then row else s!"{row}.{name}"
+        members := members.push (name, .row primitive)
+      return members
+    | .asset _ => return members
     | .suite _ =>
       let inner := found.inner.getD found.namespace
       let names := ((program.namespaces[inner]?).map (·.names)).getD {}
-      let mut declared : Array String := #[]
-      for (interface, _) in interfaces do
+      for binding in selected do
+        let (interface, args) := interfaces[binding.application]!
+        let memberDeclaration ← declaration binding.declaration
+        if memberDeclaration.kind == .lawMember then continue
+        let memberName := program.nameOf binding.declaration
         let interfaceDeclaration ← declaration interface
         let interfaceName := program.nameOf interface
-        for member in (state.members[interfaceDeclaration.inner.getD 0]?).getD #[] do
-          let memberDeclaration ← declaration member
-          let memberName := program.nameOf member
-          if memberDeclaration.kind == .lawMember || declared.contains memberName then continue
-          declared := declared.push memberName
-          let some (Binding.declaration definition) := names[memberName]?
-            | refuse "SP8" moduleName.span s!"`{name}` does not define `{memberName}` of `{interfaceName}`"
-          let definitionDeclaration ← declaration definition
-          let site := ((definitionDeclaration.name.map (·.span)).getD moduleName.span)
-          let memberParameters := ((memberDeclaration.ownScope.bind fun scope =>
-            program.scopes[scope]?).map (·.parameters.size)).getD 0
-          let definitionParameters := ((definitionDeclaration.ownScope.bind fun scope =>
-            program.scopes[scope]?).map (·.parameters.size)).getD 0
-          let wrong (what : String) : CompileM Unit :=
-            refuse "SP8" site s!"`{name}` defines `{memberName}` of `{interfaceName}`, {what}, as {kindWord definitionDeclaration.kind}"
-          match memberDeclaration.kind with
-          | .typeMember =>
-            unless [DeclarationKind.alias, .vocabularyType, .record, .«variant», .specType].contains
-                definitionDeclaration.kind do wrong "a type member"
-            unless memberParameters == definitionParameters do
-              refuse "SP8" site s!"`{name}::{memberName}` has {definitionParameters} static parameters; `{interfaceName}` declares {memberParameters}"
-            if memberParameters == 0 then
-              let value ← thingValue env (.declarations #[(definition, none)] {}) (some .type) site (pure memberName)
-              match value with
-              | .type type => members := members.push (memberName, .type type)
-              | _ => pure ()
-            else members := members.push (memberName, .definition definition)
-          | .naturalMember =>
-            unless definitionDeclaration.kind == .staticName do wrong "a natural member"
-            match ← thingValue env (.declarations #[(definition, none)] {}) (some .natural) site (pure memberName) with
-            | .natural value => members := members.push (memberName, .natural value)
+        let some (Binding.declaration definition) := names[memberName]?
+          | refuse "SP8" moduleName.span s!"`{name}` does not define `{memberName}` of `{interfaceName}`"
+        let definitionDeclaration ← declaration definition
+        let site := ((definitionDeclaration.name.map (·.span)).getD moduleName.span)
+        let memberParameters := ((memberDeclaration.ownScope.bind fun scope =>
+          program.scopes[scope]?).map (·.parameters.size)).getD 0
+        let definitionParameters := ((definitionDeclaration.ownScope.bind fun scope =>
+          program.scopes[scope]?).map (·.parameters.size)).getD 0
+        let wrong (what : String) : CompileM Unit :=
+          refuse "SP8" site s!"`{name}` defines `{memberName}` of `{interfaceName}`, {what}, as {kindWord definitionDeclaration.kind}"
+        match memberDeclaration.kind with
+        | .typeMember =>
+          unless [DeclarationKind.alias, .vocabularyType, .record, .«variant», .specType].contains
+              definitionDeclaration.kind do wrong "a type member"
+          unless memberParameters == definitionParameters do
+            refuse "SP8" site s!"`{name}::{memberName}` has {definitionParameters} static parameters; `{interfaceName}` declares {memberParameters}"
+          if memberParameters == 0 then
+            let value ← thingValue env (.declarations #[(definition, none)] {}) (some .type) site (pure memberName)
+            match value with
+            | .type type => members := members.push (memberName, .type type)
             | _ => pure ()
-          | .moduleMember =>
-            let value ← match definitionDeclaration.node with
-              | .moduleMember moduleNode =>
-                let term ← lowerWritten (Names.Written.pathExpr env.file moduleNode.path.span moduleNode.path)
-                evalTerm env term .«module»
-              | .«module» _ => thingValue env (.declarations #[(definition, none)] {}) (some .«module») site (pure memberName)
-              | _ => do wrong "a module member"; throw .abandoned
-            if let .«module» other := value then
-              if let .member (.moduleMember _ _ memberBound) := memberDeclaration.node then
-                let memberEnv : Env := { file := memberDeclaration.file, values := (instanceEnv program interfaceDeclaration
-                  ((interfaces.find? (·.1 == interface)).map (·.2) |>.getD #[])).values }
-                for (required, path) in ← boundInterfaces memberEnv memberBound do
-                  let (_, args) ← writtenInterface memberEnv path
-                  unless ← implements other required args do
-                    refuse "SP8" site s!"`{name}::{memberName}` is `{renderInstance (← get) other}`, which does not implement `{program.nameOf required}`"
-              members := members.push (memberName, .«module» other)
-          | .functionMember =>
-            match definitionDeclaration.node, memberDeclaration.node with
-            | .memberDef definitionNode, .member (.defMember _ modifier _ _ params _ _) =>
-              let memberSpec := match modifier with
-                | some (.spec _) => true
-                | _ => false
-              if memberSpec && !definitionNode.spec then
-                refuse "SP8" site s!"`{interfaceName}` declares `{memberName}` as a `spec def`: write `spec def {memberName}(…)`"
-              if !memberSpec && definitionNode.spec then
-                refuse "SP8" site s!"`{interfaceName}` declares `{memberName}` as a `def`: `{name}` defines it as deployed code, not as a `spec def`"
-              unless definitionNode.params.size == params.size do
-                refuse "SP8" site s!"`{name}::{memberName}` has {definitionNode.params.size} binders; `{interfaceName}` declares {params.size} parameters"
-            | _, _ =>
-              refuse "SP8" site s!"`{name}` defines the function `{memberName}` of `{interfaceName}` by its binders: `def {memberName}(x…)`"
-            members := members.push (memberName, .definition definition)
-          | .protocolMember =>
-            unless definitionDeclaration.kind == .protocol do wrong "a protocol member"
-            members := members.push (memberName, .definition definition)
+          else members := members.push (memberName, .definition definition)
+        | .naturalMember =>
+          unless definitionDeclaration.kind == .staticName do wrong "a natural member"
+          match ← thingValue env (.declarations #[(definition, none)] {}) (some .natural) site (pure memberName) with
+          | .natural value => members := members.push (memberName, .natural value)
           | _ => pure ()
+        | .moduleMember =>
+          let value ← match definitionDeclaration.node with
+            | .moduleMember moduleNode =>
+              let term ← lowerWritten (Names.Written.pathExpr env.file moduleNode.path.span moduleNode.path)
+              evalTerm env term .«module»
+            | .«module» _ => thingValue env (.declarations #[(definition, none)] {}) (some .«module») site (pure memberName)
+            | _ => do wrong "a module member"; throw .abandoned
+          if let .«module» other := value then
+            if let .member (.moduleMember _ _ memberBound) := memberDeclaration.node then
+              let memberEnv : Env := { file := memberDeclaration.file, values := (instanceEnv program interfaceDeclaration args).values }
+              for (required, path) in ← boundInterfaces memberEnv memberBound do
+                let (_, args) ← writtenInterface memberEnv path
+                unless ← implements other required args do
+                  refuse "SP8" site s!"`{name}::{memberName}` is `{renderInstance (← get) other}`, which does not implement `{program.nameOf required}`"
+            members := members.push (memberName, .«module» other)
+        | .functionMember =>
+          match definitionDeclaration.node, memberDeclaration.node with
+          | .memberDef definitionNode, .member (.defMember _ modifier _ _ params _ _) =>
+            let memberSpec := match modifier with
+              | some (.spec _) => true
+              | _ => false
+            if memberSpec && !definitionNode.spec then
+              refuse "SP8" site s!"`{interfaceName}` declares `{memberName}` as a `spec def`: write `spec def {memberName}(…)`"
+            if !memberSpec && definitionNode.spec then
+              refuse "SP8" site s!"`{interfaceName}` declares `{memberName}` as a `def`: `{name}` defines it as deployed code, not as a `spec def`"
+            unless definitionNode.params.size == params.size do
+              refuse "SP8" site s!"`{name}::{memberName}` has {definitionNode.params.size} binders; `{interfaceName}` declares {params.size} parameters"
+          | _, _ =>
+            refuse "SP8" site s!"`{name}` defines the function `{memberName}` of `{interfaceName}` by its binders: `def {memberName}(x…)`"
+          members := members.push (memberName, .definition definition)
+        | .protocolMember =>
+          unless definitionDeclaration.kind == .protocol do wrong "a protocol member"
+          members := members.push (memberName, .definition definition)
+        | _ => pure ()
+      if onlyMember.isSome then return members
       for member in (state.members[inner]?).getD #[] do
         let memberDeclaration ← declaration member
         let memberName := program.nameOf member
         if (memberDeclaration.kind == .functionDefinition || memberDeclaration.kind == .moduleDefinition)
-            && !declared.contains memberName then
+            && !((bindings.find? memberName).any fun b =>
+              (program.declarations[b.declaration]?).any (·.kind != .lawMember)) then
           let interfaceNames := ", ".intercalate (interfaces.toList.map fun (i, _) => program.nameOf i)
           refuse "SP8" ((memberDeclaration.name.map (·.span)).getD moduleName.span)
             (if interfaces.isEmpty then s!"`{name}` defines `{memberName}` as a member, and implements no interface"
             else s!"`{name}` defines `{memberName}`, which `{interfaceNames}` does not have")
-      return .«module» interfaces members
+      return members
 
   /-- The conditions that the interfaces of a module instance put on it: the bounds of their
   parameters and their `where` (SP3, SP4). -/
-  partial def moduleConditions (inst : InstanceId) (found : Declaration)
-      (_values : Array StaticValue) (isDefault : Bool) : CompileM Unit := do
-    let program ← program
-    let some (.«module» interfaces _) := (← get).table.content? inst | return
-    let moduleName := ((found.name.map (·.text)).getD "")
+  partial def moduleConditions (inst : InstanceId) (moduleName : String)
+      (interfaces : Array AppliedInterface) (demand : InstanceDemand) : CompileM Unit := do
+    let state ← get
+    let program := state.program
     for (interface, args) in interfaces do
       let interfaceDeclaration ← declaration interface
       let interfaceEnv : Env :=
         { instanceEnv program interfaceDeclaration args with self? := some (.«module» inst) }
       checkBounds interfaceEnv interfaceDeclaration (program.nameOf interface)
-      let some lowered := interfaceDeclaration.ownScope.bind ((← getModules).loweredScope? ·) | continue
-      for constraint in lowered.constraints do
+        (skipMismatch := demand matches .candidate _)
+      for constraint in interfaceConstraints state interface do
         -- a constraint of an interface that cannot be evaluated here is not taken to hold:
         -- the module instance waits for it (SP4)
         let outcome ← try checkConstraint interfaceEnv constraint moduleName
@@ -1110,7 +1228,7 @@ mutual
             | .waiting reason => throw (.waiting s!"a constraint of `{program.nameOf interface}`: {reason}")
             | other => throw other
         if let some message := outcome then
-          if isDefault then throw .skipped
+          if demand != .required then throw .skipped
           refuse "SP4" (constraintSpan constraint) message
 end
 

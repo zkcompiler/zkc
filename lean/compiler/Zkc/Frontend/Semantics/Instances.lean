@@ -98,7 +98,7 @@ def renderContent (state : Compile.State) : InstanceContent → String
       s!"{entry.1}: {(entry.2.map (renderType state)).getD "?"}"
     s!"({", ".intercalate (ports.toList.map typed)}) -> ({", ".intercalate (results.toList.map typed)})"
   | .«module» interfaces members =>
-    let named := interfaces.toList.map fun (id, args) =>
+    let named := interfaces.applications.toList.map fun (id, args) =>
       let name := state.program.nameOf id
       if args.isEmpty then name else s!"{name}<{", ".intercalate (args.toList.map (renderValue state))}>"
     let member (entry : String × MemberValue) : String :=
@@ -109,9 +109,11 @@ def renderContent (state : Compile.State) : InstanceContent → String
       | .definition _ => s!"{entry.1} defined"
       | .row row => s!"{entry.1} = row {row}"
       | .opaqueType _ => s!"{entry.1} opaque"
+      | .fromReceiver id => s!"{entry.1} from {renderInstance state id}"
     s!"{" + ".intercalate named}: {", ".intercalate (members.toList.map member)}"
+  | .checkingModule .. => "checking the module's interface conditions"
   | .unevaluated => "not evaluated"
-  | .waits reason => s!"waits for {reason}"
+  | .waits reason _ => s!"waits for {reason}"
 
 end Instances
 
@@ -135,7 +137,8 @@ def kindLabel : DeclarationKind → String
 def countsByKind (state : Compile.State) : Array (String × Nat) := Id.run do
   let program := state.program
   let mut counts : Array (String × Nat) := #[]
-  for entry in state.table.entries do
+  for id in state.table.requestedIds do
+    let entry := state.table.entryAt! id
     let some declaration := program.declarations[entry.key.declaration]? | continue
     let kind := kindLabel declaration.kind
     match counts.findIdx? (·.1 == kind) with

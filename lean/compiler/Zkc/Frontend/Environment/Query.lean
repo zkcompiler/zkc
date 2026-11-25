@@ -79,10 +79,13 @@ variable {κ ρ : Type} [BEq κ] [Hashable κ]
 
 instance : Inhabited (QueryTable κ ρ) := ⟨{}⟩
 
+def entryAt? (table : QueryTable κ ρ) (id : Nat) : Option (QueryEntry κ ρ) :=
+  table.entries[id]?
+
 def find? (table : QueryTable κ ρ) (key : κ) : Option Nat := table.index[key]?
 
 def entry? (table : QueryTable κ ρ) (key : κ) : Option (QueryEntry κ ρ) :=
-  (table.index[key]?).bind (table.entries[·]?)
+  table.index[key]?.bind table.entryAt?
 
 /-- The result of a request that is done. -/
 def result? (table : QueryTable κ ρ) (key : κ) : Option ρ :=
@@ -107,24 +110,15 @@ def setState (table : QueryTable κ ρ) (id : Nat) (state : QueryState ρ) : Que
   let ⟨entries, index⟩ := table
   { entries := entries.modify id fun entry => { entry with state }, index }
 
-/-- An entry that is computed again for a request other than its first: in progress, with what
-asks for it now and from where. -/
-def reenter (table : QueryTable κ ρ) (id : Nat) (requested : ChainFrame)
-    (requestedBy : Option QueryRef) : QueryTable κ ρ :=
-  let ⟨entries, index⟩ := table
-  { entries := entries.modify id fun entry =>
-      { entry with state := .inProgress, requested, requestedBy }
-    index }
-
 /-- The entry of a key in a state. -/
 def setStateOf (table : QueryTable κ ρ) (key : κ) (state : QueryState ρ) : QueryTable κ ρ :=
-  match table.index[key]? with
+  match table.find? key with
   | some id => table.setState id state
   | none => table
 
 /-- One more request made by the computation of an entry. -/
 def addRequest (table : QueryTable κ ρ) (key : κ) (request : QueryRef) : QueryTable κ ρ :=
-  match table.index[key]? with
+  match table.find? key with
   | some id =>
     let ⟨entries, index⟩ := table
     { entries := entries.modify id fun entry =>
@@ -135,7 +129,7 @@ def addRequest (table : QueryTable κ ρ) (key : κ) (request : QueryRef) : Quer
 
 /-- An entry with its result replaced: for a result that a later pass refines. -/
 def setResult (table : QueryTable κ ρ) (key : κ) (result : ρ) : QueryTable κ ρ :=
-  match table.index[key]? with
+  match table.find? key with
   | some id => table.setState id (.done result)
   | none => table
 

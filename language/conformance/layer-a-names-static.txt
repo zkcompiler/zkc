@@ -2656,3 +2656,41 @@ pub type Gt = primitive("bls12-381.gt")
 
 // [row bls12-381]
 pub module Bls12381: Pairing = primitive("hash.sha256")
+
+=== N-SP8c | refuse SP8 | the module would give one type to two declarations
+module t
+interface A:
+    type T
+interface B:
+    type T
+module M: A + B:
+    type T = bool
+def evaluate(x: bool) -> bool: x
+
+=== N-SP8d | accept | the two expressions give one application of I (SP8)
+module t
+interface I<n: nat>:
+    type T
+module M: I<2> + I<1 + 1>:
+    type T = bool
+def evaluate(x: bool) -> bool: x
+
+=== N-SP8e | accept | Self requires the same applied interface along both paths (SP8)
+module t
+interface C<k: nat>:
+    def keep(x: bool) -> bool
+interface A<n: nat> where (Self: C<n>)
+interface B<m: nat> where (Self: C<m>)
+module M: A<1> + B<1> + C<1>:
+    def keep(x): x
+def evaluate(x: bool) -> bool: x
+
+=== N-SP8f | refuse SP8 | the module names C at two different sizes
+module t
+interface C<k: nat>:
+    def keep(x: bool) -> bool
+interface A<n: nat> where (Self: C<n>)
+interface B<m: nat> where (Self: C<m>)
+module M: A<1> + B<2> + C<1> + C<2>:
+    def keep(x): x
+def evaluate(x: bool) -> bool: x

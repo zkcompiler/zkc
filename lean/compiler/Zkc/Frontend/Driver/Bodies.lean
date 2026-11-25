@@ -43,13 +43,13 @@ mutual
     let state ← get
     match state.results.body? inst with
     | some .inProgress =>
-      let some entry := state.table.entries[inst]? | throw .abandoned
-      let description ← describeInstance entry.key.declaration entry.key.arguments
-        entry.key.specification entry.key.owner
+      let some instanceKey := state.table.allocatedKey? inst | throw .abandoned
+      let description ← describeInstance instanceKey.declaration instanceKey.arguments
+        instanceKey.specification instanceKey.owner
       refuseRecursion description place
     | some _ => return
     | none => pure ()
-    let some entry := state.table.entries[inst]? | return
+    let some entry := state.table.entryAt? inst | return
     let .done _ := entry.state | return
     let description ← describeInstance entry.key.declaration entry.key.arguments
       entry.key.specification entry.key.owner
@@ -85,8 +85,8 @@ mutual
   /-- The body of an instance: of a function, or of a protocol. -/
   partial def typeInstance (inst : InstanceId) : CompileM BodyState := do
     let state ← get
-    let entry := state.table.entries[inst]!
-    let found ← declaration entry.key.declaration
+    let instanceKey := state.table.allocatedKey! inst
+    let found ← declaration instanceKey.declaration
     match found.node with
     | .«def» _ | .memberDef _ | .relation _ | .law _ | .member (.lawMember _) =>
       Emit.functionBody inst typeBody
@@ -142,10 +142,11 @@ def checkKernels : CompileM Unit := do
 /-- Types the body of every instance of the table that is not typed yet, the instances that
 typing adds included. -/
 def typeBodies : CompileM Unit := do
-  let mut index := 0
-  while index < (← get).table.entries.size do
+  let mut cursor := 0
+  while cursor < (← get).table.requestedIds.size do
     let state ← get
-    let entry := state.table.entries[index]!
+    let index := state.table.requestedIds[cursor]!
+    let entry := state.table.entryAt! index
     if let (none, some found) := (entry.key.view, state.program.declarations[entry.key.declaration]?) then
       if found.kind == .function || found.kind == .functionDefinition || found.kind == .relation
           || found.kind == .law || found.kind == .lawMember || found.kind == .protocol then
@@ -157,7 +158,7 @@ def typeBodies : CompileM Unit := do
       if found.kind == .«module» && entry.key.opaqueFor.isNone then
         endItem (moduleLaws index)
         endItem (typeModuleMembers index)
-    index := index + 1
+    cursor := cursor + 1
 
 /-- The phase of types: the checks of kernels, and the body of every instance that the roots
 reach. -/

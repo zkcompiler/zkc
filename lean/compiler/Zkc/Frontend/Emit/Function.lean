@@ -50,12 +50,12 @@ def primitiveRow (inst : InstanceId) (found : Declaration) (row : String)
     (arguments : Array Lowered.StaticArgument) (parameters : Array ClosedType) (result : ClosedType) :
     CompileM Typing.RowId := do
   let state ← get
-  let entry := state.table.entries[inst]!
-  let env := instanceEnv state.program found entry.key.arguments entry.key.specification
+  let instanceKey := state.table.allocatedKey! inst
+  let env := instanceEnv state.program found instanceKey.arguments instanceKey.specification
   let written := arguments.filterMap fun
     | .term _ _ term => some term
     | _ => none
-  let values ← if written.isEmpty then pure entry.key.arguments
+  let values ← if written.isEmpty then pure instanceKey.arguments
     else written.mapM (evalAny env ·)
   let request ← rowRequest row values
   let place := (found.name.map (·.span)).getD default
@@ -81,6 +81,7 @@ def checkedFunction (inst : InstanceId) (description : String) (tree : Typed.Fun
   let (found, unchecked) ← match checkFunction state inst body result with
     | .ok found => pure (found, none)
     | .error (.defect message) => throw (.defect message)
+    | .error (.exhausted exhaustion) => throw (.exhausted exhaustion)
     -- a form of a later layer in the body: its facts are not checked here, and the function
     -- waits for the form, so that no package holds it unchecked
     | .error (.waiting reason) | .error (.noCoreForm reason) =>
@@ -110,26 +111,18 @@ def memberOwner (found : Declaration) (values : Array StaticValue) :
   let state ← get
   let some ns := state.program.namespaces[found.namespace]? | return none
   let some inst := state.table.find? { declaration := ns.owner, arguments := values } | return none
-  let some (.«module» interfaces _) := state.table.content? inst | return none
+  let some interfaces := (state.table.content? inst).bind InstanceContent.moduleInterfaces? | return none
   let name := (found.name.map (·.text)).getD ""
-  for (interface, _) in interfaces do
-    let some inner := (state.program.declarations[interface]?).bind (·.inner) | continue
-    if let some (.declaration member) := (state.program.namespaces[inner]?).bind (·.names[name]?) then
-      if let some memberDeclaration := state.program.declarations[member]? then
-        return some (inst, member, memberDeclaration)
-  return none
+  return (declaredMember? state.program interfaces name).map fun (_, member, decl, _) => (inst, member, decl)
 
 /-- The interface that declares a member of a module instance, and its static arguments. -/
 def memberInterface (inst : InstanceId) (name : String) :
     CompileM (DeclarationId × Declaration × Array StaticValue) := do
   let state ← get
-  let some (.«module» interfaces _) := state.table.content? inst
+  let some interfaces := (state.table.content? inst).bind InstanceContent.moduleInterfaces?
     | throw (.waiting "a module whose members are not evaluated")
-  for (interface, args) in interfaces do
-    let some inner := (state.program.declarations[interface]?).bind (·.inner) | continue
-    if let some (.declaration member) := (state.program.namespaces[inner]?).bind (·.names[name]?) then
-      if let some found := state.program.declarations[member]? then
-        return (interface, found, args)
+  if let some (interface, _, member, args) := declaredMember? state.program interfaces name then
+    return (interface, member, args)
   throw (.waiting s!"the member `{name}` of a module")
 
 /-- The parameter types and the result type of a signature that is evaluated, or the wait for
@@ -297,12 +290,12 @@ def recordTree (definition : Typed.Definition) (place : Span) : CompileM Unit :=
 def functionBody (inst : InstanceId) (typeBody : InstanceId → Span → CompileM Unit) :
     CompileM BodyState := do
   let state ← get
-  let some entry := state.table.entries[inst]? | throw .abandoned
-  let found ← declaration entry.key.declaration
-  let name := state.program.nameOf entry.key.declaration
-  let description ← describeInstance entry.key.declaration entry.key.arguments
-    entry.key.specification entry.key.owner
-  let some lowered := (← getModules).lowered? entry.key.declaration
+  let some instanceKey := state.table.allocatedKey? inst | throw .abandoned
+  let found ← declaration instanceKey.declaration
+  let name := state.program.nameOf instanceKey.declaration
+  let description ← describeInstance instanceKey.declaration instanceKey.arguments
+    instanceKey.specification instanceKey.owner
+  let some lowered := (← getModules).lowered? instanceKey.declaration
     | throw (.defect "a declaration without its lowered form")
   let place := (found.name.map (·.span)).getD default
   try
@@ -329,14 +322,14 @@ def functionBody (inst : InstanceId) (typeBody : InstanceId → Span → Compile
           if mentionsRational result then
             if let some written := head.result then
               refuse "TY1" (Lowered.Expr.span (.type written)) "`rational` is a specification type"
-        let env := instanceEnv state.program found entry.key.arguments entry.key.specification
+        let env := instanceEnv state.program found instanceKey.arguments instanceKey.specification
         -- a definition generic over a module parameter is elaborated twice: the opaque
         -- elaboration first, whose resolutions the elaboration at the instance uses (SP12)
         let (resolutions, generic) ← if ← genericOverModule found then do
-            let (resolutions, generic) ← opaqueResolutions inst description name found entry.key.arguments
+            let (resolutions, generic) ← opaqueResolutions inst description name found instanceKey.arguments
               (head.parameters.map (·.binder)) (head.parameters.map (·.type)) head.result .unit expr
               specification lowered.locals typeBody fun values =>
-                let env := instanceEnv state.program found values entry.key.specification
+                let env := instanceEnv state.program found values instanceKey.specification
                 pure (env, env)
             pure (resolutions, some generic)
           else pure ({}, none)
@@ -356,8 +349,8 @@ def functionBody (inst : InstanceId) (typeBody : InstanceId → Span → Compile
     | .memberDef node, .memberDefinition binders body =>
       -- the module's values, then the values of the member's own static parameters (SP8)
       let moduleCount := (deployedParameters state.program found).size
-      let moduleValues := entry.key.arguments.extract 0 moduleCount
-      let ownValues := entry.key.arguments.extract moduleCount entry.key.arguments.size
+      let moduleValues := instanceKey.arguments.extract 0 moduleCount
+      let ownValues := instanceKey.arguments.extract moduleCount instanceKey.arguments.size
       let some (moduleInst, memberId, member) ← memberOwner found moduleValues
         | throw (.waiting "a member definition whose module is not evaluated")
       let .member (.defMember _ modifier _ _ _ _ _) := member.node
@@ -388,7 +381,7 @@ def functionBody (inst : InstanceId) (typeBody : InstanceId → Span → Compile
         return .done (header description types resultType external)
       | .absent => throw (.defect "a member definition without a body")
       | .body expr =>
-        let bodyEnv := ownEnv (instanceEnv state.program found moduleValues entry.key.specification)
+        let bodyEnv := ownEnv (instanceEnv state.program found moduleValues instanceKey.specification)
         -- a member definition generic over a module parameter of its module is elaborated twice:
         -- the opaque elaboration first, with `Self` the module at the parameter's opaque module
         let (resolutions, generic) ← if ← genericOverModule found then do
@@ -401,7 +394,7 @@ def functionBody (inst : InstanceId) (typeBody : InstanceId → Span → Compile
                 let opaqueDeclaration ← declaration opaqueInterface
                 let signatureEnv : Env := ownEnv { instanceEnv state.program opaqueDeclaration opaqueArgs with
                   file := member.file, self? := some (.«module» opaqueInst) }
-                pure (signatureEnv, ownEnv (instanceEnv state.program found values entry.key.specification))
+                pure (signatureEnv, ownEnv (instanceEnv state.program found values instanceKey.specification))
             pure (resolutions, some generic)
           else pure ({}, none)
         let (code, _, tree, locals) ← elaborateBody inst description bodyEnv (binders.zip types) resultType
@@ -410,7 +403,7 @@ def functionBody (inst : InstanceId) (typeBody : InstanceId → Span → Compile
                      waiting := code.waiting, specificationOnly := node.spec } place
         let code := { code with specificationOnly := node.spec, resolved := resolutions.toArray }
         if code.canStop && !(modifier matches some (.«partial» _)) then
-          let moduleName := state.program.nameOf (state.table.entries[moduleInst]!.key.declaration)
+          let moduleName := state.program.nameOf ((state.table.allocatedKey! moduleInst).declaration)
           refuse "SP9" node.name.span
             s!"`{moduleName}::{name}` can stop; `{state.program.nameOf interface}` declares `{name}` without `partial`"
         if let some kernel := node.kernel then
@@ -424,12 +417,12 @@ def functionBody (inst : InstanceId) (typeBody : InstanceId → Span → Compile
         recordTree { «instance» := inst, body := .external external } place
         return .done (header description parameters .bool external)
       | .body expr =>
-        let env := instanceEnv state.program found entry.key.arguments entry.key.specification
+        let env := instanceEnv state.program found instanceKey.arguments instanceKey.specification
         let (resolutions, generic) ← if ← genericOverModule found then do
-            let (resolutions, generic) ← opaqueResolutions inst description name found entry.key.arguments
+            let (resolutions, generic) ← opaqueResolutions inst description name found instanceKey.arguments
               (head.parameters.map (·.binder)) (head.parameters.map (·.type)) none .bool expr true
               lowered.locals typeBody fun values =>
-                let env := instanceEnv state.program found values entry.key.specification
+                let env := instanceEnv state.program found values instanceKey.specification
                 pure (env, env)
             pure (resolutions, some generic)
           else pure ({}, none)
@@ -445,8 +438,8 @@ def functionBody (inst : InstanceId) (typeBody : InstanceId → Span → Compile
       | _ => throw (.defect "a relation without a body")
     | .law node, .function head (.body expr) | .member (.lawMember node), .function head (.body expr) =>
       let (parameters, _) ← signatureTypes inst
-      let env := { instanceEnv state.program found entry.key.arguments entry.key.specification with
-        self? := entry.key.owner.map StaticValue.module }
+      let env := { instanceEnv state.program found instanceKey.arguments instanceKey.specification with
+        self? := instanceKey.owner.map StaticValue.module }
       let (code, _, tree, locals) ← elaborateBody inst description env
         ((head.parameters.map (·.binder)).zip parameters) .bool expr true lowered.locals typeBody
       recordTree { «instance» := inst, body := .function tree, locals, waiting := code.waiting
@@ -455,12 +448,12 @@ def functionBody (inst : InstanceId) (typeBody : InstanceId → Span → Compile
       if code.canStop then
         refuse "SP10" node.name.span s!"the law `{name}` can stop; a law is an expression that cannot stop"
       -- the obligation it leaves: of the module instance it is typed at, or of its module
-      let «module» := match entry.key.owner with
+      let «module» := match instanceKey.owner with
         | some owner => renderInstance state owner
         | none =>
           let owner := (state.program.namespaces[found.namespace]?).map (·.owner)
           (owner.map state.program.nameOf).getD "?"
-      let law ← describeInstance entry.key.declaration entry.key.arguments entry.key.specification
+      let law ← describeInstance instanceKey.declaration instanceKey.arguments instanceKey.specification
       let obligation : Typing.Obligation := { «module», law, place := node.name.span }
       modifyResults fun results => { results with obligations := results.obligations.push obligation }
       return .done { code with specificationOnly := true }

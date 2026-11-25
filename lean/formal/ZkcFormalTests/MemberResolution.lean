@@ -71,12 +71,13 @@ parameters, whose value is read. -/
 private def rootOutcome (state : Compile.State) (id : InstanceId) (evaluate : Bool) : Outcome :=
   match Typing.emitRoot state id with
   | .error (.waiting reason) => .waits reason
+  | .error (.exhausted exhaustion) => .failed exhaustion.describe
   | .error (.defect reason) => .failed s!"defect: {reason}"
   | .error (.noCoreForm reason) => .failed s!"no core form: {reason}"
   | .ok emission =>
     let reached := emission.origins.toList.map fun origin =>
-      match state.table.entries[origin.definition.number]? with
-      | some entry => Static.qualifiedName state.program entry.key.declaration
+      match state.table.allocatedKey? origin.definition.number with
+      | some key => Static.qualifiedName state.program key.declaration
       | none => "?"
     match (emission.package ⟨[], [], [], [], []⟩).checkEvidence with
     | .error _ => .failed "the package is not admitted"

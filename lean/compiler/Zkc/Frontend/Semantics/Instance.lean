@@ -68,7 +68,41 @@ inductive MemberValue where
   stands for in the opaque typing: each application is a fresh type, with the sorts of the
   member's bound (SP12). -/
   | opaqueType (sorts : Array String)
+  /-- An opaque parameter view of a receiver being checked. Resolve this member through
+  that receiver if the view actually reads it. -/
+  | fromReceiver (receiver : InstanceId)
   deriving Inhabited
+
+/-- An interface declaration at its evaluated static arguments. -/
+abbrev AppliedInterface := DeclarationId × Array StaticValue
+
+/-- A member declaration and the position of its application in the module header. -/
+structure InterfaceMember where
+  application : Nat
+  declaration : DeclarationId
+  deriving Inhabited
+
+/-- Interface members in declaration order, indexed by name. The same binding supplies
+the member value and its signature. Laws occupy names but have no module value. -/
+structure ModuleMemberBindings where
+  entries : Array InterfaceMember := #[]
+  byName : Std.HashMap String Nat := {}
+  /-- Number of function declarations in each application, used to select a primitive row. -/
+  functionCounts : Array Nat := #[]
+  deriving Inhabited
+
+def ModuleMemberBindings.find? (bindings : ModuleMemberBindings) (name : String) : Option InterfaceMember := do
+  bindings.entries[← bindings.byName[name]?]?
+
+/-- A concrete module binds each member name once (SP8). Opaque typing (SP12)
+looks up a declaration in its ordered interface bounds. -/
+inductive ModuleInterfaces where
+  | concrete (applications : Array AppliedInterface) (bindings : ModuleMemberBindings)
+  | ordered (applications : Array AppliedInterface)
+  deriving Inhabited
+
+def ModuleInterfaces.applications : ModuleInterfaces → Array AppliedInterface
+  | .concrete apps _ | .ordered apps => apps
 
 /-- What an instance is once elaborated, as far as a signature goes; the typing of bodies adds
 to it. A type of a signature that is not evaluated here (it names a generated member, or a
@@ -87,14 +121,23 @@ inductive InstanceContent where
   | protocol (ports : Array (String × Option ClosedType))
       (results : Array (String × Option ClosedType))
   /-- A module: the interfaces it names, at their static arguments, and its members by name. -/
-  | «module» (interfaces : Array (DeclarationId × Array StaticValue))
+  | «module» (interfaces : ModuleInterfaces)
       (members : Array (String × MemberValue))
+  /-- Accessible only while an interface condition is being checked. Its members are read
+  on demand from the same bindings used to form the complete module. -/
+  | checkingModule (interfaces : ModuleInterfaces) (bindings : ModuleMemberBindings)
   /-- A declaration whose content is not evaluated here: a specification type. -/
   | unevaluated
   /-- An instance that waits, with what it waits for: a constraint of its `where` that cannot be
-  evaluated here, a form of a later layer. -/
-  | waits (reason : String)
+  evaluated here, a form of a later layer. A default that waited on eligibility must
+  be checked again on explicit demand. -/
+  | waits (reason : String) (defaultOnly : Bool := false)
   deriving Inhabited
+
+/-- The header is available to a dependent query while a receiver is being validated. -/
+def InstanceContent.moduleInterfaces? : InstanceContent → Option ModuleInterfaces
+  | .«module» interfaces _ | .checkingModule interfaces _ => some interfaces
+  | _ => none
 
 /-- The default instances of one declaration (SP7). -/
 structure DefaultReport where

@@ -92,6 +92,26 @@ Resolved goals and contracts retain declaration identity and named statement arg
 
 ## Source conformance
 
+For each concrete module instance the frontend records the applied interface that declares each
+member. Signature elaboration, member-body checking and row emission read that binding.
+Function calls on a concrete receiver check the selected member’s own static bounds
+and `where` conditions after resolving the static arguments, for both bodies and primitive rows.
+The default search chooses the first fully formed module that satisfies the required applications.
+It evaluates interface conditions with access to the members each predicate reads through `Self`.
+Eligibility checked with a provisional receiver produces a judgment. The frontend discards
+its direct and indirect query results even when the predicates hold. It forms the real module
+and checks its conditions before committing their dependencies. Stable instance numbers,
+diagnostics, budget consumption and observations of project primitives survive the eligibility check.
+A module reached only through a member selection can stay unformed and receive none of the
+checks of SP8, including when a signature uses its type or natural, a literal constructs its
+record or enum, a call uses its own `pub def` or its protocol member, a clause uses its
+relation, or a `use` imports its function.
+A bound that no module can satisfy is not diagnosed where it is written.
+In the opaque typing of an application at a fresh type, the first of two applications
+that declare the member gives its signature.
+Before a module is given, a member name that two interfaces of a bound declare resolves to
+the first, so the order of the bound can change the verdict.
+
 `just test-frontend` exercises parsing and formatting across the reference corpus, compares
 assembly and name resolution with the expected rules, takes every reference case through the typing of the program and fixes the counts of the outcomes, and checks generated views at closed
 protocol instances. It also checks that guarded indexing survives a send at its sender,
