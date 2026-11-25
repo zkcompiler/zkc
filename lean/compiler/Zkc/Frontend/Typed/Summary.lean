@@ -2,7 +2,7 @@ module
 
 public import Std.Data.HashMap
 public import Zkc.Frontend.Basic.Diagnostic
-public import Zkc.Frontend.Semantics.Static
+public import Zkc.Frontend.Semantics.Instance
 
 @[expose] public section
 
@@ -187,6 +187,10 @@ inductive BodyState where
 /-- The obligation that a typed law leaves (SP10): the module instance it is about, the law at
 its instance, and its place. That it holds is a statement of the formal library. -/
 structure Obligation where
+  /-- The law's instance key and its dependencies, in dependency-first order with references
+  numbered within this array. The last key identifies the law, including its implementing
+  module for an interface law. The identity survives discarding the signature table. -/
+  identity : Array InstanceKey
   «module» : String
   law : String
   place : Syntax.Span

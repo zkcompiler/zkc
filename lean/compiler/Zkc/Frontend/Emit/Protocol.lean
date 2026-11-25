@@ -292,8 +292,7 @@ def aside {α : Type} (attempt : CompileM α) (keepReads : Bool := false) : Comp
   let (result, after) := (captureModuleReads attempt).run (← read) saved
   match result with
   | .ok (value, reads) =>
-    if keepReads then
-      modify fun s => {s with moduleReads := s.moduleReads ++ detachedModuleReads saved after reads}
+    if keepReads then publishDetachedObservations saved after reads
     return value
   | .error failure =>
     modify fun s => {s with log := after.log}
@@ -304,7 +303,8 @@ specification-only parameters, run aside. -/
 def typeClauses (inst : InstanceId) (specification : Array Nat)
     (typeBody : InstanceId → Span → CompileM Unit)
     (resolutions : Std.HashMap Typing.ResolvedPlace ParameterRef := {}) : CompileM Unit := do
-  discard <| aside (typedClauses inst specification typeBody resolutions) (← read).allClauseReads
+  let keep := (← read).allClauseReads && (realInstance (← get) inst).run' {}
+  discard <| aside (typedClauses inst specification typeBody resolutions) keep
 
 /-- The opaque typing of what the deciding clauses of the contract of a protocol generic over a
 module parameter apply (SP12), run aside: the typings of the places that it resolves. A

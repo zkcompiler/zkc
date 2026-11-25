@@ -139,12 +139,32 @@ def libraryInstancesSuite (repository : Repository) : TestM Unit := do
 /-- What some instances of the worked programs hold. -/
 def programContents : Array (String × String × String) := #[
   ("schnorr", "Schnorr<G = G1>", "(base: G1, point: G1, scalar: Fr) -> ()"),
-  ("schnorr", "DLog<G = G1>", "(base: G1, point: G1, scalar: Fr) -> bool"),
   ("sumcheck", "Reduce<F = Fr, R = Pairs<Fr>, v = 0, k = 0, rounds = 10>",
     "(p: MvPoly<Fr, 10, 1>, state: [Fr; 1024], prefix: [Fr; 0], claim: Fr) -> (point: [Fr; 10], value: Fr, residual: [Fr; 1])"),
   ("sumcheck", "Pairs<F = Fr>",
     "Round<Fr>: Degree = 1, State defined, Message = (Fr, Fr), message defined, bind defined, boundary defined, evaluate defined, table defined, polynomial defined"),
   ("sumcheck", "sums<F = Fr, v = 2>", "(table: [Fr; 8]) -> (Fr, Fr)")]
+
+/-- The contract reaches DLog at the selected protocol's group. Its detached check
+suppresses a separate public default. Requesting that actual signature gives the three
+ports of the relation as before. -/
+private def checkSchnorrRelation (check : InstanceCheck) : TestM Unit := do
+  let s := check.state
+  let some (_, relation) := s.program.declarations.zipIdx.find? (fun (d, _) =>
+      d.kind == .relation && d.name.any (·.text == "DLog"))
+    | failure "schnorr: missing relation DLog"
+  let some protocol := s.roots.find? (fun id =>
+      s.program.nameOf (s.table.allocatedKey! id).declaration == "Schnorr")
+    | failure "schnorr: missing closed protocol"
+  let reached := s.results.reachedDeclarations s.validationDeclarations
+  expectTrue (reached.contains relation && !s.defaults.any (·.declaration == relation))
+    "schnorr: the contract reaches DLog without selecting a public default"
+  let args := (s.table.allocatedKey! protocol).arguments
+  let (outcome, checked) := (Static.instantiate relation args ⟨"DLog", default⟩).run check.context s
+  let .ok id := outcome | failure "schnorr: could not instantiate DLog at the protocol's group"
+  let some content := checked.table.content? id | failure "schnorr: missing DLog signature"
+  expectTrue (Instances.renderContent checked content == "(base: G1, point: G1, scalar: Fr) -> bool")
+    "schnorr: DLog must take two G1 points and an Fr witness"
 
 /-- Every worked program with its example file. -/
 def programInstancesSuite (repository : Repository) : TestM Unit := do
@@ -179,6 +199,7 @@ def programInstancesSuite (repository : Repository) : TestM Unit := do
     | none =>
       if check.refusals.isEmpty then
         pass
+        if stem == "schnorr" then checkSchnorrRelation check
         let described := describedInstances check
         let unevaluated := (described.filter fun (_, content) => content.contains '?').size
         note s!"{stem}: {check.state.results.instanceCount} instances, {unevaluated} with a type not evaluated here"

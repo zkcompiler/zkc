@@ -22,16 +22,43 @@ See the [compiler status](../../../../docs/status.md) for current limits.
 
 Selecting a member such as `M<1>::helper` requires the enclosing instance `M<1>` to satisfy
 its module bounds, interface conditions, applicable member definitions and laws. The frontend
-records the concrete arguments after inference. Passing a formed module as an argument also
-requires its applicable members and laws. Before choosing public defaults, the ordinary checker
-counts that instance as a use of `M`. An unused public module still receives its
-eligible default instances under SP7.
+records the concrete arguments after inference. A module-valued member, an argument chosen
+by default, and a reference to an interface or scheme inside another module can all require
+a concrete implementation. The check follows the dependencies of successful computations,
+including a condition that determines that a law is inapplicable.
+
+A concrete associated type must satisfy its declared sorts, including at a realized
+application of a parameterized type member. The head of a protocol member must
+agree with the interface on its roles, static parameters and bounds, ports, results,
+and conditions. When a parameter is still open, the checker compares the binders in the
+two declarations by position. For example, a port of type `[bool; k + 0]` matches
+`[bool; k]`, and `[bool; k + 1]` differs. An open equality outside the supported
+arithmetic, such as `k * k` against `k ^ 2`, leaves the consuming root waiting.
+
+Before choosing public defaults, the ordinary checker records the declarations used by
+the selected roots and their required modules. An unused public declaration still receives
+its eligible defaults under SP7. Each chosen member default checks its enclosing module.
+Instance numbers are part of the emitted package. When a formerly scheduled default drops
+out, the checker reserves the numbers its signature and body requests contribute before
+the next public request. Private layout work publishes only these numbers. A discarded
+default contributes no root, diagnostic or law obligation.
+`zkc-check instances --contents` reports the signature and default-instance phases. Use
+`zkc-check types` for the verdict on member bodies and packages.
+
+If a phase stops at the instantiation-depth limit, a session ending there reports the
+incomplete check. A newly selected default can give a shorter path to the same module.
+When the later phase completes that check, the full session reports the settled result.
 
 A written goal requires the modules used by its deployed protocol, its selected relation,
 and the evaluation of its proof arguments, ceiling and charges. Two goals of the same scheme
-can therefore receive different results. Module validation runs in a private instance table
-so that its additional checks preserve the numbering of emitted definitions. The frontend
-checks the types of laws under SP10. The formal library owns proofs that those laws hold.
+can therefore receive different results. Admission by instance number checks all selections of
+that root. Admission by scheme checks the selected scheme, even when another scheme closes
+to the same protocol instance. A generated input record depends on the protocol
+signature. Records derived from protocol events also depend on the checked body, including
+when the record is already cached. Module validation uses a private instance table so its
+additional checks preserve the numbering of emitted definitions. The frontend checks the
+types of applicable laws under SP10 and reports their proof obligations. The formal library
+owns proofs that those laws hold.
 
 ## Proof arguments at a written goal
 

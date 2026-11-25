@@ -34,7 +34,7 @@ def types : Phase where
   writes := #[.signatures, .bodies]
   run := do
     Typing.typeProgram
-    Typing.checkProgramModules
+    Typing.checkProgramModules (beforeDefaults := true)
     reportSilentRefusals
 
 /-- The default instances of the public declarations that no root reaches (SP7): formed once

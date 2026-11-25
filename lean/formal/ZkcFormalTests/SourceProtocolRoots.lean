@@ -182,7 +182,10 @@ private def checkExample (root : System.FilePath) (gkr : Bool) (variant : Varian
   let file := if gkr then "examples/gkr_example.zkc" else "examples/sumcheck_example.zkc"
   let entry ← SourcePairReadback.source variant (root / file)
   let checked ← admitRoot entry (load root variant fixedLayer)
-  let ⟨id,s,emission,_,evidence⟩ := checked
+  let id := checked.id
+  let s := checked.state
+  let emission := checked.emission
+  let evidence := checked.evidence
   let program := evidence.admitted.program
   let some origin := emission.origins.find? (·.definition.number == id)
     | throw (IO.userError "root location missing")

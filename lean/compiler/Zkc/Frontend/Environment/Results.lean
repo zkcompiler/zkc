@@ -56,6 +56,7 @@ structure ResultStore where
   finished : Array InstanceId := #[]
   /-- The obligations of the laws typed, in the order they were typed. -/
   obligations : Array Typing.Obligation := #[]
+  obligationKeys : Std.HashSet (Array InstanceKey) := {}
   /-- What is reported without refusing: a row of a project, a declaration without default
   instance. -/
   reports : Array String := #[]
@@ -123,6 +124,60 @@ def internRow (store : ResultStore) (row : Typing.Row) : Option (ResultStore × 
 
 def checked? (store : ResultStore) (id : InstanceId) : Option Typed.Checked :=
   store.checked.result? id
+
+/-- Build a self-contained law identity. Every nominal reference in an instance key names
+an already allocated key. Number the reachable keys in their structural traversal order;
+sharing a repeated argument then costs one lookup. -/
+private structure LawKeys where
+  keys : Array InstanceKey := #[]
+  numbers : Std.HashMap InstanceId Nat := {}
+  deriving Inhabited
+
+mutual
+  private partial def lawInstance (store : ResultStore) (id : InstanceId) :
+      StateT LawKeys Option Nat := do
+    if let some number := (← get).numbers[id]? then return number
+    let some key := store.signatures.allocatedKey? id | failure
+    let arguments ← key.arguments.mapM (lawValue store)
+    let owner ← key.owner.mapM (lawInstance store)
+    let number := (← get).keys.size
+    modify fun s => { keys := s.keys.push { key with arguments, owner }
+                      numbers := s.numbers.insert id number }
+    return number
+
+  private partial def lawValue (store : ResultStore) : StaticValue → StateT LawKeys Option StaticValue
+    | .natural n => pure (.natural n)
+    | .module id => .module <$> lawInstance store id
+    | .type ty => .type <$> lawType store ty
+
+  private partial def lawType (store : ResultStore) : ClosedType → StateT LawKeys Option ClosedType
+    | .record id => .record <$> lawInstance store id
+    | .variant id => .variant <$> lawInstance store id
+    | .specification id => .specification <$> lawInstance store id
+    | .nonzero t => .nonzero <$> lawType store t
+    | .seq t n => (.seq · n) <$> lawType store t
+    | .tuple ts names => (.tuple · names) <$> ts.mapM (lawType store)
+    | .nominal row args => .nominal row <$> args.mapM (lawValue store)
+    | .opaque id member args sorts => do
+      return .opaque (← lawInstance store id) member (← args.mapM (lawValue store)) sorts
+    | .bool => pure .bool
+    | .nat => pure .nat
+    | .rational => pure .rational
+    | .index n => pure (.index n)
+end
+
+/-- The stable identity of a law whose instance belongs to this store. -/
+@[no_expose] def obligationIdentity? (store : ResultStore) (law : InstanceId) : Option (Array InstanceKey) :=
+  ((lawInstance store law).run {}).map (·.2.keys)
+
+/-- Publish the first typing of a law at an implementing instance. -/
+def addObligation (store : ResultStore) (obligation : Typing.Obligation) : ResultStore :=
+  if store.obligationKeys.contains obligation.identity then store
+  else
+    let obligations := store.obligations
+    let keys := store.obligationKeys
+    let store := { store with obligations := #[], obligationKeys := {} }
+    { store with obligations := obligations.push obligation, obligationKeys := keys.insert obligation.identity }
 
 /-- The requests that the computation of a request made. -/
 def requestsOf (store : ResultStore) (request : QueryRef) : Array QueryRef :=
@@ -213,9 +268,12 @@ def reachedInstances (store : ResultStore) (start : Array InstanceId) : Std.Hash
 
 /-- The declarations that have an instance. After the roots are elaborated these are the
 declarations that a root reached (SP7). -/
-def reachedDeclarations (store : ResultStore) : Std.HashSet DeclarationId :=
-  store.signatures.requestedIds.foldl (init := {}) fun reached id =>
-    reached.insert (store.signatures.entryAt! id).key.declaration
+def reachedDeclarations (store : ResultStore) (reached : Std.HashSet DeclarationId := {})
+    (fromRequest : Nat := 0) : Std.HashSet DeclarationId := Id.run do
+  let mut found := reached
+  for id in store.signatures.requestedIds[fromRequest...*] do
+    found := found.insert (store.signatures.allocatedKey! id).declaration
+  return found
 
 end ResultStore
 

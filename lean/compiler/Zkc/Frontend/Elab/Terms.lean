@@ -1344,6 +1344,10 @@ mutual
               | .span span => textOf span
               | .text text => pure text
             refuseHere "TY5" arg.span s!"`{text}` is a `{← renderTypeE xs.type}`; `length` takes a collection"
+          let (parameters, result) ← signatureOf id
+          let (values, _) ← inferArguments id assigned found.file parameters result
+            #[.typed xs arg.span arg.quote] expected place
+          liftM (observeDeclarationApplication id values place : CompileM Unit)
           return ← lengthNode place xs
     else if found.kind != .relation then
       unless found.kind == .function do

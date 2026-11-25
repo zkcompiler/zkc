@@ -145,9 +145,11 @@ The example and library suites report waits separately. Selected library modules
 admitted default instances of their public functions with bodies.
 
 Selecting a member of an applied module checks its interface conditions, applicable member
-bodies and laws. Ordinary checking counts the module as reached before choosing public
-defaults. Written issuance checks the modules used by each selected goal, including uses
-in its proof arguments, clause, charges and ceiling. See the [frontend guide](../lean/compiler/Zkc/Frontend/README.md#checking-selected-module-members).
+bodies and laws. Concrete associated types are checked against their declared sorts. Protocol heads
+are checked even when a sibling member is the only one used. An open head equality that the
+checker cannot decide leaves that use waiting. Ordinary checking counts declarations reached
+through those checks before choosing public defaults. Written issuance checks the modules
+used by each selected goal in its protocol, proof arguments, clause, charges and ceiling. See the [frontend guide](../lean/compiler/Zkc/Frontend/README.md#checking-selected-module-members).
 
 The function member `pair` of the catalogue's BLS12-381 module is the standard row
 `pairing.pair`. A module instance

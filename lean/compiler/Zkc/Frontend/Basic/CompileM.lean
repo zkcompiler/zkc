@@ -1,5 +1,6 @@
 module
 
+public import Init.Data.Queue
 public import Zkc.Frontend.Basic.Log
 public import Zkc.Frontend.Basic.Options
 public import Zkc.Frontend.Environment.Basic
@@ -79,7 +80,24 @@ inductive ModuleRead where
   | query (reference : QueryRef)
   deriving Inhabited
 
+/-- Method bodies normally publish their concrete trees. Private runs either check all
+parameters opaquely or reproduce the allocation order of the generic receiver alone. Nested
+callees share the corresponding run's table. -/
+inductive MemberTyping where
+  | program | validation | receiverKeys
+  deriving BEq, Inhabited
+
+/-- A discarded default signature schedule and its position in the ordinary body queue.
+The private results keep the signatures and their nominal dependencies together. -/
+structure DefaultBodyBatch where
+  afterRequests : Nat
+  firstPrivate : Nat
+  results : ResultStore
+  deriving Inhabited
+
 structure State where
+  defaultBodyBatches : Std.Queue DefaultBodyBatch := ∅
+  memberTyping : MemberTyping := .program
   /-- Reads of the current source computation, in encounter order. -/
   moduleReads : Array ModuleRead := #[]
   readsOfQuery : Std.HashMap QueryRef (Array ModuleRead) := {}
@@ -88,7 +106,10 @@ structure State where
   schemeReads : Std.HashMap DeclarationId (Array ModuleRead) := {}
   /-- Settled outcomes at stable keys of this source environment, including propagated failures. -/
   checkedModules : Std.HashMap InstanceKey (Except Interrupt Unit) := {}
-  reachedModules : Std.HashSet DeclarationId := {}
+  /-- Concrete module declarations visited by the owner check. -/
+  moduleDeclarations : Std.HashSet DeclarationId := {}
+  /-- Declarations whose signatures were used in a private member, contract or condition check. -/
+  detachedDeclarations : Std.HashSet DeclarationId := {}
   rootModuleFailures : Std.HashMap InstanceId Lack := {}
   env : Environment := {}
   log : Log := {}
@@ -183,6 +204,10 @@ def program (state : State) : Program := state.env.modules.program
 
 def results (state : State) : ResultStore := state.env.results
 
+/-- All declarations reached outside the public query table. -/
+def validationDeclarations (state : State) : Std.HashSet DeclarationId :=
+  state.moduleDeclarations.union state.detachedDeclarations
+
 def modules (state : State) : ModuleStore := state.env.modules
 
 end Compile.State
@@ -223,22 +248,23 @@ def useQueryReads (reference : QueryRef) : CompileM Unit := do
   if (← get).readsOfQuery.contains reference then
     modify fun s => { s with moduleReads := s.moduleReads.push (.query reference) }
 
-/-- Runs the computation of a request with the request on the stack. -/
+/-- Cache the reads of a completed request. A skipped signature has a result as well:
+the sources that established its false precondition are dependencies of that decision. -/
 def withRequest {α : Type} (reference : QueryRef) (action : CompileM α) : CompileM α := do
   modify fun state => { state with stack := state.stack.push (.request reference) }
-  try
-    let (result, reads) ← captureModuleReads action
-    modify fun state => { state with stack := state.stack.pop }
-    if reads.isEmpty then
-      if (← get).readsOfQuery.contains reference then
-        modify fun s => { s with readsOfQuery := s.readsOfQuery.erase reference }
-    else
-      modify fun s => { s with readsOfQuery := s.readsOfQuery.insert reference reads }
-      useQueryReads reference
-    return result
-  catch interrupt =>
-    modify fun state => { state with stack := state.stack.pop }
-    throw interrupt
+  let decide : CompileM (Option α) := try some <$> action catch
+    | .skipped => pure none
+    | other => throw other
+  let (result, reads) ← tryFinally (captureModuleReads decide)
+    (modify fun state => { state with stack := state.stack.pop })
+  if reads.isEmpty then
+    if (← get).readsOfQuery.contains reference then
+      modify fun s => { s with readsOfQuery := s.readsOfQuery.erase reference }
+  else
+    modify fun s => { s with readsOfQuery := s.readsOfQuery.insert reference reads }
+    useQueryReads reference
+  let some value := result | throw .skipped
+  return value
 
 /-- Runs an action with a line of its own on the chain: a part of a computation that is no
 request. -/

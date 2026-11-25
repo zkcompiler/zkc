@@ -61,7 +61,13 @@ def admit (state : Compile.State) (root : InstanceId) : Option PackageOutcome :=
     | .ok emission =>
       let source := emission.package ⟨[], [], [], [], []⟩
       match source.check with
-      | .ok checked => if state.rootModuleFailures.contains root then none else some (.admitted checked)
+      | .ok checked =>
+        match state.rootModuleFailures[root]? with
+        | none => some (.admitted checked)
+        | some (.waiting why) => some (.waiting why)
+        | some (.exhausted e) => some (.exhausted e)
+        | some (.defect why) => some (.defect why)
+        | _ => none
       | .error refusals => some (.refused source refusals)
     | .error (.waiting reason) => some (.waiting reason)
     | .error (.defect message) => some (.defect message)

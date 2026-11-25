@@ -2,6 +2,7 @@ module
 
 public import Zkc.Frontend.Static.ModuleBindings
 public import Zkc.Frontend.Static.ProtocolView
+public import Zkc.Frontend.Static.ProtocolHead
 
 @[expose] public section
 
@@ -221,6 +222,16 @@ inductive InstanceDemand where
   | required | candidate (requiredInterfaces : Array AppliedInterface) | defaultRoot
   deriving BEq
 
+
+/-- Read assigned arguments in declaration order, reporting any unsolved slot (SP6). -/
+def requiredArguments {α : Type} (id : DeclarationId) (assigned : Std.HashMap ParameterRef α)
+    (place : Span) : CompileM (Array α) := do
+  let program ← program
+  let name := program.nameOf id
+  (deployedParameters program (← declaration id)).mapM fun (ref, param) => do
+    let some value := assigned[ref]?
+      | refuse "SP6" place s!"cannot infer `{param.name.text}` of `{name}`; write `{name}<{param.name.text} = …>`"
+    return value
 
 mutual
   /-- What a reference stands for, step by step. -/
@@ -498,19 +509,8 @@ mutual
       (steps : Array (DeclarationId × Option (Array Lowered.StaticArgument)))
       (scopes : StaticEnvironment) (place : Span) :
       CompileM (Array StaticValue) := do
-    let program ← program
     let some (id, _) := steps.back? | throw .abandoned
-    let found ← declaration id
-    let name := program.nameOf id
-    let assigned ← assignArguments env steps scopes place
-    let mut values := #[]
-    for (reference, parameter) in deployedParameters program found do
-      match assigned[reference]? with
-      | some value => values := values.push value
-      | none =>
-        refuse "SP6" place
-          s!"cannot infer `{parameter.name.text}` of `{name}`; write `{name}<{parameter.name.text} = …>`"
-    return values
+    requiredArguments id (← assignArguments env steps scopes place) place
 
   /-- The values that a reference gives the parameters of the declaration it names, without
   the ones it leaves to inference (SP6). -/
@@ -540,6 +540,13 @@ mutual
   partial def assignWritten (env : Env) (step : DeclarationId)
       (parameters : Array (ParameterRef × StaticParam)) (initial : StaticEnvironment)
       (args : Array Lowered.StaticArgument) (place : Span) : CompileM StaticEnvironment := do
+    assignWrittenWith (evalTerm env) step parameters initial args place
+
+  /-- The same slot assignment for closed values and for classed terms of an open head. -/
+  partial def assignWrittenWith {α : Type} (evaluate : Lowered.Expr → Class → CompileM α)
+      (step : DeclarationId) (parameters : Array (ParameterRef × StaticParam))
+      (initial : Std.HashMap ParameterRef α) (args : Array Lowered.StaticArgument) (place : Span) :
+      CompileM (Std.HashMap ParameterRef α) := do
     let program ← program
     let found ← declaration step
     let name := program.nameOf step
@@ -573,7 +580,7 @@ mutual
         let cls ← parameterClass reference
         if label.isNone && cls == .natural && (term matches .number ..) then
           numerals := numerals.push parameter.name.text
-        assigned := assigned.insert reference (← evalTerm env term cls)
+        assigned := assigned.insert reference (← evaluate term cls)
     if numerals.size >= 2 then
       let named := ", ".intercalate (numerals.toList.map (s!"{·} = …"))
       refuse "SP5" place
@@ -706,7 +713,9 @@ mutual
       let found ← declaration id
       unless found.kind == .interface do
         refuse "SP3" place s!"`{(← nameOf id)}` is not an interface"
-      return (id, ← bindArguments env steps scopes place)
+      let args ← bindArguments env steps scopes place
+      observeDeclarationApplication id args place
+      return (id, args)
     | _ => refuse "SP3" place s!"`{← sourceText env place}` is not an interface"
 
   /-- An interface named by a bound as the syntax writes it: lowered first. -/
@@ -900,7 +909,11 @@ mutual
       | some (.done _) => useQueryReads ⟨.signature, inst⟩; return inst
       | some .inProgress => refuseRecursion description requested.span
       | some (.exhausted exhaustion) => throw (.exhausted exhaustion)
-      | some .skipped => if isDefault then throw .skipped else demand
+      | some .skipped =>
+        if isDefault then
+          useQueryReads ⟨.signature, inst⟩
+          throw .skipped
+        demand
       | _ => throw .abandoned
     -- a request deeper than the budget of the chain is not computed: it is exhausted (SP10)
     if ← beyondDepth then
@@ -911,6 +924,7 @@ mutual
       withRequest ⟨.signature, inst⟩ do
         let content ← instanceContent id inst values demand specification owner
         modifyResults (·.modifySignatures (·.setState inst (.done (.data content))))
+        checkAppliedMember id inst values specification content
       return inst
     catch failure =>
       match failure with
@@ -993,7 +1007,11 @@ mutual
       let results ← head.results.mapM fun result => do return (result.name.text, ← optional result.type)
       return .protocol ports results
     | .staticName _, .staticName value => return .staticName (← evalSize env value)
-    | .«module» node, _ => moduleContent inst found node env demand
+    | .«module» node, _ =>
+      let content ← moduleContent inst found node env demand
+      if let .«module» (.concrete apps bindings) members := content then
+        checkFormedMembers inst found env apps bindings members
+      return content
     | _, _ => return .unevaluated
 
   /-- Whether a constraint of a module without a body defines one of its members (`Member == T`,
@@ -1053,8 +1071,18 @@ mutual
     if decideEligibility then
       try
         return ← withModuleConditions do
-          if let some content ← prepareModuleMembers (some <$> complete) then
-            check content demand
+          -- A predicate can instantiate a member family at values that violate its
+          -- contract. If the predicate excludes this default, only its truth is needed.
+          let checkInTrial := constrained && bindings.entries.any fun binding =>
+            let member := state.program.declarations[binding.declaration]!
+            member.node matches .member (.typeMember _ _ (some _) (some _)) |
+              .member (.protocolMember { staticParams := some _, .. })
+          let prepared ← prepareModuleMembers do
+            let content ← complete
+            if checkInTrial then check content demand
+            return some content
+          if let some content := prepared then
+            unless checkInTrial do check content demand
             if let some c := conflict then reject c
             return content
           -- A dependency computed with a provisional Self may have crossed this very
@@ -1207,6 +1235,185 @@ mutual
             (if interfaces.isEmpty then s!"`{name}` defines `{memberName}` as a member, and implements no interface"
             else s!"`{name}` defines `{memberName}`, which `{interfaceNames}` does not have")
       return members
+
+  /-- A realized type member owes each written bound. Sort identity comes from name
+  resolution and the vocabulary, including the derived Group sort of sized collections. -/
+  partial def checkMemberType (member : Declaration) (type : ClosedType)
+      (site : Span) (label : String) : CompileM Unit := do
+    let .member (.typeMember _ _ _ (some bound)) := member.node | return
+    let state ← get
+    for sort in bound.sorts do
+      match sort with
+      | .linear _ => pure ()
+      | .nat _ => refuse "SP8" site s!"{label}: a type cannot satisfy the bound `nat`"
+      | .path path =>
+        let steps ← stepsOf { file := member.file } path
+        let some { step := .declaration id, .. } := steps.back?
+          | refuse "SP8" site s!"{label}: the bound of a type must name a sort"
+        let some sortName := state.sortNames[id]?
+          | refuse "SP8" site s!"{label}: `{state.program.nameOf id}` is not a type sort"
+        -- The vocabulary sorts are parameterless declarations in zkc::algebra.
+        if steps.any (·.staticArgs.isSome) then
+          refuse "SP8" path.span s!"{label}: the sort `{sortName}` takes no static arguments"
+        unless hasSort (← getVocabulary) type sortName do
+          refuse "SP8" site s!"{label}: `{renderType state type}` is not of sort `{sortName}`"
+
+  /-- Compare the two source heads in their respective scopes. In particular types
+  of both inputs and outputs must be equal; widening belongs to an application. -/
+  partial def checkProtocolHead (member definition : DeclarationId)
+      (expectedEnv actualEnv : Env) (site : Span) (label : String) : CompileM Unit := ProtocolHead.check do
+    let modules ← getModules
+    let program := modules.program
+    let require := ProtocolHead.requireEqual site label
+    let head (id : DeclarationId) : CompileM Lowered.ProtocolHead := do
+      let some (Lowered.Content.protocol head ..) := (modules.lowered? id).map (·.content)
+        | throw (.defect "missing lowered protocol head")
+      pure head
+    let expected ← head member
+    let actual ← head definition
+    let wrong (part : String) : CompileM Unit := refuse "SP8" site s!"{label}: the {part} differs"
+    unless expected.roster == actual.roster do wrong "role roster"
+    unless expected.specification == actual.specification do wrong "specification modifier"
+    let scope (id : DeclarationId) := program.declarations[id]!.ownScope
+    let evaluation : ProtocolHead.Evaluation := {
+      asType, interface := evalInterface, text := sourceText
+      arguments := fun id args span => do
+        let params := deployedParameters program (← declaration id)
+        let assigned ← assignWrittenWith (fun e cls => pure (e, cls)) id params {} args span
+        requiredArguments id assigned span
+      value := fun env expr cls => match cls with
+        | some cls => evalTerm env expr cls
+        | none => evalAny env expr }
+    let left : ProtocolHead.Side := ⟨expectedEnv, scope member⟩
+    let right : ProtocolHead.Side := ⟨actualEnv, scope definition⟩
+    let sameSorts := ProtocolHead.sameSorts evaluation left right
+    let sameTerm := ProtocolHead.sameTerm evaluation left right
+    let params (id : DeclarationId) :=
+      ((scope id >>= (program.scopes[·]?)).map (·.parameters)).getD #[]
+    let lowered (id : DeclarationId) := scope id >>= modules.loweredScope?
+    let expectedParams := params member
+    let actualParams := params definition
+    unless expectedParams.size == actualParams.size do wrong "static parameter count"
+    let bounds (id : DeclarationId) := ((lowered id).map (·.bounds)).getD #[]
+    for i in [:expectedParams.size] do
+      let a := expectedParams[i]!
+      let b := actualParams[i]!
+      unless a.name.text == b.name.text && a.spec == b.spec do wrong "static parameter"
+      let sorts (id : DeclarationId) := (((bounds id)[i]?.join).map (·.sorts)).getD #[]
+      require s!"bound of `{a.name.text}`" (sameSorts (sorts member) (sorts definition))
+    let sameType (a b : Lowered.TypeTerm) :=
+      sameTerm (.type a) (.type b) (some .type)
+    unless expected.ports.size == actual.ports.size do wrong "port count"
+    for (a, b) in expected.ports.zip actual.ports do
+      unless a.binder.name == b.binder.name && a.specification == b.specification &&
+          a.isPrivate == b.isPrivate && a.holders == b.holders && a.readers == b.readers do
+        wrong s!"port `{a.binder.name}`"
+      require s!"port `{a.binder.name}`" (sameType a.type b.type)
+    unless expected.results.size == actual.results.size do wrong "result count"
+    for (a, b) in expected.results.zip actual.results do
+      unless a.name.text == b.name.text && a.holders == b.holders && a.readers == b.readers do
+        wrong s!"result `{a.name.text}`"
+      require s!"result `{a.name.text}`" (sameType a.type b.type)
+    let constraints (id : DeclarationId) := ((lowered id).map (·.constraints)).getD #[]
+    let expectedWhere := constraints member
+    let actualWhere := constraints definition
+    unless expectedWhere.size == actualWhere.size do wrong "where clause"
+    for (a, b) in expectedWhere.zip actualWhere do
+      match a, b with
+      | .compare _ op x y, .compare _ op' x' y' =>
+        unless op == op' do wrong "where clause"
+        require "where clause" (sameTerm x x' none)
+        require "where clause" (sameTerm y y' none)
+      | .bound _ x sorts, .bound _ y sorts' =>
+        require "where clause" (sameTerm x y none)
+        require "where clause" (sameSorts sorts sorts')
+      | _, _ => wrong "where clause"
+
+  /-- The completed table supplies Self, including members declared after the protocol.
+  Optional defaults get here only after passing their eligibility and ownership checks. -/
+  partial def checkFormedMembers (inst : InstanceId) (owner : Declaration) (env : Env)
+      (apps : Array AppliedInterface) (bindings : ModuleMemberBindings)
+      (members : Array (String × MemberValue)) : CompileM Unit := do
+    let program ← program
+    let definitions := program.namespaces[owner.inner.getD owner.namespace]!.names
+    for (name, value) in members do
+      let some binding := bindings.find? name | continue
+      let member ← declaration binding.declaration
+      unless (member.node matches .member (.typeMember _ _ _ (some _)) | .member (.protocolMember _)) do
+        continue
+      let (interface, args) := apps[binding.application]!
+      let label := s!"`{owner.name.get!.text}::{name}` for `{program.nameOf interface}::{name}`"
+      let site := ((do
+        let .declaration id ← definitions[name]? | none
+        program.declarations[id]?.bind (·.name)) <|> owner.name).get!.span
+      match member.node, value with
+      | .member (.typeMember _ _ _ (some _)), .type type => checkMemberType member type site label
+      | .member (.protocolMember _), .definition id =>
+        let expected := instanceEnv program member args
+        checkIsolatedConditions do
+          checkProtocolHead binding.declaration id { expected with self? := some (.«module» inst) }
+            { env with self? := some (.«module» inst) } site label
+      | _, _ => pure ()
+
+  /-- A parameterized associated type or protocol has no single closed value at module
+  formation. Check each realized signature, including a path directly to its definition. -/
+  partial def checkAppliedMember (id : DeclarationId) (inst : InstanceId)
+      (values : Array StaticValue) (specification : Array Nat) (content : InstanceContent) :
+      CompileM Unit := do
+    let state ← get
+    let program := state.program
+    let found := program.declarations[id]!
+    unless found.kind == .protocol ||
+        [.alias, .vocabularyType, .record, .«variant», .specType].contains found.kind do return
+    let some own := found.ownScope >>= (program.scopes[·]?) | return
+    if own.parameters.isEmpty then return
+    if content matches .waits .. then return
+    let ns := program.namespaces[found.namespace]!
+    let owner := program.declarations[ns.owner]!
+    let some bound := Names.implementing? owner | return
+    let name := program.nameOf id
+    let env := instanceEnv program found values specification
+    for (interface, _) in ← boundInterfaces { file := owner.file } bound do
+      let inner := program.declarations[interface]!.inner.getD 0
+      let some (.declaration memberId) := program.namespaces[inner]!.names[name]? | continue
+      let member := program.declarations[memberId]!
+      unless (member.node matches .member (.typeMember _ _ _ (some _)) | .member (.protocolMember _)) do
+        continue
+      let ownerArgs := values.extract 0 (deployedParameters program owner).size
+      if let some receiver := state.table.find? { declaration := ns.owner, arguments := ownerArgs } then
+        if state.table.content? receiver matches some (.checkingModule ..) then
+          -- This signature is discarded with the isolated eligibility trial. A selected
+          -- module evaluates the predicate again with the completed receiver.
+          return
+      let concrete : Bool := (realInstance state inst).run' {}
+      unless concrete do return
+      let label := s!"`{program.nameOf ns.owner}::{name}` for `{program.nameOf interface}::{name}`"
+      let site := found.name.get!.span
+      match member.node with
+      | .member (.typeMember _ _ _ (some _)) =>
+        if found.kind == .protocol then return -- formation diagnoses the member kind
+        let .type type ← valueOfInstance id inst | throw (.defect "expected a realized type member")
+        checkMemberType member type site label
+      | .member (.protocolMember _) =>
+        unless found.kind == .protocol do return
+        checkIsolatedConditions do
+          let receiver ← formInstance ns.owner ownerArgs ⟨"", site⟩
+          if let some (.waits why _) := (← get).table.content? receiver then throw (.waiting why)
+          let some (.«module» interfaces _) := (← get).table.content? receiver
+            | throw (.waiting "the implementing module of a protocol member")
+          let some (_, required, decl, args) := declaredMember? program interfaces name
+            | throw (.defect "missing protocol member of a formed module")
+          let mut expected := instanceEnv program decl args
+          -- Only corresponding member binders travel between the two scopes. A
+          -- specification parameter of the module has no positional slot in the interface.
+          if let (some left, some right) := (decl.ownScope, found.ownScope) then
+            for i in [:own.parameters.size] do
+              if let some value := env.values[(⟨right, i⟩ : ParameterRef)]? then
+                expected := { expected with values := expected.values.insert ⟨left, i⟩ value }
+          checkProtocolHead required id { expected with self? := some (.«module» receiver) }
+            { env with self? := some (.«module» receiver) } site label
+          return
+      | _ => pure ()
 
   /-- The conditions that the interfaces of a module instance put on it: the bounds of their
   parameters and their `where` (SP3, SP4). -/

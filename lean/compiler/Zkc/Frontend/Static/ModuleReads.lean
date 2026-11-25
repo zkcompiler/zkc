@@ -34,41 +34,70 @@ mutual
     | .bool | .nat | .rational | .index _ => pure true
 end
 
-/-- The source modules enclosing a solved reference. A projection through a module value also
-requires the receiver itself. File namespaces and opaque typing stand-ins create no obligations. -/
-def observeMember (inst : InstanceId) (place : Span) (receiver : Bool := false) : CompileM Unit := do
+/-- A solved declaration path can cross applied modules even when the leaf, such as
+an interface or a scheme, has no signature instance of its own. -/
+def enclosingModules (id : DeclarationId) (arguments : Array StaticValue) (place : Span) :
+    CompileM (Array InstanceKey) := do
   let s ← get
-  let some key := s.table.allocatedKey? inst | return
-  let some child := s.program.declarations[key.declaration]? | return
-  if key.opaqueFor.isSome || key.view.isSome then return
+  let some child := s.program.declarations[id]? | return #[]
   let mut cursor := s.program.namespaces[child.namespace]?
-  unless (receiver && child.kind == .«module») || cursor.any (·.parent.isSome) do return
-  let real : Bool := (key.arguments.allM (realValue s)).run' {}
-  unless real do return
-  if receiver && child.kind == .«module» then
-    modify fun state => { state with moduleReads := state.moduleReads.push (.owner
-      { declaration := key.declaration, arguments := key.arguments } place) }
-  let values := ((deployedParameters s.program child).zip key.arguments).foldl
+  unless cursor.any (·.parent.isSome) do return #[]
+  let mut owners := #[]
+  let values := ((deployedParameters s.program child).zip arguments).foldl
     (init := ({} : StaticEnvironment)) fun env ((ref, _), value) => env.insert ref value
   while let some ns := cursor do
     let some outer := ns.parent | break
     if let some owner := s.program.declarations[ns.owner]? then
       if owner.kind == .«module» then
-        if let some args := (deployedParameters s.program owner).mapM (fun (ref, _) => values[ref]?) then
-          let applied : InstanceKey := { declaration := ns.owner, arguments := args }
-          modify fun state => { state with moduleReads := state.moduleReads.push (.owner applied place) }
+        let mut args := #[]
+        for (ref, parameter) in deployedParameters s.program owner do
+          let some value := values[ref]?
+            | refuse "SP6" place s!"cannot infer `{parameter.name.text}` of enclosing module `{s.program.nameOf ns.owner}`"
+          args := args.push value
+        let concrete : Bool := (args.allM (realValue s)).run' {}
+        if concrete then
+          owners := owners.push { declaration := ns.owner, arguments := args }
     cursor := s.program.namespaces[outer]?
+  return owners
 
-/-- A solved application also consumes its concrete module arguments. A provisional
-receiver or a primitive with an unavailable member table can still be passed by identity. -/
+def observeEnclosingModules (id : DeclarationId) (arguments : Array StaticValue) (place : Span) :
+    CompileM Unit := do
+  for key in ← enclosingModules id arguments place do
+    modify fun state => { state with moduleReads := state.moduleReads.push (.owner key place) }
+
+/-- A projection also requires the concrete receiver whose table it reads. -/
+def observeMember (inst : InstanceId) (place : Span) (receiver : Bool := false) : CompileM Unit := do
+  let s ← get
+  let some key := s.table.allocatedKey? inst | return
+  if key.opaqueFor.isSome || key.view.isSome then return
+  if receiver && (s.program.declarations[key.declaration]?).any (·.kind == .«module») &&
+      (key.arguments.allM (realValue s)).run' {} then
+    modify fun state => { state with moduleReads := state.moduleReads.push (.owner
+      { declaration := key.declaration, arguments := key.arguments } place) }
+  observeEnclosingModules key.declaration key.arguments place
+
+/-- Passing a formed module by value uses its implementation. A primitive awaiting its
+member table can still be named by identity. -/
+def observeModuleValue (inst : InstanceId) (place : Span) : CompileM Unit := do
+  if let some (.«module» ..) := (← get).table.content? inst then
+    observeMember inst place (receiver := true)
+
+/-- A solved static argument can use a module directly even if no member is selected. -/
+def observeModuleArguments (values : Array StaticValue) (place : Span) : CompileM Unit := do
+  for value in values do
+    if let .«module» actual := value then observeModuleValue actual place
+
+/-- Read the concrete owners of a declaration with no stored signature, including an
+interface application or a binding that lowers directly to a core operation. -/
+def observeDeclarationApplication (id : DeclarationId) (values : Array StaticValue) (place : Span) :
+    CompileM Unit := do
+  observeEnclosingModules id values place
+  observeModuleArguments values place
+
+/-- Read the concrete owners of a stored signature. -/
 def observeApplication (inst : InstanceId) (place : Span) : CompileM Unit := do
   observeMember inst place
-  let state ← get
-  let some key := state.table.allocatedKey? inst | return
-  for value in key.arguments do
-    if let .«module» actual := value then
-      if let some (.«module» ..) := state.table.content? actual then
-        observeMember actual place (receiver := true)
+  if let some key := (← get).table.allocatedKey? inst then observeModuleArguments key.arguments place
 
 mutual
   /-- A snapshot's argument can be reused directly when all its nominal identities already

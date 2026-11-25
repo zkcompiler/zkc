@@ -334,6 +334,7 @@ def selectGoalId (s : Compile.State) (id : DeclarationId) (kind : GoalKind) :
   let some decl := s.program.declarations[id]? | throw "WK-GOAL: missing goal"
   let some {content := .goal goal, ..} := s.env.modules.lowered? id
     | throw "WK-GOAL: missing resolved goal"
+  let (_, s) ← evaluate s goal.span (Static.observeEnclosingModules id #[] goal.span)
   selectedGoal s goal (Static.qualifiedName s.program id) decl.file kind
 
 def selectNamedGoal (s : Compile.State) (name : String) (kind : GoalKind) :

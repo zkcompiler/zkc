@@ -139,25 +139,53 @@ def checkKernels : CompileM Unit := do
         logError "FN5" kernel.span (.ofText "a kernel is attached to a `def` with a body") (origin := .instances)
     | _ => pure ()
 
+def typeRequestedBody (cursor : Nat) : CompileM Unit := do
+  let state ← get
+  let index := state.table.requestedIds[cursor]!
+  let entry := state.table.entryAt! index
+  if let (none, some found) := (entry.key.view, state.program.declarations[entry.key.declaration]?) then
+    if found.kind == .function || found.kind == .functionDefinition || found.kind == .relation
+        || found.kind == .law || found.kind == .lawMember || found.kind == .protocol then
+      let place := (found.name.map (·.span)).getD default
+      endItem (typeBody index place)
+    -- the laws of a module instance are typed at it (SP10); a module that a parameter stands
+    -- for in an opaque typing (SP12) is no instance of the program, and has no laws of its own
+    -- and its function members, called or not (SP7 item 7)
+    if found.kind == .«module» && entry.key.opaqueFor.isNone then
+      endItem (moduleLaws index)
+      endItem (typeModuleMembers index)
+
+/-- Both tables extend the same key prefix. Bring the private requests up to the latest
+allocation before evaluating them, then return only the extended prefix to the live table.
+Requests appended during this batch belong at the current tail of the combined queue. -/
+def layoutBodies (batch : Compile.DefaultBodyBatch) :
+    CompileM (Option Compile.DefaultBodyBatch) := do
+  let live ← get
+  let tail := batch.results.instanceCount
+  let results := batch.results.modifySignatures (·.reserveNewKeys live.table)
+  let work : CompileM Unit := do
+    for cursor in [batch.firstPrivate:tail] do typeRequestedBody cursor
+  let (_, trial) := work.run (← read) {env := {modules := live.modules, results}}
+  modifyResults (·.modifySignatures (·.reserveNewKeys trial.table))
+  if tail < trial.results.instanceCount then
+    return some ⟨live.results.instanceCount, tail, trial.results⟩
+  return none
+
 /-- Types the body of every instance of the table that is not typed yet, the instances that
 typing adds included. -/
 def typeBodies : CompileM Unit := do
   let mut cursor := 0
-  while cursor < (← get).table.requestedIds.size do
-    let state ← get
-    let index := state.table.requestedIds[cursor]!
-    let entry := state.table.entryAt! index
-    if let (none, some found) := (entry.key.view, state.program.declarations[entry.key.declaration]?) then
-      if found.kind == .function || found.kind == .functionDefinition || found.kind == .relation
-          || found.kind == .law || found.kind == .lawMember || found.kind == .protocol then
-        let place := (found.name.map (·.span)).getD default
-        endItem (typeBody index place)
-      -- the laws of a module instance are typed at it (SP10); a module that a parameter stands
-      -- for in an opaque typing (SP12) is no instance of the program, and has no laws of its own
-      -- and its function members, called or not (SP7 item 7)
-      if found.kind == .«module» && entry.key.opaqueFor.isNone then
-        endItem (moduleLaws index)
-        endItem (typeModuleMembers index)
+  if !(← get).defaultBodyBatches.isEmpty then
+    let mut batches ← modifyGet fun s => (s.defaultBodyBatches, {s with defaultBodyBatches := ∅})
+    while let some (batch, rest) := batches.dequeue? do
+      for i in [cursor:batch.afterRequests] do typeRequestedBody i
+      cursor := batch.afterRequests
+      -- A private tail cannot affect a package once all ordinary requests have run.
+      if cursor == (← getResults).instanceCount then return
+      batches := rest
+      if let some more ← layoutBodies batch then batches := batches.enqueue more
+  while cursor < (← getResults).instanceCount do
+    typeRequestedBody cursor
     cursor := cursor + 1
 
 /-- The phase of types: the checks of kernels, and the body of every instance that the roots

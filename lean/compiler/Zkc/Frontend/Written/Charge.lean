@@ -208,13 +208,13 @@ def goalCaps (c : AdmittedRoot) (specification : Array Nat) : ExportM (CapTable 
 
 /-- The named request selects the deployed root even in an assembly with several schemes. -/
 def admitSoundnessGoal (assembly : Assembly) (name : String) : ExportM AdmittedRoot := do
-  let (selected, state) ← selectNamedGoal (← sourceState assembly) name .soundness
-  admitInstance state selected.scheme.protocol selected.scheme.span
+  let (selected, closed) ← (← resolveGoals assembly).selectNamed name .soundness
+  closed.admitScheme selected.scheme
 
 /-- Read the charge at a path of application instructions from the named goal's root. -/
 def goalDrawCharge (c : AdmittedRoot) (goal : String) (path : List Core.Key) (draw : String) :
     ExportM DrawCharge := do
-  let (selected, _) ← selectNamedGoal c.state goal .soundness
+  let (selected, _) ← c.goalSource.selectNamed goal .soundness
   unless selected.scheme.protocol == c.id do throw "GL3: goal selects a different protocol"
   let root := ProofSubject.mk c.id selected.specification
   let subject ← path.foldlM (fun parent site => parent.child c site) root

@@ -294,8 +294,160 @@ goal bad = soundness(Checked, spec e = 1)
         assert all("SP8" in row for row in rows) and not files, rows
 
 
+def check_transitive_owners(work):
+    """A written goal needs the sources that determined its types, operations and law eligibility."""
+    src = work / "transitive.zkc"
+    selected = """relation Holds(x: bool): x
+protocol Check roles(P,V)(x: bool @(P,V)):
+    guard @V EXPRESSION
+spec for Check:
+    proves @V Holds(x)
+scheme Checked = Check:
+    prover P
+    construction interactive
+goal tested = soundness(Checked)
+"""
+    base = """module transitive
+use zkc::security::{soundness}
+interface Carrier:
+    def required(x: bool) -> bool
+module M<n: nat>: Carrier:
+    pub def flag(x: bool) -> bool: x
+"""
+    view = """protocol Source roles(P,V)(x: bool @(P,V)):
+    guard @V M<1>::flag(x)
+def dependency<T>(x: bool) -> bool: x
+"""
+    cases = [
+        ("intrinsic", '    pub def size<T>(xs: [T]) -> nat = primitive("seq.length")\n',
+         "M<1>::size([x]) == 1", "SP8"),
+        ("bound", "    pub interface Mark\nmodule N<n: nat>: M<n>::Mark:\n"
+         "    pub def check(x: bool) -> bool: x\n", "N<1>::check(x)", "SP8"),
+        ("child", "interface Parent:\n    module Child: Carrier\nmodule N<n: nat>: Parent:\n"
+         "    module Child = M<n>\n    pub def check(x: bool) -> bool: x\n", "N<1>::check(x)", "SP8"),
+        ("default", "interface Parent:\n    def apply<H: Carrier>(x: bool) -> bool\n"
+         "module N<n: nat>: Parent:\n    def apply(x): x\n    pub def check(x: bool) -> bool: x\n",
+         "N<1>::check(x)", "TY5"),
+        ("view-cold", view, "dependency<Source::Run>(x)", "SP8"),
+        ("view-warm", view + "def first(v: Source::Run) -> bool: true\n",
+         "dependency<Source::Run>(x)", "SP8"),
+        ("other-view-warm", view + "def first(v: Source::Run) -> bool: true\n",
+         "dependency<Source::Received<V>>(x)", "SP8"),
+        ("inputs-only", view + "def first(v: Source::Inputs<V>) -> bool: true\n",
+         "dependency<Source::Inputs<V>>(x)", None),
+    ]
+    good = base.replace("    pub def flag", "    def required(x): x\n    pub def flag")
+    for label, declarations, expression, rule in cases:
+        # A missing declaration prevents a module-valued child's signature from forming.
+        # A bad body lets a module become the default argument and fails its subsequent check.
+        bad = good.replace("def required(x): x", "def required(x): (x,x)") if label == "default" else base
+        for variant, text, expected in [("bad", bad, rule), ("good", good, None)]:
+            src.write_text(text + declarations + selected.replace("EXPRESSION", expression))
+            rows, files = run([src], ["tested"], work / f"transitive-{label}-{variant}", int(bool(expected)))
+            if expected:
+                assert expected in rows[0] and not files, (label, rows)
+            else:
+                assert "issued" in rows[0] and len(files) == 2, (label, rows)
+
+    # Checking whether a law applies consumes the source of the condition on either outcome.
+    law = """    pub nat Height = 0
+interface Parent:
+    type T
+module N<n: nat>: Parent:
+    type T = bool
+    pub def check(x: bool) -> bool: x
+    law reflexive(x: bool) where (M<n>::Height == VALUE): x == x
+"""
+    for value in [0, 1]:
+        for valid in [False, True]:
+            text = good if valid else base
+            src.write_text(text + law.replace("VALUE", str(value)) + selected.replace("EXPRESSION", "N<1>::check(x)"))
+            rows, files = run([src], ["tested"], work / f"predicate-{value}-{valid}", int(not valid))
+            if valid:
+                assert "issued" in rows[0] and len(files) == 2, rows
+            else:
+                assert "SP8" in rows[0] and not files, rows
+
+
+def check_enclosing_scheme(work):
+    src = work / "scheme.zkc"
+    src.write_text("""module library
+use zkc::security::{soundness}
+interface Carrier:
+    def required(x: bool) -> bool
+protocol Check roles(P,V)(x: bool @(P,V)):
+    guard @V x
+relation Holds(x: bool): x
+spec for Check:
+    proves @V Holds(x)
+module Box: Carrier:
+    def required(x): x
+    pub scheme Checked = Check:
+        prover P
+        construction interactive
+goal tested = soundness(Box::Checked)
+""")
+    closed = src.read_text()
+    rows, artifacts = run([src], ["tested"], work / "scheme-closed", 0)
+    assert len(artifacts) == 2 and "issued" in rows[0]
+    for label, text, rule in [
+        ("missing", closed.replace("    def required(x): x\n", ""), "SP8"),
+        ("open", closed.replace("module Box:", "module Box<n: nat>:"), "SP6"),
+    ]:
+        src.write_text(text)
+        rows, artifacts = run([src], ["tested"], work / f"scheme-{label}", 1)
+        assert rule in rows[0] and not artifacts, rows
+
+
+def check_waiting_owner(work):
+    src = work / "waiting.zkc"
+    source = """module waiting
+interface Width:
+    nat Size
+module Stub<n: nat>: Width = primitive("project.stub")
+def use_width<H: Width>(x: bool) -> bool: if H::Size == 1 then x else false
+interface Carrier:
+    def required(x: bool) -> bool
+module M<n: nat>: Carrier:
+    def required(x): use_width<Stub<n>>(x)
+    pub def flag(x: bool) -> bool: x
+def selected(x: bool) -> bool: M<1>::flag(x)
+def healthy(x: bool) -> bool: x
+"""
+    for waiting in [True, False]:
+        src.write_text(source if waiting else source.replace(' = primitive("project.stub")', ':\n    nat Size = 1'))
+        lines = subprocess.run([".lake/build/bin/zkc-check", "types", "--library", "../../libraries", src],
+                               capture_output=True, text=True, check=True).stdout.splitlines()
+        prefix = "package selected: waiting for the member" if waiting else "package selected: admitted"
+        assert any(line.startswith(prefix) for line in lines), lines
+        assert any(line.startswith("package healthy: admitted") for line in lines), lines
+        assert f"{int(waiting)} waiting" in next(line for line in lines if line.startswith("packages:")), lines
+
+
+def check_instance_summary(work):
+    source = work / "signature.zkc"
+    source.write_text("""module signature
+interface Carrier:
+    type T
+    def required(x: bool) -> bool
+module M<n: nat>: Carrier:
+    type T = bool
+def project(x: M<1>::T) -> bool: x
+""")
+    checker = ".lake/build/bin/zkc-check"
+    inventory = subprocess.run([checker, "instances", "--contents", source], capture_output=True,
+                               text=True, check=True).stdout
+    assert "from signature and default checks" in inventory and "project" in inventory, inventory
+    checked = subprocess.run([checker, "types", source], capture_output=True, text=True)
+    assert checked.returncode == 1 and "SP8" in checked.stdout, checked
+
+
 if __name__ == "__main__":
     with TemporaryDirectory() as folder:
         check(Path(folder))
         check_member_ownership(Path(folder))
         check_selected_module(Path(folder))
+        check_transitive_owners(Path(folder))
+        check_waiting_owner(Path(folder))
+        check_enclosing_scheme(Path(folder))
+        check_instance_summary(Path(folder))

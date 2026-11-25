@@ -81,17 +81,24 @@ def restoreObservations (saved checked : Compile.State) (reports : Bool := true)
   let renderer := checked.env.renderer
   let frame (f : ChainFrame) := { f with subject := .ofText (f.subject.renderWith renderer false) }
   let exhaustion (e : Exhaustion) := { e with request := frame e.request }
-  let mut entries := saved.log.entries
-  for d in checked.log.entries[saved.log.entries.size...*] do
-    entries := entries.push { d with
-      message := .ofText (d.message.render renderer)
-      chain := d.chain.map frame
-      exhaustion := d.exhaustion.map exhaustion
-      notes := d.notes.map fun note => { note with message := .ofText (note.message.render renderer) } }
+  let freezeEntries (prior after : DiagnosticLog) : DiagnosticLog := Id.run do
+    let mut entries := prior.entries
+    for d in after.entries[prior.entries.size...*] do
+      entries := entries.push { d with
+        message := .ofText (d.message.render renderer)
+        chain := d.chain.map frame
+        exhaustion := d.exhaustion.map exhaustion
+        notes := d.notes.map fun note => { note with message := .ofText (note.message.render renderer) } }
+    return {after with entries}
+  let log := {checked.log with
+    toDiagnosticLog := freezeEntries saved.log.toDiagnosticLog checked.log.toDiagnosticLog
+    moduleDepthRetry := checked.log.moduleDepthRetry.map fun retry =>
+      let prior := (saved.log.moduleDepthRetry.map (·.retained)).getD saved.log.toDiagnosticLog
+      {retry with retained := freezeEntries prior retry.retained}}
   let mut traces := saved.traces
   for entry in checked.traces[saved.traces.size...*] do
     traces := traces.push { entry with message := .ofText (entry.message.render renderer) }
-  set { saved with log := { checked.log with entries }, traces, staticSteps := checked.staticSteps }
+  set { saved with log, traces, staticSteps := checked.staticSteps }
   if reports then modifyResults fun results => { results with reports := checked.results.reports }
   return exhaustion
 
@@ -126,6 +133,27 @@ def prepareModuleMembers (make : CompileM (Option InstanceContent)) : CompileM (
   modifyResults (·.modifySignatures (·.reserveNewKeys checked.table))
   return none
 
+/-- Publish laws newly typed in a private checking state. Their identities and display
+text were captured while that state's nominal references could still be resolved. -/
+def publishValidationObligations (saved checked : Compile.State) : CompileM Unit := do
+  let start := saved.results.obligations.size
+  unless start == checked.results.obligations.size do
+    modifyResults fun results => Id.run do
+      let mut results := results
+      for law in checked.results.obligations[start...*] do
+        results := results.addObligation law
+      return results
+
+/-- A successful concrete check may reach declarations exclusively in its private table.
+Keep those uses for default selection, including observations made in nested checks. -/
+def publishDetachedObservations (saved checked : Compile.State)
+    (reads : Array Compile.ModuleRead) : CompileM Unit := do
+  let reached := checked.results.reachedDeclarations checked.detachedDeclarations
+    saved.table.requestedIds.size
+  let detached := detachedModuleReads saved checked reads
+  modify fun s => { s with detachedDeclarations := reached, moduleReads := s.moduleReads ++ detached }
+  publishValidationObligations saved checked
+
 /-- Export a judgment and its observations without publishing any query derived from the
 receiver. Module formation preserves its historical key allocations. Call-site preconditions
 introduce new queries whose numbers must stay private to the judgment. -/
@@ -136,8 +164,7 @@ def checkIsolatedConditions (check : CompileM Unit) (reserveKeys : Bool := false
   if reserveKeys then modifyResults (·.modifySignatures (·.reserveNewKeys checked.table))
   match outcome with
   | .ok (_, reads) =>
-    unless reserveKeys do
-      modify fun s => {s with moduleReads := s.moduleReads ++ detachedModuleReads saved checked reads}
+    unless reserveKeys do publishDetachedObservations saved checked reads
   | .error (.exhausted e) => throw (.exhausted (freeze e))
   | .error failure => throw failure
 

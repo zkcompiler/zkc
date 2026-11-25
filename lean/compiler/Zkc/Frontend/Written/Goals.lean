@@ -46,10 +46,10 @@ private def issueGoal (root : AdmittedRoot) (id : DeclarationId) (path : String)
 /-- Select each requested occurrence in the same source environment. Schemes can close
 lazily, so cache an admission by its source scheme declaration, not a locally allocated
 instance number. Each goal starts its relation elaboration from that admission. -/
-private def issueSelectedGoals (state : Compile.State) (refusals : Std.HashMap Names.Owner Diagnostic)
+private def issueSelectedGoals (source : GoalSource)
     (selectors : List String) :
     Array GoalResult := Id.run do
-  let index := declarationIndex state .goal
+  let index := declarationIndex source.state .goal
   let mut roots : Std.HashMap DeclarationId (ExportM AdmittedRoot) := {}
   let mut decisions : Std.HashMap DeclarationId (ExportM IssuedGoal) := {}
   let mut results := #[]
@@ -60,17 +60,13 @@ private def issueSelectedGoals (state : Compile.State) (refusals : Std.HashMap N
       if let some prior := decisions[id]? then
         results := results.push ⟨selector, some path, prior⟩
         continue
-      let selection : ExportM (Selection × Compile.State) := do
-        if let some why := refusals[Names.Owner.declaration id]? then
-          throw s!"{why.span.file}:{why.render state.env.renderer}"
-        selectGoalId state id .soundness
-      let (nextRoots, decision) := match selection with
+      let (nextRoots, decision) := match source.selectId id .soundness with
         | .error reason => (roots, .error reason)
         | .ok (selected, closed) => Id.run do
           let scheme := selected.scheme
           let root := match roots[scheme.declaration]? with
             | some prior => prior
-            | none => admitInstance closed scheme.protocol scheme.span
+            | none => closed.admitScheme scheme
           let outcome := root.bind fun r => issueGoal r id path
           let place := (selected.goal.map (·.span)).getD scheme.span
           return (roots.insert scheme.declaration root,
@@ -84,13 +80,8 @@ private def issueSelectedGoals (state : Compile.State) (refusals : Std.HashMap N
 A shared source-phase failure is reported for every request. -/
 @[no_expose] def issueSoundnessGoals (assembly : Assembly) (selectors : List String) :
     Array GoalResult :=
-  let resolved := resolveProgram assembly
-  let shared := resolved.refusalsByOwner.filter fun owner _ => match owner with
-    | .declaration id => !(assembly.program.declarations[id]?).any (·.kind == .goal)
-    | _ => true
-  let names := { Driver.resolve with run := Driver.installResolution { resolved with refusalsByOwner := shared } }
-  match sourceState assembly names with
-  | .ok state => issueSelectedGoals state resolved.refusalsByOwner selectors
+  match resolveGoals assembly with
+  | .ok source => issueSelectedGoals source selectors
   | .error reason => selectors.toArray.map fun selector => ⟨selector, none, .error reason⟩
 
 end Zkc.Frontend.Written
