@@ -196,7 +196,8 @@ def startLakeLean (work : System.FilePath) (name source : String) (text := true)
 /-- Compare the named values in the issued statements with the frontend run on the original
 source and selectors. The same values must be the fields of the package used for admission. -/
 def startSourceComparison (work : System.FilePath) (name : String) (module : Module)
-    (source : String) (goals : List String) (labels := goals) (fees := true) : IO Pending := do
+    (source : String) (goals : List String) (labels := goals.map Statements.labelOfSpelling)
+    (fees := true) : IO Pending := do
   unless goals.length == labels.length do throw (IO.userError "a public label is required for each selector")
   let observation ← IO.ofExcept (WrittenSource.consumer source (goals.zip labels) fees)
   startLakeLean work name

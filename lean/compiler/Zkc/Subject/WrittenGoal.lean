@@ -82,7 +82,7 @@ def WrittenSubject.goalAt {V : Vocabulary} {pkg : Package V} {root : WrittenRoot
 
 /-- Source names for readers, aligned before dropping any verifier-invisible inputs. -/
 structure RootOrigins {V : Vocabulary} {pkg : Package V} (root : WrittenRoot pkg) where
-  schemeName : String
+  schemePath : String
   inputNames : Array String
   aligned : inputNames.size = root.entry.header.ins.length
 

@@ -174,7 +174,7 @@ private def andParts (e : Expr) : MetaM (Expr × Expr) := do
   return (s.appFn!.appArg!, s.appArg!)
 
 private inductive ReceiptView where
-  | existential
+  | existential (served : Expr)
   | constructor (result : Expr)
 
 /-- Walk the receipt and its constructor together. When publishing the receipt, expand its
@@ -185,7 +185,9 @@ private def paired (view : ReceiptView) (sig : Signature) (q helper : Expr) : Li
     let (_, premise, body, _) ← forallParts helper
     ensureEqual rejected premise
     match view with
-    | .existential => mkAppM ``And #[service, ← presentRejection sig premise]
+    | .existential served =>
+      ensureEqual service served
+      mkAppM ``And #[served, ← presentRejection sig premise]
     | .constructor result =>
       if body.hasLooseBVars then throwError "the receipt depends on the rejection proof"
       ensureEqual body result
@@ -209,11 +211,21 @@ private def paired (view : ReceiptView) (sig : Signature) (q helper : Expr) : Li
         let body ← paired view sig next (after.instantiate1 hv) rest
         match view with
         | .constructor _ => mkForallFVars #[x, hv] body
-        | .existential =>
+        | .existential _ =>
           let pair ← mkAppM ``And #[v, body]
           return mkApp exists_.appFn! (← mkLambdaFVars #[x] pair)
 
-private def publish (canonical presentation : Expr) : MetaM Expr := do
+/-- Expose the same cap and member names that an author can unfold in the goals of a walk
+or the hypotheses of a receipt. Both abbreviations refer to concrete entries of this module. -/
+private def publish (canonical view : Expr) (caps member_ : Ident) : TermElabM Expr := do
+  let abbreviation (id : Ident) : TermElabM (Expr × Expr) := do
+    let n ← realizeGlobalConstNoOverloadWithInfo id
+    let some value := (← getConstInfo n).value? | throwErrorAt id "expected a public abbreviation"
+    return (value, mkConst n)
+  let (table, namedTable) ← abbreviation caps
+  let (memberValue, namedMember) ← abbreviation member_
+  let presentation := view.replace fun e =>
+    if e == table then some namedTable else if e == memberValue then some namedMember else none
   check presentation
   ensureEqual canonical presentation
   -- Lean may extract this proof into a declaration. Keep its type on the named goal.
@@ -245,7 +257,7 @@ elab "goal_surface% " kind:ident origin:ident "(" caps:ident "," member_:ident "
   let (_, pathTy, _, _) ← forallParts canonical
   let view ← forallBinder canonical `path pathTy fun _ body =>
     universal sig (processLeaf · process) body sig.ports
-  publish canonical view
+  publish canonical view caps member_
 
 /-- Publish the named existential proposition using the actual specialized library constructor. -/
 elab "goal_receipt% " origin:ident "(" caps:ident "," member_:ident "," witnessed:ident ")"
@@ -254,11 +266,12 @@ elab "goal_receipt% " origin:ident "(" caps:ident "," member_:ident "," witnesse
   let helper ← application (← readTerm constructor) ``witnessed_of
   unless constructorReceipt helper == q do throwError "the constructor selects a different receipt"
   let sig ← readSignature q origin caps member_ witnessed
-  publish q (← paired .existential sig q (← inferType helper) sig.ports)
+  let served ← inferType helper.appArg!
+  publish q (← paired (.existential served) sig q (← inferType helper) sig.ports) caps member_
 
 /-- Present the inferred constructor type with its alias's named receipt as the terminal result. -/
 elab "goal_helper% " origin:ident "(" caps:ident "," member_:ident "," witnessed:ident ")"
-    " in " constructor:term " returning " out:ident : term => do
+    " in " constructor:term:max &" returning " out:ident : term => do
   let helper ← application (← readTerm constructor) ``witnessed_of
   let named ← realizeGlobalConstNoOverloadWithInfo out
   unless named.getString! == witnessed.getId.toString do throwErrorAt out "expected {witnessed}"

@@ -227,29 +227,35 @@ def package (s : Statements) : SourcePackage := s.claims.emission.package ⟨[],
 
 /-- The goals of a statements module share one root. Compute a value for the first goal
 of each relation, retaining all the goals in source order. -/
-def perRelation {α : Type} (goals : List ClaimedGoal) (value : ClaimedGoal → α) :
-    Array (ClaimedGoal × α) := Id.run do
+def cacheRelations {ρ α : Type} (goals : List ρ) (key : ρ → InstanceId) (value : ρ → α) :
+    Array (ρ × α) := Id.run do
   let mut results := #[]
   let mut cache : Std.HashMap InstanceId α := {}
   for g in goals do
-    if let some v := cache[g.relation]? then
+    let relation := key g
+    if let some v := cache[relation]? then
       results := results.push (g, v)
     else
       let v := value g
-      cache := cache.insert g.relation v
+      cache := cache.insert relation v
       results := results.push (g, v)
   return results
 
+def perRelation {α : Type} (goals : List ClaimedGoal) (value : ClaimedGoal → α) :
+    Array (ClaimedGoal × α) :=
+  cacheRelations goals (·.relation) value
+
 /-- Issue covered goals of the package and retain a diagnostic for each uncovered goal.
 A project primitive requires a model of its binding, even if another goal does not use it. -/
-def coveredGoals (s : Statements) : Except String (List ClaimedGoal × List String) := do
+def coveredOccurrences (s : Statements) :
+    Except String (List { g // g ∈ s.claims.goals } × List String) := do
   let p := s.package
   if let (primitive, _) :: _ := p.bindings.rows then
     throw s!"a written statement for a package that links a project primitive {primitive.name} is not issued yet: there is no model of the primitive"
   let mut goals := #[]
   let mut refusals := #[]
-  let decisions := perRelation s.claims.goals fun g =>
-    Coverage.missing (b := p.bindings) p.named ⟨s.claims.root⟩ ⟨g.relation⟩
+  let decisions := cacheRelations s.claims.goals.attach (·.val.relation) fun g =>
+    Coverage.missing (b := p.bindings) p.named ⟨s.claims.root⟩ ⟨g.val.relation⟩
   for (g, decision) in decisions do
     match decision with
     | none => goals := goals.push g
@@ -259,9 +265,14 @@ def coveredGoals (s : Statements) : Except String (List ClaimedGoal × List Stri
         | .sort k => s!"no carrier for sort {linkedTypeKey k}"
         | .row k => s!"no interpretation of row {linkedRowKey k}"
         | .law k t => s!"no sampler for law {lawKey k} at {linkedTy t}"
-      refusals := refusals.push s!"{g.goal}: {reason}"
+      refusals := refusals.push s!"{g.val.goal}: {reason}"
   if goals.isEmpty && !refusals.isEmpty then throw ("\n".intercalate refusals.toList)
   return (goals.toList, refusals.toList)
+
+/-- The original occurrences with supported reach, together with every source refusal. -/
+def coveredGoals (s : Statements) : Except String (List ClaimedGoal × List String) := do
+  let (goals, refusals) ← s.coveredOccurrences
+  return (goals.map Subtype.val, refusals)
 
 /-- The keys of the definitions of the package in order, and whether each is a protocol. -/
 def definitions (s : Statements) : List (Nat × Bool) :=
@@ -292,10 +303,13 @@ def usableSourceLabel (name : String) : Bool :=
 
 /-- A goal keeps its source spelling for diagnostics and source readback. Its Lean label
 also has to coexist with the protocol root, the verifier walk and other generated names. -/
-def _root_.Zkc.Frontend.Written.ClaimedGoal.label (goal : ClaimedGoal) : String :=
-  if usableSourceLabel goal.goal && !goal.goal.endsWith "_claim_of" then goal.goal
-  else "goal'" ++ String.join (goal.goal.toList.map fun c =>
+def labelOfSpelling (spelling : String) : String :=
+  if usableSourceLabel spelling && !spelling.endsWith "_claim_of" then spelling
+  else "goal'" ++ String.join (spelling.toList.map fun c =>
     if c.isAlphanum then String.singleton c else s!"'{c.toNat}'")
+
+def _root_.Zkc.Frontend.Written.ClaimedGoal.label (goal : ClaimedGoal) : String :=
+  labelOfSpelling goal.goal
 
 /-- The relation aliases and transfer lemma share a namespace with fixed protocol facts.
 Keep `root_sound` and `verifier_sound` under their source names in the public challenge. -/
@@ -380,7 +394,7 @@ def protocolMember (s : Statements) (key caller : Nat) : String :=
 /-- What was read from the source, as terms: the root, the roles, the functions before the root
 that the text names, and for each goal its proof arguments, its table of caps and its
 relation. -/
-def factsOf (s : Statements) (layout : SubjectLayout) : String :=
+def factsOf (s : Statements) (layout : SubjectLayout s.claims) : String :=
   let root := s.claims.root
   s!"abbrev rootKey : Key := ⟨{root}⟩\n" ++
   s!"noncomputable abbrev rootHeader := header{root}\n" ++
@@ -403,8 +417,8 @@ def factsOf (s : Statements) (layout : SubjectLayout) : String :=
   layout.relationFacts ClaimedGoal.relationLabel s.programBefore (fun key => s.memberOf key false)
 
 /-- Root, relation, cap and argument names for a module that only needs facts. -/
-def facts (s : Statements) (goals := s.claims.goals) : String :=
-  s.factsOf (.ofGoals goals)
+def facts (s : Statements) (goals := s.claims.goals.attach) : String :=
+  s.factsOf (.ofGoals s.claims goals)
 
 /-- Where the walks of a module start. The meanings of a program are closed to Lean's own
 reduction, and a walk reads a term in an environment; so for the deciding role of the root, for
@@ -563,7 +577,7 @@ def denotation (property row : String) : String :=
 
 /-- The five public propositions. Their mathematical definitions and the checked presentation
 of the concrete verifier inputs and relation witnesses belong to the formal library. -/
-def claimTexts (layout : SubjectLayout) : String := Id.run do
+def claimTexts {owner : GoalClaims} (layout : SubjectLayout owner) : String := Id.run do
   let mut text := ""
   for (goal, row) in layout.namedGoals do
     let name := goal.label
@@ -670,7 +684,7 @@ def siteNames (s : Statements) (goals := s.claims.goals) : List String :=
       s!"{goal.label}_cap_{appliedSite site}")
 
 /-- The fees judgment and both library proofs at the same resolved goal. -/
-def judgments (layout : SubjectLayout) : String := Id.run do
+def judgments {owner : GoalClaims} (layout : SubjectLayout owner) : String := Id.run do
   let mut text := ""
   for (goal, row) in layout.namedGoals do
     let name := goal.label
@@ -806,10 +820,10 @@ def module (s : Statements) (name : String) (proof : ProofText)
     (walks := true) (after : List Consumer := [])
     (statements : Option Lean.Name := none) :
     Except String Module := do
-  let (retained, refusals) ← s.coveredGoals
-  let layout := SubjectLayout.ofGoals retained
+  let (retained, refusals) ← s.coveredOccurrences
+  let layout := SubjectLayout.ofGoals s.claims retained
   let goals := layout.publicGoals
-  let subject ← layout.text s.claims
+  let subject ← layout.text
   let ceilings ← s.ceilings goals
   let fees := proof.method == .fees
   let feeText := if fees then judgments layout else ""
@@ -842,31 +856,33 @@ def module (s : Statements) (name : String) (proof : ProofText)
 the transfers and the propositions, with nothing proved. Lean elaborates the statements. -/
 def claimsModule (s : Statements) (name : String) :
     Except String PlainModule := do
-  let (retained, refusals) ← s.coveredGoals
-  let layout := SubjectLayout.ofGoals retained
+  let (retained, refusals) ← s.coveredOccurrences
+  let layout := SubjectLayout.ofGoals s.claims retained
   let text := header (imports false) ++ s!"namespace {name}\n" ++
     subjectPackage s.package ++ statementOpens ++ s.factsOf layout ++ "\n" ++ s.transfers layout.publicGoals ++
-    (← layout.text s.claims) ++ claimTexts layout ++ s!"end {name}\n"
+    (← layout.text) ++ claimTexts layout ++ s!"end {name}\n"
   return {text, theorems := [], refusals}
 
 /-- A module with the package of the claims and the coverage theorems of its issued goals. -/
 def coverageModule (s : Statements) (name : String) :
     Except String PlainModule := do
-  let (retained, refusals) ← s.coveredGoals
-  let goals := uniqueGoalSpellings retained
+  let (retained, refusals) ← s.coveredOccurrences
+  let layout := SubjectLayout.ofGoals s.claims retained
+  let goals := layout.publicGoals
   let theorems := goals.map (s!"{·.label}_covered")
   let text := header (imports false) ++ s!"namespace {name}\n" ++
-    subjectPackage s.package ++ statementOpens ++ s.facts goals ++ "\n" ++
+    subjectPackage s.package ++ statementOpens ++ s.factsOf layout ++ "\n" ++
     coverage goals ++ footer name theorems
   return {text, theorems, refusals}
 
 /-- A module with the package of the claims, its facts, and the comparison of each goal's total
 with the ceiling that it states. A goal whose ceiling is below its total gives no module. -/
 def ceilingModule (s : Statements) (name : String) : Except String PlainModule := do
-  let goals := uniqueGoalSpellings s.claims.goals
+  let layout := SubjectLayout.ofGoals s.claims
+  let goals := layout.publicGoals
   let ceilings ← s.ceilings goals
   let text := header (subjectPackageImports ++ ["Zkc.Subject.WrittenGoal", "ZkcFormal.Written.SiteCaps"]) ++
-    s!"namespace {name}\n" ++ subjectPackage s.package ++ opens ++ s.facts goals ++ "\n" ++
+    s!"namespace {name}\n" ++ subjectPackage s.package ++ opens ++ s.factsOf layout ++ "\n" ++
     ceilings ++ footer name (s.ceilingNames goals)
   return { text, theorems := s.ceilingNames goals }
 

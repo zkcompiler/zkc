@@ -142,6 +142,12 @@ theorem emptyHelper : EmptyReceipt := by
   have receipt := emptyGoal_witnessed_of (rejected := neverLaw)
   readEmpty receipt
 
+theorem publicNames : EmptyReceipt := by
+  obtain ⟨service, rejected⟩ := emptyGoal_met
+  unfold StandardInterpretation.samplers at service
+  unfold emptyGoalMember at rejected
+  exact ⟨service, rejected⟩
+
 end
 
 open AuthorEquality in

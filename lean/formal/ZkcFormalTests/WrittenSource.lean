@@ -29,7 +29,7 @@ def consumer (source : String) (requests : List (String × String)) (fees : Bool
   let (prover, verifier) ← schemeParties root selected.scheme
   let mut text := equation "written'root.entry.header.key.number" (toString root.id) ++
     equation "(written'root.prover.val, written'root.verifier.val)" s!"({prover}, {verifier})" ++
-    equation "written'origins.schemeName" (reprStr selected.scheme.name) ++
+    equation "written'origins.schemePath" (reprStr selected.schemePath) ++
     equation "written'origins.inputNames" (reprStr (ports.map (·.binder.name)))
   let mut declarations : Array DeclarationId := #[]
   let mut decisions : Array (Nat × InstanceId) := #[]
@@ -69,7 +69,9 @@ def consumer (source : String) (requests : List (String × String)) (fees : Bool
       equation s!"{atIndex}.fields.specification" (reprStr goal.specification.toList) ++
       equation s!"{atIndex}.fields.caps" (Zkc.Subject.Print.capsTerm caps) ++
       equation s!"{atIndex}.fields.ceiling" ceiling ++
-      s!"run_cmd ZkcFormalTests.WrittenBinding.checkReferences (← Lean.getCurrNamespace) {reprStr label} {index} {d} {fees}\n"
+      s!"run_cmd ZkcFormalTests.WrittenBinding.checkReferences (← Lean.getCurrNamespace) {reprStr label} {index} {d} {fees} {goal.specification.size}\n"
+    for (argument, i) in goal.specification.toList.zipIdx do
+      text := text ++ equation s!"{label}Argument{i}" (toString argument)
     let standard := s!"StandardInterpretation.model {atIndex} StandardInterpretation.draws"
     for (publicSuffix, property) in [("ClaimOf", "ClaimOf"), ("Claim", "Claim"), ("Goal", "Goal"),
         ("Result", "Result"), ("Witnessed", "Witnessed")] do

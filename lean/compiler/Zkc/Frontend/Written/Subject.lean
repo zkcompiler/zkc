@@ -27,7 +27,7 @@ def uniqueGoalSpellings (goals : List ClaimedGoal) : List ClaimedGoal := Id.run 
 
 /-- The first-use order for a shared module. Each alias carries its goal index; each
 canonical goal carries its decision index. -/
-structure SubjectLayout where
+structure SubjectLayout (owner : GoalClaims) where
   private mk ::
   private aliases : Array (ClaimedGoal × Nat)
   private goals : Array (ClaimedGoal × Nat)
@@ -36,8 +36,10 @@ structure SubjectLayout where
 
 namespace SubjectLayout
 
+variable {owner : GoalClaims}
+
 /-- Index the successful occurrences in their original order, within one compiled scheme. -/
-def ofGoals (retained : List ClaimedGoal) : SubjectLayout := Id.run do
+def ofGoals (owner : GoalClaims) (retained := owner.goals.attach) : SubjectLayout owner := Id.run do
   let mut aliases := #[]
   let mut spellings : Std.HashSet String := {}
   let mut goals := #[]
@@ -46,7 +48,7 @@ def ofGoals (retained : List ClaimedGoal) : SubjectLayout := Id.run do
   let mut byClause : Std.HashMap (Nat × InstanceId) Nat := {}
   let mut functions := #[]
   let mut seenFunctions : Std.HashSet InstanceId := {}
-  for goal in retained do
+  for ⟨goal, _⟩ in retained do
     if spellings.contains goal.goal then continue
     spellings := spellings.insert goal.goal
     let mut goalIndex := goals.size
@@ -69,7 +71,7 @@ def ofGoals (retained : List ClaimedGoal) : SubjectLayout := Id.run do
   return ⟨aliases, goals, decisions, functions⟩
 
 /-- The goals to publish, one per original selector spelling. -/
-def publicGoals (layout : SubjectLayout) : List ClaimedGoal := layout.aliases.toList.map Prod.fst
+def publicGoals (layout : SubjectLayout owner) : List ClaimedGoal := layout.aliases.toList.map Prod.fst
 
 private def goalName (index : Nat) := s!"written'goal{index}"
 private def fieldsName (index : Nat) := s!"written'fields{index}"
@@ -78,13 +80,13 @@ private def decisionName (index : Nat) := s!"written'decision{index}"
 private def slotName (index : Nat) := s!"written'slot{index}"
 
 /-- Public spellings paired with their already resolved, row-local goal. -/
-def namedGoals (layout : SubjectLayout) : Array (ClaimedGoal × String) :=
+def namedGoals (layout : SubjectLayout owner) : Array (ClaimedGoal × String) :=
   layout.aliases.map fun (goal, index) => (goal, goalName index)
 
 /-- Emit the complete fields once per declaration. The existing author-facing cap and
 argument names use the same values at every spelling. A named cap preserves the term used
 by an author's rewrite under the public cap abbreviation. -/
-def goalFacts (layout : SubjectLayout) (label : ClaimedGoal → String) : String := Id.run do
+def goalFacts (layout : SubjectLayout owner) (label : ClaimedGoal → String) : String := Id.run do
   let mut lines := #[]
   for ((goal, _), i) in layout.goals.toList.zipIdx do
     let ceiling := option (fun (r : Rat) => s!"(({r.num} : Rat) / {r.den})") goal.ceiling
@@ -101,7 +103,7 @@ def goalFacts (layout : SubjectLayout) (label : ClaimedGoal → String) : String
 
 /-- One physical member per distinct function in the installed program, with the existing
 public relation facts at each spelling. The caller also emits the package's transfer proofs. -/
-def relationFacts (layout : SubjectLayout) (relationLabel : ClaimedGoal → String)
+def relationFacts (layout : SubjectLayout owner) (relationLabel : ClaimedGoal → String)
     (programBefore memberOf : Nat → String) : String := Id.run do
   let mut lines := #[]
   for k in layout.functions do
@@ -153,13 +155,13 @@ private def tableTerm (row : Nat → String) (count : Nat) : String :=
 
 /-- Close the typed subject over the package, physical members, role facts and lookup proofs
 already in scope. Mathematical issuance supports deciding proofs of soundness. -/
-def text (layout : SubjectLayout) (claims : GoalClaims) : Except String String := do
+def text (layout : SubjectLayout owner) : Except String String := do
   let mut lines := #[
     "noncomputable def written'root : Zkc.Subject.WrittenRoot subjectPackage :=\n" ++
       "  ⟨⟨rootHeader, rootMember, found'root⟩, ⟨proverRole, by decide +kernel⟩,\n" ++
       "   ⟨verifierRole, by decide +kernel⟩, by decide +kernel⟩\n",
     "noncomputable def written'origins : Zkc.Subject.RootOrigins written'root :=\n" ++
-      s!"  ⟨{reprStr claims.schemeName}, #{list (claims.inputs.toList.map reprStr)}, rfl⟩\n"]
+      s!"  ⟨{reprStr (Static.qualifiedName owner.state.program owner.scheme)}, #{list (owner.inputs.toList.map reprStr)}, rfl⟩\n"]
   for k in layout.functions do
     lines := lines.push (s!"noncomputable def written'fn{k} : " ++
       s!"Zkc.Subject.FunctionEntry subjectPackage := ⟨header{k}, member'fn{k}, found'fn{k}⟩\n")

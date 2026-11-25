@@ -11,6 +11,14 @@ open PrintedPackageSupport ZkcFormalTests.WrittenSubject
 private abbrev Requests := List (String × String)
 private abbrev Check := IO Unit
 
+example (a b : GoalClaims) (_g : {g // g ∈ b.goals}) : SubjectLayout a := by
+  fail_if_success exact SubjectLayout.ofGoals a [_g]
+  exact SubjectLayout.ofGoals a
+
+example (a b : Statements) (_foreign : SubjectLayout b.claims) : String := by
+  fail_if_success exact a.factsOf _foreign
+  exact a.factsOf (SubjectLayout.ofGoals a.claims)
+
 private def expect {α : Type} [BEq α] [Repr α] (what : String) (actual expected : α) : IO Unit :=
   unless actual == expected do throw (IO.userError s!"{what}: got {repr actual}, expected {repr expected}")
 
@@ -157,6 +165,32 @@ private def controls (work : System.FilePath) (m : Module) (src : String) : IO (
   let refAt := fun (l : String) => s!"checkReferences (← Lean.getCurrNamespace) {reprStr l} "
   let wrong := fun want got => s!"expected the reference {m.space}.{want}, found {got}"
   let claim ← run "Redirect" changed [(refAt "left_again", wrong "left_againClaimOf" "leftClaimOf")]
+  let twin (tag body want got : String) :=
+    run tag body [(refAt "left_again", wrong want got)]
+  let lookup ← twin "RedirectLookup"
+    (← mutate "⟨1, by decide⟩ = written'goal1 := rfl" "⟨1, by decide⟩ = written'goal0 := rfl")
+    "written'goal1" "written'goal0"
+  let cap ← twin "RedirectFieldCap"
+    (← mutate "⟨[], written'caps1, none⟩" "⟨[], written'caps0, none⟩")
+    "written'caps1" "written'caps0"
+  let capAlias ← twin "RedirectPublicCap"
+    (← mutate "left_againCaps : Zkc.Subject.CapTable := written'caps1"
+      "left_againCaps : Zkc.Subject.CapTable := written'caps0")
+    "written'caps1" "written'caps0"
+  let surfaceCap ← run "RedirectAuthorCap"
+    (← mutate "goal_surface% judged written'origins (left_againCaps,"
+      "goal_surface% judged written'origins (leftCaps,")
+    [(refAt "left_again", "left_againJudged must expose Forward.left_againCaps")]
+  let fee ← twin "RedirectFeeClaim"
+    (← mutate "(judged : left_againJudged) : left_againClaim :="
+      "(judged : left_againJudged) : leftClaim :=")
+    "left_againClaim" "leftClaim"
+  let helper (label row : String) := s!"goal_helper% written'origins ({label}Caps, {label}Member, {label}Witnessed) " ++
+    s!"in (ZkcFormal.Written.Goal.witnessed_of StandardInterpretation.model {row} " ++
+    s!"StandardInterpretation.draws StandardInterpretation.served) returning {label}Witnessed"
+  let receipt ← twin "RedirectReceipt"
+    (← mutate (helper "left_again" "written'goal1") (helper "left" "written'goal0"))
+    "left_againWitnessed" "leftWitnessed"
   let slot (i d f : Nat) := s!"written'slot{i} : Zkc.Subject.GoalSlot written'clauses.size := ⟨⟨{d}, by decide⟩, written'fields{f}⟩"
   let swapped ← mutate (slot 0 0 0) (slot 0 0 1)
   let swapped ← replaceOnce swapped (slot 1 0 1) (slot 1 0 0)
@@ -185,7 +219,7 @@ private def controls (work : System.FilePath) (m : Module) (src : String) : IO (
   let duplicate ← run "DuplicateRow" dup [("⟨1, by decide⟩).clause.val", "Type mismatch"),
     (refAt "left_again", wrong "written'decision0" "written'decision2"),
     ("written'subject.clauses.size =", "Type mismatch")]
-  return [claim, swap, operand, duplicate]
+  return [claim, lookup, cap, capAlias, surfaceCap, fee, receipt, swap, operand, duplicate]
 
 private def aliasChecks (work : System.FilePath) : IO Unit := do
   let src ← IO.FS.readFile "fixtures/written-decisions.zkc"
@@ -248,6 +282,42 @@ scheme Checked = Check:
 goal z = soundness(Checked)
 "
 
+/-- Two deployed schemes have the same short name, installed program, and roles. An
+independent reader must still identify the declaration selected by the original goal. -/
+private def schemeOwners (work : System.FilePath) : IO Unit := do
+  let left := "module pair
+use zkc::security::{soundness}
+relation No(): false
+protocol C roles(V,P)():
+    guard @V false
+spec for C:
+    proves @V No()
+module Left:
+    pub scheme S = C:
+        prover P
+        construction interactive
+module Right:
+    pub scheme S = C:
+        prover P
+        construction interactive
+goal target = soundness(Left::S)
+"
+  let right ← replaceOnce left "soundness(Left::S)" "soundness(Right::S)"
+  let req := [("target", "target"), ("pair::target", "goal'pair'58''58'target")]
+  let (m, leftCheck) ← full work "LeftScheme" left req
+    (eqn "written'origins.schemePath" (reprStr "pair::Left::S"))
+  let (_, rightCheck) ← full work "RightScheme" right req
+    (eqn "written'origins.schemePath" (reprStr "pair::Right::S"))
+  let comparison ← startSourceComparison work "QualifiedSource" m left (req.map Prod.fst)
+  let original ← IO.ofExcept (ZkcFormalTests.WrittenSource.consumer right req true)
+  let crossed ← checkMutant work m "CrossedScheme" m.statements original
+    [("written'origins.schemePath =", "Type mismatch")]
+  leftCheck
+  rightCheck
+  let (ok, log) ← comparison
+  acceptedOutput "qualified source selectors" ok log [] allowed
+  crossed
+
 private def countSource : IO String := do
   let blocks := readBlocks (← IO.FS.readFile "../../language/conformance/layer-b.txt")
   let some src := (blocks.find? (·.id == "N-GL2a")).bind (·.files[0]?)
@@ -307,9 +377,18 @@ private def capChecks (work : System.FilePath) : IO Unit := do
   let swapped ← replaceOnce m.statements "⟨[3], written'caps1," "⟨[3], written'caps0,"
   let original ← IO.ofExcept (ZkcFormalTests.WrittenSource.consumer src req true)
   let bad ← checkMutant work m "ChangedCapTree" swapped original
-    [(s!"{atGoal 1}.fields.caps =", "Type mismatch")]
+    [(s!"{atGoal 1}.fields.caps =", "Type mismatch"),
+     ("checkReferences (← Lean.getCurrNamespace) \"b\"",
+       "expected the reference EqualTotals.written'caps1, found written'caps0")]
+  let arg ← replaceOnce m.statements "bArgument0 : Nat := written'fields1.specification"
+    "bArgument0 : Nat := written'fields0.specification"
+  let wrongArg ← checkMutant work m "RedirectArgument" arg original
+    [("bArgument0 =", "Type mismatch"),
+     ("checkReferences (← Lean.getCurrNamespace) \"b\"",
+       "expected the reference EqualTotals.written'fields1, found written'fields0")]
   check
   bad
+  wrongArg
 
 private def reduction := "module reduceexample
 use zkc::security::{soundness}
@@ -451,6 +530,7 @@ private def mixedChecks (work : System.FilePath) : IO Unit := do
 
 #eval IO.FS.withTempDir aliasChecks
 #eval IO.FS.withTempDir coordinateChecks
+#eval IO.FS.withTempDir schemeOwners
 #eval IO.FS.withTempDir capChecks
 #eval IO.FS.withTempDir routeEdges
 #eval IO.FS.withTempDir mixedChecks

@@ -57,6 +57,7 @@ theorem identityLaw (x : Bool) : functionResult (t := .bool)
 
 theorem sound_judged : soundJudged := by
   claim_intro
+  unfold soundCaps
   rw [identityLaw] at rejected
   obtain rfl := Option.some.inj rejected
   walk
@@ -67,9 +68,9 @@ theorem sound_witnessed : soundWitnessed := sound_witnessed_of false trivial tru
 private def multiProof (label : String) := s!"
 theorem {label}_judged : {label}Judged := by
   claim_intro
-  have no := rejected (witness1 := 0) (witness0 := false) trivial trivial
-  rw [acceptsLaw] at no
-  have off : input_right = false := by simpa using Option.some.inj no
+  have returning := rejected (witness1 := 0) (witness0 := false) trivial trivial
+  rw [acceptsLaw] at returning
+  have off : input_right = false := by simpa using Option.some.inj returning
   subst input_right
   walk
 
@@ -164,7 +165,7 @@ def run (work : System.FilePath) (hashSource client : String) : IO Unit := do
     "goal'probes'58''58'input'95'alpha" #["claim", "flag", "alphaCaps", "n"] "port2" "input_alphaCaps"
     "claim hfirst value hsecond" "(input_claim := claim)" "AuthorAlpha"
   let audited := ["holds", "disagreement", "refuted", "zeroMet", "zeroHelper", "mappedMet", "mappedHelper",
-    "omittedMet", "omittedHelper", "emptyMet", "emptyHelper", "noEqualityReceipt", "fromGoal", "fromResult"]
+    "omittedMet", "omittedHelper", "emptyMet", "emptyHelper", "publicNames", "noEqualityReceipt", "fromGoal", "fromResult"]
   let requests := String.join (audited.map (s!"#print axioms AuthorClient.{·}\n"))
   let externalClient ← startLakeLean work "AuthorClient" (client ++ "\n" ++ requests)
   swap.accepted "AuthorSwap"
