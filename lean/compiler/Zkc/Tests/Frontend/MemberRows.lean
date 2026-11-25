@@ -439,6 +439,17 @@ private def checkReservedCollect (repository : Repository) : TestM Unit := do
 /-- A probe can fill an older reservation and create new ones. Only a real request
 gets an entry and a place in the traversal order, even when its number is older. -/
 private def checkReservedRequests : TestM Unit := do
+  -- Distinct keys deliberately share one hash. A discarded descendant must leave its parent
+  -- readable and preserve the originally interned representation of an equal key.
+  letI : Hashable (String × Nat) := ⟨fun _ => 0⟩
+  letI : BEq (String × Nat) := ⟨fun a b => a.1 == b.1⟩
+  let empty : Interner (String × Nat) := {}
+  let (parent, firstId, _) := empty.intern ("one", 1)
+  let (child, secondId, _) := parent.intern ("two", 2)
+  let (child, reusedId, stored) := child.intern ("one", 3)
+  expectTrue (firstId == 0 && secondId == 1 && reusedId == firstId && stored.2 == 1 &&
+    parent.size == 1 && (parent.find? ("two", 2)).isNone && child.find? ("two", 4) == some secondId &&
+    (child.get? secondId).any (·.2 == 2)) "shared hash buckets must preserve equality and the parent snapshot"
   let empty : SignatureTable String Nat := default
   let (base, first, _) := empty.intern "present" default none
   let base := base.setState first (.done 11)

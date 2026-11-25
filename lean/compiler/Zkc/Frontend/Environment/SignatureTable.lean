@@ -10,11 +10,11 @@ set_option autoImplicit false
 namespace Zkc.Frontend
 
 /-- Signature numbers include keys allocated by isolated checks. Request history includes only
-actual requests in this state, in the order in which they were first made. Lookups use hash
-tables or array indexing, and visiting the order takes time proportional to the requests. -/
+actual requests in this state, in the order in which they were first made. The request tree
+shares untouched entries with snapshots. Visiting the order takes time proportional to its length. -/
 structure SignatureTable (κ ρ : Type) [BEq κ] [Hashable κ] where
   private keys : Interner κ
-  private requests : Std.HashMap Nat (QueryEntry κ ρ)
+  private requests : Std.TreeMap Nat (QueryEntry κ ρ)
   private order : Array Nat
 
 namespace SignatureTable
