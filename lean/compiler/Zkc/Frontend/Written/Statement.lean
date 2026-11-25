@@ -266,7 +266,7 @@ def coveredGoals (s : Statements) : Except String (List ClaimedGoal × List Stri
 
 /-- The keys of the definitions of the package in order, and whether each is a protocol. -/
 def definitions (s : Statements) : List (Nat × Bool) :=
-  (Written.package s.package).definitions.map fun (key, isProtocol) => (key.number, isProtocol)
+  (definitionKeys s.package.named).map fun (key, isProtocol) => (key.number, isProtocol)
 
 /-- The name, in the package, of the program before the definition with a key. -/
 def programBefore (s : Statements) (key : Nat) : String :=
@@ -307,7 +307,7 @@ def _root_.Zkc.Frontend.Written.ClaimedGoal.relationLabel (goal : ClaimedGoal) :
 label belongs to this package. Retain the ordinary numbered fallback when available. -/
 def _root_.Zkc.Frontend.Written.GoalClaims.functionsBeforeRoot (claims : GoalClaims) :
     List (String × Nat) :=
-  let definitions := (Written.package (claims.emission.package ⟨[], [], [], [], []⟩)).definitions
+  let definitions := definitionKeys claims.emission.named
   let before := (definitions.takeWhile (·.1.number != claims.root)).filter (!·.2)
   let named : List (String × Nat) := before.map fun (key, _) =>
     let name := match claims.state.table.allocatedKey? key.number with
@@ -507,32 +507,22 @@ def entryNames (s : Statements) (goals := s.claims.goals) : List String :=
   (s.appliedRoles.map fun a => s!"Applied.role{a.protocol}_{a.role}in{a.caller}_meaning") ++
   s.functions.map (s!"{·.1}_meaning") ++ goals.map (s!"{·.relationLabel}_meaning")
 
-/-- That what holds of the root, and of the root with a goal's relation, in the installed
-program holds of them in every admitted program, each found by its key. -/
-def transfers (s : Statements) (goals := s.claims.goals) : String :=
-  let found (admitted : String) :=
-    "    ∃ root : Member a.program.headers.protocols rootHeader,\n" ++
-    "      a.program.findProtocol rootKey = some ⟨rootHeader, root⟩ ∧ " ++ admitted
-  "/-- What holds of the root of the installed program holds of the root of every admitted\n" ++
-  "program. -/\n" ++
-  "theorem at_root {a : Admitted V} (admitted : admit stored association = .ok a)\n" ++
-  "    (P : (p : Typed V) → Member p.headers.protocols rootHeader → Prop)\n" ++
-  "    (holds : P installed rootMember) :\n" ++
-  found "P a.program root := by\n" ++
-  "  have same := readback admitted\n  generalize a.program = p at same\n  subst same\n" ++
-  "  exact ⟨rootMember, by kernel_rfl, holds⟩\n\n" ++
-  String.join (goals.map fun goal =>
+/-- Specialize the package transport to the installed root and relations. Each distinct
+lookup has one kernel proof, including when several source labels name the same relation. -/
+def transfers (s : Statements) (goals := s.claims.goals) : String := Id.run do
+  let admitted := "{a : Admitted V} (admitted : admit stored association = .ok a)"
+  let root := "rootKey rootMember found'root"
+  let mut text :=
+    "private theorem found'root : installed.findProtocol rootKey = some ⟨rootHeader, rootMember⟩ := by kernel_rfl\n" ++
+    s!"abbrev at_root {admitted} :=\n  subjectPackage.atProtocol admitted {root}\n\n"
+  for (goal, first) in perRelation goals (·.relationLabel) do
     let name := goal.relationLabel
-    s!"/-- What holds of the root and of the relation of `{name}` in the installed program holds of\n" ++
-    "them in every admitted program, each found by its key. -/\n" ++
-    s!"theorem at_{name} " ++ "{a : Admitted V} (admitted : admit stored association = .ok a)\n" ++
-    s!"    (P : (p : Typed V) → Member p.headers.protocols rootHeader → Member p.headers.fns {name}Header → Prop)\n" ++
-    s!"    (holds : P installed rootMember {name}Member) :\n" ++
-    found "\n" ++
-    s!"      ∃ relation : Member a.program.headers.fns {name}Header,\n" ++
-    s!"        a.program.find {name}Key = some (.fn relation) ∧ P a.program root relation := by\n" ++
-    "  have same := readback admitted\n  generalize a.program = p at same\n  subst same\n" ++
-    s!"  exact ⟨rootMember, by kernel_rfl, {name}Member, by kernel_rfl, holds⟩\n\n")
+    let found := s!"found'fn{goal.relation}"
+    if name == first then
+      text := text ++ s!"private theorem {found} : installed.find {name}Key = some (.fn {name}Member) := by kernel_rfl\n"
+    text := text ++ s!"abbrev at_{name} {admitted} :=\n" ++
+      s!"  subjectPackage.atProtocolAndFunction admitted {root} {name}Key {name}Member {found}\n\n"
+  return text
 
 /-- What a statement of a goal is made of, as text over a model: the binders of the deciding
 role's inputs with their validity, the inputs, the premise about the relation for a program and
@@ -920,7 +910,7 @@ def ceilingNames (s : Statements) (goals := s.claims.goals) : List String :=
 the library that the generated statements name, and the model's. A text that walks the program
 has the walk and the equations where it starts; `walks` says whether the module is for one. -/
 def imports (walks : Bool) : List String :=
-  packageImports ++
+  subjectPackageImports ++
     (if walks then ["Zkc.Core.Evidence.FunctionEntry", "Zkc.Core.Evidence.ProtocolReadback",
       "ZkcFormal.Walk",
       "ZkcFormal.Written.WalkFees"] else []) ++
@@ -1004,7 +994,7 @@ def module (s : Statements) (name : String) (proof : ProofText)
     (if walks then s.entryNames goals else []) ++ (if fees then s.judgmentNames goals else []) ++
     s.ceilingNames goals
   let stating := header (imports walks) ++ s!"namespace {name}\n" ++
-    (Written.package s.package).text ++ statementOpens ++ s.facts goals ++ "\n" ++ s.transfers goals ++ claims ++
+    subjectPackage s.package ++ statementOpens ++ s.facts goals ++ "\n" ++ s.transfers goals ++ claims ++
     coverage goals ++ s.counts goals ++ s.sites goals ++ (if walks then s.entries goals else "") ++
     judgments ++ ceilings ++ footer name stated
   let statementsName : Lean.Name := statements.getD (.str name.toName "Stated")
@@ -1030,7 +1020,7 @@ def claimsModule (s : Statements) (name : String) :
     Except String PlainModule := do
   let (goals, refusals) ← s.coveredGoals
   let text := header (imports false) ++ s!"namespace {name}\n" ++
-    (Written.package s.package).text ++ statementOpens ++ s.facts goals ++ "\n" ++ s.transfers goals ++
+    subjectPackage s.package ++ statementOpens ++ s.facts goals ++ "\n" ++ s.transfers goals ++
     (← s.claimTexts goals) ++ s!"end {name}\n"
   return {text, theorems := [], refusals}
 
@@ -1040,7 +1030,7 @@ def coverageModule (s : Statements) (name : String) :
   let (goals, refusals) ← s.coveredGoals
   let theorems := goals.map (s!"{·.label}_covered")
   let text := header (imports false) ++ s!"namespace {name}\n" ++
-    (Written.package s.package).text ++ statementOpens ++ s.facts goals ++ "\n" ++
+    subjectPackage s.package ++ statementOpens ++ s.facts goals ++ "\n" ++
     coverage goals ++ footer name theorems
   return {text, theorems, refusals}
 
@@ -1048,8 +1038,8 @@ def coverageModule (s : Statements) (name : String) :
 with the ceiling that it states. A goal whose ceiling is below its total gives no module. -/
 def ceilingModule (s : Statements) (name : String) : Except String PlainModule := do
   let ceilings ← s.ceilings
-  let text := header (packageImports ++ ["ZkcFormal.Written.SiteCaps"]) ++
-    s!"namespace {name}\n" ++ (Written.package s.package).text ++ opens ++ s.facts ++ "\n" ++
+  let text := header (subjectPackageImports ++ ["ZkcFormal.Written.SiteCaps"]) ++
+    s!"namespace {name}\n" ++ subjectPackage s.package ++ opens ++ s.facts ++ "\n" ++
     ceilings ++ footer name s.ceilingNames
   return { text, theorems := s.ceilingNames }
 

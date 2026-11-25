@@ -83,7 +83,9 @@ The generator (`lean/compiler/Zkc/Frontend/Written/Statement.lean`) writes the p
 
 | Name | What it is |
 | --- | --- |
+| `subjectPackage` | the stored program, its association and the installation, together with proofs of elaboration and successful admission |
 | `installed`, `rootMember`, `verifierRole`, `proverRole` | the program that the module installs from the package, the root in it, the two roles |
+| `at_root`, `at_either` | move an author's property of the installed root, or of the root and relation together, to the members found by their keys in any admission of this package |
 | `eitherMember` | the function of the relation at the goal's value, a member of `installed` |
 | `calleeProgram`, `<function>Member` | the program of the definitions before the root, and in it each function that the root or a protocol that it applies calls; a law of such a function is stated there |
 | `eitherCaps`, `either_budget` | the table of caps of the goal, and its budget as a number |
