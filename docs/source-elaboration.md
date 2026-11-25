@@ -43,7 +43,7 @@ after specialization.
 
 | Boundary inspected | Finding and consequence |
 |---|---|
-| Parser and printer | Parsing the 518 reference programs distinguishes grammar errors from later refusals. The corpus also exercises canonical printing, tree equality and comment retention. It cannot establish the static or security rules of a program that parses. |
+| Parser and printer | Parsing the 524 reference programs distinguishes grammar errors from later refusals. The corpus also exercises canonical printing, tree equality and comment retention. It cannot establish the static or security rules of a program that parses. |
 | Scope and declarations | Whether a resolved declaration is a relation or an executable algorithm, its statement/witness split and the existence of a named loop can be checked before a goal is selected. Performing these checks in ordinary elaboration also catches malformed siblings of a selected clause. An unresolved module member needs an instance. |
 | Closed instance | A relation and its extractor must agree on instantiated operand types, result tuple, role and run shape. Cost closure and simulator permissions have their own conditions. General checking of those requirements is incomplete. A successful name check gives a later phase work to do. |
 | Written exporter | The resolver retains clause and goal structure, with declaration identities, binder numbers, branch boundaries and source locations. The property selects these fields directly. The ordinary FN6 binder supplies statement operands in parameter order, including named public ports. The written group consumer checks its narrower signature, view and theorem requirements at the chosen instance. |
@@ -67,11 +67,15 @@ can have no diagnostic at this prefix while an instance is waiting or a scheme o
 has yet to be checked. The independent corpus, default-instance pass, construction and
 goal discharge are outside this measurement.
 
-Of the 170 positive programs, 168 had no error through body typing and two were refused.
-Of the 335 negative programs, 192 produced a listed rule, two produced a different rule
-and 141 produced no error at this prefix. One further reference case is marked skipped.
-`just test-frontend` runs this inventory and fixes the five counts. Compared with the previous 504-row inventory, only the three role cases below changed, and the two cases added since (`N-SX3c`, `N-GL2d`: the `where` of a relation where a clause applies it) are one more listed rule and one more case without an error at this prefix, whose rule refuses where a goal gives the value. On the
-separate 134-entry independent corpus all 69 positive cases had no error through this
+Of the 178 positive programs, 176 had no error through body typing and two were refused.
+Of the 345 negative programs, 199 produced a listed rule, two produced a different rule
+and 144 produced no error at this prefix. One further reference case is marked skipped.
+`just test-frontend` runs this inventory and fixes the five counts. The six cases of
+distinct member names add three positive programs and three refusals by their listed rules.
+In the earlier comparison with the 504-row inventory, only the three role cases below
+changed. The two cases then added (`N-SX3c`, `N-GL2d`: the `where` of a relation where
+a clause applies it) gave one more listed rule and one more case without an error at
+this prefix, whose rule refuses where a goal gives the value. On the separate 134-entry independent corpus all 69 positive cases had no error through this
 prefix. Of 53 negative cases, 50 produced a listed rule, two produced another rule and one
 produced no error. Three cases request parsing alone and nine have an underdetermined
 expectation. The three corrected fact cases below also underwent Core admission, a stronger

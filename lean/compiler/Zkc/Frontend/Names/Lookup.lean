@@ -270,7 +270,10 @@ mutual
       if interfaceOfNamespace program ns |>.isSome then
         if mode == .full then
           let all ← closure #[entry.owner]
-          if let some member ← findMember all text then
+          let candidates ← membersNamed all text
+          if candidates.size > 1 then
+            return some { segments := #[segment (.self entry.owner), segment (.member text none)], target := .«open» }
+          if let #[member] := candidates then
             return some (selfMember program entry.owner member text)
       else
         match entry.names[text]? with
@@ -289,9 +292,10 @@ mutual
           if let some host := env.host? then
             if (program.declarations[host]?).bind (·.inner) == some ns then
               let known ← moduleKnown host
-              if let some member ← findMember (← closure known.interfaces) text then
-                return some { segments := #[segment (.declaration host),
-                                            segment (.member text (some member))]
+              let candidates ← membersNamed (← closure known.interfaces) text
+              if !candidates.isEmpty then
+                let member := match candidates with | #[id] => some id | _ => none
+                return some { segments := #[segment (.declaration host), segment (.member text member)]
                               target := .«open» }
       current := entry.parent
     if let some prelude := state.prelude? then
@@ -334,7 +338,7 @@ mutual
         let other := program.declarations[found]!
         let isMember ← match interfaces with
           | some all => do pure (other.kind == .functionDefinition || other.kind == .moduleDefinition
-              || (← findMember all text).isSome)
+              || !(← membersNamed all text).isEmpty)
           | none => pure false
         if other.pub || within || isMember then
           return .ok { segments := #[segment (.declaration found)], target := targetOf program found }
@@ -347,7 +351,9 @@ mutual
           s!"module `{before}` has no `{text}`: its `use` of `{text}` is not `pub`")
       | none =>
         if let some all := interfaces then
-          if let some member ← findMember all text then
+          let candidates ← membersNamed all text
+          if candidates.size > 1 then return open_
+          if let #[member] := candidates then
             return .ok { segments := #[segment (.member text (some member))]
                          target := match kindOf program member with
                            | some .typeMember | some .moduleMember | some .naturalMember => .«open»
@@ -391,7 +397,9 @@ mutual
       -- what is known of a path is looked up once per path: the table is of this lookup alone
       modify fun state => { state with knownPaths := {}, knownCut := false }
       let known ← known env path #[]
-      if let some member ← findMember known.interfaces text then
+      let candidates ← membersNamed known.interfaces text
+      if candidates.size > 1 then return open_
+      if let #[member] := candidates then
         return .ok { segments := #[segment (.member text (some member))]
                      target := memberTarget program member (path.push text) }
       if state.layout?.any known.interfaces.contains && generatedOfLayout.contains text then
@@ -414,15 +422,23 @@ mutual
     | .«open» | .generated => return open_
     | .alternative | .value => return noMember s!"`{before}`"
 
-  /-- The first member of these interfaces with the name. -/
-  partial def findMember (interfaces : Array DeclarationId) (name : String) :
-      ResolveM (Option DeclarationId) := do
+  /-- Declaration candidates before the static arguments of the interfaces are known. -/
+  partial def membersNamed (interfaces : Array DeclarationId) (name : String) :
+      ResolveM (Array DeclarationId) := do
     let program := (← get).program
+    let mut found := #[]
     for interface in interfaces do
       let some inner := (program.declarations[interface]?).bind (·.inner) | continue
       if let some (.declaration member) := (program.namespaces[inner]?).bind (·.names[name]?) then
-        return some member
-    return none
+        if !found.contains member then found := found.push member
+    return found
+
+  /-- Record a declaration only if the name determines one. The applied bound is checked
+  after its terms are resolved. -/
+  partial def findMember (interfaces : Array DeclarationId) (name : String) :
+      ResolveM (Option DeclarationId) := do
+    let #[member] ← membersNamed interfaces name | return none
+    return some member
 
   /-- Whether an interface is a sort: `Group` of `zkc::algebra`, or an interface whose `where`
   requires `Self` to be of a sort (SP3). -/

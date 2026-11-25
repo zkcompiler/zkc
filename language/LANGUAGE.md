@@ -1199,7 +1199,13 @@ only by the first form.
 **SP3. Static things.** A static parameter is a type, a natural or a module. Its bound says
 which: no bound (a type of freely copied data), `linear` (a type of any use mark), a sort (a
 type), `nat` (a natural), an interface that is not a sort (a module that implements it). `A + B`
-requires both. A parameter written with `spec` is a natural that only the specification reads
+requires both. Different applied interfaces in the bound of a module parameter declare distinct
+member names (SP8), including the interfaces required of `Self`. A collision is refused at the
+parameter: “the bound of `H` has two declarations of `T`: `A::T` and `B::T`”. Two different interface declarations that declare one name collide whatever their
+arguments. Two applications of the same declaration collide here if both argument lists have
+values and differ. Otherwise the module supplied for the parameter determines the arguments.
+The member is one at every instance. A use that needs those arguments is typed at the
+instance. A parameter written with `spec` is a natural that only the specification reads
 (SP11).
 
 A *sort* is the interface `zkc::algebra::Group`, or an interface whose `where` requires
@@ -1388,7 +1394,15 @@ default instances miss costs a late message and never soundness.
 n = 0>>`".
 
 **SP8. Interfaces.** A module `M<A>: I<B>` defines every member of `I` and no member that `I`
-lacks; it may hold other declarations, which are its own. A type member is defined by a type
+lacks; it may hold other declarations, which are its own. An applied interface is an interface
+with its evaluated static arguments. Count the same application once, whether named twice
+or required of `Self` along several paths. Different applications of the interfaces of a
+module declare distinct member names, including laws and members of different kinds.
+The check is made at each instance, before its member bodies are typed. A collision at a
+default instance is a refusal (SP7). The message at the module names both declarations:
+“module `M` has two declarations of `copy`: `I<1>::copy` and `I<2>::copy`”.
+
+A type member is defined by a type
 with the member's parameters, and satisfies the member's bound; a natural member by a static name
 (`nat Degree = 1`); a module member by a module that implements the member's bound; a function
 member by its binders and a body, a row or, for a `spec def`, an external name (`def f(x…): e`,

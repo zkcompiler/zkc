@@ -63,11 +63,14 @@ def scopeOwnerName (state : Compile.State) (scope : ScopeId) : String :=
       | none => "?"
     | none => "?"
 
-/-- SP4 and SP11 on every parameter scope. -/
+/-- Member names in parameter bounds (SP3), and the SP4 and SP11 checks of package scopes. -/
 def checkScopes : CompileM Unit := do
   let program ← program
   for scopeId in [0:program.scopes.size] do
     let scope := program.scopes[scopeId]!
+    if let some lowered := (← getModules).loweredScope? scopeId then
+      for (parameter, bound) in scope.parameters.zip lowered.bounds do
+        if let some b := bound then checkBoundMemberNames scope.file parameter b
     unless inPackage program scope.file do continue
     let owner := scopeOwnerName (← get) scopeId
     -- the specification-only parameters stand last (SP11)
@@ -600,13 +603,8 @@ def typeModuleMembers (inst : InstanceId) : CompileM Unit := do
     let some found := program.declarations[definition]? | continue
     unless found.kind == .functionDefinition do continue
     -- the member that an interface declares, and the values of its own static parameters
-    let declared := interfaces.findSome? fun (interface, args) => do
-      let inner ← (program.declarations[interface]?).bind (·.inner)
-      let .declaration member ← (program.namespaces[inner]?).bind (·.names[name]?) | none
-      return (interface, member, args)
-    let some (interface, member, args) := declared | continue
+    let some (interface, member, memberDeclaration, args) ← declaredMember? interfaces name | continue
     let some interfaceDeclaration := program.declarations[interface]? | continue
-    let some memberDeclaration := program.declarations[member]? | continue
     let interfaceParameters := deployedParameters program interfaceDeclaration
     let fixed : StaticEnvironment := (interfaceParameters.zip args).foldl (init := {})
       fun map ((reference, _), value) => map.insert reference value
@@ -680,26 +678,17 @@ def opaqueModule (reference : ParameterRef) (equated : Array String) (real : Ins
     let results := { results with signatures := {} }
     let (table, inst, _) := table.intern key { subject := .ofText "", span := default } none
     (inst, { results with signatures := table })
-  -- the type members of the interfaces kept, with the sorts of their bounds
-  let mut typeMembers : Array (String × Array String) := #[]
-  for (interface, _) in kept do
-    let some inner := (program.declarations[interface]?).bind (·.inner) | continue
-    for member in ((← get).members[inner]?).getD #[] do
-      let some found := program.declarations[member]? | continue
-      let .member (.typeMember _ name _ bound) := found.node | continue
-      let sorts ← match bound with
-        | some bound => boundSorts { file := found.file } bound
-        | none => pure #[]
-      typeMembers := typeMembers.push (name.text, sorts)
-  let opaqueMembers := members.map fun (name, value) =>
-    match (typeMembers.find? (·.1 == name)).map (·.2) with
-    | some sorts =>
-      if equated.contains name then (name, value)
-      else match value with
-        | .type _ => (name, .type (.opaque inst name #[] sorts))
-        | .definition _ => (name, .opaqueType sorts)
-        | other => (name, other)
-    | none => (name, value)
+  let opaqueMembers ← members.mapM fun (name, value) => do
+    let some (_, _, member, _) ← declaredMember? kept name | return (name, value)
+    let .member (.typeMember _ _ _ bound) := member.node | return (name, value)
+    if equated.contains name then return (name, value)
+    let sorts ← match bound with
+      | some bound => boundSorts { file := member.file } bound
+      | none => pure #[]
+    match value with
+    | .type _ => return (name, .type (.opaque inst name #[] sorts))
+    | .definition _ => return (name, .opaqueType sorts)
+    | other => return (name, other)
   modifyResults (·.modifySignatures (·.setState inst (.done (.data (.«module» kept opaqueMembers)))))
   return inst
 

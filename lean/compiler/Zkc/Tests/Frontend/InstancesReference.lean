@@ -21,6 +21,7 @@ def instanceRules : Array String :=
 /-- The tests of layer A that the check of instances refuses: the rule and the line of the first
 refusal, in the first module of the test. -/
 def expectedInstanceRefusals : Array (String × String × Nat) := #[
+  ("N-SP3e", "SP3", 6), ("N-SP8c", "SP8", 6), ("N-SP8f", "SP8", 6),
   ("T-Z1b", "SP4", 3), ("S-Z2b", "SP4", 3), ("V-W1", "SP4", 4), ("N-SP4a", "SP4", 4),
   ("N-SP11b", "SP11", 2), ("N-SP11f", "SP11", 2), ("N-SP8a", "SP8", 5), ("N-SP8b", "SP8", 5),
   ("N-NL9b", "NL9", 5), ("N-NL9c", "NL9", 5), ("M-SUM14", "SP8", 42), ("M-FRA25", "SP11", 161),

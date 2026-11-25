@@ -535,11 +535,8 @@ def interfaceMember (inst : InstanceId) (name : String) :
   let state ← getThe Compile.State
   let some (.«module» interfaces _) := state.table.content? inst
     | waitFor "a module whose members are not evaluated"
-  for (interface, args) in interfaces do
-    let some inner := (state.program.declarations[interface]?).bind (·.inner) | continue
-    if let some (.declaration member) := (state.program.namespaces[inner]?).bind (·.names[name]?) then
-      if let some found := state.program.declarations[member]? then
-        return (interface, member, found, args)
+  -- an opaque stand-in holds the applications of the module that it stands for, which passed SP8
+  if let some result ← liftM (declaredMember? interfaces name : CompileM _) then return result
   refuseHere "SP3" default s!"`{renderInstance state inst}` has no member `{name}`"
 
 /-- The parameters of a function member of a module, from the interface that declares it. -/
