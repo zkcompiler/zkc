@@ -41,6 +41,10 @@ section
 variable (F G : Type) [Field F] [DecidableEq F] [SampleableType F] [AddCommGroup G] [Module F G]
   [DecidableEq G]
 
+/-- Instance synthesis reduces the scalar carrier to the field supplied to the model. -/
+noncomputable example : SampleableType (StandardModel.Carrier (ArithmeticModel.data F G)
+    (.inl (.field .bls12381Fr))) := inferInstance
+
 /-! The sampler of a coin, read from its law and its type: the same under every audience and at
 every occurrence. -/
 

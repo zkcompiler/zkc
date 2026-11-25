@@ -5,7 +5,7 @@ import Zkc.Tests.Frontend.SyntaxHarness
 namespace Zkc.Tests.Frontend
 open Zkc.Frontend.Written PrintedPackageSupport
 
-private def primitiveCases := r#"=== direct Boolean primitive | refuse | sound
+private def primitiveCases := r#"=== direct Boolean primitive | project.test | sound
 module t
 use zkc::security::{soundness}
 def test(x: bool) -> bool = primitive("project.test")
@@ -19,7 +19,7 @@ scheme Checked = Check:
     construction interactive
 goal sound = soundness(Checked)
 
-=== primitive on a nominal input | refuse | sound
+=== primitive on a nominal input | project.test | sound
 module t
 use zkc::security::{soundness}
 type Token = primitive("project.token")
@@ -34,7 +34,7 @@ scheme Checked = Check:
     construction interactive
 goal sound = soundness(Checked)
 
-=== primitive beside a scalar draw | refuse | sound
+=== primitive beside a scalar draw | project.test | sound
 module t
 use zkc::security::{soundness}
 type F = primitive("bls12-381.fr")
@@ -50,7 +50,7 @@ scheme Checked = Check:
     construction interactive
 goal sound = soundness(Checked)
 
-=== primitive after a protocol call | refuse | sound
+=== primitive after a protocol call | project.test | sound
 module t
 use zkc::security::{soundness}
 def test(x: bool) -> bool = primitive("project.test")
@@ -67,7 +67,7 @@ scheme Checked = Check:
     construction interactive
 goal sound = soundness(Checked)
 
-=== primitive in a shared callee | refuse | twice
+=== primitive in a shared callee | project.same | twice
 module t
 use zkc::security::{soundness}
 relation Holds(claim: bool): claim
@@ -136,6 +136,38 @@ goal sound = soundness(Checked)
 
 "#
 
+section
+open Zkc.Core Zkc.Subject Zkc.Vocabulary.Project
+
+private abbrev standardBindings : Bindings := ⟨[], by decide⟩
+
+private def identityFunction : Definition standardBindings.vocabulary :=
+  .fn ⟨0⟩ [.bool] [.bool] false none ⟨[], []⟩ (.mk [0] [] [0]) []
+
+private def caller : Definition standardBindings.vocabulary :=
+  .protocol ⟨1⟩ 2 [⟨.bool, [0, 1]⟩] [] (.mk [0] [
+    .op ⟨0⟩ [1] (.compute [0, 1] (.call ⟨0⟩)) [0]] [])
+
+private def rootProtocol : Definition standardBindings.vocabulary :=
+  .protocol ⟨2⟩ 2 [⟨.bool, [0, 1]⟩] [] (.mk [0] [.op ⟨0⟩ [] (.apply ⟨1⟩ [0, 1]) [0]] [])
+
+/-- The relation is also called through an application of the root. -/
+example : Coverage.missing (b := standardBindings) ⟨[identityFunction, caller, rootProtocol]⟩
+    ⟨2⟩ ⟨0⟩ = none := rfl
+
+/-- A callee stored after its caller cannot discharge that caller's dependency. -/
+example : Coverage.missing (b := standardBindings) ⟨[identityFunction, rootProtocol, caller]⟩
+    ⟨2⟩ ⟨0⟩ = some (.definition ⟨1⟩) := rfl
+
+/-- Even when independently requested as the relation, a later function is unavailable to a caller. -/
+example : Coverage.missing (b := standardBindings) ⟨[caller, identityFunction, rootProtocol]⟩
+    ⟨2⟩ ⟨0⟩ = some (.definition ⟨0⟩) := rfl
+
+example : Coverage.missing (b := standardBindings) ⟨[identityFunction, rootProtocol]⟩
+    ⟨2⟩ ⟨0⟩ = some (.definition ⟨1⟩) := rfl
+
+end
+
 /-- Package admission precedes statement issuance. Issuance diagnoses project primitives and
 unsupported nominal sorts at the admitted package. -/
 def writtenPrimitiveSuite : TestM Unit := do
@@ -156,10 +188,9 @@ def writtenPrimitiveSuite : TestM Unit := do
           expectTrue (message.contains "no carrier for sort" && message.contains "g2") message
         | "law", .error message =>
           expectTrue (message.contains "no sampler for law" && message.contains "bool") message
-        | "refuse", .error message =>
-          expectTrue (message.contains "links a project primitive" && message.contains "no model")
+        | name, .error message =>
+          expectTrue (message.contains "links a project primitive" && message.contains name && message.contains "no model")
             s!"{block.id}: unexpected diagnostic: {message}"
-        | _, .error why => failure s!"{block.id}: {why}"
         | _, .ok () => failure s!"{block.id}: issued a statement for a project primitive"
       check ((statements.module "Check" proof).map fun _ => ())
       match statements.ceilingModule "Check" with

@@ -230,8 +230,8 @@ def package (s : Statements) : SourcePackage := s.claims.emission.package ⟨[],
 A project primitive requires a model of its binding, even if another goal does not use it. -/
 def coveredGoals (s : Statements) : Except String (List ClaimedGoal × List String) := do
   let p := s.package
-  unless p.bindings.rows.isEmpty do
-    throw "a written statement for a package that links a project primitive is not issued yet: there is no model of the primitive"
+  if let (primitive, _) :: _ := p.bindings.rows then
+    throw s!"a written statement for a package that links a project primitive {primitive.name} is not issued yet: there is no model of the primitive"
   let mut goals := #[]
   let mut refusals := #[]
   for g in s.claims.goals do

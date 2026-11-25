@@ -21,6 +21,16 @@ noncomputable abbrev samplers := lawSamplers model draws
 theorem served : Served samplers (Permitted model) := ArithmeticModel.served F G
 theorem large : Zkc.Vocabulary.Field.bls12381Fr.order ≤ Fintype.card F := ScalarField.card.ge
 
+/-- Acceptance of a nominal sort requires an actual entry before totalization. -/
+theorem coveredSort_iff_carrierEntry (k : Standard.TypeKey) :
+    (Coverage.missingSort (.nominal k)).isNone = (StandardModel.carrierEntry D k).isSome := by
+  cases k with
+  | inr => rfl
+  | inl k =>
+    cases k with
+    | field f | nonzero f => cases f <;> rfl
+    | group g => cases g <;> rfl
+
 /-- The compiler's row test describes precisely the arms of the semantic table. -/
 theorem interpreted_iff_arm (k : Standard.RowKey) :
     Coverage.interpreted k = (StandardModel.arm D k).isSome := by
@@ -82,23 +92,16 @@ theorem row_respectsPointStructure (k : Standard.RowKey) : StandardModel.interpr
 def covers (p : NamedProgram Standard) (root relation : Key) : Bool :=
   (Coverage.missing (b := ⟨[], by decide⟩) p root relation).isNone
 
+/-- For unambiguous stored keys, every row reached from either entry respects point structure. -/
 theorem covered_rows {p : NamedProgram Standard} {root relation : Key}
-    (covered : covers p root relation = true) :
-    ∀ k ∈ (NamedProgram.mk (Coverage.reach p root relation).2).rows, respectsPointStructure k = true := by
-  intro k member
+    (covered : covers p root relation = true) (distinct : (p.definitions.map Definition.key).Nodup)
+    {d : Definition Standard} (stored : d ∈ p.definitions) (path : Coverage.Reachable p root relation d.key)
+    {k : Standard.RowKey} (row : k ∈ d.rows) : respectsPointStructure k = true := by
+  have ok := Option.isNone_iff_eq_none.mp covered
+  have member := (Coverage.closed_of_missing ok).mem_of_reachable
+    (fun _ hd _ he => List.inj_on_of_nodup_map distinct hd he) stored path
   apply row_respectsPointStructure
   rw [StandardModel.interprets_iff_arm D, ← interpreted_iff_arm]
-  unfold covers Coverage.missing at covered
-  generalize Coverage.reach p root relation = reached at *
-  rcases reached with ⟨keys, defs⟩
-  simp only at covered member
-  split at covered
-  · contradiction
-  · split at covered
-    · contradiction
-    · rename_i absent
-      have noRow : (NamedProgram.mk defs).rows.find? (!Coverage.interpreted ·) = none :=
-        Option.eq_none_iff_forall_ne_some.mpr absent
-      simpa using List.find?_eq_none.mp noRow k member
+  exact Coverage.interpreted_of_missing ok k (List.mem_flatMap.mpr ⟨d, member, row⟩)
 
 end ZkcFormal.Written.StandardInterpretation
