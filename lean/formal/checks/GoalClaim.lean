@@ -253,15 +253,15 @@ def run (corpus : System.FilePath) (work : System.FilePath) : IO Unit := do
     (comparisonModule "ClaimsSource" count ["loose", "strict"] (Written.package (packageOf both)).text)
   let control ← startLakeLean work "ClaimsControl"
     (proofModule "ClaimsControl" (negated.emission.package noAssociation) (packageOf both) root.id relations)
-  -- The statement of a goal whose relation has a witness: the premise is that the relation
-  -- returns false at the statement for every valid witness. The promise pair has no charge, so
+  -- The statement of a goal whose relation has a witness: the premise is that no valid witness
+  -- makes the relation return true at the statement. The promise pair has no charge, so
   -- the bound of its statement is zero; Lean elaborates the statement.
   let (_, pairClaims) ← read pair ["sound"]
   let pairStated : Statements := { claims := pairClaims }
   let module ← IO.ofExcept (pairStated.claimsModule "ClaimsWitness")
   let client := "\nnamespace ClaimsWitness\n" ++ statementOpens ++
     "open Zkc.Core\nexample (h : soundWitnessed) : ∃ x, functionResult (t := .bool)\n" ++
-    "    (fnMeaning StandardInterpretation.model installed soundMember (.cons x (.cons x .nil))) = some false := by\n" ++
+    "    (fnMeaning StandardInterpretation.model installed soundMember (.cons x (.cons x .nil))) ≠ some true := by\n" ++
     "  obtain ⟨x, valid, _, rejected⟩ := h\n  exact ⟨x, rejected (witness0 := x) valid⟩\nend ClaimsWitness\n"
   let stated ← startLakeLean work "ClaimsWitness" (module.text ++ client)
   -- Public definitions in an exposed module must be able to refer to the same library terms.

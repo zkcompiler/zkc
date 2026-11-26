@@ -30,7 +30,7 @@ scheme Checked = Either:
 goal either = soundness(Checked, stage = written)
 ```
 
-The claim of the goal: on inputs on which the relation returns false, the verifier returns with probability at most the total of the charges that the root reaches along one run (here one quarter: the two draws are in the two arms of a choice, and the total takes the larger arm), against every service that draws each coin no more favourably than its law.
+The claim of the goal: on inputs at which no valid witness makes the relation return true, the verifier returns with probability at most the total of the charges that the root reaches along one run (here one quarter: the two draws are in the two arms of a choice, and the total takes the larger arm), against every service that draws each coin no more favourably than its law.
 
 A fee proof supplies the judgment and a witness. A direct proof supplies the installed claim and a witness. The Operands example in `lean/formal/checks/GoalStatement.lean` uses the kernel to compute the deciding role and the relation.
 
@@ -65,7 +65,7 @@ The generator (`lean/compiler/Zkc/Frontend/Written/Statement.lean`) writes the p
 | `either_cap_x`, `either_cap_y` | the cap that the table gives each charged draw |
 | `site_<a>_<d>`, `<goal>_cap_site_<a>_<d>` | a charged draw below applications and its cap, named by the numbers of the keys of the applications and of the draw in the stored program (the module's comment on the name says which) |
 | `eitherJudged` | the judgment that the text proves |
-| `either_witnessed_of` | the theorem that gives `eitherWitnessed` from an input on which the relation returns false |
+| `either_witnessed_of` | the theorem that gives `eitherWitnessed` from an input at which no valid witness makes the relation return true |
 | `eitherClaim`, `eitherGoal`, `eitherResult`, `eitherWitnessed` | the published propositions: the claim about the installed program, the goal for every admitted program, the result with the coverage, and that the hypotheses are met |
 | `either_installed`, `either_sound`, `either_result`, `either_met` | their theorems, written after the text from `either_judged` and `either_witnessed` |
 

@@ -32,13 +32,24 @@ scoped macro "rejectionAt%(" M:term ", " d:term ", " p:term ", " relation:term "
     witnesses $M (($d).relation.header.ins.drop ($d).arity) fun ws ↦
       validWitnesses $M ws <|
         functionResult (M := $M) (t := .bool) (($d).boolean ▸ fnMeaning $M $p $relation
-          (arguments _ ($d).arity statement ws)) = some false)
+          (arguments _ ($d).arity statement ws)) ≠ some true)
 
-/-- Every valid witness makes the selected relation return false on these statement operands.
-The witness mapping records source positions. The universal quantifiers use the function types. -/
+/-- No valid witness makes the selected relation return true on these statement operands: the
+statement is outside the relation's language. A witness at which the relation stops does not
+make the statement accepted. The witness mapping records source positions. The universal
+quantifiers use the function types. -/
 def Rejected (p : Typed V) (relation : Member p.headers.fns d.relation.header)
     (xs : HList (RV M scheme.verifier) scheme.entry.header.ins) : Prop :=
   rejectionAt%(M, d, p, relation, xs)
+
+/-- A statement is rejected when the relation returns true at no arguments at all: whatever the
+witnesses are, and whether the relation returns false or stops. -/
+theorem rejected_of_results {p : Typed V} {relation : Member p.headers.fns d.relation.header}
+    {xs : HList (RV M scheme.verifier) scheme.entry.header.ins}
+    (results : ∀ args : HList M.Val d.relation.header.ins,
+      functionResult (M := M) (t := .bool) (d.boolean ▸ fnMeaning M p relation args) ≠ some true) :
+    Rejected M d p relation xs :=
+  witnesses_intro M _ _ fun ws ↦ validWitnesses_intro M ws (results _)
 
 variable (draws : LawDraws M)
 

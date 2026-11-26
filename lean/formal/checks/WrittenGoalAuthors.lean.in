@@ -11,6 +11,6 @@ theorem noEqualityReceipt : ¬ equalityWitnessed := by
   have no := rejected (witness0 := value) trivial
   have yes : functionResult (t := .bool) (fnMeaning model installed equalityMember
       (.cons value (.cons value .nil))) = some true := by cases value <;> kernel_rfl
-  exact Bool.noConfusion (Option.some.inj (yes.symm.trans no))
+  exact no yes
 
 end AuthorClient

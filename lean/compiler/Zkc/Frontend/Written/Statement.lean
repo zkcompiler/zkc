@@ -27,8 +27,9 @@ the library, at the standard interpretation of the vocabulary:
   them in every program that admission gives, each found by its key;
 - `claimTexts`: for each goal, the propositions that are stated before any proof. The claim
   about a program (`<goal>ClaimOf`, and `<goal>Claim` about the installed one): on valid inputs
-  of the deciding role, where the relation of the goal's clause returns false at its operands
-  (for every valid witness, when the relation has witness parameters), the deciding role
+  of the deciding role, where the relation of the goal's clause returns true at its operands
+  for no valid witness (at the operands themselves, when it has no witness parameters), the
+  deciding role
   returns within the total of the goal's table of caps, in the experiment that the formal library
   defines (`ReturnsWithin`, `ZkcFormal/ReturnExperiment.lean`): against every service that is
   no more likely to answer a coin within a set of replies than the sampler of the coin's law
@@ -38,7 +39,7 @@ the library, at the standard interpretation of the vocabulary:
   (`Method.fees`): for each goal the proposition `<goal>Judged` that the text has to prove
   and the theorem `<goal>_claim_of_judged` that the claim follows from it, and the
   theorem `<goal>_witnessed_of` that the hypotheses of the claim are met at any valid inputs
-  on which the relation returns false;
+  at which no valid witness makes the relation return true;
 - `conclusions`, for such a text and after it: `<goal>_installed : <goal>Claim` from the
   theorem `<goal>_judged : <goal>Judged` of the text. A text of another method
   (`Method.direct`) proves `<goal>_installed` itself;

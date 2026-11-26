@@ -49,6 +49,18 @@ def validWitnesses : {ts : List V.Ty} → HList M.Val ts → Prop → Prop
   | [], .nil, q => q
   | t :: _, .cons x xs, q => M.Valid t x → validWitnesses xs q
 
+/-- What holds of every witness holds under the witness telescope. -/
+theorem witnesses_intro :
+    ∀ (ts : List V.Ty) (k : HList M.Val ts → Prop), (∀ ws, k ws) → witnesses M ts k
+  | [], _, h => h .nil
+  | _ :: ts, _, h => fun x ↦ witnesses_intro ts _ fun xs ↦ h (.cons x xs)
+
+/-- What holds, holds under the validity assumptions of the witnesses. -/
+theorem validWitnesses_intro :
+    ∀ {ts : List V.Ty} (ws : HList M.Val ts) {q : Prop}, q → validWitnesses M ws q
+  | [], .nil, _, h => h
+  | _ :: _, .cons _ xs, _, h => fun _ ↦ validWitnesses_intro xs h
+
 /-- Apply a pointwise implication under the universal deployed-input telescope. -/
 theorem mapInputs (r : Role) :
     ∀ (ports : List (LTy V)) (P Q : HList (RV M r) ports → Prop),
