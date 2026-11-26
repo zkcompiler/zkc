@@ -82,11 +82,11 @@ private partial def reachedInModule (home : Option ModuleIdx) :
       (seen.insert name)
 
 /-- What a statement over a short application must not read through it: a decision (the place
-of a clause and its witness operands), a goal's row and fields, the table of caps, the aggregate
-and the source's names. -/
+of a clause and its witness operands), a goal's row, fields and bound, the table of caps, the
+aggregate and the source's names. -/
 private def rowWords : List String :=
-  ["written'decision", "written'goal", "written'fields", "written'slot", "written'caps",
-    "written'clauses", "written'subject", "written'origins"]
+  ["written'decision", "written'goal", "written'fields", "written'bound", "written'slot",
+    "written'caps", "written'clauses", "written'subject", "written'origins"]
 
 /-- A short application reaches none of the subject's rows. A statement over a short application
 names its constant; whatever that constant reaches is compared when a proof is judged. -/

@@ -477,8 +477,22 @@ private def sharedFunction (work : System.FilePath) : IO Unit := do
   let reaching ← checkMutant work m "ApplicationReach" through original
     [("checkReferences (← Lean.getCurrNamespace) \"c\"",
       "the short application SharedFunction.written'application1 reaches SharedFunction.written'origins")]
+  -- The same function entry again, reached through a bound: a short application is the same at
+  -- every bound, and a statement over this one would read a goal's number.
+  let bounded ← replaceOnce m.statements
+    ("noncomputable def written'application1 : Zkc.Subject.ShortApplication written'root :=\n" ++
+      "  ⟨written'fn0, ⟨1, by decide +kernel⟩")
+    ("def written'bound9 : Zkc.Subject.Bound := ⟨1, 2, by decide⟩\n" ++
+      "private noncomputable def entryAtBound : Zkc.Subject.FunctionEntry subjectPackage :=\n" ++
+      "  (fun (_ : Zkc.Subject.Bound) => written'fn0) written'bound9\n" ++
+      "noncomputable def written'application1 : Zkc.Subject.ShortApplication written'root :=\n" ++
+      "  ⟨entryAtBound, ⟨1, by decide +kernel⟩")
+  let reachingBound ← checkMutant work m "ApplicationBound" bounded original
+    [("checkReferences (← Lean.getCurrNamespace) \"c\"",
+      "the short application SharedFunction.written'application1 reaches SharedFunction.written'bound9")]
   bad
   reaching
+  reachingBound
 
 private def reduction := "module reduceexample
 use zkc::security::{soundness}
