@@ -98,11 +98,11 @@ def statementsOf (text : String) (goals : List String) : Except String Statement
   return { claims := ← goalClaims (← goalRoot text first) goals }
 
 /-- The places of the operands of the one goal of a source among the inputs of the deployed
-header, and the text of its claim about the installed program. -/
-def claimOf (text : String) : Except String (Array Nat × String) := do
+header, and the names of those deployed inputs. The imported subject is inspected below. -/
+def claimOf (text : String) : Except String (Array Nat × Array String) := do
   let s ← statementsOf text ["sound"]
   let [goal] := s.claims.goals | throw "not one goal"
-  return (goal.statement, ← s.claimAt goal "installed" "rootMember" "soundMember")
+  return (goal.statement, s.claims.inputs)
 
 /-- A source whose goal is refused, for a reason that the refusal states. -/
 def refused (title text : String) (reasons : List String) : IO Unit :=
@@ -275,7 +275,7 @@ input to the statement about the result. -/
 def reduction : String :=
   "module t\nuse zkc::security::{soundness}\nrelation IsSet(b: bool): b\n" ++
   "protocol Flags roles(P, V)(flag: bool @(P, V)) -> echoed: bool @(P, V):\n" ++
-  "    bit <- draw bool from V to P\n    return flag\n" ++
+  "    bit <- draw index<2> from V to P\n    return flag\n" ++
   "spec for Flags:\n    reduces @V IsSet(flag) to IsSet(echoed)\n    charge sites.bit <= 1 / 2\n" ++
   "scheme Checked = Flags:\n    prover P\n    construction interactive\n" ++
   "goal sound = soundness(Checked)\n"
@@ -399,9 +399,12 @@ def assuming (_ : Statements) (proof : String) : Except String String := do
 experiment of a bound on returns, as a proposition that holds of everything) and proves the
 claim written anew under it. The claim written anew is not the claim that was stated before the
 text. -/
-def shadowing (s : Statements) (proof : String) : Except String String := do
-  let [goal] := s.claims.goals | throw "the statements are not of one goal"
-  let anew ← s.claimAt goal "installed" "rootMember" "soundMember"
+def shadowing (_ : Statements) (proof : String) : Except String String := do
+  let anew := "∀ (path : List Frame) (flag : Bool), StandardInterpretation.model.Valid .bool flag →\n" ++
+    "    ∀ other : Bool, StandardInterpretation.model.Valid .bool other →\n" ++
+    "    functionResult (t := .bool) (fnMeaning StandardInterpretation.model installed soundMember (.cons flag .nil)) = some false →\n" ++
+    "    ReturnsWithin (roleMeaning StandardInterpretation.model installed rootMember verifierRole path (.cons flag (.cons other .nil)))\n" ++
+    "      StandardInterpretation.samplers (Permitted StandardInterpretation.model) (fun _ => True) soundCaps.total"
   return (← established proof) ++ "\n" ++
     "def ReturnsWithin {S : Sig} {H A : Type} (_ : Process S H A) (_ : Samplers S)\n" ++
     "    (_ : ∀ op, S.Reply op → Prop) (_ : A → Prop) (_ : ℝ≥0∞) : Prop := True\n\n" ++
@@ -413,17 +416,14 @@ def run (work : System.FilePath) : IO Unit := do
   -- another port of the same type changes both.
   let base ← IO.ofExcept (claimOf (flags both "proves @V IsSet(flag)"))
   expect "the operand `flag` is not the first input of the deployed header" (base.1 == #[0])
-  expect s!"the claim does not name its inputs as the source does:\n{base.2}"
-    (base.2.contains "soundMember (.cons input_flag .nil)) = some false" &&
-      base.2.contains "verifierRole path (.cons input_flag (.cons input_other .nil))")
+  expect "the deployed inputs do not have their source names" (base.2 == #["flag", "other"])
   let inFront ← IO.ofExcept (claimOf (flags ("spec note: bool, " ++ both) "proves @V IsSet(flag)"))
   expect "a spec port in front of the operand changed the operand or the claim" (inFront == base)
   let behind ← IO.ofExcept (claimOf (flags (both ++ ", spec note: bool") "proves @V IsSet(flag)"))
   expect "a spec port behind the operand changed the operand or the claim" (behind == base)
   let other ← IO.ofExcept (claimOf (flags both "proves @V IsSet(other)"))
   expect "the operand `other` is not the second input of the deployed header" (other.1 == #[1])
-  expect "another operand of the same type left the claim as it was"
-    (other.2 != base.2 && other.2.contains "soundMember (.cons input_other .nil)) = some false")
+  expect "changing the clause operand changed the deployed ports" (other.2 == base.2)
   let otherInFront ← IO.ofExcept (claimOf (flags ("spec note: bool, " ++ both) "proves @V IsSet(other)"))
   expect "a spec port in front of the other operand changed the operand or the claim" (otherInFront == other)
 
@@ -446,11 +446,10 @@ def run (work : System.FilePath) : IO Unit := do
       ((verifiers [goal]).toOption == some (verifier, prover, 1))
   expect "two goals of one scheme are not one package" ((verifiers ["a", "d"]).toOption == some (1, 0, 2))
   -- The claim of a goal read with another goal of its scheme is its claim read alone.
-  let claimsOf (goals : List String) : Except String (List (String × String)) := do
+  let claimsOf (goals : List String) := do
     let root ← goalRoot schemes goals.head!
-    let s : Statements := { claims := ← goalClaims root goals }
-    s.claims.goals.mapM fun goal => do
-      return (goal.goal, ← s.claimAt goal "installed" "rootMember" s!"{goal.goal}Member")
+    let claims ← goalClaims root goals
+    return claims.goals.map fun g => (g.goal, g.clause.place, g.relation, g.statement, g.witness, g.caps)
   let together ← IO.ofExcept (claimsOf ["a", "d"])
   expect "the claims of two goals of one scheme are not their claims read alone"
     (together == (← IO.ofExcept (claimsOf ["a"])) ++ (← IO.ofExcept (claimsOf ["d"])))
@@ -549,8 +548,8 @@ def run (work : System.FilePath) : IO Unit := do
   let reduced ← IO.ofExcept (statementsOf reduction ["sound"])
   let [reducedGoal] := reduced.claims.goals | throw (IO.userError "the reduction has not one goal")
   expect "the clause of the reduction is not read as a reduction" (reducedGoal.clause.kind == .reduces)
-  for written in [reduced.claimTexts,
-      reduced.claimAt reducedGoal "installed" "rootMember" "soundMember"] do
+  for written in [(reduced.claimsModule "Reduction").map (fun _ => ()),
+      (reduced.module "Reduction" {}).map (fun _ => ())] do
     match written with
     | .ok _ => throw (IO.userError "a statement was written for a `reduces` clause")
     | .error why => expect s!"the reduction was refused for another reason: {why}" (why.contains "reduces")
@@ -572,7 +571,7 @@ def run (work : System.FilePath) : IO Unit := do
   -- Both comparisons read the original source. The second module has the same namespace
   -- and goal, but its verifier guards the other input.
   let compare (name : String) (issued : Module) :=
-    startSourceComparison work name issued fronted ["t::sound"]
+    startSourceComparison work name issued fronted ["t::sound"] ["sound"] (fees := false)
   let matched ← compare "OperandsSource" module
   let changed ← issuedStatements (← replaceOnce fronted "guard @V flag" "guard @V other")
   let verifier ← IO.ofExcept (changed.module module.space {} (walks := false)

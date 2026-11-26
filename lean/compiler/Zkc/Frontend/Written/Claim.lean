@@ -88,6 +88,8 @@ private def selectedClause (c : AdmittedRoot) (selected : Selection) : ExportM D
 structure ClaimedGoal where
   private mk ::
   goal : String
+  /-- The resolved source declaration, shared by all selectors of this goal. -/
+  declaration : DeclarationId
   clause : DecidingClause
   /-- The relation of the clause at the static values of its application and the proof values
   of the goal: the key of its definition in the package. Two goals that give one value claim
@@ -164,7 +166,8 @@ def operandPlace (body : Typed.ProtocolBody) (statement : Option (Nat × Nat))
 
 /-- What a goal claims, with its relation instantiated in `state` and the state after it, and
 the scheme that the goal names. -/
-private def readClaim (c : AdmittedRoot) (state : Compile.State) (goal : String) (selected : Selection) :
+private def readClaim (c : AdmittedRoot) (state : Compile.State) (goal : String)
+    (declaration : DeclarationId) (selected : Selection) :
     ExportM (ClaimedGoal × SchemeEntry × Compile.State) := do
   let clause ← selectedClause c selected
   let some application := clause.application
@@ -201,13 +204,14 @@ private def readClaim (c : AdmittedRoot) (state : Compile.State) (goal : String)
     else if application.witness.isEmpty then pure none
     else some <$> application.witness.mapM (operandPlace body none)
   let (caps, sites) ← goalCaps c selected.specification
-  return ({ goal, clause, relation, statement, witness, specification := selected.specification,
+  return ({ goal, declaration, clause, relation, statement, witness, specification := selected.specification,
             ceiling := selected.ceiling, caps, sites }, selected.scheme, state)
 
 @[no_expose] def claimedGoal (c : AdmittedRoot) (state : Compile.State) (goal : String) :
     ExportM (ClaimedGoal × SchemeEntry × Compile.State) := do
-  let (selected, _) ← c.goalSource.selectNamed goal .soundness
-  readClaim c state goal selected
+  let (id, _) ← selectDeclaration c.goalSource.state .goal goal "WK-GOAL"
+  let (selected, _) ← c.goalSource.selectId id .soundness
+  readClaim c state goal id selected
 
 /-- What written soundness goals of one scheme claim (GL3), as one package: for each goal its
 clause, the relation that the clause applies as a definition at the proof values of the goal,
@@ -220,8 +224,9 @@ private def collectClaims (c : AdmittedRoot) (goals : List (String × ExportM De
   let mut reversed := []
   let mut first : Option (String × SchemeEntry) := none
   for (goal, resolution) in goals do
-    let (selected, _) ← c.goalSource.selectId (← resolution) .soundness
-    let (next, named, after) ← readClaim c state goal selected
+    let id ← resolution
+    let (selected, _) ← c.goalSource.selectId id .soundness
+    let (next, named, after) ← readClaim c state goal id selected
     match first with
     | some (earlierGoal, earlier) =>
       unless earlier.declaration == named.declaration do

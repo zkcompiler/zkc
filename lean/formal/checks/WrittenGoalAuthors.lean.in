@@ -1,0 +1,188 @@
+import AuthorGuard
+import AuthorSwap.Stated
+import AuthorMulti
+import AuthorEmpty
+import AuthorEquality
+
+open Zkc.Core ZkcFormal ZkcFormal.Written ZkcFormal.ProbabilisticProcess OracleComp ProbComp
+open StandardInterpretation (model served)
+open scoped NNRat ENNReal
+
+namespace AuthorClient
+
+-- The mutation selects y for IsSet. It preserves the admitted package, verifier and function.
+example : AuthorGuard.stored = AuthorSwap.stored := rfl
+example : AuthorGuard.association = AuthorSwap.association := rfl
+example : AuthorGuard.installed = AuthorSwap.installed := rfl
+example : AuthorGuard.rootMember = AuthorSwap.rootMember := rfl
+example : AuthorGuard.verifierRole = AuthorSwap.verifierRole := rfl
+example : AuthorGuard.soundMember = AuthorSwap.soundMember := rfl
+
+theorem holds : AuthorGuard.soundClaim := AuthorGuard.sound_installed
+
+private abbrev inputs : HList (RV model AuthorGuard.verifierRole) AuthorGuard.rootHeader.ins :=
+  .cons () (.cons true (.cons false .nil))
+
+theorem disagreement :
+    (¬ Goal.Rejected model AuthorGuard.written'goal0 AuthorGuard.installed AuthorGuard.soundMember inputs) ∧
+      Goal.Rejected model AuthorSwap.written'goal0 AuthorSwap.installed AuthorSwap.soundMember inputs := by
+  refine ⟨?_, AuthorGuard.identityLaw false⟩
+  intro no
+  exact Bool.noConfusion (Option.some.inj ((AuthorGuard.identityLaw true).symm.trans no))
+
+open AuthorSwap in
+theorem refuted : ¬ soundClaim := by
+  intro h
+  have runs : roleMeaning model installed rootMember verifierRole []
+      (.cons () (.cons true (.cons false .nil))) = .done .nil := by kernel_rfl
+  obtain ⟨_, service, ⟨state⟩, conforms⟩ := served
+  have bound := (h (input_y := false) (input_x := true) [] trivial trivial disagreement.2).returns
+    service conforms state
+  rw [runs, prEvent_simulation_returns] at bound
+  have free : soundCaps.total = 0 := by kernel_rfl
+  rw [free] at bound
+  change Pr{let out ← (pure (Outcome.returned _, state) : ProbComp _)}[∃ a, out.1 = .returned a] ≤ 0 at bound
+  apply not_lt_of_ge bound
+  rw [prEvent_pos_iff]
+  exact ⟨(.returned .nil, state), by simp, .nil, rfl⟩
+
+section
+open AuthorGuard
+
+-- Keep the computed rejection for the value returned by the receipt.
+def OffInput : Prop := ∃ x : Bool, x = false ∧
+  functionResult (t := .bool) (fnMeaning model installed soundMember (.cons x .nil)) = some false
+
+local macro "readZero " receipt:term : tactic => `(tactic|
+  (obtain ⟨x, _, _, _, _, rejected⟩ := $receipt
+   have equation := rejected
+   rw [identityLaw] at equation
+   exact ⟨x, Option.some.inj equation, rejected⟩))
+
+theorem zeroMet : OffInput := by readZero sound_met
+theorem zeroHelper : OffInput := by
+  have receipt := sound_witnessed_of (input_y := true) (input_x := false) trivial trivial
+    (identityLaw false)
+  readZero receipt
+
+end
+
+section
+open AuthorMulti
+
+def ImportedClaim := mappedClaim
+
+example (h : ImportedClaim) : mappedClaim := by
+  intro path claim hc right hv rejected
+  fail_if_success have _ := h (input_flag := true)
+  exact h (input_claim := claim) (input_right := right) path hc hv rejected
+
+example : mappedClaimOf = omittedClaimOf := rfl
+example : mappedWitnessed = omittedWitnessed := rfl
+
+def OffForEveryWitness : Prop := ∃ y : Bool, y = false ∧ ∀ b : Bool, ∀ n : Nat,
+  functionResult (t := .bool) (fnMeaning model installed mappedMember
+    (.cons y (.cons b (.cons n .nil)))) = some false
+
+local macro "readMulti " receipt:term : tactic => `(tactic|
+  (obtain ⟨_, _, y, _, _, rejected⟩ := $receipt
+   fail_if_success have _ := rejected false trivial 0 trivial
+   have equation := rejected (witness1 := 0) (witness0 := false) trivial trivial
+   rw [acceptsLaw] at equation
+   exact ⟨y, by simpa using Option.some.inj equation, fun b n ↦ rejected b n trivial trivial⟩))
+
+theorem mappedMet : OffForEveryWitness := by readMulti mapped_met
+theorem omittedMet : OffForEveryWitness := by readMulti omitted_met
+
+theorem mappedHelper : OffForEveryWitness := by
+  have receipt := mapped_witnessed_of (input_right := false) (valid_input_claim := trivial)
+    (input_claim := true) (valid_input_right := trivial) (fun b n _ _ ↦ acceptsLaw false b n)
+  readMulti receipt
+
+theorem omittedHelper : OffForEveryWitness := by
+  have receipt := omitted_witnessed_of (input_right := false) (valid_input_claim := trivial)
+    (input_claim := true) (valid_input_right := trivial) (fun b n _ _ ↦ acceptsLaw false b n)
+  readMulti receipt
+
+-- These proofs use named unfolds at the operands exposed to an importing author.
+example : mappedClaim := by
+  claim_intro
+  unfold StandardInterpretation.samplers
+  apply mapped_installed <;> assumption
+
+example : mappedJudged := by
+  claim_intro
+  unfold StandardInterpretation.samplers
+  apply mapped_judged <;> assumption
+
+example : mappedGoal := by
+  intro a ok
+  unfold stored association at ok
+  obtain ⟨root, foundRoot, relation, foundRelation, claim⟩ := mapped_sound ok
+  unfold rootKey rootHeader at foundRoot
+  unfold mappedKey mappedHeader at foundRelation
+  unfold mappedClaimOf at claim
+  exact ⟨root, foundRoot, relation, foundRelation, claim⟩
+
+example : mappedResult := by
+  obtain ⟨coverage, counted, goal⟩ := mapped_result
+  unfold stored rootKey mappedKey StandardInterpretation.covers at coverage
+  unfold stored rootKey mappedCaps at counted
+  unfold mappedGoal at goal
+  exact ⟨coverage, counted, goal⟩
+
+-- Membership and both lookups are for the arbitrary admitted program supplied by the caller.
+def LocatedClaim (a : Admitted V) : Prop :=
+  ∃ r : Member a.program.headers.protocols rootHeader, a.program.findProtocol rootKey = some ⟨rootHeader, r⟩ ∧
+  ∃ f : Member a.program.headers.fns mappedHeader, a.program.find mappedKey = some (.fn f) ∧
+    mappedClaimOf a.program r f
+
+local macro "useLocated " lookup:term : tactic => `(tactic|
+  (obtain ⟨r, hr, f, hf, h⟩ := $lookup
+   refine ⟨r, hr, f, hf, ?_⟩
+   intro path claim hc right hv rejection
+   fail_if_success have _ := h (input_flag := true)
+   exact h (input_claim := claim) (input_right := right) path hc hv rejection))
+
+theorem fromGoal (goal : mappedGoal) {a : Admitted V} (ok : admit stored association = .ok a) :
+    LocatedClaim a := by useLocated (goal ok)
+
+theorem fromResult (result : mappedResult) {a : Admitted V} (ok : admit stored association = .ok a) :
+    LocatedClaim a := by useLocated (result.2.2 ok)
+
+end
+
+section
+open AuthorEmpty
+
+-- With no visible inputs the first pair already contains the service and rejection.
+def EmptyReceipt : Prop := Served (lawSamplers model StandardInterpretation.draws) (Permitted model) ∧
+  functionResult (t := .bool) (fnMeaning model installed emptyGoalMember .nil) = some false
+
+local macro "readEmpty " receipt:term : tactic => `(tactic|
+  (obtain ⟨service, rejected⟩ := $receipt
+   rw [neverLaw] at rejected
+   exact ⟨service, neverLaw.trans rejected⟩))
+
+theorem emptyMet : EmptyReceipt := by readEmpty emptyGoal_met
+theorem emptyHelper : EmptyReceipt := by
+  have receipt := emptyGoal_witnessed_of (rejected := neverLaw)
+  readEmpty receipt
+
+theorem publicNames : EmptyReceipt := by
+  obtain ⟨service, rejected⟩ := emptyGoal_met
+  unfold StandardInterpretation.samplers at service
+  unfold emptyGoalMember at rejected
+  exact ⟨service, rejected⟩
+
+end
+
+open AuthorEquality in
+theorem noEqualityReceipt : ¬ equalityWitnessed := by
+  rintro ⟨_, _, value, _, _, rejected⟩
+  have no := rejected (witness0 := value) trivial
+  have yes : functionResult (t := .bool) (fnMeaning model installed equalityMember
+      (.cons value (.cons value .nil))) = some true := by cases value <;> kernel_rfl
+  exact Bool.noConfusion (Option.some.inj (yes.symm.trans no))
+
+end AuthorClient

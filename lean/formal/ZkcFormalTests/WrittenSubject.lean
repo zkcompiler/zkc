@@ -3,6 +3,8 @@ import Zkc.Frontend.Written.Goals
 import Zkc.Tests.Frontend.SourceClause
 import Zkc.Tests.Frontend.PrintedPackageSupport
 import ZkcFormalTests.SubjectProject
+import ZkcFormalTests.WrittenBinding
+import ZkcFormalTests.WrittenSource
 
 /-!
 A subject of a written soundness goal, as a check states it.
@@ -194,15 +196,19 @@ def startLakeLean (work : System.FilePath) (name source : String) (text := true)
 /-- Compare the named values in the issued statements with the frontend run on the original
 source and selectors. The same values must be the fields of the package used for admission. -/
 def startSourceComparison (work : System.FilePath) (name : String) (module : Module)
-    (source : String) (goals : List String) : IO Pending :=
+    (source : String) (goals : List String) (labels := goals.map Statements.labelOfSpelling)
+    (fees := true) : IO Pending := do
+  unless goals.length == labels.length do throw (IO.userError "a public label is required for each selector")
+  let observation ← IO.ofExcept (WrittenSource.consumer source (goals.zip labels) fees)
   startLakeLean work name
-    (s!"import {module.statementsName}\nimport Zkc.Tests.Frontend.PrintedPackageSupport\n\n" ++
+    (s!"import {module.statementsName}\nimport Zkc.Tests.Frontend.PrintedPackageSupport\n" ++
+      "import ZkcFormalTests.WrittenBinding\nopen ZkcFormal.Written\n\n" ++
       s!"namespace {module.space}\n" ++
       "example : subjectPackage.stored = stored := rfl\n" ++
       "example : subjectPackage.association = association := rfl\n" ++
       "example : subjectPackage.installed = installed := rfl\n" ++
       s!"#eval Zkc.Tests.Frontend.PrintedPackageSupport.expectGoalClaims {literal source} " ++
-      s!"{reprStr goals} ⟨[], [], [], [], []⟩ stored association\nend {module.space}\n")
+      s!"{reprStr goals} ⟨[], [], [], [], []⟩ stored association\n" ++ observation ++ s!"end {module.space}\n")
     (text := false)
 
 /-- `expectUnprovedIn`, of a module that the check added. -/
