@@ -29,7 +29,7 @@ theorem silent_conforms (samplers : Samplers S) (allowed : ∀ op, S.Reply op �
 theorem silent_not_draws (samplers : Samplers S) (op : S.Op) (draw : ProbComp (S.Reply op))
     (has : samplers op = some draw) : ¬ (silent : Service S Unit).Draws samplers := by
   intro draws
-  have same := draws op draw has () (fun _ => True)
+  have same := draws.prEvent_reply has () (fun _ => True)
   have never : Pr{let out ← (silent : Service S Unit) op ()}[∃ v, out.1 = some v ∧ True] = 0 := by
     simp [silent]
   have sometimes : 0 < Pr{let v ← draw}[True] := by

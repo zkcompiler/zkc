@@ -24,7 +24,8 @@ says nothing of its own about services.
   statement holds.
 - `Served samplers allowed`: there is a conforming service with a state that answers every
   effect with a sampler as the sampler draws, so that a statement with `ReturnsWithin` is not
-  about nothing: the service that never answers conforms, and is no such service.
+  about nothing: the service that never answers conforms, and is no such service where an
+  effect has a sampler.
 
 The bridge from a judgment with fees to the experiment is in `ZkcFormal.ChargedReturn`.
 -/
@@ -55,7 +56,8 @@ def ReturnsWithin (p : Process S H A) (samplers : Samplers S)
       ∃ a, out.1 = some (.inl a) ∧ bad a] ≤ limit
 
 /-- There is a conforming service with a state that answers as the samplers draw. A service
-that does not answer conforms to every samplers; it serves nothing. -/
+that does not answer conforms to every samplers; where an effect has a sampler it is no such
+service. -/
 def Served (samplers : Samplers S) (allowed : ∀ op, S.Reply op → Prop) : Prop :=
   ∃ (σ : Type) (service : Service S σ), Nonempty σ ∧ service.Conforms samplers allowed ∧
     service.Draws samplers
@@ -68,7 +70,7 @@ theorem Served.allowed_of_drawn {samplers : Samplers S} {allowed : ∀ op, S.Rep
   have pos : 0 < Pr{let w ← draw}[w = v] := by
     rw [prEvent_pos_iff]
     exact ⟨v, drawn, rfl⟩
-  rw [← draws op draw has s (· = v), prEvent_pos_iff] at pos
+  rw [← draws.prEvent_reply has s (· = v), prEvent_pos_iff] at pos
   obtain ⟨⟨reply, t⟩, reached, w, same, rfl⟩ := pos
   cases same
   exact conforms.permitted op s w t reached

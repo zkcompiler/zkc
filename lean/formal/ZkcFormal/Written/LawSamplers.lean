@@ -65,19 +65,14 @@ theorem serveLaws_at {op : ROp M} {sampler : ProbComp ((RSig M).Reply op)}
     serveLaws M draws op s = (fun answer => (some answer, s)) <$> sampler := by
   simp only [serveLaws, has]
 
-/-- The service of the laws draws as the samplers do. -/
-theorem serveLaws_follows : (serveLaws M draws).Follows (lawSamplers M draws) := by
-  intro op sampler has s excluded
-  rw [serveLaws_at M draws has s]
-  refine (prEvent_map (mx := sampler) (f := fun answer => (some answer, s))
-    (p := fun out : Option ((RSig M).Reply op) × Unit => ∃ v, out.1 = some v ∧ excluded v)).le.trans ?_
-  exact prEvent_mono _ _ _ fun v ⟨w, same, ex⟩ => Option.some.inj same ▸ ex
-
 /-- The service of the laws answers as the samplers draw. -/
 theorem serveLaws_draws : (serveLaws M draws).Draws (lawSamplers M draws) := by
-  intro op sampler has s excluded
-  rw [serveLaws_at M draws has s]
-  simp
+  intro op sampler has s
+  rw [serveLaws_at M draws has s, Functor.map_map]
+
+/-- The service of the laws is no more likely than the samplers to answer within a set. -/
+theorem serveLaws_follows : (serveLaws M draws).Follows (lawSamplers M draws) :=
+  (serveLaws_draws M draws).follows
 
 /-- The service of the laws answers only what is permitted, when what each sampler draws is. -/
 theorem serveLaws_permitted
