@@ -67,8 +67,9 @@ theorem mem_all (property : Property) : property ∈ all := by
   cases property <;> decide
 
 /-- Whether a goal of this property is published from the written subject: the formal library's
-command states its theorems from the goal's row. A goal of another property is refused at its
-line. -/
+command states its theorems from the goal's row. The issuer of the written subject refuses a
+goal of another property at the goal's line; a goal of special soundness is issued by the route
+of two-run knowledge, which does not read this. -/
 def published : Property → Bool
   | .soundness => true
   | _ => false

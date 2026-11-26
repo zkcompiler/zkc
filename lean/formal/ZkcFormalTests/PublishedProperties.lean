@@ -3,8 +3,8 @@ import ZkcFormal.Written.Publish
 /-!
 The frontend and the library agree on which properties the written subject publishes.
 
-The frontend refuses, at the goal's line, a goal whose property is not published from the written
-subject (`Zkc.Security.Property.published`). The library's command states the theorems of a
+The issuer of the written subject refuses, at the goal's line, a goal whose property is not
+published from the written subject (`Zkc.Security.Property.published`). The library's command states the theorems of a
 goal's row from its own table (`ZkcFormal.Written.Publish.theorems`). The compiler cannot read
 the library's table, so the two are held equal here: a property is published exactly when the
 table has theorems for it.

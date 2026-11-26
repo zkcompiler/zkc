@@ -25,8 +25,9 @@ For the property `soundness` the theorems are
 at the standard interpretation's model, samplers and coverage.
 
 A statement is an expression built from the constants that the row names (the short application
-and the bound) and the library's own constants. No name is resolved in the scope of the caller,
-so a declaration of the caller's with the same short name does not enter a statement. A row is
+and the bound) and the library's own constants. The subject is the one name that is resolved
+in the scope of the caller; no name inside a statement is, so a declaration of the caller's with
+the short name of a library constant does not enter a statement. A row is
 read by reducing the record that holds a field to its constructor and taking the field's
 argument as it stands, so the constant that a field names is the constant of the statement.
 
@@ -102,8 +103,9 @@ def rows (subject : Name) : MetaM (Array Row) := do
   return out
 
 /-- **What each property publishes**: the names of its theorems. A property that is not listed
-publishes nothing from the written subject, and the frontend refuses a goal of it at its line
-(`Zkc.Security.Property.published`; a test holds the two lists equal). -/
+publishes nothing from the written subject, and the issuer of the written subject refuses a
+goal of it at the goal's line (`Zkc.Security.Property.published`; a test holds the two lists
+equal). -/
 def theorems : List (Name × List String) :=
   [(``Zkc.Security.Property.soundness, ["sound", "met"])]
 
