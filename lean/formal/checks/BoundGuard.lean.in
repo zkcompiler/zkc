@@ -1,0 +1,27 @@
+private theorem relationValue (x : Bool) :
+    functionResult (t := .bool) (fnMeaning model installed looseMember (.cons x .nil)) = some x := by
+  kernel_rfl
+
+theorem withinZero : withinZeroStatement := by
+  intro path x _ rejected
+  cases x with
+  | true => exact False.elim (rejected (relationValue true))
+  | false =>
+    have shape : roleMeaning model installed rootMember verifierRole path
+        (.cons () (.cons false .nil)) =
+        .call (.own (.coin (.uniform (.fin 4))) [0] ⟨path, ⟨0⟩⟩ [] .nil (.fin 4))
+          (fun _ ↦ .halt (.declared .reject ⟨path, ⟨1⟩⟩)) := by kernel_rfl
+    change Process.interpret (L := ℚ≥0 → Prop) _ _ _ (roleMeaning model installed rootMember verifierRole path
+      (.cons () (.cons false .nil))) 0
+    rw [shape]
+    exact ZkcFormal.Written.charged_free _ _ _ _ _ _ (fun _ _ ↦ True.intro)
+
+theorem belowTable : belowTableStatement := by
+  show (0 : NNRat) < looseCaps.budget
+  rw [loose_budget]
+  norm_num
+
+theorem atZero : atZeroStatement :=
+  Soundness.result_of_installed model written'application0 draws loose_covered
+    (Fees.installed_of_judged model written'application0 draws looseCaps withinZero
+      (by simp [ZkcFormal.ProbabilisticProcess.toProbability]))

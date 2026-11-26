@@ -14,7 +14,8 @@ private def startReader (work : System.FilePath) (m : Written.Module) (reader : 
       s!"namespace {m.space}\n{reader}end {m.space}\n") (text := false)
 
 private def check (work : System.FilePath) (file source name : String)
-    (questions : List (String × String)) : IO (IO Unit) := do
+    (questions : List (String × String)) (formalImport := "ZkcFormal.Written.Soundness") :
+    IO (IO Unit) := do
   let assembly ← Driver.assembleFiles ⟨file, Syntax.parseString file source⟩ ["../../libraries"]
   let root ← IO.ofExcept (admitSoundnessGoal assembly "loose")
   let claims ← IO.ofExcept (goalClaims root ["loose"])
@@ -36,7 +37,6 @@ private def check (work : System.FilePath) (file source name : String)
   let names := (questions.map fun (label, _) => (label, label))
   let text ← IO.FS.readFile s!"checks/{m.space}.lean.in"
   let opening := s!"import {m.statementsName}\n" ++ scope
-  let formalImport := "ZkcFormal.Written.Soundness"
   let issued := { m with
     statements := s!"import {formalImport}\n" ++ m.statements ++ scope ++ declarations ++ closing
     proof := opening ++ text ++ closing
@@ -62,10 +62,17 @@ def run (work : System.FilePath) : IO Unit := do
   let witnessed := s!"Soundness.Witnessed {args}"
   let always ← check work file total "BoundTotal" [
     ("allBounds", s!"∀ b, {result} b"), ("noWitness", "¬ " ++ witnessed)]
+  -- The guarded source as it is: on the rejected input its verifier draws and stops, so it is
+  -- judged within a budget of zero under its own table, whose budget is one over four. The
+  -- judgment's budget is its own number, not the table's.
+  let guarded ← check work file source "BoundGuard" [
+    ("withinZero", s!"Fees.JudgedWithin {args} looseCaps 0"),
+    ("belowTable", "(0 : NNRat) < looseCaps.budget"),
+    ("atZero", s!"{result} 0")] (formalImport := "ZkcFormal.Written.Fees")
   let reader ← IO.FS.readFile "checks/WrittenBoundEndpoints.lean.in"
   let observed ← startLakeLean work "BoundEndpoints" reader (text := false)
   acceptedByLean "written bound endpoints" (← observed)
-  [always].forM id
+  [always, guarded].forM id
 
 end WrittenBoundGuard
 

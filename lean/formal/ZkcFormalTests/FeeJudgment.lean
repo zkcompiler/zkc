@@ -1,12 +1,18 @@
 import ZkcFormal.Written.Fees
 
 /-!
-The author's chain from a judgment by fees to a published result.
+The author's chain from a judgment by fees to the library's result of soundness at a chosen
+bound.
 
 A judgment by fees has its own budget; the table of caps bounds each fee. A judgment within a
-budget gives the result of soundness at every bound that is at least that budget, with the
-statements' coverage fact, by two steps of the library. A bound below the budget is not reached
-by them: the step asks for the comparison.
+budget gives `Soundness.Result` at every bound that is at least that budget, with a coverage
+fact, by two steps of the library. A bound below the budget is not reached by them: the step
+asks for the comparison. This is not the result that a goal publishes today (`Goal.Result`, at
+its table's total and with the table's count against the stored program).
+
+These theorems take a judgment as given. That a judgment exists within a budget other than its
+table's is shown on a subject: the guarded verifier of `checks/WrittenBoundGuard.lean` is
+judged within zero under a table whose budget is one over four.
 -/
 
 open Zkc.Core Zkc.Subject ZkcFormal ZkcFormal.ProbabilisticProcess ZkcFormal.Written
