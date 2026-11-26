@@ -12,8 +12,10 @@ listed is refused, whatever it holds: the judgment with fees and what stands on 
 charge modules that do not stand on it, an author's tactics. A change of what the statement
 stands on is made here, in view.
 
-One listed module is of the method of fees: `Zkc.Subject.Charges`, the type of a table of caps,
-which a written goal's fields hold. It leaves this list when the fields no longer hold a table.
+Two listed modules are not the statement's by what they hold. `Zkc.Subject.Charges` is the type
+of a table of caps, which a written goal's fields hold; it leaves this list when the fields no
+longer hold a table. `ZkcFormal.Written.Extraction` is the extraction support of the knowledge
+path, which `ZkcFormal.Written.Source` imports; it leaves with that path's engine.
 -/
 
 open Lean Elab Command
