@@ -104,6 +104,33 @@ theorem omittedHelper : OffForEveryWitness := by
     (input_claim := true) (valid_input_right := trivial) (fun b n _ _ ↦ acceptsLaw false b n)
   readMulti receipt
 
+-- These proofs use named unfolds at the operands exposed to an importing author.
+example : mappedClaim := by
+  claim_intro
+  unfold StandardInterpretation.samplers
+  apply mapped_installed <;> assumption
+
+example : mappedJudged := by
+  claim_intro
+  unfold StandardInterpretation.samplers
+  apply mapped_judged <;> assumption
+
+example : mappedGoal := by
+  intro a ok
+  unfold stored association at ok
+  obtain ⟨root, foundRoot, relation, foundRelation, claim⟩ := mapped_sound ok
+  unfold rootKey rootHeader at foundRoot
+  unfold mappedKey mappedHeader at foundRelation
+  unfold mappedClaimOf at claim
+  exact ⟨root, foundRoot, relation, foundRelation, claim⟩
+
+example : mappedResult := by
+  obtain ⟨coverage, counted, goal⟩ := mapped_result
+  unfold stored rootKey mappedKey StandardInterpretation.covers at coverage
+  unfold stored rootKey mappedCaps at counted
+  unfold mappedGoal at goal
+  exact ⟨coverage, counted, goal⟩
+
 -- Membership and both lookups are for the arbitrary admitted program supplied by the caller.
 def LocatedClaim (a : Admitted V) : Prop :=
   ∃ r : Member a.program.headers.protocols rootHeader, a.program.findProtocol rootKey = some ⟨rootHeader, r⟩ ∧

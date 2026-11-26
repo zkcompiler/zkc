@@ -180,7 +180,19 @@ private def controls (work : System.FilePath) (m : Module) (src : String) : IO (
   let surfaceCap ← run "RedirectAuthorCap"
     (← mutate "goal_surface% judged written'origins (left_againCaps,"
       "goal_surface% judged written'origins (leftCaps,")
-    [(refAt "left_again", "left_againJudged must expose Forward.left_againCaps")]
+    [(refAt "left_again", wrong "left_againCaps" "leftCaps")]
+  let admittedKey ← twin "RedirectAdmissionKey"
+    (← mutate "rootKey left_againHeader left_againKey left_againClaimOf)"
+      "rootKey left_againHeader leftKey left_againClaimOf)") "left_againKey" "leftKey"
+  let resultCap ← twin "RedirectResultCap"
+    (← mutate "left_againKey left_againCaps StandardInterpretation.covers left_againGoal)"
+      "left_againKey leftCaps StandardInterpretation.covers left_againGoal)") "left_againCaps" "leftCaps"
+  let sameSampler ← mutate "noncomputable def left_againClaimOf"
+    "noncomputable abbrev alternateSamplers := StandardInterpretation.samplers\n\nnoncomputable def left_againClaimOf"
+  let start := "goal_surface% claim written'origins (left_againCaps, left_againMember, left_againWitnessed) "
+  let sampler ← run "RedirectSampler"
+    (← replaceOnce sameSampler (start ++ "StandardInterpretation.samplers") (start ++ "alternateSamplers"))
+    [(refAt "left_again", "expected the reference ZkcFormal.Written.StandardInterpretation.samplers, found alternateSamplers")]
   let fee ← twin "RedirectFeeClaim"
     (← mutate "(judged : left_againJudged) : left_againClaim :="
       "(judged : left_againJudged) : leftClaim :=")
@@ -219,7 +231,8 @@ private def controls (work : System.FilePath) (m : Module) (src : String) : IO (
   let duplicate ← run "DuplicateRow" dup [("⟨1, by decide⟩).clause.val", "Type mismatch"),
     (refAt "left_again", wrong "written'decision0" "written'decision2"),
     ("written'subject.clauses.size =", "Type mismatch")]
-  return [claim, lookup, cap, capAlias, surfaceCap, fee, receipt, swap, operand, duplicate]
+  return [claim, lookup, cap, capAlias, surfaceCap, admittedKey, resultCap, sampler, fee, receipt,
+    swap, operand, duplicate]
 
 private def aliasChecks (work : System.FilePath) : IO Unit := do
   let src ← IO.FS.readFile "fixtures/written-decisions.zkc"
@@ -401,9 +414,17 @@ private def capChecks (work : System.FilePath) : IO Unit := do
   let (m, check) ← full work "EqualTotals" src req
     (fields 0 [1] (draws 1 3) "some (1/1)" ++ fields 1 [3] (draws 3 1) "some (1/2)" ++
      "example : aCaps.budget = bCaps.budget := a_budget.trans b_budget.symm\n")
-  let swapped ← replaceOnce m.statements "⟨[3], written'caps1," "⟨[3], written'caps0,"
+  let redirect := fun (text : String) =>
+    replaceOnce text "⟨[3], written'caps1," "⟨[3], written'caps0,"
+  let inconsistent ← startLakeLean work "InconsistentCap.Stated" (← redirect m.statements) (text := false)
+  -- A consistent re-emission pays the sibling's fees but keeps the requested arguments and
+  -- the common total. Redirect its now equal table reference as a second, independent fault.
+  let constant ← replaceOnce src "sites.z <= e / 8" "sites.z <= 1 / 8"
+  let constant ← replaceOnce constant "sites.t <= (4 - e) / 8" "sites.t <= 3 / 8"
+  let other ← readSource constant req
+  let other ← IO.ofExcept (other.module m.space {})
   let original ← IO.ofExcept (ZkcFormalTests.WrittenSource.consumer src req true)
-  let bad ← checkMutant work m "ChangedCapTree" swapped original
+  let bad ← checkMutant work m "ChangedCapTree" (← redirect other.statements) original
     [(s!"{atGoal 1}.fields.caps =", "Type mismatch"),
      ("checkReferences (← Lean.getCurrNamespace) \"b\"",
        "expected the reference EqualTotals.written'caps1, found written'caps0")]
@@ -414,6 +435,10 @@ private def capChecks (work : System.FilePath) : IO Unit := do
      ("checkReferences (← Lean.getCurrNamespace) \"b\"",
        "expected the reference EqualTotals.written'fields1, found written'fields0")]
   check
+  let (accepted, log) ← inconsistent
+  expect "inconsistent cap presentation compiled" accepted false
+  unless log.contains "written goal presentation differs from the library term" do
+    throw (IO.userError s!"expected the cap presentation to fail its equality check\n{log}")
   bad
   wrongArg
 

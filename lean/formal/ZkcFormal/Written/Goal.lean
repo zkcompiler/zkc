@@ -90,24 +90,36 @@ def ClaimOf (p : Typed V) (root : Member p.headers.protocols scheme.entry.header
 def Claim : Prop :=
   ClaimOf M g draws pkg.installed scheme.entry.member g.decision.relation.member
 
-/-- Every admitted program contains the selected entries and satisfies the claim at them. -/
+/-- Look up both named entries in the same admitted program before applying its claim. -/
+def admission (stored : NamedProgram V) (association : Association)
+    (rootHeader : ProtocolHeader V) (rootKey : Key) (relationHeader : FnHeader V) (relationKey : Key)
+    (claim : (p : Typed V) → Member p.headers.protocols rootHeader →
+      Member p.headers.fns relationHeader → Prop) : Prop :=
+  ∀ {a : Admitted V}, admit stored association = .ok a →
+    ∃ root : Member a.program.headers.protocols rootHeader,
+      a.program.findProtocol rootKey = some ⟨rootHeader, root⟩ ∧
+      ∃ relation : Member a.program.headers.fns relationHeader,
+        a.program.find relationKey = some (.fn relation) ∧ claim a.program root relation
+
+/-- Admission at the headers and keys selected by this decision. -/
 def admittedAt (claim : (p : Typed V) → Member p.headers.protocols scheme.entry.header →
     Member p.headers.fns g.decision.relation.header → Prop) : Prop :=
-  ∀ {a : Admitted V}, admit pkg.stored pkg.association = .ok a →
-    ∃ root : Member a.program.headers.protocols scheme.entry.header,
-      a.program.findProtocol scheme.entry.header.key = some ⟨scheme.entry.header, root⟩ ∧
-      ∃ relation : Member a.program.headers.fns g.decision.relation.header,
-        a.program.find g.decision.relation.header.key = some (.fn relation) ∧
-          claim a.program root relation
+  admission pkg.stored pkg.association scheme.entry.header scheme.entry.header.key
+    g.decision.relation.header g.decision.relation.header.key claim
 
 set_option linter.dupNamespace false in
 /-- The written claim at the entries found by admission. -/
 def Goal : Prop := admittedAt g (ClaimOf M g draws)
 
-/-- Coverage and the counts of the cap table accompany the supplied goal. -/
+/-- Coverage and the cap count on the stored program accompany the supplied goal. -/
+def countedResult (stored : NamedProgram V) (rootKey relationKey : Key) (caps : CapTable)
+    (covers : NamedProgram V → Key → Key → Bool) (goal : Prop) : Prop :=
+  covers stored rootKey relationKey = true ∧ caps.counted stored rootKey = true ∧ goal
+
+/-- The result at the keys and caps selected by this goal. -/
 def resultOf (covers : NamedProgram V → Key → Key → Bool) (goal : Prop) : Prop :=
-  covers pkg.stored scheme.entry.header.key g.decision.relation.header.key = true ∧
-    g.fields.caps.counted pkg.stored scheme.entry.header.key = true ∧ goal
+  countedResult pkg.stored scheme.entry.header.key g.decision.relation.header.key g.fields.caps
+    covers goal
 
 /-- Coverage, cap counts, and the written goal. -/
 def Result (covers : NamedProgram V → Key → Key → Bool) : Prop :=

@@ -73,16 +73,24 @@ private def signature (canonical origin : Expr) (reserved : List Name) : MetaM S
   let inputs ← listCells (← mkProjection header `ins)
   unless names.length == inputs.length do throwError "input origins and deployed header disagree"
   let verifier ← numeral (← mkProjection (← mkProjection root `verifier) `val)
+  -- Source annotations use the model vocabulary and ordinary Lean numerals for sizes and keys.
+  let modelTy := fun t => do
+    let t ← whnf t
+    return t.replace fun e =>
+      if e == goalType.getArg! 0 then some (canonical.getArg! 0)
+      else if e.isAppOf ``OfNat.ofNat then some e
+      else if let .lit (.natVal n) := e then some (mkNatLit n)
+      else none
   let mut ports := #[]
   for ((s, input), i) in (names.zip inputs).zipIdx do
     let holders ← (← listCells (← mkProjection input `holders)).mapM numeral
     if holders.contains verifier then
-      ports := ports.push ⟨inputName s i (counts.getD s 0) reserved, ← whnf (← mkProjection input `ty)⟩
+      ports := ports.push ⟨inputName s i (counts.getD s 0) reserved, ← modelTy (← mkProjection input `ty)⟩
   let decision ← mkProjection g `decision
   let relation ← mkProjection (← mkProjection decision `relation) `header
   let args ← listCells (← mkProjection relation `ins)
   let arity ← numeral (← mkProjection (← mkProjection decision `arity) `val)
-  return ⟨canonical.getArg! 1, ports.toList, ← (args.drop arity).mapM whnf⟩
+  return ⟨canonical.getArg! 1, ports.toList, ← (args.drop arity).mapM modelTy⟩
 
 /-- Select the fields of the subject without unfolding the selected installation, members or cap
 table. These named operands are the ones used by the published entry and rewrite theorems. -/
@@ -97,14 +105,16 @@ private def subjectFields (e : Expr) : MetaM Expr :=
     return .continue)
 
 /-- Make both the selected values and the hidden indices of the HList match direct rewrites. -/
-private partial def operands (e : Expr) : MetaM Expr := do
+private partial def operands (indices e : Expr) : MetaM Expr := do
   let s ← whnf e
   if s.isAppOf ``HList.nil then return s
-  let_expr HList.cons indexType family index _ value rest := s
+  let_expr HList.cons indexType family _ _ value rest := s
     | throwError "expected a concrete operand list in {e}"
-  let tail ← operands rest
-  return mkAppN s.getAppFn #[indexType, family, ← whnf index, (← inferType tail).appArg!,
-    ← whnf value, tail]
+  let_expr List.cons _ index tail := ← whnf indices
+    | throwError "expected a matching header input for {e}"
+  let v ← whnf value
+  let v := if v.isConstOf ``PUnit.unit then Lean.mkConst ``Unit.unit else v
+  return mkAppN s.getAppFn #[indexType, family, index, tail, v, ← operands tail rest]
 
 private def atHead (e : Expr) (head : Name) : MetaM Expr := do
   let some s ← whnfUntil e head | throwError "expected {head} in {e}"
@@ -112,7 +122,13 @@ private def atHead (e : Expr) (head : Name) : MetaM Expr := do
 
 private def meaning (e : Expr) (head : Name) : MetaM Expr := do
   let s ← subjectFields (← atHead e head)
-  return mkApp s.appFn! (← operands s.appArg!)
+  -- Both meanings infer their header from the member: a binder has its public header,
+  -- while an installed member has the source header in its declared type.
+  let memberType ← atHead (← inferType (s.getArg! 4)) ``Zkc.Core.Member
+  let header := memberType.appArg!
+  let inputs ← operands (← mkProjection header `ins) s.appArg!
+  let args := s.appFn!.getAppArgs.set! 3 header
+  return mkAppN s.getAppFn (args.push inputs)
 
 private def forallParts (e : Expr) : MetaM (Name × Expr × Expr × BinderInfo) := do
   let .forallE n t b bi ← whnf e | throwError "expected a binder in {e}"
@@ -152,12 +168,23 @@ private def presentRejection (sig : Signature) (e : Expr) : MetaM Expr := do
   ensureEqual canonical view
   return view
 
-private def processLeaf (e : Expr) (head : Name) : MetaM Expr := do
+private def processLeaf (samplers e : Expr) (head : Name) : MetaM Expr := do
   let s ← subjectFields (← atHead e head)
   let args := s.getAppArgs
   let some pos := args.findIdx? (·.isAppOf ``roleMeaning)
     | throwError "expected the verifier's roleMeaning in {s}"
-  return mkAppN s.getAppFn (args.set! pos (← meaning args[pos]! ``roleMeaning))
+  let process ← meaning args[pos]! ``roleMeaning
+  let header := process.getArg! 3
+  let original := mkAppN s.getAppFn (args.set! pos process)
+  let leaf := original.replace fun e =>
+    if e.isAppOfArity ``Zkc.Core.ProtocolHeader.outs 2 then some (mkApp e.appFn! header) else none
+  -- The sampler is the next operand after the process in ReturnsWithin and the first
+  -- explicit operand in paysWithin. The rest of either policy comes from the canonical leaf.
+  let (policy, arity) := if head == ``ReturnsWithin then (``ReturnsWithin, 5) else (``paysWithin, 2)
+  let some sampled := leaf.find? (·.isAppOfArity policy arity)
+    | throwError "expected a sampler operand of {policy}"
+  ensureEqual sampled.appArg! samplers
+  return leaf.replace fun e => if e == sampled then some (mkApp e.appFn! samplers) else none
 
 private def universal (sig : Signature) (leaf : Expr → MetaM Expr) (e : Expr) :
     List Port → MetaM Expr
@@ -213,19 +240,19 @@ private def paired (view : ReceiptView) (sig : Signature) (q helper : Expr) : Li
         | .constructor _ => mkForallFVars #[x, hv] body
         | .existential _ =>
           let pair ← mkAppM ``And #[v, body]
-          return mkApp exists_.appFn! (← mkLambdaFVars #[x] pair)
+          return ← mkAppM ``Exists #[← mkLambdaFVars #[x] pair]
 
 /-- Expose the same cap and member names that an author can unfold in the goals of a walk
 or the hypotheses of a receipt. Both abbreviations refer to concrete entries of this module. -/
 private def publish (canonical view : Expr) (caps member_ : Ident) : TermElabM Expr := do
-  let abbreviation (id : Ident) : TermElabM (Expr × Expr) := do
-    let n ← realizeGlobalConstNoOverloadWithInfo id
-    let some value := (← getConstInfo n).value? | throwErrorAt id "expected a public abbreviation"
-    return (value, mkConst n)
-  let (table, namedTable) ← abbreviation caps
-  let (memberValue, namedMember) ← abbreviation member_
+  let table := Lean.mkConst (← realizeGlobalConstNoOverloadWithInfo caps)
+  let memberName := Lean.mkConst (← realizeGlobalConstNoOverloadWithInfo member_)
   let presentation := view.replace fun e =>
-    if e == table then some namedTable else if e == memberValue then some namedMember else none
+    if e.isAppOfArity ``CapTable.total 1 || e.isAppOfArity ``CapTable.budget 1 ||
+        e.isAppOfArity ``CapTable.allowance 3 then some (mkApp e.appFn! table)
+    else if !canonical.isAppOf ``ClaimOf && e.isAppOfArity ``fnMeaning 5 then
+      some (mkApp e.appFn! memberName)
+    else none
   check presentation
   ensureEqual canonical presentation
   -- Lean may extract this proof into a declaration. Keep its type on the named goal.
@@ -247,7 +274,7 @@ private def constructorReceipt (helper : Expr) : Expr :=
 
 /-- Publish the named input and rejection binders of a claim or fee judgment. -/
 elab "goal_surface% " kind:ident origin:ident "(" caps:ident "," member_:ident "," witnessed:ident ")"
-    " in " t:term : term => do
+    samplers:(ident)? " in " t:term : term => do
   let (head, process) ← match kind.getId with
     | `claim => pure (``ClaimOf, ``ReturnsWithin)
     | `judged => pure (``Judged, ``Process.interpret)
@@ -255,8 +282,11 @@ elab "goal_surface% " kind:ident origin:ident "(" caps:ident "," member_:ident "
   let canonical ← application (← readTerm t (some (.sort .zero))) head
   let sig ← readSignature canonical origin caps member_ witnessed
   let (_, pathTy, _, _) ← forallParts canonical
+  let namedSamplers ← match samplers with
+    | some id => pure (Lean.mkConst (← realizeGlobalConstNoOverloadWithInfo id))
+    | none => mkAppM ``lawSamplers #[sig.model, canonical.getArg! 5]
   let view ← forallBinder canonical `path pathTy fun _ body =>
-    universal sig (processLeaf · process) body sig.ports
+    universal sig (processLeaf namedSamplers · process) body sig.ports
   publish canonical view caps member_
 
 /-- Publish the named existential proposition using the actual specialized library constructor. -/

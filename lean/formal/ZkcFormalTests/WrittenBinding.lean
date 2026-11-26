@@ -44,6 +44,14 @@ private def named (e : Expr) (expected : Name) : MetaM Unit := do
   unless e.consumeMData.isConstOf expected do
     throwError "expected the reference {expected}, found {e}"
 
+private def namedApplication (e : Expr) (head : Name) (arguments : List Name) : MetaM Unit := do
+  unless e.isAppOfArity head arguments.length do throwError "expected the complete application of {head}"
+  for (arg, expected) in e.getAppArgs.toList.zip arguments do named arg expected
+
+private def site (e : Expr) (head : Name) (arity : Nat) : MetaM Expr := do
+  let some app := e.find? (·.isAppOfArity head arity) | throwError "missing {head} in the presentation"
+  return app
+
 /-- Observe the leaf before unfolding any generated row. Two equal-valued leaves still
 have different physical names. The bound for the concrete index comes from the selector. -/
 private def checkLeaf (table : Expr) (i : Nat) (expected : Name) : MetaM Unit := do
@@ -106,31 +114,69 @@ def checkReferences (space : Name) (label : String) (goal clause relation : Nat)
   let inspect (suffix_ : String) (visit : Expr → MetaM Unit) := do
     lambdaTelescope (← bodyOf (publicName suffix_)) fun _ body => visit body
   let memberLabel := if label == "root" || label == "verifier" then "relation'" ++ label else label
-  let view (suffix_ kind : String) (fromEnd : Nat) (operands : List Name) := inspect suffix_ fun body => do
-    let canonical ← operand body (semantic "checkedSurface") 2
-    named (← operand canonical (semantic kind) fromEnd) row
-    let presentation ← operand body (semantic "checkedSurface") 1
-    for expected in operands do
-      unless (presentation.find? (·.isConstOf expected)).isSome do
-        throwError "{publicName suffix_} must expose {expected} to the author"
   let publicCap := publicName "Caps"
   let publicMember := localName (memberLabel ++ "Member")
+  let publicHeader := localName (memberLabel ++ "Header")
+  let publicKey := localName (memberLabel ++ "Key")
+  let sampler := `ZkcFormal.Written.StandardInterpretation.samplers
+  let coverage := `ZkcFormal.Written.StandardInterpretation.covers
   named (← bodyOf publicMember) fnMember
-  view "ClaimOf" "ClaimOf" 4 [publicCap]
-  view "Witnessed" "Witnessed" 1 [publicMember]
+  let views (body : Expr) := do
+    return (← operand body (semantic "checkedSurface") 2, ← operand body (semantic "checkedSurface") 1)
+  let processView (suffix_ : String) := do
+    let free := suffix_ == "ClaimOf"
+    lambdaTelescope (← bodyOf (publicName suffix_)) fun params body => do
+      let (canonical, presentation) ← views body
+      named (← operand canonical (semantic suffix_) (if free then 4 else 1)) row
+      let fn ← site presentation `Zkc.Core.fnMeaning 6
+      named (fn.getArg! 3) (if free then publicHeader else localName s!"header{relation}")
+      if free then
+        unless fn.getArg! 2 == params[0]! && fn.getArg! 4 == params[2]! do
+          throwError "expected the claim's program and relation parameters"
+      else
+        named (fn.getArg! 2) (localName "installed")
+        named (fn.getArg! 4) publicMember
+      if suffix_ == "Witnessed" then
+        named ((← site presentation `ZkcFormal.ProbabilisticProcess.Served 3).getArg! 1) sampler
+      else
+        let role ← site presentation `Zkc.Core.roleMeaning 8
+        named (role.getArg! 5) (localName "verifierRole")
+        if free then
+          named (role.getArg! 3) (localName "rootHeader")
+          unless role.getArg! 2 == params[0]! && role.getArg! 4 == params[1]! do
+            throwError "expected the claim's program and root parameters"
+          named ((← site presentation `ZkcFormal.ProbabilisticProcess.ReturnsWithin 8).getArg! 4) sampler
+          named (← site presentation `Zkc.Subject.CapTable.total 1).appArg! publicCap
+        else
+          named (role.getArg! 2) (localName "installed")
+          let .const header _ := (← bodyOf (localName "rootHeader")).consumeMData
+            | throwError "expected the root's source header"
+          named (role.getArg! 3) header
+          named (role.getArg! 4) (localName "rootMember")
+          named ((← site presentation `ZkcFormal.ProbabilisticProcess.paysWithin 3).getArg! 1) sampler
+          named ((← site presentation `Zkc.Subject.CapTable.allowance 4).getArg! 2) publicCap
+          named (← site presentation `Zkc.Subject.CapTable.budget 1).appArg! publicCap
+  processView "ClaimOf"
+  processView "Witnessed"
   inspect "Claim" fun e => do
     named e.getAppFn (publicName "ClaimOf")
     named (← operand e (publicName "ClaimOf") 0) publicMember
     named (← operand e (publicName "ClaimOf") 1) (localName "rootMember")
     named (← operand e (publicName "ClaimOf") 2) (localName "installed")
   inspect "Goal" fun e => do
-    named (← operand e (semantic "admittedAt") 1) row
-    named (← operand e (semantic "admittedAt") 0) (publicName "ClaimOf")
+    let (canonical, presentation) ← views e
+    namedApplication canonical (semantic "admittedAt")
+      [localName "V", localName "subjectPackage", localName "written'root", row, publicName "ClaimOf"]
+    namedApplication presentation (semantic "admission") [localName "V", localName "stored",
+      localName "association", localName "rootHeader", localName "rootKey", publicHeader, publicKey, publicName "ClaimOf"]
   inspect "Result" fun e => do
-    named (← operand e (semantic "resultOf") 2) row
-    named (← operand e (semantic "resultOf") 0) (publicName "Goal")
+    let (canonical, presentation) ← views e
+    namedApplication canonical (semantic "resultOf")
+      [localName "V", localName "subjectPackage", localName "written'root", row, coverage, publicName "Goal"]
+    namedApplication presentation (semantic "countedResult")
+      [localName "V", localName "stored", localName "rootKey", publicKey, publicCap, coverage, publicName "Goal"]
   if fees then
-    view "Judged" "Judged" 1 [publicCap, publicMember]
+    processView "Judged"
     for (suffix_, proof) in [("_claim_of_judged", "claim_of_judged"), ("_witnessed_of", "witnessed_of")] do
       inspect suffix_ fun e => do named (← operand e (semantic proof) 2) row
     let bridge := publicName "_claim_of_judged"

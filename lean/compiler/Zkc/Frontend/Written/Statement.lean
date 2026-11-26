@@ -585,10 +585,14 @@ def claimTexts {owner : GoalClaims} (layout : SubjectLayout owner) : String := I
     let origin := originFor goal
     text := text ++ s!"noncomputable def {name}ClaimOf (p : Typed V)\n" ++
       s!"    (root : Member p.headers.protocols rootHeader) (relation : Member p.headers.fns {relation}Header) : Prop :=\n" ++
-      s!"  goal_surface% claim {origin} in ({denotation "ClaimOf" row} p root relation)\n\n" ++
+      s!"  goal_surface% claim {origin} StandardInterpretation.samplers in ({denotation "ClaimOf" row} p root relation)\n\n" ++
       s!"def {name}Claim : Prop := {name}ClaimOf installed rootMember {relation}Member\n\n" ++
-      s!"def {name}Goal : Prop := ZkcFormal.Written.Goal.admittedAt {row} {name}ClaimOf\n\n" ++
-      s!"def {name}Result : Prop := ZkcFormal.Written.Goal.resultOf {row} StandardInterpretation.covers {name}Goal\n\n" ++
+      s!"def {name}Goal : Prop := ZkcFormal.Written.Goal.checkedSurface\n" ++
+      s!"  (ZkcFormal.Written.Goal.admittedAt {row} {name}ClaimOf)\n" ++
+      s!"  (ZkcFormal.Written.Goal.admission stored association rootHeader rootKey {relation}Header {relation}Key {name}ClaimOf) rfl\n\n" ++
+      s!"def {name}Result : Prop := ZkcFormal.Written.Goal.checkedSurface\n" ++
+      s!"  (ZkcFormal.Written.Goal.resultOf {row} StandardInterpretation.covers {name}Goal)\n" ++
+      s!"  (ZkcFormal.Written.Goal.countedResult stored rootKey {relation}Key {name}Caps StandardInterpretation.covers {name}Goal) rfl\n\n" ++
       s!"def {name}Witnessed : Prop :=\n  goal_receipt% {origin} in ({denotation "Witnessed" row})\n" ++
       s!"    using ({denotation "witnessed_of" row} StandardInterpretation.served)\n\n"
   return text
@@ -691,7 +695,7 @@ def judgments {owner : GoalClaims} (layout : SubjectLayout owner) : String := Id
     let origin := originFor goal
     let witness := s!"{denotation "witnessed_of" row} StandardInterpretation.served"
     text := text ++ s!"def {name}Judged : Prop :=\n" ++
-      s!"  goal_surface% judged {origin} in ({denotation "Judged" row})\n\n" ++
+      s!"  goal_surface% judged {origin} StandardInterpretation.samplers in ({denotation "Judged" row})\n\n" ++
       s!"theorem {name}_claim_of_judged (judged : {name}Judged) : {name}Claim :=\n" ++
       s!"  {denotation "claim_of_judged" row} judged\n\n" ++
       s!"theorem {name}_witnessed_of :\n" ++
