@@ -2,6 +2,7 @@ module
 
 public import ZkcFormal.Written.Soundness
 public import ZkcFormal.Written.SiteCaps
+public import ZkcFormal.ChargedReturn
 import Mathlib.Tactic.DSimpPercent
 
 @[expose] public section
