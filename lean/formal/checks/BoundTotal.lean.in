@@ -3,7 +3,7 @@ private theorem neverRejected (x : Bool) :
   intro rejected
   have accepts : functionResult (t := .bool) (fnMeaning model installed looseMember (.cons x .nil)) =
       some true := by kernel_rfl
-  exact Bool.noConfusion (Option.some.inj (accepts.symm.trans rejected))
+  exact rejected accepts
 
 theorem allBounds : allBoundsStatement := by
   intro b

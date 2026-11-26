@@ -155,8 +155,8 @@ inputs, the samplers of the model and the bound; the generator does not write wh
 the bound is against or which event it is of.
 For a text that establishes its claims by the judgment with fees it also writes, before the
 text, the judgment of each goal (`<goal>Judged`, with named binders), the theorem that the claim
-follows from it and the theorem that the hypotheses of the claim are met at inputs on which the
-relation returns false, and the key of each named draw of the root under the name of its site
+follows from it and the theorem that the hypotheses of the claim are met at inputs at which no valid
+witness makes the relation return true, and the key of each named draw of the root under the name of its site
 (`site_<name>`), with its cap where the contract charges it; the text proves the judgment, and the claim is concluded after it.
 After the text of the proofs it writes the theorems of the last three from the claim and a
 witness, and the comparison of a goal's total with its ceiling. A statement uses the standard interpretation. It is

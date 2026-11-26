@@ -310,7 +310,7 @@ def proofText (guarded : String) : String :=
   "    have computed : functionResult (t := .bool)\n" ++
   s!"        (fnMeaning StandardInterpretation.model installed soundMember (.cons {guarded} .nil)) = some {guarded} := by\n" ++
   "      kernel_rfl\n" ++
-  "    rw [computed] at premise\n    exact Option.some.inj premise\n" ++
+  "    rw [computed] at premise\n    exact Bool.eq_false_iff.mpr fun accepted => premise (congrArg some accepted)\n" ++
   "  subst declined\n" ++
   "  have rejected : roleMeaning StandardInterpretation.model installed rootMember verifierRole path\n" ++
   s!"      (.cons {first} (.cons {second} .nil)) = .halt (.declared .reject ⟨path, ⟨0⟩⟩) := by\n" ++
@@ -323,7 +323,8 @@ def proofText (guarded : String) : String :=
   "  simpa using never\n\n" ++
   "theorem sound_witnessed : soundWitnessed :=\n" ++
   "  ⟨false, trivial, false, trivial,\n" ++
-  "    StandardInterpretation.served, by kernel_rfl⟩\n\n" ++
+  "    StandardInterpretation.served, fun accepted =>\n" ++
+  "      Bool.false_ne_true (Option.some.inj ((by kernel_rfl : _ = some false).symm.trans accepted))⟩\n\n" ++
   "end\n"
 
 def consumer : Consumer where
@@ -350,8 +351,9 @@ def consumer : Consumer where
     "    rw [CapTable.total, sound_budget]\n    simp [toProbability]\n" ++
     "  obtain ⟨root, found, relation, foundRelation, claim⟩ := sound_sound admitted\n" ++
     "  refine ⟨root, found, relation, foundRelation, fun rejected => ?_⟩\n" ++
+    "  have notAccepted := fun accepted => Bool.false_ne_true (Option.some.inj (rejected.symm.trans accepted))\n" ++
     "  rw [← free]\n" ++
-    "  simpa using claim [] false trivial true trivial rejected _ (serveLaws StandardInterpretation.model StandardInterpretation.draws)\n" ++
+    "  simpa using claim [] false trivial true trivial notAccepted _ (serveLaws StandardInterpretation.model StandardInterpretation.draws)\n" ++
     "    ⟨serveLaws_follows _ _, serveLaws_permitted _ _ (ArithmeticModel.draws_permitted F G)⟩ ()"
   after := "\nend\n"
 
@@ -402,7 +404,7 @@ text. -/
 def shadowing (_ : Statements) (proof : String) : Except String String := do
   let anew := "∀ (path : List Frame) (flag : Bool), StandardInterpretation.model.Valid .bool flag →\n" ++
     "    ∀ other : Bool, StandardInterpretation.model.Valid .bool other →\n" ++
-    "    functionResult (t := .bool) (fnMeaning StandardInterpretation.model installed soundMember (.cons flag .nil)) = some false →\n" ++
+    "    functionResult (t := .bool) (fnMeaning StandardInterpretation.model installed soundMember (.cons flag .nil)) ≠ some true →\n" ++
     "    ReturnsWithin (roleMeaning StandardInterpretation.model installed rootMember verifierRole path (.cons flag (.cons other .nil)))\n" ++
     "      StandardInterpretation.samplers (Permitted StandardInterpretation.model) (fun _ => True) soundCaps.total"
   return (← established proof) ++ "\n" ++
@@ -610,8 +612,8 @@ def run (work : System.FilePath) : IO Unit := do
   expectUnproved "a clause about the other input" "OperandsControl" theorems control ["consumer"]
   let (_, refusal) ← finishLean control
   expect s!"the consumer of the control was refused for another reason\n{refusal}"
-    (refusal.contains "The argument\n  rejected\nhas type" &&
-      refusal.contains "(HList.cons true HList.nil)) = some false\nin the application")
+    (refusal.contains "The argument\n  notAccepted\nhas type" &&
+      refusal.contains "(HList.cons true HList.nil)) ≠ some true\nin the application")
   assumedProof
   -- A name of the claim defined again by the text: the claim written anew is not the claim that
   -- was stated before the text, and the goal is not concluded from it: Lean refuses the module

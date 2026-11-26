@@ -146,10 +146,10 @@ private def forallBinder (e : Expr) (n : Name) (domain : Expr)
 
 private def validityBinders (e : Expr) : List Expr → MetaM Expr
   | [] => do
-    let s ← atHead e ``Eq
-    let some (_, lhs, rhs) := s.eq? | throwError "expected the rejection equality"
+    let s ← atHead e ``Ne
+    let some (_, lhs, rhs) := s.ne? | throwError "expected the rejection disequality"
     let result ← subjectFields (← atHead lhs ``functionResult)
-    mkEq (mkApp result.appFn! (← meaning result.appArg! ``fnMeaning)) rhs
+    mkAppM ``Ne #[mkApp result.appFn! (← meaning result.appArg! ``fnMeaning), rhs]
   | valid :: rest => do
     let (n, _, _, _) ← forallParts e
     forallBinder e n valid fun _ next => validityBinders next rest
