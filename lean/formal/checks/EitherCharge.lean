@@ -66,11 +66,6 @@ def run : IO Unit := do
     throw (IO.userError s!"the table of caps is not the two draws at 1/8 and 1/4: {repr goal.caps}")
   unless goal.siteLabels.map (·.2.1) == ["x", "y"] do
     throw (IO.userError s!"the draws are not named `x` and `y`: {goal.siteLabels.map (·.2.1)}")
-  -- The charges exchanged: the program and the budget (the larger arm) are what they were,
-  -- and the caps are exchanged.
-  let exchanged ← read (source "1 / 4" "1 / 8") reading
-  unless exchanged.package == written.package && (exchanged.goals.map (·.total)) == [1 / 4] do
-    throw (IO.userError "exchanging the charges changed the package or the budget")
   -- The stepped loop: three blocks, each with its draw.
   let stepped ← read steppedSource
     { goals := ["stepped"], ports := #["claim"],

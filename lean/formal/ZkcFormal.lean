@@ -7,6 +7,7 @@ public import ZkcFormal.ModelComparison
 public import ZkcFormal.ChargedProbability
 public import ZkcFormal.OracleProcess
 public import ZkcFormal.ReturnExperiment
+public import ZkcFormal.RoleRules
 public import ZkcFormal.Application
 public import ZkcFormal.ComputedTypes
 public import ZkcFormal.Written.ClaimIntro

@@ -34,7 +34,7 @@ The claim of the goal: on inputs on which the relation returns false, the verifi
 
 A fee proof supplies the judgment and a witness. A direct proof supplies the installed claim and a witness. The Operands example in `lean/formal/checks/GoalStatement.lean` uses the kernel to compute the deciding role and the relation.
 
-A `Reading` asserts the ports of the root, the clause that each goal reads, the inputs of the deployed header that the relation is applied to, the number of proof arguments, the roles of the scheme. A reading that is not what the check asserts is an error: the text is written against it. A relation with witness parameters is not a subject yet. What else a check asserts of the reading is its own; the five checks assert the table of caps and the names of the draws:
+A `Reading` asserts the ports of the root, the clause that each goal reads, the inputs of the deployed header that the relation is applied to, the number of proof arguments, the roles of the scheme. A reading that is not what the check asserts is an error: the text is written against it. A relation with witness parameters is not a subject yet. What else a check asserts of the reading is its own; the five checks assert the table of caps, and the check of Either also the names of its draws:
 
 ```lean
   let goal ← written.goal

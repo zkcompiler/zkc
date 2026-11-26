@@ -14,9 +14,9 @@ A module about what goals claim holds the printed package of the claims (`goalCl
 file writes what stands around a proof in such a module, from what the frontend read and from
 the library, at the standard interpretation of the vocabulary:
 
-- `facts`: the keys, headers and places of the root, of the functions before it that the text
-  names and of each goal's relation, the verifier and the prover of the scheme, and each goal's
-  proof arguments and table of caps, as terms;
+- `facts`: the key, header and place of the root and of each goal's relation, the header and
+  place of each function before the root that the text names, the verifier and the prover of
+  the scheme, and each goal's proof arguments and table of caps, as terms;
 - `counts`: for each goal, that the counts of its table are those of the stored program and
   that its budget is the number that the frontend computed, both decided by the kernel;
 - `coverage`: for each goal, that its reachable definitions are covered;
