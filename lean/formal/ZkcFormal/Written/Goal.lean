@@ -91,6 +91,17 @@ theorem claim_of_judged (judged : Judged M g draws) : Claim M g draws :=
   fun path ↦ Internal.mapInputs M _ _ _ _ (fun _ h rejected ↦
     returnsWithin_of_never _ _ _ _ _ (h rejected)) (judged path)
 
+/-- A judgment paying the selected fees also establishes every bound above their total. -/
+theorem installed_of_judged {b : ℝ≥0∞} (judged : Judged M g draws) (le : g.fields.caps.total ≤ b) :
+    Soundness.Installed M g.decision draws b :=
+  Soundness.installed_mono M g.decision draws le (claim_of_judged M g draws judged)
+
+/-- At the table total, recovering the legacy result requires the table's own count. -/
+theorem result_iff_bound_and_counted (covers : NamedProgram V → Key → Key → Bool) :
+    Result M g draws covers ↔ Soundness.Result M g.decision draws covers g.fields.caps.total ∧
+      g.fields.caps.counted pkg.stored scheme.entry.header.key = true :=
+  ⟨fun h ↦ ⟨⟨h.1, h.2.2⟩, h.2.1⟩, fun h ↦ ⟨h.1.1, h.2, h.1.2⟩⟩
+
 /-- Valid verifier inputs and installed rejection meet the hypotheses with the given service. -/
 theorem witnessed_of (served : Served (lawSamplers M draws) (Permitted M)) :
     inputs M scheme.verifier false scheme.entry.header.ins fun xs ↦

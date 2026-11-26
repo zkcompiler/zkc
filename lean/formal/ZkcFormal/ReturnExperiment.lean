@@ -90,6 +90,18 @@ theorem returnsWithin_of_never (p : Process S H A) (samplers : Samplers S)
     ReturnsWithin p samplers allowed (fun _ => True) (toProbability budget) :=
   returnsWithin_of_charged p samplers allowance allowed (fun _ => True) budget (by simpa using judged)
 
+/-- A bound on the probability that the simulation returns, against every conforming service, is
+the experiment with the event that the process returns. -/
+theorem returnsWithin_of_returns (p : Process S H A) (samplers : Samplers S)
+    (allowed : ∀ op, S.Reply op → Prop) (limit : ℝ≥0∞)
+    (returns : ∀ {σ : Type} (service : Service S σ), service.Follows samplers →
+      (∀ op s reply t, (some reply, t) ∈ support (service op s) → allowed op reply) → ∀ s : σ,
+      Pr{let out ← (simulateQ (handlerOf service) (embed p)).run.run s}[
+        ∃ a, out.1 = some (.inl a)] ≤ limit) :
+    ReturnsWithin p samplers allowed (fun _ => True) limit := by
+  intro σ service conforms s
+  simpa using returns service conforms.follows conforms.permitted s
+
 /-- What a bound on every return says of the simulation: the probability that it returns. -/
 theorem ReturnsWithin.returns {p : Process S H A} {samplers : Samplers S}
     {allowed : ∀ op, S.Reply op → Prop} {limit : ℝ≥0∞}

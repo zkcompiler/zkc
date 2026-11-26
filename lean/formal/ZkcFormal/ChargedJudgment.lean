@@ -25,6 +25,11 @@ def ProcessJudgment.charged (allowed : ∀ op, S.Reply op → Prop)
   node op next budget := ∃ fee bad, fee ≤ budget ∧ small op fee bad ∧
     ∀ v, allowed op v → ¬bad v → next v (budget - fee)
 
+theorem ProcessJudgment.charged_mono (allowed : ∀ op, S.Reply op → Prop)
+    (small : (op : S.Op) → ℚ≥0 → (S.Reply op → Prop) → Prop) : (charged allowed small).Monotone := by
+  rintro op p q implies budget ⟨fee, bad, bound, ok, next⟩
+  exact ⟨fee, bad, bound, ok, fun v valid kept => implies v _ (next v valid kept)⟩
+
 /-- A judgment with fees within a budget holds within a larger one, when what is asked at the
 end does not read what is left of the budget. -/
 theorem Process.charged_of_le (allowed : ∀ op, S.Reply op → Prop)

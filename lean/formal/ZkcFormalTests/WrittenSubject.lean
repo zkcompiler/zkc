@@ -9,9 +9,18 @@ import ZkcFormalTests.WrittenSource
 /-!
 A subject of a written soundness goal, as a check states it.
 
-The checks read the ports, clauses, operands and charges of a source. A subject can issue a
-statements module and a proof module. The project builds the statements and challenges before
-the texts, and the comparator judges the published theorems against their challenges.
+A subject is a source, the text of its proofs, what the check asserts of what the frontend
+read of the source, and its controls. The checks of the subjects (`lean/formal/checks/*Charge.lean`)
+give these as data and share what is here: how a source is read and what is asserted of the
+reading (`Reading`, `read`), how the two modules of a subject are assembled (`Subject.module`),
+how the modules of a check are built and its proof modules judged (`start`, `judged`), and how
+a control is stated and judged (`Control`).
+
+A control is the subject with its source or its text altered, in a module that must be refused: by Lean in the text, by Lean in
+what is generated before the text, or by the judgment where Lean accepts it. It names the
+theorems that are then left unproved and the texts of the places at which it is refused; with
+`only` the module is refused at those places and at no other. A text is altered with
+`replaceOnce` (`PrintedPackageSupport`), which fails when the place that it alters is gone.
 -/
 
 namespace ZkcFormalTests.WrittenSubject
@@ -364,7 +373,8 @@ def startModule (work : System.FilePath) (name : String) (module : Module) : IO 
 
 /-- The two modules of a module that Lean must refuse in its proof module, added: the
 statements, which are accepted, and the proof module with the requests for the axioms of its
-theorems. The result is Lean's on the proof module. -/
+theorems. The result is Lean's on the proof module. For a control that is not of a subject
+(`Control` is). -/
 def startRefused (work : System.FilePath) (name : String) (module : Module) : IO Pending := do
   let stated ← addStated work module
   let proved ← addProof work name module (module.proof ++ module.requests)
@@ -392,5 +402,154 @@ def refusedOutside (work : System.FilePath) (title name : String) (module : Modu
     (places : List String) : IO (IO Unit) := do
   let outside ← readOutside work name module
   return do (← outside).refused title name places
+
+/-- Where a control is refused. -/
+inductive Refusal where
+  /-- By Lean, in the proof module: the statements are accepted. -/
+  | text
+  /-- By Lean, in the module of the statements: what is generated before the text does not
+  hold of the altered source, and the proof module is not read. -/
+  | generated
+  /-- By the judgment: Lean accepts both modules. -/
+  | outside
+  deriving DecidableEq, Repr
+
+/-- A control: the subject altered, in a module that must be refused. -/
+structure Control where
+  /-- What the control changes, for a message. -/
+  title : String
+  /-- The name of its module. The name space of its declarations is the subject's. -/
+  name : String
+  /-- The subject, with its source altered where the control alters the source. -/
+  subject : Subject
+  /-- The text of the proofs, altered where the control alters the text. -/
+  text : String
+
+  /-- Where it is refused. -/
+  refusal : Refusal := .text
+  /-- The theorems that are left unproved, themselves or by what they use, and no other: of the
+  theorems of the module that Lean refuses (the proof module, or the module of the statements
+  of a control that is refused there). Nothing is unproved in a control that the judgment
+  refuses. -/
+  unproved : List String := []
+  /-- The texts of the places at which the module is refused: each occurs in Lean's output, or
+  in what the comparator says. -/
+  places : List String := []
+  /-- The module is refused at those places and at no other: its errors are as many. -/
+  only : Bool := false
+  /-- Texts with the number of times that each occurs in Lean's output: a refusal that two
+  proofs of one module both meet is counted, since one text twice among the places says only
+  that it occurs. -/
+  occurrences : List (String × Nat) := []
+
+/-- What the run of a control gave: which module was refused or accepted, with its theorems,
+and what was said of it. -/
+structure Ran where
+  refusal : Refusal
+  theorems : List String
+  outside : Outside
+
+/-- A control whose modules the check added. -/
+structure Running where
+  control : Control
+  space : String
+  ran : IO Ran
+
+/-- The modules of a control, added. The name space is the subject's (`space`). A control
+whose statements are those of the subject, character for character (it alters only the text),
+imports the subject's module of statements; another has a module of statements of its own,
+`<control>.Stated`. A control that Lean must refuse has the requests for the axioms of its
+theorems appended, from which the unproved ones are read. -/
+def Control.start (work : System.FilePath) (space : String) (proof : Proof) (honest : Module)
+    (honestStated : Stated) (control : Control) : IO Running := do
+  let plain ← control.subject.module space proof control.text
+  let own := plain.statements != honest.statements
+  let module ← if own then
+      control.subject.module space proof control.text
+        (statements := some (.str control.name.toName "Stated"))
+    else pure plain
+  let stated ← if own then addStated work module else pure honestStated
+  if control.refusal == .outside then
+    let outside ← readOutside work control.name module
+    return ⟨control, space, do
+      let statements ← stated.lean
+      unless statements.1 do
+        return { refusal := .generated, theorems := module.stated, outside := { lean := statements } }
+      return { refusal := .outside, theorems := [], outside := ← outside }⟩
+  let proved ← addProof work control.name module (module.proof ++ module.requests)
+  return ⟨control, space, do
+    let statements ← stated.lean
+    unless statements.1 do
+      return { refusal := .generated, theorems := module.stated, outside := { lean := statements } }
+    return { refusal := .text, theorems := module.proved, outside := { lean := ← proved } }⟩
+
+/-- A control judged: it was refused where it says, the theorems left unproved are those that
+it names, and it was refused at the places that it names. -/
+def Running.finish (running : Running) : IO Unit := do
+  let control := running.control
+  let ran ← running.ran
+  let (ok, output) := ran.outside.lean
+  unless ran.refusal == control.refusal do
+    throw (IO.userError s!"{control.title}: the control is one refused in `{repr control.refusal}`, and was read as `{repr ran.refusal}`\n{output}")
+  if control.refusal == .outside then
+    return ← ran.outside.refused control.title running.space control.places
+  expectUnprovedIn control.title running.space ran.theorems ok output control.unproved
+  if control.only then expectPlacesIn control.title output control.places
+  for place in control.places do
+    unless output.contains place do
+      throw (IO.userError s!"{control.title}: not refused at `{place}`\n{output}")
+  for (place, times) in control.occurrences do
+    unless (output.splitOn place).length == times + 1 do
+      throw (IO.userError s!"{control.title}: `{place}` does not occur {times} times\n{output}")
+
+/-- A subject whose modules the check added: its two modules, the module in which Lean reads
+the source again, and its controls. -/
+structure Checking where
+  name : String
+  work : System.FilePath
+  /-- Lean on the two modules of the subject: the statements accepted, and the proof module. -/
+  honest : Pending
+  comparison : Pending
+  controls : List Running
+
+/-- The modules of a subject, added: the module of the statements, the proof module, which is
+judged, each control, and the comparison of the package with the frontend. -/
+def start (work : System.FilePath) (name : String) (subject : Subject) (proof : Proof)
+    (controls : List Control := []) : IO Checking := do
+  let module ← subject.module name proof
+  let stated ← addStated work module
+  let proved ← addProof work name module
+  noteAccepted work name module
+  let honest : Pending := do
+    stated.accepted name
+    let lean ← proved
+    acceptedByLean name lean
+    return lean
+  -- `read` checked these selectors against the requested goals, in order, before issuance.
+  let comparison ← startSourceComparison work s!"{name}Source" module subject.text
+    (subject.goals.map (·.goal))
+  return ⟨name, work, honest, comparison, ← controls.mapM (·.start work name proof module stated)⟩
+
+/-- A subject judged: Lean accepts the module of its statements, with every theorem on the
+allowed axioms; Lean accepts its proof module, and the judgment accepts it; Lean accepts the
+module in which it reads the source again; each control is refused as it says. What Lean said is
+read first, of every module, and the judgments after it, since a judgment costs the more. The
+result is Lean's output on the proof module. -/
+def Checking.finish (checking : Checking) : IO (Bool × String) := do
+  let (ok, output) ← checking.honest
+  let (sourceOk, sourceOutput) ← checking.comparison
+  acceptedOutput s!"{checking.name}Source" sourceOk sourceOutput []
+  let (outside, inside) := checking.controls.partition (·.control.refusal == .outside)
+  for control in inside do
+    control.finish
+  acceptedByJudgment checking.work checking.name
+  for control in outside do
+    control.finish
+  return (ok, output)
+
+/-- A subject checked: `start`, then `finish`. -/
+def check (work : System.FilePath) (name : String) (subject : Subject) (proof : Proof)
+    (controls : List Control := []) : IO (Bool × String) := do
+  (← start work name subject proof controls).finish
 
 end ZkcFormalTests.WrittenSubject

@@ -242,8 +242,8 @@ private def paired (view : ReceiptView) (sig : Signature) (q helper : Expr) : Li
           let pair ← mkAppM ``And #[v, body]
           return ← mkAppM ``Exists #[← mkLambdaFVars #[x] pair]
 
-/-- Expose the same cap and member names that an author can unfold in a judgment
-or the hypotheses of a receipt. Both abbreviations refer to concrete entries of this module. -/
+/-- Expose the cap and member names that an author can unfold in the judgment
+or in the hypotheses of a receipt. Both abbreviations refer to concrete entries of this module. -/
 private def publish (canonical view : Expr) (caps member_ : Ident) : TermElabM Expr := do
   let table := Lean.mkConst (← realizeGlobalConstNoOverloadWithInfo caps)
   let memberName := Lean.mkConst (← realizeGlobalConstNoOverloadWithInfo member_)
