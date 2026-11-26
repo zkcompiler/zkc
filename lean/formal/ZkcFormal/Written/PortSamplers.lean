@@ -1,6 +1,6 @@
 module
 
-public import ZkcFormal.ChargedProbability
+public import ZkcFormal.Samplers
 public import ZkcFormal.Written.Source
 public import VCVio.OracleComp.Constructions.SampleableType.Measure
 public import Mathlib.Data.Fintype.Fin
@@ -123,17 +123,6 @@ theorem prEvent_drawPosition (n : ℕ) (p : ℕ → Prop) [DecidablePred p] :
       ((Finset.univ.filter fun i : Fin (n + 1) => p i).card : ℝ≥0∞) / (n + 1) := by
   rw [drawPosition, prEvent_map, SampleableType.prEvent_uniformSample, Fintype.card_fin,
     Nat.cast_add, Nat.cast_one]
-
-/-- A drawn position is a given one with probability at most one over the positions. -/
-theorem prEvent_drawPosition_eq_le (n position : ℕ) :
-    Pr{let v ← drawPosition n}[v = position] ≤
-      toProbability (((1 : ℕ) : ℚ≥0) / ((n + 1 : ℕ) : ℚ≥0)) := by
-  rw [prEvent_drawPosition, toProbability_natCast_div 1 (n + 1) (Nat.succ_pos n)]
-  have few : (Finset.univ.filter fun i : Fin (n + 1) => (i : ℕ) = position).card ≤ 1 :=
-    Finset.card_le_one.mpr fun a ha b hb =>
-      Fin.ext ((Finset.mem_filter.mp ha).2.trans (Finset.mem_filter.mp hb).2.symm)
-  push_cast
-  exact ENNReal.div_le_div_right (by exact_mod_cast few) _
 
 /-- What a draw of a position gives is a position. -/
 theorem lt_of_mem_support_drawPosition (n v : ℕ) (drawn : v ∈ support (drawPosition n)) :

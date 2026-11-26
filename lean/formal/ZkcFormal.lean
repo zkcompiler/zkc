@@ -14,6 +14,7 @@ public import ZkcFormal.Written.ClaimIntro
 public import ZkcFormal.Written.GoalPresentation
 public import ZkcFormal.Written.Blind
 public import ZkcFormal.Written.PortSamplers
+public import ZkcFormal.Written.PortFees
 public import ZkcFormal.Written.LawSamplers
 public import ZkcFormal.Written.UniformVector
 public import ZkcFormal.Written.FixedSequences
