@@ -8,9 +8,14 @@ public import ZkcFormal.Written.LawSamplers
 @[expose] public section
 set_option autoImplicit false
 
-/-! The return probability of a written verifier at a selected deciding clause.
+/-! The return probability of a written verifier at a short application of a relation.
 The same bound applies to every deployed path, valid verifier input and conforming service.
-A separate receipt states that the rejection premise is met at a valid input. -/
+A separate receipt states that the rejection premise is met at a valid input.
+
+A statement of soundness reads a short application (`Zkc.Subject.ShortApplication`): the
+relation, its arity, its Boolean result and the statement operands. The place of a clause in its
+contract and its witness operands are of the decision (`Zkc.Subject.Decision`) and are not read
+here. -/
 
 namespace ZkcFormal.Written.Soundness
 
@@ -21,35 +26,34 @@ variable {V : Vocabulary} (M : Model V)
 
 open Goal.Internal
 
-variable {pkg : Package V} {scheme : WrittenRoot pkg} (d : Decision scheme)
+variable {pkg : Package V} {scheme : WrittenRoot pkg} (app : ShortApplication scheme)
 
-/-- Elaborate the same rejection expression at a decision or a legacy goal. Each public
-definition then keeps its own kernel names for the proofs of holder membership and Boolean
-result type. Existing frozen challenges reach those names. -/
-scoped macro "rejectionAt%(" M:term ", " d:term ", " p:term ", " relation:term ", " xs:term ")" : term =>
-  `(let statement := ($d).statement.map (G := ($M).Val) fun t port ↦
+/-- The rejection expression at a short application, elaborated where it is used: here and
+at a goal's short application in `ZkcFormal.Written.Goal`. -/
+scoped macro "rejectionAt%(" M:term ", " app:term ", " p:term ", " relation:term ", " xs:term ")" : term =>
+  `(let statement := ($app).statement.map (G := ($M).Val) fun t port ↦
       reveal $M (a := ⟨t, port.holders⟩) port.heldByVerifier (valueAt port.member $xs)
-    witnesses $M (($d).relation.header.ins.drop ($d).arity) fun ws ↦
+    witnesses $M (($app).relation.header.ins.drop ($app).arity) fun ws ↦
       validWitnesses $M ws <|
-        functionResult (M := $M) (t := .bool) (($d).boolean ▸ fnMeaning $M $p $relation
-          (arguments _ ($d).arity statement ws)) ≠ some true)
+        functionResult (M := $M) (t := .bool) (($app).boolean ▸ fnMeaning $M $p $relation
+          (arguments _ ($app).arity statement ws)) ≠ some true)
 
 /-- No valid witness makes the selected relation return true on these statement operands: the
 statement is outside the relation's language. A witness at which the relation stops does not
 make the statement accepted. The witness mapping records source positions. The universal
 quantifiers use the function types. -/
-def Rejected (p : Typed V) (relation : Member p.headers.fns d.relation.header)
+def Rejected (p : Typed V) (relation : Member p.headers.fns app.relation.header)
     (xs : HList (RV M scheme.verifier) scheme.entry.header.ins) : Prop :=
-  rejectionAt%(M, d, p, relation, xs)
+  rejectionAt%(M, app, p, relation, xs)
 
 /-- **What a rejected statement is, pointwise**: at the statement's operands, every list of
 valid witnesses gives the relation a result other than `some true`. -/
-theorem rejected_iff (p : Typed V) (relation : Member p.headers.fns d.relation.header)
+theorem rejected_iff (p : Typed V) (relation : Member p.headers.fns app.relation.header)
     (xs : HList (RV M scheme.verifier) scheme.entry.header.ins) :
-    Rejected M d p relation xs ↔
-      ∀ ws : HList M.Val (d.relation.header.ins.drop d.arity), ws.All M.Valid →
-        functionResult (M := M) (t := .bool) (d.boolean ▸ fnMeaning M p relation
-          (arguments _ d.arity (d.statement.map (G := M.Val) fun t port ↦
+    Rejected M app p relation xs ↔
+      ∀ ws : HList M.Val (app.relation.header.ins.drop app.arity), ws.All M.Valid →
+        functionResult (M := M) (t := .bool) (app.boolean ▸ fnMeaning M p relation
+          (arguments _ app.arity (app.statement.map (G := M.Val) fun t port ↦
             reveal M (a := ⟨t, port.holders⟩) port.heldByVerifier (valueAt port.member xs)) ws)) ≠
           some true := by
   unfold Rejected
@@ -61,15 +65,15 @@ variable (draws : LawDraws M)
 
 /-- At the given members, returning on a rejected statement has probability at most `b`. -/
 def BoundOf (b : ℝ≥0∞) (p : Typed V) (root : Member p.headers.protocols scheme.entry.header)
-    (relation : Member p.headers.fns d.relation.header) : Prop :=
+    (relation : Member p.headers.fns app.relation.header) : Prop :=
   ∀ path : List Frame, inputs M scheme.verifier false scheme.entry.header.ins fun xs ↦
-    Rejected M d p relation xs →
+    Rejected M app p relation xs →
       ReturnsWithin (roleMeaning M p root scheme.verifier path xs)
         (lawSamplers M draws) (Permitted M) (fun _ ↦ True) b
 
 /-- The bound at the selected members of the installation. -/
 def Installed (b : ℝ≥0∞) : Prop :=
-  BoundOf M d draws b pkg.installed scheme.entry.member d.relation.member
+  BoundOf M app draws b pkg.installed scheme.entry.member app.relation.member
 
 /-- Look up both named entries in the same admitted program before applying its claim. -/
 def admission (stored : NamedProgram V) (association : Association)
@@ -85,13 +89,13 @@ def admission (stored : NamedProgram V) (association : Association)
 /-- At the selected root and relation, properties of the installed members hold at precisely
 the members found by admission. Both lookups are deterministic, and the package admits. -/
 theorem installed_iff_admission (P : (p : Typed V) → Member p.headers.protocols scheme.entry.header →
-    Member p.headers.fns d.relation.header → Prop) :
-    P pkg.installed scheme.entry.member d.relation.member ↔
+    Member p.headers.fns app.relation.header → Prop) :
+    P pkg.installed scheme.entry.member app.relation.member ↔
       admission pkg.stored pkg.association scheme.entry.header scheme.entry.header.key
-        d.relation.header d.relation.header.key P := by
+        app.relation.header app.relation.header.key P := by
   constructor
   · intro holds a ok
-    exact pkg.atProtocolAndFunction ok _ _ scheme.entry.found _ _ d.relation.found P holds
+    exact pkg.atProtocolAndFunction ok _ _ scheme.entry.found _ _ app.relation.found P holds
   · intro admitted
     obtain ⟨a, ok⟩ := pkg.admitted_exists
     have selected := admitted ok
@@ -99,8 +103,8 @@ theorem installed_iff_admission (P : (p : Typed V) → Member p.headers.protocol
     obtain ⟨root, hr, relation, hf, holds⟩ := selected
     have root_eq : scheme.entry.member = root :=
       eq_of_heq (Sigma.mk.inj (Option.some.inj (scheme.entry.found.symm.trans hr))).2
-    have fn_eq : d.relation.member = relation :=
-      eq_of_heq (Ref.fn.inj (Option.some.inj (d.relation.found.symm.trans hf))).2
+    have fn_eq : app.relation.member = relation :=
+      eq_of_heq (Ref.fn.inj (Option.some.inj (app.relation.found.symm.trans hf))).2
     subst root
     subst relation
     exact holds
@@ -108,34 +112,34 @@ theorem installed_iff_admission (P : (p : Typed V) → Member p.headers.protocol
 /-- The bound at the members obtained by looking up the selected keys after admission. -/
 def AdmittedBound (b : ℝ≥0∞) : Prop :=
   admission pkg.stored pkg.association scheme.entry.header scheme.entry.header.key
-    d.relation.header d.relation.header.key (BoundOf M d draws b)
+    app.relation.header app.relation.header.key (BoundOf M app draws b)
 
-theorem installed_iff_admitted (b : ℝ≥0∞) : Installed M d draws b ↔ AdmittedBound M d draws b :=
-  installed_iff_admission d (BoundOf M d draws b)
+theorem installed_iff_admitted (b : ℝ≥0∞) : Installed M app draws b ↔ AdmittedBound M app draws b :=
+  installed_iff_admission app (BoundOf M app draws b)
 
 /-- Interpretation covers the selected source, and its admitted verifier has the stated bound. -/
 def Result (covers : NamedProgram V → Key → Key → Bool) (b : ℝ≥0∞) : Prop :=
-  covers pkg.stored scheme.entry.header.key d.relation.header.key = true ∧ AdmittedBound M d draws b
+  covers pkg.stored scheme.entry.header.key app.relation.header.key = true ∧ AdmittedBound M app draws b
 
 /-- Rejection by all valid witnesses and a served model hold together at one valid input. -/
 def Witnessed : Prop :=
   inputs M scheme.verifier true scheme.entry.header.ins fun xs ↦
     Served (lawSamplers M draws) (Permitted M) ∧
-      Rejected M d pkg.installed d.relation.member xs
+      Rejected M app pkg.installed app.relation.member xs
 
 theorem boundOf_mono {b larger : ℝ≥0∞} (le : b ≤ larger) {p : Typed V}
-    {root : Member p.headers.protocols scheme.entry.header} {relation : Member p.headers.fns d.relation.header}
-    (holds : BoundOf M d draws b p root relation) : BoundOf M d draws larger p root relation :=
+    {root : Member p.headers.protocols scheme.entry.header} {relation : Member p.headers.fns app.relation.header}
+    (holds : BoundOf M app draws b p root relation) : BoundOf M app draws larger p root relation :=
   fun path ↦ mapInputs M _ _ _ _ (fun _ h rejected ↦ (h rejected).mono le) (holds path)
 
-theorem installed_mono {b larger : ℝ≥0∞} (le : b ≤ larger) (holds : Installed M d draws b) :
-    Installed M d draws larger :=
-  boundOf_mono M d draws le holds
+theorem installed_mono {b larger : ℝ≥0∞} (le : b ≤ larger) (holds : Installed M app draws b) :
+    Installed M app draws larger :=
+  boundOf_mono M app draws le holds
 
-theorem admitted_mono {b larger : ℝ≥0∞} (le : b ≤ larger) (holds : AdmittedBound M d draws b) :
-    AdmittedBound M d draws larger :=
-  (installed_iff_admitted M d draws larger).mp <|
-    installed_mono M d draws le ((installed_iff_admitted M d draws b).mpr holds)
+theorem admitted_mono {b larger : ℝ≥0∞} (le : b ≤ larger) (holds : AdmittedBound M app draws b) :
+    AdmittedBound M app draws larger :=
+  (installed_iff_admitted M app draws larger).mp <|
+    installed_mono M app draws le ((installed_iff_admitted M app draws b).mpr holds)
 
 /-- Each choice of valid visible inputs can introduce the matching existential telescope. -/
 private theorem introInputs (r : Role) :
@@ -152,7 +156,7 @@ private theorem introInputs (r : Role) :
 /-- Valid verifier inputs and installed rejection meet the hypotheses with the given service. -/
 theorem witnessed_of (served : Served (lawSamplers M draws) (Permitted M)) :
     inputs M scheme.verifier false scheme.entry.header.ins fun xs ↦
-      Rejected M d pkg.installed d.relation.member xs → Witnessed M d draws :=
+      Rejected M app pkg.installed app.relation.member xs → Witnessed M app draws :=
   mapInputs M _ _ _ _ (fun _ h rejected ↦ h ⟨served, rejected⟩)
     (introInputs M _ _ _ _ (fun h ↦ h))
 

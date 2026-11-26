@@ -159,8 +159,8 @@ def check(work):
             # contract. Every other issued byte, including the challenge, stays the same.
             expected = bare.copy()
             stated = next(name for name in bare if name.endswith("/Stated.lean"))
-            before = "  ⟨0, written'fn1, ".encode()
-            after = "  ⟨1, written'fn1, ".encode()
+            before = "  ⟨written'application0, 0, ".encode()
+            after = "  ⟨written'application0, 1, ".encode()
             assert bare[stated].count(before) == 1
             expected[stated] = bare[stated].replace(before, after)
             assert files == expected

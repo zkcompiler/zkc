@@ -448,12 +448,23 @@ private def sharedFunction (work : System.FilePath) : IO Unit := do
   let req := simple ["a", "b", "c"]
   let s ← readSource tenancy req
   let m ← IO.ofExcept (s.module "SharedFunction" {})
-  let changed ← replaceOnce m.statements "⟨2, written'fn0, ⟨1, by decide +kernel⟩"
-    "⟨2, ⟨header0, member'fn0, found'fn0⟩, ⟨1, by decide +kernel⟩"
+  let changed ← replaceOnce m.statements
+    "written'application1 : Zkc.Subject.ShortApplication written'root :=\n  ⟨written'fn0, ⟨1, by decide +kernel⟩"
+    "written'application1 : Zkc.Subject.ShortApplication written'root :=\n  ⟨⟨header0, member'fn0, found'fn0⟩, ⟨1, by decide +kernel⟩"
   let original ← IO.ofExcept (ZkcFormalTests.WrittenSource.consumer tenancy req true)
   let bad ← checkMutant work m "InlineFunction" changed original
     [("checkReferences (← Lean.getCurrNamespace) \"c\"", "expected the reference SharedFunction.written'fn0")]
+  -- The same function entry, reached through the source's names: the propositions are the same,
+  -- and a statement over this short application would read the origins.
+  let through ← replaceOnce m.statements
+    "written'application1 : Zkc.Subject.ShortApplication written'root :=\n  ⟨written'fn0, ⟨1, by decide +kernel⟩"
+    ("written'application1 : Zkc.Subject.ShortApplication written'root :=\n" ++
+      "  ⟨(fun (_ : Zkc.Subject.RootOrigins written'root) => written'fn0) written'origins, ⟨1, by decide +kernel⟩")
+  let reaching ← checkMutant work m "ApplicationReach" through original
+    [("checkReferences (← Lean.getCurrNamespace) \"c\"",
+      "the short application SharedFunction.written'application1 reaches SharedFunction.written'origins")]
   bad
+  reaching
 
 private def reduction := "module reduceexample
 use zkc::security::{soundness}

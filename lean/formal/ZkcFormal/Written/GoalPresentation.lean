@@ -86,16 +86,16 @@ private def signature (canonical origin : Expr) (reserved : List Name) : MetaM S
     let holders ← (← listCells (← mkProjection input `holders)).mapM numeral
     if holders.contains verifier then
       ports := ports.push ⟨inputName s i (counts.getD s 0) reserved, ← modelTy (← mkProjection input `ty)⟩
-  let decision ← mkProjection g `decision
-  let relation ← mkProjection (← mkProjection decision `relation) `header
+  let application ← mkProjection (← mkProjection g `decision) `application
+  let relation ← mkProjection (← mkProjection application `relation) `header
   let args ← listCells (← mkProjection relation `ins)
-  let arity ← numeral (← mkProjection (← mkProjection decision `arity) `val)
+  let arity ← numeral (← mkProjection (← mkProjection application `arity) `val)
   return ⟨canonical.getArg! 1, ports.toList, ← (args.drop arity).mapM modelTy⟩
 
 /-- Select the fields of the subject without unfolding the selected installation, members or cap
 table. These named operands are the ones used by the published entry and rewrite theorems. -/
 private def subjectFields (e : Expr) : MetaM Expr :=
-  let selected := fun n => [``WrittenGoal, ``GoalFields, ``Decision, ``WrittenRoot,
+  let selected := fun n => [``WrittenGoal, ``GoalFields, ``Decision, ``ShortApplication, ``WrittenRoot,
     ``ProtocolEntry, ``FunctionEntry, ``Package, ``Fin].contains n
   Meta.transform e (pre := fun s => do
     if let some p ← reduceProjOf? s selected then return .visit p

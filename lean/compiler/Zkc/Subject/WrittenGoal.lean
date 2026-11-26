@@ -39,16 +39,24 @@ structure SharedPort {V : Vocabulary} (ports : List (LTy V)) (prover verifier : 
   heldByProver : prover ∈ holders
   heldByVerifier : verifier ∈ holders
 
-/-- An instantiated deciding clause. Its position counts every clause in the source contract.
-The arity splits the actual function signature into statement and witness parameters. -/
-structure Decision {V : Vocabulary} {pkg : Package V} (root : WrittenRoot pkg) where
-  place : Nat
+/-- A relation applied at its statement positions (the short application `R(a…)` of the
+language): the relation, how its parameters split into statement and witness parameters (the
+arity), its Boolean result, and the deployed inputs in its statement positions, which both
+parties hold. A property's statement reads a short application and nothing else of the contract. -/
+structure ShortApplication {V : Vocabulary} {pkg : Package V} (root : WrittenRoot pkg) where
   relation : FunctionEntry pkg
   arity : Fin (relation.header.ins.length + 1)
   boolean : relation.header.outs = [.bool]
   statement : HList (SharedPort root.entry.header.ins root.prover root.verifier)
     (relation.header.ins.take arity)
-  witness : Option (HList (PortRef root.entry.header.ins) (relation.header.ins.drop arity))
+
+/-- An instantiated deciding clause: its short application, its place in the source contract
+(counting every clause), and the deployed inputs that the prover gives the witness parameters,
+where the source names them. -/
+structure Decision {V : Vocabulary} {pkg : Package V} (root : WrittenRoot pkg) where
+  application : ShortApplication root
+  place : Nat
+  witness : Option (HList (PortRef root.entry.header.ins) (application.relation.header.ins.drop application.arity))
 
 /-- The source goal's own arguments and numerical data. -/
 structure GoalFields where
