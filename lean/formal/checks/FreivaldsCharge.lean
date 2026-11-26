@@ -66,8 +66,8 @@ def run (work : System.FilePath) : IO Unit := do
   unless goal.caps == ⟨[(.flat ⟨1⟩ [⟨⟨0⟩, 1, order, 1⟩] [])]⟩ do
     throw (IO.userError "the table of caps is not one over the order of the scalar field, on the draw of the root, once")
 
-  -- The operands exchanged: the package and the charge are what they were, and the relation is
-  -- applied to the ports in another order.
+  -- The operands exchanged: the package is what it was, and the relation is applied to the
+  -- ports in another order. The charge is not compared here.
   let exchanged ← read (source "Product(b, a, c)") (reading ["b", "a", "c"] #[1, 0, 2])
   unless exchanged.package == written.package do
     throw (IO.userError "exchanging the operands of the clause changed the package of the claims")
