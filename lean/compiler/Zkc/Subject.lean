@@ -1,5 +1,6 @@
 module
 
+public import Zkc.Subject.Bound
 public import Zkc.Subject.Charges
 public import Zkc.Subject.Coverage
 public import Zkc.Subject.Package

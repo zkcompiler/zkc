@@ -70,8 +70,8 @@ private def roles (root prover verifier : Nat) :=
   eqn "(written'root.entry.header.key.number, written'root.prover.val, written'root.verifier.val)"
     s!"({root}, {prover}, {verifier})"
 
-private def fields (i : Nat) (args : List Nat) (table ceiling : String) :=
-  eqn s!"{atGoal i}.fields" s!"⟨{reprStr args}, {table}, {ceiling}⟩"
+private def fields (i : Nat) (args : List Nat) (table : String) (bound : Nat × Nat) :=
+  eqn s!"{atGoal i}.fields" s!"⟨{reprStr args}, {table}, ⟨{bound.1}, {bound.2}, by decide⟩⟩"
 
 private def flat (root : Nat) (draws := "[]") := s!"⟨[.flat ⟨{root}⟩ {draws} []]⟩"
 
@@ -115,7 +115,7 @@ private def aliasCase (work : System.FilePath) (src : String) (reverse : Bool) :
     else ("Forward", aliases, [("left",0,0), (qualifiedLeft,0,0), ("left_again",1,0),
         ("right",2,1)], [(0,2),(0,2),(1,3)])
   let gold := sizes 3 2 ++ roles 1 0 1 ++ String.join (ports.zipIdx.map fun ((p,x),i) =>
-    coordinates i p 0 [x] (some [0]) ++ fields i [] (flat 1) "none")
+    coordinates i p 0 [x] (some [0]) ++ fields i [] (flat 1) (0, 1))
   let (m, check) ← full work space src req
     (gold ++ String.join (selections.map fun (l,i,d) => refs l i d 0 true))
   let s ← readSource src req
@@ -171,8 +171,18 @@ private def controls (work : System.FilePath) (m : Module) (src : String) : IO (
     (← mutate "⟨1, by decide⟩ = written'goal1 := rfl" "⟨1, by decide⟩ = written'goal0 := rfl")
     "written'goal1" "written'goal0"
   let cap ← twin "RedirectFieldCap"
-    (← mutate "⟨[], written'caps1, none⟩" "⟨[], written'caps0, none⟩")
+    (← mutate "⟨[], written'caps1, written'bound1⟩" "⟨[], written'caps0, written'bound1⟩")
     "written'caps1" "written'caps0"
+  -- The fields of `left_again` name the bound of `left`: the two bounds are equal, and the
+  -- reference is another goal's.
+  let boundRef ← twin "RedirectFieldBound"
+    (← mutate "⟨[], written'caps1, written'bound1⟩" "⟨[], written'caps1, written'bound0⟩")
+    "written'bound1" "written'bound0"
+  -- The bound of `left_again` is another number than its source gives.
+  let boundValue ← run "OtherBound"
+    (← mutate "written'bound1 : Zkc.Subject.Bound := ⟨0, 1, by decide⟩"
+      "written'bound1 : Zkc.Subject.Bound := ⟨1, 2, by decide⟩")
+    [(s!"({atGoal 1}.fields.bound.numerator,", "Type mismatch")]
   let capAlias ← twin "RedirectPublicCap"
     (← mutate "left_againCaps : Zkc.Subject.CapTable := written'caps1"
       "left_againCaps : Zkc.Subject.CapTable := written'caps0")
@@ -231,7 +241,7 @@ private def controls (work : System.FilePath) (m : Module) (src : String) : IO (
   let duplicate ← run "DuplicateRow" dup [("⟨1, by decide⟩).clause.val", "Type mismatch"),
     (refAt "left_again", wrong "written'decision0" "written'decision2"),
     ("written'subject.clauses.size =", "Type mismatch")]
-  return [claim, lookup, cap, capAlias, surfaceCap, admittedKey, resultCap, sampler, fee, receipt,
+  return [claim, lookup, cap, boundRef, boundValue, capAlias, surfaceCap, admittedKey, resultCap, sampler, fee, receipt,
     swap, operand, duplicate]
 
 private def aliasChecks (work : System.FilePath) : IO Unit := do
@@ -368,10 +378,10 @@ private def coordinateChecks (work : System.FilePath) : IO Unit := do
   let add := fun name src labels gold => Prod.snd <$> full work name src (simple labels) gold
   let count ← add "CountRows" (← countSource) ["loose","strict"]
     (sizes 2 2 ++ roles 1 0 1 ++ coordinates 0 0 3 [0] (some []) ++
-     coordinates 1 0 4 [0] (some []) ++ fields 0 [4] (flat 1 "[⟨⟨0⟩, 3, 8, 1⟩]") "none" ++
-     fields 1 [1] (flat 1 "[⟨⟨0⟩, 3, 4, 1⟩]") "none")
+     coordinates 1 0 4 [0] (some []) ++ fields 0 [4] (flat 1 "[⟨⟨0⟩, 3, 8, 1⟩]") (3, 8) ++
+     fields 1 [1] (flat 1 "[⟨⟨0⟩, 3, 4, 1⟩]") (3, 4))
   let shared ← add "ChargedRows" tenancy ["a","b","c"] (sizes 3 2 ++ String.join
-    ([(1,1,2,"some (1/1)"), (1,3,4,"some (1/2)"), (2,1,2,"some (1/1)")].zipIdx.map
+    ([(1,1,2,(1, 1)), (1,3,4,(1, 2)), (2,1,2,(1, 1))].zipIdx.map
       fun ((place,e,den,cap),i) => coordinates i place 0 [0] (some []) ++
         fields i [e] (flat 1 s!"[⟨⟨0⟩, 1, {den}, 1⟩]") cap))
   let reps ← add "Occurrences" occurrences ["left","right","twin","again","left"]
@@ -412,7 +422,7 @@ private def capChecks (work : System.FilePath) : IO Unit := do
   let req := simple ["a","b"]
   let draws := fun (z t : Nat) => flat 1 s!"[⟨⟨0⟩, {z}, 8, 1⟩, ⟨⟨1⟩, {t}, 8, 1⟩]"
   let (m, check) ← full work "EqualTotals" src req
-    (fields 0 [1] (draws 1 3) "some (1/1)" ++ fields 1 [3] (draws 3 1) "some (1/2)" ++
+    (fields 0 [1] (draws 1 3) (1, 1) ++ fields 1 [3] (draws 3 1) (1, 2) ++
      "example : aCaps.budget = bCaps.budget := a_budget.trans b_budget.symm\n")
   let redirect := fun (text : String) =>
     replaceOnce text "⟨[3], written'caps1," "⟨[3], written'caps0,"
@@ -467,8 +477,22 @@ private def sharedFunction (work : System.FilePath) : IO Unit := do
   let reaching ← checkMutant work m "ApplicationReach" through original
     [("checkReferences (← Lean.getCurrNamespace) \"c\"",
       "the short application SharedFunction.written'application1 reaches SharedFunction.written'origins")]
+  -- The same function entry again, reached through a bound: a short application is the same at
+  -- every bound, and a statement over this one would read a goal's number.
+  let bounded ← replaceOnce m.statements
+    ("noncomputable def written'application1 : Zkc.Subject.ShortApplication written'root :=\n" ++
+      "  ⟨written'fn0, ⟨1, by decide +kernel⟩")
+    ("def written'bound9 : Zkc.Subject.Bound := ⟨1, 2, by decide⟩\n" ++
+      "private noncomputable def entryAtBound : Zkc.Subject.FunctionEntry subjectPackage :=\n" ++
+      "  (fun (_ : Zkc.Subject.Bound) => written'fn0) written'bound9\n" ++
+      "noncomputable def written'application1 : Zkc.Subject.ShortApplication written'root :=\n" ++
+      "  ⟨entryAtBound, ⟨1, by decide +kernel⟩")
+  let reachingBound ← checkMutant work m "ApplicationBound" bounded original
+    [("checkReferences (← Lean.getCurrNamespace) \"c\"",
+      "the short application SharedFunction.written'application1 reaches SharedFunction.written'bound9")]
   bad
   reaching
+  reachingBound
 
 private def reduction := "module reduceexample
 use zkc::security::{soundness}
@@ -586,7 +610,7 @@ private def mixedChecks (work : System.FilePath) : IO Unit := do
   let mut clients := []
   for (mod,space,fees) in [(m.statementsName.toString,m.space,true), ("MixedClaims","MixedClaims",false)] do
     let data := sizes 1 1 ++ roles 6 0 1 ++ refs "good" 0 0 2 fees ++
-      coordinates 0 0 2 [0,1] (some []) ++ fields 0 [0] (flat 6) "none"
+      coordinates 0 0 2 [0,1] (some []) ++ fields 0 [0] (flat 6) (0, 1)
     let standard := s!"StandardInterpretation.model {atGoal 0} StandardInterpretation.draws"
     let properties := ["ClaimOf","Claim","Goal","Result","Witnessed"] ++ (if fees then ["Judged"] else [])
     let meaning := String.join (properties.map fun p =>

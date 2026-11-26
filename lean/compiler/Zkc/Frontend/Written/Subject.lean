@@ -76,6 +76,7 @@ def publicGoals (layout : SubjectLayout owner) : List ClaimedGoal := layout.alia
 private def goalName (index : Nat) := s!"written'goal{index}"
 private def fieldsName (index : Nat) := s!"written'fields{index}"
 private def capsName (index : Nat) := s!"written'caps{index}"
+private def boundName (index : Nat) := s!"written'bound{index}"
 private def decisionName (index : Nat) := s!"written'decision{index}"
 private def slotName (index : Nat) := s!"written'slot{index}"
 
@@ -89,10 +90,11 @@ by an author's rewrite under the public cap abbreviation. -/
 def goalFacts (layout : SubjectLayout owner) (label : ClaimedGoal → String) : String := Id.run do
   let mut lines := #[]
   for ((goal, _), i) in layout.goals.toList.zipIdx do
-    let ceiling := option (fun (r : Rat) => s!"(({r.num} : Rat) / {r.den})") goal.ceiling
+    let bound := goal.bound
     lines := lines.push (s!"def {capsName i} : Zkc.Subject.CapTable := {capsTerm goal.caps}\n" ++
+      s!"def {boundName i} : Zkc.Subject.Bound := ⟨{bound.num.toNat}, {bound.den}, by decide⟩\n" ++
       s!"def {fieldsName i} : Zkc.Subject.GoalFields :=\n" ++
-      s!"  ⟨{numbers goal.specification.toList}, {capsName i}, {ceiling}⟩\n")
+      s!"  ⟨{numbers goal.specification.toList}, {capsName i}, {boundName i}⟩\n")
   for (goal, i) in layout.aliases do
     let name := label goal
     lines := lines.push s!"abbrev {name}Caps : Zkc.Subject.CapTable := {capsName i}\n"
