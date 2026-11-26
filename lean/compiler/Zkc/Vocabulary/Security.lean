@@ -34,10 +34,51 @@ def RequiredClause.description : RequiredClause → String
   | .fork => "`knowledge` with a two-run extractor"
   | .simulation => "`zero_knowledge`"
 
+/-- The properties that a goal can name (`CORE-LIBRARY.md` §2.9), in the order of the
+documents' tables. -/
+inductive Property where
+  | completeness
+  | soundness
+  | specialSoundness
+  | knowledgeSoundness
+  | zeroKnowledge
+  | honestVerifierZeroKnowledge
+  | unforgeability
+  deriving Inhabited, DecidableEq, Repr
+
+namespace Property
+
+/-- The name that a source writes for a property. -/
+def spelling : Property → String
+  | .completeness => "completeness"
+  | .soundness => "soundness"
+  | .specialSoundness => "special_soundness"
+  | .knowledgeSoundness => "knowledge_soundness"
+  | .zeroKnowledge => "zero_knowledge"
+  | .honestVerifierZeroKnowledge => "honest_verifier_zero_knowledge"
+  | .unforgeability => "unforgeability"
+
+/-- Every property, once. -/
+def all : List Property :=
+  [.completeness, .soundness, .specialSoundness, .knowledgeSoundness, .zeroKnowledge,
+    .honestVerifierZeroKnowledge, .unforgeability]
+
+theorem mem_all (property : Property) : property ∈ all := by
+  cases property <;> decide
+
+/-- Whether a goal of this property is published from the written subject: the formal library's
+command states its theorems from the goal's row. A goal of another property is refused at its
+line. -/
+def published : Property → Bool
+  | .soundness => true
+  | _ => false
+
+end Property
+
 /-- Language-level applicability. A property can be named before its source-to-theorem
 binding is implemented. The formal definition supplies the mathematical statement. -/
-structure Property where
-  name : String
+structure Description where
+  property : Property
   honestSide : HonestSide
   clause : RequiredClause
   stages : List String := ["written", "committed", "constructed", "serialized"]
@@ -45,17 +86,30 @@ structure Property where
   binding : Option Binding := none
   deriving Inhabited, Repr
 
-def properties : Array Property := #[
-  {name := "completeness", honestSide := .allRoles, clause := .none},
-  {name := "soundness", honestSide := .verifier, clause := .decision},
-  {name := "special_soundness", honestSide := .verifier, clause := .fork,
-   stages := ["written"], binding := some .writtenFork},
-  {name := "knowledge_soundness", honestSide := .verifier, clause := .knowledge},
-  {name := "zero_knowledge", honestSide := .exceptSimulated,
-   clause := .simulation},
-  {name := "honest_verifier_zero_knowledge", honestSide := .allRoles, clause := .simulation,
-   stages := ["written", "committed"]},
-  {name := "unforgeability", honestSide := .verifier, clause := .none,
-   stages := ["constructed", "serialized"], constructions := ["derived", "authored"]}]
+/-- The name that a source writes for the described property. -/
+def Description.name (description : Description) : String := description.property.spelling
+
+/-- What the language says of each property. -/
+def Property.description : Property → Description
+  | .completeness =>
+    {property := .completeness, honestSide := .allRoles, clause := .none}
+  | .soundness =>
+    {property := .soundness, honestSide := .verifier, clause := .decision}
+  | .specialSoundness =>
+    {property := .specialSoundness, honestSide := .verifier, clause := .fork,
+     stages := ["written"], binding := some .writtenFork}
+  | .knowledgeSoundness =>
+    {property := .knowledgeSoundness, honestSide := .verifier, clause := .knowledge}
+  | .zeroKnowledge =>
+    {property := .zeroKnowledge, honestSide := .exceptSimulated, clause := .simulation}
+  | .honestVerifierZeroKnowledge =>
+    {property := .honestVerifierZeroKnowledge, honestSide := .allRoles, clause := .simulation,
+     stages := ["written", "committed"]}
+  | .unforgeability =>
+    {property := .unforgeability, honestSide := .verifier, clause := .none,
+     stages := ["constructed", "serialized"], constructions := ["derived", "authored"]}
+
+/-- The descriptions of every property, in the documents' order. -/
+def properties : Array Description := (Property.all.map Property.description).toArray
 
 end Zkc.Security

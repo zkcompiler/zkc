@@ -3,6 +3,7 @@ module
 public import Zkc.Subject.Bound
 public import Zkc.Subject.Charges
 public import Zkc.Subject.ShortApplication
+public import Zkc.Vocabulary.Security
 
 @[expose] public section
 set_option autoImplicit false
@@ -34,8 +35,12 @@ structure BoundedTable (α : Type) where
   size : Nat
   get : Fin size → α
 
-/-- A goal's fields and the position of its decision in the same subject. -/
+/-- A goal's row: the path of its declaration in the source (its components), the property that
+it names, the position of its decision in the same subject, and its fields. What a goal
+publishes is stated from its row and named by its path. -/
 structure GoalSlot (decisions : Nat) where
+  path : List String
+  property : Zkc.Security.Property
   clause : Fin decisions
   fields : GoalFields
 

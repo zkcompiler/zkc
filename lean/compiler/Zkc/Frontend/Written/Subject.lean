@@ -94,7 +94,8 @@ def goalFacts (layout : SubjectLayout owner) (label : ClaimedGoal → String) : 
     lines := lines.push (s!"def {capsName i} : Zkc.Subject.CapTable := {capsTerm goal.caps}\n" ++
       s!"def {boundName i} : Zkc.Subject.Bound := ⟨{bound.num.toNat}, {bound.den}, by decide⟩\n" ++
       s!"def {fieldsName i} : Zkc.Subject.GoalFields :=\n" ++
-      s!"  ⟨{numbers goal.specification.toList}, {capsName i}, {boundName i}⟩\n")
+      s!"  \{ specification := {numbers goal.specification.toList}, caps := {capsName i}, " ++
+      s!"bound := {boundName i} }\n")
   for (goal, i) in layout.aliases do
     let name := label goal
     lines := lines.push s!"abbrev {name}Caps : Zkc.Subject.CapTable := {capsName i}\n"
@@ -184,11 +185,13 @@ def text (layout : SubjectLayout owner) : Except String String := do
   lines := lines.push ("noncomputable def written'clauses : " ++
     "Zkc.Subject.BoundedTable (Zkc.Subject.Decision written'root) :=\n" ++
     s!"  {tableTerm decisionName layout.decisions.size}\n")
-  for ((_, d), i) in layout.goals.toList.zipIdx do
+  for ((goal, d), i) in layout.goals.toList.zipIdx do
+    let path := (Static.qualifiedName program goal.declaration).splitOn "::"
     lines := lines.push (s!"noncomputable def {goalName i} : Zkc.Subject.WrittenGoal " ++
       s!"written'root := ⟨{decisionName d}, {fieldsName i}⟩\n" ++
-      s!"noncomputable def {slotName i} : Zkc.Subject.GoalSlot written'clauses.size := " ++
-      s!"⟨⟨{d}, by decide⟩, {fieldsName i}⟩\n")
+      s!"noncomputable def {slotName i} : Zkc.Subject.GoalSlot written'clauses.size :=\n" ++
+      s!"  \{ path := {reprStr path}, property := {reprStr goal.property}, " ++
+      s!"clause := ⟨{d}, by decide⟩, fields := {fieldsName i} }\n")
   lines := lines.push ("noncomputable def written'subject : " ++
     "Zkc.Subject.WrittenSubject written'root :=\n" ++
     s!"  ⟨written'clauses, {tableTerm slotName layout.goals.size}⟩\n")

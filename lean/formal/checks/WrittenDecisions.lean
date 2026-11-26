@@ -171,18 +171,32 @@ private def controls (work : System.FilePath) (m : Module) (src : String) : IO (
     (← mutate "⟨1, by decide⟩ = written'goal1 := rfl" "⟨1, by decide⟩ = written'goal0 := rfl")
     "written'goal1" "written'goal0"
   let cap ← twin "RedirectFieldCap"
-    (← mutate "⟨[], written'caps1, written'bound1⟩" "⟨[], written'caps0, written'bound1⟩")
+    (← mutate "caps := written'caps1, bound := written'bound1 }" "caps := written'caps0, bound := written'bound1 }")
     "written'caps1" "written'caps0"
   -- The fields of `left_again` name the bound of `left`: the two bounds are equal, and the
   -- reference is another goal's.
   let boundRef ← twin "RedirectFieldBound"
-    (← mutate "⟨[], written'caps1, written'bound1⟩" "⟨[], written'caps1, written'bound0⟩")
+    (← mutate "caps := written'caps1, bound := written'bound1 }" "caps := written'caps1, bound := written'bound0 }")
     "written'bound1" "written'bound0"
   -- The bound of `left_again` is another number than its source gives.
   let boundValue ← run "OtherBound"
     (← mutate "written'bound1 : Zkc.Subject.Bound := ⟨0, 1, by decide⟩"
       "written'bound1 : Zkc.Subject.Bound := ⟨1, 2, by decide⟩")
     [(s!"({atGoal 1}.fields.bound.numerator,", "Type mismatch")]
+  -- The bound of `left_again` is computed in Lean from its table of caps: the same number, and a
+  -- bound that is no longer the goal's own.
+  let boundTable ← run "BoundFromTable"
+    (← mutate "written'bound1 : Zkc.Subject.Bound := ⟨0, 1, by decide⟩"
+      "written'bound1 : Zkc.Subject.Bound := (fun (_ : Zkc.Subject.CapTable) => ⟨0, 1, by decide⟩) written'caps1")
+    [(refAt "left_again", s!"the bound {m.space}.written'bound1 reaches {m.space}.written'caps1")]
+  -- The row of `left_again` has the path of `left`, and then another property than its goal names.
+  let otherPath ← run "OtherPath"
+    (← mutate "\"left_again\"], property :=" "\"left\"], property :=")
+    [("⟨1, by decide⟩).path", "Type mismatch")]
+  let otherProperty ← run "OtherProperty"
+    (← mutate "property := Zkc.Security.Property.soundness, clause := ⟨0, by decide⟩, fields := written'fields1 }"
+      "property := Zkc.Security.Property.completeness, clause := ⟨0, by decide⟩, fields := written'fields1 }")
+    [("⟨1, by decide⟩).property", "Type mismatch")]
   let capAlias ← twin "RedirectPublicCap"
     (← mutate "left_againCaps : Zkc.Subject.CapTable := written'caps1"
       "left_againCaps : Zkc.Subject.CapTable := written'caps0")
@@ -213,9 +227,11 @@ private def controls (work : System.FilePath) (m : Module) (src : String) : IO (
   let receipt ← twin "RedirectReceipt"
     (← mutate (helper "left_again" "written'goal1") (helper "left" "written'goal0"))
     "left_againWitnessed" "leftWitnessed"
-  let slot (i d f : Nat) := s!"written'slot{i} : Zkc.Subject.GoalSlot written'clauses.size := ⟨⟨{d}, by decide⟩, written'fields{f}⟩"
-  let swapped ← mutate (slot 0 0 0) (slot 0 0 1)
-  let swapped ← replaceOnce swapped (slot 1 0 1) (slot 1 0 0)
+  -- A slot is printed with named fields; its clause and its fields are its last two.
+  let slot (d : Nat) (f : String) := s!"clause := ⟨{d}, by decide⟩, fields := written'fields{f} }"
+  let swapped ← mutate (slot 0 "0") (slot 0 "'")
+  let swapped ← replaceOnce swapped (slot 0 "1") (slot 0 "0")
+  let swapped ← replaceOnce swapped (slot 0 "'") (slot 0 "1")
   let swap ← run "SwapFields" swapped [
     (refAt "left", wrong "written'fields0" "written'fields1"),
     (refAt qualifiedLeft, wrong "written'fields0" "written'fields1"),
@@ -236,12 +252,12 @@ private def controls (work : System.FilePath) (m : Module) (src : String) : IO (
   let [body, _] := tail.splitOn (decl ++ "1 :") | throw (IO.userError "expected decision 1")
   let dup ← mutate marker (decl ++ "2 :" ++ body ++ marker)
   let dup ← replaceOnce dup table dupTable
-  let dup ← replaceOnce dup (slot 1 0 1) (slot 1 2 1)
+  let dup ← replaceOnce dup (slot 0 "1") (slot 2 "1")
   let dup ← replaceOnce dup "⟨written'decision0, written'fields1⟩" "⟨written'decision2, written'fields1⟩"
   let duplicate ← run "DuplicateRow" dup [("⟨1, by decide⟩).clause.val", "Type mismatch"),
     (refAt "left_again", wrong "written'decision0" "written'decision2"),
     ("written'subject.clauses.size =", "Type mismatch")]
-  return [claim, lookup, cap, boundRef, boundValue, capAlias, surfaceCap, admittedKey, resultCap, sampler, fee, receipt,
+  return [claim, lookup, cap, boundRef, boundValue, boundTable, otherPath, otherProperty, capAlias, surfaceCap, admittedKey, resultCap, sampler, fee, receipt,
     swap, operand, duplicate]
 
 private def aliasChecks (work : System.FilePath) : IO Unit := do
@@ -425,7 +441,7 @@ private def capChecks (work : System.FilePath) : IO Unit := do
     (fields 0 [1] (draws 1 3) (1, 1) ++ fields 1 [3] (draws 3 1) (1, 2) ++
      "example : aCaps.budget = bCaps.budget := a_budget.trans b_budget.symm\n")
   let redirect := fun (text : String) =>
-    replaceOnce text "⟨[3], written'caps1," "⟨[3], written'caps0,"
+    replaceOnce text "specification := [3], caps := written'caps1," "specification := [3], caps := written'caps0,"
   let inconsistent ← startLakeLean work "InconsistentCap.Stated" (← redirect m.statements) (text := false)
   -- A consistent re-emission pays the sibling's fees but keeps the requested arguments and
   -- the common total. Redirect its now equal table reference as a second, independent fault.
