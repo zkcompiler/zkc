@@ -151,6 +151,7 @@ def run (corpus template : System.FilePath) (work : System.FilePath) : IO Unit :
   let blocks := readBlocks (← IO.FS.readFile corpus)
   let some source := (blocks.find? (·.id == "N-GL2a")).bind (·.files[0]?)
     | throw (IO.userError "missing the reference case N-GL2a")
+  let checks := template.parent.getD "."
   let template ← IO.FS.readFile template
   let written ← read source
   unless places written == (1, 1, 0) do
@@ -279,8 +280,28 @@ def run (corpus template : System.FilePath) (work : System.FilePath) : IO Unit :
       text := template, unproved := ofCharge, places := atCap }]
   -- The roster reversed: the same text proves the same theorems.
   let turnedCount ← start work "CountTurned" turned proof
+  -- Judge the four fixed-bound theorems against their independent roots. The solution can
+  -- use the existing Count proof. Its challenge imports only the trusted statements.
+  let boundText ← IO.FS.readFile (checks / "CountBounds.lean.in")
+  let some loose := elsewhere.goals.find? (·.goal == "loose")
+    | throw (IO.userError "missing loose in the inactive-draw source")
+  let boundText := boundText ++
+    s!"\nexample := CountBounds.inactive_charge ({Zkc.Subject.Print.capsTerm loose.caps}) rfl\n"
+  let bounds ← startModule work "CountBounds" {
+    space := "CountBounds", statementsName := `CountBoundRoots
+    statements := ← IO.FS.readFile (checks / "CountBoundRoots.lean.in")
+    stated := [], statedImports := ["Count.Stated", "ZkcFormal.Written.Soundness", "Lean"]
+    proof := boundText, proved := [], proofImports := ["Count"]
+    textLine := 1, textLines := (boundText.splitOn "\n").length
+    published := [(`CountBounds.installation, `CountBoundRoots.installed),
+      (`CountBounds.admission, `CountBoundRoots.admitted),
+      (`CountBounds.certificate, `CountBoundRoots.result),
+      (`CountBounds.witness, `CountBoundRoots.witnessed)] }
   let _ ← count.finish
   let _ ← turnedCount.finish
+  let (ok, output) ← bounds
+  acceptedOutput "CountBounds" ok output ["installation", "admission", "certificate", "witness",
+    "installed_iff", "admitted_iff", "quarter_refuted", "misplaced_result", "counted_zero", "inactive_charge"] allowed
   let (ok, output) ← finishLean ceilingProof
   acceptedOutput "CeilingAtTotal" ok output ["loose_ceiling"] allowed
   for (goal, checked) in coverageChecks do
