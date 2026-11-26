@@ -123,14 +123,21 @@ private def portTerm (shared : Bool) (position : Nat) : String :=
   let port := s!"⟨_, {memberAt position}⟩"
   if shared then s!"⟨{port}, by decide +kernel, by decide +kernel⟩" else port
 
+private def operandsText (shared : Bool) (positions : Array Nat) : String :=
+  consList (positions.toList.map (portTerm shared))
+
+/-- The decision's short application: the relation, the arity, the Boolean result, the statement
+operands. A statement that is made over a short application names this constant and not the
+decision; the present published family reads it through the goal's decision. -/
+private def applicationText (goal : ClaimedGoal) (i : Nat) : String :=
+  s!"noncomputable def written'application{i} : Zkc.Subject.ShortApplication written'root :=\n" ++
+    s!"  ⟨written'fn{goal.relation}, ⟨{goal.statement.size}, by decide +kernel⟩, rfl,\n" ++
+    s!"   {operandsText true goal.statement}⟩\n"
+
+/-- The decision: its short application, its place in the source contract and its witness operands. -/
 private def decisionText (goal : ClaimedGoal) (i : Nat) : String :=
-  let operands (shared : Bool) (positions : Array Nat) :=
-    consList (positions.toList.map (portTerm shared))
-  let witness := option (operands false) goal.witness
   s!"noncomputable def {decisionName i} : Zkc.Subject.Decision written'root :=\n" ++
-    s!"  ⟨{goal.clause.place}, written'fn{goal.relation}, " ++
-    s!"⟨{goal.statement.size}, by decide +kernel⟩, rfl,\n" ++
-    s!"   {operands true goal.statement}, {witness}⟩\n"
+    s!"  ⟨written'application{i}, {goal.clause.place}, {option (operandsText false) goal.witness}⟩\n"
 
 /-- Select a named leaf by its absolute position. Splitting on the middle position keeps
 each projection logarithmic, including projection of the last row. -/
@@ -169,6 +176,8 @@ def text (layout : SubjectLayout owner) : Except String String := do
     unless goal.clause.kind == .proves do
       throw (s!"{goal.goal}: the goal reads a `reduces` clause. The statement of a reduction " ++
         "is about a return on which the reduced statement is true, and is not issued yet")
+    lines := lines.push (applicationText goal i)
+  for (goal, i) in layout.decisions.toList.zipIdx do
     lines := lines.push (decisionText goal i)
   lines := lines.push ("noncomputable def written'clauses : " ++
     "Zkc.Subject.BoundedTable (Zkc.Subject.Decision written'root) :=\n" ++

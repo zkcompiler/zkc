@@ -57,7 +57,7 @@ def run (work : System.FilePath) : IO Unit := do
   let file := "fixtures/written-bound-guard.zkc"
   let source ← IO.FS.readFile file
   let total ← replaceOnce source "IsSet(claim: bool): claim" "IsSet(claim: bool): true"
-  let args := "model written'decision0 draws"
+  let args := "model written'application0 draws"
   let result := s!"Soundness.Result {args} covers"
   let witnessed := s!"Soundness.Witnessed {args}"
   let always ← check work file total "BoundTotal" [

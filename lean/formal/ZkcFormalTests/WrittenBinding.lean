@@ -24,8 +24,8 @@ explicitly supplied witness vector. Caps are compared as complete tables in the 
 def operands {V : Vocabulary} {pkg : Package V} {root : WrittenRoot pkg}
     (g : WrittenGoal root) : Nat × Nat × Nat × List Nat × Option (List Nat) :=
   let d := g.decision
-  (d.place, d.relation.header.key.number, d.arity.val,
-    statementPlaces d.statement, d.witness.map witnessPlaces)
+  (d.place, d.application.relation.header.key.number, d.application.arity.val,
+    statementPlaces d.application.statement, d.witness.map witnessPlaces)
 
 open Lean Meta Elab Command
 
@@ -66,6 +66,37 @@ private def checkLeaf (table : Expr) (i : Nat) (expected : Name) : MetaM Unit :=
   let some selected := selected | throwError "slot {i} did not select {expected}"
   named selected expected
 
+/-- The constants of a constant's own module that it reaches through types and values. The
+module decides, not the name: a private declaration of the module has a name outside the
+subject's name space. -/
+private partial def reachedInModule (home : Option ModuleIdx) :
+    List Name → NameSet → MetaM NameSet
+  | [], seen => return seen
+  | name :: rest, seen => do
+    if seen.contains name then reachedInModule home rest seen else
+    let info ← getConstInfo name
+    let env ← getEnv
+    let used := info.type.getUsedConstants ++
+      ((info.value? (allowOpaque := true)).map (·.getUsedConstants)).getD #[]
+    reachedInModule home (used.toList.filter (env.getModuleIdxFor? · == home) ++ rest)
+      (seen.insert name)
+
+/-- What a statement over a short application must not read through it: a decision (the place
+of a clause and its witness operands), a goal's row and fields, the table of caps, the aggregate
+and the source's names. -/
+private def rowWords : List String :=
+  ["written'decision", "written'goal", "written'fields", "written'slot", "written'caps",
+    "written'clauses", "written'subject", "written'origins"]
+
+/-- A short application reaches none of the subject's rows. A statement over a short application
+names its constant; whatever that constant reaches is compared when a proof is judged. -/
+private def checkApplicationReach (space application : Name) : MetaM Unit := do
+  let home := (← getEnv).getModuleIdxFor? application
+  for name in (← reachedInModule home [application] {}).toList do
+    let word := ((privateToUserName name).replacePrefix space .anonymous).toString
+    if rowWords.any (word.startsWith ·) then
+      throwError "the short application {application} reaches {privateToUserName name}"
+
 /-- Follow the actual aggregate and public declarations. The expected indices and label
 are chosen by the client from the original source, independently of the layout issuer. -/
 def checkReferences (space : Name) (label : String) (goal clause relation : Nat) (fees : Bool) (arguments := 0) :
@@ -83,7 +114,10 @@ def checkReferences (space : Name) (label : String) (goal clause relation : Nat)
   let clauses ← operand aggregate ``WrittenSubject.mk 1
   named clauses (localName "written'clauses")
   checkLeaf (← bodyOf (localName "written'clauses")) clause decision
-  named (← operand (← bodyOf decision) ``Decision.mk 4) fnEntry
+  let application := localName s!"written'application{clause}"
+  named (← operand (← bodyOf decision) ``Decision.mk 2) application
+  checkApplicationReach space application
+  named (← operand (← bodyOf application) ``ShortApplication.mk 3) fnEntry
   let entry ← bodyOf fnEntry
   named (← operand entry ``FunctionEntry.mk 2) (localName s!"header{relation}")
   named (← operand entry ``FunctionEntry.mk 1) fnMember

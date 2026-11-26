@@ -71,7 +71,7 @@ local notation "standardCoverage" => ZkcFormal.Written.StandardInterpretation.co
 
 #check_endpoints
   | BoundTotal.allBounds : BoundTotal.allBoundsStatement :=
-    ∀ b, ZkcFormal.Written.Soundness.Result standardModel BoundTotal.written'decision0
+    ∀ b, ZkcFormal.Written.Soundness.Result standardModel BoundTotal.written'application0
       standardDraws standardCoverage b
   | BoundTotal.noWitness : BoundTotal.noWitnessStatement :=
-    ¬ ZkcFormal.Written.Soundness.Witnessed standardModel BoundTotal.written'decision0 standardDraws
+    ¬ ZkcFormal.Written.Soundness.Witnessed standardModel BoundTotal.written'application0 standardDraws

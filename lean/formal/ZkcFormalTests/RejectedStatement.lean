@@ -67,10 +67,10 @@ noncomputable def root : Zkc.Subject.WrittenRoot subjectPackage :=
   ⟨⟨header1, rootMember, found'root⟩, ⟨0, by decide +kernel⟩, ⟨1, by decide +kernel⟩,
    by decide +kernel⟩
 
-/-- The clause: the relation at the root's first input, with one witness parameter. -/
-noncomputable def decision : Zkc.Subject.Decision root :=
-  ⟨0, ⟨header0, relationMember, found'relation⟩, ⟨1, by decide +kernel⟩, rfl,
-   (.cons ⟨⟨_, Member.head⟩, by decide +kernel, by decide +kernel⟩ .nil), none⟩
+/-- The relation at the root's first input, with one witness parameter. -/
+noncomputable def application : Zkc.Subject.ShortApplication root :=
+  ⟨⟨header0, relationMember, found'relation⟩, ⟨1, by decide +kernel⟩, rfl,
+   (.cons ⟨⟨_, Member.head⟩, by decide +kernel, by decide +kernel⟩ .nil)⟩
 
 /-- The verifier's inputs with the statement `x`. -/
 noncomputable abbrev inputs (x : Bool) : HList (RV model root.verifier) root.entry.header.ins :=
@@ -87,20 +87,20 @@ theorem results : result true false = none ∧ result true true = some true ∧
 
 /-- A statement that a valid witness accepts is not rejected. -/
 theorem accepted_not_rejected :
-    ¬ Soundness.Rejected model decision installed relationMember (inputs true) :=
+    ¬ Soundness.Rejected model application installed relationMember (inputs true) :=
   fun rejected ↦ rejected true trivial results.2.1
 
 /-- A statement that no valid witness accepts is rejected, also where the relation stops for
 a valid witness. -/
 theorem stopping_rejected :
-    Soundness.Rejected model decision installed relationMember (inputs false) := by
+    Soundness.Rejected model application installed relationMember (inputs false) := by
   intro w _
   change result false w ≠ some true
   cases w <;> simp [results.2.2.1, results.2.2.2]
 
 /-- The same through the pointwise form of the library. -/
-example : Soundness.Rejected model decision installed relationMember (inputs false) :=
-  (Soundness.rejected_iff model decision installed relationMember (inputs false)).mpr
+example : Soundness.Rejected model application installed relationMember (inputs false) :=
+  (Soundness.rejected_iff model application installed relationMember (inputs false)).mpr
     fun (.cons w .nil) _ ↦ by
       change result false w ≠ some true
       cases w <;> simp [results.2.2.1, results.2.2.2]
