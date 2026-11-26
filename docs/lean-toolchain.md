@@ -2,7 +2,7 @@
 
 Both Lake packages pin **Lean 4.36.0**, the final release at commit
 `611c117bfaf7b7ae1cfcf246ce6fba31e8f509e9`. The compiler package has no external Lake
-dependency; the formal package requires only `../compiler`. Install the pins through elan and
+dependency; the formal package requires `../compiler`, Mathlib and VCVio. Install the pins through elan and
 use the [development commands](development.md). Keep package pins identical and rebuild
 artifacts for the selected compiler; build caches from different Lean versions are incompatible.
 

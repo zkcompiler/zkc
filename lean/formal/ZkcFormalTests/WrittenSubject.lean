@@ -403,17 +403,6 @@ def refusedOutside (work : System.FilePath) (title name : String) (module : Modu
   let outside ← readOutside work name module
   return do (← outside).refused title name places
 
-/-- Several pairs as one source: the imports of all of them, and then for each pair its
-statements, its proof module and the requests for the axioms of the proof module's theorems.
-For a module of a check that must hold two programs at once, so that what is generated for both
-is in scope together. Such a module is judged by what Lean says of it. -/
-def asOne (modules : List Module) : String :=
-  let imports := (modules.flatMap fun m => m.statedImports ++ m.proofImports).eraseDups
-  let body (source : String) : String :=
-    "\n".intercalate ((source.splitOn "\n").filter fun line => !line.startsWith "import ")
-  String.join (imports.map (s!"import {·}\n")) ++
-    String.join (modules.map fun m => body m.statements ++ body m.proof ++ m.requests)
-
 /-- Where a control is refused. -/
 inductive Refusal where
   /-- By Lean, in the proof module: the statements are accepted. -/

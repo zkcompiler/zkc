@@ -143,11 +143,9 @@ require a model, so a package linking any project primitive gets a diagnostic at
 `Written.Statements` (`Written/Statement.lean`) writes the module of the goals of a scheme
 (`Statements.module`: its imports, the order of its parts and the names of the theorems whose
 axioms it asks for are decided there, and a check gives the text of the proofs).
-Around the proofs stands, with the claims' package: the facts (keys, headers and places of the root, of the
-functions before it that the text names and of each goal's relation, the verifier and the prover
-of the claims' scheme, each goal's proof arguments and charge), that the standard interpretation covers each goal’s reach, where the walks of the module
-start (the meaning of the deciding role, of each named function and of each goal's relation as
-the sealed denotation of its body), the transfers of a statement from the installed program to
+Around the proofs stands, with the claims' package: the facts (the key, header and place of the root and of
+each goal's relation, the header and place of each function before the root that the text names, the verifier and the prover
+of the claims' scheme, each goal's proof arguments and charge), that the standard interpretation covers each goal’s reach, the transfers of a statement from the installed program to
 every admitted one, and for each goal four propositions that are defined before any proof: the
 claim about the installed program, the goal for every admitted program, the result (the model
 covers the package, and the goal), and that the hypotheses of the claim are met together. The

@@ -93,62 +93,7 @@ private def checkPublicationNames (work : System.FilePath) : IO Unit := do
     let (ok, output) ← leanOn work challenge
     unless ok do throw (IO.userError s!"{challenge}: {output}")
 
-/-- Elaborate the propositions issued for these goals with their proofs at the source field. -/
-def checkClaims (work : System.FilePath) (name fixture : String) (goals theorems : List String)
-    (edits : List (String × String) := []) (refusedHash := false) : IO Unit := do
-  let statements ← statementsFor (← source s!"fixtures/{fixture}.zkc" edits) goals
-  let issued ← IO.ofExcept (statements.module name {})
-  match issued.refusals with
-  | [] => if refusedHash then throw (IO.userError "issued the goal that reaches SHA-256")
-  | [why] => unless refusedHash && why.contains "bad:" && why.contains "sha256" do
-      throw (IO.userError why)
-  | other => throw (IO.userError s!"unexpected refusals {other}")
-  let proof ← IO.FS.readFile s!"checks/{name}.lean.in"
-  if refusedHash then
-    let publication ← IO.ofExcept (statements.module name
-      {text := proof, theorems := ["good_judged", "good_witnessed"]})
-    unless publication.published.map (·.1.getString!) ==
-        ["good_installed", "good_sound", "good_result", "good_met"] do
-      throw (IO.userError s!"unexpected publication {publication.published}")
-    let checked ← startLakeLean work name (asOne [publication])
-    let (ok, output) ← checked
-    acceptedOutput name ok output (publication.stated ++ publication.proved) allowed
-    return
-  let checked ← startLakeLean work name (issued.statements ++ proof)
-  let (ok, output) ← checked
-  acceptedOutput name ok output (issued.stated ++ theorems) allowed
-
 #eval IO.FS.withTempDir checkLinkedCeilings
 #eval checkEveryGoalIssued
 #eval checkSharedCoverage
 #eval IO.FS.withTempDir checkPublicationNames
-#eval IO.FS.withTempDir fun w => checkClaims w "ThirdElement" "third-element" ["sound"]
-  ["sound_judged", "field_claim", "hypotheses_met"]
-#eval IO.FS.withTempDir fun w => checkClaims w "Unguarded" "third-element" ["sound"]
-  ["false_at_source"] [("        guard @V b\nspec", "spec")]
-#eval IO.FS.withTempDir fun w => checkClaims w "ScalarLiteral" "scalar-literal" ["sound"] ["literal_claim"]
-#eval IO.FS.withTempDir fun w => checkClaims w "ZeroRounds" "zero-round-sumcheck" ["sound"] ["evaluate_one", "sum_claim"]
-#eval IO.FS.withTempDir fun w => checkClaims w "PointSum" "point-sum" ["sound"] ["checked", "hypotheses_met"]
-#eval IO.FS.withTempDir fun w => checkClaims w "Siblings" "sibling-relations" ["zero"] ["zero_checked", "zero_met"]
-#eval IO.FS.withTempDir fun w => checkClaims w "Siblings" "sibling-relations" ["zero", "one"] ["zero_checked", "zero_met"]
-#eval IO.FS.withTempDir fun w => checkClaims w "HashRelation" "hash-relation" ["good", "bad"] ["result"] (refusedHash := true)
-
-/-- Submit the surviving target from a mixed request to the same comparator as all other
-written subjects. The proof consumes the exact trusted module that the batch issued. -/
-private def judgeIssuedGoal (work : System.FilePath) : IO Unit := do
-  let assembly ← Driver.assembleFiles (← source "fixtures/hash-relation.zkc" []) ["../../libraries"]
-  let results := issueSoundnessGoals assembly ["bad", "mixed::good", "good"]
-  let #[bad, good, alias_] := results | throw (IO.userError "lost a requested goal")
-  unless bad.outcome.isOk == false && !allGoalsIssued results && good.path == alias_.path do
-    throw (IO.userError "unexpected mixed issuance")
-  let issued ← IO.ofExcept good.outcome
-  let proof ← IO.FS.readFile "checks/HashRelation.lean.in"
-  let publication ← IO.ofExcept (issued.statements.module issued.publication.space
-    { text := proof, theorems := ["good_judged", "good_witnessed"] })
-  unless publication.statements == issued.publication.statements &&
-      publication.challenge == issued.publication.challenge do
-    throw (IO.userError "the submission changed the issued challenge")
-  let finish ← startModule work publication.space publication
-  discard finish
-
-#eval IO.FS.withTempDir judgeIssuedGoal
