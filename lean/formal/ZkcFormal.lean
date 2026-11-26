@@ -7,13 +7,10 @@ public import ZkcFormal.ModelComparison
 public import ZkcFormal.ChargedProbability
 public import ZkcFormal.OracleProcess
 public import ZkcFormal.ReturnExperiment
-public import ZkcFormal.RoleRules
 public import ZkcFormal.Application
 public import ZkcFormal.ComputedTypes
-public import ZkcFormal.Walk
 public import ZkcFormal.Written.ClaimIntro
 public import ZkcFormal.Written.GoalPresentation
-public import ZkcFormal.Written.WalkFees
 public import ZkcFormal.Written.Blind
 public import ZkcFormal.Written.PortSamplers
 public import ZkcFormal.Written.LawSamplers

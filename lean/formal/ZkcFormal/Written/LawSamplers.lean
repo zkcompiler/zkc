@@ -90,25 +90,6 @@ theorem serveLaws_permitted
     obtain ⟨v, drawn, rfl, _⟩ := reached
     exact allowed op sampler has v drawn
 
-/-- The run of a process that begins with a coin, against the service of the laws, where the
-sampler of the coin is a map of another draw: when what follows each reply ends with a known
-outcome, an event of the outcome has the probability of the draws whose outcome is in it. -/
-theorem prEvent_run_serveLaws {ι H A : Type} (op : ROp M) (base : ProbComp ι)
-    (reply : ι → (RSig M).Reply op) (has : lawSamplers M draws op = some (reply <$> base))
-    (next : (RSig M).Reply op → Process (RSig M) H A)
-    (outcome : ι → ProbabilisticProcess.Outcome H A)
-    (ends : ∀ i, run (serveLaws M draws) (next (reply i)) () = pure (outcome i, ()))
-    (event : ProbabilisticProcess.Outcome H A → Prop) :
-    Pr{let out ← run (serveLaws M draws) (.call op next) ()}[event out.1] =
-      Pr{let i ← base}[event (outcome i)] := by
-  have runs : run (serveLaws M draws) (.call op next) () = (fun i => (outcome i, ())) <$> base := by
-    rw [run_call, serveLaws_at M draws has, Functor.map_map, bind_map_left]
-    change (base >>= fun i => run (serveLaws M draws) (next (reply i)) ()) = _
-    rw [show (fun i => run (serveLaws M draws) (next (reply i)) ()) =
-      fun i => pure (outcome i, ()) from funext ends]
-    exact bind_pure_comp _ _
-  rw [runs, prEvent_map]
-
 end
 
 /-! ## The laws of the standard vocabulary

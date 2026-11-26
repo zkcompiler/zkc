@@ -11,20 +11,12 @@ The types of a statement, computed.
 A value of a type of the vocabulary is written with a type that only computation makes the
 field, the group or the natural numbers (`Model.Val M ty`, `RV M role lty`). A statement that a
 text reads is stated with those types computed, so that it is about the same terms as a lemma
-about the carrier. The walk reads a reply and a value with this, and `claim_intro` an input of
-a generated proposition; a module of statements that has no walk needs only this module.
+about the carrier.
 -/
 
 open Lean Meta
 
 namespace ZkcFormal
-
-/-- The type of a variable that a step introduces, computed: the carrier of a type of the
-vocabulary, and for a sequence the list of the carrier of its items. -/
-partial def readType (type : Expr) : MetaM Expr := do
-  let computed ← whnfD type
-  if computed.isAppOfArity ``List 1 then return mkApp computed.appFn! (← readType computed.appArg!)
-  else return computed
 
 /-- Whether a term mentions the type of the values of a type of the vocabulary. -/
 private def mentionsValues (e : Expr) : Bool :=

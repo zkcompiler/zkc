@@ -266,10 +266,10 @@ def run (corpus : System.FilePath) (work : System.FilePath) : IO Unit := do
   let stated ← startLakeLean work "ClaimsWitness" (module.text ++ client)
   -- Public definitions in an exposed module must be able to refer to the same library terms.
   let publicModule ← IO.ofExcept (pairStated.claimsModule "ClaimsExposed")
-  let opening := Statements.header (Statements.imports false)
+  let opening := Statements.header Statements.imports
   unless publicModule.text.startsWith opening do throw (IO.userError "missing generated imports")
   let exposed ← startLakeLean work "ClaimsExposed"
-    ("module\n" ++ String.join ((Statements.imports false).map (s!"public import {·}\n")) ++
+    ("module\n" ++ String.join (Statements.imports.map (s!"public import {·}\n")) ++
       "\n@[expose] public section\nopen Zkc.Core\n" ++ (publicModule.text.dropPrefix opening).toString)
     (text := false)
   let (ok, output) ← finishLean proof

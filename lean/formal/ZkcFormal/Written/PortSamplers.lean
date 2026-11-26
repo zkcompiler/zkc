@@ -20,7 +20,7 @@ then what follows the reply (`prEvent_run_serveAt`).
 
 The uniform law on `fin n` draws a position: in a model whose positions are naturals, a natural
 below `n`, by VCVio's uniform sampler of `Fin n`. A set of positions has the probability of its
-count over `n`; the count of the positions of a list that hold a value is Mathlib's.
+count over `n`.
 -/
 
 namespace ZkcFormal.Written
@@ -141,34 +141,5 @@ theorem lt_of_mem_support_drawPosition (n v : ℕ) (drawn : v ∈ support (drawP
   simp only [drawPosition, support_map, Set.mem_image] at drawn
   obtain ⟨i, _, rfl⟩ := drawn
   exact i.isLt
-
-/-! ## The entry at a drawn position -/
-
-section
-variable {α : Type} [DecidableEq α]
-
-/-- The positions of a list at which the entry is `v` are as many as the entries that are `v`. -/
-theorem card_positions (xs : List α) (n : ℕ) (length : xs.length = n) (v : α) :
-    (Finset.univ.filter fun i : Fin n => xs[(i : ℕ)]? = some v).card = xs.count v := by
-  subst length
-  have counted := List.count_ofFn (fun i : Fin xs.length => xs[(i : ℕ)]) v
-  rw [List.ofFn_getElem] at counted
-  rw [counted]
-  refine congrArg Finset.card (Finset.filter_congr fun i _ => ?_)
-  rw [List.getElem?_eq_getElem i.isLt, Option.some.injEq]
-
-/-- The entries that are `v` and the entries that are not are all the entries. -/
-theorem count_add_countP_ne (xs : List α) (v : α) :
-    xs.count v + xs.countP (· ≠ v) = xs.length := by
-  rw [List.length_eq_countP_add_countP (· == v) (l := xs), List.count]
-  congr 2
-
-/-- The entry of a list at a drawn position is `v` with the probability of the count of `v`
-among the entries. -/
-theorem prEvent_drawPosition_entry (xs : List α) (n : ℕ) (length : xs.length = n + 1) (v : α) :
-    Pr{let z ← drawPosition n}[xs[z]? = some v] = (xs.count v : ℝ≥0∞) / (n + 1) := by
-  rw [prEvent_drawPosition, card_positions xs (n + 1) length v]
-
-end
 
 end ZkcFormal.Written

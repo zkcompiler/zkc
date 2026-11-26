@@ -3,7 +3,6 @@ module
 public import ZkcFormal.Application
 public import ZkcFormal.Written.SiteCaps
 public import ZkcFormal.Written.LawSamplers
-public import ZkcFormal.WalkLabels
 
 @[expose] public section
 
@@ -13,11 +12,7 @@ The judgment with fees of a written goal reads no peer.
 What the world may give (`Permitted`), the samplers of the laws (`lawSamplers`) and what a
 table of caps allows an effect (`CapTable.allowanceFrom`, which reads where the effect occurs)
 do not read who gives, gets, hears or owns. So the judgment in which the statements of a goal
-are made is `Blind`: inside an application a walk states its goal under that judgment as it
-stands, and not under the judgment with its peers renamed. So are the judgments "on every
-permitted reply" and "on some permitted reply", in which a text states what a role returns. The
-theorems carry the label `walk_blind`, by which the walk finds that a judgment reads no peer.
-The judgment that records the trace of a run (`ProcessJudgment.trace`) reads the peers, and is
+are made is blind. The judgment that records the trace of a run (`ProcessJudgment.trace`) reads the peers, and is
 not among them: under it the goal in a callee is stated under `ProcessJudgment.renamed`.
 -/
 
@@ -86,18 +81,15 @@ theorem possible_blind (ρ : Role → Role) (allowed : ∀ op, (RSig M).Reply op
 
 /-- **Every permitted reply**: the judgment in which a text states that a role returns on every
 run, at what the world may give, reads no peer. -/
-@[walk_blind]
 theorem every_permitted_blind (ρ : Role → Role) : Blind (M := M) ρ (.every (Permitted M)) :=
   every_blind ρ _ (permitted_blind ρ)
 
 /-- **Some permitted reply**: the judgment in which a text states that a role can return reads
 no peer. -/
-@[walk_blind]
 theorem possible_permitted_blind (ρ : Role → Role) : Blind (M := M) ρ (.possible (Permitted M)) :=
   possible_blind ρ _ (permitted_blind ρ)
 
 /-- **The judgment of a written goal reads no peer.** -/
-@[walk_blind]
 theorem judgment_blind (ρ : Role → Role) (draws : LawDraws M) (table : CapTable) (place : Nat)
     (start : List Frame) :
     Blind ρ (.charged (Permitted M)

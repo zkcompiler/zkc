@@ -104,7 +104,7 @@ def goalFacts (layout : SubjectLayout owner) (label : ClaimedGoal → String) : 
 /-- One physical member per distinct function in the installed program, with the existing
 public relation facts at each spelling. The caller also emits the package's transfer proofs. -/
 def relationFacts (layout : SubjectLayout owner) (relationLabel : ClaimedGoal → String)
-    (programBefore memberOf : Nat → String) : String := Id.run do
+    (memberOf : Nat → String) : String := Id.run do
   let mut lines := #[]
   for k in layout.functions do
     lines := lines.push (s!"noncomputable def member'fn{k} : " ++
@@ -114,9 +114,6 @@ def relationFacts (layout : SubjectLayout owner) (relationLabel : ClaimedGoal �
     let k := goal.relation
     lines := lines.push (s!"abbrev {name}Key : Key := stored{k}.key\n" ++
       s!"noncomputable abbrev {name}Header := header{k}\n" ++
-      s!"noncomputable abbrev {name}Names := names{k}\n" ++
-      s!"noncomputable abbrev {name}Body := body{k}\n" ++
-      s!"noncomputable abbrev {name}Before : Typed V := {programBefore k}\n" ++
       s!"noncomputable abbrev {name}Member := member'fn{k}\n")
   return String.join lines.toList
 

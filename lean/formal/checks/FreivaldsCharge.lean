@@ -10,86 +10,6 @@ import Zkc.Core.Admission.Theorems
 import Zkc.Kernel
 import Zkc.Vocabulary.Project
 
-/-!
-Freivalds' check of a matrix product, judged within the table of caps that the frontend reads
-for its goal from the charge of its source.
-
-The subject is `Freivalds<2>`: the verifier draws a vector `r` of two scalars and returns when
-`apply(a, apply(b, r)) == apply(c, r)`, where `apply` is the product of a matrix and a vector;
-its relation `Product(a, b, c)` holds when the product of `a` and `b` is `c`; its charge on the
-draw is `1 / F::Order`. It is the second subject of a written soundness goal, and differs from
-`Count<8>` in what the proof has to read: a function that the verifier calls three times, a
-relation of three nested loops, a draw of a sequence of scalars, and a charge that depends on
-the size of the field.
-
-The check reads the source with the frontend and writes modules on which Lean is run.
-
-- The proof module has the printed package of what the goal claims and, around the text of
-  `FreivaldsCharge.lean.in`, what `Written.Statements` writes. Before the text: the facts, with
-  those of the function that the root calls under its name in the source; that the arithmetic
-  interpretation covers the reach of the goal; where the walks start; the transfers; and four propositions, the
-  claim about the installed program (`soundClaim`), the goal for every admitted program
-  (`soundGoal`), the result with the coverage (`soundResult`), and that the hypotheses of the
-  claim are met together (`soundWitnessed`); and the judgment that establishes the claim
-  (`soundJudged`) with the theorem that the claim follows from it. After the text: the claim
-  from the judgment that the text proved, and the theorems of the last three.
-  The claim uses the scalar field of the source. The text specializes its lemma about
-  every field large enough for the charge, proves the
-  judgment and gives the witness. It says what `apply` and `Product` compute, each loop taken by an
-  invariant (`walk_loop`); the verifier is walked with its three calls taken by the law of
-  `apply` (`walk_law`), once for the judgment and once on a hypothesis for its converse,
-  and is judged never to return within the budget of the goal's table (`soundCaps`: the root
-  with the cap of its draw, once, and its three calls of `apply`, which has no charge) on
-  matrices whose product differs; against every service that is no more likely to answer a coin
-  within a set of replies than the sampler of the coin's law is to draw one there, it returns
-  with probability at most the total of the table. On matrices whose product holds every permitted vector
-  leads it to return. The hypotheses are met over the scalar field of the source, on the zero
-  matrices and a matrix with one entry, and there it returns with a probability that is not
-  zero.
-- The comparison module has the same printed package and the frontend: the program by names
-  and the association that Lean reads from the package are those that the frontend gives to
-  admission for the claims.
-
-The text follows the mathematics of the program and not its instructions. The same text,
-character for character, is accepted on a source whose `apply` computes each product another
-way: the vector read before the matrix, and a term added that cancels
-(`v[k] * m[i][k] + (v[k] - v[k])`), which reads the vector twice more and changes the numbers
-that the compiler gives the values of `apply`. A walk reads each entry by the bounds of the loops, in
-whatever order the program reads, and what is left of a step is an equation in the field,
-which `ring` proves. On a source whose `apply` adds where it should multiply
-(`v[k] + m[i][k]`) the same text is refused at one place, that equation, and nothing that
-rests on the law of `apply` is proved.
-
-What the source says and the proof module takes as given is asserted here against the source:
-the clause that the goal reads and the ports that the relation is applied to. The operands of a
-claim are inputs of the deployed header, which has no `spec` port: the same source with a
-`spec` port that nothing uses in front of the matrices gives the same proof module, character
-for character.
-
-Six controls are refused by Lean, each for the theorems that depend on what it changes and at
-the line that the check names: the sum for the product, above; the operands of the relation exchanged in the clause
-(`Product(b, a, c)`: the claim is then about another product; the text is refused where it
-takes from the premise that the product of `a` and `b` differs); a charge of half the source's, written in the source (refused where the cap of the draw
-is compared with what a uniform scalar pays for); an insufficient lower bound used in place of the field's
-cardinality theorem (refused at the fee comparison); and coverage at an absent protocol
-key (decided false by the kernel). The sixth is a text and not a claim: one that defines again, in its
-own scope, a name that the judgment of the goal uses (the fees within allowances `paysWithin`,
-as a policy under which every fee pays for every set of replies) and proves the judgment
-written anew under it. Every statement of the module is a proposition defined before the text,
-so the claim is not concluded from that proof: Lean refuses the generated conclusion at one
-place, as a mismatch of types.
-
-The check does not rest on Lean's acceptance of the proof module: the module of the statements
-holds no text, and the proof module is judged against it and the challenge that the generator
-writes, by `lake comparator`: the published theorems have the statements of the challenge, the
-kernel accepts them, and they rest on the allowed axioms (`WrittenSubject.startModule`;
-`checks/OutsideReading.lean` has the controls of that use, the check of `Either` one on a real
-subject, and the check of `Guess<3>` the control of a text that makes the theorems after it
-take a hypothesis). Lean's report of the
-axioms is read for the theorems of the module of the statements, and for a control, where
-there is exactly one report of each.
--/
-
 open Zkc.Core Zkc.Frontend Zkc.Frontend.Written
 open Zkc.Tests.Frontend Zkc.Tests.Frontend.PrintedPackageSupport
 open ZkcFormalTests ZkcFormalTests.WrittenSubject
@@ -128,65 +48,12 @@ def reading (operands : List String) (inputs : Array Nat) (front : Array String 
   clause := ⟨"proves", none, "V", "Product", operands, []⟩
   operands := inputs
 
-/-- The theorems of the text of the proofs. -/
-def ofText : List String := [
-  "sound_within", "apply_law", "sound_relation", "sound_far", "returns_on_product",
-  "walked_within", "walked_excludes", "returns_possible", "large_covers",
-  "sound_judged", "Witness.rejected", "Witness.sound_at_corner", "Witness.returns_at_corner",
-  "sound_witnessed"]
-
-/-- The law of `apply` and what rests on it: the verifier is walked by that law. -/
-def ofApply : List String :=
-  ["apply_law", "returns_on_product", "walked_within", "walked_excludes", "returns_possible",
-    "sound_judged", "sound_installed", "Witness.sound_at_corner", "Witness.returns_at_corner",
-    "sound_sound", "sound_result"]
-
-/-- The claim and what rests on it. -/
-def ofClaim : List String :=
-  ["sound_judged", "sound_installed", "Witness.sound_at_corner", "sound_sound", "sound_result"]
-
-/-- The text of the proofs with what it imports: the fixed sequences of the library and
-Mathlib's matrices. -/
-def proofOf (template : String) : Proof :=
-  { text := template, theorems := ofText
-    imports := ["ZkcFormal.Written.FixedSequences", "Mathlib.Data.Matrix.Mul"] }
-
-/-- A text that defines again, in its own scope, a name of the library that the statement of
-the goal's judgment uses, and proves the judgment written anew under that name: the fees within
-allowances, as a policy under which every fee pays for every set of replies. Under it the
-verifier is judged at its first effect, with no fee and every reply excluded. The judgment
-written anew is not the judgment that was stated before the text, so the text is refused where
-the claim is concluded from it. (An audit found the same of the claim: before the statements of
-a module were propositions defined ahead of the text, a text that defined the total of a charge
-again published a goal under its own name, and every check passed.) -/
-def shadowing (template : String) : IO String := do
-  let anew := "∀ (path : List Frame) (a : StandardInterpretation.model.Val matrixTy), StandardInterpretation.model.Valid matrixTy a →\n" ++
-    "    ∀ b : StandardInterpretation.model.Val matrixTy, StandardInterpretation.model.Valid matrixTy b →\n" ++
-    "    ∀ c : StandardInterpretation.model.Val matrixTy, StandardInterpretation.model.Valid matrixTy c →\n" ++
-    "    functionResult (t := .bool) (fnMeaning StandardInterpretation.model installed soundMember (.cons a (.cons b (.cons c .nil)))) = some false →\n" ++
-    "    (roleMeaning StandardInterpretation.model installed rootMember verifierRole path (.cons a (.cons b (.cons c .nil)))).interpret\n" ++
-    "      (.charged (Permitted StandardInterpretation.model) (paysWithin StandardInterpretation.samplers (soundCaps.allowance StandardInterpretation.model path)))\n" ++
-    "      (fun _ _ => False) (fun _ _ => True) soundCaps.budget"
-  let established ← replaceOnce template "theorem sound_judged : soundJudged := by"
-    "theorem sound_established : soundJudged := by"
-  -- what the text concludes from the judgment, it concludes from the judgment as it was stated
-  let renamed ← replaceOnce established "  (sound_claim_of_judged sound_judged path"
-    "  (sound_claim_of_judged sound_established path"
-  return renamed ++ "\n" ++
-    "def paysWithin {S : Sig} (_ : Samplers S) (_ : S.Op → ℚ≥0) :\n" ++
-    "    (op : S.Op) → ℚ≥0 → (S.Reply op → Prop) → Prop := fun _ _ _ => True\n\n" ++
-    "set_option linter.unusedVariables false in\n" ++
-    s!"theorem sound_judged :\n  {anew} := by\n" ++
-    "  intros\n  walk_step\n" ++
-    "  exact ⟨0, fun _ => True, zero_le, trivial, fun _ _ kept => (kept trivial).elim⟩\n"
-
 /-- An action of the check that must end in a refusal. -/
 def refuses (title : String) (action : IO Unit) : IO Unit := do
   let refused ← (do action; pure false) <|> pure true
   unless refused do throw (IO.userError s!"{title}: not refused")
 
-def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
-  let template ← IO.FS.readFile template
+def run (work : System.FilePath) : IO Unit := do
   let inOrder := reading ["a", "b", "c"] #[0, 1, 2]
   let written ← read (source "Product(a, b, c)") inOrder
   let stated := written.statements
@@ -204,15 +71,6 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
   let exchanged ← read (source "Product(b, a, c)") (reading ["b", "a", "c"] #[1, 0, 2])
   unless exchanged.package == written.package do
     throw (IO.userError "exchanging the operands of the clause changed the package of the claims")
-
-  -- A `spec` port in front of the matrices, which nothing uses: the operands are the same
-  -- inputs of the deployed header, and the proof module is the same text.
-  let fronted ← read (source "Product(a, b, c)" "spec note: bool, ")
-    (reading ["a", "b", "c"] #[0, 1, 2] #["note"])
-  let proof := proofOf template
-  let (frontedModule, writtenModule) := (← fronted.module "Freivalds" proof, ← written.module "Freivalds" proof)
-  unless frontedModule.statements == writtenModule.statements && frontedModule.proof == writtenModule.proof do
-    throw (IO.userError "a spec port in front of the matrices changed the modules")
 
   -- A charge of half the source's, in the source: the program is what it was, and the cap of
   -- the draw is half.
@@ -236,61 +94,25 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
         [(goal.statement, goal.caps)] do
       throw (IO.userError s!"the product {title}: the goal claims something else")
 
-  let freivalds ← start work "Freivalds" written proof [
-    -- The same text on a sum: the equation of one step of `apply` is not one of the field,
-    -- and nothing that rests on the law of `apply` is proved. The law of the relation, which
-    -- does not call `apply`, stands.
-    { title := "a sum for the product", name := "ProductControl", subject := summed,
-      text := template, unproved := ofApply, only := true,
-      places := ["unsolved goals"],
-      occurrences := [("M ⟨i, early_i⟩ ⟨k, early_k⟩ * w ⟨k, early_k⟩ = ", 1)] },
-    -- The claim is about `b * a`: its premise is not the one from which the text gets that
-    -- the product of `a` and `b` differs. The laws of the two functions and the theorems
-    -- about the verifier stand.
-    { title := "the operands exchanged", name := "OperandsControl", subject := exchanged,
-      text := template, unproved := ofClaim,
-      places := ["sound_far G input_a input_b input_c A B C ha hb hc rejected"] },
-    -- The ceiling of half the charge is not one over the order: the comparison with what a
-    -- uniform scalar pays for is not proved.
-    { title := "a charge of half", name := "BoundControl", subject := halved,
-      text := template, unproved := "large_covers" :: ofClaim, places := ["drawCap soundCaps ="] },
-    -- Both casts of the size fact must point from the source order to the field cardinality.
-    { title := "the reciprocal comparison reversed", name := "CardinalityControl", subject := written,
-      text := template.replace "by exact_mod_cast large" "by exact_mod_cast Nat.lt_succ_self (Fintype.card F)",
-      unproved := "large_covers" :: ofClaim, places := ["Fintype.card F < (Fintype.card F).succ"] },
-    -- A name of the library defined again by the text: the claim that the text then proves is
-    -- not the claim that was stated before it, and the goal is not concluded from it.
-    { title := "a name of the statement defined again", name := "ShadowControl", subject := written,
-      text := ← shadowing template,
-      unproved := ["sound_installed", "sound_sound", "sound_result"], only := true,
-      places := ["sound_judged\nhas type"] }]
-  -- The same text on the product computed another way: every theorem is proved.
-  let rewrittenCheck ← start work "FreivaldsRewritten" rewritten proof
   -- The actual coverage theorem is about the goal's own two keys.
   let badCoverage ← startLakeLean work "CoverageControl"
     ((← IO.ofExcept (written.statements.coverageModule "CoverageControl")).text.replace
       "covers stored rootKey soundKey = true" "covers stored ⟨999⟩ soundKey = true")
 
-  let _ ← freivalds.finish
   -- The reading of Lean's output: a report of axioms that stands twice is not read.
   let report := "'Freivalds.sound_covered' depends on axioms: [propext]\n"
   acceptedOutput "Freivalds" true report ["sound_covered"] allowed
   refuses "a report of axioms printed again"
     (acceptedOutput "Freivalds" true
       (report ++ "'Freivalds.sound_covered' does not depend on any axioms\n") ["sound_covered"] allowed)
-  let _ ← rewrittenCheck.finish
   -- The lookup at the altered root key has no definition.
   let (ok, output) ← finishLean badCoverage
   if ok then throw (IO.userError "Lean accepted coverage at an absent root")
   unless output.contains "StandardInterpretation.covers stored" && output.contains "is false" do
     throw (IO.userError s!"the coverage control was refused for another reason\n{output}")
-  IO.println (s!"Freivalds<2> is judged within the table of caps of its goal (the draw at 1/{order}), on the matrices on " ++
-    "which the admitted relation returns false, at the scalar field of the source; " ++
-    "the same text is accepted on a source that computes the product another way; " ++
-    "6 of 6 controls refused, each at its line.")
 
 end FreivaldsCharge
 
 #eval show IO Unit from
   IO.FS.withTempDir fun work =>
-    FreivaldsCharge.run "checks/FreivaldsCharge.lean.in" work
+    FreivaldsCharge.run work

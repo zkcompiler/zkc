@@ -32,10 +32,6 @@ The cap of a draw is read by the frontend from the `charge` of the definition th
 The counts are not taken from the frontend: `CapTable.counted` says of a stored program and a
 root that every use has the counts that its definition gives, and the kernel decides it on the
 stored program of a module.
-
-Two rules meet the judgment at an effect (`charged_free`, `charged_pay`), `charged_pay_at` is
-the second at a draw of the table, and the frame moves a judgment to a larger budget
-(`charged_frame`).
 -/
 
 namespace ZkcFormal.Written
@@ -131,45 +127,6 @@ theorem charged_frame (allowed : ∀ op, S.Reply op → Prop)
     rw [← tsub_add_eq_add_tsub le]
     exact ih v (budget - fee) (next v allowedV kept)
 
-/-- **An effect at which nothing is excluded costs nothing**: a message got, a value heard, or
-a coin whose every reply is followed. -/
-theorem charged_free (samplers : Samplers S) (allowance : S.Op → ℚ≥0)
-    (allowed : ∀ op, S.Reply op → Prop) (op : S.Op) (next : S.Reply op → ℚ≥0 → Prop)
-    (budget : ℚ≥0) (all : ∀ v, allowed op v → next v budget) :
-    (ProcessJudgment.charged allowed (paysWithin samplers allowance)).node op next budget :=
-  ⟨0, fun _ => False, zero_le, ⟨Or.inl ⟨rfl, fun _ excluded => excluded⟩, zero_le⟩,
-    fun v ok _ => by simpa only [tsub_zero] using all v ok⟩
-
-/-- **An effect with a sampler is paid for**: a fee within the budget and within what the
-effect is allowed pays for a set of replies of at most the fee's weight under the sampler; the
-replies outside the set are followed with what is left of the budget. -/
-theorem charged_pay (samplers : Samplers S) (allowance : S.Op → ℚ≥0)
-    (allowed : ∀ op, S.Reply op → Prop) (op : S.Op) (next : S.Reply op → ℚ≥0 → Prop)
-    (budget fee : ℚ≥0) (excluded : S.Reply op → Prop) (draw : ProbComp (S.Reply op))
-    (has : samplers op = some draw) (weight : Pr{let v ← draw}[excluded v] ≤ toProbability fee)
-    (within : fee ≤ budget) (cap : fee ≤ allowance op)
-    (outside : ∀ v, allowed op v → ¬ excluded v → next v (budget - fee)) :
-    (ProcessJudgment.charged allowed (paysWithin samplers allowance)).node op next budget :=
-  ⟨fee, excluded, within, ⟨Or.inr ⟨draw, has, weight⟩, cap⟩, outside⟩
-
 end
-
-/-- **A draw of the table is paid within its cap.** At an effect that occurs at the start's path
-and a rest, a fee within the budget and within the cap of the draw's site pays for a set of
-replies of at most the fee's weight under the sampler; the replies outside the set are followed
-with what is left of the budget. The occurrence is read from the effect. -/
-theorem charged_pay_at {V : Vocabulary} (M : Model V) (samplers : Samplers (RSig M))
-    (table : CapTable) (place : Nat) {start rest : List Frame} {key : Key}
-    (allowed : ∀ op, (RSig M).Reply op → Prop) (op : ROp M)
-    (next : (RSig M).Reply op → ℚ≥0 → Prop) (budget fee : ℚ≥0)
-    (excluded : (RSig M).Reply op → Prop) (draw : ProbComp ((RSig M).Reply op))
-    (occurs : ROp.occurrence M op = ⟨start ++ rest, key⟩)
-    (has : samplers op = some draw) (weight : Pr{let v ← draw}[excluded v] ≤ toProbability fee)
-    (within : fee ≤ budget) (cap : fee ≤ table.capFrom place (Frame.applications rest) key)
-    (outside : ∀ v, allowed op v → ¬ excluded v → next v (budget - fee)) :
-    (ProcessJudgment.charged allowed
-      (paysWithin samplers (table.allowanceFrom M place start))).node op next budget :=
-  charged_pay samplers _ allowed op next budget fee excluded draw has weight within
-    (by rw [CapTable.allowanceFrom_at M table place start rest key op occurs]; exact cap) outside
 
 end ZkcFormal.Written

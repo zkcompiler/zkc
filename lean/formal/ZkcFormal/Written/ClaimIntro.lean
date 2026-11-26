@@ -14,7 +14,7 @@ In a generated judgment, `claim_intro` introduces `path`, each verifier input as
 `rejected`. The statements module opens `F`, `G`, `D`, `model`, `samplers`, `served` and
 `large` from the standard interpretation. The tactic takes each binder's name from the
 proposition and leaves an anonymous premise anonymous. A binder of
-data (an input, the path) is introduced at its computed type, as a reply of the walk is, so
+data (an input, the path) is introduced at its computed type, so
 that a law about a value of the field or about a list of them applies to it as it stands.
 -/
 

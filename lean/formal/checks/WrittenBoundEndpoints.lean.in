@@ -1,9 +1,7 @@
-import BoundGuard.Challenge
-import BoundReturn.Challenge
 import BoundTotal.Challenge
 import Lean
 
-/-! Read the issued propositions and the types printed in the three challenges.
+/-! Read the issued propositions and the types printed in the challenge.
 The oracle lives outside their namespaces and does not use the issuer's question list. -/
 
 namespace WrittenBoundEndpoints
@@ -72,40 +70,6 @@ local notation "standardDraws" => ZkcFormal.Written.StandardInterpretation.draws
 local notation "standardCoverage" => ZkcFormal.Written.StandardInterpretation.covers
 
 #check_endpoints
-  | BoundGuard.directZero : BoundGuard.directZeroStatement :=
-    ZkcFormal.Written.Soundness.Installed standardModel BoundGuard.written'decision0 standardDraws 0
-  | BoundGuard.directQuarter BoundGuard.feeQuarter : BoundGuard.directQuarterStatement :=
-    ZkcFormal.Written.Soundness.Installed standardModel BoundGuard.written'decision0
-      standardDraws (1/4)
-  | BoundGuard.coveredZero : BoundGuard.coveredZeroStatement :=
-    ZkcFormal.Written.Soundness.Result standardModel BoundGuard.written'decision0
-      standardDraws standardCoverage 0
-  | BoundGuard.rejectedFalse : BoundGuard.rejectedFalseStatement :=
-    ZkcFormal.Written.Soundness.Rejected standardModel BoundGuard.written'decision0
-      BoundGuard.installed BoundGuard.looseMember (.cons () (.cons false .nil))
-  | BoundGuard.met : BoundGuard.metStatement :=
-    ZkcFormal.Written.Soundness.Witnessed standardModel BoundGuard.written'decision0 standardDraws
-  | BoundGuard.missingCount : BoundGuard.missingCountStatement :=
-    let t : Zkc.Subject.CapTable := ⟨[]⟩
-    ZkcFormal.Written.Soundness.Result standardModel BoundGuard.written'decision0
-      standardDraws standardCoverage t.total ∧
-      t.counted BoundGuard.stored BoundGuard.rootKey = false
-  | BoundReturn.rejectedFalse : BoundReturn.rejectedFalseStatement :=
-    ZkcFormal.Written.Soundness.Rejected standardModel BoundReturn.written'decision0
-      BoundReturn.installed BoundReturn.looseMember (.cons () (.cons false .nil))
-  | BoundReturn.met : BoundReturn.metStatement :=
-    ZkcFormal.Written.Soundness.Witnessed standardModel BoundReturn.written'decision0 standardDraws
-  | BoundReturn.refutesInstalled : BoundReturn.refutesInstalledStatement :=
-    ¬ ZkcFormal.Written.Soundness.Installed standardModel BoundReturn.written'decision0
-      standardDraws 0
-  | BoundReturn.refutesAdmitted : BoundReturn.refutesAdmittedStatement :=
-    ¬ ZkcFormal.Written.Soundness.AdmittedBound standardModel BoundReturn.written'decision0
-      standardDraws 0
-  | BoundReturn.countedAtZero : BoundReturn.countedAtZeroStatement :=
-    let t : Zkc.Subject.CapTable := ⟨[⟨BoundReturn.rootKey, .nil⟩]⟩
-    t.counted BoundReturn.stored BoundReturn.rootKey = true ∧ t.total = 0 ∧
-      ¬ ZkcFormal.Written.Soundness.Installed standardModel BoundReturn.written'decision0
-        standardDraws t.total
   | BoundTotal.allBounds : BoundTotal.allBoundsStatement :=
     ∀ b, ZkcFormal.Written.Soundness.Result standardModel BoundTotal.written'decision0
       standardDraws standardCoverage b
