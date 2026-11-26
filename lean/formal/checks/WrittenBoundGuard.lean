@@ -32,9 +32,25 @@ private def wrongOrdinal (work : System.FilePath) (m : Written.Module) (reader :
     unless (output.splitOn ": error").length == 2 do
       throw (IO.userError s!"wrong decision ordinal: expected one operand type mismatch\n{output}")
 
+/-- Keep the issued decision and source reader. Substitute only two operands in the
+statements consumed by a separate printing of the guard challenge. -/
+private def wrongEndpoints (work : System.FilePath) (m : Written.Module) (reader : String) :
+    IO (IO Unit) := do
+  let statements ← replaceOnce m.statements "written'decision0 draws (1/4)"
+    "{ written'decision0 with place := 1 } draws (1/4)"
+  let statements ← replaceOnce statements "written'decision0 draws covers 0"
+    "written'decision0 draws (fun _ _ _ ↦ true) 0"
+  let mutant := { m with statementsName := `WrongEndpoints.Stated, statements }
+  let stated ← addStated work mutant
+  discard <| addChallenge work "WrongEndpoints" mutant
+  let observed ← startReader work mutant reader
+  return do
+    stated.accepted "substituted endpoints"
+    acceptedByLean "substituted endpoints source reader" (← observed)
+
 private def check (work : System.FilePath) (file source name : String)
     (questions : List (String × String)) (otherProofs : List (String × String) := [])
-    (checkOrdinal := false) : IO (IO Unit) := do
+    (guardControls := false) : IO (IO Unit) := do
   let assembly ← Driver.assembleFiles ⟨file, Syntax.parseString file source⟩ ["../../libraries"]
   let root ← IO.ofExcept (admitSoundnessGoal assembly "loose")
   let claims ← IO.ofExcept (goalClaims root ["loose"])
@@ -68,10 +84,14 @@ private def check (work : System.FilePath) (file source name : String)
     textLines := (text.splitOn "\n").length }
   let observed ← startReader work issued reader
   let submitted ← startModule work name issued
-  let control ← if checkOrdinal then wrongOrdinal work issued reader else pure (pure ())
+  -- The reader imports the printed challenge even when the recipe batches judgments elsewhere.
+  discard <| addChallenge work name issued
+  let controls ← if guardControls then
+    pure [← wrongOrdinal work issued reader, ← wrongEndpoints work issued reader]
+    else pure []
   return do
     acceptedByLean s!"{name} source reader" (← observed)
-    control
+    controls.forM id
     discard submitted
 
 def run (work : System.FilePath) : IO Unit := do
@@ -91,7 +111,7 @@ def run (work : System.FilePath) : IO Unit := do
     ("coveredZero", result ++ " 0"),
     ("rejectedFalse", rejected), ("met", witnessed),
     ("missingCount", s!"let t : CapTable := ⟨[]⟩; {result} t.total ∧ t.counted stored rootKey = false")]
-    [("feeQuarter", "directQuarter")] (checkOrdinal := true)
+    [("feeQuarter", "directQuarter")] (guardControls := true)
   let returns ← check work file unguarded "BoundReturn" [
     ("rejectedFalse", rejected), ("met", witnessed),
     ("refutesInstalled", "¬ " ++ installed ++ " 0"), ("refutesAdmitted", "¬ " ++ admitted ++ " 0"),
@@ -99,7 +119,16 @@ def run (work : System.FilePath) : IO Unit := do
       s!"t.counted stored rootKey = true ∧ t.total = 0 ∧ ¬ {installed} t.total")]
   let always ← check work file total "BoundTotal" [
     ("allBounds", s!"∀ b, {result} b"), ("noWitness", "¬ " ++ witnessed)]
+  let reader ← IO.FS.readFile "checks/WrittenBoundEndpoints.lean.in"
+  let observed ← startLakeLean work "BoundEndpoints" reader (text := false)
+  let mutant ← replaceOnce reader "import BoundGuard.Challenge" "import WrongEndpoints.Challenge"
+  let control ← startLakeLean work "WrongEndpoints.Reader" mutant (text := false)
+  acceptedByLean "written bound endpoints" (← observed)
   [guard, returns, always].forM id
+  let (ok, output) ← control
+  refusedOutput "substituted endpoints" ok output
+    ["BoundGuard.directQuarterStatement argument 4:", "BoundGuard.coveredZeroStatement argument 6:"]
+    (only := true)
 
 end WrittenBoundGuard
 
