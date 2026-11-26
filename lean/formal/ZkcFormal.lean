@@ -21,6 +21,8 @@ public import ZkcFormal.Written.FixedSequences
 public import ZkcFormal.Written.ArithmeticDraws
 public import ZkcFormal.Written.SiteAllowance
 public import ZkcFormal.Written.SiteCaps
+public import ZkcFormal.Written.Bound
+public import ZkcFormal.Written.Fees
 public import ZkcFormal.Written.ReductionModel
 public import ZkcFormal.Written.UniformChallenge
 public import ZkcFormal.Written.ScalarField
