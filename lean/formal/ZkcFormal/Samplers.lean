@@ -27,4 +27,17 @@ def Service.Follows (service : Service S σ) (samplers : Samplers S) : Prop :=
   ∀ op draw, samplers op = some draw → ∀ s (excluded : S.Reply op → Prop),
     Pr{let out ← service op s}[∃ v, out.1 = some v ∧ excluded v] ≤ Pr{let v ← draw}[excluded v]
 
+/-- A service answers as the samplers draw: at an effect with a sampler, in every state, it
+answers within a set of replies with exactly the probability that the sampler draws one there.
+In particular it answers there with probability one. -/
+def Service.Draws (service : Service S σ) (samplers : Samplers S) : Prop :=
+  ∀ op draw, samplers op = some draw → ∀ s (excluded : S.Reply op → Prop),
+    Pr{let out ← service op s}[∃ v, out.1 = some v ∧ excluded v] = Pr{let v ← draw}[excluded v]
+
+/-- A service that answers as the samplers draw is no more likely than they are to answer
+within a set. -/
+theorem Service.Draws.follows {service : Service S σ} {samplers : Samplers S}
+    (draws : service.Draws samplers) : service.Follows samplers :=
+  fun op draw has s excluded ↦ (draws op draw has s excluded).le
+
 end ZkcFormal.ProbabilisticProcess

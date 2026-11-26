@@ -73,6 +73,12 @@ theorem serveLaws_follows : (serveLaws M draws).Follows (lawSamplers M draws) :=
     (p := fun out : Option ((RSig M).Reply op) × Unit => ∃ v, out.1 = some v ∧ excluded v)).le.trans ?_
   exact prEvent_mono _ _ _ fun v ⟨w, same, ex⟩ => Option.some.inj same ▸ ex
 
+/-- The service of the laws answers as the samplers draw. -/
+theorem serveLaws_draws : (serveLaws M draws).Draws (lawSamplers M draws) := by
+  intro op sampler has s excluded
+  rw [serveLaws_at M draws has s]
+  simp
+
 /-- The service of the laws answers only what is permitted, when what each sampler draws is. -/
 theorem serveLaws_permitted
     (allowed : ∀ (op : ROp M) (sampler : ProbComp ((RSig M).Reply op)),
@@ -180,13 +186,14 @@ theorem StandardModel.uniformDraw_allowed {F G : Type} [DecidableEq F] [Decidabl
   · exact absurd has (by simp)
 
 /-- **The experiment is not about nothing**: the service of the laws, with a state of one
-value, draws within the samplers and answers only what is permitted, when what each sampler
+value, answers as the samplers draw and answers only what is permitted, when what each sampler
 draws is permitted. It is the service of a witness of a claim's hypotheses. -/
 theorem served_of_draws {V : Vocabulary} (M : Model V) (draws : LawDraws M)
     (allowed : ∀ (op : ROp M) (sampler : ProbComp ((RSig M).Reply op)),
       lawSamplers M draws op = some sampler → ∀ v, v ∈ support sampler → Permitted M op v) :
     Served (lawSamplers M draws) (Permitted M) :=
-  ⟨Unit, serveLaws M draws, ⟨()⟩, serveLaws_follows M draws, serveLaws_permitted M draws allowed⟩
+  ⟨Unit, serveLaws M draws, ⟨()⟩,
+    ⟨serveLaws_follows M draws, serveLaws_permitted M draws allowed⟩, serveLaws_draws M draws⟩
 
 /-- What the standard samplers draw is permitted: a position below the bound of its type. -/
 theorem StandardModel.draws_permitted {F G : Type} [DecidableEq F] [DecidableEq G]

@@ -22,8 +22,9 @@ says nothing of its own about services.
   probability at most `limit`. A protocol that decides has `bad` true of everything: the event
   is that the role returns. A reduction has `bad` true of the results on which the reduced
   statement holds.
-- `Served samplers allowed`: there is a conforming service with a state, so that a statement
-  with `ReturnsWithin` is not about nothing.
+- `Served samplers allowed`: there is a conforming service with a state that answers every
+  effect with a sampler as the sampler draws, so that a statement with `ReturnsWithin` is not
+  about nothing: the service that never answers conforms, and is no such service.
 
 The bridge from a judgment with fees to the experiment is in `ZkcFormal.ChargedReturn`.
 -/
@@ -53,9 +54,24 @@ def ReturnsWithin (p : Process S H A) (samplers : Samplers S)
     Pr{let out ← (simulateQ (handlerOf service) (embed p)).run.run s}[
       ∃ a, out.1 = some (.inl a) ∧ bad a] ≤ limit
 
-/-- There is a conforming service with a state. -/
+/-- There is a conforming service with a state that answers as the samplers draw. A service
+that does not answer conforms to every samplers; it serves nothing. -/
 def Served (samplers : Samplers S) (allowed : ∀ op, S.Reply op → Prop) : Prop :=
-  ∃ (σ : Type) (service : Service S σ), Nonempty σ ∧ service.Conforms samplers allowed
+  ∃ (σ : Type) (service : Service S σ), Nonempty σ ∧ service.Conforms samplers allowed ∧
+    service.Draws samplers
+
+/-- **What a served model says**: every reply that a sampler can draw is allowed. -/
+theorem Served.allowed_of_drawn {samplers : Samplers S} {allowed : ∀ op, S.Reply op → Prop}
+    (served : Served samplers allowed) (op : S.Op) (draw : ProbComp (S.Reply op))
+    (has : samplers op = some draw) (v : S.Reply op) (drawn : v ∈ support draw) : allowed op v := by
+  obtain ⟨_, service, ⟨s⟩, conforms, draws⟩ := served
+  have pos : 0 < Pr{let w ← draw}[w = v] := by
+    rw [prEvent_pos_iff]
+    exact ⟨v, drawn, rfl⟩
+  rw [← draws op draw has s (· = v), prEvent_pos_iff] at pos
+  obtain ⟨⟨reply, t⟩, reached, w, same, rfl⟩ := pos
+  cases same
+  exact conforms.permitted op s w t reached
 
 /-- A bound on returns holds with every larger limit. -/
 theorem ReturnsWithin.mono {p : Process S H A} {samplers : Samplers S}
