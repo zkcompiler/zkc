@@ -105,6 +105,7 @@ def checkReferences (space : Name) (label : String) (goal clause relation : Nat)
   let row := localName s!"written'goal{goal}"
   let fields := localName s!"written'fields{goal}"
   let caps := localName s!"written'caps{goal}"
+  let bound := localName s!"written'bound{goal}"
   let decision := localName s!"written'decision{clause}"
   let fnEntry := localName s!"written'fn{relation}"
   let fnMember := localName s!"member'fn{relation}"
@@ -129,6 +130,7 @@ def checkReferences (space : Name) (label : String) (goal clause relation : Nat)
   named (← operand selected ``WrittenGoal.mk 0) fields
   let publicName := fun (suffix_ : String) => localName (label ++ suffix_)
   named (← operand (← bodyOf fields) ``GoalFields.mk 1) caps
+  named (← operand (← bodyOf fields) ``GoalFields.mk 0) bound
   named (← bodyOf (publicName "Caps")) caps
   for i in [:arguments] do
     let getter := publicName s!"Argument{i}"

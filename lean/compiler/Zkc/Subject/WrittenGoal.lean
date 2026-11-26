@@ -1,5 +1,6 @@
 module
 
+public import Zkc.Subject.Bound
 public import Zkc.Subject.Charges
 public import Zkc.Subject.ShortApplication
 
@@ -17,11 +18,11 @@ structure Decision {V : Vocabulary} {pkg : Package V} (root : WrittenRoot pkg) w
   place : Nat
   witness : Option (HList (PortRef root.entry.header.ins) (application.relation.header.ins.drop application.arity))
 
-/-- The source goal's own arguments and numerical data. -/
+/-- The source goal's own arguments, its table of caps and its bound. -/
 structure GoalFields where
   specification : List Nat
   caps : CapTable
-  ceiling : Option Rat
+  bound : Bound
 
 /-- The semantic consumer takes one goal with its selected decision. -/
 structure WrittenGoal {V : Vocabulary} {pkg : Package V} (root : WrittenRoot pkg) where

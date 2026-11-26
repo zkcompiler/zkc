@@ -109,7 +109,7 @@ structure ClaimedGoal where
   /-- The ceiling that the goal states, when it states one (GL4). -/
   ceiling : Option Rat
   /-- The table of caps of the root at the goal's proof arguments (SX8): every charge that the
-  root reaches, by use. The bound of the goal's statement is its total. -/
+  root reaches, by use. -/
   caps : CapTable
   /-- The draws of the root by the names of their sites, each with the keys of the draws that
   realize it: every named draw that is emitted, charged or not. -/
@@ -206,6 +206,11 @@ private def readClaim (c : AdmittedRoot) (state : Compile.State) (goal : String)
   let (caps, sites) ← goalCaps c selected.specification
   return ({ goal, declaration, clause, relation, statement, witness, specification := selected.specification,
             ceiling := selected.ceiling, caps, sites }, selected.scheme, state)
+
+/-- **The bound of a goal**: the ceiling that the goal writes, and where it writes none, the
+total of the charges of its contract as they add up along one run (SX8). It is not negative: a
+negative ceiling is refused where the goal is selected, and no charge is negative. -/
+def ClaimedGoal.bound (goal : ClaimedGoal) : Rat := goal.ceiling.getD goal.caps.ratio
 
 @[no_expose] def claimedGoal (c : AdmittedRoot) (state : Compile.State) (goal : String) :
     ExportM (ClaimedGoal × SchemeEntry × Compile.State) := do
