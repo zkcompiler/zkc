@@ -42,14 +42,20 @@ def Rejected (p : Typed V) (relation : Member p.headers.fns d.relation.header)
     (xs : HList (RV M scheme.verifier) scheme.entry.header.ins) : Prop :=
   rejectionAt%(M, d, p, relation, xs)
 
-/-- A statement is rejected when the relation returns true at no arguments at all: whatever the
-witnesses are, and whether the relation returns false or stops. -/
-theorem rejected_of_results {p : Typed V} {relation : Member p.headers.fns d.relation.header}
-    {xs : HList (RV M scheme.verifier) scheme.entry.header.ins}
-    (results : ∀ args : HList M.Val d.relation.header.ins,
-      functionResult (M := M) (t := .bool) (d.boolean ▸ fnMeaning M p relation args) ≠ some true) :
-    Rejected M d p relation xs :=
-  witnesses_intro M _ _ fun ws ↦ validWitnesses_intro M ws (results _)
+/-- **What a rejected statement is, pointwise**: at the statement's operands, every list of
+valid witnesses gives the relation a result other than `some true`. -/
+theorem rejected_iff (p : Typed V) (relation : Member p.headers.fns d.relation.header)
+    (xs : HList (RV M scheme.verifier) scheme.entry.header.ins) :
+    Rejected M d p relation xs ↔
+      ∀ ws : HList M.Val (d.relation.header.ins.drop d.arity), ws.All M.Valid →
+        functionResult (M := M) (t := .bool) (d.boolean ▸ fnMeaning M p relation
+          (arguments _ d.arity (d.statement.map (G := M.Val) fun t port ↦
+            reveal M (a := ⟨t, port.holders⟩) port.heldByVerifier (valueAt port.member xs)) ws)) ≠
+          some true := by
+  unfold Rejected
+  dsimp only
+  rw [witnesses_iff]
+  exact forall_congr' fun ws ↦ validWitnesses_iff M ws _
 
 variable (draws : LawDraws M)
 
