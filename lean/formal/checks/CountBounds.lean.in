@@ -26,52 +26,6 @@ private theorem loose_total : looseCaps.total = requested := by
   rw [CapTable.total, loose_budget]
   rfl
 
-theorem installation : CountBoundRoots.installed :=
-  Goal.installed_of_judged model written'goal0 draws loose_judged loose_total.le
-
-theorem admission : CountBoundRoots.admitted :=
-  (Soundness.installed_iff_admitted model written'decision0 draws requested).mp installation
-
-theorem certificate : CountBoundRoots.result := ⟨loose_covered, admission⟩
-
-theorem witness : CountBoundRoots.witnessed :=
-  CountBoundRoots.witnessOf looseTable loose_valid
-    ((loose_relation data looseTable rfl).trans (by decide))
-
-/-- One admission supplies the location of both members. Identify them with the members at
-which the stock author proved rejection and attained the fee total. -/
-private theorem attained_le (b : ℝ≥0∞) (holds : Soundness.AdmittedBound model written'decision0 draws b) :
-    requested ≤ b := by
-  obtain ⟨a, ok⟩ := subjectPackage.admitted_exists
-  obtain ⟨root, hr, relation, hf, claim⟩ := holds ok
-  obtain ⟨_, _, relation', hf', rejected, _⟩ := loose_at_table ok []
-  obtain ⟨root', hr', attained⟩ := loose_attained ok []
-  have sameRoot : root = root' := eq_of_heq (Sigma.mk.inj (Option.some.inj (hr.symm.trans hr'))).2
-  have sameFn : relation = relation' := eq_of_heq (Ref.fn.inj (Option.some.inj (hf.symm.trans hf'))).2
-  subst root'
-  subst relation'
-  have bound : returnsAt a.program root [] looseTable ≤ b :=
-    (claim [] looseTable loose_valid rejected).returns service
-      ⟨serveLaws_follows _ _, service_permitted⟩ ()
-  rwa [attained, loose_total] at bound
-
-theorem installed_iff (b : ℝ≥0∞) : Soundness.Installed model written'decision0 draws b ↔
-    toProbability (3 / 8) ≤ b :=
-  ⟨fun h ↦ attained_le b ((Soundness.installed_iff_admitted model written'decision0 draws b).mp h),
-   fun le ↦ Soundness.installed_mono model written'decision0 draws le installation⟩
-
-theorem admitted_iff (b : ℝ≥0∞) : Soundness.AdmittedBound model written'decision0 draws b ↔
-    toProbability (3 / 8) ≤ b :=
-  (Soundness.installed_iff_admitted model written'decision0 draws b).symm.trans (installed_iff b)
-
-theorem quarter_refuted : Soundness.Witnessed model written'decision0 draws ∧
-    ¬ Soundness.Installed model written'decision0 draws (toProbability (1 / 4)) ∧
-    ¬ Soundness.AdmittedBound model written'decision0 draws (toProbability (1 / 4)) := by
-  have small : ¬ toProbability (3 / 8) ≤ toProbability (1 / 4) :=
-    fun h ↦ (by norm_num : ¬ (3 / 8 : ℚ≥0) ≤ 1 / 4) (toProbability_le_iff.mp h)
-  exact ⟨witness, fun h ↦ small ((installed_iff _).mp h), fun h ↦ small ((admitted_iff _).mp h)⟩
-
-/-- Edit the issued table's only draw, keeping its root and every other draw field. -/
 private def editDraw (edit : DrawCap → DrawCap) : CapTable :=
   let use := looseCaps.uses[0]'(by decide)
   ⟨[.flat use.definition [edit (use.draws[0]'(by decide))] []]⟩
@@ -79,80 +33,6 @@ private def editDraw (edit : DrawCap → DrawCap) : CapTable :=
 example : editDraw id = looseCaps := rfl
 example : editDraw (fun draw ↦ { draw with key := ⟨5⟩ }) = misplaced := rfl
 
-private noncomputable def withCaps (caps : CapTable) : WrittenGoal written'root :=
-  { written'goal0 with fields := { written'fields0 with caps } }
-
-/-- Moving the issued row to the guard preserves its total. Both neutral receipts still
-hold there. The legacy result requires a count at the moved row. -/
-theorem misplaced_result : misplaced.total = requested ∧
-    Soundness.Result model written'decision0 draws covers misplaced.total ∧
-    Soundness.Witnessed model written'decision0 draws ∧
-    ¬ Goal.Result model (withCaps misplaced) draws covers := by
-  have same : misplaced.total = requested :=
-    (congrArg toProbability (show misplaced.budget = looseCaps.budget by decide +kernel)).trans loose_total
-  refine ⟨same, same ▸ certificate, witness, fun legacy ↦ ?_⟩
-  have counted := ((Goal.result_iff_bound_and_counted model (withCaps misplaced) draws covers).mp legacy).2
-  exact Bool.noConfusion (misplaced_not_counted.symm.trans counted)
-
-private def zeroFee := editDraw fun draw ↦ { draw with numerator := 0 }
-
-/-- A counted zero fee at the actual draw gives a false legacy bound for this verifier.
-The same decision has precisely the same covered result at every independently chosen bound. -/
-theorem counted_zero : zeroFee.counted stored rootKey = true ∧ zeroFee.total = 0 ∧
-    Goal.Claim model written'goal0 draws ∧ ¬ Goal.Claim model (withCaps zeroFee) draws ∧
-    ¬ Goal.Judged model (withCaps zeroFee) draws ∧
-    (∀ b, Soundness.Result model (withCaps zeroFee).decision draws covers b =
-      Soundness.Result model written'decision0 draws covers b) := by
-  have zero : zeroFee.total = 0 := by
-    rw [CapTable.total, show zeroFee.budget = 0 by decide +kernel]
-    rfl
-  have tooSmall : ¬ Soundness.Installed model written'decision0 draws zeroFee.total := by
-    rw [zero, installed_iff]
-    norm_num [toProbability]
-  exact ⟨by decide +kernel, zero, loose_installed, tooSmall,
-    fun judged ↦ tooSmall (Goal.installed_of_judged model (withCaps zeroFee) draws judged le_rfl),
-    fun _ ↦ rfl⟩
-
-/-- The runner applies this to the table read from the source that charges the inactive draw.
-The root has its counted use, with no charge left on the live draw. -/
-theorem inactive_charge (table : CapTable) (row : table = ⟨[.flat rootKey [] []]⟩) :
-    table.counted stored rootKey = true ∧ ¬ Soundness.AdmittedBound model written'decision0 draws
-      table.total := by
-  subst table
-  refine ⟨by decide +kernel, ?_⟩
-  rw [admitted_iff, CapTable.total,
-    show (CapTable.mk [.flat rootKey [] []]).budget = 0 by decide +kernel]
-  exact fun le ↦ (by norm_num : ¬ (3 / 8 : ℚ≥0) ≤ 0) (toProbability_le_iff.mp le)
-
-open Lean Elab Command in
-run_cmd liftCoreM do
-  CountBoundRoots.checkRoots
-  for (proof, root) in [(``installation, ``_root_.CountBoundRoots.installed),
-      (``admission, ``_root_.CountBoundRoots.admitted), (``certificate, ``_root_.CountBoundRoots.result),
-      (``witness, ``_root_.CountBoundRoots.witnessed)] do
-    unless (← getConstInfo proof).type.isConstOf root do
-      throwError "{proof} must prove the issued downstream type {root}"
-
-#print axioms installation
-#print axioms admission
-#print axioms certificate
-#print axioms witness
-#print axioms installed_iff
-#print axioms admitted_iff
-#print axioms quarter_refuted
-#print axioms misplaced_result
-#print axioms counted_zero
-#print axioms inactive_charge
+run_cmd Lean.Elab.Command.liftCoreM CountBoundRoots.checkRoots
 
 end CountBounds
-
--- Check the complete quarter theorem independently of its proof and the signed manifest.
-example :
-    let M := ZkcFormal.Written.StandardInterpretation.model
-    let d := Count.written'decision0
-    let draws := ZkcFormal.Written.StandardInterpretation.draws
-    let quarter := ZkcFormal.ProbabilisticProcess.toProbability (1 / 4)
-    ZkcFormal.Written.Soundness.Witnessed M d draws ∧
-      ¬ ZkcFormal.Written.Soundness.Installed M d draws quarter ∧
-      ¬ ZkcFormal.Written.Soundness.AdmittedBound M d draws quarter :=
-  CountBounds.quarter_refuted

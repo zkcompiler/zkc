@@ -34,34 +34,3 @@ private theorem zeroOfHalt {S : Sig} {H A : Type} (p : Process S H A)
       subst out
       cases same
     | some answer => exact ih answer (never answer trivial) t out rest same
-
-theorem directZero : directZeroStatement := by
-  intro path x _ rejected
-  obtain rfl := Option.some.inj ((relationValue x).symm.trans rejected)
-  apply zeroOfHalt
-  change (roleMeaning model installed rootMember verifierRole path
-    (.cons () (.cons false .nil))).interpret _ _ _
-  walk
-  intro _ _
-  walk
-
-theorem directQuarter : directQuarterStatement :=
-  Soundness.installed_mono model written'decision0 draws zero_le directZero
-
-private theorem judged : looseJudged := by
-  claim_intro
-  obtain rfl := Option.some.inj ((relationValue input_claim).symm.trans rejected)
-  walk
-  walk_free as drawn
-  walk
-
-theorem feeQuarter : directQuarterStatement := by
-  have total : looseCaps.total = 1 / 4 := by
-    rw [CapTable.total, loose_budget]
-    exact toProbability_natCast_div 1 4 (by decide)
-  exact Goal.installed_of_judged model written'goal0 draws judged total.le
-
-theorem coveredZero : coveredZeroStatement :=
-  ⟨loose_covered, (Soundness.installed_iff_admitted model written'decision0 draws 0).mp directZero⟩
-
-theorem missingCount : missingCountStatement := ⟨coveredZero, by decide +kernel⟩

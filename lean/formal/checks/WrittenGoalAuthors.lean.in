@@ -18,8 +18,6 @@ example : AuthorGuard.rootMember = AuthorSwap.rootMember := rfl
 example : AuthorGuard.verifierRole = AuthorSwap.verifierRole := rfl
 example : AuthorGuard.soundMember = AuthorSwap.soundMember := rfl
 
-theorem holds : AuthorGuard.soundClaim := AuthorGuard.sound_installed
-
 private abbrev inputs : HList (RV model AuthorGuard.verifierRole) AuthorGuard.rootHeader.ins :=
   .cons () (.cons true (.cons false .nil))
 
@@ -103,33 +101,6 @@ theorem omittedHelper : OffForEveryWitness := by
   have receipt := omitted_witnessed_of (input_right := false) (valid_input_claim := trivial)
     (input_claim := true) (valid_input_right := trivial) (fun b n _ _ ↦ acceptsLaw false b n)
   readMulti receipt
-
--- These proofs use named unfolds at the operands exposed to an importing author.
-example : mappedClaim := by
-  claim_intro
-  unfold StandardInterpretation.samplers
-  apply mapped_installed <;> assumption
-
-example : mappedJudged := by
-  claim_intro
-  unfold StandardInterpretation.samplers
-  apply mapped_judged <;> assumption
-
-example : mappedGoal := by
-  intro a ok
-  unfold stored association at ok
-  obtain ⟨root, foundRoot, relation, foundRelation, claim⟩ := mapped_sound ok
-  unfold rootKey rootHeader at foundRoot
-  unfold mappedKey mappedHeader at foundRelation
-  unfold mappedClaimOf at claim
-  exact ⟨root, foundRoot, relation, foundRelation, claim⟩
-
-example : mappedResult := by
-  obtain ⟨coverage, counted, goal⟩ := mapped_result
-  unfold stored rootKey mappedKey StandardInterpretation.covers at coverage
-  unfold stored rootKey mappedCaps at counted
-  unfold mappedGoal at goal
-  exact ⟨coverage, counted, goal⟩
 
 -- Membership and both lookups are for the arbitrary admitted program supplied by the caller.
 def LocatedClaim (a : Admitted V) : Prop :=

@@ -1,25 +1,3 @@
-/-!
-The verifier of `Guess<3>` within the charges of its goal.
-
-Before this text the check writes the printed package of what the goal claims and, generated
-from what the frontend read: the facts (`rootKey` with `rootHeader`, `rootNames`, `rootBody`,
-`rootMember`; `verifierRole`, `proverRole`; `guessingCaps`, the table of caps of the goal;
-`guessingKey` with `guessingHeader` and `guessingMember`), that the standard interpretation covers the goal’s reach, that the counts of the table are the program's and what its budget is
-(`guessing_counted`, `guessing_budget`), where the walks start (`verifierProgram` with
-`verifier_meaning`, `guessing_meaning`), the key of the charged draw under the name of its site (`site_r`) with its
-cap (`guessing_cap_r`), the transfers, the propositions `guessingClaim`, `guessingGoal`,
-`guessingResult` and `guessingWitnessed`, and the judgment that the method of fees establishes
-(`guessingJudged`) with the theorems that the claim follows from it and that its hypotheses are
-met at an input (`guessing_witnessed_of`). After this text it writes the claim and the theorems
-of the last three propositions. This text proves the judgment and gives the input.
-
-The protocol has three rounds. In each the verifier gets a position and draws one, and it
-rejects unless the claim holds or a drawn position was the one that it got. On a false claim
-the verifier returns only where some round drew the position sent: each round pays one eighth
-for that position, at the draw's cap, and the budget of the table is three eighths. The loop is
-taken by an invariant that says that no round has hit yet and how much of the budget is left.
--/
-
 noncomputable section
 
 /-- The relation of the goal returns the claim. -/
@@ -29,33 +7,6 @@ theorem guessing_relation {F G : Type} (D : StandardModel.Data F G) [DecidableEq
       (fnMeaning (StandardModel.model D) installed guessingMember (.cons claim .nil)) =
         some claim := by
   kernel_rfl
-
-/-- **Within the table.** On a false claim the verifier is judged never to return within the
-budget of the goal's table, each fee within the cap of the draw that pays it: in every round
-the fee of the draw pays for the position that the prover sent. -/
-theorem guessing_judged : guessingJudged := by
-  claim_intro
-  obtain rfl : input_claim = false :=
-    Option.some.inj ((guessing_relation D input_claim).symm.trans rejected)
-  walk
-  walk_loop fun i (hit : Bool) budget => hit = false ∧ ((3 - i : ℕ) : ℚ≥0) * (1 / 8) ≤ budget
-  case first => exact ⟨rfl, by decide +kernel⟩
-  case step =>
-    obtain ⟨rfl, enough⟩ := invariant_i
-    have split : (3 - i : ℕ) = (3 - (i + 1)) + 1 := by omega
-    rw [split, Nat.cast_add, Nat.cast_one, add_mul, one_mul] at enough
-    -- the message: nothing is excluded
-    walk_free as sent
-    -- the draw: the fee of one eighth pays for the position that was sent
-    walk_pay (1 / 8) excluding (fun drawn : ℕ => drawn = sent) as drawn differs
-    case weight => simpa using prEvent_drawPosition_eq_le 7 sent
-    case within => exact le_trans le_add_self enough
-    walk
-    refine ⟨?_, le_tsub_of_add_le_right enough⟩
-    exact Bool.eq_false_iff.mpr fun same => differs (Nat.eq_of_beq_eq_true same)
-  case after =>
-    obtain ⟨rfl, _⟩ := invariant_i
-    walk
 
 /-- **The hypotheses of the claim are met**: at the source field, on the false claim,
 with the service of the laws. -/

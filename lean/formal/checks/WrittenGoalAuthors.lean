@@ -55,25 +55,10 @@ private def guardProof := "
 theorem identityLaw (x : Bool) : functionResult (t := .bool)
     (fnMeaning model installed soundMember (.cons x .nil)) = some x := by kernel_rfl
 
-theorem sound_judged : soundJudged := by
-  claim_intro
-  unfold soundCaps
-  rw [identityLaw] at rejected
-  obtain rfl := Option.some.inj rejected
-  walk
-
 theorem sound_witnessed : soundWitnessed := sound_witnessed_of false trivial true trivial (identityLaw false)
 "
 
 private def multiProof (label : String) := s!"
-theorem {label}_judged : {label}Judged := by
-  claim_intro
-  have returning := rejected (witness1 := 0) (witness0 := false) trivial trivial
-  rw [acceptsLaw] at returning
-  have off : input_right = false := by simpa using Option.some.inj returning
-  subst input_right
-  walk
-
 theorem {label}_witnessed : {label}Witnessed :=
   {label}_witnessed_of true trivial false trivial (fun b n _ _ => acceptsLaw false b n)
 "
@@ -87,9 +72,6 @@ theorem acceptsLaw (x b : Bool) (n : Nat) : functionResult (t := .bool)
 private def emptyProof := "
 theorem neverLaw : functionResult (t := .bool) (fnMeaning model installed emptyGoalMember .nil) =
     some false := by kernel_rfl
-theorem emptyGoal_judged : emptyGoalJudged := by
-  claim_intro
-  walk
 theorem emptyGoal_witnessed : emptyGoalWitnessed := emptyGoal_witnessed_of neverLaw
 "
 
@@ -152,7 +134,12 @@ def run (work : System.FilePath) (hashSource client : String) : IO Unit := do
   unless impossible.refusals.isEmpty do throw <| IO.userError s!"equality: {impossible.refusals}"
   let equality ← startLakeLean work "AuthorEquality" impossible.text (text := false)
   let swap ← addStated work wrong
-  let proofs ← [good, multi, empty].mapM fun m => startModule work m.space m
+  let proofs ← [(good, guardProof), (multi, acceptsLaw ++ multiProof "mapped" ++ multiProof "omitted"),
+      (empty, emptyProof)].mapM fun (m, body) => do
+    let names := (m.published.map (·.1.getString!)).filter (·.endsWith "_met")
+    let closings := (m.proof.splitOn "\n").filter fun line =>
+      names.any fun n => line.startsWith s!"theorem {n} :"
+    startLemmas work m.space m (body ++ "\n".intercalate closings) names
 
   let mut hash := hashSource
   for (before, after) in [("goal good =", "goal input_b ="), ("(b: bool @(P,V)", "(bCaps: bool @(P,V)"),
@@ -164,12 +151,12 @@ def run (work : System.FilePath) (hashSource client : String) : IO Unit := do
   let alphaCalls ← aliases work alpha "input_alpha" "probes::input_alpha"
     "goal'probes'58''58'input'95'alpha" #["claim", "flag", "alphaCaps", "n"] "port2" "input_alphaCaps"
     "claim hfirst value hsecond" "(input_claim := claim)" "AuthorAlpha"
-  let audited := ["holds", "disagreement", "refuted", "zeroMet", "zeroHelper", "mappedMet", "mappedHelper",
+  let audited := ["disagreement", "refuted", "zeroMet", "zeroHelper", "mappedMet", "mappedHelper",
     "omittedMet", "omittedHelper", "emptyMet", "emptyHelper", "publicNames", "noEqualityReceipt", "fromGoal", "fromResult"]
   let requests := String.join (audited.map (s!"#print axioms AuthorClient.{·}\n"))
   let externalClient ← startLakeLean work "AuthorClient" (client ++ "\n" ++ requests)
   swap.accepted "AuthorSwap"
-  for check in proofs do discard check
+  for check in proofs do check
   acceptedByLean "AuthorEquality" (← equality)
   for check in hashCalls ++ alphaCalls do check
   let (ok, output) ← externalClient

@@ -11,24 +11,3 @@ private theorem conforms : service.Conforms samplers (Permitted model) :=
 theorem met : metStatement :=
   Soundness.witnessed_of model written'decision0 draws ⟨Unit, service, ⟨()⟩, conforms⟩
     false trivial rejectedFalse
-
-theorem refutesInstalled : refutesInstalledStatement := by
-  intro installedBound
-  have bound := (installedBound [] false trivial rejectedFalse).returns service conforms ()
-  rw [prEvent_simulation_returns] at bound
-  apply not_lt_of_ge bound
-  apply returns_pos_of_possible
-  change (roleMeaning model installed rootMember verifierRole []
-    (.cons () (.cons false .nil))).interpret _ _ _
-  walk
-  refine ⟨(0 : Nat), ?_, ?_⟩
-  · change (some 0, ()) ∈ support ((fun n : Nat ↦ (some n, ())) <$> drawPosition 3)
-    simp only [drawPosition, support_map, Set.mem_image]
-    exact ⟨0, ⟨(0 : Fin 4), by simp, rfl⟩, rfl⟩
-  · walk
-
-theorem refutesAdmitted : refutesAdmittedStatement :=
-  fun h ↦ refutesInstalled ((Soundness.installed_iff_admitted model written'decision0 draws 0).mpr h)
-
-theorem countedAtZero : countedAtZeroStatement :=
-  ⟨by decide +kernel, by kernel_rfl, refutesInstalled⟩

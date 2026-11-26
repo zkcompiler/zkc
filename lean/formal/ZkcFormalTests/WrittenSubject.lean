@@ -371,6 +371,25 @@ def startModule (work : System.FilePath) (name : String) (module : Module) : IO 
     acceptedByJudgment work name
     return lean
 
+/-- Check the independent lemmas of a subject against its issued statements. -/
+def startLemmas (work : System.FilePath) (name : String) (m : Module) (text : String)
+    (theorems : List String := []) (source : Option Subject := none)
+    (refusal unproved : List String := []) : IO (IO Unit) := do
+  let stated ← addStated work m
+  let reader ← source.mapM fun s => startSourceComparison work (name ++ "Source") m s.text
+    (s.goals.map (·.goal))
+  let comparison := Statements.header (m.statementsName.toString :: m.proofImports) ++
+    s!"namespace {m.space}\n" ++ statementOpens ++ text ++ "\n" ++ Statements.footer m.space theorems
+  let proof ← startLakeLean work name comparison
+  return do
+    stated.accepted name
+    let (ok, out) ← proof
+    if refusal.isEmpty then acceptedOutput m.space ok out theorems allowed
+    else
+      refusedOutput name ok out refusal
+      expectUnprovedIn name m.space theorems ok out unproved
+    if let some read := reader then acceptedByLean (name ++ "Source") (← read)
+
 /-- The two modules of a module that Lean must refuse in its proof module, added: the
 statements, which are accepted, and the proof module with the requests for the axioms of its
 theorems. The result is Lean's on the proof module. For a control that is not of a subject

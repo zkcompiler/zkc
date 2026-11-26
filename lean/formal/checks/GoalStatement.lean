@@ -363,7 +363,7 @@ def issuedStatements (source : String) : IO Statements := do
   unless !bad.outcome.isOk do throw (IO.userError "issued the absent clause")
   return (← IO.ofExcept good.outcome).statements
 
-/-- The proof module of a source, as the generator assembles it for a text that does not walk:
+/-- The proof module of a source, as the generator assembles it for a direct proof:
 the package of its claims, what the generator writes around the proofs, the proofs and the
 consumer. -/
 def proofModule (name text guarded : String)
@@ -374,7 +374,7 @@ def proofModule (name text guarded : String)
     { text := ← IO.ofExcept (alter s (proofText guarded))
       theorems := ["sound_installed", "sound_witnessed"]
       method := .direct }
-    (walks := false) (after := [consumer]))
+    (withEntries := false) (after := [consumer]))
 
 /-- The proof of the claim under another name, so that a control can state `sound_installed`
 itself. -/
@@ -574,7 +574,7 @@ def run (work : System.FilePath) : IO Unit := do
     startSourceComparison work name issued fronted ["t::sound"] ["sound"] (fees := false)
   let matched ← compare "OperandsSource" module
   let changed ← issuedStatements (← replaceOnce fronted "guard @V flag" "guard @V other")
-  let verifier ← IO.ofExcept (changed.module module.space {} (walks := false)
+  let verifier ← IO.ofExcept (changed.module module.space {} (withEntries := false)
     (statements := some `ChangedVerifier.Stated))
   discard <| addStated work verifier
   let mismatched ← compare "ChangedVerifierSource" verifier

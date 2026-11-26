@@ -2,13 +2,10 @@ import Zkc.Core.Admission.Theorems
 import Zkc.Kernel
 import Zkc.Vocabulary.Project
 import Zkc.Frontend.Written.Charge
-import ZkcFormal.Walk
 import ZkcFormal.Written.SiteCaps
-import ZkcFormal.Written.WalkFees
 import ZkcFormal.Written.LawSamplers
 import ZkcFormal.Written.PortSamplers
 import ZkcFormal.Written.StandardModel
-import ZkcFormalTests.WalkLoop
 
 /-!
 Tables of caps, against stored programs.
@@ -30,10 +27,6 @@ unlike shapes are read here.
   times the callee's; two calls of one definition at different proof arguments are two uses,
   and exchanging them exchanges what each call is allowed; the list of sites of a table is the
   program's occurrences at the charged draws.
-- **A draw two loops deep is paid at its site** (`charged_pay_at`): the verifier of the nested
-  program, on a false claim, is judged never to return within the budget of its table, six
-  times one eighth, each fee within the cap of the draw. The occurrence of the draw is read
-  from the effect, and its cap from the table by the kernel.
 -/
 
 open Zkc.Core ZkcFormal ZkcFormal.ProbabilisticProcess ZkcFormal.Written OracleComp ProbComp
@@ -42,10 +35,28 @@ open scoped NNRat ENNReal
 
 namespace ZkcFormalTests.CapTables
 
-abbrev V : Vocabulary := WalkLoop.V
+abbrev V : Vocabulary := (Zkc.Vocabulary.Project.Bindings.mk [] (by decide +kernel)).vocabulary
+
+/-- The protocol by names: the claim and the hit (`0`, `3`, `13`), the position got and the
+position drawn in a round (`6`, `7`), and what the guard reads (`14`). -/
+def stored : Definition V :=
+  .protocol ⟨0⟩ 2 [⟨.bool, [0, 1]⟩, ⟨.fin 8, [0]⟩] []
+    (.mk [0, 1] [
+      .op ⟨0⟩ [2] (.compute [0, 1] (.literal .bool [0])) [],
+      .op ⟨1⟩ [3] (.narrow [0, 1]) [2],
+      .loop ⟨9⟩ [0, 1] (.fixed 3) [3] [13] (.mk [4, 5] [
+        .op ⟨2⟩ [6] (.event (.flow .message 0 [1]) (.fin 8)) [1],
+        .op ⟨3⟩ [7] (.event (.given (.coin (.uniform (.fin 8))) 1 [0]) (.fin 8)) [],
+        .op ⟨4⟩ [8] (.compute [0, 1] (.owned OwnedName.finToNat [.fin 8] [])) [7],
+        .op ⟨5⟩ [9] (.compute [0, 1] (.owned OwnedName.finToNat [.fin 8] [])) [6],
+        .op ⟨6⟩ [10] (.compute [0, 1] (.owned OwnedName.natEqual [] [])) [8, 9],
+        .op ⟨7⟩ [11] (.compute [0, 1] (.owned OwnedName.boolOr [] [])) [5, 10],
+        .op ⟨8⟩ [12] (.narrow [0, 1]) [11]] [12]),
+      .op ⟨10⟩ [14] (.compute [1] (.owned OwnedName.boolOr [] [])) [0, 13],
+      .guard ⟨11⟩ [1] 14 .reject] [])
 
 /-- The guessing protocol of three rounds: a message and a draw in a kept loop. -/
-def guess : NamedProgram V := ⟨[WalkLoop.stored]⟩
+def guess : NamedProgram V := ⟨[stored]⟩
 
 /-- The same rounds in two kept loops, of two and of three. -/
 def nested : Definition V :=
@@ -357,170 +368,8 @@ example {F G : Type} (D : StandardModel.Data F G) [DecidableEq F] [DecidableEq G
     lawSamplers (StandardModel.model D) (StandardModel.draws D)
       (.get .message giver at_ (.fin 8)) = none := rfl
 
-/-! ## A draw two loops deep, paid at its site -/
-
-noncomputable section
-
-kernel_ok elaborated with header names body : Elaborated V Typed.empty.headers :=
-  elaborateDefinition Typed.empty.headers nested
-
-def installed : Typed V := Typed.empty.add elaborated
-
-abbrev verifier : Role := 1
-
-kernel_normal verifierProgram :
-    Term (roleDialect V Typed.empty.headers verifier) (Ctx.empty.extend names) header.outs :=
-  project verifier body
-
-theorem verifier_meaning (M : Model V) (path : List Frame)
-    (inputs : HList (RV M verifier) header.ins) :
-    roleMeaning M installed Member.head verifier path inputs =
-      (verifierProgram.denote (roleSem M verifier (Defs.fnTable M Typed.empty.defs)
-        (Defs.rTable M Typed.empty.defs)) path (Env.empty.extend names inputs)).sealed := by
-  kernel_rfl
-
-variable {F G : Type} (D : StandardModel.Data F G) [DecidableEq F] [DecidableEq G]
-
-abbrev model : Model V := StandardModel.model D
-
-def inputs (claim : Bool) : HList (RV (model D) verifier) header.ins := .cons claim (.cons () .nil)
-
-abbrev samplers : Samplers (RSig (model D)) := lawSamplers (model D) (StandardModel.draws D)
-
-/-- A draw two kept loops deep is paid at every iteration of both, by the tactics of a text:
-the walk stops at each effect, the message is met for free, and the draw pays one eighth for
-the position that was sent. The occurrence of the draw, with the frames of both loops, the
-sampler of its law and its cap in the table are read from the goal; the kernel decides the
-cap. -/
-theorem judged (path : List Frame) :
-    (roleMeaning (model D) installed Member.head verifier path (inputs D false)).interpret
-      (.charged (Permitted (model D)) (paysWithin (samplers D) (nestedCaps.allowance (model D) path)))
-      (fun _ _ => False) (fun _ _ => True) nestedCaps.budget := by
-  rw [verifier_meaning]
-  walk
-  walk_loop fun i (hit : Bool) budget => hit = false ∧ ((2 - i : ℕ) : ℚ≥0) * (3 / 8) ≤ budget
-  case first =>
-    refine ⟨rfl, le_of_eq ?_⟩
-    have total : nestedCaps.budget = 6 / 8 := by decide +kernel
-    rw [total]
-    norm_num
-  case step =>
-    obtain ⟨rfl, enough⟩ := invariant_i
-    have split : (2 - i : ℕ) = (2 - (i + 1)) + 1 := by omega
-    rw [split, Nat.cast_add, Nat.cast_one, add_mul, one_mul] at enough
-    walk
-    walk_loop fun j (hit : Bool) budget =>
-      hit = false ∧ ((2 - (i + 1) : ℕ) : ℚ≥0) * (3 / 8) + ((3 - j : ℕ) : ℚ≥0) * (1 / 8) ≤ budget
-    case first =>
-      refine ⟨rfl, le_trans (le_of_eq ?_) enough⟩
-      norm_num
-    case step =>
-      obtain ⟨rfl, left⟩ := invariant_j
-      have inner : (3 - j : ℕ) = (3 - (j + 1)) + 1 := by omega
-      rw [inner, Nat.cast_add, Nat.cast_one, add_mul, one_mul, ← add_assoc] at left
-      walk
-      walk_free as got
-      walk
-      walk_pay (1 / 8) excluding (fun drawn : ℕ => drawn = got) as drawn differs
-      case weight => simpa using prEvent_drawPosition_eq_le 7 got
-      case within => exact le_trans le_add_self left
-      walk
-      refine ⟨?_, le_tsub_of_add_le_right left⟩
-      exact Bool.eq_false_iff.mpr fun same => differs (Nat.eq_of_beq_eq_true same)
-    case after =>
-      obtain ⟨rfl, left⟩ := invariant_j
-      walk
-      exact ⟨rfl, by simpa using left⟩
-  case after =>
-    obtain ⟨rfl, _⟩ := invariant_i
-    walk
-
-/-! ## A fee within its cap and over what is left of the budget
-
-The three draws of the stepped loop each have the cap one half. Judged within three quarters,
-the first fee of one half leaves one quarter, and a second fee of one half is within its cap
-and over what is left: the kernel decides that, and `walk_pay` refuses the fee there. -/
-
-kernel_ok steppedElaborated with steppedHeader steppedNames steppedBody :
-    Elaborated V Typed.empty.headers :=
-  elaborateDefinition Typed.empty.headers steppedRounds
-
-def steppedInstalled : Typed V := Typed.empty.add steppedElaborated
-
-kernel_normal steppedVerifier :
-    Term (roleDialect V Typed.empty.headers verifier) (Ctx.empty.extend steppedNames)
-      steppedHeader.outs :=
-  project verifier steppedBody
-
-theorem stepped_meaning (M : Model V) (path : List Frame)
-    (inputs : HList (RV M verifier) steppedHeader.ins) :
-    roleMeaning M steppedInstalled Member.head verifier path inputs =
-      (steppedVerifier.denote (roleSem M verifier (Defs.fnTable M Typed.empty.defs)
-        (Defs.rTable M Typed.empty.defs)) path (Env.empty.extend steppedNames inputs)).sealed := by
-  kernel_rfl
-
-def steppedInputs (claim : Bool) : HList (RV (model D) verifier) steppedHeader.ins :=
-  .cons claim .nil
-
-/--
-error: walk_pay: the fee is not within what is left of the budget
-  1 / 2 ≤ 3 / 4 - 1 / 2
--/
-#guard_msgs in
-example (path : List Frame) :
-    (roleMeaning (model D) steppedInstalled Member.head verifier path (steppedInputs D false)).interpret
-      (.charged (Permitted (model D)) (paysWithin (samplers D) (steppedCaps.allowance (model D) path)))
-      (fun _ _ => False) (fun _ _ => True) (3 / 4) := by
-  rw [stepped_meaning]
-  walk_pay (1 / 2) excluding (fun drawn : ℕ => drawn = 0) as first kept
-  case weight => simpa using prEvent_drawPosition_eq_le 1 0
-  walk_pay (1 / 2) excluding (fun drawn : ℕ => drawn = 0) as second keptToo
-
--- the allowances written as a function of the effect are the same allowances: the first fee
--- is paid and the second is refused at the same place
-/--
-error: walk_pay: the fee is not within what is left of the budget
-  1 / 2 ≤ 3 / 4 - 1 / 2
--/
-#guard_msgs in
-example (path : List Frame) :
-    (roleMeaning (model D) steppedInstalled Member.head verifier path (steppedInputs D false)).interpret
-      (.charged (Permitted (model D))
-        (paysWithin (samplers D) (fun op => steppedCaps.allowance (model D) path op)))
-      (fun _ _ => False) (fun _ _ => True) (3 / 4) := by
-  rw [stepped_meaning]
-  walk_pay (1 / 2) excluding (fun drawn : ℕ => drawn = 0) as first kept
-  case weight => simpa using prEvent_drawPosition_eq_le 1 0
-  walk_pay (1 / 2) excluding (fun drawn : ℕ => drawn = 0) as second keptToo
-
-/-- A text's own name for the allowances of a table at a path. -/
-abbrev steppedAllowance (path : List Frame) := steppedCaps.allowance (model D) path
-
--- and so are the allowances under a text's own name for them
-/--
-error: walk_pay: the fee is not within what is left of the budget
-  1 / 2 ≤ 3 / 4 - 1 / 2
--/
-#guard_msgs in
-example (path : List Frame) :
-    (roleMeaning (model D) steppedInstalled Member.head verifier path (steppedInputs D false)).interpret
-      (.charged (Permitted (model D)) (paysWithin (samplers D) (steppedAllowance D path)))
-      (fun _ _ => False) (fun _ _ => True) (3 / 4) := by
-  rw [stepped_meaning]
-  walk_pay (1 / 2) excluding (fun drawn : ℕ => drawn = 0) as first kept
-  case weight => simpa using prEvent_drawPosition_eq_le 1 0
-  walk_pay (1 / 2) excluding (fun drawn : ℕ => drawn = 0) as second keptToo
-
-end
-
-/--
-info: 'ZkcFormalTests.CapTables.judged' depends on axioms: [propext, Classical.choice, Quot.sound]
--/
-#guard_msgs in
-#print axioms judged
-
 /-! `kernel_rfl` is checked by the kernel also where a file turns the check of its
-declarations off, and the words of the walk's tactics stay names. -/
+declarations off. -/
 
 /-- error: kernel_rfl: the kernel does not find the two sides definitionally equal -/
 #guard_msgs in

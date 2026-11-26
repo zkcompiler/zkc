@@ -32,24 +32,8 @@ private def wrongOrdinal (work : System.FilePath) (m : Written.Module) (reader :
     unless (output.splitOn ": error").length == 2 do
       throw (IO.userError s!"wrong decision ordinal: expected one operand type mismatch\n{output}")
 
-/-- Keep the issued decision and source reader. Substitute only two operands in the
-statements consumed by a separate printing of the guard challenge. -/
-private def wrongEndpoints (work : System.FilePath) (m : Written.Module) (reader : String) :
-    IO (IO Unit) := do
-  let statements ← replaceOnce m.statements "written'decision0 draws (1/4)"
-    "{ written'decision0 with place := 1 } draws (1/4)"
-  let statements ← replaceOnce statements "written'decision0 draws covers 0"
-    "written'decision0 draws (fun _ _ _ ↦ true) 0"
-  let mutant := { m with statementsName := `WrongEndpoints.Stated, statements }
-  let stated ← addStated work mutant
-  discard <| addChallenge work "WrongEndpoints" mutant
-  let observed ← startReader work mutant reader
-  return do
-    stated.accepted "substituted endpoints"
-    acceptedByLean "substituted endpoints source reader" (← observed)
-
 private def check (work : System.FilePath) (file source name : String)
-    (questions : List (String × String)) (otherProofs : List (String × String) := [])
+    (questions : List (String × String))
     (guardControls := false) : IO (IO Unit) := do
   let assembly ← Driver.assembleFiles ⟨file, Syntax.parseString file source⟩ ["../../libraries"]
   let root ← IO.ofExcept (admitSoundnessGoal assembly "loose")
@@ -69,7 +53,7 @@ private def check (work : System.FilePath) (file source name : String)
   let closing := s!"\nend {m.space}\n"
   let declarations := String.join <| questions.map fun (label, prop) =>
     s!"def {label}Statement : Prop := {prop}\n"
-  let names := (questions.map fun (label, _) => (label, label)) ++ otherProofs
+  let names := questions.map fun (label, _) => (label, label)
   let text ← IO.FS.readFile s!"checks/{m.space}.lean.in"
   let opening := s!"import {m.statementsName}\n" ++ scope
   let formalImport := "ZkcFormal.Written.Soundness"
@@ -87,7 +71,7 @@ private def check (work : System.FilePath) (file source name : String)
   -- The reader imports the printed challenge even when the recipe batches judgments elsewhere.
   discard <| addChallenge work name issued
   let controls ← if guardControls then
-    pure [← wrongOrdinal work issued reader, ← wrongEndpoints work issued reader]
+    pure [← wrongOrdinal work issued reader]
     else pure []
   return do
     acceptedByLean s!"{name} source reader" (← observed)
@@ -100,36 +84,19 @@ def run (work : System.FilePath) : IO Unit := do
   let unguarded ← replaceOnce source "guard @V claim" "guard @V true"
   let total ← replaceOnce source "IsSet(claim: bool): claim" "IsSet(claim: bool): true"
   let args := "model written'decision0 draws"
-  let installed := s!"Soundness.Installed {args}"
-  let admitted := s!"Soundness.AdmittedBound {args}"
   let result := s!"Soundness.Result {args} covers"
   let witnessed := s!"Soundness.Witnessed {args}"
   let rejected := "Soundness.Rejected model written'decision0 installed looseMember " ++
     "(.cons () (.cons false .nil))"
-  let guard ← check work file source "BoundGuard" [
-    ("directZero", installed ++ " 0"), ("directQuarter", installed ++ " (1/4)"),
-    ("coveredZero", result ++ " 0"),
-    ("rejectedFalse", rejected), ("met", witnessed),
-    ("missingCount", s!"let t : CapTable := ⟨[]⟩; {result} t.total ∧ t.counted stored rootKey = false")]
-    [("feeQuarter", "directQuarter")] (guardControls := true)
-  let returns ← check work file unguarded "BoundReturn" [
-    ("rejectedFalse", rejected), ("met", witnessed),
-    ("refutesInstalled", "¬ " ++ installed ++ " 0"), ("refutesAdmitted", "¬ " ++ admitted ++ " 0"),
-    ("countedAtZero", "let t : CapTable := ⟨[⟨rootKey, .nil⟩]⟩; " ++
-      s!"t.counted stored rootKey = true ∧ t.total = 0 ∧ ¬ {installed} t.total")]
+  let guard ← check work file source "BoundGuard" [("rejectedFalse", rejected), ("met", witnessed)]
+    (guardControls := true)
+  let returns ← check work file unguarded "BoundReturn" [("rejectedFalse", rejected), ("met", witnessed)]
   let always ← check work file total "BoundTotal" [
     ("allBounds", s!"∀ b, {result} b"), ("noWitness", "¬ " ++ witnessed)]
   let reader ← IO.FS.readFile "checks/WrittenBoundEndpoints.lean.in"
   let observed ← startLakeLean work "BoundEndpoints" reader (text := false)
-  let mutant ← replaceOnce reader "import BoundGuard.Challenge" "import WrongEndpoints.Challenge"
-  let control ← startLakeLean work "WrongEndpoints.Reader" mutant (text := false)
   acceptedByLean "written bound endpoints" (← observed)
   [guard, returns, always].forM id
-  let (ok, output) ← control
-  refusedOutput "substituted endpoints" ok output
-    ["BoundGuard.directQuarterStatement argument 4:", "BoundGuard.coveredZeroStatement argument 6:"]
-    (only := true)
-
 end WrittenBoundGuard
 
 #eval IO.FS.withTempDir WrittenBoundGuard.run

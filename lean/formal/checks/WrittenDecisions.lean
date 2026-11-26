@@ -33,6 +33,23 @@ private def readSource (src : String) (req : Requests) : IO Statements := do
   let (first, _) :: _ := req | throw (IO.userError "empty request")
   statements (← IO.ofExcept (goalRoot src first)) (req.map Prod.fst)
 
+/-- The statements of a goal only import the libraries needed to state it. -/
+private def checkStatementImports : IO Unit := do
+  let src ← IO.FS.readFile "fixtures/written-decisions.zkc"
+  let s ← readSource src [("left", "left")]
+  let m ← IO.ofExcept (s.module "Imports" {})
+  let libraries := subjectPackageImports ++ statementOpenImports ++
+    ["Zkc.Subject.WrittenGoal", "ZkcFormal.Written.GoalPresentation", "ZkcFormal.OracleProcess",
+     "ZkcFormal.ReturnExperiment", "ZkcFormal.Written.LawSamplers", "ZkcFormal.Written.SiteCaps",
+     "ZkcFormal.Written.FunctionMeaning", "ZkcFormal.Written.ClaimIntro",
+     "Zkc.Core.Evidence.FunctionEntry", "Zkc.Core.Evidence.ProtocolReadback"]
+  for line in m.statements.splitOn "\n" do
+    if let some name := line.dropPrefix? "import " then
+      unless libraries.contains name.toString do
+        throw (IO.userError s!"unexpected statements import {name}")
+
+#eval checkStatementImports
+
 private def publication (m : Module) (labels : List String) : IO Unit := do
   let suffixes := [("_installed", "Claim"), ("_sound", "Goal"), ("_result", "Result"),
     ("_met", "Witnessed")]

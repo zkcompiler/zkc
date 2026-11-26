@@ -1,21 +1,3 @@
-/-!
-The verifier of `Either` within the charges of its goal.
-
-Before this text the check writes the printed package of what the goal claims and what
-`Written.Statements` generates from what the frontend read (the facts, the coverage, the
-table of caps `eitherCaps` with its counts and budget, where the walks start, the names of
-the two draws `site_x` and `site_y` with their caps, the transfers, the propositions of the
-goal, and the judgment `eitherJudged` with the theorems that the claim follows from it and
-that its hypotheses are met at an input). After it the check writes the claim and the theorems
-of the propositions. This text proves the judgment and gives the input.
-
-The protocol chooses by the claim. On a false claim only the second arm runs: the verifier
-gets a position of four, stops unless it is not the last, draws a position, and returns only
-where the draw is the position sent. The fee of the draw, one quarter, pays for that position.
-The table has the draws of both arms as the arms of a choice, and its budget is the larger arm,
-one quarter: the fee of this text is the whole budget.
--/
-
 noncomputable section
 
 /-- The relation of the goal returns the claim. -/
@@ -25,44 +7,6 @@ theorem either_relation {F G : Type} (D : StandardModel.Data F G) [DecidableEq F
       (fnMeaning (StandardModel.model D) installed eitherMember (.cons claim .nil)) =
         some claim := by
   kernel_rfl
-
-/-- **Within the table.** On a false claim the verifier is judged never to return within the
-budget of the goal's table: the fee of the draw of the second arm pays for the position that
-the prover sent. -/
-theorem either_judged : eitherJudged := by
-  claim_intro
-  obtain rfl : input_claim = false :=
-    Option.some.inj ((either_relation D input_claim).symm.trans rejected)
-  -- the choice takes the second arm; its message: nothing is excluded
-  walk_free as sent
-  -- the guard on the message: where it does not pass the run stops
-  walk as allowed
-  -- it is stated of the position sent, with no name of the walk's, while the process goes on
-  guard_hyp allowed : (!sent.beq 3) = true
-  -- the draw: one quarter pays for the position that was sent
-  walk_pay (1 / 4) excluding (fun drawn : ℕ => drawn = sent) as drawn differs
-  case weight => simpa using prEvent_drawPosition_eq_le 3 sent
-  -- the guard on the draw: where it passes, the draw is the position sent
-  walk as hit
-  exact differs (Nat.eq_of_beq_eq_true hit)
-
-/-- The same judgment with the choice left open: the walk forks on the claim, which the text
-names, and goes into each arm. The arm of a true claim does not arise where the relation
-returns false. -/
-theorem either_judged_forked : eitherJudged := by
-  claim_intro
-  have isFalse : input_claim = false :=
-    Option.some.inj ((either_relation D input_claim).symm.trans rejected)
-  walk as chosen
-  · -- the arm of a false claim, as above
-    walk_free as sent
-    walk as allowed
-    walk_pay (1 / 4) excluding (fun drawn : ℕ => drawn = sent) as drawn differs
-    case weight => simpa using prEvent_drawPosition_eq_le 3 sent
-    walk as hit
-    exact differs (Nat.eq_of_beq_eq_true hit)
-  · -- the arm of a true claim
-    exact absurd (chosen.symm.trans isFalse) (by decide)
 
 /-- **The hypotheses of the claim are met**: at the source field, on the false claim,
 with the service of the laws. -/

@@ -1,21 +1,3 @@
-/-!
-The verifier of `Twice` within the charges of its goal.
-
-Before this text the check writes the printed package of what the goal claims and what
-`Written.Statements` generates from what the frontend read (the facts, the coverage, the
-table of caps `twiceCaps` with its counts and budget, where the walks start, in the root and
-in the protocol that the root applies, the transfers, the propositions of the goal, and the
-judgment `twiceJudged` with the theorems that the claim follows from it and that its
-hypotheses are met at an input). After it the check writes the claim and the theorems of the
-propositions. This text proves the judgment and gives the input.
-
-The root applies `Round` twice and returns where the claim holds or one of the rounds hit. In
-a round the verifier gets a position of four from the prover, draws one, and reports whether
-the two are the same, which the function `same` computes. The fee of each draw, one quarter,
-pays for the position that was sent; the table has the draw of `Round` once and the two
-applications of the root, and its budget is one half.
--/
-
 noncomputable section
 
 /-- The relation of the goal returns the claim. -/
@@ -25,45 +7,6 @@ theorem twice_relation {F G : Type} (D : StandardModel.Data F G) [DecidableEq F]
       (fnMeaning (StandardModel.model D) installed twiceMember (.cons claim .nil)) =
         some claim := by
   kernel_rfl
-
-/-- What `same` computes, stated in the table of the definitions before the root. `Round`
-calls it in the table of the definitions before `Round`; the walk takes that call by this
-law. -/
-theorem same_law {F G : Type} (D : StandardModel.Data F G) [DecidableEq F] [DecidableEq G]
-    (a b : ℕ) :
-    fnMeaning (StandardModel.model D) calleeProgram sameMember (.cons a (.cons b .nil)) =
-      .done (.cons (a.beq b) .nil) := by
-  refine done_of_judged ?_
-  repeat walk_step
-  subst_vars
-  rfl
-
-/-- **Within the table.** On a false claim the verifier is judged never to return within the
-budget of the goal's table: in each application the fee of the draw pays for the position
-that the prover sent, and where neither draw is that position neither round hit. -/
-theorem twice_judged : twiceJudged := by
-  claim_intro
-  obtain rfl : input_claim = false :=
-    Option.some.inj ((twice_relation D input_claim).symm.trans rejected)
-  -- the first application: the walk is in `Round`, at its message
-  walk_free as first
-  -- its draw: one quarter pays for the position that was sent
-  walk_pay (1 / 4) excluding (fun drawn : ℕ => drawn = first) as one differs_one
-  case weight => simpa using prEvent_drawPosition_eq_le 3 first
-  -- the call of `same` in `Round`, by the law stated before the root
-  walk
-  walk_law same_law D one first
-  -- the second application, as the first
-  walk_free as second
-  walk_pay (1 / 4) excluding (fun drawn : ℕ => drawn = second) as two differs_two
-  case weight => simpa using prEvent_drawPosition_eq_le 3 second
-  walk
-  walk_law same_law D two second
-  -- the guard of the root, on the results that the two applications carried back
-  walk as hit
-  rcases Bool.or_eq_true _ _ |>.mp hit with h | h
-  · exact differs_one (Nat.eq_of_beq_eq_true h)
-  · exact differs_two (Nat.eq_of_beq_eq_true h)
 
 /-- **The hypotheses of the claim are met**: at the source field, on the false claim,
 with the service of the laws. -/
