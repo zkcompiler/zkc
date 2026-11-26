@@ -145,7 +145,10 @@ local macro "useLocated " lookup:term : tactic => `(tactic|
    exact h (input_claim := claim) (input_right := right) path hc hv rejection))
 
 theorem fromGoal (goal : mappedGoal) {a : Admitted V} (ok : admit stored association = .ok a) :
-    LocatedClaim a := by useLocated (goal ok)
+    LocatedClaim a := by
+  unfold mappedGoal Goal.checkedSurface Goal.admission at goal
+  rw [ok] at goal
+  useLocated (goal (a := a) rfl)
 
 theorem fromResult (result : mappedResult) {a : Admitted V} (ok : admit stored association = .ok a) :
     LocatedClaim a := by useLocated (result.2.2 ok)

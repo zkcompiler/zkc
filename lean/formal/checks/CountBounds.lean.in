@@ -9,6 +9,19 @@ open scoped ENNReal NNRat
 
 namespace CountBounds
 
+-- Authors can unfold the cap-based predicates down to their named rejection and recurse
+-- on the input and witness telescopes under their published names.
+example (h : Goal.Claim model written'goal0 draws) : Goal.Claim model written'goal0 draws := by
+  unfold Goal.Claim Goal.ClaimOf Goal.Rejected at h
+  exact h
+
+example (h : Goal.Witnessed model written'goal0 draws) : Goal.Witnessed model written'goal0 draws := by
+  unfold Goal.Witnessed Goal.Rejected at h
+  exact h
+
+example := @Goal.Internal.inputs.eq_1
+example := @Goal.Internal.witnesses.eq_2
+
 private theorem loose_total : looseCaps.total = requested := by
   rw [CapTable.total, loose_budget]
   rfl
@@ -113,9 +126,10 @@ theorem inactive_charge (table : CapTable) (row : table = ⟨[.flat rootKey [] [
 
 open Lean Elab Command in
 run_cmd liftCoreM do
-  for (proof, root) in [(``installation, ``CountBoundRoots.installed),
-      (``admission, ``CountBoundRoots.admitted), (``certificate, ``CountBoundRoots.result),
-      (``witness, ``CountBoundRoots.witnessed)] do
+  CountBoundRoots.checkRoots
+  for (proof, root) in [(``installation, ``_root_.CountBoundRoots.installed),
+      (``admission, ``_root_.CountBoundRoots.admitted), (``certificate, ``_root_.CountBoundRoots.result),
+      (``witness, ``_root_.CountBoundRoots.witnessed)] do
     unless (← getConstInfo proof).type.isConstOf root do
       throwError "{proof} must prove the issued downstream type {root}"
 
@@ -131,3 +145,14 @@ run_cmd liftCoreM do
 #print axioms inactive_charge
 
 end CountBounds
+
+-- Check the complete quarter theorem independently of its proof and the signed manifest.
+example :
+    let M := ZkcFormal.Written.StandardInterpretation.model
+    let d := Count.written'decision0
+    let draws := ZkcFormal.Written.StandardInterpretation.draws
+    let quarter := ZkcFormal.ProbabilisticProcess.toProbability (1 / 4)
+    ZkcFormal.Written.Soundness.Witnessed M d draws ∧
+      ¬ ZkcFormal.Written.Soundness.Installed M d draws quarter ∧
+      ¬ ZkcFormal.Written.Soundness.AdmittedBound M d draws quarter :=
+  CountBounds.quarter_refuted

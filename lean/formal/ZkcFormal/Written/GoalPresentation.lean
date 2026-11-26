@@ -163,7 +163,7 @@ private def witnessBinders (model e : Expr) (i : Nat) (validities : List Expr) :
       witnessBinders model next (i + 1) ((← mkAppM ``Model.Valid #[model, ty, x]) :: validities) rest
 
 private def presentRejection (sig : Signature) (e : Expr) : MetaM Expr := do
-  let canonical ← atHead e ``Soundness.Rejected
+  let canonical ← atHead e ``Rejected
   let view ← witnessBinders sig.model canonical 0 [] sig.witnesses
   ensureEqual canonical view
   return view

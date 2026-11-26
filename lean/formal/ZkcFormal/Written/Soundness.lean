@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Subject.WrittenGoal
+public import ZkcFormal.Written.Goal.Inputs
 public import ZkcFormal.Written.FunctionMeaning
 public import ZkcFormal.Written.LawSamplers
 
@@ -18,73 +19,26 @@ open scoped ENNReal
 
 variable {V : Vocabulary} (M : Model V)
 
-namespace Internal
-
-/-- Bind each visible value next to its validity, building every position in the deployed header. -/
-def inputs (r : Role) (existential : Bool) :
-    (ports : List (LTy V)) → (HList (RV M r) ports → Prop) → Prop
-  | [], k => k .nil
-  | port :: rest, k =>
-    if h : r ∈ port.holders then
-      let more := fun (x : M.Val port.ty) ↦
-        inputs r existential rest fun xs ↦ k (.cons (hide M r port x) xs)
-      if existential then ∃ x, M.Valid port.ty x ∧ more x else ∀ x, M.Valid port.ty x → more x
-    else
-      inputs r existential rest fun xs ↦ k (.cons (nothing M h) xs)
-
-/-- Read a heterogeneous value at its typed position. -/
-def valueAt {α : Type} {F : α → Type} :
-    {ts : List α} → {t : α} → Member ts t → HList F ts → F t
-  | _, _, .head, .cons x _ => x
-  | _, _, .tail i, .cons _ xs => valueAt i xs
-
-/-- Assemble the two sides of the actual signature. Recursing on the signature makes the
-argument spine compute even when the selected values are free variables. -/
-def arguments {α : Type} {F : α → Type} :
-    (ts : List α) → (n : Nat) → HList F (ts.take n) → HList F (ts.drop n) → HList F ts
-  | [], _, _, _ => .nil
-  | _ :: _, 0, _, ws => ws
-  | _ :: ts, n + 1, .cons x xs, ws => .cons x (arguments ts n xs ws)
-
-/-- Bind all witness values before entering the validity assumptions. -/
-def witnesses :
-    (ts : List V.Ty) → (HList M.Val ts → Prop) → Prop
-  | [], k => k .nil
-  | t :: ts, k => ∀ x : M.Val t, witnesses ts fun xs ↦ k (.cons x xs)
-
-/-- Imply the body from each witness validity in parameter order. -/
-def validWitnesses : {ts : List V.Ty} → HList M.Val ts → Prop → Prop
-  | [], .nil, q => q
-  | t :: _, .cons x xs, q => M.Valid t x → validWitnesses xs q
-
-/-- Apply a pointwise implication under the universal deployed-input telescope. -/
-theorem mapInputs (r : Role) :
-    ∀ (ports : List (LTy V)) (P Q : HList (RV M r) ports → Prop),
-      (∀ xs, P xs → Q xs) → inputs M r false ports P → inputs M r false ports Q
-  | [], _, _, f, hp => f .nil hp
-  | port :: rest, _, _, f, hp => by
-    by_cases h : r ∈ port.holders
-    · simp only [inputs, h, ↓reduceDIte, Bool.false_eq_true, ↓reduceIte] at hp ⊢
-      exact fun x hx ↦ mapInputs r rest _ _ (fun xs ↦ f (.cons (hide M r port x) xs)) (hp x hx)
-    · simp only [inputs, h, ↓reduceDIte] at hp ⊢
-      exact mapInputs r rest _ _ (fun xs ↦ f (.cons (nothing M h) xs)) hp
-
-end Internal
-
-open Internal
+open Goal.Internal
 
 variable {pkg : Package V} {scheme : WrittenRoot pkg} (d : Decision scheme)
+
+/-- Elaborate the same rejection expression at a decision or a legacy goal. Each public
+definition then keeps its own kernel names for the proofs of holder membership and Boolean
+result type. Existing frozen challenges reach those names. -/
+scoped macro "rejectionAt%(" M:term ", " d:term ", " p:term ", " relation:term ", " xs:term ")" : term =>
+  `(let statement := ($d).statement.map (G := ($M).Val) fun t port ↦
+      reveal $M (a := ⟨t, port.holders⟩) port.heldByVerifier (valueAt port.member $xs)
+    witnesses $M (($d).relation.header.ins.drop ($d).arity) fun ws ↦
+      validWitnesses $M ws <|
+        functionResult (M := $M) (t := .bool) (($d).boolean ▸ fnMeaning $M $p $relation
+          (arguments _ ($d).arity statement ws)) = some false)
 
 /-- Every valid witness makes the selected relation return false on these statement operands.
 The witness mapping records source positions. The universal quantifiers use the function types. -/
 def Rejected (p : Typed V) (relation : Member p.headers.fns d.relation.header)
     (xs : HList (RV M scheme.verifier) scheme.entry.header.ins) : Prop :=
-  let statement := d.statement.map (G := M.Val) fun t port ↦
-    reveal M (a := ⟨t, port.holders⟩) port.heldByVerifier (valueAt port.member xs)
-  witnesses M (d.relation.header.ins.drop d.arity) fun ws ↦
-    validWitnesses M ws <|
-      functionResult (M := M) (t := .bool) (d.boolean ▸ fnMeaning M p relation
-        (arguments _ d.arity statement ws)) = some false
+  rejectionAt%(M, d, p, relation, xs)
 
 variable (draws : LawDraws M)
 

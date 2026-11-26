@@ -2,6 +2,8 @@ import Count.Stated
 import ZkcFormal.Written.Soundness
 import Lean
 
+section
+
 open Zkc.Subject ZkcFormal ZkcFormal.Written ZkcFormal.ProbabilisticProcess
 open StandardInterpretation (model draws covers served)
 open Count
@@ -50,7 +52,24 @@ example : fromFees = CountBoundRoots.installed := by
   have same : looseCaps.total = requested := by rw [CapTable.total, loose_budget]; rfl
   exact congrArg (Soundness.Installed model written'decision0 draws) same
 
+-- The issued decision still occurs inside the replacement, and its installed bound
+-- is definitionally equal to the original. Its source clause has moved.
+noncomputable def written'decision0 : Decision Count.written'root :=
+  { Count.written'decision0 with place := 1 }
+def relocated := Soundness.Installed model written'decision0 draws requested
+example : written'decision0.place ≠ Count.written'decision0.place := by decide +kernel
+example : relocated = CountBoundRoots.installed := rfl
+
+def covers : type_of% StandardInterpretation.covers := fun _ _ _ ↦ true
+def uncheckedCoverage := Soundness.Result model Count.written'decision0 draws covers requested
+
 end Control
+end CountBoundRoots
+end
+
+-- Read the bound and the issued clause independently of the names opened by the fixture.
+example : CountBoundRoots.requested = ZkcFormal.ProbabilisticProcess.toProbability (3 / 8) := rfl
+example : Count.written'decision0.place = 0 := rfl
 
 open Lean Elab Command
 
@@ -67,10 +86,12 @@ private def reachable (roots : List Name) : CoreM NameSet := do
   return seen
 
 private def forbidden : List Name :=
-  [``CapTable, ``UseCaps, ``Cap, ``DrawCap, ``CallCap, ``DrawCharge, ``GoalFields, ``WrittenGoal,
-   ``WrittenSubject, ``Goal.Judged, ``paysWithin,
-   ``written'caps0, ``written'fields0, ``written'goal0, ``written'subject, ``written'decision1,
-   ``loose_counted, ``loose_claim_of_judged, ``loose_witnessed_of]
+  [``Zkc.Subject.CapTable, ``Zkc.Subject.UseCaps, ``Zkc.Subject.Cap, ``Zkc.Subject.DrawCap,
+   ``Zkc.Subject.CallCap, ``Zkc.Subject.DrawCharge, ``Zkc.Subject.GoalFields,
+   ``Zkc.Subject.WrittenGoal, ``Zkc.Subject.WrittenSubject, ``ZkcFormal.Written.Goal.Judged,
+   ``ZkcFormal.ProbabilisticProcess.paysWithin, ``Count.written'caps0, ``Count.written'fields0,
+   ``Count.written'goal0, ``Count.written'subject, ``Count.written'decision1, ``Count.loose_counted,
+   ``Count.loose_claim_of_judged, ``Count.loose_witnessed_of]
 
 private def clean (root : Name) (seen : NameSet) : CoreM Unit := do
   let leaks := forbidden.filter seen.contains
@@ -82,70 +103,91 @@ private def requireNames (root : Name) (seen : NameSet) (required : List Name) :
 
 /-- Check the unreduced application. Graph membership cannot identify an operand. -/
 private def checkOperands (root owner : Name) (extra : List Name)
-    (wrongAt : Option Nat := none) : CoreM Unit := do
+    : CoreM (Except (List Nat) Unit) := do
   let some body := (← getConstInfo root).value? (allowOpaque := true)
     | throwError "missing body of {root}"
-  let args := [``model, ``subjectPackage, ``written'root, ``written'decision0, ``draws] ++ extra
-  unless body.isAppOfArity owner (1 + args.length) do
-    throwError "{root} should apply {owner} to {1 + args.length} arguments"
-  let mismatches := (args.zipIdx 1).filterMap fun (expected, index) =>
+  let args := [``ZkcFormal.Written.Standard, ``ZkcFormal.Written.StandardInterpretation.model,
+    ``Count.subjectPackage, ``Count.written'root, ``Count.written'decision0,
+    ``ZkcFormal.Written.StandardInterpretation.draws] ++ extra
+  unless body.isAppOfArity owner args.length do
+    throwError "{root} should apply {owner} to {args.length} arguments"
+  let mismatches := args.zipIdx.filterMap fun (expected, index) =>
     if (body.getArg! index).isConstOf expected then none else some index
-  unless mismatches == wrongAt.toList do
-    throwError "{root}: wrong operands {mismatches}, expected {wrongAt.toList}"
+  return if mismatches.isEmpty then .ok () else .error mismatches
+
+private def expectWrongOperand (root owner : Name) (extra : List Name) (index : Nat) : CoreM Unit := do
+  match ← checkOperands root owner extra with
+  | .ok () => throwError "accepted the replacement operand of {root}"
+  | .error slots => unless slots == [index] do throwError "{root}: wrong operands {slots}, expected [{index}]"
 
 /-- Check the trusted roots here and again as imported declarations in the submitting reader. -/
-def checkRoots : CoreM Unit := do
-  for owner in [``Soundness.Rejected, ``Soundness.BoundOf, ``Soundness.Installed,
-      ``Soundness.AdmittedBound, ``Soundness.Result, ``Soundness.Witnessed,
-      ``Soundness.witnessed_of, ``Soundness.installed_iff_admitted, ``Soundness.installed_mono] do
+def CountBoundRoots.checkRoots : CoreM Unit := do
+  let installed := ``ZkcFormal.Written.Soundness.Installed
+  let result := ``ZkcFormal.Written.Soundness.Result
+  let magnitude := ``CountBoundRoots.requested
+  let some value := (← getConstInfo magnitude).value? | throwError "missing body of {magnitude}"
+  unless value.isAppOfArity ``ZkcFormal.ProbabilisticProcess.toProbability 1 do
+    throwError "{magnitude} should apply toProbability to the requested magnitude"
+
+  let bound := [magnitude]
+  let covered := ``ZkcFormal.Written.StandardInterpretation.covers :: bound
+  for owner in [``ZkcFormal.Written.Soundness.Rejected, ``ZkcFormal.Written.Soundness.BoundOf,
+      installed, ``ZkcFormal.Written.Soundness.AdmittedBound, result,
+      ``ZkcFormal.Written.Soundness.Witnessed, ``ZkcFormal.Written.Soundness.witnessed_of,
+      ``ZkcFormal.Written.Soundness.installed_iff_admitted, ``ZkcFormal.Written.Soundness.installed_mono] do
     unless (← getConstInfo owner).hasValue (allowOpaque := true) do
       throwError "missing body of public owner {owner}"
     clean owner (← reachable [owner])
 
   for (root, owner, extra) in [
-      (``CountBoundRoots.installed, ``Soundness.Installed, [``requested]),
-      (``admitted, ``Soundness.AdmittedBound, [``requested]),
-      (``result, ``Soundness.Result, [``covers, ``requested]),
-      (``witnessed, ``Soundness.Witnessed, []),
-      (``witnessOf, ``Soundness.witnessed_of, [``served])] do
-    checkOperands root owner extra
+      (``CountBoundRoots.installed, installed, bound),
+      (``CountBoundRoots.admitted, ``ZkcFormal.Written.Soundness.AdmittedBound, bound),
+      (``CountBoundRoots.result, result, covered),
+      (``CountBoundRoots.witnessed, ``ZkcFormal.Written.Soundness.Witnessed, []),
+      (``CountBoundRoots.witnessOf, ``ZkcFormal.Written.Soundness.witnessed_of,
+        [``ZkcFormal.Written.StandardInterpretation.served])] do
+    if let .error slots ← checkOperands root owner extra then
+      throwError "{root}: wrong operands {slots}"
     let seen ← reachable [root]
     clean root seen
-    requireNames root seen [``written'decision0, ``written'root, ``subjectPackage,
-      ``written'fn3, ``found'root, ``found'fn3]
-    unless seen.contains ``requested == extra.contains ``requested do
+    requireNames root seen [``Count.written'decision0, ``Count.written'root, ``Count.subjectPackage,
+      ``Count.written'fn3, ``Count.found'root, ``Count.found'fn3]
+    unless seen.contains magnitude == extra.contains magnitude do
       throwError "{root}: unexpected dependence on the requested bound"
+
+  -- Each shadow must fail the same operand comparison at its own slot.
+  expectWrongOperand ``CountBoundRoots.Control.relocated installed bound 4
+  expectWrongOperand ``CountBoundRoots.Control.uncheckedCoverage result covered 6
 
   -- On the twin all graph requirements pass. Only the physical decision slot distinguishes it.
   for (root, index, leaks) in [
-      (``Control.redirected, 4, []),
-      (``Control.sibling, 4, [``written'decision1]),
-      (``Control.projected, 4, [``written'goal0, ``written'fields0, ``written'caps0]),
-      (``Control.throughProof, 4, [``loose_counted, ``written'caps0]),
-      (``Control.fromFees, 6, [``written'caps0])] do
-    checkOperands root ``Soundness.Installed [``requested] (some index)
+      (``CountBoundRoots.Control.redirected, 4, []),
+      (``CountBoundRoots.Control.sibling, 4, [``Count.written'decision1]),
+      (``CountBoundRoots.Control.projected, 4,
+        [``Count.written'goal0, ``Count.written'fields0, ``Count.written'caps0]),
+      (``CountBoundRoots.Control.throughProof, 4, [``Count.loose_counted, ``Count.written'caps0]),
+      (``CountBoundRoots.Control.fromFees, 6, [``Count.written'caps0])] do
+    expectWrongOperand root installed bound index
     let seen ← reachable [root]
     if leaks.isEmpty then
       clean root seen
-      requireNames root seen [``written'decision0, ``requested]
+      requireNames root seen [``Count.written'decision0, ``CountBoundRoots.requested]
     else
       requireNames root seen leaks
       unless leaks.all forbidden.contains do throwError "unexpected control declarations {leaks}"
 
-  let field := ``Control.boolean
+  let field := ``CountBoundRoots.Control.boolean
   clean field (← reachable (← getConstInfo field).type.getUsedConstants.toList)
-  requireNames field (← reachable [field]) [``loose_counted, ``written'caps0]
+  requireNames field (← reachable [field]) [``Count.loose_counted, ``Count.written'caps0]
 
-  let presentation := ``Control.feePresentation
+  let presentation := ``CountBoundRoots.Control.feePresentation
   let decl ← getConstInfo presentation
   let some proof := decl.value? (allowOpaque := true) | throwError "missing proof of {presentation}"
   clean presentation (← reachable proof.getUsedConstants.toList)
-  requireNames presentation (← reachable [presentation]) [``written'caps0]
+  requireNames presentation (← reachable [presentation]) [``Count.written'caps0]
 
-  let helper := ``Control.borrowed
+  let helper := ``CountBoundRoots.Control.borrowed
   clean helper (← reachable (← getConstInfo helper).type.getUsedConstants.toList)
-  requireNames helper (← reachable [helper]) [``loose_witnessed_of, ``written'caps0]
+  requireNames helper (← reachable [helper]) [``Count.loose_witnessed_of, ``Count.written'caps0]
 
-run_cmd liftCoreM checkRoots
-
-end CountBoundRoots
+run_cmd liftCoreM CountBoundRoots.checkRoots

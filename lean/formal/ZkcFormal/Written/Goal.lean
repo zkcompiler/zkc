@@ -2,6 +2,7 @@ module
 
 public import ZkcFormal.Written.Soundness
 public import ZkcFormal.Written.SiteCaps
+import Mathlib.Tactic.DSimpPercent
 
 @[expose] public section
 
@@ -11,11 +12,7 @@ its cap table. Its accounting judgment and counted result keep the table explici
 namespace ZkcFormal.Written.Goal
 
 open Zkc.Core Zkc.Subject ProbabilisticProcess
-open scoped ENNReal
-
-namespace Internal
-export Soundness.Internal (inputs valueAt arguments witnesses validWitnesses)
-end Internal
+open scoped ENNReal Soundness
 
 open Internal
 variable {V : Vocabulary} (M : Model V)
@@ -24,14 +21,21 @@ variable {pkg : Package V} {scheme : WrittenRoot pkg} (g : WrittenGoal scheme)
 /-- Rejection on the statement operands of this goal. -/
 def Rejected (p : Typed V) (relation : Member p.headers.fns g.decision.relation.header)
     (xs : HList (RV M scheme.verifier) scheme.entry.header.ins) : Prop :=
-  Soundness.Rejected M g.decision p relation xs
+  rejectionAt%(M, g.decision, p, relation, xs)
+
+/-- The decision and fee goal select the same rejection predicate. Refolding this name in
+the legacy definitions preserves the existing `unfold ClaimOf` and `unfold Witnessed` steps. -/
+theorem rejected_at_decision (p : Typed V) (relation : Member p.headers.fns g.decision.relation.header)
+    (xs : HList (RV M scheme.verifier) scheme.entry.header.ins) :
+    Soundness.Rejected M g.decision p relation xs = Rejected M g p relation xs := rfl
 
 variable (draws : LawDraws M)
 
 /-- The selected verifier's probability bound at the total of this goal's caps. -/
 def ClaimOf (p : Typed V) (root : Member p.headers.protocols scheme.entry.header)
     (relation : Member p.headers.fns g.decision.relation.header) : Prop :=
-  Soundness.BoundOf M g.decision draws g.fields.caps.total p root relation
+  dsimp% -zeta only [Soundness.BoundOf, rejected_at_decision]
+    Soundness.BoundOf M g.decision draws g.fields.caps.total p root relation
 
 /-- The claim at the two members in the installation. -/
 def Claim : Prop :=
@@ -42,7 +46,8 @@ def admission (stored : NamedProgram V) (association : Association)
     (rootHeader : ProtocolHeader V) (rootKey : Key) (relationHeader : FnHeader V) (relationKey : Key)
     (claim : (p : Typed V) → Member p.headers.protocols rootHeader →
       Member p.headers.fns relationHeader → Prop) : Prop :=
-  Soundness.admission stored association rootHeader rootKey relationHeader relationKey claim
+  dsimp% -zeta only [Soundness.admission]
+    Soundness.admission stored association rootHeader rootKey relationHeader relationKey claim
 
 /-- Admission at the headers and keys selected by this decision. -/
 def admittedAt (claim : (p : Typed V) → Member p.headers.protocols scheme.entry.header →
@@ -69,7 +74,8 @@ def Result (covers : NamedProgram V → Key → Key → Bool) : Prop :=
   resultOf g covers (Goal M g draws)
 
 /-- The joint service and rejection receipt for the selected decision. -/
-def Witnessed : Prop := Soundness.Witnessed M g.decision draws
+def Witnessed : Prop :=
+  dsimp% -zeta only [Soundness.Witnessed, rejected_at_decision] Soundness.Witnessed M g.decision draws
 
 /-- The installed verifier is judged never to return, with each fee paid at its site within
 the goal's budget. -/
@@ -82,7 +88,7 @@ def Judged : Prop :=
 
 /-- A judgment with fees gives the installed probability bound. -/
 theorem claim_of_judged (judged : Judged M g draws) : Claim M g draws :=
-  fun path ↦ Soundness.Internal.mapInputs M _ _ _ _ (fun _ h rejected ↦
+  fun path ↦ Internal.mapInputs M _ _ _ _ (fun _ h rejected ↦
     returnsWithin_of_never _ _ _ _ _ (h rejected)) (judged path)
 
 /-- A judgment paying the selected fees also establishes every bound above their total. -/
