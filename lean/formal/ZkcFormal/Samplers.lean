@@ -15,16 +15,7 @@ namespace ZkcFormal.ProbabilisticProcess
 open Zkc.Core OracleComp
 open scoped ENNReal
 
-variable {S : Sig} {σ H A : Type}
-
-/-- The run of a process that calls: the service answers, and the run continues with the reply
-or ends without one. -/
-theorem run_call (service : Service S σ) (op : S.Op) (next : S.Reply op → Process S H A) (s : σ) :
-    run service (.call op next) s = (do
-      let (reply, state) ← service op s
-      match reply with
-      | none => pure (.unavailable, state)
-      | some v => run service (next v) state) := rfl
+variable {S : Sig} {σ : Type}
 
 /-- What is known of the effects: at some effects, how the reply is drawn. -/
 abbrev Samplers (S : Sig) := (op : S.Op) → Option (ProbComp (S.Reply op))

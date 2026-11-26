@@ -30,6 +30,16 @@ def run {S : Sig} {H A State : Type} (service : Service S State)
       | some v => next v state' }
   p.interpret algebra (fun a s ↦ pure (.returned a,s)) (fun h s ↦ pure (.halted h,s))
 
+/-- The run of a process that calls: the service answers, and the run continues with the reply
+or ends without one. -/
+theorem run_call {S : Sig} {H A State : Type} (service : Service S State) (op : S.Op)
+    (next : S.Reply op → Process S H A) (s : State) :
+    run service (.call op next) s = (do
+      let (reply, state) ← service op s
+      match reply with
+      | none => pure (.unavailable, state)
+      | some v => run service (next v) state) := rfl
+
 /-- The type of the reply to the first effect of a process; a process that begins with none has
 no reply. -/
 def ReplyToFirst {S : Sig} {H A : Type} : Process S H A → Type
