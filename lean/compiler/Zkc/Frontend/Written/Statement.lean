@@ -344,51 +344,6 @@ def calleeMember (s : Statements) (key : Nat) : String :=
   let before := s.definitions.takeWhile (·.1 != s.claims.root)
   memberAt (((before.dropWhile (·.1 != key)).drop 1).filter (!·.2)).length
 
-/-- A role of a protocol that the deciding role plays through applications: the protocol, the
-role in it, and the definition whose body applies it. The application finds the protocol in the
-table of the program before that definition. -/
-structure AppliedRole where
-  protocol : Nat
-  role : Nat
-  caller : Nat
-  deriving BEq
-
-/-- The applications in the stored body of a protocol of the package: each callee with the
-roles of the caller that play the callee's, in the callee's order. -/
-def applications (s : Statements) (key : Nat) : List (Nat × List Nat) :=
-  match s.package.named.definitions.find? (·.key.number == key) with
-  | some (.protocol _ _ _ _ body) =>
-    (body.counted (some 1)).filterMap fun (_, operation, _) =>
-      match operation with
-      | .apply callee roles => some (callee.number, roles)
-      | _ => none
-  | _ => []
-
-/-- The roles that a role of a definition plays in the protocols that the definition applies,
-and through them: `depth` bounds how many applications are entered, and no chain of
-applications is longer than the list of definitions. -/
-def appliedFrom (s : Statements) : Nat → Nat → Nat → List AppliedRole → List AppliedRole
-  | 0, _, _, found => found
-  | depth + 1, caller, role, found =>
-    (s.applications caller).foldl (init := found) fun found (callee, roles) =>
-      match roles.idxOf? role with
-      | none => found
-      | some played =>
-        let entry : AppliedRole := ⟨callee, played, caller⟩
-        if found.contains entry then found
-        else s.appliedFrom depth callee played (found ++ [entry])
-
-/-- The roles that the deciding role of the root plays through applications, read from the
-stored program. -/
-def appliedRoles (s : Statements) : List AppliedRole :=
-  s.appliedFrom s.definitions.length s.claims.root s.claims.verifier []
-
-/-- The place of a protocol among the protocols of the program before a definition, which
-stand last first. -/
-def protocolMember (s : Statements) (key caller : Nat) : String :=
-  let before := s.definitions.takeWhile (·.1 != caller)
-  memberAt (((before.dropWhile (·.1 != key)).drop 1).filter (·.2)).length
-
 /-- What was read from the source, as terms: the root, the roles, the functions before the root
 that the text names, and for each goal its proof arguments, its table of caps and its
 relation. -/
@@ -435,12 +390,6 @@ def verifierEntry : String :=
       s!"        (Defs.rTable M calleeProgram.defs)) path (Env.empty.extend rootNames inputs)).sealed := by\n" ++
       s!"  rw [Process.sealed_eq, {label}Program.eq]\n" ++
       s!"  exact roleMeaning_entry M installed rootMember {label}Role path inputs\n\n" ++ "end\n\n"
-
-/-- The member of each applied protocol in its caller's table. -/
-def appliedMembers (s : Statements) : String := String.join (s.appliedRoles.map fun a =>
-  let name := s!"Applied.role{a.protocol}_{a.role}in{a.caller}Member"
-  s!"noncomputable abbrev {name} : Member {s.programBefore a.caller}.headers.protocols header{a.protocol} :=\n" ++
-    s!"  {s.protocolMember a.protocol a.caller}\n\n")
 
 /-- Specialize the package transport to the installed root and relations. Each distinct
 lookup has one kernel proof, including when several source labels name the same relation. -/
@@ -594,9 +543,7 @@ def appliedSite (site : Core.Site) : String :=
 /-- The draws of the root under the names of their sites: the key of each
 (`site_<name>`, and `site_<name>_<index>` for each block of a stepped loop), once for the
 package, and for each goal the cap that its table gives the draw (`<goal>_cap_<name>`), decided
-by the kernel. A text can name a draw as the source does, and where it pays a fee at such a
-draw the fee is compared with the cap stated here (the label `walk_cap`), so that a fee that is
-not within it is refused with the name of the site. -/
+by the kernel. The label `walk_cap` identifies the equations giving those caps. -/
 def sites (s : Statements) (goals := s.claims.goals) : String :=
   let named := (goals.flatMap (·.siteLabels)).eraseDups
   String.join (named.map fun (site, label, key) =>
@@ -664,26 +611,33 @@ def conclusions (s : Statements) (goals := s.claims.goals) : String :=
 def conclusionNames (s : Statements) (goals := s.claims.goals) : List String :=
   goals.map fun goal => s!"{goal.label}_installed"
 
-/-- For each goal, after the text of the proofs: the theorems `<goal>_sound : <goal>Goal`,
-`<goal>_result : <goal>Result` and `<goal>_met : <goal>Witnessed`, from the theorems
-`<goal>_installed : <goal>Claim` (the text's, or the one that `conclusions` writes from the
-text's judgment) and `<goal>_witnessed : <goal>Witnessed` of the text. The statements were
-fixed before the text; only their proofs are written here. -/
-def closings (s : Statements) (goals := s.claims.goals) : String :=
-  String.join (goals.map fun goal =>
-    let name := goal.label
-    s!"/-- The goal `{name}`, for every admitted program. -/\n" ++
-    s!"theorem {name}_sound : {name}Goal :=\n" ++
-    s!"  fun admitted => at_{goal.relationLabel} admitted {name}ClaimOf ({name}_installed : {name}Claim)\n\n" ++
-    s!"/-- The result of the goal `{name}`. -/\n" ++
-    s!"theorem {name}_result : {name}Result := ⟨{name}_covered, {name}_counted, {name}_sound⟩\n\n" ++
-    s!"/-- The hypotheses of the claim of `{name}` are met. -/\n" ++
-    s!"theorem {name}_met : {name}Witnessed := {name}_witnessed\n\n")
+/-- A publication in the goal's namespace. Its closing, when generated after the author text,
+gives the documentation and proof of the named proposition. -/
+structure Publication where
+  name : String
+  proposition : String
+  closing : Option (String × String) := none
 
-/-- The names of the theorems that `closings` writes. -/
-def closingNames (s : Statements) (goals := s.claims.goals) : List String :=
-  goals.flatMap fun goal =>
-    [s!"{goal.label}_sound", s!"{goal.label}_result", s!"{goal.label}_met"]
+/-- The publications requested for one goal. A witness can be published on its own. -/
+def goalPublications (goal : ClaimedGoal) (witnessesOnly : Bool) : List Publication := Id.run do
+  let n := goal.label
+  let witness : Publication := ⟨n ++ "_met", n ++ "Witnessed",
+    some (s!"The hypotheses of the claim of `{n}` are met.", s!" {n}_witnessed")⟩
+  if witnessesOnly then return [witness]
+  return [
+    ⟨n ++ "_installed", n ++ "Claim", none⟩,
+    ⟨n ++ "_sound", n ++ "Goal", some (s!"The goal `{n}`, for every admitted program.",
+      s!"\n  fun admitted => at_{goal.relationLabel} admitted {n}ClaimOf ({n}_installed : {n}Claim)")⟩,
+    ⟨n ++ "_result", n ++ "Result", some (s!"The result of the goal `{n}`.",
+      s!" ⟨{n}_covered, {n}_counted, {n}_sound⟩")⟩, witness]
+
+def Publication.closingText (p : Publication) : String :=
+  match p.closing with
+  | none => ""
+  | some (doc, proof) => s!"/-- {doc} -/\ntheorem {p.name} : {p.proposition} :={proof}\n\n"
+
+def Publication.pair (p : Publication) (space : Lean.Name) : Lean.Name × Lean.Name :=
+  (.str space p.name, .str space p.proposition)
 
 /-- The names of the theorems that `ceilings` writes. -/
 def ceilingNames (s : Statements) (goals := s.claims.goals) : List String :=
@@ -695,25 +649,15 @@ def imports (withEntries : Bool) : List String :=
   subjectPackageImports ++ (if withEntries then ["Zkc.Core.Evidence.ProtocolReadback"] else []) ++
     ["Zkc.Subject.WrittenGoal", "ZkcFormal.Written.GoalPresentation",
       "ZkcFormal.OracleProcess", "ZkcFormal.ReturnExperiment", "ZkcFormal.Written.LawSamplers",
-      "ZkcFormal.Written.SiteCaps", "ZkcFormal.Written.FunctionMeaning",
-      "ZkcFormal.Written.ClaimIntro"] ++ statementOpenImports
+      "ZkcFormal.Written.SiteCaps", "ZkcFormal.Written.FunctionMeaning"] ++ statementOpenImports
 
 /-- The lines that open a module: its imports, and the namespace of the core. -/
 def header (modules : List String) : String :=
   String.join (modules.map (s!"import {·}\n")) ++ "\nopen Zkc.Core\n"
 
-/-- The published theorems of the goals, each with the proposition that it is of, under their
-full names in the name space `name`: for a goal, `<goal>_installed : <goal>Claim`,
-`<goal>_sound : <goal>Goal`, `<goal>_result : <goal>Result`, `<goal>_met : <goal>Witnessed`.
-The challenge of a pair states this list (`Module.challenge`), and the judgment is of these
-names. The theorems themselves are written by `conclusions` and `closings`, which spell the
-same endings: if the two came apart, the judgment would find no theorem under a listed name. -/
+/-- The full publication of the selected goals, in the order used by the challenge. -/
 def publicationPairs (s : Statements) (name : String) (goals := s.claims.goals) : List (Lean.Name × Lean.Name) :=
-  (uniqueGoalSpellings goals).flatMap fun goal =>
-    [("_installed", "Claim"), ("_sound", "Goal"), ("_result", "Result"), ("_met", "Witnessed")].map
-      fun (theorem_, proposition) =>
-        (.str name.toName s!"{goal.label}{theorem_}",
-          .str name.toName s!"{goal.label}{proposition}")
+  ((uniqueGoalSpellings goals).flatMap (goalPublications · false)).map (·.pair name.toName)
 
 /-- The requests for the axioms of theorems, and the end of the module's name space. -/
 def footer (name : String) (theorems : List String) : String :=
@@ -760,10 +704,11 @@ text that changes what it says there is refused by its statement.
 
 `statements` names the module of the statements where it is not `<name>.Stated`: a control
 whose statements differ from its subject's keeps the subject's name space and has a module of
-statements of its own. -/
+statements of its own. With `witnessesOnly`, the challenge and proof publish only the witness
+of each goal; the issued statements are the same. -/
 def module (s : Statements) (name : String) (proof : ProofText)
     (withEntries := true) (after : List Consumer := [])
-    (statements : Option Lean.Name := none) :
+    (statements : Option Lean.Name := none) (witnessesOnly := false) :
     Except String Module := do
   let (retained, refusals) ← s.coveredOccurrences
   let layout := SubjectLayout.ofGoals s.claims retained
@@ -779,23 +724,25 @@ def module (s : Statements) (name : String) (proof : ProofText)
   let stating := header (imports withEntries) ++ s!"namespace {name}\n" ++
     subjectPackage s.package ++ statementOpens ++ s.factsOf layout ++ "\n" ++ s.transfers goals ++
     subject ++ claimTexts layout ++
-    coverage goals ++ s.counts goals ++ s.sites goals ++ (if withEntries then verifierEntry ++ s.appliedMembers else "") ++
+    coverage goals ++ s.counts goals ++ s.sites goals ++ (if withEntries then verifierEntry else "") ++
     feeText ++ ceilings ++ footer name stated
   let statementsName : Lean.Name := statements.getD (.str name.toName "Stated")
-  let proofImports := proof.imports ++ after.flatMap (·.imports)
+  let publications := (uniqueGoalSpellings goals).flatMap (goalPublications · witnessesOnly)
+  let proofImports := ("ZkcFormal.Written.ClaimIntro" :: proof.imports ++ after.flatMap (·.imports)).eraseDups
   -- the proof module reopens the name space and the names that the statements were read with
   let opening := header (toString statementsName :: proofImports) ++ s!"namespace {name}\n" ++ statementOpens
-  let text := opening ++ proof.text ++ "\n" ++ (if fees then s.conclusions goals else "") ++
-    s.closings goals ++ String.join (after.map (·.text)) ++ s!"end {name}\n"
+  let text := opening ++ proof.text ++ "\n" ++ (if fees && !witnessesOnly then s.conclusions goals else "") ++
+    String.join (publications.map Publication.closingText) ++ String.join (after.map (·.text)) ++ s!"end {name}\n"
   return {
     space := name, statementsName, statements := stating, stated, statedImports := imports withEntries
     proof := text
-    proved := proof.theorems ++ (if fees then s.conclusionNames goals else []) ++ s.closingNames goals ++
+    proved := proof.theorems ++ (if fees && !witnessesOnly then s.conclusionNames goals else []) ++
+      (publications.filter (·.closing.isSome)).map (·.name) ++
       after.map (·.name)
     proofImports
     textLine := (opening.splitOn "\n").length
     textLines := (proof.text.splitOn "\n").length
-    published := s.publicationPairs name goals
+    published := publications.map (·.pair name.toName)
     consumers := after, refusals }
 
 /-- A module with the package of the claims and the propositions of the goals alone: the facts,

@@ -137,6 +137,16 @@ def twoArms : Tally Cap → Bool
   | .choice (.item (.draw _) .nil) (.item (.draw _) .nil) .nil => true
   | _ => false
 
+private def asideLookup := "import Aside.Stated
+open Zkc.Core Aside
+private noncomputable def firstCalleePosition : Option Nat := do
+  let .protocol _ _ _ _ body ← stored.definitions.find? (·.key == rootKey) | none
+  let .apply callee _ ← body.operations.head? | none
+  return (← calleeProgram.findProtocol callee).2.index
+
+example : firstCalleePosition = some 1 := by kernel_rfl
+"
+
 def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
   let template ← IO.FS.readFile template
   let written ← read (source "1 / 4") (reading "twice")
@@ -187,10 +197,10 @@ def run (template : System.FilePath) (work : System.FilePath) : IO Unit := do
         text.replace "forked_witnessed_of false trivial" "forked_witnessed_of false trivial true trivial"
         else text
       let m ← subject.module space { text, theorems := [] }
-      if space == "Aside" && !(m.statements.contains "(Member.tail Member.head)") then
-        throw (IO.userError "the protocol that the root applies first is the last before the root")
       startLemmas work space m text [label ++ "_relation", label ++ "_witnessed"] subject
+  let lookup ← startLakeLean work "AsideLookup" asideLookup (text := false)
   checks.forM id
+  acceptedByLean "AsideLookup" (← lookup)
 
 end TwiceCharge
 

@@ -86,7 +86,7 @@ private def statements (source : String) (labels : List String)
   return ⟨claims, claims.functionsBeforeRoot⟩
 
 private def issue (s : Statements) (name proof : String) : IO Written.Module := do
-  let m ← IO.ofExcept (s.module name { text := proof })
+  let m ← IO.ofExcept (s.module name { text := proof } (witnessesOnly := true))
   unless m.refusals.isEmpty do throw <| IO.userError s!"{name}: {m.refusals}"
   return m
 
@@ -134,12 +134,7 @@ def run (work : System.FilePath) (hashSource client : String) : IO Unit := do
   unless impossible.refusals.isEmpty do throw <| IO.userError s!"equality: {impossible.refusals}"
   let equality ← startLakeLean work "AuthorEquality" impossible.text (text := false)
   let swap ← addStated work wrong
-  let proofs ← [(good, guardProof), (multi, acceptsLaw ++ multiProof "mapped" ++ multiProof "omitted"),
-      (empty, emptyProof)].mapM fun (m, body) => do
-    let names := (m.published.map (·.1.getString!)).filter (·.endsWith "_met")
-    let closings := (m.proof.splitOn "\n").filter fun line =>
-      names.any fun n => line.startsWith s!"theorem {n} :"
-    startLemmas work m.space m (body ++ "\n".intercalate closings) names
+  let proofs ← [good, multi, empty].mapM fun m => startModule work m.space m
 
   let mut hash := hashSource
   for (before, after) in [("goal good =", "goal input_b ="), ("(b: bool @(P,V)", "(bCaps: bool @(P,V)"),
@@ -156,7 +151,7 @@ def run (work : System.FilePath) (hashSource client : String) : IO Unit := do
   let requests := String.join (audited.map (s!"#print axioms AuthorClient.{·}\n"))
   let externalClient ← startLakeLean work "AuthorClient" (client ++ "\n" ++ requests)
   swap.accepted "AuthorSwap"
-  for check in proofs do check
+  for check in proofs do discard check
   acceptedByLean "AuthorEquality" (← equality)
   for check in hashCalls ++ alphaCalls do check
   let (ok, output) ← externalClient

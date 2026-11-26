@@ -109,6 +109,11 @@ def checkClaims (work : System.FilePath) (name fixture : String) (goals : List S
       throw (IO.userError s!"unexpected publication {issued.published}")
   let text ← if fragment then IO.FS.readFile s!"checks/{name}.lean.in" else pure ""
   let checked ← startLakeLean work name (issued.statements ++ text) (text := fragment)
+  if refusedHash then
+    let client ← startLakeLean work "OmittedGoal" (s!"import {name}\n" ++
+      s!"run_cmd\n  if (← Lean.getEnv).contains `{name}.badClaim then\n" ++
+      "    throwError \"the uncovered goal has a claim\"\n") (text := false)
+    acceptedByLean "OmittedGoal" (← client)
   let (ok, output) ← checked
   acceptedOutput name ok output issued.stated allowed
 

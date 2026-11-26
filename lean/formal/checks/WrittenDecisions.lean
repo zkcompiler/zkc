@@ -38,11 +38,11 @@ private def checkStatementImports : IO Unit := do
   let src ← IO.FS.readFile "fixtures/written-decisions.zkc"
   let s ← readSource src [("left", "left")]
   let m ← IO.ofExcept (s.module "Imports" {})
-  let libraries := subjectPackageImports ++ statementOpenImports ++
-    ["Zkc.Subject.WrittenGoal", "ZkcFormal.Written.GoalPresentation", "ZkcFormal.OracleProcess",
-     "ZkcFormal.ReturnExperiment", "ZkcFormal.Written.LawSamplers", "ZkcFormal.Written.SiteCaps",
-     "ZkcFormal.Written.FunctionMeaning", "ZkcFormal.Written.ClaimIntro",
-     "Zkc.Core.Evidence.FunctionEntry", "Zkc.Core.Evidence.ProtocolReadback"]
+  let libraries := ["Zkc.Subject.Package", "Zkc.Core.Admission.Theorems", "Zkc.Kernel",
+    "Zkc.Vocabulary.Project", "Zkc.Core.Evidence.ProtocolReadback", "Zkc.Subject.WrittenGoal",
+    "ZkcFormal.Written.GoalPresentation", "ZkcFormal.OracleProcess", "ZkcFormal.ReturnExperiment",
+    "ZkcFormal.Written.LawSamplers", "ZkcFormal.Written.SiteCaps", "ZkcFormal.Written.FunctionMeaning",
+    "Zkc.Subject.Charges", "ZkcFormal.Written.StandardInterpretation"]
   for line in m.statements.splitOn "\n" do
     if let some name := line.dropPrefix? "import " then
       unless libraries.contains name.toString do

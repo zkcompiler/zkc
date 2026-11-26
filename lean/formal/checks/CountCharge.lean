@@ -42,6 +42,11 @@ def deployed (s : Subject) : IO (List (Nat × String)) := do
 /-- The source with its one occurrence of `before` replaced. -/
 def edit (text before after : String) : IO String := replaceOnce text before after
 
+/-- Four nonzero entries put the relation exactly at the loose goal's tolerance. -/
+private def boundary (expected : Bool) : String :=
+  s!"\nexample : functionResult (t := .bool) (fnMeaning StandardInterpretation.model installed looseMember\n" ++
+  s!"  (.cons ([1,1,1,1,0,0,0,0] : List StandardInterpretation.F) .nil)) = some {expected} := by kernel_rfl\n"
+
 def run (corpus template : System.FilePath) (work : System.FilePath) : IO Unit := do
   let blocks := readBlocks (← IO.FS.readFile corpus)
   let some source := (blocks.find? (·.id == "N-GL2a")).bind (·.files[0]?)
@@ -156,7 +161,7 @@ def run (corpus template : System.FilePath) (work : System.FilePath) : IO Unit :
     "Witness.loose_attained", "Witness.strict_attained", "Witness.misplaced_not_counted",
     "Witness.foreign_not_counted", "Witness.fixed_position_does_not_follow"]
   let count ← written.module "Count" { text := template, theorems := [] }
-  let lemmas ← startLemmas work "Count" count template names written
+  let lemmas ← startLemmas work "Count" count (template ++ boundary true) names written
   let reversed ← turned.module "CountTurned" { text := template, theorems := [] }
   let other ← startLemmas work "CountTurned" reversed template names turned
   let caps ← [("BoundControl", small), ("SiteControl", elsewhere), ("OwnerControl", foreign)].mapM
@@ -165,7 +170,7 @@ def run (corpus template : System.FilePath) (work : System.FilePath) : IO Unit :
       startLemmas work name m template names (refusal := ["drawCap looseCaps =", "drawCap strictCaps ="])
         (unproved := ["loose_exact", "strict_exact", "Witness.loose_attained", "Witness.strict_attained"])
   let altered ← changed.module "RelationControl" { text := template, theorems := [] }
-  let verifier ← startLemmas work "RelationControl" altered template names
+  let verifier ← startLemmas work "RelationControl" altered (template ++ boundary false) names
   let roots ← startLakeLean work "CountBoundRoots" (← IO.FS.readFile (checks / "CountBoundRoots.lean.in")) (text := false)
   let endpoints ← startLakeLean work "CountBounds" (← IO.FS.readFile (checks / "CountBounds.lean.in"))
   lemmas
