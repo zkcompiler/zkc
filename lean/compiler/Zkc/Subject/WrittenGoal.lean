@@ -1,54 +1,13 @@
 module
 
 public import Zkc.Subject.Charges
-public import Zkc.Subject.Package
+public import Zkc.Subject.ShortApplication
 
 @[expose] public section
 set_option autoImplicit false
 
 namespace Zkc.Subject
 open Core
-
-/-- A protocol in the installation, located by the key of its own header. -/
-structure ProtocolEntry {V : Vocabulary} (pkg : Package V) where
-  header : ProtocolHeader V
-  member : Member pkg.installed.headers.protocols header
-  found : pkg.installed.findProtocol header.key = some ⟨header, member⟩
-
-/-- A function in the installation, located by the key of its own header. -/
-structure FunctionEntry {V : Vocabulary} (pkg : Package V) where
-  header : FnHeader V
-  member : Member pkg.installed.headers.fns header
-  found : pkg.installed.find header.key = some (.fn member)
-
-/-- The ordered parties of a written scheme, in the deployed protocol's roster. -/
-structure WrittenRoot {V : Vocabulary} (pkg : Package V) where
-  entry : ProtocolEntry pkg
-  prover : Fin entry.header.roles
-  verifier : Fin entry.header.roles
-  distinct : prover ≠ verifier
-
-/-- A typed position in the full deployed input list, including its holders. -/
-structure PortRef {V : Vocabulary} (ports : List (LTy V)) (t : V.Ty) where
-  holders : Holders
-  member : Member ports ⟨t, holders⟩
-
-/-- A statement operand must be available to both parties of the scheme. -/
-structure SharedPort {V : Vocabulary} (ports : List (LTy V)) (prover verifier : Role)
-    (t : V.Ty) extends PortRef ports t where
-  heldByProver : prover ∈ holders
-  heldByVerifier : verifier ∈ holders
-
-/-- A relation applied at its statement positions (the short application `R(a…)` of the
-language): the relation, how its parameters split into statement and witness parameters (the
-arity), its Boolean result, and the deployed inputs in its statement positions, which both
-parties hold. A property's statement reads a short application and nothing else of the contract. -/
-structure ShortApplication {V : Vocabulary} {pkg : Package V} (root : WrittenRoot pkg) where
-  relation : FunctionEntry pkg
-  arity : Fin (relation.header.ins.length + 1)
-  boolean : relation.header.outs = [.bool]
-  statement : HList (SharedPort root.entry.header.ins root.prover root.verifier)
-    (relation.header.ins.take arity)
 
 /-- An instantiated deciding clause: its short application, its place in the source contract
 (counting every clause), and the deployed inputs that the prover gives the witness parameters,

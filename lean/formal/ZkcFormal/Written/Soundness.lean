@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Subject.WrittenGoal
+public import Zkc.Subject.ShortApplication
 public import ZkcFormal.Written.Goal.Inputs
 public import ZkcFormal.Written.FunctionMeaning
 public import ZkcFormal.Written.LawSamplers

@@ -66,30 +66,36 @@ private def checkLeaf (table : Expr) (i : Nat) (expected : Name) : MetaM Unit :=
   let some selected := selected | throwError "slot {i} did not select {expected}"
   named selected expected
 
-/-- The constants of the subject's name space that a constant reaches through types and values. -/
-private partial def reachedWithin (space : Name) : List Name → NameSet → MetaM NameSet
+/-- The constants of a constant's own module that it reaches through types and values. The
+module decides, not the name: a private declaration of the module has a name outside the
+subject's name space. -/
+private partial def reachedInModule (home : Option ModuleIdx) :
+    List Name → NameSet → MetaM NameSet
   | [], seen => return seen
   | name :: rest, seen => do
-    if seen.contains name then reachedWithin space rest seen else
+    if seen.contains name then reachedInModule home rest seen else
     let info ← getConstInfo name
+    let env ← getEnv
     let used := info.type.getUsedConstants ++
       ((info.value? (allowOpaque := true)).map (·.getUsedConstants)).getD #[]
-    reachedWithin space (used.toList.filter (space.isPrefixOf ·) ++ rest) (seen.insert name)
+    reachedInModule home (used.toList.filter (env.getModuleIdxFor? · == home) ++ rest)
+      (seen.insert name)
 
-/-- What a statement of a property must not read through a short application: a decision (the
-place of a clause and its witness operands), a goal's row and fields, the table of caps, the
-aggregate and the source's names. -/
+/-- What a statement over a short application must not read through it: a decision (the place
+of a clause and its witness operands), a goal's row and fields, the table of caps, the aggregate
+and the source's names. -/
 private def rowWords : List String :=
   ["written'decision", "written'goal", "written'fields", "written'slot", "written'caps",
     "written'clauses", "written'subject", "written'origins"]
 
-/-- A short application reaches none of the subject's rows. A statement of a property names the
-short application's constant; whatever that constant reaches is compared when a proof is judged. -/
+/-- A short application reaches none of the subject's rows. A statement over a short application
+names its constant; whatever that constant reaches is compared when a proof is judged. -/
 private def checkApplicationReach (space application : Name) : MetaM Unit := do
-  for name in (← reachedWithin space [application] {}).toList do
-    let word := (name.replacePrefix space .anonymous).toString
+  let home := (← getEnv).getModuleIdxFor? application
+  for name in (← reachedInModule home [application] {}).toList do
+    let word := ((privateToUserName name).replacePrefix space .anonymous).toString
     if rowWords.any (word.startsWith ·) then
-      throwError "the short application {application} reaches {name}"
+      throwError "the short application {application} reaches {privateToUserName name}"
 
 /-- Follow the actual aggregate and public declarations. The expected indices and label
 are chosen by the client from the original source, independently of the layout issuer. -/

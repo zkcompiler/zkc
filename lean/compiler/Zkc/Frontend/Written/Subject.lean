@@ -127,7 +127,8 @@ private def operandsText (shared : Bool) (positions : Array Nat) : String :=
   consList (positions.toList.map (portTerm shared))
 
 /-- The decision's short application: the relation, the arity, the Boolean result, the statement
-operands. A statement of a property names this constant and not the decision. -/
+operands. A statement that is made over a short application names this constant and not the
+decision; the present published family reads it through the goal's decision. -/
 private def applicationText (goal : ClaimedGoal) (i : Nat) : String :=
   s!"noncomputable def written'application{i} : Zkc.Subject.ShortApplication written'root :=\n" ++
     s!"  ⟨written'fn{goal.relation}, ⟨{goal.statement.size}, by decide +kernel⟩, rfl,\n" ++

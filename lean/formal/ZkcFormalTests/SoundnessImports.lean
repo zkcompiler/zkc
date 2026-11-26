@@ -12,10 +12,10 @@ listed is refused, whatever it holds: the judgment with fees and what stands on 
 charge modules that do not stand on it, an author's tactics. A change of what the statement
 stands on is made here, in view.
 
-Two listed modules are not the statement's by what they hold. `Zkc.Subject.Charges` is the type
-of a table of caps, which a written goal's fields hold; it leaves this list when the fields no
-longer hold a table. `ZkcFormal.Written.Extraction` is the extraction support of the knowledge
-path, which `ZkcFormal.Written.Source` imports; it leaves with that path's engine.
+One listed module is not the statement's by what it holds: `ZkcFormal.Written.Extraction`, the
+extraction support of the knowledge path, which `ZkcFormal.Written.Source` imports; it leaves
+with that path's engine. The records of a goal (its decision, its fields, the table of caps)
+are not listed: the statement is over a short application.
 -/
 
 open Lean Elab Command
@@ -23,9 +23,8 @@ open Lean Elab Command
 /-- The modules of `ZkcFormal` and of `Zkc.Subject` that the statement of written soundness
 imports, directly or through others. -/
 def soundnessStandsOn : List Name := [
-  `Zkc.Subject.Charges,
   `Zkc.Subject.Package,
-  `Zkc.Subject.WrittenGoal,
+  `Zkc.Subject.ShortApplication,
   `ZkcFormal.OracleProcess,
   `ZkcFormal.ProbabilisticProcess,
   `ZkcFormal.ProcessJudgment,

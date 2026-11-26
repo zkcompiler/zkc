@@ -1,5 +1,6 @@
 module
 
+public import Zkc.Subject.WrittenGoal
 public import ZkcFormal.Written.Soundness
 public import ZkcFormal.Written.SiteCaps
 public import ZkcFormal.ChargedReturn
