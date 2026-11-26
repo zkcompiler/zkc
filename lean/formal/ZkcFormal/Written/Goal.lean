@@ -1,90 +1,37 @@
 module
 
-public import Zkc.Subject.WrittenGoal
-public import ZkcFormal.Written.FunctionMeaning
-public import ZkcFormal.Written.LawSamplers
+public import ZkcFormal.Written.Soundness
 public import ZkcFormal.Written.SiteCaps
 
 @[expose] public section
 
-/-!
-A written goal selects a protocol, a deciding function and a table of caps. The verifier runs
-on the full vector of role inputs. The decision selects statement operands from this same vector,
-and rejection ranges over all valid witnesses of the deciding function.
--/
+/-! The written goal with fees uses the selected decision's return bound at the total of
+its cap table. Its accounting judgment and counted result keep the table explicit. -/
 
 namespace ZkcFormal.Written.Goal
 
 open Zkc.Core Zkc.Subject ProbabilisticProcess
-
-variable {V : Vocabulary} (M : Model V)
+open scoped ENNReal
 
 namespace Internal
-
-/-- Bind each visible value next to its validity, building every position in the deployed header. -/
-def inputs (r : Role) (existential : Bool) :
-    (ports : List (LTy V)) → (HList (RV M r) ports → Prop) → Prop
-  | [], k => k .nil
-  | port :: rest, k =>
-    if h : r ∈ port.holders then
-      let more := fun (x : M.Val port.ty) ↦
-        inputs r existential rest fun xs ↦ k (.cons (hide M r port x) xs)
-      if existential then ∃ x, M.Valid port.ty x ∧ more x else ∀ x, M.Valid port.ty x → more x
-    else
-      inputs r existential rest fun xs ↦ k (.cons (nothing M h) xs)
-
-/-- Read a heterogeneous value at its typed position. -/
-def valueAt {α : Type} {F : α → Type} :
-    {ts : List α} → {t : α} → Member ts t → HList F ts → F t
-  | _, _, .head, .cons x _ => x
-  | _, _, .tail i, .cons _ xs => valueAt i xs
-
-/-- Assemble the two sides of the actual signature. Recursing on the signature makes the
-argument spine compute even when the selected values are free variables. -/
-def arguments {α : Type} {F : α → Type} :
-    (ts : List α) → (n : Nat) → HList F (ts.take n) → HList F (ts.drop n) → HList F ts
-  | [], _, _, _ => .nil
-  | _ :: _, 0, _, ws => ws
-  | _ :: ts, n + 1, .cons x xs, ws => .cons x (arguments ts n xs ws)
-
-/-- Bind all witness values before entering the validity assumptions. -/
-def witnesses :
-    (ts : List V.Ty) → (HList M.Val ts → Prop) → Prop
-  | [], k => k .nil
-  | t :: ts, k => ∀ x : M.Val t, witnesses ts fun xs ↦ k (.cons x xs)
-
-/-- Imply the body from each witness validity in parameter order. -/
-def validWitnesses : {ts : List V.Ty} → HList M.Val ts → Prop → Prop
-  | [], .nil, q => q
-  | t :: _, .cons x xs, q => M.Valid t x → validWitnesses xs q
-
+export Soundness.Internal (inputs valueAt arguments witnesses validWitnesses)
 end Internal
 
 open Internal
-
+variable {V : Vocabulary} (M : Model V)
 variable {pkg : Package V} {scheme : WrittenRoot pkg} (g : WrittenGoal scheme)
 
-/-- Every valid witness makes the selected relation return false on these statement operands.
-The witness mapping records source positions. The universal quantifiers use the function types. -/
+/-- Rejection on the statement operands of this goal. -/
 def Rejected (p : Typed V) (relation : Member p.headers.fns g.decision.relation.header)
     (xs : HList (RV M scheme.verifier) scheme.entry.header.ins) : Prop :=
-  let statement := g.decision.statement.map (G := M.Val) fun t port ↦
-    reveal M (a := ⟨t, port.holders⟩) port.heldByVerifier (valueAt port.member xs)
-  witnesses M (g.decision.relation.header.ins.drop g.decision.arity) fun ws ↦
-    validWitnesses M ws <|
-      functionResult (M := M) (t := .bool) (g.decision.boolean ▸ fnMeaning M p relation
-        (arguments _ g.decision.arity statement ws)) = some false
+  Soundness.Rejected M g.decision p relation xs
 
 variable (draws : LawDraws M)
 
-/-- On valid inputs rejected by the deciding relation, the verifier returns with probability
-at most the goal's cap total against the services of this model and its law draws. -/
+/-- The selected verifier's probability bound at the total of this goal's caps. -/
 def ClaimOf (p : Typed V) (root : Member p.headers.protocols scheme.entry.header)
     (relation : Member p.headers.fns g.decision.relation.header) : Prop :=
-  ∀ path : List Frame, inputs M scheme.verifier false scheme.entry.header.ins fun xs ↦
-    Rejected M g p relation xs →
-      ReturnsWithin (roleMeaning M p root scheme.verifier path xs)
-        (lawSamplers M draws) (Permitted M) (fun _ ↦ True) g.fields.caps.total
+  Soundness.BoundOf M g.decision draws g.fields.caps.total p root relation
 
 /-- The claim at the two members in the installation. -/
 def Claim : Prop :=
@@ -95,11 +42,7 @@ def admission (stored : NamedProgram V) (association : Association)
     (rootHeader : ProtocolHeader V) (rootKey : Key) (relationHeader : FnHeader V) (relationKey : Key)
     (claim : (p : Typed V) → Member p.headers.protocols rootHeader →
       Member p.headers.fns relationHeader → Prop) : Prop :=
-  ∀ {a : Admitted V}, admit stored association = .ok a →
-    ∃ root : Member a.program.headers.protocols rootHeader,
-      a.program.findProtocol rootKey = some ⟨rootHeader, root⟩ ∧
-      ∃ relation : Member a.program.headers.fns relationHeader,
-        a.program.find relationKey = some (.fn relation) ∧ claim a.program root relation
+  Soundness.admission stored association rootHeader rootKey relationHeader relationKey claim
 
 /-- Admission at the headers and keys selected by this decision. -/
 def admittedAt (claim : (p : Typed V) → Member p.headers.protocols scheme.entry.header →
@@ -125,11 +68,8 @@ def resultOf (covers : NamedProgram V → Key → Key → Bool) (goal : Prop) : 
 def Result (covers : NamedProgram V → Key → Key → Bool) : Prop :=
   resultOf g covers (Goal M g draws)
 
-/-- The hypotheses are met together at one vector of valid verifier inputs. -/
-def Witnessed : Prop :=
-  inputs M scheme.verifier true scheme.entry.header.ins fun xs ↦
-    Served (lawSamplers M draws) (Permitted M) ∧
-      Rejected M g pkg.installed g.decision.relation.member xs
+/-- The joint service and rejection receipt for the selected decision. -/
+def Witnessed : Prop := Soundness.Witnessed M g.decision draws
 
 /-- The installed verifier is judged never to return, with each fee paid at its site within
 the goal's budget. -/
@@ -140,39 +80,26 @@ def Judged : Prop :=
         (.charged (Permitted M) (paysWithin (lawSamplers M draws) (g.fields.caps.allowance M path)))
         (fun _ _ ↦ False) (fun _ _ ↦ True) g.fields.caps.budget
 
-private theorem mapInputs (r : Role) :
-    ∀ (ports : List (LTy V)) (P Q : HList (RV M r) ports → Prop),
-      (∀ xs, P xs → Q xs) → inputs M r false ports P → inputs M r false ports Q
-  | [], _, _, f, hp => f .nil hp
-  | port :: rest, _, _, f, hp => by
-    by_cases h : r ∈ port.holders
-    · simp only [inputs, h, ↓reduceDIte, Bool.false_eq_true, ↓reduceIte] at hp ⊢
-      exact fun x hx ↦ mapInputs r rest _ _ (fun xs ↦ f (.cons (hide M r port x) xs)) (hp x hx)
-    · simp only [inputs, h, ↓reduceDIte] at hp ⊢
-      exact mapInputs r rest _ _ (fun xs ↦ f (.cons (nothing M h) xs)) hp
-
 /-- A judgment with fees gives the installed probability bound. -/
 theorem claim_of_judged (judged : Judged M g draws) : Claim M g draws :=
-  fun path ↦ mapInputs M _ _ _ _ (fun _ h rejected ↦
+  fun path ↦ Soundness.Internal.mapInputs M _ _ _ _ (fun _ h rejected ↦
     returnsWithin_of_never _ _ _ _ _ (h rejected)) (judged path)
 
-/-- Each choice of valid visible inputs can introduce the matching existential telescope. -/
-private theorem introInputs (r : Role) :
-    ∀ (ports : List (LTy V)) (P : HList (RV M r) ports → Prop) (R : Prop),
-      (inputs M r true ports P → R) → inputs M r false ports (fun xs ↦ P xs → R)
-  | [], _, _, finish => finish
-  | port :: rest, _, _, finish => by
-    by_cases h : r ∈ port.holders
-    · simp only [inputs, h, ↓reduceDIte, Bool.false_eq_true, ↓reduceIte] at finish ⊢
-      exact fun x hx ↦ introInputs r rest _ _ (fun hrest ↦ finish ⟨x, hx, hrest⟩)
-    · simp only [inputs, h, ↓reduceDIte] at finish ⊢
-      exact introInputs r rest _ _ finish
+/-- A judgment paying the selected fees also establishes every bound above their total. -/
+theorem installed_of_judged {b : ℝ≥0∞} (judged : Judged M g draws) (le : g.fields.caps.total ≤ b) :
+    Soundness.Installed M g.decision draws b :=
+  Soundness.installed_mono M g.decision draws le (claim_of_judged M g draws judged)
+
+/-- At the table total, recovering the legacy result requires the table's own count. -/
+theorem result_iff_bound_and_counted (covers : NamedProgram V → Key → Key → Bool) :
+    Result M g draws covers ↔ Soundness.Result M g.decision draws covers g.fields.caps.total ∧
+      g.fields.caps.counted pkg.stored scheme.entry.header.key = true :=
+  ⟨fun h ↦ ⟨⟨h.1, h.2.2⟩, h.2.1⟩, fun h ↦ ⟨h.1.1, h.2, h.1.2⟩⟩
 
 /-- Valid verifier inputs and installed rejection meet the hypotheses with the given service. -/
 theorem witnessed_of (served : Served (lawSamplers M draws) (Permitted M)) :
     inputs M scheme.verifier false scheme.entry.header.ins fun xs ↦
       Rejected M g pkg.installed g.decision.relation.member xs → Witnessed M g draws :=
-  mapInputs M _ _ _ _ (fun _ h rejected ↦ h ⟨served, rejected⟩)
-    (introInputs M _ _ _ _ (fun h ↦ h))
+  Soundness.witnessed_of M g.decision draws served
 
 end ZkcFormal.Written.Goal
