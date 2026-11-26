@@ -143,25 +143,19 @@ require a model, so a package linking any project primitive gets a diagnostic at
 `Written.Statements` (`Written/Statement.lean`) writes the module of the goals of a scheme
 (`Statements.module`: its imports, the order of its parts and the names of the theorems whose
 axioms it asks for are decided there, and a check gives the text of the proofs).
-Around the proofs stands, with the claims' package: the facts (keys, headers and places of the root, of the
-functions before it that the text names and of each goal's relation, the verifier and the prover
-of the claims' scheme, each goal's proof arguments and charge), that the standard interpretation covers each goal’s reach, where the walks of the module
-start (the meaning of the deciding role, of each named function and of each goal's relation as
-the sealed denotation of its body), the transfers of a statement from the installed program to
-every admitted one, and for each goal four propositions that are defined before any proof: the
-claim about the installed program, the goal for every admitted program, the result (the model
-covers the package, and the goal), and that the hypotheses of the claim are met together. The
-claim applies the experiment of the formal library (`ReturnsWithin`,
-`lean/formal/ZkcFormal/ReturnExperiment.lean`) to the process of the deciding role on its
-inputs, the samplers of the model and the bound; the generator does not write which services
-the bound is against or which event it is of.
-For a text that establishes its claims by the judgment with fees it also writes, before the
-text, the judgment of each goal (`<goal>Judged`, with named binders), the theorem that the claim
-follows from it and the theorem that the hypotheses of the claim are met at inputs on which the
-relation returns false, and the key of each named draw of the root under the name of its site
-(`site_<name>`), with its cap where the contract charges it; the text proves the judgment, and the claim is concluded after it.
-After the text of the proofs it writes the theorems of the last three from the claim and a
-witness, and the comparison of a goal's total with its ceiling. A statement uses the standard interpretation. It is
+The statements module gives the root and relation keys, headers and members, the headers and
+members of named functions before the root, both roles, and each goal's proof arguments and
+charges. It proves coverage of each goal's reach and transfers statements about the installed
+root and relation to every admission. When requested it gives the deciding role's projected
+program and entry equation. Its propositions describe the installed claim, the goal for every
+admission, the result with coverage and counts, and the witness that meets the hypotheses.
+The claim applies the formal library's experiment (`ReturnsWithin`,
+`lean/formal/ZkcFormal/ReturnExperiment.lean`) to the deciding role on its inputs.
+The statements also give the draw keys and cap equations, and compare each total with its
+ceiling. For the fee method they include `<goal>Judged` and the implications for the claim and
+the witness. In full publication the proof module closes soundness, result and witness from
+the installed claim and the author's witness. In witness-only publication it closes the
+witness alone. A statement uses the standard interpretation. It is
 bounded by the total of the goal's table of caps (`<goal>Caps.total`), which `goalClaims` reads
 with the claim (`goalCaps`): the uses that the root reaches at the goal's proof arguments, each
 with the caps that the contract of its definition gives its charged draws and with its calls.
@@ -174,9 +168,9 @@ reader sees which inputs the relation is applied to and which the deciding role 
 whose clause is a `reduces` gets no statement yet: the statement of a reduction is about a
 return on which the reduced statement is true. Under SX7, a requirement that reads an input inaccessible to the deciding role is outside
 the soundness experiment. An available requirement currently prevents issuance until the claim
-and its satisfiability witness can represent the hypothesis. The checks of the four subjects
+and its satisfiability witness can represent the hypothesis. The checks of the five subjects
 (`lean/formal/checks/CountCharge.lean`, `FreivaldsCharge.lean`, `GuessCharge.lean`,
-`EitherCharge.lean`, on the library `lean/formal/ZkcFormalTests/WrittenSubject.lean`) are its users;
+`EitherCharge.lean`, `TwiceCharge.lean`, on the library `lean/formal/ZkcFormalTests/WrittenSubject.lean`) are its users;
 [the page for authors](../../../../docs/written-soundness.md) says how a subject is written.
 `lean/formal/checks/GoalClaim.lean` has Lean elaborate the statement of a goal whose relation
 has a witness.

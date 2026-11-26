@@ -254,9 +254,13 @@ private def controls (work : System.FilePath) (m : Module) (src : String) : IO (
 private def aliasChecks (work : System.FilePath) : IO Unit := do
   let src ← IO.FS.readFile "fixtures/written-decisions.zkc"
   let (m, forward) ← aliasCase work src false
+  let imports ← issued work "StatementImports" m.space (s!"import {m.statementsName}\n" ++
+    "run_cmd\n  if (← Lean.getEnv).getModuleIdx? `ZkcFormal.Written.ClaimIntro |>.isSome then\n" ++
+    "    throwError \"statements import the author tactic ZkcFormal.Written.ClaimIntro\"\n")
   let (_, backward) ← aliasCase work src true
   let mutants ← controls work m src
   forward
+  imports
   backward
   mutants.forM id
 

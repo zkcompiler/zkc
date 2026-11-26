@@ -27,8 +27,7 @@ theorem done_of_judged {A : Type} {p : Local A} {value : A}
   | .call op _, _ => exact nomatch op
 
 /-- A function whose process is judged to end with one value has that value as its result. The
-judgment is of a process without effects, so the body of a function is walked as the program of
-a role is, a loop by its rule (`Term.interpret_loop`) with an invariant. -/
+judgment uses the postcondition on return and rules out a stop. -/
 theorem functionResult_of_judged {M : Model V} {t : V.Ty} {p : Local (HList M.Val [t])}
     {v : M.Val t}
     (judged : p.interpret ProcessJudgment.silent (fun out _ => out = .cons v .nil)

@@ -62,10 +62,22 @@ private def checkPublicationNames (work : System.FilePath) : IO Unit := do
   let input ← source "fixtures/hash-relation.zkc"
     [(goal "good", "\n".intercalate (["root", "verifier", long].map goal))]
   let shared ← statementsFor input ["root", "verifier"]
-  unless (shared.publicationPairs "SharedLabels").map (·.1.getString!) ==
-      ["root_installed", "root_sound", "root_result", "root_met",
-       "verifier_installed", "verifier_sound", "verifier_result", "verifier_met"] do
+  let publication ← IO.ofExcept (shared.module "SharedLabels" {})
+  unless publication.published ==
+      [(`SharedLabels.root_installed, `SharedLabels.rootClaim),
+       (`SharedLabels.root_sound, `SharedLabels.rootGoal),
+       (`SharedLabels.root_result, `SharedLabels.rootResult),
+       (`SharedLabels.root_met, `SharedLabels.rootWitnessed),
+       (`SharedLabels.verifier_installed, `SharedLabels.verifierClaim),
+       (`SharedLabels.verifier_sound, `SharedLabels.verifierGoal),
+       (`SharedLabels.verifier_result, `SharedLabels.verifierResult),
+       (`SharedLabels.verifier_met, `SharedLabels.verifierWitnessed)] do
     throw (IO.userError "the public challenge lost the source names")
+  let witnesses ← IO.ofExcept (shared.module "SharedLabels" {} (witnessesOnly := true))
+  unless witnesses.published ==
+      [(`SharedLabels.root_met, `SharedLabels.rootWitnessed),
+       (`SharedLabels.verifier_met, `SharedLabels.verifierWitnessed)] do
+    throw (IO.userError "unexpected witness publication")
   let assembly ← Driver.assembleFiles input ["../../libraries"]
   let #[result] := issueSoundnessGoals assembly [long] | throw (IO.userError "missing goal")
   let issued ← IO.ofExcept result.outcome
@@ -82,7 +94,7 @@ private def checkPublicationNames (work : System.FilePath) : IO Unit := do
     ("(b: bool @(P,V), xs:", "(bCaps: bool @(P,V), xs:"),
     ("guard @V b", "guard @V bCaps"), ("Holds(b, xs)", "Holds(bCaps, xs)")]
   let binderStatements ← statementsFor binders ["input_b"]
-  let modules := [← IO.ofExcept (shared.module "SharedLabels" {}), issued.publication,
+  let modules := [publication, issued.publication,
     ← IO.ofExcept (called.module "HelperLabels" {}), ← IO.ofExcept (binderStatements.module "InputLabels" {})]
   let pending ← modules.mapM fun publication => do
     let stated ← addStated work publication
