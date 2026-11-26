@@ -1,0 +1,151 @@
+import Count.Stated
+import ZkcFormal.Written.Soundness
+import Lean
+
+open Zkc.Subject ZkcFormal ZkcFormal.Written ZkcFormal.ProbabilisticProcess
+open StandardInterpretation (model draws covers served)
+open Count
+open scoped ENNReal
+
+namespace CountBoundRoots
+
+/-- The downstream reader fixes its own rational instance before reading a proof. -/
+noncomputable def requested : ℝ≥0∞ := toProbability (3 / 8)
+
+def installed := Soundness.Installed model written'decision0 draws requested
+def admitted := Soundness.AdmittedBound model written'decision0 draws requested
+def result := Soundness.Result model written'decision0 draws covers requested
+def witnessed := Soundness.Witnessed model written'decision0 draws
+
+theorem witnessOf : type_of% (Soundness.witnessed_of model written'decision0 draws served) :=
+  Soundness.witnessed_of model written'decision0 draws served
+
+namespace Control
+
+noncomputable def twin := written'decision0
+def redirected := Soundness.Installed model twin draws requested
+def sibling := Soundness.Installed model written'decision1 draws requested
+def projected := Soundness.Installed model written'goal0.decision draws requested
+def fromFees := Soundness.Installed model written'decision0 draws looseCaps.total
+
+private theorem retain {P Q : Prop} (_ : P) (q : Q) : Q := q
+
+/-- Only the value of this proof refers to a counted receipt. -/
+private theorem boolean : written'decision0.relation.header.outs = [.bool] :=
+  retain loose_counted written'decision0.boolean
+
+noncomputable def withProof : Decision written'root := { written'decision0 with boolean }
+def throughProof := Soundness.Installed model withProof draws requested
+
+/-- The same public telescope can conceal a call to a fee-dependent helper. -/
+theorem borrowed : type_of% witnessOf := loose_witnessed_of
+
+/-- Conversely, a fee-dependent presentation can accompany a clean proof value. -/
+theorem feePresentation : type_of% loose_witnessed_of := witnessOf
+
+example : redirected = CountBoundRoots.installed := rfl
+example : projected = CountBoundRoots.installed := rfl
+example : throughProof = CountBoundRoots.installed := rfl
+example : fromFees = CountBoundRoots.installed := by
+  have same : looseCaps.total = requested := by rw [CapTable.total, loose_budget]; rfl
+  exact congrArg (Soundness.Installed model written'decision0 draws) same
+
+end Control
+
+open Lean Elab Command
+
+/-- Include theorem and opaque values, proof arguments, and the types of every dependency. -/
+private def reachable (roots : List Name) : CoreM NameSet := do
+  let mut pending := roots
+  let mut seen : NameSet := {}
+  while let n :: rest := pending do
+    pending := rest
+    unless seen.contains n do
+      seen := seen.insert n
+      let decl ← getConstInfo n
+      pending := decl.getUsedConstantsAsSet.toList ++ pending
+  return seen
+
+private def forbidden : List Name :=
+  [``CapTable, ``UseCaps, ``Cap, ``DrawCap, ``CallCap, ``DrawCharge, ``GoalFields, ``WrittenGoal,
+   ``WrittenSubject, ``Goal.Judged, ``paysWithin,
+   ``written'caps0, ``written'fields0, ``written'goal0, ``written'subject, ``written'decision1,
+   ``loose_counted, ``loose_claim_of_judged, ``loose_witnessed_of]
+
+private def clean (root : Name) (seen : NameSet) : CoreM Unit := do
+  let leaks := forbidden.filter seen.contains
+  unless leaks.isEmpty do throwError "{root} depends on {leaks}"
+
+private def requireNames (root : Name) (seen : NameSet) (required : List Name) : CoreM Unit := do
+  for n in required do
+    unless seen.contains n do throwError "{root} should reach {n}"
+
+/-- Check the unreduced application. Graph membership cannot identify an operand. -/
+private def checkOperands (root owner : Name) (extra : List Name)
+    (wrongAt : Option Nat := none) : CoreM Unit := do
+  let some body := (← getConstInfo root).value? (allowOpaque := true)
+    | throwError "missing body of {root}"
+  let args := [``model, ``subjectPackage, ``written'root, ``written'decision0, ``draws] ++ extra
+  unless body.isAppOfArity owner (1 + args.length) do
+    throwError "{root} should apply {owner} to {1 + args.length} arguments"
+  let mismatches := (args.zipIdx 1).filterMap fun (expected, index) =>
+    if (body.getArg! index).isConstOf expected then none else some index
+  unless mismatches == wrongAt.toList do
+    throwError "{root}: wrong operands {mismatches}, expected {wrongAt.toList}"
+
+/-- Check the trusted roots here and again as imported declarations in the submitting reader. -/
+def checkRoots : CoreM Unit := do
+  for owner in [``Soundness.Rejected, ``Soundness.BoundOf, ``Soundness.Installed,
+      ``Soundness.AdmittedBound, ``Soundness.Result, ``Soundness.Witnessed,
+      ``Soundness.witnessed_of, ``Soundness.installed_iff_admitted, ``Soundness.installed_mono] do
+    unless (← getConstInfo owner).hasValue (allowOpaque := true) do
+      throwError "missing body of public owner {owner}"
+    clean owner (← reachable [owner])
+
+  for (root, owner, extra) in [
+      (``CountBoundRoots.installed, ``Soundness.Installed, [``requested]),
+      (``admitted, ``Soundness.AdmittedBound, [``requested]),
+      (``result, ``Soundness.Result, [``covers, ``requested]),
+      (``witnessed, ``Soundness.Witnessed, []),
+      (``witnessOf, ``Soundness.witnessed_of, [``served])] do
+    checkOperands root owner extra
+    let seen ← reachable [root]
+    clean root seen
+    requireNames root seen [``written'decision0, ``written'root, ``subjectPackage,
+      ``written'fn3, ``found'root, ``found'fn3]
+    unless seen.contains ``requested == extra.contains ``requested do
+      throwError "{root}: unexpected dependence on the requested bound"
+
+  -- On the twin all graph requirements pass. Only the physical decision slot distinguishes it.
+  for (root, index, leaks) in [
+      (``Control.redirected, 4, []),
+      (``Control.sibling, 4, [``written'decision1]),
+      (``Control.projected, 4, [``written'goal0, ``written'fields0, ``written'caps0]),
+      (``Control.throughProof, 4, [``loose_counted, ``written'caps0]),
+      (``Control.fromFees, 6, [``written'caps0])] do
+    checkOperands root ``Soundness.Installed [``requested] (some index)
+    let seen ← reachable [root]
+    if leaks.isEmpty then
+      clean root seen
+      requireNames root seen [``written'decision0, ``requested]
+    else
+      requireNames root seen leaks
+      unless leaks.all forbidden.contains do throwError "unexpected control declarations {leaks}"
+
+  let field := ``Control.boolean
+  clean field (← reachable (← getConstInfo field).type.getUsedConstants.toList)
+  requireNames field (← reachable [field]) [``loose_counted, ``written'caps0]
+
+  let presentation := ``Control.feePresentation
+  let decl ← getConstInfo presentation
+  let some proof := decl.value? (allowOpaque := true) | throwError "missing proof of {presentation}"
+  clean presentation (← reachable proof.getUsedConstants.toList)
+  requireNames presentation (← reachable [presentation]) [``written'caps0]
+
+  let helper := ``Control.borrowed
+  clean helper (← reachable (← getConstInfo helper).type.getUsedConstants.toList)
+  requireNames helper (← reachable [helper]) [``loose_witnessed_of, ``written'caps0]
+
+run_cmd liftCoreM checkRoots
+
+end CountBoundRoots

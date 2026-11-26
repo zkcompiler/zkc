@@ -1,0 +1,67 @@
+private theorem relationValue (x : Bool) :
+    functionResult (t := .bool) (fnMeaning model installed looseMember (.cons x .nil)) = some x := by
+  kernel_rfl
+
+theorem rejectedFalse : rejectedFalseStatement := relationValue false
+
+theorem met : metStatement :=
+  Soundness.witnessed_of model written'decision0 draws served false trivial rejectedFalse
+
+/-- If every reply leads to a halt, no stateful service can produce a return. -/
+private theorem zeroOfHalt {S : Sig} {H A : Type} (p : Process S H A)
+    (samp : Samplers S) (allow : ∀ op, S.Reply op → Prop)
+    (never : p.interpret (.every fun _ _ ↦ True) (fun _ ↦ False) (fun _ ↦ True)) :
+    ReturnsWithin p samp allow (fun _ ↦ True) 0 := by
+  apply returnsWithin_of_returns
+  intro σ service _ _ s
+  rw [prEvent_simulation_returns]
+  apply le_of_eq
+  apply prEvent_eq_zero_of_forall_mem_support
+  rintro out reached ⟨v, same⟩
+  induction p generalizing s out with
+  | done value => exact never
+  | halt why =>
+    change out ∈ support (pure (Outcome.halted why, s) : ProbComp _) at reached
+    rw [mem_support_pure_iff] at reached
+    subst out
+    cases same
+  | call op next ih =>
+    rw [run_call, mem_support_bind_iff] at reached
+    obtain ⟨⟨reply, t⟩, _, rest⟩ := reached
+    cases reply with
+    | none =>
+      rw [mem_support_pure_iff] at rest
+      subst out
+      cases same
+    | some answer => exact ih answer (never answer trivial) t out rest same
+
+theorem directZero : directZeroStatement := by
+  intro path x _ rejected
+  obtain rfl := Option.some.inj ((relationValue x).symm.trans rejected)
+  apply zeroOfHalt
+  change (roleMeaning model installed rootMember verifierRole path
+    (.cons () (.cons false .nil))).interpret _ _ _
+  walk
+  intro _ _
+  walk
+
+theorem directQuarter : directQuarterStatement :=
+  Soundness.installed_mono model written'decision0 draws zero_le directZero
+
+private theorem judged : looseJudged := by
+  claim_intro
+  obtain rfl := Option.some.inj ((relationValue input_claim).symm.trans rejected)
+  walk
+  walk_free as drawn
+  walk
+
+theorem feeQuarter : directQuarterStatement := by
+  have total : looseCaps.total = 1 / 4 := by
+    rw [CapTable.total, loose_budget]
+    exact toProbability_natCast_div 1 4 (by decide)
+  exact Goal.installed_of_judged model written'goal0 draws judged total.le
+
+theorem coveredZero : coveredZeroStatement :=
+  ⟨loose_covered, (Soundness.installed_iff_admitted model written'decision0 draws 0).mp directZero⟩
+
+theorem missingCount : missingCountStatement := ⟨coveredZero, by decide +kernel⟩
