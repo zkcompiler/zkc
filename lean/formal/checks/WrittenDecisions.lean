@@ -196,7 +196,26 @@ private def controls (work : System.FilePath) (m : Publication) (src : String) :
   let duplicate ← run "DuplicateRow" dup [("⟨1, by decide⟩).clause.val", "Type mismatch"),
     (refAt 1, s!"{m.space}.written'slot1 must select the decision 0"),
     ("written'subject.clauses.size =", "Type mismatch")]
-  return [cap, boundRef, boundValue, flipped, otherPath, otherProperty, swap, operand, duplicate]
+  -- The selector of the table of decisions with a threshold that sends both indexes to the first
+  -- decision, and with a comparison in another order that sends both to the second: the data
+  -- control runs a selector at each index.
+  let selector (tag changed refusal : String) : IO Check := do
+    let file := tag ++ ".Stated"
+    let check ← issued work file m.space (← replaceOnce m.data table changed) m.stated
+    let pending ← startLakeLean work (tag ++ "Shape") (s!"import {file}\nimport ZkcFormalTests.PublicationControl\n\n#data_module {file} of {m.space}.written'subject\n") (text := false)
+    return do
+      check
+      let (ok, log) ← pending
+      expect s!"{tag}: the data control accepted the selector" ok false
+      expect s!"{tag}: the data control refused the selector for another reason\n{log}" (log.contains refusal) true
+  let threshold ← selector "SelectorThreshold"
+    "⟨2, fun i => (if i.val < 2 then written'decision0 else written'decision1)⟩"
+    "written'decision1 at the index 1"
+  let ordered ← selector "SelectorOrder"
+    ("⟨2, fun i => (@ite _ (@LT.lt Nat ⟨fun a b => b < a⟩ i.val 1) (Nat.decLt 1 i.val) " ++
+      "written'decision0 written'decision1)⟩")
+    "written'decision0 at the index 0"
+  return [cap, boundRef, boundValue, flipped, otherPath, otherProperty, swap, operand, duplicate, threshold, ordered]
 
 private def aliasChecks (work : System.FilePath) : IO Unit := do
   let src ← IO.FS.readFile "fixtures/written-decisions.zkc"

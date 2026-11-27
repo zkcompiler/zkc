@@ -143,7 +143,9 @@ def rowAt (t : Tables) (index : Nat) : MetaM Row := do
 bound's expression, and the table's. The number is reduced to its constructor and no further:
 the bound and the table are the constructor's arguments as they stand. For a row that writes
 its ceiling the optional table is kept unopened: what a goal publishes is its bound, and only
-who asks for the table (the fee facts) reads whether there is one. -/
+who asks for the table (the fee facts; a control of a data module's shape) reads whether there
+is one. So `publish_goals`, `published%` and `publish_views` accept a row whose optional table
+cannot be opened. -/
 inductive Number where
   | total (table bound : Expr)
   | ceiling (bound caps : Expr)
@@ -177,7 +179,9 @@ def Row.number (row : Row) : MetaM Number := do
   throwError "publish: the row at the path {row.path}: expected a goal's number built by a constructor, got {number}"
 
 /-- The table of caps of a row, where it holds one. -/
-def Row.table (row : Row) : MetaM (Option Expr) := do (← row.number).table
+def Row.table (row : Row) : MetaM (Option Expr) := do
+  try (← row.number).table
+  catch refusal => throwError "publish: the row at the path {row.path}: {refusal.toMessageData}"
 
 /-- Whether the source writes the row's bound, as the goal's ceiling. -/
 def Row.ceiling (row : Row) : MetaM Bool := return (← row.number).written
