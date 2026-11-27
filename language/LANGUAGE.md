@@ -2856,9 +2856,11 @@ one. The charge of an `attempt` is the probability that one attempt aborts. A ch
 between a deferred query and the `open` of its claim is stated for the runs in which the claim
 may be false. The charges of a contract are also the bound that a `knowledge` clause claims
 when it reads one run (SX6). A charge is a probability: it is not negative and at most one.
+A site has one charge: a second `charge` on a site is an error.
 **Messages:** "`sites.<x>` is a send; a charge belongs to a draw, an application or
 an attempt"; "a charge is over static terms; `<p>` is a port of `<X>`, a run-time value"; "a
-charge is not negative"; "a charge is a probability, at most one; this one is `<3>`".
+charge is not negative"; "a charge is a probability, at most one; this one is `<3>`"; "a second
+charge on `sites.<x>`: a site has one cap".
 
 **SX9. Generated members.** A protocol, a scheme and a layout module have generated members,
 named through `::` (NL3 c) and nowhere declared. §8 lists every one with its definition.

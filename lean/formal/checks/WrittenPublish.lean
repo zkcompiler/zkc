@@ -133,7 +133,7 @@ def run (work : System.FilePath) : IO Unit := do
   discard <| SubjectProject.add project `Published.Proof (proof "Published.Stated" "Published")
   discard <| SubjectProject.add project `Low.Stated low.data .statements
   discard <| SubjectProject.add project `Low.Challenge low.challenge .challenge
-  -- the shape of what the issuer publishes, and nineteen changes of it that the controls refuse
+  -- the shape of what the issuer publishes, and twenty-one changes of it that the controls refuse
   let control (command : String) (imported : String) :=
     s!"import {imported}\nimport ZkcFormalTests.PublicationControl\n\n{command}\n"
   let shape ← startLakeLean work "PublishedShape" (control
@@ -190,7 +190,14 @@ def run (work : System.FilePath) : IO Unit := do
     ("WithChosenNumber", ← replaceOnce honest.data "number := .total written'caps0 written'bound0 }"
         ("number := if written'caps0.uses.length = 0 then .total written'caps0 written'bound0 " ++
           "else .total written'caps0 written'bound0 }"),
-      "data control: the number of Published.written'fields0 is not a constructor over declarations")]
+      "data control: the number of Published.written'fields0 is not a constructor over declarations"),
+    -- a path, and a decision, that a computation over the table chooses
+    ("WithChosenPath", ← replaceOnce honest.data "path := [\"probes\", \"mapped\"]"
+        "path := if written'caps0.uses.length = 0 then [\"probes\", \"mapped\"] else [\"probes\", \"mapped\"]",
+      "data control: the path of the row Published.written'slot0 is not built of constructors, literals and declarations"),
+    ("WithChosenDecision", ← replaceOnce honest.data "⟨1, fun _ => written'decision0⟩"
+        "⟨1, fun _ => if written'caps0.uses.length = 0 then written'decision0 else written'decision0⟩",
+      "data control: the table of decisions of Published.written'subject reads Published.written'caps0, which is none of its elements")]
   let mut shapes := []
   for (name, text, refusal) in mutants do
     discard <| SubjectProject.add project s!"{name}.Stated".toName text .statements
@@ -257,7 +264,7 @@ def run (work : System.FilePath) : IO Unit := do
     throw (IO.userError s!"the challenge at another bound was not refused at the bound\n{said}")
   IO.println ("The issuer's data module holds definitions that are no propositions, the package's " ++
     "theorems and a bound of numerals, and imports no module of the formal library; its challenge " ++
-    "imports what the publication command does; 19 of 19 changes of that shape are refused.")
+    "imports what the publication command does; 21 of 21 changes of that shape are refused.")
   IO.println ("The library states what a goal publishes from its row: the built challenge holds " ++
     "exactly the statements that the check spells, and the control by rows refuses 3 of 3 " ++
     "changes of what is stated or judged; the proof module that states them as " ++

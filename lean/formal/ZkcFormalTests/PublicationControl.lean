@@ -9,9 +9,9 @@ Controls of the shape of what the issuer publishes, read from the built modules.
   issuer's list (`Statements.dataImports`) and no other, and through them no module of the
   formal library; each of its declarations is a definition that is no instance, whose type
   names no `Prop` and is no proposition, or a theorem that the subject reaches and that states a
-  lookup in the installed program, or one of the package's listed names; it declares no inductive type; the subject, its table of rows, each row, its
-  fields and its number are constructors over declarations of the module as they stand
-  (`rowsAsTheyStand`); and, reading the subject's rows as the commands read them, each row's
+  lookup in the installed program, or one of the package's listed names; it declares no inductive type; the subject, its tables, each
+  row, its fields, its number and each decision are constructors over literals and declarations
+  of the module as they stand (`subjectAsItStands`, which lists what may stand at each place); and, reading the subject's rows as the commands read them, each row's
   bound is a declaration of the module at two numerals and each row's table a declaration of
   the module that reads no other. The rows are followed from the subject: a bound or a table is
   told by its place in a row, not by its name.
@@ -83,33 +83,106 @@ def typeHead (name : Name) : MetaM (Option Name) := do
   let type := (← getConstInfo name).type
   Meta.forallTelescopeReducing type fun _ body => return (← Meta.whnf body).getAppFn.constName?
 
-/-- **The rows of a subject as they stand.** The subject is its constructor over a table of rows
-whose selector reads, of the module, only declarations of rows; each such row is its constructor
-with a declaration of the module for its fields; the fields are their constructor with a number
-that is a constructor over declarations of the module (a table, a bound; a table or none). So no
-row, no fields and no number is chosen by a computation over anything else of the module. -/
-def rowsAsTheyStand (inModule : Name → Bool) (subject : Name) : MetaM Unit := do
+/-- Whether a term is built of constructors, literals, numerals and declarations of the module
+(each standing alone, applied to nothing). A proof and a type are not looked into, nor a
+constructor's parameters and implicit fields: none of these chooses a value. A term with any other head (a conditional, a matcher, a recursor, a function
+of a library) is none, so nothing in such a term is computed from the module's data. -/
+partial def constructorTerm (inModule : Name → Bool) (e : Expr) : MetaM Bool := do
+  let e := e.consumeMData
+  if numeral e then return true
+  if e.isLit || e.isSort || e.isForall then return true
+  if ← (try Meta.isProof e catch _ => pure false) then return true
+  if ← (try Meta.isType e catch _ => pure false) then return true
+  let .const head _ := e.getAppFn | return false
+  if inModule head then return e.getAppNumArgs == 0
+  let some (.ctorInfo constructor) := (← getEnv).find? head | return false
+  -- the constructor's fields that are written: its parameters and its implicit fields are fixed
+  -- by the type at which it stands
+  let info ← Meta.getFunInfoNArgs e.getAppFn e.getAppNumArgs
+  let args := e.getAppArgs
+  for index in [constructor.numParams:args.size] do
+    if (info.paramInfo[index]?.map (·.binderInfo.isExplicit)).getD true then
+      unless ← constructorTerm inModule args[index]! do return false
+  return true
+
+/-- The declarations of the module that a term reads as values: those in its types (that are no
+propositions) and in its proofs are left out, since neither chooses a value; a condition is a
+proposition and is read. -/
+partial def valueReads (inModule : Name → Bool) (e : Expr) (found : NameSet := {}) : MetaM NameSet := do
+  let e := e.consumeMData
+  if ← (try Meta.isProof e catch _ => pure false) then return found
+  if ← (try (do return (← Meta.isType e) && !(← Meta.isProp e)) catch _ => pure false) then return found
+  match e with
+  | .const name _ => return if inModule name then found.insert name else found
+  | .app .. =>
+    let mut found ← valueReads inModule e.getAppFn found
+    for arg in e.getAppArgs do found ← valueReads inModule arg found
+    return found
+  | .lam name type body info | .forallE name type body info =>
+    Meta.withLocalDecl name info type fun x => valueReads inModule (body.instantiate1 x) found
+  | .letE name type value body _ =>
+    let found ← valueReads inModule value found
+    Meta.withLetDecl name type value fun x => valueReads inModule (body.instantiate1 x) found
+  | .proj _ _ body => valueReads inModule body found
+  | _ => return found
+
+/-- **The subject as it stands.** What may stand at each place, for the subject, a table, a row,
+its fields and a decision:
+
+* the subject is its constructor; its table of decisions and its table of rows are each a
+  declaration of the module or a table in place;
+* a table is its constructor at a numeral, and its selector reads, of the module, only
+  declarations of the table's element (rows; decisions): it may compute over its index and over
+  nothing else;
+* a row is its constructor: its path, its property and its clause's place are terms of
+  constructors, literals and numerals, and its fields are a declaration of the module;
+* the fields are their constructor: the proof arguments are a term of constructors and numerals,
+  and the number is a constructor over declarations of the module (a table and a bound; a bound
+  with a table or none);
+* a decision is its constructor: its short application is a declaration of the module, and its
+  place and its witness operands are terms of constructors, numerals and such declarations.
+
+So no row, decision, path, property, place, number or operand is chosen by a computation over
+the module's data. -/
+def subjectAsItStands (inModule : Name → Bool) (subject : Name) : MetaM Unit := do
   let valueOf (name : Name) : MetaM Expr := do
     let some value := (← getConstInfo name).value? | throwError "data control: {name} has no value"
     return value.consumeMData
   let declared (e : Expr) : Bool := e.consumeMData.constName?.any inModule
+  let plain (what : MessageData) (e : Expr) : MetaM Unit := do
+    unless ← constructorTerm inModule e do
+      throwError "data control: {what} is not built of constructors, literals and declarations:{indentExpr e}"
+  -- a table, in place or as a declaration: the declarations of its element that its selector reads
+  let elements (what : MessageData) (table : Expr) (element : Name) : MetaM (Array Name) := do
+    let table ← if declared table then valueOf table.consumeMData.constName! else pure table.consumeMData
+    unless table.isAppOfArity ``Zkc.Subject.BoundedTable.mk 3 && numeral (table.getArg! 1) do
+      throwError "data control: {what} is not a table's constructor at a numeral:{indentExpr table}"
+    let read := (← valueReads inModule (table.getArg! 2)).toArray
+    for name in read do
+      unless (← typeHead name) == some element do
+        throwError "data control: {what} reads {name}, which is none of its elements"
+    return read
   let value ← valueOf subject
   unless value.isAppOfArity ``Zkc.Subject.WrittenSubject.mk 6 do
     throwError "data control: the subject {subject} is not its constructor:{indentExpr value}"
-  let table := (value.getArg! 4).consumeMData
-  unless table.isAppOfArity ``Zkc.Subject.BoundedTable.mk 3 do
-    throwError "data control: the table of rows of {subject} is not its constructor:{indentExpr table}"
-  for slot in (table.getArg! 2).getUsedConstants do
-    unless inModule slot do continue
-    unless (← typeHead slot) == some ``Zkc.Subject.GoalSlot do
-      throwError "data control: the table of rows of {subject} reads {slot}, which is no row"
+  for decision in ← elements m!"the table of decisions of {subject}" (value.getArg! 3) ``Zkc.Subject.Decision do
+    let held ← valueOf decision
+    unless held.isAppOfArity ``Zkc.Subject.Decision.mk 6 && declared (held.getArg! 3) do
+      throwError "data control: the decision {decision} is not its constructor over a declaration of its short application:{indentExpr held}"
+    plain m!"the place of the decision {decision}" (held.getArg! 4)
+    plain m!"the witness operands of the decision {decision}" (held.getArg! 5)
+  for slot in ← elements m!"the table of rows of {subject}" (value.getArg! 4) ``Zkc.Subject.GoalSlot do
     let row ← valueOf slot
     unless row.isAppOfArity ``Zkc.Subject.GoalSlot.mk 5 && declared (row.getArg! 4) do
       throwError "data control: the row {slot} is not its constructor over a declaration of its fields:{indentExpr row}"
+    plain m!"the path of the row {slot}" (row.getArg! 1)
+    plain m!"the property of the row {slot}" (row.getArg! 2)
+    plain m!"the clause of the row {slot}" (row.getArg! 3)
     let fieldsName := (row.getArg! 4).consumeMData.constName!
     let fields ← valueOf fieldsName
     unless fields.isAppOfArity ``Zkc.Subject.GoalFields.mk 2 do
       throwError "data control: the fields {fieldsName} are not their constructor:{indentExpr fields}"
+    plain m!"the proof arguments of {fieldsName}" (fields.getArg! 0)
     let number := (fields.getArg! 1).consumeMData
     let total := number.isAppOfArity ``Zkc.Subject.GoalNumber.total 2 &&
       declared (number.getArg! 0) && declared (number.getArg! 1)
@@ -147,7 +220,7 @@ elab "#data_module " m:ident " of " s:ident : command => do
   let space := subject.getPrefix
   -- The rows as they stand, then as the commands read them: each bound is a declaration of the
   -- module at two numerals, and each table a declaration of the module that reads no other.
-  liftTermElabM (rowsAsTheyStand inModule subject)
+  liftTermElabM (subjectAsItStands inModule subject)
   for row in ← liftTermElabM (ZkcFormal.Written.Publish.rows subject) do
     let number ← liftTermElabM row.number
     let some bound := number.bound.constName?
