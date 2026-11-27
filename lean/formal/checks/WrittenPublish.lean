@@ -47,7 +47,7 @@ def statements (text : String) : IO Statements := do
     ["../../libraries"]
   let root ← IO.ofExcept (admitSoundnessGoal assembly "mapped")
   let claims ← IO.ofExcept (goalClaims root ["mapped"])
-  return ⟨claims, claims.functionsBeforeRoot⟩
+  return ⟨claims⟩
 
 /-- The challenge: the same three lines for every subject. -/
 def challenge (stated space : String) : String :=
@@ -63,7 +63,7 @@ by the library's step, each published theorem stated as `published%`. -/
 def proof (stated space : String) : String :=
   s!"import {stated}\nimport ZkcFormal.Written.Publish\n\n" ++ opens ++ s!"namespace {space}\n\n" ++
   "theorem acceptsLaw (x b : Bool) (n : Nat) : functionResult (t := .bool)\n" ++
-  "    (fnMeaning model installed mappedMember (.cons x (.cons b (.cons n .nil)))) =\n" ++
+  "    (fnMeaning model installed member'fn0 (.cons x (.cons b (.cons n .nil)))) =\n" ++
   "      some (x && (b || (n == 0))) := by\n" ++
   "  kernel_rfl\n\n" ++
   "theorem installedBound : Soundness.Installed model written'application0 draws written'bound0.limit := by\n" ++
@@ -129,11 +129,11 @@ def run (work : System.FilePath) : IO Unit := do
   discard <| SubjectProject.add project `Published.Proof (proof "Published.Stated" "Published")
   discard <| SubjectProject.add project `Low.Stated low.data .statements
   discard <| SubjectProject.add project `Low.Challenge low.challenge .challenge
-  -- the shape of what the issuer publishes, and eleven changes of it that the controls refuse
+  -- the shape of what the issuer publishes, and fourteen changes of it that the controls refuse
   let control (command : String) (imported : String) :=
     s!"import {imported}\nimport ZkcFormalTests.PublicationControl\n\n{command}\n"
   let shape ← startLakeLean work "PublishedShape" (control
-    "#data_module Published.Stated\n#challenge_module Published.Challenge over Published.Stated" "Published.Challenge")
+    "#data_module Published.Stated of Published.written'subject\n#challenge_module Published.Challenge over Published.Stated" "Published.Challenge")
     (text := false)
   let ending := "#print axioms admitted_exists"
   let bound := "def written'bound0 : Zkc.Subject.Bound := "
@@ -144,6 +144,9 @@ def run (work : System.FilePath) : IO Unit := do
       "data control: WithTheorem.Stated states the theorem Published.extra"),
     ("WithPredicate", ← replaceOnce honest.data ending ("def extraOf (n : Nat) : Prop := n = n\n" ++ ending),
       "data control: WithPredicate.Stated defines the proposition Published.extraOf"),
+    ("WithAliasedPredicate", ← replaceOnce honest.data ending
+        ("def Claim (α : Type) : Type := α → Prop\ndef extraOf : Claim Nat := fun n => n = n\n" ++ ending),
+      "data control: WithAliasedPredicate.Stated defines the proposition Published.extraOf"),
     ("WithInductive", ← replaceOnce honest.data ending ("inductive Extra : Prop where | intro\n" ++ ending),
       "data control: WithInductive.Stated declares the inductive type Published.Extra"),
     ("WithNamedTheorem", ← replaceOnce honest.data ending ("theorem extra.found'root : True := trivial\n" ++ ending),
@@ -154,15 +157,24 @@ def run (work : System.FilePath) : IO Unit := do
       "data control: WithImport.Stated imports Std.Data.HashMap, which is none of the issuer's list"),
     ("WithLibrary", "import ZkcFormal.Written.Bound\n" ++ honest.data,
       "data control: WithLibrary.Stated imports the formal library's ZkcFormal.Written.Bound"),
-    ("WithTableInPlace", ← replaceOnce honest.data "caps := some written'caps0," "caps := some ⟨[]⟩,",
-      "data control: the fields Published.written'fields0 do not hold a named table or none"),
+    ("WithTableInPlace", ← replaceOnce honest.data "number := .total written'caps0 written'bound0 }" "number := .total ⟨[]⟩ written'bound0 }",
+      "data control: the table of the row at [probes, mapped] is no declaration"),
+    -- a row whose bound is another declaration, which is no pair of numerals and reads the table
+    ("WithOtherBound", ← replaceOnce (← replaceOnce honest.data "number := .total written'caps0 written'bound0 }"
+        "number := .total written'caps0 otherBound }") "def written'fields0 :"
+        "def otherBound : Zkc.Subject.Bound := ⟨written'caps0.uses.length - 1, 1, by decide⟩\ndef written'fields0 :",
+      "data control: the bound Published.otherBound is not two numerals"),
+    ("WithReadingTable", ← replaceOnce (← replaceOnce honest.data "number := .total written'caps0 written'bound0 }"
+        "number := .total otherCaps written'bound0 }") "def written'fields0 :"
+        "def otherCaps : Zkc.Subject.CapTable := written'caps0\ndef written'fields0 :",
+      "data control: the table Published.otherCaps reads Published.written'caps0"),
     ("WithComputedBound", ← replaceOnce honest.data (bound ++ "⟨0, 1, by decide⟩") (bound ++ "⟨0 + 0, 1, by decide⟩"),
       "data control: the bound Published.written'bound0 is not two numerals")]
   let mut shapes := []
   for (name, text, refusal) in mutants do
     discard <| SubjectProject.add project s!"{name}.Stated".toName text .statements
     shapes := shapes ++ [(name, refusal, ← startLakeLean work (name ++ "Shape")
-      (control s!"#data_module {name}.Stated" s!"{name}.Stated") (text := false))]
+      (control s!"#data_module {name}.Stated of Published.written'subject" s!"{name}.Stated") (text := false))]
   discard <| SubjectProject.add project `Published.Views honest.views .statements
   discard <| SubjectProject.add project `Wide.Challenge
     ("import Published.Views\n" ++ honest.challenge) .challenge
@@ -194,7 +206,7 @@ def run (work : System.FilePath) : IO Unit := do
     throw (IO.userError s!"the challenge at another bound was not refused at the bound\n{said}")
   IO.println ("The issuer's data module holds definitions that are no propositions, the package's " ++
     "theorems and a bound of numerals, and imports no module of the formal library; its challenge " ++
-    "imports what the publication command does; 11 of 11 changes of that shape are refused.")
+    "imports what the publication command does; 14 of 14 changes of that shape are refused.")
   IO.println ("The library states what a goal publishes from its row: the built challenge holds " ++
     "exactly the statements that the check spells; the proof module that states them as " ++
     "`published%` is accepted, and refused against a subject at another bound.")

@@ -181,33 +181,6 @@ def steppedDraws : String := charged
     "spec for Steps:\n    proves @V Holds(claim)\n    charge sites.r <= 1 / 4\n")
   "Steps"
 
-/-- A stepped loop over `r` beside a draw whose site has the name that the first block of that
-loop would get. -/
-def clashingSites : String := charged
-  ("protocol Clash roles(P, V)(claim: bool @(P, V)):\n" ++
-    "    for i in 0..2:\n        r <- draw index<i + 2> from V to P\n" ++
-    "    r_0 <- draw index<4> from V to P\n    guard @V claim\n" ++
-    "spec for Clash:\n    proves @V Holds(claim)\n    charge sites.r <= 1 / 8\n" ++
-    "    charge sites.r_0 <= 1 / 4\n")
-  "Clash"
-
-/-- The same with no charge on the stepped loop: the charged draw has its site's name, as it
-had when only charged draws were named. -/
-def clashingUncharged : String := charged
-  ("protocol Clash roles(P, V)(claim: bool @(P, V)):\n" ++
-    "    for i in 0..2:\n        r <- draw index<i + 2> from V to P\n" ++
-    "    r_0 <- draw index<4> from V to P\n    guard @V claim\n" ++
-    "spec for Clash:\n    proves @V Holds(claim)\n" ++
-    "    charge sites.r_0 <= 1 / 4\n")
-  "Clash"
-
-/-- A site whose name is an identifier of the source and no plain name for a module. -/
-def greekSite : String := charged
-  ("protocol Greek roles(P, V)(claim: bool @(P, V)):\n" ++
-    "    β <- draw index<4> from V to P\n    guard @V claim\n" ++
-    "spec for Greek:\n    proves @V Holds(claim)\n    charge sites.β <= 1 / 4\n")
-  "Greek"
-
 /-- A charged draw in each arm of a choice. -/
 def chargedArms : String := charged
   ("protocol Arms roles(P, V)(claim: bool @(P, V)):\n" ++
@@ -425,8 +398,15 @@ def publicationOf (source space : String) (data : Option Lean.Name := none) : IO
 def proofModule (name text guarded : String)
     (alter : String → Except String String := pure) : IO Module := do
   let issued ← publicationOf text name
+  -- The data module names the relation by its key, which the views show (`member'fn<k>`); the
+  -- texts of this check are written with `soundMember`, `soundHeader` and `soundKey` in its
+  -- place, and the key is the issued claim's.
+  let [goal] := (← issuedStatements text).claims.goals | throw (IO.userError s!"{name}: not one goal")
+  let byKey (text : String) := ((text.replace "soundMember" s!"member'fn{goal.relation}").replace
+    "soundHeader" s!"header{goal.relation}").replace "soundKey" s!"stored{goal.relation}.key"
   let written ← IO.ofExcept (alter (boundText guarded))
-  return Module.ofPublication issued (written ++ closingText) textTheorems [consumer]
+  return Module.ofPublication issued (byKey (written ++ closingText)) textTheorems
+    [{ consumer with signature := byKey consumer.signature }]
 
 /-- The proof of the installed bound under another name, so that a control can state
 `installedBound` itself. -/
@@ -535,28 +515,6 @@ def run (work : System.FilePath) : IO Unit := do
       (.ordered ⟨2⟩ [.call ⟨⟨0⟩, 1, 0⟩, .call ⟨⟨1⟩, 3, 0⟩, .draw ⟨⟨3⟩, 1, 4, 1⟩])]⟩, 3 / 4))
   expect "the blocks of a stepped loop do not each have a draw"
     (tableOf steppedDraws == some (⟨[(.flat ⟨1⟩ [⟨⟨0⟩, 1, 4, 1⟩, ⟨⟨2⟩, 1, 4, 1⟩, ⟨⟨4⟩, 1, 4, 1⟩] [])]⟩, 3 / 4))
-  -- The names that a module gives the draws of the root, charged or not: the site's, with the place
-  -- of the block in a stepped loop; the key where two draws would share a name or the site's
-  -- name is no plain identifier.
-  let labelsOf (text : String) : Except String (List (String × Nat)) := do
-    let s ← statementsOf text ["sound"]
-    let [goal] := s.claims.goals | throw "the statements are not of one goal"
-    return goal.siteLabels.map fun (_, label, key) => (label, key.number)
-  for (title, text, labels) in [
-      ("the draws of a stepped loop are not named after its site and their places",
-        steppedDraws, [("r_0", 0), ("r_1", 2), ("r_2", 4)]),
-      ("two draws that would share a name are not told apart by their keys",
-        clashingSites, [("r_0_key0", 0), ("r_1", 2), ("r_0_key4", 4)]),
-      ("a source site collides with the numbered label of a stepped draw",
-        clashingSites.replace "    guard @V" "    r_0_key0 <- draw index<4> from V to P\n    guard @V",
-        [("r_0_key0", 0), ("r_1", 2), ("r_0_key4", 4), ("draw'5", 5)]),
-      ("a charged draw has not its site's name beside a draw without a charge that would share it",
-        clashingUncharged, [("r_0_key0", 0), ("r_1", 2), ("r_0", 4)]),
-      ("a site whose name is no plain identifier is not named by its key",
-        greekSite, [("key0", 0)])] do
-    match labelsOf text with
-    | .ok found => expect s!"{title}: {found}" (found == labels)
-    | .error why => throw (IO.userError s!"{title}: {why}")
   -- The arms of a choice are arms of the table, and one of them runs: the total takes the
   -- larger, one quarter, and not their sum.
   expect "the charged draws of the two arms of a choice are not the two arms of a choice of the table"
@@ -751,7 +709,7 @@ def run (work : System.FilePath) : IO Unit := do
     (tableless.refusals.isEmpty && (tableless.limits.map fun limit =>
       limit.startsWith "sound: no table of caps: " && limit.contains "`sites.first` is no draw") == [true])
   expect "the row of the goal without a table does not hold `none` and the ceiling"
-    ((tableless.data.splitOn "caps := none, bound := written'bound0, ceiling := true }").length == 2 &&
+    ((tableless.data.splitOn "number := .ceiling written'bound0 none }").length == 2 &&
       !tableless.data.contains "written'caps0")
   let mut tablelessModules := []
   for (name, text, kind) in [
@@ -764,6 +722,26 @@ def run (work : System.FilePath) : IO Unit := do
     discard <| ZkcFormalTests.SubjectProject.add (projectOf work) name text kind
     tablelessModules := tablelessModules ++ [(name, leanOn work name)]
 
+  -- What a goal publishes does not depend on whether it has a table. Two sources that differ only
+  -- in where a legal charge stands (on the root's draw, which a table holds; on the root's
+  -- application, which it does not), at one ceiling: the two `sound` are one proposition, and so
+  -- are the two `met`, by `rfl`.
+  let pairOf (site space : String) : IO Publication := do
+    IO.ofExcept ((← IO.ofExcept (statementsOf (ceiling (chargedAt site)) ["sound"])).publication space)
+  let withTable ← pairOf "w" "WithTable"
+  let withoutTable ← pairOf "first" "WithoutTable"
+  expect "the two sources of one statement: one has a table and the other has none"
+    (withTable.limits.isEmpty && withoutTable.limits.length == 1 &&
+      withTable.refusals.isEmpty && withoutTable.refusals.isEmpty)
+  for (name, text) in [(withTable.dataName, withTable.data), (withoutTable.dataName, withoutTable.data)] do
+    discard <| ZkcFormalTests.SubjectProject.add (projectOf work) name text .statements
+  discard <| ZkcFormalTests.SubjectProject.add (projectOf work) `SameStatements
+    (s!"import {withTable.dataName}\nimport {withoutTable.dataName}\nimport ZkcFormal.Written.Publish\n\n" ++
+      String.join (["sound", "met"].map fun which =>
+        s!"example : (published% WithTable.written'subject t.sound {which}) =\n" ++
+        s!"    (published% WithoutTable.written'subject t.sound {which}) := rfl\n")) .statements
+  let sameStatements := leanOn work `SameStatements
+
   -- Lean: the published theorem at the inputs of the source, by a consumer written apart.
   let fronted := decided ("spec note: bool, " ++ both) "flag" "proves @V IsSet(flag)"
   let aboutOther := decided ("spec note: bool, " ++ both) "other" "proves @V IsSet(other)"
@@ -773,7 +751,7 @@ def run (work : System.FilePath) : IO Unit := do
   -- Both comparisons read the original source. The second data module has the same namespace
   -- and goal, but its verifier guards the other input.
   let compare (name : String) (issued : Module) :=
-    startSourceComparison work name issued fronted ["t::sound"] ["sound"]
+    startSourceComparison work name issued fronted ["t::sound"]
   let matched ← compare "OperandsSource" module
   let changed ← publicationOf (← replaceOnce fronted "guard @V flag" "guard @V other") module.space
     (data := some `ChangedVerifier.Stated)
@@ -824,6 +802,9 @@ def run (work : System.FilePath) : IO Unit := do
   expectUnproved "a name of the installed bound defined again" "ShadowControl" theorems shadowedProof
     ["t.sound.sound", "consumer"]
   expectPlaces "a name of the installed bound defined again" shadowedProof ["Application type mismatch"]
+  let (ok, output) ← sameStatements
+  unless ok do
+    throw (IO.userError s!"the statements of a goal with a table and of one without are not the same\n{output}")
   -- The goal without a table: Lean accepts its four modules; the fees module says that the row
   -- holds no table; the step from the installed bound is declared and no fee fact is.
   for (name, pending) in tablelessModules do

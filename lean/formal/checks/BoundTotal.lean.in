@@ -1,7 +1,7 @@
 private theorem neverRejected (x : Bool) :
-    ¬ Soundness.Rejected model written'application0 installed looseMember (.cons () (.cons x .nil)) := by
+    ¬ Soundness.Rejected model written'application0 installed member'fn0 (.cons () (.cons x .nil)) := by
   intro rejected
-  have accepts : functionResult (t := .bool) (fnMeaning model installed looseMember (.cons x .nil)) =
+  have accepts : functionResult (t := .bool) (fnMeaning model installed member'fn0 (.cons x .nil)) =
       some true := by kernel_rfl
   exact rejected accepts
 

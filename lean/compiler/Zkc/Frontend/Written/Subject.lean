@@ -73,55 +73,36 @@ def ofGoals (owner : GoalClaims) (retained := owner.goals.attach) : SubjectLayou
 /-- The goals to publish, one per original selector spelling. -/
 def publicGoals (layout : SubjectLayout owner) : List ClaimedGoal := layout.aliases.toList.map Prod.fst
 
-private def goalName (index : Nat) := s!"written'goal{index}"
 private def fieldsName (index : Nat) := s!"written'fields{index}"
 private def capsName (index : Nat) := s!"written'caps{index}"
 private def boundName (index : Nat) := s!"written'bound{index}"
 private def decisionName (index : Nat) := s!"written'decision{index}"
 private def slotName (index : Nat) := s!"written'slot{index}"
 
-/-- Public spellings paired with their already resolved, row-local goal. -/
-def namedGoals (layout : SubjectLayout owner) : Array (ClaimedGoal × String) :=
-  layout.aliases.map fun (goal, index) => (goal, goalName index)
-
-/-- Emit the complete fields once per declaration. The existing author-facing cap and
-argument names use the same values at every spelling. A named cap preserves the term used
-by an author's rewrite under the public cap abbreviation. -/
-def goalFacts (layout : SubjectLayout owner) (label : ClaimedGoal → String) : String := Id.run do
+/-- The table of caps where the goal has one, the bound and the fields of each goal's row. -/
+def goalFacts (layout : SubjectLayout owner) : String := Id.run do
   let mut lines := #[]
   for ((goal, _), i) in layout.goals.toList.zipIdx do
     let bound := goal.bound
-    let (table, caps) := match goal.caps with
-      | some table => (s!"def {capsName i} : Zkc.Subject.CapTable := {capsTerm table}\n", s!"some {capsName i}")
-      | none => ("", "none")
+    let table := match goal.caps with
+      | some table => s!"def {capsName i} : Zkc.Subject.CapTable := {capsTerm table}\n"
+      | none => ""
+    let number := match goal.ceiling, goal.caps with
+      | none, _ => s!".total {capsName i} {boundName i}"
+      | some _, some _ => s!".ceiling {boundName i} (some {capsName i})"
+      | some _, none => s!".ceiling {boundName i} none"
     lines := lines.push (table ++
       s!"def {boundName i} : Zkc.Subject.Bound := ⟨{bound.num.toNat}, {bound.den}, by decide⟩\n" ++
       s!"def {fieldsName i} : Zkc.Subject.GoalFields :=\n" ++
-      s!"  \{ specification := {numbers goal.specification.toList}, caps := {caps}, " ++
-      s!"bound := {boundName i}, ceiling := {goal.ceiling.isSome} }\n")
-  for (goal, i) in layout.aliases do
-    let name := label goal
-    if goal.caps.isSome then
-      lines := lines.push s!"abbrev {name}Caps : Zkc.Subject.CapTable := {capsName i}\n"
-    for j in [:goal.specification.size] do
-      lines := lines.push (s!"def {name}Argument{j} : Nat := " ++
-        s!"{fieldsName i}.specification[{j}]'(by decide)\n")
+      s!"  \{ specification := {numbers goal.specification.toList}, number := {number} }\n")
   return String.join lines.toList
 
-/-- One physical member per distinct function in the installed program, with the existing
-public relation facts at each spelling. The caller also emits the package's transfer proofs. -/
-def relationFacts (layout : SubjectLayout owner) (relationLabel : ClaimedGoal → String)
-    (memberOf : Nat → String) : String := Id.run do
+/-- One member for each distinct relation in the installed program, by its key. -/
+def relationFacts (layout : SubjectLayout owner) (memberOf : Nat → String) : String := Id.run do
   let mut lines := #[]
   for k in layout.functions do
     lines := lines.push (s!"noncomputable def member'fn{k} : " ++
       s!"Member installed.headers.fns header{k} :=\n  {memberOf k}\n")
-  for (goal, _) in layout.aliases do
-    let name := relationLabel goal
-    let k := goal.relation
-    lines := lines.push (s!"abbrev {name}Key : Key := stored{k}.key\n" ++
-      s!"noncomputable abbrev {name}Header := header{k}\n" ++
-      s!"noncomputable abbrev {name}Member := member'fn{k}\n")
   return String.join lines.toList
 
 /-- The member fixes the full deployed position and its type and holders in the root header.
@@ -196,17 +177,13 @@ def text (layout : SubjectLayout owner) : Except String String := do
     "Zkc.Subject.BoundedTable (Zkc.Subject.Decision written'root) :=\n" ++
     s!"  {tableTerm decisionName layout.decisions.size}\n")
   for (((goal, d), path), i) in (layout.goals.toList.zip layout.paths).zipIdx do
-    lines := lines.push (s!"noncomputable def {goalName i} : Zkc.Subject.WrittenGoal " ++
-      s!"written'root := ⟨{decisionName d}, {fieldsName i}⟩\n" ++
+    lines := lines.push (
       s!"noncomputable def {slotName i} : Zkc.Subject.GoalSlot written'clauses.size :=\n" ++
       s!"  \{ path := {reprStr path}, property := {reprStr goal.property}, " ++
       s!"clause := ⟨{d}, by decide⟩, fields := {fieldsName i} }\n")
   lines := lines.push ("noncomputable def written'subject : " ++
     "Zkc.Subject.WrittenSubject written'root :=\n" ++
     s!"  ⟨written'clauses, {tableTerm slotName layout.goals.size}, written'origins⟩\n")
-  for i in [:layout.goals.size] do
-    lines := lines.push (s!"theorem written'goalAt{i} : " ++
-      s!"written'subject.goalAt ⟨{i}, by decide⟩ = {goalName i} := rfl\n")
   return String.join lines.toList
 
 end SubjectLayout

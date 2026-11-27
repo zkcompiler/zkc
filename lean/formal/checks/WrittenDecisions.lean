@@ -8,7 +8,6 @@ The controls change the issuance. Their clients keep the original source and sel
 open Zkc.Frontend Zkc.Frontend.Written Zkc.Tests.Frontend
 open PrintedPackageSupport ZkcFormalTests.WrittenSubject
 
-private abbrev Requests := List (String × String)
 private abbrev Check := IO Unit
 
 example (a b : GoalClaims) (_g : {g // g ∈ b.goals}) : SubjectLayout a := by
@@ -22,16 +21,14 @@ example (a b : Statements) (_foreign : SubjectLayout b.claims) : String := by
 private def expect {α : Type} [BEq α] [Repr α] (what : String) (actual expected : α) : IO Unit :=
   unless actual == expected do throw (IO.userError s!"{what}: got {repr actual}, expected {repr expected}")
 
-private def simple (ns : List String) : Requests := ns.map fun n => (n, n)
-
 private def statements (root : AdmittedRoot) (selectors : List String) : IO Statements := do
   let raw ← IO.ofExcept (goalClaims root selectors)
   expect "original occurrences" (raw.goals.map (·.goal)) selectors
-  return ⟨raw, raw.functionsBeforeRoot⟩
+  return ⟨raw⟩
 
-private def readSource (src : String) (req : Requests) : IO Statements := do
-  let (first, _) :: _ := req | throw (IO.userError "empty request")
-  statements (← IO.ofExcept (goalRoot src first)) (req.map Prod.fst)
+private def readSource (src : String) (selectors : List String) : IO Statements := do
+  let first :: _ := selectors | throw (IO.userError "empty request")
+  statements (← IO.ofExcept (goalRoot src first)) selectors
 
 /-- The published theorems of rows whose declarations have the qualified names `paths`, in the
 order of the rows: `sound` and `met` under the name space and the components of each path. -/
@@ -53,14 +50,14 @@ private def client (file space checks : String) : String :=
 
 private def eqn (lhs rhs : String) : String := s!"example : {lhs} = {rhs} := rfl\n"
 
-private def atGoal (i : Nat) := s!"(written'subject.goalAt ⟨{i}, by decide⟩)"
+private def atGoal (i : Nat) := s!"(written'subject.goals.get ⟨{i}, by decide⟩)"
 
 private def coordinates (i place key : Nat) (xs : List Nat) (ws : Option (List Nat)) : String :=
-  eqn s!"ZkcFormalTests.WrittenBinding.operands {atGoal i}"
+  eqn s!"ZkcFormalTests.WrittenBinding.operands (written'subject.clauses.get {atGoal i}.clause)"
     s!"({place}, {key}, {xs.length}, {reprStr xs}, {reprStr ws})"
 
-private def refs (label : String) (i d relation : Nat) :=
-  s!"run_cmd ZkcFormalTests.WrittenBinding.checkReferences (← Lean.getCurrNamespace) {reprStr label} {i} {d} {relation}\n"
+private def refs (i d relation : Nat) :=
+  s!"run_cmd ZkcFormalTests.WrittenBinding.checkReferences (← Lean.getCurrNamespace) {i} {d} {relation}\n"
 
 private def sizes (goals decisions : Nat) :=
   eqn "written'subject.goals.size" (toString goals) ++
@@ -71,11 +68,13 @@ private def roles (root prover verifier : Nat) :=
     s!"({root}, {prover}, {verifier})"
 
 private def fields (i : Nat) (args : List Nat) (table : String) (bound : Nat × Nat) (ceiling := false) :=
-  eqn s!"{atGoal i}.fields" s!"⟨{reprStr args}, some {table}, ⟨{bound.1}, {bound.2}, by decide⟩, {ceiling}⟩"
+  let number := s!"⟨{bound.1}, {bound.2}, by decide⟩"
+  eqn s!"{atGoal i}.fields" (s!"⟨{reprStr args}, " ++
+    (if ceiling then s!".ceiling {number} (some {table})" else s!".total {table} {number}") ++ "⟩")
 
 private def flat (root : Nat) (draws := "[]") := s!"⟨[.flat ⟨{root}⟩ {draws} []]⟩"
 
-private def full (work : System.FilePath) (space src : String) (req : Requests)
+private def full (work : System.FilePath) (space src : String) (req : List String)
     (paths : List String) (gold : String) : IO (Publication × Check) := do
   let s ← readSource src req
   let m ← IO.ofExcept (s.publication space)
@@ -83,43 +82,35 @@ private def full (work : System.FilePath) (space src : String) (req : Requests)
   published m paths
   let check ← issued work m.dataName.toString space m.data m.stated
   let original ← IO.ofExcept (ZkcFormalTests.WrittenSource.consumer src req)
-  let indices := List.range (s.claims.goals.map (·.declaration)).eraseDups.length
-  let lookups := indices.map fun i => s!"written'goalAt{i}"
-  let equations := String.join ((indices.zip lookups).map fun (i, thm) =>
-    s!"example : {atGoal i} = written'goal{i} := {thm}\n#print axioms {thm}\n")
   let compare ← issued work (space ++ "Source") space
-    (client m.dataName.toString space (original ++ gold ++ equations)) lookups
+    (client m.dataName.toString space (original ++ gold)) []
   return (m, check *> compare)
 
-/-- The public caps of the data module have one declaration per spelling, including aliases.
-Read their names in order, and count the separate canonical fields and located functions. -/
-private def checkLayout (text : String) (labels : List String) (rows functions : Nat) : IO Unit := do
+/-- Count the groups of fields of the data module, one per declaration, and its located
+functions. -/
+private def checkLayout (text : String) (rows functions : Nat) : IO Unit := do
   let names := (text.splitOn "\n").filterMap fun line => match line.splitOn " " with
     | "noncomputable" :: "def" :: n :: _ => some n
     | "def" :: n :: _ | "abbrev" :: n :: _ => some n
     | _ => none
-  expect "public cap names" (names.filter (·.endsWith "Caps")) (labels.map (· ++ "Caps"))
   expect "one group of fields per declaration" (names.filter (·.startsWith "written'fields")).length rows
   expect "located functions" (names.filter (·.startsWith "written'fn")).length functions
 
-private def qualifiedLeft := "goal'operands'58''58'left"
-private def aliases : Requests :=
-  [("left", "left"), ("operands::left", qualifiedLeft), ("left", "left"),
-   ("left_again", "left_again"), ("right", "right")]
+/-- Five selectors of three declarations: three of them select `left`, which is one row. -/
+private def aliases : List String :=
+  ["left", "operands::left", "left", "left_again", "right"]
 
 private def aliasCase (work : System.FilePath) (src : String) (reverse : Bool) :
     IO (Publication × Check) := do
   let rows := ["operands::left", "operands::left_again", "operands::right"]
   let (space, req, rows, selections, ports) := if reverse then
-      ("Backward", aliases.reverse, rows.reverse, [("right",0,0), ("left_again",1,1), ("left",2,1),
-        (qualifiedLeft,2,1)], [(1,3),(0,2),(0,2)])
-    else ("Forward", aliases, rows, [("left",0,0), (qualifiedLeft,0,0), ("left_again",1,0),
-        ("right",2,1)], [(0,2),(0,2),(1,3)])
+      ("Backward", aliases.reverse, rows.reverse, [(0,0), (1,1), (2,1)], [(1,3),(0,2),(0,2)])
+    else ("Forward", aliases, rows, [(0,0), (1,0), (2,1)], [(0,2),(0,2),(1,3)])
   let gold := sizes 3 2 ++ roles 1 0 1 ++ String.join (ports.zipIdx.map fun ((p,x),i) =>
     coordinates i p 0 [x] (some [0]) ++ fields i [] (flat 1) (0, 1))
   let (m, check) ← full work space src req rows
-    (gold ++ String.join (selections.map fun (l,i,d) => refs l i d 0))
-  checkLayout m.data (selections.map Prod.fst) 3 1
+    (gold ++ String.join (selections.map fun (i,d) => refs i d 0))
+  checkLayout m.data 3 1
   return (m, check)
 
 /-- Match each failure to a unique command in the unchanged source consumer and check the
@@ -147,31 +138,28 @@ private def controls (work : System.FilePath) (m : Publication) (src : String) :
   let original ← IO.ofExcept (ZkcFormalTests.WrittenSource.consumer src aliases)
   let mutate := replaceOnce m.data
   let run := fun tag body => checkMutant work m tag body original
-  let refAt := fun (l : String) => s!"checkReferences (← Lean.getCurrNamespace) {reprStr l} "
+  let refAt := fun (i : Nat) => s!"checkReferences (← Lean.getCurrNamespace) {i} "
   let wrong := fun want got => s!"expected the reference {m.space}.{want}, found {got}"
   let twin (tag body want got : String) :=
-    run tag body [(refAt "left_again", wrong want got)]
-  let lookup ← twin "RedirectLookup"
-    (← mutate "⟨1, by decide⟩ = written'goal1 := rfl" "⟨1, by decide⟩ = written'goal0 := rfl")
-    "written'goal1" "written'goal0"
+    run tag body [(refAt 1, wrong want got)]
   let cap ← twin "RedirectFieldCap"
-    (← mutate "caps := some written'caps1, bound := written'bound1, ceiling" "caps := some written'caps0, bound := written'bound1, ceiling")
+    (← mutate "number := .total written'caps1 written'bound1 }" "number := .total written'caps0 written'bound1 }")
     "written'caps1" "written'caps0"
   -- The fields of `left_again` name the bound of `left`: the two bounds are equal, and the
   -- reference is another goal's.
   let boundRef ← twin "RedirectFieldBound"
-    (← mutate "caps := some written'caps1, bound := written'bound1, ceiling" "caps := some written'caps1, bound := written'bound0, ceiling")
+    (← mutate "number := .total written'caps1 written'bound1 }" "number := .total written'caps1 written'bound0 }")
     "written'bound1" "written'bound0"
   -- The bound of `left_again` is another number than its source gives.
   let boundValue ← run "OtherBound"
     (← mutate "written'bound1 : Zkc.Subject.Bound := ⟨0, 1, by decide⟩"
       "written'bound1 : Zkc.Subject.Bound := ⟨1, 2, by decide⟩")
-    [(s!"({atGoal 1}.fields.bound.numerator,", "Type mismatch")]
+    [(s!"({atGoal 1}.fields.number.bound.numerator,", "Type mismatch")]
   -- The fields of `left_again` say that the source writes its bound, and the goal writes none: a
   -- challenge would then not hold the bound to the table.
   let flipped ← run "FlippedCeiling"
-    (← mutate "bound := written'bound1, ceiling := false }" "bound := written'bound1, ceiling := true }")
-    [(s!"{atGoal 1}.fields.ceiling =", "Type mismatch")]
+    (← mutate "number := .total written'caps1 written'bound1 }" "number := .ceiling written'bound1 (some written'caps1) }")
+    [(s!"{atGoal 1}.fields.number.written =", "Type mismatch")]
   -- The row of `left_again` has the path of `left`, and then another property than its goal names.
   let otherPath ← run "OtherPath"
     (← mutate "\"left_again\"], property :=" "\"left\"], property :=")
@@ -180,24 +168,19 @@ private def controls (work : System.FilePath) (m : Publication) (src : String) :
     (← mutate "property := Zkc.Security.Property.soundness, clause := ⟨0, by decide⟩, fields := written'fields1 }"
       "property := Zkc.Security.Property.completeness, clause := ⟨0, by decide⟩, fields := written'fields1 }")
     [("⟨1, by decide⟩).property", "Type mismatch")]
-  let capAlias ← twin "RedirectPublicCap"
-    (← mutate "left_againCaps : Zkc.Subject.CapTable := written'caps1"
-      "left_againCaps : Zkc.Subject.CapTable := written'caps0")
-    "written'caps1" "written'caps0"
   -- A slot is printed with named fields; its clause and its fields are its last two.
   let slot (d : Nat) (f : String) := s!"clause := ⟨{d}, by decide⟩, fields := written'fields{f} }"
   let swapped ← mutate (slot 0 "0") (slot 0 "'")
   let swapped ← replaceOnce swapped (slot 0 "1") (slot 0 "0")
   let swapped ← replaceOnce swapped (slot 0 "'") (slot 0 "1")
   let swap ← run "SwapFields" swapped [
-    (refAt "left", wrong "written'fields0" "written'fields1"),
-    (refAt qualifiedLeft, wrong "written'fields0" "written'fields1"),
-    (refAt "left_again", wrong "written'fields1" "written'fields0")]
+    (refAt 0, wrong "written'fields0" "written'fields1"),
+    (refAt 1, wrong "written'fields1" "written'fields0")]
   -- Only the right decision uses the fourth port. Both candidate ports are shared Booleans.
   let third := "(Member.tail (Member.tail Member.head))"
   let fourth := s!"(Member.tail {third})"
   let moved ← mutate s!"⟨⟨_, {fourth}⟩, by decide +kernel" s!"⟨⟨_, {third}⟩, by decide +kernel"
-  let operand ← run "MoveOperand" moved [(s!"WrittenBinding.operands {atGoal 2}", "Type mismatch")]
+  let operand ← run "MoveOperand" moved [(s!"WrittenBinding.operands (written'subject.clauses.get {atGoal 2}.clause)", "Type mismatch")]
   -- Route left_again to a new physical copy. All three dereferenced goals keep their values.
   let table := "⟨2, fun i => (if i.val < 1 then written'decision0 else written'decision1)⟩"
   let dupTable := "⟨3, fun i => (if i.val < 1 then written'decision0 else " ++
@@ -210,12 +193,10 @@ private def controls (work : System.FilePath) (m : Publication) (src : String) :
   let dup ← mutate marker (decl ++ "2 :" ++ body ++ marker)
   let dup ← replaceOnce dup table dupTable
   let dup ← replaceOnce dup (slot 0 "1") (slot 2 "1")
-  let dup ← replaceOnce dup "⟨written'decision0, written'fields1⟩" "⟨written'decision2, written'fields1⟩"
   let duplicate ← run "DuplicateRow" dup [("⟨1, by decide⟩).clause.val", "Type mismatch"),
-    (refAt "left_again", wrong "written'decision0" "written'decision2"),
+    (refAt 1, s!"{m.space}.written'slot1 must select the decision 0"),
     ("written'subject.clauses.size =", "Type mismatch")]
-  return [lookup, cap, boundRef, boundValue, flipped, otherPath, otherProperty, capAlias, swap, operand,
-    duplicate]
+  return [cap, boundRef, boundValue, flipped, otherPath, otherProperty, swap, operand, duplicate]
 
 private def aliasChecks (work : System.FilePath) : IO Unit := do
   let src ← IO.FS.readFile "fixtures/written-decisions.zkc"
@@ -299,13 +280,13 @@ module Right:
 goal target = soundness(Left::S)
 "
   let right ← replaceOnce left "soundness(Left::S)" "soundness(Right::S)"
-  let req := [("target", "target"), ("pair::target", "goal'pair'58''58'target")]
+  -- two selectors of one declaration, which is one row
+  let req := ["target", "pair::target"]
   let (m, leftCheck) ← full work "LeftScheme" left req ["pair::target"]
     (eqn "written'origins.schemePath" (reprStr "pair::Left::S"))
   let (_, rightCheck) ← full work "RightScheme" right req ["pair::target"]
     (eqn "written'origins.schemePath" (reprStr "pair::Right::S"))
-  let comparison ← startSourceComparison work "QualifiedSource" (Module.ofPublication m) left
-    (req.map Prod.fst)
+  let comparison ← startSourceComparison work "QualifiedSource" (Module.ofPublication m) left req
   let original ← IO.ofExcept (ZkcFormalTests.WrittenSource.consumer right req)
   let crossed ← checkMutant work m "CrossedScheme" m.data original
     [("written'origins.schemePath =", "Type mismatch")]
@@ -328,7 +309,7 @@ private def importedScheme (work : System.FilePath) : IO Unit := do
     expect "original goal" result.path (some "catalog::target")
     let m := (← IO.ofExcept result.outcome).publication
     let original ← IO.ofExcept (admitSoundnessGoal assembly "target")
-    let readback ← IO.ofExcept (ZkcFormalTests.WrittenSource.consumerAt original [("target", "target")])
+    let readback ← IO.ofExcept (ZkcFormalTests.WrittenSource.consumerAt original ["target"])
     let check ← issued work tag m.space m.data m.stated
     let gold := eqn "written'origins.schemeFileModule" (reprStr definingModule) ++
       eqn "written'origins.schemePath" (reprStr "catalog::Pair::S")
@@ -349,7 +330,7 @@ private def countSource : IO String := do
   return src
 
 private def coordinateChecks (work : System.FilePath) : IO Unit := do
-  let add := fun name src labels rows gold => Prod.snd <$> full work name src (simple labels) rows gold
+  let add := fun name src selectors rows gold => Prod.snd <$> full work name src selectors rows gold
   let count ← add "CountRows" (← countSource) ["loose","strict"] ["t::loose","t::strict"]
     (sizes 2 2 ++ roles 1 0 1 ++ coordinates 0 0 3 [0] (some []) ++
      coordinates 1 0 4 [0] (some []) ++ fields 0 [4] (flat 1 "[⟨⟨0⟩, 3, 8, 1⟩]") (3, 8) ++
@@ -363,7 +344,7 @@ private def coordinateChecks (work : System.FilePath) : IO Unit := do
     (sizes 4 3 ++ roles 1 1 0 ++ String.join ([
       (0,0,[2,1,1],[0,3]), (1,1,[1,2,1],[3,0]), (2,2,[2,1,1],[0,3]),
       (3,0,[2,1,1],[0,3])].map fun (i,p,x,w) => coordinates i p 0 x (some w)) ++
-      refs "again" 3 0 0)
+      refs 3 0 0)
   let short ← add "ShortWitness" occurrences ["short"] ["coordinates::short"] (coordinates 0 3 0 [2,1,1] none)
   let slots ← IO.FS.readFile "fixtures/written-decisions.zkc"
   let mapped ← add "WitnessPorts" slots ["left","other_witness","implicit_witness"]
@@ -373,10 +354,10 @@ private def coordinateChecks (work : System.FilePath) : IO Unit := do
   let mut bare := []
   for (name,src,p,v) in [("EmptyRoles",zero,1,0),
       ("TurnedRoles",(zero.replace "prover P" "prover V").replace "@V" "@P",0,1)] do
-    let raw ← readSource src (simple ["z"])
+    let raw ← readSource src ["z"]
     expect "raw zero-input scheme" (raw.claims.inputs.size, raw.claims.prover, raw.claims.verifier)
       (0,p,v)
-    let req := simple ["z"]
+    let req := ["z"]
     let (m, good) ← full work name src req ["zero::z"] (roles 1 p v ++ coordinates 0 0 0 [] (some []))
     bare := good :: bare
     if name == "EmptyRoles" then
@@ -395,17 +376,17 @@ private def capChecks (work : System.FilePath) : IO Unit := do
     "        t <- draw index<2> from V to P\n        guard @V x"
   let src ← replaceOnce src "charge sites.z <= 1 / (e + 1)"
     "charge sites.z <= e / 8\n        charge sites.t <= (4 - e) / 8"
-  let req := simple ["a","b"]
+  let req := ["a","b"]
   let draws := fun (z t : Nat) => flat 1 s!"[⟨⟨0⟩, {z}, 8, 1⟩, ⟨⟨1⟩, {t}, 8, 1⟩]"
   let (m, check) ← full work "EqualTotals" src req ["tenancy::a","tenancy::b"]
     (fields 0 [1] (draws 1 3) (3, 4) (ceiling := true) ++ fields 1 [3] (draws 3 1) (1, 2) (ceiling := true))
   let redirect := fun (text : String) =>
-    replaceOnce text "specification := [3], caps := some written'caps1," "specification := [3], caps := some written'caps0,"
+    replaceOnce text "specification := [3], number := .ceiling written'bound1 (some written'caps1) }" "specification := [3], number := .ceiling written'bound1 (some written'caps0) }"
   let original ← IO.ofExcept (ZkcFormalTests.WrittenSource.consumer src req)
   -- The fields of `b` name the table of `a`, whose total is the same and whose draws pay other fees.
   let inconsistent ← checkMutant work m "InconsistentCap" (← redirect m.data) original
-    [(s!"{atGoal 1}.fields.caps =", "Type mismatch"),
-     ("checkReferences (← Lean.getCurrNamespace) \"b\"",
+    [(s!"{atGoal 1}.fields.number.caps =", "Type mismatch"),
+     ("checkReferences (← Lean.getCurrNamespace) 1 ",
        "expected the reference EqualTotals.written'caps1, found written'caps0")]
   -- A consistent re-emission pays the sibling's fees but keeps the requested arguments and
   -- the common total. Redirect its now equal table reference as a second, independent fault.
@@ -414,24 +395,17 @@ private def capChecks (work : System.FilePath) : IO Unit := do
   let other ← readSource constant req
   let other ← IO.ofExcept (other.publication m.space)
   let bad ← checkMutant work m "ChangedCapTree" (← redirect other.data) original
-    [(s!"{atGoal 1}.fields.caps =", "Type mismatch"),
-     ("checkReferences (← Lean.getCurrNamespace) \"b\"",
+    [(s!"{atGoal 1}.fields.number.caps =", "Type mismatch"),
+     ("checkReferences (← Lean.getCurrNamespace) 1 ",
        "expected the reference EqualTotals.written'caps1, found written'caps0")]
-  let arg ← replaceOnce m.data "bArgument0 : Nat := written'fields1.specification"
-    "bArgument0 : Nat := written'fields0.specification"
-  let wrongArg ← checkMutant work m "RedirectArgument" arg original
-    [("bArgument0 =", "Type mismatch"),
-     ("checkReferences (← Lean.getCurrNamespace) \"b\"",
-       "expected the reference EqualTotals.written'fields1, found written'fields0")]
   check
   inconsistent
   bad
-  wrongArg
 
 /-- Two clauses select one function. Inlining an equal entry in only the second clause
 still gives the same values, but loses the reference to the shared function. -/
 private def sharedFunction (work : System.FilePath) : IO Unit := do
-  let req := simple ["a", "b", "c"]
+  let req := ["a", "b", "c"]
   let s ← readSource tenancy req
   let m ← IO.ofExcept (s.publication "SharedFunction")
   let changed ← replaceOnce m.data
@@ -439,7 +413,7 @@ private def sharedFunction (work : System.FilePath) : IO Unit := do
     "written'application1 : Zkc.Subject.ShortApplication written'root :=\n  ⟨⟨header0, member'fn0, found'fn0⟩, ⟨1, by decide +kernel⟩"
   let original ← IO.ofExcept (ZkcFormalTests.WrittenSource.consumer tenancy req)
   let bad ← checkMutant work m "InlineFunction" changed original
-    [("checkReferences (← Lean.getCurrNamespace) \"c\"", "expected the reference SharedFunction.written'fn0")]
+    [("checkReferences (← Lean.getCurrNamespace) 2 ", "expected the reference SharedFunction.written'fn0")]
   -- The same function entry, reached through the source's names by way of a private helper of
   -- the module: the values are the same, and a statement over this short application
   -- would read the origins.
@@ -451,7 +425,7 @@ private def sharedFunction (work : System.FilePath) : IO Unit := do
       "noncomputable def written'application1 : Zkc.Subject.ShortApplication written'root :=\n" ++
       "  ⟨entryByNames, ⟨1, by decide +kernel⟩")
   let reaching ← checkMutant work m "ApplicationReach" through original
-    [("checkReferences (← Lean.getCurrNamespace) \"c\"",
+    [("checkReferences (← Lean.getCurrNamespace) 2 ",
       "the short application SharedFunction.written'application1 reaches SharedFunction.written'origins")]
   -- The same function entry again, reached through a bound: a short application is the same at
   -- every bound, and a statement over this one would read a goal's number.
@@ -464,7 +438,7 @@ private def sharedFunction (work : System.FilePath) : IO Unit := do
       "noncomputable def written'application1 : Zkc.Subject.ShortApplication written'root :=\n" ++
       "  ⟨entryAtBound, ⟨1, by decide +kernel⟩")
   let reachingBound ← checkMutant work m "ApplicationBound" bounded original
-    [("checkReferences (← Lean.getCurrNamespace) \"c\"",
+    [("checkReferences (← Lean.getCurrNamespace) 2 ",
       "the short application SharedFunction.written'application1 reaches SharedFunction.written'bound9")]
   bad
   reaching
@@ -491,13 +465,13 @@ private def refusal {α : Type} (why : String) (result : Except String α) : IO 
   | .error actual => expect "route diagnostic" actual why
 
 private def routeEdges (work : System.FilePath) : IO Unit := do
-  let red ← readSource reduction (simple ["red","pos"])
+  let red ← readSource reduction ["red","pos"]
   let why := "red: the goal reads a `reduces` clause. The statement of a reduction " ++
     "is about a return on which the reduced statement is true, and is not issued yet"
   refusal why (red.publication "Reduction")
   -- A ceiling below the total of the charges is issued: the row's bound is the ceiling.
   let src := (← countSource) ++ "\ngoal low = soundness(Checked, spec e = 1) <= 0\n"
-  let req := simple ["low","loose"]
+  let req := ["low","loose"]
   let low ← IO.ofExcept ((← readSource src req).publication "Low")
   expect "low-ceiling refusals" low.refusals []
   published low ["t::low","t::loose"]
@@ -507,8 +481,8 @@ private def routeEdges (work : System.FilePath) : IO Unit := do
     (original ++ fields 0 [1] (flat 1 "[⟨⟨0⟩, 3, 4, 1⟩]") (0, 1) (ceiling := true)))
   [data, reader].forM id
 
-private def hashDiagnostic (label : String) :=
-  label ++ ": no interpretation of row (.inl (Zkc.Vocabulary.RowKey.hash (Zkc.Vocabulary.Hash.sha256)))"
+private def hashDiagnostic (goal : String) :=
+  goal ++ ": no interpretation of row (.inl (Zkc.Vocabulary.RowKey.hash (Zkc.Vocabulary.Hash.sha256)))"
 
 /-- Exercise the same command handler used by written-goals, including its occurrence reports,
 exit code, canonical directories and both files of each surviving publication. -/
@@ -560,11 +534,11 @@ private def mixedChecks (work : System.FilePath) : IO Unit := do
   let m ← IO.ofExcept (s.publication "MixedFull")
   published m ["mixed::good"]
   expect "mixed full refusals" m.refusals omitted
-  checkLayout m.data ["good"] 1 1
+  checkLayout m.data 1 1
   let fullCheck ← issued work m.dataName.toString m.space m.data m.stated
-  let data := sizes 1 1 ++ roles 6 0 1 ++ refs "good" 0 0 2 ++
+  let data := sizes 1 1 ++ roles 6 0 1 ++ refs 0 0 2 ++
     coordinates 0 0 2 [0,1] (some []) ++ fields 0 [0] (flat 6) (0, 1) ++
-    eqn "goodArgument0" "0" ++ eqn "goodKey.number" "2" ++ eqn "goodCaps" (flat 6)
+    eqn "stored2.key.number" "2"
   let reader ← issued work (m.space ++ "Source") m.space (client m.dataName.toString m.space data)
   let allBad := ["bad","bad","mixed::bad"]
   let bad ← statements root allBad
@@ -583,7 +557,7 @@ private def mixedChecks (work : System.FilePath) : IO Unit := do
 #eval IO.FS.withTempDir routeEdges
 #eval IO.FS.withTempDir mixedChecks
 #eval do
-  let selectors := aliases.map Prod.fst
+  let selectors := aliases
   let paths := ["operands::left","operands::left","operands::left","operands::left_again","operands::right"]
   for (order, targets) in [(selectors, paths), (selectors.reverse, paths.reverse)] do
     IO.FS.withTempDir fun w => cli w "fixtures/written-decisions.zkc" order targets (List.replicate 5 true)

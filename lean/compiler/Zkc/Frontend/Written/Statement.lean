@@ -13,10 +13,10 @@ What the issuer writes for written soundness goals, as the text of modules.
 The goals of one scheme are published through the formal library (`Statements.publication`):
 
 - *the data module* holds the printed package of the claims (`goalClaims`) and its installation;
-  `facts`: the key, header and place of the root and of each goal's relation, the header and
-  place of each function before the root that a text names, the verifier and the prover of the
-  scheme, and each goal's proof arguments and table of caps, as terms; `lookups`: the root and
-  each relation found in the installed program by their keys; and the typed subject
+  `factsOf`: the key, header and place of the root, the place of each relation and of each
+  function before the root by its key, the verifier and the prover of the scheme, and each
+  goal's table of caps, bound and fields, as terms; `lookups`: the root and each relation found
+  in the installed program by their keys; and the typed subject
   (`SubjectLayout.text`): a short application and a decision for each clause, a row for each
   goal with the path of its declaration, its property, its bound (the ceiling that the goal
   writes, else the total of its charges) and its table of caps, and the source names of the root.
@@ -30,8 +30,9 @@ applied to the goal's row; the issuer writes none of them as text.
 What the data say of a goal is read from the claims and from nothing that a caller gives beside
 them: the deciding role is the verifier of the claims' scheme, the operands are the inputs of
 the deployed header at the places that the claims give, and the proof arguments, the bound and
-the table of caps are the goal's. A caller gives the labels of the functions that a text names.
-A goal whose clause is a `reduces` is not issued: the statement of a reduction is about a return
+the table of caps are the goal's. No declaration of the data module is named after a name of
+the source: a relation and a function before the root are named by their keys, and a goal by its
+row. A goal whose clause is a `reduces` is not issued: the statement of a reduction is about a return
 on which the reduced statement is true. A goal whose reach the standard interpretation does not
 cover is not issued and is reported.
 -/
@@ -40,15 +41,11 @@ namespace Zkc.Frontend.Written
 open Zkc.Subject Zkc.Subject.Print
 open Core
 
-/-- The claims of goals of one scheme, with what their statements need beside them: the labels
-of the functions that the text names. The deciding role is the verifier of the claims' scheme;
+/-- The claims of goals of one scheme. The deciding role is the verifier of the claims' scheme;
 the text names it `verifierRole` and the prover `proverRole`. The goals of the statements are
 those of the claims. -/
 structure Statements where
   claims : GoalClaims
-  /-- The functions of the package before the root that the text names, each with the label of
-  its name (`apply` gives `applyMember`): what the root may call. -/
-  functions : List (String × Nat) := []
 
 /-- The names that a text, and a consumer after it, may use. -/
 def opens : String :=
@@ -114,11 +111,6 @@ def coveredOccurrences (s : Statements) :
   if goals.isEmpty && !refusals.isEmpty then throw ("\n".intercalate refusals.toList)
   return (goals.toList, refusals.toList)
 
-/-- The original occurrences with supported reach, together with every source refusal. -/
-def coveredGoals (s : Statements) : Except String (List ClaimedGoal × List String) := do
-  let (goals, refusals) ← s.coveredOccurrences
-  return (goals.map Subtype.val, refusals)
-
 /-- The keys of the definitions of the package in order, and whether each is a protocol. -/
 def definitions (s : Statements) : List (Nat × Bool) :=
   (definitionKeys s.package.named).map fun (key, isProtocol) => (key.number, isProtocol)
@@ -134,56 +126,20 @@ last first: as many places after the head as definitions of its kind follow it. 
 def memberOf (s : Statements) (key : Nat) (isProtocol : Bool) : String :=
   memberAt (((s.definitions.dropWhile (·.1 != key)).drop 1).filter (·.2 == isProtocol)).length
 
-/-- Whether a name of the source can stand in a generated name as it is: letters of the basic
-alphabet, digits and underscores, not beginning with a digit. A name of the source may be any
-identifier of Unicode, of which Lean reads some as other tokens. -/
-def plainName (name : String) : Bool :=
-  !name.isEmpty && name.all (fun c => c.isAlphanum || c == '_') && !name.front.isDigit
-
-/-- Keep ordinary source labels readable. Escaped labels use an apostrophe, which cannot
-occur in a source identifier. The prefixes `at_` and `site_` introduce generated declarations. -/
-def usableSourceLabel (name : String) : Bool :=
-  plainName name && name != "at" && !name.startsWith "at_" && name != "site" &&
-    !name.startsWith "site_" && !name.contains "_cap_" && !name.endsWith "_cap"
-
-/-- A goal keeps its source spelling for diagnostics and source readback. Its Lean label
-also has to coexist with the protocol root and other generated names. -/
-def labelOfSpelling (spelling : String) : String :=
-  if usableSourceLabel spelling && !spelling.endsWith "_claim_of" then spelling
-  else "goal'" ++ String.join (spelling.toList.map fun c =>
-    if c.isAlphanum then String.singleton c else s!"'{c.toNat}'")
-
-def _root_.Zkc.Frontend.Written.ClaimedGoal.label (goal : ClaimedGoal) : String :=
-  labelOfSpelling goal.goal
-
-/-- The relation aliases and transfer lemma share a namespace with fixed protocol facts.
-Keep `root_sound` and `verifier_sound` under their source names in the public challenge. -/
-def _root_.Zkc.Frontend.Written.ClaimedGoal.relationLabel (goal : ClaimedGoal) : String :=
-  if goal.goal == "root" || goal.goal == "verifier" then "relation'" ++ goal.goal else goal.label
-
-/-- Functions before the root keep their source labels where unique. The key in a fallback
-label belongs to this package. Retain the ordinary numbered fallback when available. -/
+/-- The functions of the package before the root, which the root may call: each with its name in
+the source and its key. -/
 def _root_.Zkc.Frontend.Written.GoalClaims.functionsBeforeRoot (claims : GoalClaims) :
     List (String × Nat) :=
   let definitions := definitionKeys claims.emission.named
   let before := (definitions.takeWhile (·.1.number != claims.root)).filter (!·.2)
-  let named : List (String × Nat) := before.map fun (key, _) =>
+  before.map fun (key, _) =>
     let name := match claims.state.table.allocatedKey? key.number with
       | some instanceKey => claims.state.program.nameOf instanceKey.declaration
       | none => ""
     (name, key.number)
-  let reserved := claims.goals.foldl (fun names goal => names.insert goal.label)
-    (Std.HashSet.ofList ["root", "callee", "verifier", "prover", "site"])
-  let (sourceNames, taken) := named.foldl (init := (∅, reserved)) fun (seen, taken) (name, _) =>
-    ((seen : Std.HashSet String).insert name, if seen.contains name then taken.insert name else taken)
-  let (_, labels) := named.foldl (init := (reserved, #[])) fun (used, labels) (name, key) => Id.run do
-    let numbered := s!"{name}{key}"
-    let label :=
-      if usableSourceLabel name && !taken.contains name then name
-      else if usableSourceLabel name && !sourceNames.contains numbered && !used.contains numbered then numbered
-      else s!"function'{key}"
-    return (used.insert label, labels.push (label, key))
-  labels.toList
+
+/-- The functions before the root, by name in the source and key. -/
+def functions (s : Statements) : List (String × Nat) := s.claims.functionsBeforeRoot
 
 /-- The place of a function among the functions of the program before the root, which stand
 last first. -/
@@ -192,66 +148,26 @@ def calleeMember (s : Statements) (key : Nat) : String :=
   memberAt (((before.dropWhile (·.1 != key)).drop 1).filter (!·.2)).length
 
 /-- What was read from the source, as terms: the root, the roles, the functions before the root
-that the text names, and for each goal its proof arguments, its table of caps and its
-relation. -/
+by their keys, and for each goal its table of caps, its bound and its fields, and the member of
+its relation. A function before the root is `member'callee<key>`, a member of `calleeProgram`,
+with the function's name in the source in its comment; a relation is `member'fn<key>`, a
+member of `installed`. -/
 def factsOf (s : Statements) (layout : SubjectLayout s.claims) : String :=
   let root := s.claims.root
   s!"abbrev rootKey : Key := ⟨{root}⟩\n" ++
   s!"noncomputable abbrev rootHeader := header{root}\n" ++
-  s!"noncomputable abbrev calleeProgram : Typed V := {s.programBefore root}\n" ++
+  (if s.functions.isEmpty then "" else
+    s!"noncomputable abbrev calleeProgram : Typed V := {s.programBefore root}\n") ++
   s!"noncomputable abbrev rootMember : Member installed.headers.protocols header{root} :=\n" ++
   s!"  {s.memberOf root true}\n" ++
   s!"abbrev verifierRole : Role := {s.claims.verifier}\n" ++
   s!"abbrev proverRole : Role := {s.claims.prover}\n" ++
-  String.join (s.functions.map fun (label, key) =>
-    s!"noncomputable abbrev {label}Header := header{key}\n" ++
-    s!"noncomputable abbrev {label}Member : Member calleeProgram.headers.fns header{key} :=\n" ++
+  String.join (s.functions.map fun (name, key) =>
+    s!"/-- The function `{name}` of the source. -/\n" ++
+    s!"noncomputable abbrev member'callee{key} : Member calleeProgram.headers.fns header{key} :=\n" ++
     s!"  {s.calleeMember key}\n") ++
-  layout.goalFacts ClaimedGoal.label ++
-  layout.relationFacts ClaimedGoal.relationLabel (fun key => s.memberOf key false)
-
-/-- Root, relation, cap and argument names for a module that only needs facts. -/
-def facts (s : Statements) (goals := s.claims.goals.attach) : String :=
-  s.factsOf (.ofGoals s.claims goals)
-
-/-- The total of a goal's table of caps, as the frontend computes it, where the goal has a table. -/
-def _root_.Zkc.Frontend.Written.ClaimedGoal.total (goal : ClaimedGoal) : Option Rat :=
-  goal.caps.map (·.ratio)
-
-/-- The name of a draw of the root in a module: the name of its site in the source, with
-its place among the draws that realize the site where a stepped loop gives several. -/
-def siteLabel (site : String) (index count : Nat) : String :=
-  if count == 1 then site else s!"{site}_{index}"
-
-/-- The named draws of a goal's root, each with the name of its site in the source, its name
-in a module and its key. The name in a module is the site's (`siteLabel`) where that is a plain
-name, and `key<number>` of the draw where it is not. A name that two charged draws would share
-(a site `r_0` beside the first draw of a stepped loop over `r`) is followed by the key of each.
-The name of a charged draw does not depend on the draws that the contract does not charge: a
-draw without a charge whose name another draw has is the one that is followed by its key. The
-charged draws are those of the goal's table; for a goal without a table none counts as charged. -/
-def _root_.Zkc.Frontend.Written.ClaimedGoal.siteLabels (goal : ClaimedGoal) :
-    List (String × String × Core.Key) :=
-  let capped := ((goal.caps.bind (·.uses.getLast?)).map (·.draws)).getD []
-  let charged := Std.HashSet.ofList (capped.map (·.key.number))
-  let draws := goal.sites.flatMap fun (site, keys) =>
-    keys.zipIdx.map fun (key, index) =>
-      let label := if plainName site then siteLabel site index keys.length else s!"key{key.number}"
-      -- Applied sites reserve labels beginning with site_ and a numeric address.
-      let reserved := label.startsWith "site_" && (label.drop 5).front?.any Char.isDigit
-      (site, if reserved then s!"draw'{key.number}" else label, key)
-  let disambiguate (draws : List (String × String × Core.Key)) (fallback : String → Nat → String) :=
-    let counts := draws.foldl (init := ({} : Std.HashMap String (Nat × Nat))) fun counts (_, label, key) =>
-      let (all, paid) := counts[label]?.getD (0, 0)
-      counts.insert label (all + 1, paid + (if charged.contains key.number then 1 else 0))
-    draws.map fun (site, label, key) =>
-      let (all, paid) := counts[label]?.getD (0, 0)
-      let shared := (if charged.contains key.number then paid else all) > 1
-      (site, if shared then fallback label key.number else label, key)
-  -- A source site can itself be called r_0_key0. The final fallback is disjoint from
-  -- every source spelling and unique by instruction key.
-  let numbered := disambiguate draws fun label key => s!"{label}_key{key}"
-  disambiguate numbered fun _ key => s!"draw'{key}"
+  layout.goalFacts ++
+  layout.relationFacts (fun key => s.memberOf key false)
 
 /-- The lines that open a module: its imports, and the namespace of the core. -/
 def header (modules : List String) : String :=
@@ -266,10 +182,8 @@ kernel proof for each distinct lookup. -/
 def lookups (goals : List ClaimedGoal) : String := Id.run do
   let mut text :=
     "theorem found'root : installed.findProtocol rootKey = some ⟨rootHeader, rootMember⟩ := by kernel_rfl\n"
-  for (goal, first) in perRelation goals (·.relationLabel) do
-    let name := goal.relationLabel
-    if name == first then
-      text := text ++ s!"theorem found'fn{goal.relation} : installed.find {name}Key = some (.fn {name}Member) := by kernel_rfl\n"
+  for relation in (goals.map (·.relation)).eraseDups do
+    text := text ++ s!"theorem found'fn{relation} : installed.find stored{relation}.key = some (.fn member'fn{relation}) := by kernel_rfl\n"
   return text ++ "\n"
 
 /-- The modules that a data module imports: those of the printed package and the typed subject's.

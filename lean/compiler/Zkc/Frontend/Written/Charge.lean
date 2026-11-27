@@ -155,10 +155,6 @@ def chargedSite (s : Compile.State) (declaration : DeclarationId) (place : Synta
           "attempt is not in a table of caps yet")
   throw "a charge names no site"
 
-/-- Draws by the names of their sites: each name with the keys of the draws that realize it
-(one, or one for each block of a stepped loop). -/
-abbrev SiteKeys := List (String × List Core.Key)
-
 /-- **A limit of a table of caps**: what a legal source has and a table has no place for yet. They
 are four: a charge on an application or on an attempt; a charge on a site of an applied protocol;
 a charged draw under a loop whose count is read at run time, or in an attempt; an application
@@ -177,7 +173,7 @@ def TableLimit.describe (limit : TableLimit) : String :=
 walk goes on after a limit, so an error of the source that stands after one is still an error;
 the uses of a walk that met a limit are no table. -/
 structure TableWalk where
-  uses : Array (ProofSubject × UseCaps × SiteKeys) := #[]
+  uses : Array (ProofSubject × UseCaps) := #[]
   limit : Option TableLimit := none
 
 abbrev TableM := StateT TableWalk ExportM
@@ -248,7 +244,6 @@ partial def capsOfUse (c : AdmittedRoot) (subject : ProofSubject) : TableM Nat :
         s!"a second charge on `sites.{".".intercalate names.toList}`: a site has one cap"
     seen := seen.push names
   let mut capped : Array (Core.Key × Nat × Nat) := #[]
-  let mut sites : SiteKeys := []
   -- A charge's site and amount are read before a limit is noted for it: a site that is no site of
   -- a charge, and an amount in error, are errors.
   let some owner := c.state.table.allocatedKey? subject.protocol | throw "missing charge instance"
@@ -267,51 +262,25 @@ partial def capsOfUse (c : AdmittedRoot) (subject : ProofSubject) : TableM Nat :
       | some (_, _, none) => atLimit span (s!"the draw `{site}` of `{name}` is under a loop whose count is " ++
           "read at run time, or in an attempt: it has no count in a table of caps yet")
       | none => throw s!"missing the draw `{site}` of `{name}` among the instructions of its definition"
-    sites := sites ++ [(site, charge.draws.map (·.2))]
   let caps ← capsOfTally c subject name place capped (body.tally (some 1))
-  modify fun walk => { walk with uses := walk.uses.push (subject, ⟨⟨subject.protocol⟩, caps⟩, sites) }
+  modify fun walk => { walk with uses := walk.uses.push (subject, ⟨⟨subject.protocol⟩, caps⟩) }
   return (← get).uses.size - 1
 
 end
-
-/-- The draws of the root by the names that the source gives them, each with the keys of the
-draws that realize it (one, or one for each block of a stepped loop): every draw that has a
-name and is emitted, whether the contract charges it or not. A draw of a loop that does not
-run is realized by no instruction and has no name here; nor has a draw of which a realization
-is not found by its address (two instructions at one coordinate). A name is a convenience of a
-text: a goal is not refused for a draw that has none, and a charge on such a draw is refused
-where the charge is read (`drawCharge`). -/
-def drawSites (c : AdmittedRoot) : ExportM SiteKeys := do
-  let s := c.state
-  let some instanceKey := s.table.allocatedKey? c.id | throw "missing root instance"
-  let some {content := .protocol head .., ..} := s.env.modules.lowered? instanceKey.declaration
-    | throw "expected a resolved protocol"
-  let some (.protocol code) := s.results.body? c.id | throw "missing elaborated root"
-  let some addresses := Emit.SiteAddresses.forProtocol c.evidence.admitted.program ⟨c.id⟩
-    | throw "missing admitted root"
-  let mut sites : SiteKeys := []
-  for (source, event) in head.events.zipIdx do
-    let some name := source.name | continue
-    let .transfer _ (some _) := source.audience | continue
-    let occurrences := Typing.SiteEntry.realizations code.sites event "value"
-    let some draws := occurrences.toList.mapM addresses.resolve | continue
-    unless draws.isEmpty do sites := sites ++ [(name, draws.map (·.2))]
-  return sites
 
 /-- **The table of caps of a goal's root** (SX8): the uses that the root reaches at the goal's
 proof arguments, callees first and the root's last, each with the caps that the contract of its
 definition gives its charged draws at the proof arguments of that use. No caller names a draw:
 the table is of every charge that the root reaches. Where a charge that the root reaches has no
 place in a table, the result is that limit, the first in the order of the walk; an error of the
-source is an error whether or not a limit stands before it. With the table, the draws of the
-root by the names of their sites (`drawSites`), for a text that names a draw as the source does. -/
+source is an error whether or not a limit stands before it. -/
 def goalCaps (c : AdmittedRoot) (specification : Array Nat) :
-    ExportM (Except TableLimit CapTable × SiteKeys) := do
+    ExportM (Except TableLimit CapTable) := do
   let (_, walk) ← (capsOfUse c ⟨c.id, specification⟩).run {}
   let table := match walk.limit with
     | some limit => .error limit
-    | none => .ok ⟨walk.uses.toList.map (·.2.1)⟩
-  return (table, ← drawSites c)
+    | none => .ok ⟨walk.uses.toList.map (·.2)⟩
+  return table
 
 /-- The named request selects the deployed root even in an assembly with several schemes. -/
 def admitSoundnessGoal (assembly : Assembly) (name : String) : ExportM AdmittedRoot := do

@@ -4,6 +4,7 @@ public import ZkcFormal.ChargedProbability
 public import Zkc.Core.World.Stack
 public import Zkc.Core.Program.Links
 public import Zkc.Subject.Charges
+public import ZkcFormal.Written.Budget
 
 @[expose] public section
 
@@ -84,18 +85,6 @@ theorem _root_.Zkc.Subject.CapTable.allowanceFrom_at {V : Vocabulary} (M : Model
     (occurs : ROp.occurrence M op = ⟨start ++ rest, key⟩) :
     table.allowanceFrom M place start op = table.capFrom place (Frame.applications rest) key := by
   simp [CapTable.allowanceFrom, occurs, Occurrence.siteBelow_append]
-
-/-- The total of each use of a table. -/
-def _root_.Zkc.Subject.CapTable.totals (table : CapTable) : List ℚ≥0 :=
-  table.totalsIn ℚ≥0
-
-/-- The budget of the use at a place: its total. -/
-def _root_.Zkc.Subject.CapTable.budgetAt (table : CapTable) (place : Nat) : ℚ≥0 :=
-  table.totalAt ℚ≥0 place
-
-/-- The budget of a table: the total of the root's use. -/
-def _root_.Zkc.Subject.CapTable.budget (table : CapTable) : ℚ≥0 :=
-  table.budgetAt table.root
 
 /-- The total of a table, as a probability. -/
 noncomputable def _root_.Zkc.Subject.CapTable.total (table : CapTable) : ℝ≥0∞ :=

@@ -39,7 +39,7 @@ private def goalNamespace (path : String) : String :=
 private def issueGoal (root : AdmittedRoot) (id : DeclarationId) (path : String) :
     ExportM IssuedGoal := do
   let claims ← singleGoalClaims root id
-  let statements : Statements := ⟨claims, claims.functionsBeforeRoot⟩
+  let statements : Statements := ⟨claims⟩
   let publication ← statements.publication (goalNamespace path)
   return ⟨statements, publication⟩
 

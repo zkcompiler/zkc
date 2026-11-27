@@ -117,7 +117,7 @@ def typedSubjects : String :=
   "namespace Complete\nnoncomputable def subject := Typed.over #[\"claim\", \"flag\", \"right\", \"n\"] rfl\n" ++
   "  ⟨1, fun _ => { Named.written'slot0 with property := Zkc.Security.Property.completeness }⟩\nend Complete\n" ++
   "namespace BoundInPlace\nnoncomputable def subject := Typed.over #[\"claim\", \"flag\", \"right\", \"n\"] rfl\n" ++
-  "  ⟨1, fun _ => { Named.written'slot0 with fields := { Named.written'fields0 with bound := ⟨0, 1, by decide⟩ } }⟩\n" ++
+  "  ⟨1, fun _ => { Named.written'slot0 with fields := { Named.written'fields0 with number := .total Named.written'caps0 ⟨0, 1, by decide⟩ } }⟩\n" ++
   "end BoundInPlace\n"
 
 /-- The scope of a caller around a command: a name space and a section, a local instance of
@@ -173,7 +173,7 @@ issuer's views module is the line that this check also writes over other subject
 def statementsOf (text goal space : String) : IO String := do
   let root ← admitted text goal
   let claims ← IO.ofExcept (goalClaims root [goal])
-  let issued ← IO.ofExcept ((⟨claims, claims.functionsBeforeRoot⟩ : Statements).publication space)
+  let issued ← IO.ofExcept ((⟨claims⟩ : Statements).publication space)
   unless issued.refusals.isEmpty do throw (IO.userError s!"{issued.refusals}")
   unless issued.views == s!"import {space}.Stated\nimport ZkcFormal.Written.Views\n\npublish_views {space}.written'subject\n" do
     throw (IO.userError s!"the issuer's views module is not the line of this check:\n{issued.views}")

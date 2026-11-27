@@ -12,7 +12,7 @@ the subject.
 `publish_fees S` decides, for each goal row of the subject `S` at the path `p` that holds a table
 of caps, while it elaborates and before it declares anything of the row: that the table counts as
 the stored program does (`CapTable.counted`), and that the table's budget is at most the row's
-bound (`Fees.within`). A row that holds no table (a goal with a ceiling whose charges a table has
+bound (`Budget.within`). A row that holds no table (a goal with a ceiling whose charges a table has
 no place for) gets no fee facts and a line. Both are closed definitions of the library, evaluated by the kernel. A row for
 which one evaluates to `false` gets no fee facts and a line that says which; the other rows are
 not affected. A decision that the kernel does not evaluate is an error. For a row where both hold,
@@ -100,12 +100,12 @@ def rowFacts (subject : Name) (space : Name) (row : Publish.Row) : CommandElabM 
     let counted ← mkAppM ``Zkc.Subject.CapTable.counted #[caps, stored, rootKey]
     unless ← decided "whether the table counts as the stored program" counted do
       return some m!"publish_fees: {pathText}: the table {caps} does not count as the stored program; no fee facts"
-    let within ← mkAppM ``ZkcFormal.Written.Fees.within #[caps, bound]
+    let within ← mkAppM ``ZkcFormal.Written.Budget.within #[caps, bound]
     unless ← decided "whether the budget is within the bound" within do
       let numerator ← kernelNat (← mkProjection bound `numerator)
       let denominator ← kernelNat (← mkProjection bound `denominator)
       return some m!"publish_fees: {pathText}: the budget of {caps} is above the bound {numerator}/{denominator}; no fee facts"
-    let atBound ← mkAppM ``ZkcFormal.Written.Fees.atBound #[caps, bound]
+    let atBound ← mkAppM ``ZkcFormal.Written.Budget.atBound #[caps, bound]
     let equal ← decided "whether the budget is the bound" atBound
     let count := mkNatLit (← kernelNat (← mkAppM ``ZkcFormal.Written.Fees.budgetNumerator #[caps, bound]))
     let total := mkNatLit (← kernelNat (← mkAppM ``ZkcFormal.Written.Fees.budgetDenominator #[caps, bound]))
