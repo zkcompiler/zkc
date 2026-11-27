@@ -132,6 +132,11 @@ structure Namer where
   binder is made, and to no other binder. -/
   carrier : Expr → MetaM Expr
   found : IO.Ref Bool
+  /-- The terms already named, with their named forms. A statement's term is shared: after an
+  input telescope every cell of the inputs carries the list of the remaining ports in its type,
+  so a traversal without this table visits a term of n inputs about n² times. The table is this
+  naming's own (one carrier), and a term is found in it by its structure with its binder names. -/
+  named : IO.Ref (Std.HashMap ExprStructEq Expr)
 
 /-- Whether the value of a listed definition leads to a telescope: it names `inputs` or
 `witnesses`, or a listed definition whose value does. -/
@@ -160,8 +165,15 @@ private def validName (n : Name) : Name := Name.mkSimple (Zkc.Subject.validBinde
 
 mutual
 
-/-- The term with its telescopes named. -/
+/-- The term with its telescopes named: each term once. -/
 partial def name (n : Namer) (e : Expr) : MetaM Expr := do
+  if let some known := (← n.named.get).get? e then return known
+  let named ← nameOnce n e
+  n.named.modify (·.insert e named)
+  return named
+
+/-- The term with its telescopes named. -/
+partial def nameOnce (n : Namer) (e : Expr) : MetaM Expr := do
   let e := e.consumeMData.headBeta
   if e.isAppOfArity ``Goal.Internal.inputs 6 then return ← namedInputs n e
   if e.isAppOfArity ``Goal.Internal.witnesses 4 then return ← namedWitnesses n e
@@ -329,7 +341,8 @@ return a type that is definitionally the one given. -/
 private def namedWith (subject : Name) (e : Expr) (carrier : Expr → MetaM Expr) : MetaM Expr := do
   let e ← instantiateMVars e
   let n : Namer := { origins := ← originsOf subject, listed := ← unfoldList,
-                     premises := ← premiseList, carrier, found := ← IO.mkRef false }
+                     premises := ← premiseList, carrier, found := ← IO.mkRef false,
+                     named := ← IO.mkRef {} }
   let named ← withInputsDepth n.origins (name n e)
   unless ← n.found.get do
     throwError m!"views: no input or witness telescope is reached in{indentExpr e}\nthrough the definitions of the list; a definition outside the list is not unfolded (`@[view_unfold]` adds one)"
