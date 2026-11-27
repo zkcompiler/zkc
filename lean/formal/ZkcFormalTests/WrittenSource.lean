@@ -60,9 +60,14 @@ def consumerAt (root : AdmittedRoot) (requests : List (String × String)) : Exce
     let key := (clause.place, relation)
     let d := (decisions.findIdx? (· == key)).getD decisions.size
     if d == decisions.size then decisions := decisions.push key
-    let (caps, _) ← goalCaps root goal.specification
-    -- the reader's own reading of the rule: the ceiling that the goal writes, else the total
-    let bound : Rat := goal.ceiling.getD caps.ratio
+    let (table, _) ← goalCaps root goal.specification
+    let caps := table.toOption
+    -- the reader's own reading of the rule: the ceiling that the goal writes, else the total of
+    -- its table, which a goal without a ceiling has
+    let bound : Rat ← match goal.ceiling, caps with
+      | some ceiling, _ => pure ceiling
+      | none, some table => pure table.ratio
+      | none, none => throw "a goal without a ceiling has no table of caps"
     let row := s!"written'goal{index}"
     let atIndex := s!"(written'subject.goalAt ⟨{index}, by decide⟩)"
     text := text ++ equation atIndex row ++
@@ -74,7 +79,10 @@ def consumerAt (root : AdmittedRoot) (requests : List (String × String)) : Exce
       equation s!"ZkcFormalTests.WrittenBinding.operands {atIndex}"
         s!"({clause.place}, {relation}, {statement.size}, {reprStr statement.toList}, {reprStr (witness.map Array.toList)})" ++
       equation s!"{atIndex}.fields.specification" (reprStr goal.specification.toList) ++
-      equation s!"{atIndex}.fields.caps" (Zkc.Subject.Print.capsTerm caps) ++
+      equation s!"{atIndex}.fields.caps" (match caps with
+        | some table => s!"some ({Zkc.Subject.Print.capsTerm table})"
+        | none => "none") ++
+      equation s!"{atIndex}.fields.ceiling" (toString goal.ceiling.isSome) ++
       equation s!"({atIndex}.fields.bound.numerator, {atIndex}.fields.bound.denominator)"
         s!"({bound.num.toNat}, {bound.den})" ++
       s!"run_cmd ZkcFormalTests.WrittenBinding.checkReferences (← Lean.getCurrNamespace) {reprStr label} {index} {d} {relation} {goal.specification.size}\n"

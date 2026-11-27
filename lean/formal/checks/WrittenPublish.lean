@@ -129,7 +129,7 @@ def run (work : System.FilePath) : IO Unit := do
   discard <| SubjectProject.add project `Published.Proof (proof "Published.Stated" "Published")
   discard <| SubjectProject.add project `Low.Stated low.data .statements
   discard <| SubjectProject.add project `Low.Challenge low.challenge .challenge
-  -- the shape of what the issuer publishes, and ten changes of it that the controls refuse
+  -- the shape of what the issuer publishes, and eleven changes of it that the controls refuse
   let control (command : String) (imported : String) :=
     s!"import {imported}\nimport ZkcFormalTests.PublicationControl\n\n{command}\n"
   let shape ← startLakeLean work "PublishedShape" (control
@@ -154,6 +154,8 @@ def run (work : System.FilePath) : IO Unit := do
       "data control: WithImport.Stated imports Std.Data.HashMap, which is none of the issuer's list"),
     ("WithLibrary", "import ZkcFormal.Written.Bound\n" ++ honest.data,
       "data control: WithLibrary.Stated imports the formal library's ZkcFormal.Written.Bound"),
+    ("WithTableInPlace", ← replaceOnce honest.data "caps := some written'caps0," "caps := some ⟨[]⟩,",
+      "data control: the fields Published.written'fields0 do not hold a named table or none"),
     ("WithComputedBound", ← replaceOnce honest.data (bound ++ "⟨0, 1, by decide⟩") (bound ++ "⟨0 + 0, 1, by decide⟩"),
       "data control: the bound Published.written'bound0 is not two numerals")]
   let mut shapes := []
@@ -192,7 +194,7 @@ def run (work : System.FilePath) : IO Unit := do
     throw (IO.userError s!"the challenge at another bound was not refused at the bound\n{said}")
   IO.println ("The issuer's data module holds definitions that are no propositions, the package's " ++
     "theorems and a bound of numerals, and imports no module of the formal library; its challenge " ++
-    "imports what the publication command does; 10 of 10 changes of that shape are refused.")
+    "imports what the publication command does; 11 of 11 changes of that shape are refused.")
   IO.println ("The library states what a goal publishes from its row: the built challenge holds " ++
     "exactly the statements that the check spells; the proof module that states them as " ++
     "`published%` is accepted, and refused against a subject at another bound.")

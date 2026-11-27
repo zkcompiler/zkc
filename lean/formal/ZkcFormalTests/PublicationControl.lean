@@ -9,8 +9,9 @@ Controls of the shape of what the issuer publishes, read from the built modules.
   (`Statements.dataImports`) and no other, and through them no module of the formal library; each
   of its declarations is a definition that is no instance and whose type does not end in `Prop`,
   or a theorem of the listed names in the subject's name space (the package's and the lookups');
-  it declares no inductive type; and the bound of each goal is the constructor of `Bound` at two
-  numerals.
+  it declares no inductive type; the bound of each goal is the constructor of `Bound` at two
+  numerals; and the fields of each goal hold a named table of caps or none, a named bound, and
+  whether the source writes the bound.
 * `#challenge_module C over M`: every module that the challenge `C` imports, directly or not, is
   the data module `M`, a module that `M` imports, or a module that the library's
   `ZkcFormal.Written.Publish` imports. A views module, a fees module and an author's tool are none
@@ -86,6 +87,16 @@ elab "#data_module " m:ident : command => do
         unless d.value.isAppOfArity ``Zkc.Subject.Bound.mk 3 && numeral (d.value.getArg! 0) &&
             numeral (d.value.getArg! 1) do
           throwError "data control: the bound {name} is not two numerals:{indentExpr d.value}"
+      if digitsAfter last "written'fields" then
+        let value := d.value
+        unless value.isAppOfArity ``Zkc.Subject.GoalFields.mk 4 do
+          throwError "data control: the fields {name} are not built by their constructor:{indentExpr value}"
+        let table := value.getArg! 1
+        let named := table.isAppOfArity ``Option.none 1 ||
+          (table.isAppOfArity ``Option.some 2 && table.appArg!.isConst)
+        unless named && (value.getArg! 2).isConst &&
+            ((value.getArg! 3).isConstOf ``Bool.true || (value.getArg! 3).isConstOf ``Bool.false) do
+          throwError "data control: the fields {name} do not hold a named table or none, a named bound and whether the source writes it:{indentExpr value}"
     | .opaqueInfo _ | .axiomInfo _ =>
       throwError "data control: {m.getId} declares {name} without a value"
     | .inductInfo _ =>

@@ -141,9 +141,14 @@ def checkReferences (space : Name) (label : String) (goal clause relation : Nat)
   named (← operand selected ``WrittenGoal.mk 1) decision
   named (← operand selected ``WrittenGoal.mk 0) fields
   let publicName := fun (suffix_ : String) => localName (label ++ suffix_)
-  named (← field (← bodyOf fields) ``GoalFields `caps) caps
+  -- a row's table is `some` of its named table, with the goal's public name for it, or `none`
+  let table ← field (← bodyOf fields) ``GoalFields `caps
+  if table.isAppOfArity ``Option.some 2 then
+    named table.appArg! caps
+    named (← bodyOf (publicName "Caps")) caps
+  else unless table.isAppOfArity ``Option.none 1 do
+    throwError "{fields} must hold `some` of a table of caps or `none`, not{indentExpr table}"
   named (← field (← bodyOf fields) ``GoalFields `bound) bound
-  named (← bodyOf (publicName "Caps")) caps
   for i in [:arguments] do
     let getter := publicName s!"Argument{i}"
     let body ← bodyOf getter

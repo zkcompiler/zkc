@@ -9,10 +9,11 @@ public meta import Lean
 The facts of a subject's tables of caps that a proof by fees needs, declared by a command over
 the subject.
 
-`publish_fees S` decides, for each goal row of the subject `S` at the path `p`, while it
-elaborates and before it declares anything of the row: that the row's table of caps counts as the
-stored program does (`CapTable.counted`), and that the table's budget is at most the row's bound
-(`Fees.within`). Both are closed definitions of the library, evaluated by the kernel. A row for
+`publish_fees S` decides, for each goal row of the subject `S` at the path `p` that holds a table
+of caps, while it elaborates and before it declares anything of the row: that the table counts as
+the stored program does (`CapTable.counted`), and that the table's budget is at most the row's
+bound (`Fees.within`). A row that holds no table (a goal with a ceiling whose charges a table has
+no place for) gets no fee facts and a line. Both are closed definitions of the library, evaluated by the kernel. A row for
 which one evaluates to `false` gets no fee facts and a line that says which; the other rows are
 not affected. A decision that the kernel does not evaluate is an error. For a row where both hold,
 it declares under `<space>.<p>.fees`:
@@ -55,20 +56,12 @@ public meta section
 namespace ZkcFormal.Written.FeeFacts
 open Lean Meta Elab Term Command
 
-private def kernelValue (e : Expr) : MetaM Expr := do
-  ofExceptKernelException (Kernel.whnf (← getEnv) (← getLCtx) e)
-
-/-- A decision of the library evaluated by the kernel; a decision that the kernel does not
-evaluate to a truth value is an error, not a refusal. -/
-private def decided (what : String) (e : Expr) : MetaM Bool := do
-  let r ← kernelValue e
-  if r.isConstOf ``Bool.true then return true
-  if r.isConstOf ``Bool.false then return false
-  throwError "publish_fees: the kernel did not evaluate {what}{indentExpr e}\nit stopped at{indentExpr r}"
+private def decided (what : String) (e : Expr) : MetaM Bool :=
+  Publish.decided "publish_fees" what e
 
 /-- A number of the library evaluated by the kernel. -/
 private def kernelNat (e : Expr) : MetaM Nat := do
-  match ← kernelValue e with
+  match ← Publish.kernelValue e with
   | .lit (.natVal n) => return n
   | r => throwError "publish_fees: the kernel did not evaluate{indentExpr e}\nto a number; it stopped at{indentExpr r}"
 
@@ -100,11 +93,9 @@ def rowFacts (subject : Name) (space : Name) (row : Publish.Row) : CommandElabM 
     let draws := Lean.mkConst ``ZkcFormal.Written.StandardInterpretation.draws
     let app := Lean.mkConst row.application
     let bound := Lean.mkConst (← row.bound)
-    let caps ← Publish.fieldOf row.fields ``Zkc.Subject.GoalFields `caps
-    let root := (← whnf (← inferType app)).appArg!
-    let pkg := (← whnf (← inferType root)).appArg!
-    let stored ← mkProjection pkg `stored
-    let rootKey ← mkProjection (← mkProjection (← mkProjection root `entry) `header) `key
+    let some caps ← row.table
+      | return some m!"publish_fees: {pathText}: the row holds no table of caps; no fee facts"
+    let (stored, rootKey) ← row.program
     -- the two decisions, before anything is declared
     let counted ← mkAppM ``Zkc.Subject.CapTable.counted #[caps, stored, rootKey]
     unless ← decided "whether the table counts as the stored program" counted do

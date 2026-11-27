@@ -38,8 +38,8 @@ A `Reading` asserts the ports of the root, the clause that each goal reads, the 
 
 ```lean
   let goal ← written.goal
-  unless goal.total == 1 / 4 && (goal.caps.uses.map fun use => use.draws.map fun draw =>
-      (draw.numerator, draw.denominator, draw.count)) == [[(1, 8, 1), (1, 4, 1)]] do
+  unless goal.total == some (1 / 4) && (goal.caps.map fun table => table.uses.map fun use => use.draws.map fun draw =>
+      (draw.numerator, draw.denominator, draw.count)) == some [[(1, 8, 1), (1, 4, 1)]] do
     throw (IO.userError "the table of caps is not the two draws at 1/8 and 1/4")
   unless goal.siteLabels.map (·.2.1) == ["x", "y"] do
     throw (IO.userError "the draws are not named `x` and `y`")
@@ -51,10 +51,10 @@ The issuer (`lean/compiler/Zkc/Frontend/Written/Statement.lean`, `Statements.pub
 
 | Module | Holds |
 | --- | --- |
-| `<Name>.Stated`, the data module | the printed package and the names below; the typed subject `written'subject` with a row for each goal (the path of its declaration, its property, its deciding clause, its bound and its table of caps) and the source names of the root. It states no proposition about the protocol and imports no module of the formal library |
-| `<Name>.Challenge` | `publish_goals <Name>.written'subject`: for a goal at the path `p`, the theorems `p.sound` and `p.met` without a proof |
+| `<Name>.Stated`, the data module | the printed package and the names below; the typed subject `written'subject` with a row for each goal (the path of its declaration, its property, its deciding clause, its bound, whether the source writes the bound as a ceiling, and its table of caps where it has one) and the source names of the root. It states no proposition about the protocol and imports no module of the formal library |
+| `<Name>.Challenge` | `publish_goals <Name>.written'subject`: for a goal at the path `p`, the theorems `p.sound` and `p.met` without a proof. For a goal that writes no ceiling the command first decides by the kernel that the counts of the goal's table are those of the stored program and that the table adds up to the bound, and refuses the subject where it does not. The caps of the table, which draws it charges and whether the source writes the bound are the issuer's reading of the source, which the stored program does not hold; the checks' second reading of the source compares them |
 | `<Name>.Views` | `publish_views <Name>.written'subject`: the named views `p.sound.view`, `p.met.view`, `p.installed.view`, each with `view_iff`; the coverage fact `p.covered`; the step `p.sound_of_installed` |
-| `<Name>.Fees` | `publish_fees <Name>.written'subject`: under `p.fees`, the count, the budget, the view `judged.view` of the fee judgment, and the step `installed_of_judged`; a goal whose budget is above its bound has none |
+| `<Name>.Fees` | `publish_fees <Name>.written'subject`: under `p.fees`, the count, the budget, the view `judged.view` of the fee judgment, and the step `installed_of_judged`; a goal whose budget is above its bound has none, and neither has a goal without a table |
 
 The names of the data module that a text uses, for a goal `either` of the source above:
 
@@ -64,8 +64,10 @@ The names of the data module that a text uses, for a goal `either` of the source
 | `installed`, `rootMember`, `verifierRole`, `proverRole` | the program that the module installs from the package, the root in it, the two roles |
 | `eitherMember` | the function of the relation at the goal's value, a member of `installed` |
 | `calleeProgram`, `<function>Member` | the program of the definitions before the root, and in it each function that the root or a protocol that it applies calls |
-| `eitherCaps` | the table of caps of the goal; a site's cap is read from it in the fee judgment's term |
+| `eitherCaps` | the table of caps of the goal, where it has one; a site's cap is read from it in the fee judgment's term |
 | `written'subject`, `written'application<i>`, `written'bound<i>` | the typed subject, the short application of a deciding clause and the bound of a goal |
+
+A goal that writes its ceiling is issued also where its root reaches what a table of caps has no place for yet (a charge on an application or an attempt; a charge on a site of an applied protocol; a charged draw, or any application, under a loop whose count is read at run time or in an attempt; a root with an `attempt` is not emitted yet, so the cases of an attempt are not reached). Its row then holds no table, the publication reports the limit (`Publication.limits`, and the goal's result line of `zkc-check written-goals`), and its proof does not go through the fee facts. A goal that writes no ceiling takes its bound from its table and is refused there. This is a limit of the written stage; the language gives each of these charges a total. An error of the source in a charge refuses either: two charges on one site, a negative charge, a site that names no one event, a site that is a send or a sample, a path that goes through what is no application.
 
 A text is the issuer's opening (the imports of the four modules' data, views and fees, the name space and the opened names) followed by the author's proofs. It states each published theorem itself, `theorem t.either.sound : published% written'subject t.either sound`, and closes it with `t.either.sound_of_installed`; nothing is generated after it. A published theorem is named by its goal's path, so a goal `sound` publishes `sound.sound`: the opening turns off the linter that reports a repeated component of a name (`linter.dupNamespace`), for the whole text.
 

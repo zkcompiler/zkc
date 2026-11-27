@@ -60,9 +60,9 @@ def run : IO Unit := do
   let goal ← written.goal
   -- The table of caps: the draws of the two arms, once each, as the arms of a choice, whose
   -- total is the larger arm.
-  unless goal.total == 1 / 4 && (goal.caps.uses.map (·.caps)) ==
-      [.choice (.item (.draw ⟨⟨1⟩, 1, 8, 1⟩) .nil) (.item (.draw ⟨⟨12⟩, 1, 4, 1⟩) .nil) .nil] && (goal.caps.uses.map fun use => use.draws.map fun draw =>
-      (draw.numerator, draw.denominator, draw.count)) == [[(1, 8, 1), (1, 4, 1)]] do
+  unless goal.total == some (1 / 4) && (goal.caps.map fun table => table.uses.map (·.caps)) == some
+      [.choice (.item (.draw ⟨⟨1⟩, 1, 8, 1⟩) .nil) (.item (.draw ⟨⟨12⟩, 1, 4, 1⟩) .nil) .nil] && (goal.caps.map fun table => table.uses.map fun use => use.draws.map fun draw =>
+      (draw.numerator, draw.denominator, draw.count)) == some [[(1, 8, 1), (1, 4, 1)]] do
     throw (IO.userError s!"the table of caps is not the two draws at 1/8 and 1/4: {repr goal.caps}")
   unless goal.siteLabels.map (·.2.1) == ["x", "y"] do
     throw (IO.userError s!"the draws are not named `x` and `y`: {goal.siteLabels.map (·.2.1)}")
@@ -73,7 +73,7 @@ def run : IO Unit := do
   unless (stepped.goals.map fun goal => goal.siteLabels.map (·.2.1)) == [["r_0", "r_1", "r_2"]] do
     throw (IO.userError "the stepped loop has not a draw in each of three blocks")
   let low ← read (source "1 / 16" "1 / 16") reading
-  unless (low.goals.map (·.total)) == [1 / 16] do
+  unless (low.goals.map (·.total)) == [some (1 / 16)] do
     throw (IO.userError "the low charges do not give a total of one sixteenth")
 
 end EitherCharge

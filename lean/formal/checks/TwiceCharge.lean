@@ -128,37 +128,37 @@ def run : IO Unit := do
   let goal ← written.goal
   -- The table of caps: the draw of `Round` in its use, and the two applications of the root,
   -- each of that use.
-  unless goal.total == 1 / 2 && shape goal.caps == [([(1, 4, 1)], []), ([], [(0, 1), (0, 1)])] do
+  unless goal.total == some (1 / 2) && goal.caps.map shape == some [([(1, 4, 1)], []), ([], [(0, 1), (0, 1)])] do
     throw (IO.userError s!"the table of caps is not the draw at 1/4 under two applications: {repr goal.caps}")
   -- The charge halved: the program is what it was, and the cap of the draw is one eighth.
   let halved ← read (source "1 / 8") (reading "twice")
-  unless halved.package == written.package && (halved.goals.map (·.total)) == [1 / 4] do
+  unless halved.package == written.package && (halved.goals.map (·.total)) == [some (1 / 4)] do
     throw (IO.userError "halving the charge changed the package, or the budget is not one quarter")
   -- The nested root: one application in the root, two in the protocol that it applies.
   let nested ← read nestedSource (reading "nested")
   let nestedGoal ← nested.goal
-  unless nestedGoal.total == 1 / 2 && shape nestedGoal.caps ==
+  unless nestedGoal.total == some (1 / 2) && nestedGoal.caps.map shape == some
       [([(1, 4, 1)], []), ([], [(0, 1), (0, 1)]), ([], [(1, 1)])] do
     throw (IO.userError s!"the table of the nested root is not one application of two: {repr nestedGoal.caps}")
   -- The looped root: one application in the body of a loop of three iterations.
   let looped ← read loopedSource (reading "looped" #["claim", "guess"])
   let loopedGoal ← looped.goal
-  unless loopedGoal.total == 3 / 4 && shape loopedGoal.caps == [([(1, 4, 1)], []), ([], [(0, 3)])] do
+  unless loopedGoal.total == some (3 / 4) && loopedGoal.caps.map shape == some [([(1, 4, 1)], []), ([], [(0, 3)])] do
     throw (IO.userError s!"the table of the looped root is not three applications: {repr loopedGoal.caps}")
   -- The root beside a protocol of the prover alone: one application of `Round`, which is the
   -- second protocol before the root, and one in which the verifier takes no part.
   let aside ← read asideSource (reading "aside" #["claim", "first"])
   let asideGoal ← aside.goal
-  unless asideGoal.total == 1 / 4 do
+  unless asideGoal.total == some (1 / 4) do
     throw (IO.userError s!"the table of the root beside a protocol is not one draw: {repr asideGoal.caps}")
   -- The root whose callees fork:
   -- the draw of `Gate`, the draws of both arms of `Pick`, and one application of each.
   let forked ← read (forkedSource) (reading "forked" #["claim", "side", "first", "second"])
   let forkedGoal ← forked.goal
-  unless forkedGoal.total == 1 / 2 && shape forkedGoal.caps ==
+  unless forkedGoal.total == some (1 / 2) && forkedGoal.caps.map shape == some
       [([(1, 4, 1)], []), ([(1, 4, 1), (1, 4, 1)], []), ([], [(0, 1), (1, 1)])] &&
       -- the two draws of `Pick` are the two arms of a choice, with nothing after it
-      (forkedGoal.caps.uses.map fun use => twoArms use.caps) == [false, true, false] do
+      (forkedGoal.caps.map fun table => table.uses.map fun use => twoArms use.caps) == some [false, true, false] do
     throw (IO.userError s!"the table of the forked root is not three draws under two applications, with the larger arm of the choice: {repr forkedGoal.caps}")
 
 end TwiceCharge
