@@ -231,6 +231,7 @@ def run (work : System.FilePath) : IO Unit := do
   let sourced (space text judgment : String) (judged := true) : IO Unit := do
     let issued ← publicationOf text ["loose"] space
     add (toString issued.dataName) issued.data .statements
+    add s!"{space}Shape" (WrittenSubject.shapeControl issued.dataName space) .statements
     add (toString issued.challengeName) issued.challenge .challenge
     add (toString issued.viewsName) issued.views .statements
     add (toString issued.feesName) issued.fees .statements
@@ -284,7 +285,7 @@ def run (work : System.FilePath) : IO Unit := do
   add "PrintScoped" (printAll "Scoped.Fees") .statements
   add "ScopedFacts" (factsOf "Scoped.Fees" s!"AtBound.{path}.fees") .statements
   -- what Lean says
-  let accepted := ["AtBound.Fees", "AtBoundFacts", "AtBoundReads", "Below.Fees", "BelowFacts", "Paying.Fees",
+  let accepted := ["AtBoundShape", "BelowShape", "PayingShape", "ExchangedShape", "AtBound.Fees", "AtBoundFacts", "AtBoundReads", "Below.Fees", "BelowFacts", "Paying.Fees",
     "PayingFacts", "Exchanged.Fees", "ExchangedFacts", "Rows.Views", "Rows.Fees", "Rows.Challenge", "Scoped.Fees", "ScopedFacts",
     "PrintPlain", "PrintScoped"] ++ typed.map (s!"Rows{·}Facts")
   for name in accepted do

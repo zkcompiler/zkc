@@ -286,6 +286,23 @@ def startLakeLean (work : System.FilePath) (name source : String) (text := true)
   discard <| SubjectProject.add (projectOf work) name.toName source (if text then .module else .statements)
   return leanOn work name.toName
 
+/-- The control of a data module's shape (`#data_module`) as a module of a check's project, for
+the data module `data` of a publication in the name space `space`: its imports, its declarations
+and its rows are those of an issuer's data module. -/
+def shapeControl (data : Lean.Name) (space : String) : String :=
+  s!"import {data}\nimport ZkcFormalTests.PublicationControl\n\n" ++
+    s!"#data_module {data} of {space}.written'subject\n"
+
+/-- The controls of a pair made from a publication, as one module of a check's project: the data
+module's shape (`#data_module`), and what the challenge states (`#challenge_theorems`): the
+theorems of the subject's rows, each the statement that the control spells, with the check's
+consumers beside them; the names `published`, which the judgment is given, are the rows'. -/
+def pairControl (data challenge : Lean.Name) (space : String) (published beside : List Lean.Name) : String :=
+  let listed (names : List Lean.Name) := ", ".intercalate (names.map fun name => (toString name).quote)
+  s!"import {challenge}\nimport ZkcFormalTests.PublicationControl\n\n" ++
+    s!"#data_module {data} of {space}.written'subject\n" ++
+    s!"#challenge_theorems {challenge} of {space}.written'subject published {listed published} beside {listed beside}\n"
+
 /-- Compare the named values in the issued statements with the frontend run on the original
 source and selectors. The same values must be the fields of the package used for admission. -/
 def startSourceComparison (work : System.FilePath) (name : String) (module : Module)
@@ -456,9 +473,11 @@ def acceptedByJudgment (work : System.FilePath) (name : String) : IO Unit := do
   match ← judged work with
   | (.accepted, _) => pure ()
   | (.refused, said) =>
-    throw (IO.userError s!"{name}: Lean accepted the module, and the judgment refuses the check's modules\n{said}")
+    -- one judgment is of every pair of the check: what it says names the module that it refuses
+    throw (IO.userError (s!"the judgment of the check's modules refuses one of them (asked after Lean accepted {name}); " ++
+      s!"the module is named in what it says:\n{said}"))
   | (.failed, said) =>
-    throw (IO.userError s!"{name}: the check's modules were not judged\n{said}")
+    throw (IO.userError s!"the check's modules were not judged (asked after Lean accepted {name})\n{said}")
 
 /-- The two modules of `module`, added to be accepted: the statements by Lean, with their
 theorems on the allowed axioms, and the proof module by Lean and by the judgment. The result is
@@ -467,10 +486,21 @@ def startModule (work : System.FilePath) (name : String) (module : Module) : IO 
   unless module.refusals.isEmpty do
     throw (IO.userError s!"{name}: the publication left goals out: {module.refusals}")
   let stated ← addStated work module
+  -- the data module of a publication has the shape that the issuer's data modules have, and its
+  -- challenge states the theorems of the subject's rows, which are the names that are judged
+  let shape ← if let some (_, published) := module.issued then
+      let challenge ← addChallenge work name module
+      let beside := module.consumers.map fun c => Lean.Name.str module.space.toName c.name
+      some <$> startLakeLean work (name ++ "Shape")
+        (pairControl module.statementsName challenge module.space published beside) (text := false)
+    else pure none
   let proved ← addProof work name module
   noteAccepted work name module
   return do
     stated.accepted name
+    if let some shape := shape then
+      let (ok, output) ← shape
+      unless ok do throw (IO.userError s!"{name}: the data module or the challenge is refused by its control\n{output}")
     let lean ← proved
     acceptedByLean name lean
     acceptedByJudgment work name

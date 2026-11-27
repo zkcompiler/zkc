@@ -282,6 +282,10 @@ def run (work : System.FilePath) : IO Unit := do
   add "Twice.Views" (viewsModule "Twice.Stated" "Twice.written'subject") .statements
   -- a root with 160 inputs: the three views are declared as for a root with three
   add "Wide.Stated" (← statementsOf (wideSource 160) "g" "Wide") .statements
+  -- each issued data module has the shape of an issuer's data module
+  let shaped := ["Named", "Short", "Shapes", "Guess", "Twice", "Wide"]
+  for space in shaped do
+    add s!"{space}Shape" (WrittenSubject.shapeControl s!"{space}.Stated".toName space) .statements
   add "Wide.Views" (viewsModule "Wide.Stated" "Wide.written'subject") .statements
   add "WideViews" ("import Wide.Views\n#check @Wide.wide.g.sound.view\n#check @Wide.wide.g.met.view\n" ++
     "#check @Wide.wide.g.installed.view\n#check @Wide.wide.g.sound_of_installed\n") .statements
@@ -467,7 +471,7 @@ def run (work : System.FilePath) : IO Unit := do
     [`Named.probes.mapped.sound, `Named.probes.mapped.met] WrittenSubject.allowed
   -- what Lean and the judgment say
   let result (name : String) := SubjectProject.result project name.toName
-  for name in ["PrintViews", "Named.Views", "Guess.Views", "Twice.Views", "Wide.Views", "WideViews", "Exchanged.Views", "NamedReads", "GuessReads",
+  for name in shaped.map (· ++ "Shape") ++ ["PrintViews", "Named.Views", "Guess.Views", "Twice.Views", "Wide.Views", "WideViews", "Exchanged.Views", "NamedReads", "GuessReads",
       "TwiceReads", "Short.Views", "ShortReads", "Shapes.Views", "ShapesReads",
       "Fallback.Views", "FallbackReads", "Paths.Views", "Paths.Goals", "PathsNames", "Ambient.Goals", "AmbientGoals", "Shifted.Views", "Held.Views", "Before.Views", "BeforeReads",
       "AfterReads", "Lemmas", "Premises", "OtherBinders", "Listed"] do

@@ -440,9 +440,22 @@ private def sharedFunction (work : System.FilePath) : IO Unit := do
   let reachingBound ← checkMutant work m "ApplicationBound" bounded original
     [("checkReferences (← Lean.getCurrNamespace) 2 ",
       "the short application SharedFunction.written'application1 reaches SharedFunction.written'bound9")]
+  -- The bound again under an alias of its type: the declaration is told by what its type is.
+  let aliased ← replaceOnce m.data
+    ("noncomputable def written'application1 : Zkc.Subject.ShortApplication written'root :=\n" ++
+      "  ⟨written'fn0, ⟨1, by decide +kernel⟩")
+    ("abbrev BoundAlias := Zkc.Subject.Bound\ndef written'bound9 : BoundAlias := ⟨1, 2, by decide⟩\n" ++
+      "private noncomputable def entryAtBound : Zkc.Subject.FunctionEntry subjectPackage :=\n" ++
+      "  (fun (_ : Zkc.Subject.Bound) => written'fn0) written'bound9\n" ++
+      "noncomputable def written'application1 : Zkc.Subject.ShortApplication written'root :=\n" ++
+      "  ⟨entryAtBound, ⟨1, by decide +kernel⟩")
+  let reachingAlias ← checkMutant work m "ApplicationAlias" aliased original
+    [("checkReferences (← Lean.getCurrNamespace) 2 ",
+      "the short application SharedFunction.written'application1 reaches SharedFunction.written'bound9")]
   bad
   reaching
   reachingBound
+  reachingAlias
 
 private def reduction := "module reduceexample
 use zkc::security::{soundness}

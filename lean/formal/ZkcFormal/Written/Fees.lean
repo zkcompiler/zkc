@@ -96,15 +96,6 @@ theorem budget_eq (count total : ℕ) (is : budgetIs caps count total = true) :
 theorem total_eq_limit_of_atBound (b : Bound) (at_ : Budget.atBound caps b = true) : caps.total = b.limit := by
   rw [CapTable.total, of_decide_eq_true at_, toProbability_ratio]
 
-/-- The total of a table that a challenge's decision holds to a bound (`Budget.sumsTo`, for a goal
-that writes no ceiling) is the bound's limit: the decision of the challenge and the fee facts'
-`atBound` are one definition. -/
-theorem total_eq_limit_of_sumsTo (p : NamedProgram V) (root : Key) (b : Bound)
-    (holds : Budget.sumsTo caps p root b = true) : caps.total = b.limit :=
-  total_eq_limit_of_atBound caps b (by
-    have := (Budget.sumsTo_iff caps p root b).mp holds
-    simp [Budget.atBound, this.2])
-
 /-- **The fee judgment within the budget `count / total`**: the judgment that the fee facts name. -/
 def JudgedAt (count total : ℕ) : Prop := JudgedWithin M app draws caps ((count : ℚ≥0) / total)
 
