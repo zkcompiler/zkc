@@ -29,7 +29,8 @@ and the bound) and the library's own constants. The subject is the one name that
 in the scope of the caller; no name inside a statement is, so a declaration of the caller's with
 the short name of a library constant does not enter a statement. A row is
 read by reducing the record that holds a field to its constructor and taking the field's
-argument as it stands, so the constant that a field names is the constant of the statement.
+argument as it stands, so the constant that a field names is the constant of the statement. A
+statement reads its own row alone, and the bound only where the statement has one.
 
 `published% S <path> <theorem>` is the same statement as a term, for an author or a consumer;
 the path is written as one identifier whose components are the path's (`«…»` around a component
@@ -72,35 +73,51 @@ private partial def strings (e : Expr) : MetaM (List String) := do
   let some head := getStringValue? (← whnf s.appFn!.appArg!) | throwError "publish: expected a string"
   return head :: (← strings s.appArg!)
 
-/-- One goal row: its path, its property (the constructor's name), and the constants of its
-short application and of its bound. -/
+/-- The two tables of a subject: the selector and the size of its goal rows and of its clauses. -/
+structure Tables where
+  goalAt : Expr
+  goals : Nat
+  clauseAt : Expr
+  clauses : Nat
+
+/-- The tables of the subject `S`. -/
+def tables (subject : Name) : MetaM Tables := do
+  let s := Lean.mkConst subject
+  let goals ← fieldOf s ``Zkc.Subject.WrittenSubject `goals
+  let clauses ← fieldOf s ``Zkc.Subject.WrittenSubject `clauses
+  return {
+    goalAt := ← fieldOf goals ``Zkc.Subject.BoundedTable `get
+    goals := ← natOf (← fieldOf goals ``Zkc.Subject.BoundedTable `size)
+    clauseAt := ← fieldOf clauses ``Zkc.Subject.BoundedTable `get
+    clauses := ← natOf (← fieldOf clauses ``Zkc.Subject.BoundedTable `size) }
+
+/-- The path of the goal row at an index, and nothing else of the row. -/
+def pathAt (t : Tables) (index : Nat) : MetaM (List String) := do
+  strings (← fieldOf (mkApp t.goalAt (← finAt t.goals index)) ``Zkc.Subject.GoalSlot `path)
+
+/-- One goal row: its path, its property (the constructor's name), the constant of its short
+application, and its fields as the row holds them. The bound is read from the fields only for a
+statement that has a bound. -/
 structure Row where
   path : List String
   property : Name
   application : Name
-  bound : Name
+  fields : Expr
 
-/-- The goal rows of the subject `S`. -/
-def rows (subject : Name) : MetaM (Array Row) := do
-  let s := Lean.mkConst subject
-  let goals ← fieldOf s ``Zkc.Subject.WrittenSubject `goals
-  let clauses ← fieldOf s ``Zkc.Subject.WrittenSubject `clauses
-  let size ← natOf (← fieldOf goals ``Zkc.Subject.BoundedTable `size)
-  let clauseCount ← natOf (← fieldOf clauses ``Zkc.Subject.BoundedTable `size)
-  let goalAt ← fieldOf goals ``Zkc.Subject.BoundedTable `get
-  let clauseAt ← fieldOf clauses ``Zkc.Subject.BoundedTable `get
-  let mut out := #[]
-  for i in [:size] do
-    let slot := mkApp goalAt (← finAt size i)
-    let path ← strings (← fieldOf slot ``Zkc.Subject.GoalSlot `path)
-    let property ← constName (← whnf (← fieldOf slot ``Zkc.Subject.GoalSlot `property))
-    let clause ← natOf (← fieldOf (← fieldOf slot ``Zkc.Subject.GoalSlot `clause) ``Fin `val)
-    let fields ← fieldOf slot ``Zkc.Subject.GoalSlot `fields
-    let bound ← constName (← fieldOf fields ``Zkc.Subject.GoalFields `bound)
-    let decision := mkApp clauseAt (← finAt clauseCount clause)
-    let application ← constName (← fieldOf decision ``Zkc.Subject.Decision `application)
-    out := out.push { path, property, application, bound }
-  return out
+/-- The goal row at an index. -/
+def rowAt (t : Tables) (index : Nat) : MetaM Row := do
+  let slot := mkApp t.goalAt (← finAt t.goals index)
+  let path ← strings (← fieldOf slot ``Zkc.Subject.GoalSlot `path)
+  let property ← constName (← whnf (← fieldOf slot ``Zkc.Subject.GoalSlot `property))
+  let clause ← natOf (← fieldOf (← fieldOf slot ``Zkc.Subject.GoalSlot `clause) ``Fin `val)
+  let fields ← fieldOf slot ``Zkc.Subject.GoalSlot `fields
+  let decision := mkApp t.clauseAt (← finAt t.clauses clause)
+  let application ← constName (← fieldOf decision ``Zkc.Subject.Decision `application)
+  return { path, property, application, fields }
+
+/-- The constant of a row's bound. -/
+def Row.bound (row : Row) : MetaM Name := do
+  constName (← fieldOf row.fields ``Zkc.Subject.GoalFields `bound)
 
 /-- **What each property publishes**: the names of its theorems. A property that is not listed
 publishes nothing from the written subject, and the issuer of the written subject refuses a
@@ -125,7 +142,7 @@ def statement (row : Row) (which : String) : MetaM Expr := do
   let application := Lean.mkConst row.application
   match row.property, which with
   | ``Zkc.Security.Property.soundness, "sound" =>
-    let limit ← mkAppM ``Zkc.Subject.Bound.limit #[Lean.mkConst row.bound]
+    let limit ← mkAppM ``Zkc.Subject.Bound.limit #[Lean.mkConst (← row.bound)]
     mkAppM ``ZkcFormal.Written.Soundness.Result #[model, application, draws, covers, limit]
   | ``Zkc.Security.Property.soundness, "met" =>
     mkAppM ``ZkcFormal.Written.Soundness.Witnessed #[model, application, draws]
@@ -145,17 +162,22 @@ def declareUnproved (name : Name) (type : Expr) : CommandElabM Unit := liftTermE
 elab "publish_goals " s:ident : command => do
   let subject ← liftCoreM <| realizeGlobalConstNoOverloadWithInfo s
   let space := subject.getPrefix
-  for row in ← liftTermElabM (rows subject) do
+  let t ← liftTermElabM (tables subject)
+  for index in [:t.goals] do
+    let row ← liftTermElabM (rowAt t index)
     for which in ← liftTermElabM (theoremsOf row) do
       declareUnproved (theoremName space row which) (← liftTermElabM (statement row which))
 
 /-- **A published statement as a term**: `published% S a.b which`, the components of the
-identifier `a.b` being those of the goal's path. -/
+identifier `a.b` being those of the goal's path. The path and the theorem's name are read as
+they are written, also where a macro supplies them; only the row at that path is read. -/
 elab "published% " s:ident path:ident which:ident : term => do
   let subject ← realizeGlobalConstNoOverloadWithInfo s
-  let wanted := path.getId.components.map (·.toString (escape := false))
-  let some row := (← rows subject).find? (·.path == wanted)
-    | throwError "publish: no goal at the path {wanted} in {subject}"
-  statement row which.getId.toString
+  let wanted := path.getId.eraseMacroScopes.components.map (·.toString (escape := false))
+  let t ← tables subject
+  for index in [:t.goals] do
+    if (← pathAt t index) == wanted then
+      return ← statement (← rowAt t index) which.getId.eraseMacroScopes.toString
+  throwError "publish: no goal at the path {wanted} in {subject}"
 
 end ZkcFormal.Written.Publish

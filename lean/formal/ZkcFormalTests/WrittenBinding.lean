@@ -109,17 +109,17 @@ private def checkApplicationReach (space application : Name) : MetaM Unit := do
     if rowWords.any (word.startsWith ·) then
       throwError "the short application {application} reaches {privateToUserName name}"
 
-/-- A goal's bound is a number of its own: it reaches no table of caps and no other row, so no
-bound is computed in Lean from the fee side's data. The proof that a denominator is positive is
-an auxiliary constant under a bound's name, which bounds of the same denominator share. -/
+/-- A goal's bound is a number of its own, written as a literal. Of its own module it reaches
+itself and the proofs that a denominator is positive, which stand under a bound's name and which
+bounds of one denominator share, and nothing else: no table of caps, no row, no helper. So no
+bound is computed in Lean from other data of the subject. -/
 private def checkBoundReach (space bound : Name) : MetaM Unit := do
   let home := (← getEnv).getModuleIdxFor? bound
   for name in (← reachedInModule home [bound] {}).toList do
     if name == bound then continue
     let user := privateToUserName name
     let word := (user.replacePrefix space .anonymous).toString
-    let positivity := user.isInternalDetail && word.startsWith "written'bound"
-    if rowWords.any (word.startsWith ·) && !positivity then
+    unless user.isInternalDetail && word.startsWith "written'bound" do
       throwError "the bound {bound} reaches {user}"
 
 /-- Follow the actual aggregate and public declarations. The expected indices and label
