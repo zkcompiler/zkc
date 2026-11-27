@@ -85,6 +85,36 @@ def check(work):
     assert renumbered.keys() == target.keys() and renumbered != target
     src.write_text(original)
 
+    # A charge on an application has no place in a table of caps. The goal that writes its
+    # ceiling is issued and says so; the goal that writes none is refused with the limit.
+    charged = """module charged
+use zkc::security::{soundness}
+relation Holds(claim: bool): claim
+protocol Once roles(P, V)(claim: bool @(P, V)):
+    z <- draw index<8> from V to P
+protocol Caller roles(P, V)(claim: bool @(P, V)):
+    first <- Once(claim)
+    guard @V claim
+spec for Caller:
+    proves @V Holds(claim)
+    charge sites.first <= 1 / 8
+scheme Checked = Caller:
+    prover P
+    construction interactive
+goal capped = soundness(Checked) <= 1 / 2
+goal bare = soundness(Checked)
+"""
+    other = work / "charged.zkc"
+    other.write_text(charged)
+    rows, tableless = run([other], ["capped", "bare"], work / "tableless", 1)
+    assert len(tableless) == 4, sorted(tableless)
+    assert "charged::capped: issued" in rows[0] and "no table of caps" in rows[0] and "`sites.first` is no draw" in rows[0], rows[0]
+    assert "charged::bare: refused" in rows[1] and "GL4" in rows[1] and "`sites.first` is no draw" in rows[1], rows[1]
+    stated = next(text for name, text in tableless.items() if name.endswith("/Stated.lean")).decode()
+    assert "caps := none, bound := written'bound0, ceiling := true }" in stated, stated[-600:]
+    rows, alone = run([other], ["capped"], work / "tableless-alone", 0)
+    assert alone == tableless and "no table of caps" in rows[0]
+
     rows, files = run([src], ["missing", "missing"], work / "missing", 1)
     assert not files and all("WK-GOAL" in row for row in rows)
 

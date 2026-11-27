@@ -91,14 +91,18 @@ def goalFacts (layout : SubjectLayout owner) (label : ClaimedGoal → String) : 
   let mut lines := #[]
   for ((goal, _), i) in layout.goals.toList.zipIdx do
     let bound := goal.bound
-    lines := lines.push (s!"def {capsName i} : Zkc.Subject.CapTable := {capsTerm goal.caps}\n" ++
+    let (table, caps) := match goal.caps with
+      | some table => (s!"def {capsName i} : Zkc.Subject.CapTable := {capsTerm table}\n", s!"some {capsName i}")
+      | none => ("", "none")
+    lines := lines.push (table ++
       s!"def {boundName i} : Zkc.Subject.Bound := ⟨{bound.num.toNat}, {bound.den}, by decide⟩\n" ++
       s!"def {fieldsName i} : Zkc.Subject.GoalFields :=\n" ++
-      s!"  \{ specification := {numbers goal.specification.toList}, caps := {capsName i}, " ++
-      s!"bound := {boundName i} }\n")
+      s!"  \{ specification := {numbers goal.specification.toList}, caps := {caps}, " ++
+      s!"bound := {boundName i}, ceiling := {goal.ceiling.isSome} }\n")
   for (goal, i) in layout.aliases do
     let name := label goal
-    lines := lines.push s!"abbrev {name}Caps : Zkc.Subject.CapTable := {capsName i}\n"
+    if goal.caps.isSome then
+      lines := lines.push s!"abbrev {name}Caps : Zkc.Subject.CapTable := {capsName i}\n"
     for j in [:goal.specification.size] do
       lines := lines.push (s!"def {name}Argument{j} : Nat := " ++
         s!"{fieldsName i}.specification[{j}]'(by decide)\n")

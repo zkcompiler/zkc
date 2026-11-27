@@ -37,7 +37,7 @@ def places (s : Subject) : Nat × Nat × Nat :=
   (s.statements.claims.root, s.statements.claims.verifier, s.statements.claims.prover)
 
 /-- The name, the proof arguments and the table of caps of each goal. -/
-def tables (s : Subject) : List (String × Array Nat × CapTable) :=
+def tables (s : Subject) : List (String × Array Nat × Option CapTable) :=
   s.goals.map fun goal => (goal.goal, goal.specification, goal.caps)
 
 /-- The stored text of the definitions of the root's own package. -/
@@ -59,7 +59,7 @@ def run (corpus : System.FilePath) (work : System.FilePath) : IO Unit := do
   -- The tables of caps, as the frontend read them: the one draw of the root, once, at the
   -- charge of each goal's tolerance.
   unless (tables written).map (·.2.2) ==
-      [⟨[(.flat ⟨1⟩ [⟨⟨0⟩, 3, 8, 1⟩] [])]⟩, ⟨[(.flat ⟨1⟩ [⟨⟨0⟩, 3, 4, 1⟩] [])]⟩] do
+      [some ⟨[(.flat ⟨1⟩ [⟨⟨0⟩, 3, 8, 1⟩] [])]⟩, some ⟨[(.flat ⟨1⟩ [⟨⟨0⟩, 3, 4, 1⟩] [])]⟩] do
     throw (IO.userError s!"the tables of caps are not the draw of the root at 3/8 and at 3/4: {repr ((tables written).map (·.2.2))}")
 
   -- The roster reversed: the verifier is the first role, and the key of the root is as it was.
@@ -81,12 +81,12 @@ def run (corpus : System.FilePath) (work : System.FilePath) : IO Unit := do
   -- outside the relation has no zero entry, and the charge is zero; with four entries the
   -- ceiling that the source writes is negative, and no charge is read.
   let five ← read (← edit source "scheme Checked = Count<8>:" "scheme Checked = Count<5>:")
-  unless ((tables five).map fun (_, _, caps) => caps.ratio) == [0, (3 : Rat) / 5] do
+  unless ((tables five).map fun (_, _, caps) => caps.map (·.ratio)) == [some 0, some ((3 : Rat) / 5)] do
     throw (IO.userError "the charges of Count<5> are not 0 and 3/5")
   let four ← edit source "scheme Checked = Count<8>:" "scheme Checked = Count<4>:"
   let .error refusal := (goalRoot four "loose").bind (goalClaims · ["loose"])
     | throw (IO.userError "a negative ceiling was read as a charge")
-  unless refusal.contains "nonnegative" do
+  unless refusal.contains "WK-CHARGE: a charge is not negative" do
     throw (IO.userError s!"Count<4> was refused for another reason: {refusal}")
 
   -- A goal that states a ceiling is issued at its ceiling, whatever its table adds up to: at the
@@ -96,7 +96,7 @@ def run (corpus : System.FilePath) (work : System.FilePath) : IO Unit := do
   for (ceiling, bound) in [(" <= 3/8", (3 : Rat) / 8), (" <= 1/4", (1 : Rat) / 4)] do
     let stated ← read (← edit source goalLine (goalLine ++ ceiling))
     let some goal := stated.goals.find? (·.goal == "loose") | throw (IO.userError "no goal loose")
-    unless goal.bound == bound && goal.total == 3 / 8 do
+    unless goal.bound == bound && goal.total == some (3 / 8) do
       throw (IO.userError s!"the goal with the ceiling{ceiling}: bound {goal.bound}, total {goal.total}")
     let issued ← IO.ofExcept (stated.statements.publication "Ceiling")
     unless issued.refusals.isEmpty && issued.published.length == 4 do
@@ -133,10 +133,10 @@ def run (corpus : System.FilePath) (work : System.FilePath) : IO Unit := do
     if tables control == tables written then
       throw (IO.userError s!"the charge {title}: the tables of caps are what they were")
   unless (tables small).map (·.2.2) ==
-      [⟨[(.flat ⟨1⟩ [⟨⟨0⟩, 1, 4, 1⟩] [])]⟩, ⟨[(.flat ⟨1⟩ [⟨⟨0⟩, 5, 8, 1⟩] [])]⟩] do
+      [some ⟨[(.flat ⟨1⟩ [⟨⟨0⟩, 1, 4, 1⟩] [])]⟩, some ⟨[(.flat ⟨1⟩ [⟨⟨0⟩, 5, 8, 1⟩] [])]⟩] do
     throw (IO.userError "the smaller charge is not 1/4 and 5/8 at the draw")
   for control in [elsewhere, foreign] do
-    unless (tables control).all (·.2.2 == ⟨[(.flat ⟨1⟩ [] [])]⟩) do
+    unless (tables control).all (·.2.2 == some ⟨[(.flat ⟨1⟩ [] [])]⟩) do
       throw (IO.userError s!"a charge that is not on the draw of the root gave a cap: {repr ((tables control).map (·.2.2))}")
   -- A row outside the table of the model, inside the loop of the relation: the power of a field
   -- element, which the standard model gives a constant.

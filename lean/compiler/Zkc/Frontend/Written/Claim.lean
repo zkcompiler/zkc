@@ -83,6 +83,14 @@ private def selectedClause (c : AdmittedRoot) (selected : Selection) : ExportM D
   let (selected, _) ← c.goalSource.selectNamed goal .soundness
   selectedClause c selected
 
+/-- **The number of a goal and the table that goes with it** (GL4). A goal that writes no ceiling
+takes its bound from its table of caps, so it has one. A goal that writes a ceiling has a table
+where every charge that its root reaches has a place in one, and else the limit that the walk of
+the charges met. -/
+inductive GoalNumber where
+  | total (table : CapTable)
+  | ceiling (value : Rat) (table : Except TableLimit CapTable)
+
 /-- What one written soundness goal claims, in the package of its claims. It is made by
 `goalClaims` alone. -/
 structure ClaimedGoal where
@@ -108,11 +116,9 @@ structure ClaimedGoal where
   specification : Array Nat
   /-- The property that the goal names. -/
   property : Security.Property
-  /-- The ceiling that the goal states, when it states one (GL4). -/
-  ceiling : Option Rat
-  /-- The table of caps of the root at the goal's proof arguments (SX8): every charge that the
-  root reaches, by use. -/
-  caps : CapTable
+  /-- The goal's number: its ceiling, when it states one, and the table of caps of the root at the
+  goal's proof arguments (SX8), every charge that the root reaches, by use. -/
+  number : GoalNumber
   /-- The draws of the root by the names of their sites, each with the keys of the draws that
   realize it: every named draw that is emitted, charged or not. -/
   sites : SiteKeys
@@ -205,15 +211,44 @@ private def readClaim (c : AdmittedRoot) (state : Compile.State) (goal : String)
     if (node.witness.getD #[]).isEmpty then pure (some #[])
     else if application.witness.isEmpty then pure none
     else some <$> application.witness.mapM (operandPlace body none)
-  let (caps, sites) ← goalCaps c selected.specification
+  let (table, sites) ← goalCaps c selected.specification
+  let number ← match selected.ceiling, table with
+    | some value, table => pure (GoalNumber.ceiling value table)
+    | none, .ok table => pure (.total table)
+    | none, .error limit =>
+      throw (s!"GL4: the goal `{goal}` writes no ceiling, so its bound is the total of the charges " ++
+        s!"that its root reaches, and they are not read into a table of caps ({limit.describe}); " ++
+        "a goal that writes its ceiling is issued without a table")
   let some property := selected.property | throw "the claim is of no goal"
   return ({ goal, declaration, clause, relation, statement, witness, specification := selected.specification,
-            property, ceiling := selected.ceiling, caps, sites }, selected.scheme, state)
+            property, number, sites }, selected.scheme, state)
+
+/-- The ceiling that the goal states, when it states one (GL4). -/
+def ClaimedGoal.ceiling (goal : ClaimedGoal) : Option Rat :=
+  match goal.number with
+  | .total _ => none
+  | .ceiling value _ => some value
+
+/-- The table of caps of the goal; none for a goal with a ceiling whose contract has a charge that
+a table has no place for. -/
+def ClaimedGoal.caps (goal : ClaimedGoal) : Option CapTable :=
+  match goal.number with
+  | .total table => some table
+  | .ceiling _ table => table.toOption
+
+/-- The limit of a table that the goal's charges met, for a goal that has no table. -/
+def ClaimedGoal.limit (goal : ClaimedGoal) : Option TableLimit :=
+  match goal.number with
+  | .ceiling _ (.error limit) => some limit
+  | _ => none
 
 /-- **The bound of a goal**: the ceiling that the goal writes, and where it writes none, the
 total of the charges of its contract as they add up along one run (SX8). It is not negative: a
 negative ceiling is refused where the goal is selected, and no charge is negative. -/
-def ClaimedGoal.bound (goal : ClaimedGoal) : Rat := goal.ceiling.getD goal.caps.ratio
+def ClaimedGoal.bound (goal : ClaimedGoal) : Rat :=
+  match goal.number with
+  | .total table => table.ratio
+  | .ceiling value _ => value
 
 @[no_expose] def claimedGoal (c : AdmittedRoot) (state : Compile.State) (goal : String) :
     ExportM (ClaimedGoal × SchemeEntry × Compile.State) := do
@@ -265,7 +300,8 @@ private def collectClaims (c : AdmittedRoot) (goals : List (String × ExportM De
       throw "WK-CORE: the inputs of the deployed header are not the deployed ports of the protocol"
     -- the counts of each goal's table are those of the program that the module prints
     for goal in claimed do
-      unless goal.caps.counted package.named ⟨c.id⟩ do
+      let some table := goal.caps | continue
+      unless table.counted package.named ⟨c.id⟩ do
         throw s!"WK-CHARGE: the counts of the table of caps of `{goal.goal}` are not those of the package"
     return { root := c.id, scheme := scheme.declaration, schemeName := scheme.name, prover, verifier
              inputs := body.deployedPorts.map (·.binder.name)

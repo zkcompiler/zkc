@@ -87,7 +87,7 @@ open Zkc.Core Zkc.Frontend Zkc.Frontend.Written
 open Zkc.Subject (CapTable)
 open Zkc.Tests.Frontend Zkc.Tests.Frontend.PrintedPackageSupport
 open ZkcFormalTests.WrittenSubject (Module Consumer startModule startRefused refusedOutside startLakeLean
-  addStated startSourceComparison finishLean expectUnproved expectPlaces)
+  addStated startSourceComparison finishLean expectUnproved expectPlaces projectOf leanOn)
 
 namespace GoalStatementCheck
 
@@ -249,6 +249,17 @@ def chargedCall : String := charged
     "protocol Caller roles(P, V)(claim: bool @(P, V)):\n" ++
     "    first <- Once(claim)\n    guard @V claim\n" ++
     "spec for Caller:\n    proves @V Holds(claim)\n    charge sites.first <= 1 / 8\n")
+  "Caller"
+
+/-- A root with a send `a`, a draw `w` and an application `first` of a protocol with the draw `z`,
+and one charge on the given site. -/
+def chargedAt (site : String) : String := charged
+  ("protocol Once roles(P, V)(claim: bool @(P, V)):\n" ++
+    "    z <- draw index<8> from V to P\n" ++
+    "protocol Caller roles(P, V)(claim: bool @(P, V), m: index<8> @P):\n" ++
+    "    a <- send m from P to V\n    w <- draw index<4> from V to P\n" ++
+    "    first <- Once(claim)\n    guard @V claim\n" ++
+    s!"spec for Caller:\n    proves @V Holds(claim)\n    charge sites.{site} <= 1 / 8\n")
   "Caller"
 
 /-- A charge of the caller on a site of its callee. -/
@@ -492,7 +503,7 @@ def run (work : System.FilePath) : IO Unit := do
   let tableOf (text : String) : Option (CapTable × Rat) := do
     let s ← (statementsOf text ["sound"]).toOption
     let [goal] := s.claims.goals | none
-    return (goal.caps, goal.total)
+    return (← goal.caps, ← goal.total)
   expect "two charged draws of the root are not both in its table"
     (tableOf twoDraws == some (⟨[(.flat ⟨1⟩ [⟨⟨0⟩, 3, 8, 1⟩, ⟨⟨1⟩, 1, 2, 1⟩] [])]⟩, 7 / 8))
   expect "a callee at the proof arguments 3 and 2 is not two uses, each call with its own"
@@ -548,7 +559,9 @@ def run (work : System.FilePath) : IO Unit := do
   expect "a callee reached by three ways is not one use with the counts of the ways"
     (tableOf sharedCallee == some (⟨[(.flat ⟨1⟩ [⟨⟨0⟩, 1, 8, 1⟩] []), (.flat ⟨2⟩ [] [⟨⟨0⟩, 2, 0⟩]),
       (.flat ⟨3⟩ [] [⟨⟨0⟩, 1, 0⟩]), (.flat ⟨4⟩ [] [⟨⟨0⟩, 1, 1⟩, ⟨⟨1⟩, 1, 2⟩, ⟨⟨2⟩, 5, 1⟩])]⟩, 13 / 8))
-  -- What has no table yet is refused with the reason, and no claim is read.
+  -- A goal that writes no ceiling takes its bound from its table: what a table has no place for
+  -- yet is refused with the limit, and no claim is read. Two charges on one draw are an error of
+  -- the source.
   for (title, text, reason) in [
       ("a charge on an application", chargedCall, "`sites.first` is no draw"),
       ("a charge on a site of a callee", calleeSite, "a charge on a site of a callee"),
@@ -565,6 +578,66 @@ def run (work : System.FilePath) : IO Unit := do
     | .error why =>
       expect s!"{title} was refused for another reason: {why}"
         (why.contains "WK-CHARGE" && why.contains reason)
+  -- A goal that writes its ceiling is read where a table has no place for a charge: it has no
+  -- table, the limit is the first that the walk of the charges meets, and its bound is the ceiling.
+  let ceiling (text : String) := text.replace "goal sound = soundness(Checked)\n" "goal sound = soundness(Checked) <= 1 / 2\n"
+  for (title, text, reason) in [
+      ("a charge on an application", chargedCall, "`sites.first` is no draw"),
+      ("a charge on a site of a callee", calleeSite, "a charge on a site of a callee"),
+      ("a charged draw under a loop of a run-time count",
+        runtimeDraws "    charge sites.z <= 1 / 8\n", "the draw `z` of `Runs` is under a loop whose count is read at run time"),
+      ("an application under a loop of a run-time count",
+        runtimeCalls "spec for Once:\n    charge sites.z <= 1 / 8\n",
+        "an application in `Caller` is under a loop whose count is read at run time")] do
+    match statementsOf (ceiling text) ["sound"] with
+    | .error why => throw (IO.userError s!"{title}, in a goal with a ceiling, was refused: {why}")
+    | .ok s =>
+      let [goal] := s.claims.goals | throw (IO.userError s!"{title}: not one goal")
+      expect s!"{title}, in a goal with a ceiling: the goal has a table, or another bound than its ceiling"
+        (goal.caps.isNone && goal.total.isNone && goal.bound == 1 / 2 && goal.ceiling == some (1 / 2))
+      expect s!"{title}, in a goal with a ceiling: the limit is {goal.limit.map (·.describe)}"
+        ((goal.limit.map fun limit => limit.describe.contains "WK-CHARGE" && limit.describe.contains reason) == some true)
+  -- An error of the source is an error with a ceiling too, also where a limit stands before it in
+  -- the walk: two charges on one draw; two charges on one draw of a callee that is applied under a
+  -- loop of a run-time count; a negative charge on a site of a callee; a negative charge on an
+  -- application.
+  for (title, text, reason) in [
+      ("two charges on one draw", chargedTwice, "a second charge on `sites.z`"),
+      ("two charges on a draw of a callee behind a limit",
+        runtimeCalls "spec for Once:\n    charge sites.z <= 1 / 8\n    charge sites.z <= 1 / 2\n",
+        "a second charge on `sites.z`"),
+      ("a negative charge on a site of a callee",
+        calleeSite.replace "charge sites.first.z <= 1 / 8" "charge sites.first.z <= 0 - 1 / 8", "a charge is not negative"),
+      ("a negative charge on an application",
+        chargedCall.replace "charge sites.first <= 1 / 8" "charge sites.first <= 0 - 1 / 8", "a charge is not negative")] do
+    unless (ceiling text) != text do throw (IO.userError s!"{title}: the source has not the goal's line")
+    match statementsOf (ceiling text) ["sound"] with
+    | .ok _ => throw (IO.userError s!"{title}, in a goal with a ceiling, was read")
+    | .error why =>
+      expect s!"{title}, in a goal with a ceiling, was refused for another reason: {why}"
+        (why.contains "WK-CHARGE" && why.contains reason)
+  -- A charge belongs to a draw, an application or an attempt: a site that is none of these, or
+  -- that names no one event, is an error of the source, with a ceiling and without one. The same
+  -- root with the charge on its draw has a table; on its application, or on the draw of the
+  -- protocol that it applies, it meets a limit.
+  for (site, reason) in [
+      ("a", "`sites.a` is a send; a charge belongs to a draw, an application or an attempt"),
+      ("w.z", "`sites.w.z`: `w` is no application, and has no sites"),
+      ("first.nosuch", "`sites.first.nosuch`: `nosuch` names no one event of `Once`"),
+      ("first.z.q", "`sites.first.z.q`: `z` is no application, and has no sites"),
+      ("nosuch", "`sites.nosuch`: `nosuch` names no one event of `Caller`")] do
+    for text in [chargedAt site, ceiling (chargedAt site)] do
+      match statementsOf text ["sound"] with
+      | .ok _ => throw (IO.userError s!"a charge on `sites.{site}` was read")
+      | .error why =>
+        expect s!"a charge on `sites.{site}` was refused for another reason: {why}"
+          (why.contains "WK-CHARGE" && why.contains reason && !why.contains "GL4")
+  for (site, table) in [("w", true), ("first", false), ("first.z", false)] do
+    match statementsOf (ceiling (chargedAt site)) ["sound"] with
+    | .error why => throw (IO.userError s!"a charge on `sites.{site}`, in a goal with a ceiling, was refused: {why}")
+    | .ok read =>
+      expect s!"a charge on `sites.{site}`: the goal has a table, or has none, against what its site is"
+        ((read.claims.goals.map (·.caps.isSome)) == [table])
   -- A draw without a charge under such a loop is in no table: it is allowed nothing.
   expect "a draw without a charge under a loop of a run-time count is in a table"
     (tableOf (runtimeDraws "") == some (⟨[(.flat ⟨1⟩ [] [])]⟩, 0))
@@ -582,8 +655,30 @@ def run (work : System.FilePath) : IO Unit := do
     ("import Zkc.Frontend.Written.Statement\nopen Zkc.Frontend.Written\n" ++
       "example (claimed : ClaimedGoal) : ClaimedGoal := { claimed with statement := #[1] }\n" ++
       "example (claims : GoalClaims) : GoalClaims := { claims with verifier := 0 }\n" ++
-      "example (claimed : ClaimedGoal) : ClaimedGoal := { claimed with caps := ⟨[]⟩ }\n" ++
+      "example (claimed : ClaimedGoal) : ClaimedGoal := { claimed with number := .total ⟨[]⟩ }\n" ++
       "example (claimed : ClaimedGoal) : Array Nat := claimed.statement\n")
+
+  -- Lean on the publication of a goal without a table: its row holds none and says that the source
+  -- writes the bound; the data module, the challenge and the views are built; the fees module
+  -- gives the row no facts and a line.
+  let tableless ← IO.ofExcept
+    ((← IO.ofExcept (statementsOf (ceiling chargedCall) ["sound"])).publication "Tableless")
+  expect s!"the goal without a table: refusals {tableless.refusals}, limits {tableless.limits}"
+    (tableless.refusals.isEmpty && (tableless.limits.map fun limit =>
+      limit.startsWith "sound: no table of caps: " && limit.contains "`sites.first` is no draw") == [true])
+  expect "the row of the goal without a table does not hold `none` and the ceiling"
+    ((tableless.data.splitOn "caps := none, bound := written'bound0, ceiling := true }").length == 2 &&
+      !tableless.data.contains "written'caps0")
+  let mut tablelessModules := []
+  for (name, text, kind) in [
+      (tableless.dataName, tableless.data, ZkcFormalTests.SubjectProject.Kind.statements),
+      (tableless.challengeName, tableless.challenge, .challenge),
+      (tableless.viewsName, tableless.views, .statements),
+      (tableless.feesName, tableless.fees, .statements),
+      (`TablelessFacts, "import Tableless.Fees\nimport Tableless.Views\n" ++
+        "#check @Tableless.t.sound.sound_of_installed\n#check @Tableless.t.sound.fees.budget\n", .statements)] do
+    discard <| ZkcFormalTests.SubjectProject.add (projectOf work) name text kind
+    tablelessModules := tablelessModules ++ [(name, leanOn work name)]
 
   -- Lean: the published theorem at the inputs of the source, by a consumer written apart.
   let fronted := decided ("spec note: bool, " ++ both) "flag" "proves @V IsSet(flag)"
@@ -645,6 +740,19 @@ def run (work : System.FilePath) : IO Unit := do
   expectUnproved "a name of the installed bound defined again" "ShadowControl" theorems shadowedProof
     ["t.sound.sound", "consumer"]
   expectPlaces "a name of the installed bound defined again" shadowedProof ["Application type mismatch"]
+  -- The goal without a table: Lean accepts its four modules; the fees module says that the row
+  -- holds no table; the step from the installed bound is declared and no fee fact is.
+  for (name, pending) in tablelessModules do
+    let (ok, output) ← pending
+    if name == `TablelessFacts then
+      expect s!"the goal without a table has a fee fact, or no step from the installed bound\n{output}"
+        (!ok && output.contains "Tableless.t.sound.sound_of_installed" &&
+          (output.splitOn "error").length == 2 && output.contains "Tableless.t.sound.fees.budget")
+    else
+      unless ok do throw (IO.userError s!"the goal without a table: Lean refused {name}\n{output}")
+      if name == tableless.feesName then
+        expect s!"the fees module of the goal without a table does not say why\n{output}"
+          (output.contains "publish_fees: t.sound: the row holds no table of caps; no fee facts")
   IO.println ("The statement of a goal reads its operands in the deployed header, its deciding role " ++
     "in the goal's scheme and its event in the clause: a spec port that nothing uses leaves the " ++
     "operand as it is, another operand changes it, and a consumer written apart uses the published " ++

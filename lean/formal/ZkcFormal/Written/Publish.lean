@@ -32,6 +32,11 @@ read by reducing the record that holds a field to its constructor and taking the
 argument as it stands, so the constant that a field names is the constant of the statement. A
 statement reads its own row alone, and the bound only where the statement has one.
 
+A row says whether the source writes its bound (`ceiling`). Where it does not, the bound is the
+total of the row's table of caps, and the command decides by the kernel, before it declares
+anything, that the table counts as the stored program does and adds up to the bound; it refuses
+a subject with a row for which that is false. A row that writes its ceiling may hold no table.
+
 `published% S <path> <theorem>` is the same statement as a term, for an author or a consumer;
 the path is written as one identifier whose components are the path's (`«…»` around a component
 that is no identifier).
@@ -61,6 +66,18 @@ def fieldOf (e : Expr) (struct field : Name) : MetaM Expr := do
 def constName (e : Expr) : MetaM Name := do
   let some c := e.consumeMData.constName? | throwError "publish: expected a constant, got {e}"
   return c
+
+/-- A closed term of the library evaluated by the kernel. -/
+def kernelValue (e : Expr) : MetaM Expr := do
+  ofExceptKernelException (Kernel.whnf (← getEnv) (← getLCtx) e)
+
+/-- A decision of the library evaluated by the kernel; a decision that the kernel does not
+evaluate to a truth value is an error, not a refusal. -/
+def decided (command what : String) (e : Expr) : MetaM Bool := do
+  let r ← kernelValue e
+  if r.isConstOf ``Bool.true then return true
+  if r.isConstOf ``Bool.false then return false
+  throwError "{command}: the kernel did not evaluate {what}{indentExpr e}\nit stopped at{indentExpr r}"
 
 /-- The index `i` of a table of `n` rows, refused here where it is past the rows. The term is made
 of fixed constants (`Fin.mk` with `Nat.le_of_ble_eq_true rfl`), so no instance of the caller's
@@ -120,9 +137,33 @@ def rowAt (t : Tables) (index : Nat) : MetaM Row := do
   let application ← constName (← fieldOf decision ``Zkc.Subject.Decision `application)
   return { path, property, application, fields }
 
+/-- The table of caps of a row, where its fields hold one: the argument of `some`, as it stands. -/
+def Row.table (row : Row) : MetaM (Option Expr) := do
+  let caps ← whnf (← fieldOf row.fields ``Zkc.Subject.GoalFields `caps)
+  if caps.isAppOfArity ``Option.some 2 then return some caps.appArg!
+  if caps.isAppOfArity ``Option.none 1 then return none
+  throwError "publish: expected a table of caps or none, got {caps}"
+
+/-- Whether the source writes the row's bound, as the goal's ceiling. -/
+def Row.ceiling (row : Row) : MetaM Bool := do
+  let written ← whnf (← fieldOf row.fields ``Zkc.Subject.GoalFields `ceiling)
+  if written.isConstOf ``Bool.true then return true
+  if written.isConstOf ``Bool.false then return false
+  throwError "publish: expected whether the row writes its ceiling, got {written}"
+
+/-- The stored program of the subject's package and the key of its root, read from the type of
+the row's short application. -/
+def Row.program (row : Row) : MetaM (Expr × Expr) := do
+  let root := (← whnf (← inferType (Lean.mkConst row.application))).appArg!
+  let pkg := (← whnf (← inferType root)).appArg!
+  let stored ← mkProjection pkg `stored
+  let rootKey ← mkProjection (← mkProjection (← mkProjection root `entry) `header) `key
+  return (stored, rootKey)
+
 /-- **The goal rows of a subject, read once for a command.** No path is the path of two rows: a
 command declares by path, so two rows of one path would give one name two rows' meanings, also
-where a command declares nothing for one of them. -/
+where a command declares nothing for one of them. A row that writes no ceiling holds a table: its
+bound is the table's total. -/
 def rows (subject : Name) : MetaM (Array Row) := do
   let t ← tables subject
   let mut read : Array Row := #[]
@@ -130,6 +171,8 @@ def rows (subject : Name) : MetaM (Array Row) := do
     let row ← rowAt t index
     if read.any (·.path == row.path) then
       throwError "publish: the path {row.path} is the path of two rows of {subject}"
+    unless (← row.ceiling) || (← row.table).isSome do
+      throwError "publish: the row at the path {row.path} writes no ceiling and holds no table of caps: its bound is the total of no table"
     read := read.push row
   return read
 
@@ -141,6 +184,20 @@ def Row.isSoundness (row : Row) : Bool := row.property == ``Zkc.Security.Propert
 /-- The constant of a row's bound. -/
 def Row.bound (row : Row) : MetaM Name := do
   constName (← fieldOf row.fields ``Zkc.Subject.GoalFields `bound)
+
+/-- **The bound of a row that writes no ceiling is its table's.** The kernel decides that the
+table counts as the stored program does and that its total is the bound's number
+(`CapTable.sumsTo`). A challenge is declared over a subject each of whose rows passes; a row that
+writes its ceiling is not asked. -/
+def Row.checkTotal (row : Row) : MetaM Unit := do
+  if ← row.ceiling then return
+  let some table ← row.table
+    | throwError "publish: the row at the path {row.path} writes no ceiling and holds no table of caps"
+  let (stored, rootKey) ← row.program
+  let bound := Lean.mkConst (← row.bound)
+  let holds ← mkAppM ``Zkc.Subject.CapTable.sumsTo #[table, stored, rootKey, bound]
+  unless ← decided "publish_goals" "whether the bound is the table's total" holds do
+    throwError "publish_goals: the row at the path {row.path} writes no ceiling, and its bound is not the total of a table that counts as the stored program does"
 
 /-- **What each property publishes**: the names of its theorems. A property that is not listed
 publishes nothing from the written subject, and the issuer of the written subject refuses a
@@ -181,11 +238,15 @@ def declareUnproved (name : Name) (type : Expr) : CommandElabM Unit := liftTermE
   let value ← mkSorry type false
   addDecl (.thmDecl { name, levelParams := [], type, value })
 
-/-- **Declare what the goals of a subject publish**, each theorem without a proof. -/
+/-- **Declare what the goals of a subject publish**, each theorem without a proof. Before it
+declares anything, the bound of each row that writes no ceiling is held to its table and to the
+stored program (`Row.checkTotal`); a subject with a row that fails is refused. -/
 elab "publish_goals " s:ident : command => do
   let subject ← liftCoreM <| realizeGlobalConstNoOverloadWithInfo s
   let space := subject.getPrefix
-  for row in ← liftTermElabM (rows subject) do
+  let rows ← liftTermElabM (rows subject)
+  for row in rows do liftTermElabM row.checkTotal
+  for row in rows do
     for which in ← liftTermElabM (theoremsOf row) do
       declareUnproved (theoremName space row which) (← liftTermElabM (statement row which))
 

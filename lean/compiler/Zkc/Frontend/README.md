@@ -156,7 +156,16 @@ A goal is issued at its bound: the ceiling that the goal writes, else the total 
 caps, which `goalClaims` reads with the claim (`goalCaps`): the uses that the root reaches at
 the goal's proof arguments, each with the caps that the contract of its definition gives its
 charged draws and with its calls. A goal whose ceiling is below that total is issued, and the
-fees command gives its row no fee facts. The deciding role, the operands, the proof arguments,
+fees command gives its row no fee facts. Where the root reaches what a table has no
+place for yet (`TableLimit` lists the four cases), `goalCaps` returns that limit and not a
+table: a goal that writes its ceiling is issued with no table in its row, and the publication
+reports the limit; a goal that writes none is refused with it. The walk of the charges goes on
+after a limit and resolves each charge's site first (`chargedSite`), so an error of the source
+in a charge refuses either: a site that names no one event, a send or a sample, a path through
+what is no application, two charges on one site, a negative charge. A row says whether the
+source writes its bound; for a row that does not, `publish_goals` decides by the kernel that
+the table's counts are the stored program's and that it adds up to the bound. The caps, the
+set of charged draws and that field are this reading of the source. The deciding role, the operands, the proof arguments,
 the bound and the table are read from the claims and from nothing that a caller gives. A goal
 whose reach the standard interpretation does not cover is not issued and is reported. A goal
 whose clause is a `reduces` is not issued yet: the statement of a reduction is about a return on

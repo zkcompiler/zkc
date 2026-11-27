@@ -214,8 +214,9 @@ def factsOf (s : Statements) (layout : SubjectLayout s.claims) : String :=
 def facts (s : Statements) (goals := s.claims.goals.attach) : String :=
   s.factsOf (.ofGoals s.claims goals)
 
-/-- The total of a goal's table of caps, as the frontend computes it. -/
-def _root_.Zkc.Frontend.Written.ClaimedGoal.total (goal : ClaimedGoal) : Rat := goal.caps.ratio
+/-- The total of a goal's table of caps, as the frontend computes it, where the goal has a table. -/
+def _root_.Zkc.Frontend.Written.ClaimedGoal.total (goal : ClaimedGoal) : Option Rat :=
+  goal.caps.map (·.ratio)
 
 /-- The name of a draw of the root in a module: the name of its site in the source, with
 its place among the draws that realize the site where a stepped loop gives several. -/
@@ -227,10 +228,11 @@ in a module and its key. The name in a module is the site's (`siteLabel`) where 
 name, and `key<number>` of the draw where it is not. A name that two charged draws would share
 (a site `r_0` beside the first draw of a stepped loop over `r`) is followed by the key of each.
 The name of a charged draw does not depend on the draws that the contract does not charge: a
-draw without a charge whose name another draw has is the one that is followed by its key. -/
+draw without a charge whose name another draw has is the one that is followed by its key. The
+charged draws are those of the goal's table; for a goal without a table none counts as charged. -/
 def _root_.Zkc.Frontend.Written.ClaimedGoal.siteLabels (goal : ClaimedGoal) :
     List (String × String × Core.Key) :=
-  let capped := (goal.caps.uses.getLast?.map (·.draws)).getD []
+  let capped := ((goal.caps.bind (·.uses.getLast?)).map (·.draws)).getD []
   let charged := Std.HashSet.ofList (capped.map (·.key.number))
   let draws := goal.sites.flatMap fun (site, keys) =>
     keys.zipIdx.map fun (key, index) =>
@@ -313,6 +315,9 @@ structure Publication where
   published : List Lean.Name
   /-- Diagnostics for goals omitted because their reach has no standard interpretation. -/
   refusals : List String := []
+  /-- For each goal that is issued without a table of caps, the limit of a table that its
+  charges met. Such a goal writes its ceiling; its row holds no table and gets no fee facts. -/
+  limits : List String := []
 
 namespace Publication
 
@@ -361,8 +366,10 @@ def publication (s : Statements) (name : String) (imports : List String := [])
   let published := layout.paths.flatMap fun path =>
     let row := path.foldl (fun n c => Lean.Name.str n c) name.toName
     [.str row "sound", .str row "met"]
+  let limits := retained.filterMap fun goal =>
+    goal.val.limit.map fun limit => s!"{goal.val.goal}: no table of caps: {limit.describe}"
   return {
-    space := name, dataName, data, stated
+    space := name, dataName, data, stated, limits
     challenge := line "ZkcFormal.Written.Publish" "publish_goals"
     views := line "ZkcFormal.Written.Views" "publish_views"
     fees := line "ZkcFormal.Written.FeeFacts" "publish_fees"

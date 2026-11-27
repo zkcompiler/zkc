@@ -19,11 +19,59 @@ structure Decision {V : Vocabulary} {pkg : Package V} (root : WrittenRoot pkg) w
   place : Nat
   witness : Option (HList (PortRef root.entry.header.ins) (application.relation.header.ins.drop application.arity))
 
-/-- The source goal's own arguments, its table of caps and its bound. -/
+/-- The source goal's own arguments, its table of caps, its bound, and where the bound comes
+from. -/
 structure GoalFields where
   specification : List Nat
-  caps : CapTable
+  /-- The table of caps of the root at the goal's proof arguments. There is none where the
+  contract has a charge that a table has no place for; such a goal writes its ceiling. -/
+  caps : Option CapTable
   bound : Bound
+  /-- Whether the source writes the bound, as the goal's ceiling. Where it does not, the bound is
+  the total of the table (`CapTable.sumsTo`). -/
+  ceiling : Bool
+
+/-- A fraction of naturals, not reduced, at which the kernel adds a table up. It is zero where
+its denominator is zero, as a rational divided by zero is, so its arithmetic is that of the
+nonnegative rationals; it rests on no axiom. -/
+structure Fraction where
+  numerator : Nat
+  denominator : Nat
+
+namespace Fraction
+
+/-- The fraction with a denominator that is not zero. -/
+def normal (f : Fraction) : Fraction := if f.denominator == 0 then ⟨0, 1⟩ else f
+
+instance : NatCast Fraction := ⟨fun n => ⟨n, 1⟩⟩
+instance : Zero Fraction := ⟨⟨0, 1⟩⟩
+instance : Add Fraction := ⟨fun a b =>
+  let a := a.normal; let b := b.normal
+  ⟨a.numerator * b.denominator + b.numerator * a.denominator, a.denominator * b.denominator⟩⟩
+instance : Mul Fraction := ⟨fun a b =>
+  let a := a.normal; let b := b.normal
+  ⟨a.numerator * b.numerator, a.denominator * b.denominator⟩⟩
+instance : Div Fraction := ⟨fun a b =>
+  let a := a.normal; let b := b.normal
+  normal ⟨a.numerator * b.denominator, a.denominator * b.numerator⟩⟩
+instance : Max Fraction := ⟨fun a b =>
+  let a := a.normal; let b := b.normal
+  if a.numerator * b.denominator ≤ b.numerator * a.denominator then b else a⟩
+
+/-- Whether the fraction is the number `numerator / denominator`, the denominator not zero. -/
+def isNumber (f : Fraction) (numerator denominator : Nat) : Bool :=
+  let f := f.normal
+  f.numerator * denominator == numerator * f.denominator
+
+end Fraction
+
+/-- **A bound that is taken from a table is the table's**: the table counts as the stored program
+does, and its total is the bound's number. A closed decision over fractions of naturals,
+evaluated by the kernel where a challenge is declared over a goal that writes no ceiling. -/
+def CapTable.sumsTo {V : Vocabulary} (table : CapTable) (p : NamedProgram V) (root : Key)
+    (bound : Bound) : Bool :=
+  table.counted p root &&
+    (table.totalAt Fraction table.root).isNumber bound.numerator bound.denominator
 
 /-- The semantic consumer takes one goal with its selected decision. -/
 structure WrittenGoal {V : Vocabulary} {pkg : Package V} (root : WrittenRoot pkg) where

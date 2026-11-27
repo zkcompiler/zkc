@@ -63,7 +63,7 @@ def run : IO Unit := do
   unless stated.functions == [("apply", 2)] do
     throw (IO.userError s!"the root calls other functions than `apply`: {stated.functions}")
   let order := Zkc.Vocabulary.Field.bls12381Fr.order
-  unless goal.caps == ⟨[(.flat ⟨1⟩ [⟨⟨0⟩, 1, order, 1⟩] [])]⟩ do
+  unless goal.caps == some ⟨[(.flat ⟨1⟩ [⟨⟨0⟩, 1, order, 1⟩] [])]⟩ do
     throw (IO.userError "the table of caps is not one over the order of the scalar field, on the draw of the root, once")
 
   -- The operands exchanged: the package is what it was, and the relation is applied to the
@@ -77,7 +77,7 @@ def run : IO Unit := do
   let halved ← read (← replaceOnce (source "Product(a, b, c)") "charge sites.r <= 1 / F::Order"
     "charge sites.r <= 1 / (2 * F::Order)") inOrder
   unless halved.package == written.package &&
-      (halved.goals.map (·.caps)) == [⟨[(.flat ⟨1⟩ [⟨⟨0⟩, 1, 2 * order, 1⟩] [])]⟩] do
+      (halved.goals.map (·.caps)) == [some ⟨[(.flat ⟨1⟩ [⟨⟨0⟩, 1, 2 * order, 1⟩] [])]⟩] do
     throw (IO.userError "the halved charge changed the package, or is not half at the draw")
 
   -- The product computed another way: the vector is read before the matrix, and a term is

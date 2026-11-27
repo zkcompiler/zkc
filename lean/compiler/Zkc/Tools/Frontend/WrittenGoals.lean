@@ -26,7 +26,8 @@ private def writeGoal (directory : System.FilePath) (publication : Written.Publi
     if ← pending.pathExists then IO.FS.removeDirAll pending
 
 /-- Report every requested occurrence in order, write each distinct challenge once, and
-return failure if any required goal was refused. -/
+return failure if any required goal was refused. A goal that is issued without a table of caps
+is issued: its result ends with the limit of a table that its charges met, and is no failure. -/
 def writtenGoals (options : Names.Options) : IO UInt32 := do
   if options.goals.isEmpty then
     IO.eprintln "written-goals requires at least one --goal"
@@ -59,9 +60,14 @@ def writtenGoals (options : Names.Options) : IO UInt32 := do
           continue
       let claims := issued.statements.claims
       for goal in claims.goals do
+        -- a goal with a ceiling whose charges a table has no place for is issued, and its result
+        -- says so
+        let limit := match goal.limit with
+          | some limit => s!"; no table of caps: {limit.describe}"
+          | none => ""
         IO.println (s!"{result.selector} -> {path}: issued {publication.space}.Challenge " ++
           s!"(scheme {claims.schemeName}, root {claims.root}, relation {goal.relation}, " ++
-          s!"spec {goal.specification})")
+          s!"spec {goal.specification}){limit}")
   return if exported && allGoalsIssued results then 0 else 1
 
 end Zkc.Tools.Frontend

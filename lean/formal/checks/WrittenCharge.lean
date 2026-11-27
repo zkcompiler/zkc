@@ -59,7 +59,7 @@ private def sum (root : System.FilePath) (rounds : Nat) (edit : Option (String �
     let approved ← IO.ofExcept (chargeSumcheck c 1 "challenge")
     let fee := approved.issued.charge
     unless Rat.divInt fee.numerator fee.denominator == expected do throw (IO.userError s!"wrong exact amount for {expr}")
-  for (expr,reason) in [("-1", "nonnegative"), ("2^(1/2)", "integer"), ("3 % 2", "remainder")] do
+  for (expr,reason) in [("-1", "not negative"), ("2^(1/2)", "integer"), ("3 % 2", "remainder")] do
     let c ← sum root 1 (some (original, "charge sites.challenge <= " ++ expr))
     let .error why := chargeSumcheck c 1 "challenge" | throw (IO.userError s!"accepted {expr}")
     unless why.contains reason do throw (IO.userError why)

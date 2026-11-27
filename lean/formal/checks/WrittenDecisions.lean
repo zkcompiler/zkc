@@ -70,8 +70,8 @@ private def roles (root prover verifier : Nat) :=
   eqn "(written'root.entry.header.key.number, written'root.prover.val, written'root.verifier.val)"
     s!"({root}, {prover}, {verifier})"
 
-private def fields (i : Nat) (args : List Nat) (table : String) (bound : Nat × Nat) :=
-  eqn s!"{atGoal i}.fields" s!"⟨{reprStr args}, {table}, ⟨{bound.1}, {bound.2}, by decide⟩⟩"
+private def fields (i : Nat) (args : List Nat) (table : String) (bound : Nat × Nat) (ceiling := false) :=
+  eqn s!"{atGoal i}.fields" s!"⟨{reprStr args}, some {table}, ⟨{bound.1}, {bound.2}, by decide⟩, {ceiling}⟩"
 
 private def flat (root : Nat) (draws := "[]") := s!"⟨[.flat ⟨{root}⟩ {draws} []]⟩"
 
@@ -155,18 +155,23 @@ private def controls (work : System.FilePath) (m : Publication) (src : String) :
     (← mutate "⟨1, by decide⟩ = written'goal1 := rfl" "⟨1, by decide⟩ = written'goal0 := rfl")
     "written'goal1" "written'goal0"
   let cap ← twin "RedirectFieldCap"
-    (← mutate "caps := written'caps1, bound := written'bound1 }" "caps := written'caps0, bound := written'bound1 }")
+    (← mutate "caps := some written'caps1, bound := written'bound1, ceiling" "caps := some written'caps0, bound := written'bound1, ceiling")
     "written'caps1" "written'caps0"
   -- The fields of `left_again` name the bound of `left`: the two bounds are equal, and the
   -- reference is another goal's.
   let boundRef ← twin "RedirectFieldBound"
-    (← mutate "caps := written'caps1, bound := written'bound1 }" "caps := written'caps1, bound := written'bound0 }")
+    (← mutate "caps := some written'caps1, bound := written'bound1, ceiling" "caps := some written'caps1, bound := written'bound0, ceiling")
     "written'bound1" "written'bound0"
   -- The bound of `left_again` is another number than its source gives.
   let boundValue ← run "OtherBound"
     (← mutate "written'bound1 : Zkc.Subject.Bound := ⟨0, 1, by decide⟩"
       "written'bound1 : Zkc.Subject.Bound := ⟨1, 2, by decide⟩")
     [(s!"({atGoal 1}.fields.bound.numerator,", "Type mismatch")]
+  -- The fields of `left_again` say that the source writes its bound, and the goal writes none: a
+  -- challenge would then not hold the bound to the table.
+  let flipped ← run "FlippedCeiling"
+    (← mutate "bound := written'bound1, ceiling := false }" "bound := written'bound1, ceiling := true }")
+    [(s!"{atGoal 1}.fields.ceiling =", "Type mismatch")]
   -- The row of `left_again` has the path of `left`, and then another property than its goal names.
   let otherPath ← run "OtherPath"
     (← mutate "\"left_again\"], property :=" "\"left\"], property :=")
@@ -209,7 +214,7 @@ private def controls (work : System.FilePath) (m : Publication) (src : String) :
   let duplicate ← run "DuplicateRow" dup [("⟨1, by decide⟩).clause.val", "Type mismatch"),
     (refAt "left_again", wrong "written'decision0" "written'decision2"),
     ("written'subject.clauses.size =", "Type mismatch")]
-  return [lookup, cap, boundRef, boundValue, otherPath, otherProperty, capAlias, swap, operand,
+  return [lookup, cap, boundRef, boundValue, flipped, otherPath, otherProperty, capAlias, swap, operand,
     duplicate]
 
 private def aliasChecks (work : System.FilePath) : IO Unit := do
@@ -352,7 +357,7 @@ private def coordinateChecks (work : System.FilePath) : IO Unit := do
   let shared ← add "ChargedRows" tenancy ["a","b","c"] ["tenancy::a","tenancy::b","tenancy::c"] (sizes 3 2 ++ String.join
     ([(1,1,2,(1, 1)), (1,3,4,(1, 2)), (2,1,2,(1, 1))].zipIdx.map
       fun ((place,e,den,cap),i) => coordinates i place 0 [0] (some []) ++
-        fields i [e] (flat 1 s!"[⟨⟨0⟩, 1, {den}, 1⟩]") cap))
+        fields i [e] (flat 1 s!"[⟨⟨0⟩, 1, {den}, 1⟩]") cap (ceiling := true)))
   let reps ← add "Occurrences" occurrences ["left","right","twin","again","left"]
     ["coordinates::left","coordinates::right","coordinates::twin","coordinates::again"]
     (sizes 4 3 ++ roles 1 1 0 ++ String.join ([
@@ -393,9 +398,9 @@ private def capChecks (work : System.FilePath) : IO Unit := do
   let req := simple ["a","b"]
   let draws := fun (z t : Nat) => flat 1 s!"[⟨⟨0⟩, {z}, 8, 1⟩, ⟨⟨1⟩, {t}, 8, 1⟩]"
   let (m, check) ← full work "EqualTotals" src req ["tenancy::a","tenancy::b"]
-    (fields 0 [1] (draws 1 3) (1, 1) ++ fields 1 [3] (draws 3 1) (1, 2))
+    (fields 0 [1] (draws 1 3) (1, 1) (ceiling := true) ++ fields 1 [3] (draws 3 1) (1, 2) (ceiling := true))
   let redirect := fun (text : String) =>
-    replaceOnce text "specification := [3], caps := written'caps1," "specification := [3], caps := written'caps0,"
+    replaceOnce text "specification := [3], caps := some written'caps1," "specification := [3], caps := some written'caps0,"
   let original ← IO.ofExcept (ZkcFormalTests.WrittenSource.consumer src req)
   -- The fields of `b` name the table of `a`, whose total is the same and whose draws pay other fees.
   let inconsistent ← checkMutant work m "InconsistentCap" (← redirect m.data) original
@@ -499,7 +504,7 @@ private def routeEdges (work : System.FilePath) : IO Unit := do
   let data ← issued work low.dataName.toString low.space low.data low.stated
   let original ← IO.ofExcept (ZkcFormalTests.WrittenSource.consumer src req)
   let reader ← issued work "LowSource" low.space (client low.dataName.toString low.space
-    (original ++ fields 0 [1] (flat 1 "[⟨⟨0⟩, 3, 4, 1⟩]") (0, 1)))
+    (original ++ fields 0 [1] (flat 1 "[⟨⟨0⟩, 3, 4, 1⟩]") (0, 1) (ceiling := true)))
   [data, reader].forM id
 
 private def hashDiagnostic (label : String) :=
