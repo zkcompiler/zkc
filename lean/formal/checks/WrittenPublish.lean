@@ -21,6 +21,9 @@ inputs of one type and a witness).
   on every pair made from a publication) accepts the issuer's challenge with the two names that
   are judged, and refuses a judgment that is given one name less, a challenge with one theorem
   more, and a challenge whose `sound` is at a number and not at the row's bound.
+* A row that writes its ceiling and holds an optional table that cannot be opened is published:
+  the challenge and the statement as a term read the bound alone; the fee facts, which ask for
+  the table, refuse it.
 * The proof module is judged by `lake comparator` against the challenge and is accepted. It
   also states the result through a macro and through a notation of its own, each of which gives
   the same statement.
@@ -133,7 +136,7 @@ def run (work : System.FilePath) : IO Unit := do
   discard <| SubjectProject.add project `Published.Proof (proof "Published.Stated" "Published")
   discard <| SubjectProject.add project `Low.Stated low.data .statements
   discard <| SubjectProject.add project `Low.Challenge low.challenge .challenge
-  -- the shape of what the issuer publishes, and twenty-one changes of it that the controls refuse
+  -- the shape of what the issuer publishes, and twenty-five changes of it that the controls refuse
   let control (command : String) (imported : String) :=
     s!"import {imported}\nimport ZkcFormalTests.PublicationControl\n\n{command}\n"
   let shape ← startLakeLean work "PublishedShape" (control
@@ -197,7 +200,24 @@ def run (work : System.FilePath) : IO Unit := do
       "data control: the path of the row Published.written'slot0 is not built of constructors, literals and declarations"),
     ("WithChosenDecision", ← replaceOnce honest.data "⟨1, fun _ => written'decision0⟩"
         "⟨1, fun _ => if written'caps0.uses.length = 0 then written'decision0 else written'decision0⟩",
-      "data control: the table of decisions of Published.written'subject reads Published.written'caps0, which is none of its elements")]
+      "data control: the table of decisions of Published.written'subject reads Published.written'caps0, which is none of its elements"),
+    -- a path that is a declaration whose value a computation chooses
+    ("WithPathDeclared", ← replaceOnce (← replaceOnce honest.data "path := [\"probes\", \"mapped\"]" "path := chosenPath")
+        "def written'fields0 :"
+        ("def chosenPath : List String := if written'caps0.uses.length = 0 then [\"probes\", \"mapped\"] else [\"probes\", \"mapped\"]\n" ++
+          "def written'fields0 :"),
+      "data control: the path of the row Published.written'slot0 is not built of constructors, literals and declarations"),
+    -- a cap whose numeral's instance gives another number
+    ("WithCapInstance", ← replaceOnce honest.data "def written'caps0 : Zkc.Subject.CapTable := ⟨["
+        "def written'caps0 : Zkc.Subject.CapTable := ⟨[⟨⟨@OfNat.ofNat Nat (nat_lit 9) ⟨7⟩⟩, .nil⟩, ",
+      "data control: the table Published.written'caps0 is not built of constructors and numerals"),
+    -- a selector that gives one decision whatever the index, by a conditional
+    ("WithSelectorTwice", ← replaceOnce honest.data "⟨1, fun _ => written'decision0⟩"
+        "⟨1, fun i => if i.val < 1 then written'decision0 else written'decision0⟩",
+      "data control: the selector of the table of decisions of Published.written'subject does not give 1 elements, each at one index"),
+    -- a private proposition
+    ("WithPrivateTheorem", ← replaceOnce honest.data ending ("private theorem hidden : stored = stored := rfl\n" ++ ending),
+      "data control: WithPrivateTheorem.Stated states the theorem")]
   let mut shapes := []
   for (name, text, refusal) in mutants do
     discard <| SubjectProject.add project s!"{name}.Stated".toName text .statements
@@ -232,6 +252,20 @@ def run (work : System.FilePath) : IO Unit := do
   let mut byRowsPending := []
   for (title, name, text, refusal) in rowsControls do
     byRowsPending := byRowsPending ++ [(title, refusal, ← startLakeLean work name text (text := false))]
+  -- A row that writes its ceiling, with an optional table that cannot be opened: what the goal
+  -- publishes is its bound, and neither the challenge nor a published statement as a term reads
+  -- the table; the fee facts ask for it and say that they cannot read it.
+  let hidden ← replaceOnce (← replaceOnce honest.data "number := .total written'caps0 written'bound0 }"
+      "number := .ceiling written'bound0 hiddenCaps }") "def written'fields0 :"
+    "opaque hiddenCaps : Option Zkc.Subject.CapTable\ndef written'fields0 :"
+  discard <| SubjectProject.add project `Hidden.Stated hidden .statements
+  discard <| SubjectProject.add project `Hidden.Challenge (challenge "Hidden.Stated" "Published") .challenge
+  let hiddenTerm ← startLakeLean work "HiddenTerm"
+    ("import Hidden.Challenge\n\n" ++
+      "example : Published.probes.mapped.sound = Published.probes.mapped.sound := rfl\n" ++
+      "example : Prop := published% Published.written'subject probes.mapped sound\n") (text := false)
+  let hiddenFees ← startLakeLean work "HiddenFees"
+    "import Hidden.Stated\nimport ZkcFormal.Written.FeeFacts\n\npublish_fees Published.written'subject\n" (text := false)
   let reads ← startLakeLean work "PublishedReads" (reader resultSpelling boundSpelling) (text := false)
   let installed ← startLakeLean work "PublishedReadsInstalled"
     (reader "Soundness.Installed model Published.written'application0 draws" boundSpelling) (text := false)
@@ -254,6 +288,10 @@ def run (work : System.FilePath) : IO Unit := do
     | some refusal =>
       let (ok, output) ← pending
       expectErrorsAt title ok output [refusal]
+  acceptedByLean "the challenge and the published statement of a row whose table cannot be opened" (← hiddenTerm)
+  let (ok, output) ← hiddenFees
+  expectErrorsAt "the fee facts of a row whose table cannot be opened" ok output
+    ["publish: expected a table of caps or none"]
   refusedReader "the installed bound where the result stands" (← installed)
   refusedReader "the bound's number where its constant stands" (← number)
   let (verdict, said) ← SubjectProject.judge project "Published"
@@ -264,7 +302,7 @@ def run (work : System.FilePath) : IO Unit := do
     throw (IO.userError s!"the challenge at another bound was not refused at the bound\n{said}")
   IO.println ("The issuer's data module holds definitions that are no propositions, the package's " ++
     "theorems and a bound of numerals, and imports no module of the formal library; its challenge " ++
-    "imports what the publication command does; 21 of 21 changes of that shape are refused.")
+    "imports what the publication command does; 25 of 25 changes of that shape are refused.")
   IO.println ("The library states what a goal publishes from its row: the built challenge holds " ++
     "exactly the statements that the check spells, and the control by rows refuses 3 of 3 " ++
     "changes of what is stated or judged; the proof module that states them as " ++
