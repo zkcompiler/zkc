@@ -62,12 +62,14 @@ def constName (e : Expr) : MetaM Name := do
   let some c := e.consumeMData.constName? | throwError "publish: expected a constant, got {e}"
   return c
 
-/-- The index `i` of a table of `n` rows. An index past the rows is refused here: the proof that the
-index is within the table is written without being checked. -/
+/-- The index `i` of a table of `n` rows, refused here where it is past the rows. The term is made
+of fixed constants (`Fin.mk` with `Nat.le_of_ble_eq_true rfl`), so no instance of the caller's
+scope enters it. -/
 private def finAt (n i : Nat) : MetaM Expr := do
   unless i < n do throwError "publish: no row {i} in a table of {n}"
-  let lt ← mkAppM ``LT.lt #[mkNatLit i, mkNatLit n]
-  mkAppM ``Fin.mk #[mkNatLit i, ← mkDecideProof lt]
+  let rfl := mkApp2 (Lean.mkConst ``Eq.refl [1]) (Lean.mkConst ``Bool) (Lean.mkConst ``Bool.true)
+  let within := mkApp3 (Lean.mkConst ``Nat.le_of_ble_eq_true) (mkNatLit (i + 1)) (mkNatLit n) rfl
+  return mkApp3 (Lean.mkConst ``Fin.mk) (mkNatLit n) (mkNatLit i) within
 
 private partial def strings (e : Expr) : MetaM (List String) := do
   let s ← whnf e
@@ -117,6 +119,11 @@ def rowAt (t : Tables) (index : Nat) : MetaM Row := do
   let decision := mkApp t.clauseAt (← finAt t.clauses clause)
   let application ← constName (← fieldOf decision ``Zkc.Subject.Decision `application)
   return { path, property, application, fields }
+
+/-- Whether the row is of the property `soundness`. What a command declares for the proof of a
+soundness goal (the installed bound and the step from it, the fee facts) it declares for such a
+row and for no other. -/
+def Row.isSoundness (row : Row) : Bool := row.property == ``Zkc.Security.Property.soundness
 
 /-- The constant of a row's bound. -/
 def Row.bound (row : Row) : MetaM Name := do

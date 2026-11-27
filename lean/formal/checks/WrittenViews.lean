@@ -13,9 +13,13 @@ reading of the source; it does not use the naming.
 
 * The views of the three subjects are declared and each `view_iff` holds (the views module is
   built). The reader accepts the source's names, also for the clause written short
-  (`Accepts(right)`), whose views bind the relation's two witnesses all the same. It refuses a row
-  past the subject's rows, the views of a subject whose origins exchange two names, and the views
-  made by two altered copies of the naming module: one gives
+  (`Accepts(right)`), whose views bind the relation's two witnesses all the same, and for a source
+  with each kind of port that the written route issues (`shapesSource`): a `spec` port, which is
+  in no view and in no ordinal; a port that the prover alone holds; one whose name is no plain name
+  (`port<ordinal>`); one that the verifier alone holds; a private one. The second reading's
+  deployed ports are held to the frontend's typed protocol, by name and holders. The reader refuses
+  a row past the subject's rows, the views of a subject whose origins exchange two names, and the
+  views made by two altered copies of the naming module: one gives
   each binder the name of the binder after it, so that the first input's name falls on the path's
   binder; one takes a held input's name at its position among the held inputs, which puts the name
   of `flag`, which the prover alone holds, into the verifier's view.
@@ -24,9 +28,16 @@ reading of the source; it does not use the naming.
   that is not registered is anonymous, or keeps its name where the rest refers to its proof. A
   binder that the naming did not make does not have its type computed, whatever its name: the type of a binder
   `portfolio` before an input telescope is not computed, the types of the inputs after it are.
+* Subjects that the issuer does not print, typed over the explicit clause's root: origins that
+  repeat a name give both inputs the name of their position; an empty path and a path with a
+  component that is no identifier name their declarations so; the same path twice, a row of a
+  property that publishes nothing and a bound that is no constant are refused by one error, by
+  `publish_goals` and by `publish_views` alike.
 * A declaration named like an input, before the views or after them, changes no view; neither
-  does a variable of that name, a local notation for a name of the interpretation or a printing
-  option around the command. A view
+  does the caller's scope around the command: a local instance of classical decidability at a high
+  priority, a variable named like an input, local notations for names of the interpretation, a
+  printing option. Under the same scope `publish_goals` and `published%` state what they state
+  without it. A view
   whose term holds a proof that Lean moved into an auxiliary constant is read. A witness telescope
   whose continuation is not a validity premise is named.
 * A wrapper outside the library's name space, and a closed specialized constant inside it, are
@@ -62,6 +73,58 @@ goal mapped = soundness(S, clause = explicit)
 /-- The same clause written short, `Accepts(right)`: the relation's witnesses are no operands of
 the clause. -/
 def shortSource : String := explicitSource.replace "Accepts(right; flag, n)" "Accepts(right)"
+
+/-- Each kind of port that a protocol's head can have and the written route issues, with a clause
+written short over a relation with a witness: a `spec` port before the deployed ones, a port that
+the prover alone holds, one that both hold, one whose name is no plain name, one that the verifier
+alone holds, a private one, and the witness's. (A port with readers is not emitted by the written
+route today: the frontend refuses the protocol.) -/
+def shapesSource := "module probes
+use zkc::security::{soundness}
+relation Opens(x: bool; w: bool): x and w
+protocol Check roles(P,V)(spec note: bool, secret: bool @P, claim: bool @(P,V), 값: bool @(P,V), only: bool @V, hush: bool @P private, w: bool @P):
+    guard @V claim and 값 and only
+spec for Check:
+    proves @V shown: Opens(claim)
+scheme S = Check:
+    prover P
+    construction interactive
+goal shaped = soundness(S, clause = shown)
+"
+
+/-- Subjects that the issuer does not print, typed over the explicit clause's root, clauses and
+rows: origins that exchange two names; origins that repeat a name (both take the name of
+their position); rows whose paths are empty, hold a component that is no identifier, or are the same twice; a
+row of a property that publishes nothing; a bound that is no constant. -/
+def typedSubjects : String :=
+  "import Named.Stated\n\nnamespace Typed\nopen Named\n\n" ++
+  "noncomputable def over (names : Array String) (aligned : names.size = written'root.entry.header.ins.length)\n" ++
+  "    (rows : Zkc.Subject.BoundedTable (Zkc.Subject.GoalSlot written'clauses.size) := ⟨1, fun _ => written'slot0⟩) :\n" ++
+  "    Zkc.Subject.WrittenSubject written'root :=\n" ++
+  "  ⟨written'clauses, rows, { written'origins with inputNames := names, aligned }⟩\n" ++
+  "noncomputable def at_ (path : List String) : Zkc.Subject.GoalSlot written'clauses.size :=\n" ++
+  "  { written'slot0 with path }\n" ++
+  "noncomputable def source := over #[\"claim\", \"flag\", \"right\", \"n\"] rfl\n" ++
+  "end Typed\n" ++
+  "namespace Exchanged\nnoncomputable def subject := Typed.over #[\"right\", \"flag\", \"claim\", \"n\"] rfl\nend Exchanged\n" ++
+  "namespace Fallback\nnoncomputable def subject := Typed.over #[\"claim\", \"flag\", \"claim\", \"κ\"] rfl\nend Fallback\n" ++
+  "namespace Paths\nnoncomputable def subject := Typed.over #[\"claim\", \"flag\", \"right\", \"n\"] rfl\n" ++
+  "  ⟨2, fun i => if i.val == 0 then Typed.at_ [] else Typed.at_ [\"two words\", \"x\"]⟩\nend Paths\n" ++
+  "namespace Twin\nnoncomputable def subject := Typed.over #[\"claim\", \"flag\", \"right\", \"n\"] rfl\n" ++
+  "  ⟨2, fun _ => Typed.at_ [\"same\"]⟩\nend Twin\n" ++
+  "namespace Complete\nnoncomputable def subject := Typed.over #[\"claim\", \"flag\", \"right\", \"n\"] rfl\n" ++
+  "  ⟨1, fun _ => { Named.written'slot0 with property := Zkc.Security.Property.completeness }⟩\nend Complete\n" ++
+  "namespace BoundInPlace\nnoncomputable def subject := Typed.over #[\"claim\", \"flag\", \"right\", \"n\"] rfl\n" ++
+  "  ⟨1, fun _ => { Named.written'slot0 with fields := { Named.written'fields0 with bound := ⟨0, 1, by decide⟩ } }⟩\n" ++
+  "end BoundInPlace\n"
+
+/-- The scope of a caller around a command: a name space and a section, a local instance of
+classical decidability at a high priority, a variable named like an input, local notations for the
+interpretation's names, and a printing option. -/
+def scope : String :=
+  "namespace Customer\nsection\n" ++
+  "variable (input_claim : Nat)\nlocal notation \"model\" => Unit\nlocal notation \"draws\" => False\n" ++
+  "attribute [local instance 2000] Classical.propDecidable\nset_option pp.universes true in\n"
 
 /-- A guessing protocol: `n` rounds, each a guess sent and a draw. -/
 def guessSource (rounds charge : String) : String :=
@@ -184,20 +247,22 @@ def run (work : System.FilePath) : IO Unit := do
     discard <| SubjectProject.add project name.toName text kind
   -- the subjects
   let named ← statementsOf explicitSource "mapped" "Named"
-  let exchanged ← replaceOnce (← statementsOf explicitSource "mapped" "Exchanged")
-    "#[\"claim\", \"flag\", \"right\", \"n\"]" "#[\"right\", \"flag\", \"claim\", \"n\"]"
   let guess ← statementsOf (guessSource "3" "1 / 8") "guessing" "Guess"
   let twice ← statementsOf (twiceSource "1 / 4") "twice" "Twice"
   add "Named.Stated" named .statements
   add "Short.Stated" (← statementsOf shortSource "mapped" "Short") .statements
-  add "Exchanged.Stated" exchanged .statements
+  add "Shapes.Stated" (← statementsOf shapesSource "shaped" "Shapes") .statements
+  add "Typed.Subjects" typedSubjects .statements
   add "Guess.Stated" guess .statements
   add "Twice.Stated" twice .statements
   add "Named.Challenge" "import Named.Stated\nimport ZkcFormal.Written.Publish\n\npublish_goals Named.written'subject\n" .challenge
   -- the views and their readers
   add "Named.Views" (viewsModule "Named.Stated" "Named.written'subject") .statements
   add "Short.Views" (viewsModule "Short.Stated" "Short.written'subject") .statements
-  add "Exchanged.Views" (viewsModule "Exchanged.Stated" "Exchanged.written'subject") .statements
+  add "Shapes.Views" (viewsModule "Shapes.Stated" "Shapes.written'subject") .statements
+  add "Exchanged.Views" (viewsModule "Typed.Subjects" "Exchanged.subject") .statements
+  add "Fallback.Views" (viewsModule "Typed.Subjects" "Fallback.subject") .statements
+  add "Paths.Views" (viewsModule "Typed.Subjects" "Paths.subject") .statements
   add "Guess.Views" (viewsModule "Guess.Stated" "Guess.written'subject") .statements
   add "Twice.Views" (viewsModule "Twice.Stated" "Twice.written'subject") .statements
   let universal ← expectedRows explicitSource "mapped" false
@@ -232,7 +297,35 @@ def run (work : System.FilePath) : IO Unit := do
     ("Twice.t.twice.met.view", "Twice.written'subject", twiceExistential),
     ("Twice.t.twice.installed.view", "Twice.written'subject", twiceUniversal)]) .statements
   add "ExchangedReads" (reader ["Exchanged.Views"]
-    [("Exchanged.probes.mapped.sound.view", "Exchanged.written'subject", universal)]) .statements
+    [("Exchanged.probes.mapped.sound.view", "Exchanged.subject", universal)]) .statements
+  -- each kind of port, and a clause written short over a relation with a witness
+  let shapesUniversal ← expectedRows shapesSource "shaped" false
+  let shapesExistential ← expectedRows shapesSource "shaped" true
+  unless shapesUniversal == "  | input_claim := input 1\n  | valid_input_claim := valid 1\n  | port2 := input 2\n" ++
+      "  | valid_port2 := valid 2\n  | input_only := input 3\n  | valid_input_only := valid 3\n  | witness0 := witness 0\n" do
+    throw (IO.userError s!"the second reading of the source of each kind of port is not what the language says:\n{shapesUniversal}")
+  add "ShapesReads" (reader ["Shapes.Views"] [
+    ("Shapes.probes.shaped.sound.view", "Shapes.written'subject", shapesUniversal),
+    ("Shapes.probes.shaped.met.view", "Shapes.written'subject", shapesExistential),
+    ("Shapes.probes.shaped.installed.view", "Shapes.written'subject", shapesUniversal)]) .statements
+  -- origins that repeat a name and hold a name that is no plain name: the names by position
+  add "FallbackReads" (reader ["Fallback.Views"] [
+    ("Fallback.probes.mapped.installed.view", "Fallback.subject",
+      "  | port0 := input 0\n  | valid_port0 := valid 0\n  | port2 := input 2\n  | valid_port2 := valid 2\n" ++
+        "  | witness0 := witness 0\n  | witness1 := witness 1\n")]) .statements
+  -- paths: an empty one, one with a component that is no identifier; the same path twice
+  add "Paths.Goals" "import Typed.Subjects\nimport ZkcFormal.Written.Publish\n\npublish_goals Paths.subject\n" .challenge
+  add "PathsNames" ("import Paths.Goals\nimport Paths.Views\n\nopen Lean in\n#eval show CoreM Unit from do\n" ++
+    "  for name in [`Paths.sound, `Paths.met, `Paths.«two words».x.sound, `Paths.«two words».x.met,\n" ++
+    "      `Paths.sound.view, `Paths.installed.view, `Paths.sound_of_installed, `Paths.«two words».x.sound.view,\n" ++
+    "      `Paths.«two words».x.installed.view_iff, `Paths.«two words».x.sound_of_installed] do\n" ++
+    "    unless (← getEnv).contains name do throwError \"no declaration {name}\"\n" ++
+    "  logInfo \"the declarations of an empty path and of a path with a component that is no identifier\"\n" ++
+    "example : published% Paths.subject «two words».x sound ↔ Paths.«two words».x.sound.view :=\n" ++
+    "  Paths.«two words».x.sound.view_iff.symm\n") .statements
+  for (name, subject) in [("Twin", "Twin.subject"), ("Complete", "Complete.subject"), ("BoundInPlace", "BoundInPlace.subject")] do
+    add s!"{name}Goals" s!"import Typed.Subjects\nimport ZkcFormal.Written.Publish\n\npublish_goals {subject}\n" .challenge
+    add s!"{name}Views" (viewsModule "Typed.Subjects" subject) .statements
   -- the two altered copies of the naming module
   let namer ← IO.FS.readFile "ZkcFormal/Written/Views.lean"
   let shift ← replaceOnce namer "  let named ← name n e\n" "  let named := shiftNames (← name n e)\n"
@@ -262,9 +355,21 @@ def run (work : System.FilePath) : IO Unit := do
   add "PrintBefore" (printAll "Before.Views") .statements
   -- the command inside a name space and a section, with a variable named like an input, local
   -- notations for the interpretation's names and a printing option around it
-  add "Ambient.Views" (viewsModule "Named.Stated" "Named.written'subject"
-    (before := "namespace Customer\nsection\nvariable (input_claim : Nat)\nlocal notation \"model\" => Unit\n" ++
-      "local notation \"draws\" => False\nset_option pp.universes true in\n")) .statements
+  add "Ambient.Views" (viewsModule "Named.Stated" "Named.written'subject" (before := scope)) .statements
+  -- the published statements under the same scope: the command's, and the term's
+  add "Ambient.Goals" ("import Named.Stated\nimport ZkcFormal.Written.Publish\n\n" ++ scope ++
+    "publish_goals Named.written'subject\n" ++
+    "def soundInScope : Prop := published% Named.written'subject probes.mapped sound\n" ++
+    "def metInScope : Prop := published% Named.written'subject probes.mapped met\n") .challenge
+  add "AmbientGoals" ("import Ambient.Goals\n\nopen Lean Meta ZkcFormal.Written in\n#eval show MetaM Unit from do\n" ++
+    "  let t ← Publish.tables `Named.written'subject\n  let row ← Publish.rowAt t 0\n" ++
+    "  for (which, inScope) in [(\"sound\", `Customer.soundInScope), (\"met\", `Customer.metInScope)] do\n" ++
+    "    let plain ← Publish.statement row which\n" ++
+    "    let declared := (← getConstInfo (Publish.theoremName `Named row which)).type\n" ++
+    "    let some (.defnInfo term) := (← getEnv).find? inScope | throwError \"no {inScope}\"\n" ++
+    "    unless declared == plain do throwError \"publish_goals under the scope states another `{which}`\"\n" ++
+    "    unless term.value == plain do throwError \"published% under the scope gives another `{which}`\"\n" ++
+    "  logInfo \"the published statements are the same under the caller's scope\"\n") .statements
   add "PrintAmbient" (printAll "Ambient.Views") .statements
   add "AfterReads" (reader ["Named.Views"] (named3 "Named")
     (before := "def input_claim : Nat := 0\ndef valid_input_right : Nat := 0\ndef Named.input_right : Nat := 0\n\n")) .statements
@@ -343,7 +448,8 @@ def run (work : System.FilePath) : IO Unit := do
   -- what Lean and the judgment say
   let result (name : String) := SubjectProject.result project name.toName
   for name in ["PrintViews", "Named.Views", "Guess.Views", "Twice.Views", "Exchanged.Views", "NamedReads", "GuessReads",
-      "TwiceReads", "Short.Views", "ShortReads", "Shifted.Views", "Held.Views", "Before.Views", "BeforeReads",
+      "TwiceReads", "Short.Views", "ShortReads", "Shapes.Views", "ShapesReads",
+      "Fallback.Views", "FallbackReads", "Paths.Views", "Paths.Goals", "PathsNames", "Ambient.Goals", "AmbientGoals", "Shifted.Views", "Held.Views", "Before.Views", "BeforeReads",
       "AfterReads", "Lemmas", "Premises", "OtherBinders", "Listed"] do
     let (ok, output) ← result name
     unless ok do throw (IO.userError s!"{name}: Lean refused the module\n{output}")
@@ -369,6 +475,12 @@ def run (work : System.FilePath) : IO Unit := do
   refusedAt "the namer that takes a held input's name at its position among the held" (← result "HeldReads")
     ["Named.probes.mapped.installed.view: at the source's binder 2 the view binds `input_flag` where the source gives `input_right`"]
   refusedAt "a row past the subject's rows" (← result "PastTheRows") ["publish: no row 1 in a table of 1"]
+  refusedAt "the same path twice, goals" (← result "TwinGoals") ["publish: Twin.same.sound is already declared"]
+  refusedAt "the same path twice, views" (← result "TwinViews") ["views: Twin.same.sound.view is already declared"]
+  for kind in ["Goals", "Views"] do
+    refusedAt s!"a row of a property that publishes nothing, {kind}" (← result s!"Complete{kind}")
+      ["publish: the written subject publishes nothing for the property Zkc.Security.Property.completeness"]
+    refusedAt s!"a bound that is no constant, {kind}" (← result s!"BoundInPlace{kind}") ["publish: expected a constant"]
   refusedAt "a wrapper outside the list" (← result "UnlistedWrapper") ["views: no input or witness telescope is reached"]
   refusedAt "a closed constant outside the list" (← result "UnlistedClosed") ["views: no input or witness telescope is reached"]
   refusedAt "a telescope over other ports" (← result "OtherPorts")

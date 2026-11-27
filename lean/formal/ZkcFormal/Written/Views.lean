@@ -12,17 +12,17 @@ public meta import Zkc.Subject.SourceNames
 /-!
 Named views of what a subject publishes, declared by a command over the subject.
 
-`publish_views S` declares, for each goal row of the subject `S` at the path `p` (in the name
-space `<space>` of `S`) and each theorem `t` that the row's property publishes, the proposition
-`<space>.<p>.<t>.view` and the theorem `<space>.<p>.<t>.view_iff : view ↔ published% S p t`,
-proved by `Iff.rfl`; and the view of what an author proves, `Soundness.Installed` at the row's
-short application and the limit of its bound, under `<space>.<p>.installed`. For a row whose
-stored program the standard interpretation covers (decided by the kernel) it declares the
-coverage fact `<space>.<p>.covered` and the author's last step
-`<space>.<p>.sound_of_installed : installed.view → published% S p sound`; a row that is not
-covered gets neither, and a line that says so. A views module is its imports and that line. It
-is for proofs and readers, not for a challenge: the repository's challenges do not import it, and
-nothing refuses a challenge that does yet.
+`publish_views S` declares, for each goal row of the subject `S` at the path `p` (in the name space
+`<space>` of `S`) and each theorem `t` that the row's property publishes, the proposition
+`<space>.<p>.<t>.view` and the theorem `<space>.<p>.<t>.view_iff : view ↔ published% S p t`, proved
+by `Iff.rfl`; and, for a row of the property `soundness` (the one published property today), the
+view of what an author proves, `Soundness.Installed` at the row's short application and the limit of
+its bound, under `<space>.<p>.installed`. For such a row whose stored program the standard
+interpretation covers (decided by the kernel) it declares the coverage fact `<space>.<p>.covered`
+and the author's last step `<space>.<p>.sound_of_installed : installed.view → published% S p sound`;
+a row that is not covered gets neither, and a line that says so. A views module is its imports and
+that line. It is for proofs and readers, not for a challenge: the repository's challenges do not
+import it, and nothing refuses a challenge that does yet.
 
 A stored view is the library's term **named** and then **presented**:
 
@@ -316,14 +316,10 @@ def present (e : Expr) : MetaM Expr := do
 
 /-! ## Views -/
 
-/-- The term `e` named after the origins of the subject `S`, not presented: the binders of inputs
-and witnesses get the type that `carrier` makes of theirs, which is their own type unless a caller
-says otherwise. Naming changes binder names, unfolds definitions and substitutes `let`s, so the
-result is definitionally `e`; what holds a declared view to `e` is its theorem `view_iff`, which the
-kernel checks (`declareView`), and no check of the elaborator's here: at 64 deployed inputs held by
-the verifier, `isDefEq` of the named term with the term reaches Lean's maximum recursion depth where
-the kernel's check does not. -/
-def namedOf (subject : Name) (e : Expr) (carrier : Expr → MetaM Expr := pure) : MetaM Expr := do
+/-- The term `e` named after the origins of the subject `S`, with `carrier` applied to the type of
+each binder of an input or a witness. The callers are the two functions below, whose carriers
+return a type that is definitionally the one given. -/
+private def namedWith (subject : Name) (e : Expr) (carrier : Expr → MetaM Expr) : MetaM Expr := do
   let e ← instantiateMVars e
   let n : Namer := { origins := ← originsOf subject, listed := ← unfoldList,
                      premises := ← premiseList, carrier, found := ← IO.mkRef false }
@@ -332,10 +328,18 @@ def namedOf (subject : Name) (e : Expr) (carrier : Expr → MetaM Expr := pure) 
     throwError m!"views: no input or witness telescope is reached in{indentExpr e}\nthrough the definitions of the list; a definition outside the list is not unfolded (`@[view_unfold]` adds one)"
   return named
 
+/-- The term `e` named after the origins of the subject `S`, not presented, with every type as it
+is. Naming changes binder names, unfolds definitions and substitutes `let`s, so the result is
+definitionally `e`; what holds a declared view to `e` is its theorem `view_iff`, which the kernel
+checks (`declareView`), and no check of the elaborator's here: at 64 deployed inputs held by the
+verifier, `isDefEq` of the named term with the term reaches Lean's maximum recursion depth where
+the kernel's check does not. -/
+def namedOf (subject : Name) (e : Expr) : MetaM Expr := namedWith subject e pure
+
 /-- **The view of `e` over the subject `S`**: named with the types of the bound inputs and
 witnesses computed, then presented. -/
 def viewOf (subject : Name) (e : Expr) : MetaM Expr := do
-  present (← namedOf subject e ZkcFormal.computedTypes)
+  present (← namedWith subject e ZkcFormal.computedTypes)
 
 /-- Declare `<base>.view : Prop` with the value `value` and `<base>.view_iff : view ↔ e` by
 `Iff.rfl`. -/
@@ -401,9 +405,11 @@ elab "publish_views " s:ident : command => do
     for which in ← liftTermElabM (Publish.theoremsOf row) do
       let e ← liftTermElabM (Publish.statement row which)
       liftTermElabM do declareView (Publish.theoremName space row which) (← viewOf subject e) e
-    liftTermElabM do
-      let e ← installedStatement row
-      declareView (Publish.theoremName space row "installed") (← viewOf subject e) e
-    if let some reason ← liftTermElabM (declareClosing space row) then logInfo reason
+    -- what an author of a soundness proof proves, and the step from it
+    if row.isSoundness then
+      liftTermElabM do
+        let e ← installedStatement row
+        declareView (Publish.theoremName space row "installed") (← viewOf subject e) e
+      if let some reason ← liftTermElabM (declareClosing space row) then logInfo reason
 
 end ZkcFormal.Written.Views
