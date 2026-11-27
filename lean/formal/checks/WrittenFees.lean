@@ -17,10 +17,12 @@ Sources. The first three are judged by the comparator; the fourth's text is refu
   free.
 * The same with the goal at one over two, above the budget: `budget` is at the table's numbers,
   there is no `total_eq_limit`, and the same text closes at the goal's bound and is judged.
-* A verifier that draws twice and returns, with the caps one and zero at its two draws: the
-  author pays the whole fee at the first draw, within the cap that the judgment's term reads from
-  the table, and the proof is judged. With the two caps exchanged in the source, the same text is
-  refused at the first draw's allowance.
+* A verifier that hears a guess, draws a bit and returns where the claim holds or the bit is the
+  guess, with a cap of one half at the draw and no ceiling: its bound is one half. The author
+  follows the message for free and pays a fee of one half at the draw for the one reply that is
+  the guess, within the cap that the judgment's term reads from the table, and the proof is
+  judged. Over the source with a cap of one quarter the same text is refused at the budget and
+  at the draw's allowance.
 
 Rows that the issuer does not print, built as typed rows over the first subject's root, clauses
 and origins:
@@ -59,15 +61,16 @@ def publicationOf (text : String) (goals : List String) (space : String) : IO Pu
   unless issued.refusals.isEmpty do throw (IO.userError s!"{issued.refusals}")
   return issued
 
-/-- A verifier that draws twice and returns whatever the claim, with a cap at each draw. -/
-def payingSource (first second : String) : String :=
+/-- A verifier that hears a guess of the prover, draws a bit and returns where the claim holds or
+the bit is the guess, with a cap at the draw: its soundness error is one half. -/
+def payingSource (cap : String) : String :=
   "module guard_bound\nuse zkc::security::{soundness}\n\n" ++
   "relation IsSet(claim: bool): claim\n" ++
-  "protocol Check roles(P,V)(hidden: bool @P, claim: bool @(P,V)):\n" ++
-  "    r <- draw index<4> from V to P\n    s <- draw index<4> from V to P\n    guard @V true\n" ++
-  s!"spec for Check:\n    proves @V IsSet(claim)\n    charge sites.r <= {first}\n    charge sites.s <= {second}\n" ++
+  "protocol Check roles(P,V)(hidden: index<2> @P, claim: bool @(P,V)):\n" ++
+  "    g <- send hidden from P to V\n    r <- draw index<2> from V to P\n    guard @V claim or r == g\n" ++
+  s!"spec for Check:\n    proves @V IsSet(claim)\n    charge sites.r <= {cap}\n" ++
   "scheme Checked = Check:\n    prover P\n    construction interactive\n" ++
-  "goal loose = soundness(Checked, stage = written) <= 1\n"
+  "goal loose = soundness(Checked, stage = written)\n"
 
 def opens : String :=
   "open Zkc.Core ZkcFormal ZkcFormal.ProbabilisticProcess ZkcFormal.Written OracleComp ProbComp\n" ++
@@ -87,23 +90,45 @@ def guardedJudgment : String :=
   "    rw [shape]\n" ++
   "    exact charged_free _ _ _ _ _ _ (fun _ _ ↦ True.intro)\n"
 
-/-- The paying verifier's judgment: the whole fee is paid at the first draw, every reply of which
-is excluded; the cap of that draw is read from the table. -/
+/-- The paying verifier's judgment: the message is followed for free; at the draw a fee of one
+half is paid for the one reply that is the guess, within the cap that the table gives the draw;
+after every other reply the verifier stops. -/
 def payingJudgment : String :=
-  "  have shape : roleMeaning model installed rootMember verifierRole path\n" ++
-  "      (.cons () (.cons input_claim .nil)) =\n" ++
-  "      .call (.own (.coin (.uniform (.fin 4))) [0] ⟨path, ⟨0⟩⟩ [] .nil (.fin 4))\n" ++
-  "        (fun _ ↦ .call (.own (.coin (.uniform (.fin 4))) [0] ⟨path, ⟨1⟩⟩ [] .nil (.fin 4))\n" ++
-  "          (fun _ ↦ .done .nil)) := by cases input_claim <;> kernel_rfl\n" ++
-  "  rw [shape]\n" ++
-  "  apply charged_pay_at (rest := []) (key := ⟨0⟩) (fee := 1) (excluded := fun _ => True)\n" ++
-  "  · simp [ROp.occurrence]\n" ++
-  "  · rfl\n" ++
-  "  · simp [toProbability]\n" ++
-  "  · decide +kernel\n" ++
-  "  · decide +kernel\n" ++
-  "  · intro _ _ h\n" ++
-  "    exact (h trivial).elim\n"
+  "  cases input_claim with\n" ++
+  "  | true => exact False.elim (rejected (relationValue true))\n" ++
+  "  | false =>\n" ++
+  "    have shape : roleMeaning model installed rootMember verifierRole path\n" ++
+  "        (.cons () (.cons false .nil)) =\n" ++
+  "        .call (.get .message 0 ⟨path, ⟨0⟩⟩ (.fin 2)) (fun g ↦\n" ++
+  "          .call (.own (.coin (.uniform (.fin 2))) [0] ⟨path, ⟨1⟩⟩ [] .nil (.fin 2)) (fun r ↦\n" ++
+  "            Process.bind (A := HList (RV model verifierRole) [])\n" ++
+  "              (cond (Nat.beq r g) (Process.done HList.nil) (Process.halt (.declared .reject ⟨path, ⟨6⟩⟩)))\n" ++
+  "              fun _ ↦ .done .nil)) := by kernel_rfl\n" ++
+  "    rw [shape]\n" ++
+  "    apply charged_free _ _ _ _ _ _ (fun g _ ↦ ?_)\n" ++
+  "    apply charged_pay_at (rest := []) (key := ⟨1⟩) (fee := 1 / 2)\n" ++
+  "      (op := .own (.coin (Zkc.Vocabulary.LawKey.uniform (.fin 2))) [0] ⟨path, ⟨1⟩⟩ [] .nil (.fin 2))\n" ++
+  "      (excluded := fun r => r = g)\n" ++
+  "    · simp [ROp.occurrence]\n" ++
+  "    · rfl\n" ++
+  "    · rw [prEvent_drawPosition, show (1 / 2 : ℚ≥0) = ((1 : ℕ) : ℚ≥0) / ((1 + 1 : ℕ) : ℚ≥0) by norm_num,\n" ++
+  "        toProbability_natCast_div 1 (1 + 1) (Nat.succ_pos 1)]\n" ++
+  "      have few : ({x : Fin (1 + 1) | (x : ℕ) = g} : Finset (Fin (1 + 1))).card ≤ 1 :=\n" ++
+  "        Finset.card_le_one.mpr fun a ha b hb =>\n" ++
+  "          Fin.ext ((Finset.mem_filter.mp ha).2.trans (Finset.mem_filter.mp hb).2.symm)\n" ++
+  "      push_cast\n" ++
+  "      calc _ ≤ (1 : ℝ≥0∞) / (1 + 1) := ENNReal.div_le_div_right (by exact_mod_cast few) _\n" ++
+  "        _ = 1 / 2 := by norm_num\n" ++
+  "    · decide +kernel\n" ++
+  "    · decide +kernel\n" ++
+  "    · intro r _ different\n" ++
+  "      have unequal : Nat.beq r g = false := by\n" ++
+  "        cases h : Nat.beq r g\n" ++
+  "        · rfl\n" ++
+  "        · exact absurd (Nat.eq_of_beq_eq_true h) different\n" ++
+  "      beta_reduce\n" ++
+  "      rw [unequal]\n" ++
+  "      exact True.intro\n"
 
 /-- An author's text for the goal at `path` of the subject `subject`: the judgment by fees proved
 on its declared view, and the two published theorems through the declared steps. -/
@@ -223,8 +248,9 @@ def run (work : System.FilePath) : IO Unit := do
   let source ← IO.FS.readFile "fixtures/written-bound-guard.zkc"
   sourced "AtBound" source guardedJudgment
   sourced "Below" (← replaceOnce source "stage = written) <= 1 / 4" "stage = written) <= 1 / 2") guardedJudgment
-  sourced "Paying" (payingSource "1" "0") payingJudgment
-  sourced "Exchanged" (payingSource "0" "1") payingJudgment (judged := false)
+  sourced "Paying" (payingSource "1 / 2") payingJudgment
+  -- the same text over the source with a cap of one quarter: its fee of one half is above the cap
+  sourced "Exchanged" (payingSource "1 / 4") payingJudgment (judged := false)
   -- the judgment's view, read by name and type from a second reading of the source
   let rows ← ViewRows.expectedRows source "loose" false
   add "AtBoundReads" (ViewRows.reader ["AtBound.Fees"]
@@ -286,7 +312,7 @@ def run (work : System.FilePath) : IO Unit := do
   facts "BelowFacts" s!"Below.{path}" unequal
   said "BelowFacts" ["Below.written'caps0.budget = ↑1 / ↑4", "Below.written'bound0.limit"]
   facts "PayingFacts" s!"Paying.{path}" all
-  said "PayingFacts" ["Paying.written'caps0.budget = ↑1 / ↑1"]
+  said "PayingFacts" ["Paying.written'caps0.budget = ↑1 / ↑2"]
   facts "ExchangedFacts" s!"Exchanged.{path}" all
   -- the typed rows, each by itself
   facts "RowsunreducedFacts" "Rows.unreduced" all
@@ -344,10 +370,13 @@ def run (work : System.FilePath) : IO Unit := do
       throw (IO.userError s!"{space}: the proof through the fee facts was not accepted\n{words}")
     IO.println s!"{space}: judgment {verdict.word}"
   let (ok, output) ← result "Exchanged.Proof"
-  expectErrorsAt "the fee paid at a draw whose cap is zero" ok output ["Tactic `decide` failed"]
-  -- the obligation that fails is the fee of one against the cap of the first draw, the site 0
-  unless output.contains "(1 ≤ written'caps0.capFrom written'caps0.root (Frame.applications []) { number := 0 })" do
-    throw (IO.userError s!"the paying text is not refused at the first draw's allowance\n{output}")
+  expectErrorsAt "a fee of one half paid at a draw whose cap is one quarter" ok output
+    ["Tactic `decide` failed", "Tactic `decide` failed"]
+  -- the two obligations that fail: the fee against what is left of the budget, one quarter, and
+  -- against the cap of the draw, the site 1
+  unless output.contains "@decide (1 / 2 ≤ ↑1 / ↑4)" &&
+      output.contains "(1 / 2 ≤ written'caps0.capFrom written'caps0.root (Frame.applications []) { number := 1 })" do
+    throw (IO.userError s!"the paying text is not refused at the budget and at the draw's allowance\n{output}")
   IO.println s!"Exchanged.Proof: refused\n{output}"
   for name in ["above", "miscounted"] do
     let (ok, output) ← result s!"Rows.{name}Proof"
@@ -357,7 +386,7 @@ def run (work : System.FilePath) : IO Unit := do
     IO.println s!"Rows.{name}Proof: refused\n{output}"
   IO.println ("Fee facts by the library's command: at the bound and above the budget the facts are " ++
     "declared, the judgment's view is read by name and type, and the proofs through them (a draw followed " ++
-    "for free; a fee paid within its cap) are accepted by lake comparator; a fee above its cap is refused; " ++
+    "for free; a fee of one half paid within its cap for the one reply that lets the verifier return) are accepted by lake comparator; the same fee above a cap of one quarter is refused; " ++
     "typed rows get their facts or a reason, each by itself; the caller's scope changes nothing.")
 
 end WrittenFees

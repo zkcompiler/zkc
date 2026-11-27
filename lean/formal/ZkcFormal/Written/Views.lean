@@ -316,6 +316,13 @@ def present (e : Expr) : MetaM Expr := do
 
 /-! ## Views -/
 
+/-- A traversal of a statement goes some levels deeper for each input of the root (`met` nests
+one existential for each). The depth that Lean allows a recursion is raised by the number of the
+inputs, so that a root with many inputs gets its views as one with few does. -/
+def withInputsDepth {α : Type} (origins : Origins) (x : MetaM α) : MetaM α :=
+  withTheReader Core.Context
+    (fun c => { c with maxRecDepth := max c.maxRecDepth (512 + 64 * origins.inputs.length) }) x
+
 /-- The term `e` named after the origins of the subject `S`, with `carrier` applied to the type of
 each binder of an input or a witness. The callers are the two functions below, whose carriers
 return a type that is definitionally the one given. -/
@@ -323,7 +330,7 @@ private def namedWith (subject : Name) (e : Expr) (carrier : Expr → MetaM Expr
   let e ← instantiateMVars e
   let n : Namer := { origins := ← originsOf subject, listed := ← unfoldList,
                      premises := ← premiseList, carrier, found := ← IO.mkRef false }
-  let named ← name n e
+  let named ← withInputsDepth n.origins (name n e)
   unless ← n.found.get do
     throwError m!"views: no input or witness telescope is reached in{indentExpr e}\nthrough the definitions of the list; a definition outside the list is not unfolded (`@[view_unfold]` adds one)"
   return named
@@ -339,7 +346,7 @@ def namedOf (subject : Name) (e : Expr) : MetaM Expr := namedWith subject e pure
 /-- **The view of `e` over the subject `S`**: named with the types of the bound inputs and
 witnesses computed, then presented. -/
 def viewOf (subject : Name) (e : Expr) : MetaM Expr := do
-  present (← namedWith subject e ZkcFormal.computedTypes)
+  withInputsDepth (← originsOf subject) (present (← namedWith subject e ZkcFormal.computedTypes))
 
 /-- Declare `<base>.view : Prop` with the value `value` and `<base>.view_iff : view ↔ e` by
 `Iff.rfl`. -/

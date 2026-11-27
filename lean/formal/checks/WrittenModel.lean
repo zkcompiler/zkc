@@ -15,9 +15,9 @@ without a ceiling. -/
 def checkLinkedPrimitive : IO Unit := do
   let file := "../../examples/gkr_example.zkc"
   let scheme ← IO.FS.readFile file
-  let subject (bound : Nat) := statementsFor ⟨file, Syntax.parseString file
+  let subject (bound : String) := statementsFor ⟨file, Syntax.parseString file
     (scheme ++ s!"\ngoal bound = soundness(Proof, stage = written, statement = fixed) <= {bound}\n")⟩ ["bound"]
-  for bound in [1, 0] do
+  for bound in ["1 / 2", "0"] do
     let statements ← subject bound
     unless !statements.package.bindings.rows.isEmpty do throw (IO.userError "expected project bindings")
     match statements.publication "LayerCeiling" with

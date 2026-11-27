@@ -172,6 +172,31 @@ def operandPlace (body : Typed.ProtocolBody) (statement : Option (Nat × Nat))
     return place
   | other => refuse other.span "WK-CLAUSE" "an operand of the clause that is no port is not read yet"
 
+/-- **A coin of the verifier that the prover does not hear**, in an instance or in a protocol that
+it applies: the place of the event and its name. `verifiers` and `provers` are the roles of the
+instance that the scheme's verifier and prover play; an application gives the callee's roles
+through its role map. A `sample` of a verifier's role is such a coin, and so is a `draw` of one
+that no prover's role receives. -/
+partial def privateVerifierCoin? (s : Compile.State) (instance_ : InstanceId)
+    (verifiers provers : List Nat) : Option (Syntax.Span × String) := do
+  let checked ← s.results.checked? instance_
+  let key ← s.table.allocatedKey? instance_
+  let named (id : EventId) : Syntax.Span × String :=
+    match s.env.modules.lowered? key.declaration with
+    | some {content := .protocol head .., ..} =>
+      ((head.events[id]?.map (·.span)).getD default,
+        ((head.events[id]?.bind (·.name)).getD s!"event {id}"))
+    | _ => (default, s!"event {id}")
+  checked.events.findSome? fun
+    | .event _ id (.sample _ _ role) .. => if verifiers.contains role then some (named id) else none
+    | .event _ id (.draw _ _ sender receivers) .. =>
+      if verifiers.contains sender && !receivers.any provers.contains then some (named id) else none
+    | .event _ _ (.apply _ callee _ _ roleMap ..) .. =>
+      let played (roles : List Nat) := (roleMap.toList.zipIdx.filter fun (role, _) => roles.contains role).map (·.2)
+      if (played verifiers).isEmpty then none
+      else privateVerifierCoin? s callee (played verifiers) (played provers)
+    | _ => none
+
 /-- What a goal claims, with its relation instantiated in `state` and the state after it, and
 the scheme that the goal names. -/
 private def readClaim (c : AdmittedRoot) (state : Compile.State) (goal : String)
@@ -185,6 +210,13 @@ private def readClaim (c : AdmittedRoot) (state : Compile.State) (goal : String)
   let .protocol body := checked.definition.body
     | throw "the root of the scheme is no protocol"
   let parties ← schemeParties c selected.scheme
+  -- The statement runs the verifier against one service that answers its coins and the prover's
+  -- messages alike, so every coin of the verifier is one that the prover's side sees. That is
+  -- soundness for a verifier with public coins only.
+  if let some (place, name) := privateVerifierCoin? c.state c.id [parties.2] [parties.1] then
+    refuse place "WK-VIEW" (s!"the verifier's coin `{name}` is heard by no role of the prover: the " ++
+      "written soundness statement lets the prover's side answer after every coin of the " ++
+      "verifier, so a goal on a verifier with a private coin is not issued yet")
   let some key := c.state.results.key? c.id | throw "missing protocol key"
   let some {content := .protocol head .., ..} := c.state.env.modules.lowered? key.declaration
     | throw "missing the source ports of the protocol"
@@ -219,6 +251,17 @@ private def readClaim (c : AdmittedRoot) (state : Compile.State) (goal : String)
       throw (s!"GL4: the goal `{goal}` writes no ceiling, so its bound is the total of the charges " ++
         s!"that its root reaches, and they are not read into a table of caps ({limit.describe}); " ++
         "a goal that writes its ceiling is issued without a table")
+  -- A probability is at most one: a bound of one or more holds of every verifier and says
+  -- nothing of this one (GL4).
+  match number with
+  | .ceiling value _ =>
+    if value ≥ 1 then
+      throw (s!"GL4: the goal `{goal}` writes the ceiling {value}: a bound of one or more holds of " ++
+        "every verifier; a goal claims a bound below one")
+  | .total table =>
+    if table.ratio ≥ 1 then
+      throw (s!"GL4: the goal `{goal}` writes no ceiling, and the charges of its contract add up to " ++
+        s!"{table.ratio}: a bound of one or more holds of every verifier; a goal claims a bound below one")
   let some property := selected.property | throw "the claim is of no goal"
   return ({ goal, declaration, clause, relation, statement, witness, specification := selected.specification,
             property, number, sites }, selected.scheme, state)

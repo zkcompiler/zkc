@@ -260,9 +260,9 @@ section <spec e: nat>:
 scheme Checked = Check:
     prover P
     construction interactive
-goal a = soundness(Checked, clause = first, spec e = 1) <= 1
+goal a = soundness(Checked, clause = first, spec e = 1) <= 3/4
 goal b = soundness(Checked, clause = first, spec e = 3) <= 1/2
-goal c = soundness(Checked, clause = clone, spec e = 1) <= 1
+goal c = soundness(Checked, clause = clone, spec e = 1) <= 3/4
 "
 
 private def zero := "module zero
@@ -355,7 +355,7 @@ private def coordinateChecks (work : System.FilePath) : IO Unit := do
      coordinates 1 0 4 [0] (some []) ++ fields 0 [4] (flat 1 "[⟨⟨0⟩, 3, 8, 1⟩]") (3, 8) ++
      fields 1 [1] (flat 1 "[⟨⟨0⟩, 3, 4, 1⟩]") (3, 4))
   let shared ← add "ChargedRows" tenancy ["a","b","c"] ["tenancy::a","tenancy::b","tenancy::c"] (sizes 3 2 ++ String.join
-    ([(1,1,2,(1, 1)), (1,3,4,(1, 2)), (2,1,2,(1, 1))].zipIdx.map
+    ([(1,1,2,(3, 4)), (1,3,4,(1, 2)), (2,1,2,(3, 4))].zipIdx.map
       fun ((place,e,den,cap),i) => coordinates i place 0 [0] (some []) ++
         fields i [e] (flat 1 s!"[⟨⟨0⟩, 1, {den}, 1⟩]") cap (ceiling := true)))
   let reps ← add "Occurrences" occurrences ["left","right","twin","again","left"]
@@ -398,7 +398,7 @@ private def capChecks (work : System.FilePath) : IO Unit := do
   let req := simple ["a","b"]
   let draws := fun (z t : Nat) => flat 1 s!"[⟨⟨0⟩, {z}, 8, 1⟩, ⟨⟨1⟩, {t}, 8, 1⟩]"
   let (m, check) ← full work "EqualTotals" src req ["tenancy::a","tenancy::b"]
-    (fields 0 [1] (draws 1 3) (1, 1) (ceiling := true) ++ fields 1 [3] (draws 3 1) (1, 2) (ceiling := true))
+    (fields 0 [1] (draws 1 3) (3, 4) (ceiling := true) ++ fields 1 [3] (draws 3 1) (1, 2) (ceiling := true))
   let redirect := fun (text : String) =>
     replaceOnce text "specification := [3], caps := some written'caps1," "specification := [3], caps := some written'caps0,"
   let original ← IO.ofExcept (ZkcFormalTests.WrittenSource.consumer src req)
