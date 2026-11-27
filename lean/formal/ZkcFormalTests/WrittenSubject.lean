@@ -286,6 +286,13 @@ def startLakeLean (work : System.FilePath) (name source : String) (text := true)
   discard <| SubjectProject.add (projectOf work) name.toName source (if text then .module else .statements)
   return leanOn work name.toName
 
+/-- The control of a data module's shape (`#data_module`) as a module of a check's project, for
+the data module `data` of a publication in the name space `space`: its imports, its declarations
+and its rows are those of an issuer's data module. -/
+def shapeControl (data : Lean.Name) (space : String) : String :=
+  s!"import {data}\nimport ZkcFormalTests.PublicationControl\n\n" ++
+    s!"#data_module {data} of {space}.written'subject\n"
+
 /-- Compare the named values in the issued statements with the frontend run on the original
 source and selectors. The same values must be the fields of the package used for admission. -/
 def startSourceComparison (work : System.FilePath) (name : String) (module : Module)
@@ -467,10 +474,17 @@ def startModule (work : System.FilePath) (name : String) (module : Module) : IO 
   unless module.refusals.isEmpty do
     throw (IO.userError s!"{name}: the publication left goals out: {module.refusals}")
   let stated ← addStated work module
+  -- the data module of a publication has the shape that the issuer's data modules have
+  let shape ← if module.issued.isSome then
+      some <$> startLakeLean work (name ++ "Shape") (shapeControl module.statementsName module.space) (text := false)
+    else pure none
   let proved ← addProof work name module
   noteAccepted work name module
   return do
     stated.accepted name
+    if let some shape := shape then
+      let (ok, output) ← shape
+      unless ok do throw (IO.userError s!"{name}: the data module is refused by the control of its shape\n{output}")
     let lean ← proved
     acceptedByLean name lean
     acceptedByJudgment work name

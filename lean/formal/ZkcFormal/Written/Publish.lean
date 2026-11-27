@@ -168,10 +168,16 @@ def Row.table (row : Row) : MetaM (Option Expr) := return (← row.number).table
 def Row.ceiling (row : Row) : MetaM Bool := return (← row.number).written
 
 /-- The stored program of the subject's package and the key of its root, read from the type of
-the row's short application. -/
+the row's short application: `ShortApplication root`, whose root is a `WrittenRoot pkg`. -/
 def Row.program (row : Row) : MetaM (Expr × Expr) := do
-  let root := (← whnf (← inferType (Lean.mkConst row.application))).appArg!
-  let pkg := (← whnf (← inferType root)).appArg!
+  let application ← whnf (← inferType (Lean.mkConst row.application))
+  unless application.isAppOfArity ``Zkc.Subject.ShortApplication 3 do
+    throwError "publish: the row at the path {row.path}: {row.application} is no short application of a root:{indentExpr application}"
+  let root := application.appArg!
+  let rooted ← whnf (← inferType root)
+  unless rooted.isAppOfArity ``Zkc.Subject.WrittenRoot 2 do
+    throwError "publish: the row at the path {row.path}: the root of {row.application} is no written root of a package:{indentExpr rooted}"
+  let pkg := rooted.appArg!
   let stored ← mkProjection pkg `stored
   let rootKey ← mkProjection (← mkProjection (← mkProjection root `entry) `header) `key
   return (stored, rootKey)
