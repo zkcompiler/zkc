@@ -399,9 +399,7 @@ with the coverage fact and the step to the published result. -/
 elab "publish_views " s:ident : command => do
   let subject ← liftCoreM <| realizeGlobalConstNoOverloadWithInfo s
   let space := subject.getPrefix
-  let t ← liftTermElabM (Publish.tables subject)
-  for index in [:t.goals] do
-    let row ← liftTermElabM (Publish.rowAt t index)
+  for row in ← liftTermElabM (Publish.rows subject) do
     for which in ← liftTermElabM (Publish.theoremsOf row) do
       let e ← liftTermElabM (Publish.statement row which)
       liftTermElabM do declareView (Publish.theoremName space row which) (← viewOf subject e) e

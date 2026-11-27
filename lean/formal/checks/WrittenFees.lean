@@ -5,7 +5,7 @@ import ZkcFormalTests.ViewRows
 Fee facts declared by the library's command over a subject, decided row by row, and proofs by
 fees closed through them. A fees module is its imports and `publish_fees S`.
 
-Sources, each through the comparator:
+Sources. The first three are judged by the comparator; the fourth's text is refused by Lean:
 
 * The guarded verifier of the bound checks (`fixtures/written-bound-guard.zkc`: one draw at one
   over four, a claim that is not set is rejected), its goal at one over four: the command
@@ -32,8 +32,9 @@ and origins:
   within the bound, and one with its budget above it: no fee facts and a line with the reason,
   each row by itself, and the row after them has its six facts; the author's text on such a row
   is refused at the judgment's view and at the step from it, which are not declared;
-* a row of a property that publishes nothing, a bound that is no constant, and a table whose
-  count the kernel does not evaluate: the command is refused by one error.
+* a row of a property that publishes nothing, a bound that is no constant, one path twice (the
+  first of the two rows without facts) and a table whose count the kernel does not evaluate: the
+  command is refused by one error.
 
 The scope of the caller: inside a name space and a section, with a local instance of classical
 decidability at a high priority, local notations for the interpretation's names, a variable named
@@ -164,6 +165,10 @@ def typedRows : String :=
   "  row \"boundInPlace\" { specification := [], caps := written'caps0, bound := ⟨1, 4, by decide⟩ }\n" ++
   "noncomputable def boundInPlace : Zkc.Subject.WrittenSubject written'root :=\n" ++
   "  ⟨written'clauses, ⟨1, fun _ => boundInPlaceRow⟩, written'origins⟩\n" ++
+  "-- one path twice, the first row without facts\n" ++
+  "noncomputable def twin : Zkc.Subject.WrittenSubject written'root :=\n" ++
+  "  ⟨written'clauses, ⟨2, fun i => if i.val == 0 then { aboveRow with path := [\"same\"] } else\n" ++
+  "    row \"same\" written'fields0⟩, written'origins⟩\n" ++
   "-- a table whose count the kernel cannot evaluate\n" ++
   "opaque unknown : Nat\n" ++
   "noncomputable def unknownRow := row \"unknown\" { specification := [], caps := table unknown, bound := written'bound0 }\n" ++
@@ -225,6 +230,7 @@ def run (work : System.FilePath) : IO Unit := do
       "namespace Rows\nopen AtBound\n\n" ++ authorText "subject" name guardedJudgment ++ "\nend Rows\n") .module
   add "CompleteFees" (command "publish_fees" ["Rows.Typed", "ZkcFormal.Written.FeeFacts"] "Rows.complete") .statements
   add "BoundInPlaceFees" (command "publish_fees" ["Rows.Typed", "ZkcFormal.Written.FeeFacts"] "Rows.boundInPlace") .statements
+  add "TwinFees" (command "publish_fees" ["Rows.Typed", "ZkcFormal.Written.FeeFacts"] "Rows.twin") .statements
   add "UncountedFees" (command "publish_fees" ["Rows.Typed", "ZkcFormal.Written.FeeFacts"] "Rows.uncounted") .statements
   -- the caller's scope around the command, and the terms printed in full with it and without it
   add "Scoped.Fees" (command "publish_fees" ["AtBound.Stated", "ZkcFormal.Written.FeeFacts"] "AtBound.written'subject"
@@ -285,6 +291,8 @@ def run (work : System.FilePath) : IO Unit := do
     ["publish: the written subject publishes nothing for the property Zkc.Security.Property.completeness"]
   expectErrorsAt "a bound that is no constant" (← result "BoundInPlaceFees").1 (← result "BoundInPlaceFees").2
     ["publish: expected a constant"]
+  expectErrorsAt "one path twice, the first row without facts" (← result "TwinFees").1 (← result "TwinFees").2
+    ["publish: the path [same] is the path of two rows of Rows.twin"]
   expectErrorsAt "a count that the kernel does not evaluate" (← result "UncountedFees").1 (← result "UncountedFees").2
     ["publish_fees: the kernel did not evaluate whether the table counts as the stored program"]
   -- the scope of the caller changes neither the facts nor their terms
@@ -307,7 +315,8 @@ def run (work : System.FilePath) : IO Unit := do
     IO.println s!"{space}: judgment {verdict.word}"
   let (ok, output) ← result "Exchanged.Proof"
   expectErrorsAt "the fee paid at a draw whose cap is zero" ok output ["Tactic `decide` failed"]
-  unless output.contains "written'caps0.capFrom" do
+  -- the obligation that fails is the fee of one against the cap of the first draw, the site 0
+  unless output.contains "(1 ≤ written'caps0.capFrom written'caps0.root (Frame.applications []) { number := 0 })" do
     throw (IO.userError s!"the paying text is not refused at the first draw's allowance\n{output}")
   IO.println s!"Exchanged.Proof: refused\n{output}"
   for name in ["above", "miscounted"] do

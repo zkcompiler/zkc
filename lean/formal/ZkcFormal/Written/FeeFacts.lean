@@ -27,12 +27,15 @@ it declares under `<space>.<p>.fees`:
   (`ZkcFormal.Written.Views`);
 * `installed_of_judged`: from that view, the installed bound at the limit of the row's bound.
 
-Each fact is a theorem of `ZkcFormal.Written.Fees` applied to the row's constants, to numerals and
-to the value of a decision; the kernel checks each when it is declared. The command's terms are
+`budget`, `total_eq_limit` and `installed_of_judged` are theorems of `ZkcFormal.Written.Fees`
+applied to the row's constants, to numerals and to the value of a decision; `counted` is the
+decision's own value; the view and its `view_iff` are declared by the views' machinery
+(`Views.declareView`). The kernel checks each when it is declared. The command's terms are
 applications of the library's constants: it synthesizes no instance where it is called, so an
 instance, a notation or a variable of the caller's does not change what it decides or declares.
 
-A row is read as `ZkcFormal.Written.Publish` reads it. The table of caps is the expression that
+The rows are read as `ZkcFormal.Written.Publish` reads them (`Publish.rows`: no path is the path
+of two rows). The table of caps is the expression that
 the row's fields hold, named or written in place; the bound is a constant, as in a published
 statement. The fee facts are those of a proof of soundness: a subject with a row of a property
 that publishes nothing is refused, as `publish_goals` refuses it, and a row of another published
@@ -137,8 +140,7 @@ def rowFacts (subject : Name) (space : Name) (row : Publish.Row) : CommandElabM 
 elab "publish_fees " s:ident : command => do
   let subject ← liftCoreM <| realizeGlobalConstNoOverloadWithInfo s
   let space := subject.getPrefix
-  let t ← liftTermElabM (Publish.tables subject)
-  for index in [:t.goals] do
-    rowFacts subject space (← liftTermElabM (Publish.rowAt t index))
+  for row in ← liftTermElabM (Publish.rows subject) do
+    rowFacts subject space row
 
 end ZkcFormal.Written.FeeFacts

@@ -1,4 +1,5 @@
 import Zkc.Tests.Frontend.SourceClause
+import Zkc.Frontend.Driver.Files
 import Zkc.Tests.Frontend.PrintedPackageSupport
 import Zkc.Subject.SourceNames
 
@@ -18,6 +19,13 @@ open Zkc.Frontend Zkc.Frontend.Written Zkc.Tests.Frontend Zkc.Tests.Frontend.Pri
 
 namespace ZkcFormalTests.ViewRows
 
+/-- The root that a goal of a source selects, with the project's library files: the one resolution
+of a source for a check's issued statements and for its second reading. -/
+def admitted (text goal : String) : IO AdmittedRoot := do
+  let assembly ← Driver.assembleFiles ⟨"source.zkc", Syntax.parseString "source.zkc" text⟩
+    ["../../libraries"]
+  IO.ofExcept (admitSoundnessGoal assembly goal)
+
 /-- The ports of a source's head that are deployed, in their order: those that are not `spec`.
 Refused where the frontend's typed protocol deploys other names or holders. -/
 def deployedPorts (c : AdmittedRoot) : Except String (List Lowered.Port) := do
@@ -36,7 +44,7 @@ ordinal among the deployed ports: its name by the rule of names, and its validit
 telescope is universal; then a witness for each witness parameter that the declaration of the
 clause's relation has, whether the clause writes its witness operands or not. -/
 def expectedRows (text goal : String) (existential : Bool) : IO String := do
-  let c ← IO.ofExcept (goalRoot text goal)
+  let c ← admitted text goal
   let head ← IO.ofExcept (SourceClause.rootHead c)
   let seen ← IO.ofExcept (SourceClause.seen c goal)
   let some role := head.roster.idxOf? seen.role | throw (IO.userError "no deciding role")

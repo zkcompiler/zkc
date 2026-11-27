@@ -77,12 +77,14 @@ def shortSource : String := explicitSource.replace "Accepts(right; flag, n)" "Ac
 /-- Each kind of port that a protocol's head can have and the written route issues, with a clause
 written short over a relation with a witness: a `spec` port before the deployed ones, a port that
 the prover alone holds, one that both hold, one whose name is no plain name, one that the verifier
-alone holds, a private one, and the witness's. (A port with readers is not emitted by the written
+alone holds, a private one, and the witness's. The `spec` port's type is imported from the library,
+so the second reading resolves the source with the library's files, as the issuer does. (A port with readers is not emitted by the written
 route today: the frontend refuses the protocol.) -/
 def shapesSource := "module probes
 use zkc::security::{soundness}
+use zkc::curves::bls12_381::{Fr}
 relation Opens(x: bool; w: bool): x and w
-protocol Check roles(P,V)(spec note: bool, secret: bool @P, claim: bool @(P,V), 값: bool @(P,V), only: bool @V, hush: bool @P private, w: bool @P):
+protocol Check roles(P,V)(spec note: Fr, secret: bool @P, claim: bool @(P,V), 값: bool @(P,V), only: bool @V, hush: bool @P private, w: bool @P):
     guard @V claim and 값 and only
 spec for Check:
     proves @V shown: Opens(claim)
@@ -156,9 +158,7 @@ def twiceSource (charge : String) : String :=
 
 /-- The statements module of a source's goal, in the name space `space`. -/
 def statementsOf (text goal space : String) : IO String := do
-  let assembly ← Driver.assembleFiles ⟨"source.zkc", Syntax.parseString "source.zkc" text⟩
-    ["../../libraries"]
-  let root ← IO.ofExcept (admitSoundnessGoal assembly goal)
+  let root ← admitted text goal
   let claims ← IO.ofExcept (goalClaims root [goal])
   let issued ← IO.ofExcept ((⟨claims, claims.functionsBeforeRoot⟩ : Statements).module space {})
   unless issued.refusals.isEmpty do throw (IO.userError s!"{issued.refusals}")
@@ -475,8 +475,9 @@ def run (work : System.FilePath) : IO Unit := do
   refusedAt "the namer that takes a held input's name at its position among the held" (← result "HeldReads")
     ["Named.probes.mapped.installed.view: at the source's binder 2 the view binds `input_flag` where the source gives `input_right`"]
   refusedAt "a row past the subject's rows" (← result "PastTheRows") ["publish: no row 1 in a table of 1"]
-  refusedAt "the same path twice, goals" (← result "TwinGoals") ["publish: Twin.same.sound is already declared"]
-  refusedAt "the same path twice, views" (← result "TwinViews") ["views: Twin.same.sound.view is already declared"]
+  for kind in ["Goals", "Views"] do
+    refusedAt s!"the same path twice, {kind}" (← result s!"Twin{kind}")
+      ["publish: the path [same] is the path of two rows of Twin.subject"]
   for kind in ["Goals", "Views"] do
     refusedAt s!"a row of a property that publishes nothing, {kind}" (← result s!"Complete{kind}")
       ["publish: the written subject publishes nothing for the property Zkc.Security.Property.completeness"]

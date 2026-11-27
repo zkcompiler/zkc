@@ -120,6 +120,19 @@ def rowAt (t : Tables) (index : Nat) : MetaM Row := do
   let application ← constName (← fieldOf decision ``Zkc.Subject.Decision `application)
   return { path, property, application, fields }
 
+/-- **The goal rows of a subject, read once for a command.** No path is the path of two rows: a
+command declares by path, so two rows of one path would give one name two rows' meanings, also
+where a command declares nothing for one of them. -/
+def rows (subject : Name) : MetaM (Array Row) := do
+  let t ← tables subject
+  let mut read : Array Row := #[]
+  for index in [:t.goals] do
+    let row ← rowAt t index
+    if read.any (·.path == row.path) then
+      throwError "publish: the path {row.path} is the path of two rows of {subject}"
+    read := read.push row
+  return read
+
 /-- Whether the row is of the property `soundness`. What a command declares for the proof of a
 soundness goal (the installed bound and the step from it, the fee facts) it declares for such a
 row and for no other. -/
@@ -172,15 +185,15 @@ def declareUnproved (name : Name) (type : Expr) : CommandElabM Unit := liftTermE
 elab "publish_goals " s:ident : command => do
   let subject ← liftCoreM <| realizeGlobalConstNoOverloadWithInfo s
   let space := subject.getPrefix
-  let t ← liftTermElabM (tables subject)
-  for index in [:t.goals] do
-    let row ← liftTermElabM (rowAt t index)
+  for row in ← liftTermElabM (rows subject) do
     for which in ← liftTermElabM (theoremsOf row) do
       declareUnproved (theoremName space row which) (← liftTermElabM (statement row which))
 
 /-- **A published statement as a term**: `published% S a.b which`, the components of the
 identifier `a.b` being those of the goal's path. The path and the theorem's name are read as
-they are written, also where a macro supplies them; only the row at that path is read. -/
+they are written, also where a macro supplies them; only the row at that path is read. A path has
+at least one component here: the theorems of a row whose path is empty are declared by the
+commands and have no spelling as this term. -/
 elab "published% " s:ident path:ident which:ident : term => do
   let subject ← realizeGlobalConstNoOverloadWithInfo s
   let wanted := path.getId.eraseMacroScopes.components.map (·.toString (escape := false))
