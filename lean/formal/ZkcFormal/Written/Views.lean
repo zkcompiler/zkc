@@ -21,8 +21,9 @@ short application and the limit of its bound, under `<space>.<p>.installed`. For
 stored program the standard interpretation covers (decided by the kernel) it declares the
 coverage fact `<space>.<p>.covered` and the author's last step
 `<space>.<p>.sound_of_installed : installed.view → published% S p sound`; a row that is not
-covered gets neither, and a line that says so. A views module is its imports and that line. No
-challenge imports this module.
+covered gets neither, and a line that says so. A views module is its imports and that line. It
+is for proofs and readers, not for a challenge: the repository's challenges do not import it, and
+nothing refuses a challenge that does yet.
 
 A stored view is the library's term **named** and then **presented**:
 
