@@ -24,6 +24,8 @@ public import ZkcFormal.Written.SiteCaps
 public import ZkcFormal.Written.Bound
 public import ZkcFormal.Written.Fees
 public import ZkcFormal.Written.Publish
+public import ZkcFormal.Written.Views
+public import ZkcFormal.Written.FeeFacts
 public import ZkcFormal.Written.ReductionModel
 public import ZkcFormal.Written.UniformChallenge
 public import ZkcFormal.Written.ScalarField

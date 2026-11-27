@@ -43,4 +43,14 @@ def seen (c : AdmittedRoot) (goal : String) : Except String Seen := do
     statement := (← application.statement.mapM port).toList
     witness := (← application.witness.mapM port).toList }
 
+/-- The names of the witness parameters of the relation that a goal's clause applies, from the
+relation's declaration: the same whether the clause writes its witness operands or not. -/
+def witnessParameters (c : AdmittedRoot) (goal : String) : Except String (List String) := do
+  let clause ← goalClause c goal
+  let some application := clause.application | throw "the clause applies no relation"
+  let some {content := .function head _, ..} := c.state.env.modules.lowered? application.relation
+    | throw "missing the relation's declaration"
+  let some statement := head.statementParameters | throw "the clause applies no relation's declaration"
+  return (head.parameters.toList.drop statement).map (·.binder.name)
+
 end Zkc.Tests.Frontend.SourceClause

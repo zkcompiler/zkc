@@ -67,4 +67,54 @@ theorem total_eq_limit {count total : ℕ} (positive : 0 < total)
     caps.total = (⟨count, total, positive⟩ : Bound).limit := by
   rw [CapTable.total, budget, toProbability_eq_limit]
 
+/-! ## A table's budget against a bound, decided
+
+What the command of the fee facts (`ZkcFormal.Written.FeeFacts`) evaluates and applies. Each
+decision is a closed definition of this module, so the instances that it runs on are fixed here
+and not where the command is called; each fact is a theorem from the decision's value. -/
+
+/-- A bound as a nonnegative rational. -/
+def ratio (b : Bound) : ℚ≥0 := (b.numerator : ℚ≥0) / b.denominator
+
+/-- A bound's rational, as a probability, is its limit. -/
+theorem toProbability_ratio (b : Bound) : toProbability (ratio b) = b.limit :=
+  toProbability_natCast_div b.numerator b.denominator b.positive
+
+/-- Whether the table's budget is at most the bound. -/
+def within (b : Bound) : Bool := decide (caps.budget ≤ ratio b)
+
+/-- Whether the table's budget is the bound. -/
+def atBound (b : Bound) : Bool := decide (caps.budget = ratio b)
+
+/-- The numerator of the number at which the budget is stated: the bound's where the budget is
+the bound, the budget's own in lowest terms otherwise. -/
+def budgetNumerator (b : Bound) : ℕ := if atBound caps b then b.numerator else caps.budget.num
+
+/-- The denominator of the number at which the budget is stated. -/
+def budgetDenominator (b : Bound) : ℕ := if atBound caps b then b.denominator else caps.budget.den
+
+/-- Whether the table's budget is `count / total`. -/
+def budgetIs (count total : ℕ) : Bool := decide (caps.budget = (count : ℚ≥0) / total)
+
+/-- The table's budget as a number. -/
+theorem budget_eq (count total : ℕ) (is : budgetIs caps count total = true) :
+    caps.budget = (count : ℚ≥0) / total :=
+  of_decide_eq_true is
+
+/-- The total of a table whose budget is the bound is the bound's limit. -/
+theorem total_eq_limit_of_atBound (b : Bound) (at_ : atBound caps b = true) : caps.total = b.limit := by
+  rw [CapTable.total, of_decide_eq_true at_, toProbability_ratio]
+
+/-- **The fee judgment within the budget `count / total`**: the judgment that the fee facts name. -/
+def JudgedAt (count total : ℕ) : Prop := JudgedWithin M app draws caps ((count : ℚ≥0) / total)
+
+/-- **The step of fees to a goal's bound**: a fee judgment within the table's budget, where that
+budget is at most the bound. -/
+theorem installed_of_judgedAt {count total : ℕ} (judged : JudgedAt M app draws caps count total)
+    (is : budgetIs caps count total = true) (b : Bound) (le : within caps b = true) :
+    Soundness.Installed M app draws b.limit :=
+  installed_of_judged M app draws caps judged <| by
+    rw [← budget_eq caps count total is, ← toProbability_ratio]
+    exact toProbability_mono (of_decide_eq_true le)
+
 end ZkcFormal.Written.Fees
