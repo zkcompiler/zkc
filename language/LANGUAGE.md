@@ -3081,6 +3081,10 @@ property other than `completeness` of a `derived` scheme at the stage `construct
 the budget of the model of every commitment scheme that the scheme names (the queries of the
 random oracle for a scheme built on a hash, the operations of the group model for one built on a
 pairing). A ceiling is a request: nothing relates it to its budget before the bound is proved.
+At the stage `written`, a soundness goal claims its bound: the ceiling where the goal writes one,
+and otherwise the total of the charges of its contract along one run (SX8). A ceiling below that
+total is a claim that the charges do not establish; the goal is issued, and a proof by the
+charges does not reach it.
 **Messages:** "a ceiling needs a budget: write `random_oracle(queries = …)`"; "a ceiling on
 `<soundness>` of a `derived` scheme at the stage `<serialized>` needs a query budget: write
 `model = random_oracle(queries = …)`, or state the goal at `stage = written`"; "a ceiling at

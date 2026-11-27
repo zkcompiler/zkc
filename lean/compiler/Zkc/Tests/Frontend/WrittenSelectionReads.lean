@@ -116,7 +116,7 @@ private def soundnessNames : TestM Unit := do
   let .ok g := good.outcome | failure "batch issuance of selected failed"
   let .ok a := alias_.outcome | failure "batch issuance of the canonical name failed"
   expectTrue (good.path == some "caller::selected" && good.path == alias_.path &&
-      g.publication.statements == a.publication.statements &&
+      g.publication.data == a.publication.data &&
       g.publication.challenge == a.publication.challenge)
     "canonical and short names produced different challenges"
 

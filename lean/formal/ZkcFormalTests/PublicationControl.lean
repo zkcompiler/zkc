@@ -1,0 +1,105 @@
+import Lean
+import ZkcFormal.Written.Publish
+import Zkc.Frontend.Written.Statement
+
+/-!
+Controls of the shape of what the issuer publishes, read from the built modules.
+
+* `#data_module M`: the data module `M` imports the modules of the issuer's list
+  (`Statements.dataImports`) and no other, and through them no module of the formal library; each
+  of its declarations is a definition that is no instance and whose type does not end in `Prop`,
+  or a theorem of the listed names in the subject's name space (the package's and the lookups');
+  it declares no inductive type; and the bound of each goal is the constructor of `Bound` at two
+  numerals.
+* `#challenge_module C over M`: every module that the challenge `C` imports, directly or not, is
+  the data module `M`, a module that `M` imports, or a module that the library's
+  `ZkcFormal.Written.Publish` imports. A views module, a fees module and an author's tool are none
+  of these.
+
+Each lists what is allowed.
+-/
+
+open Lean Elab Command
+
+namespace ZkcFormalTests.PublicationControl
+
+/-- The modules that a module imports, directly or not, itself included. -/
+partial def closure (env : Environment) (start : Name) : NameSet := Id.run do
+  let mut seen : NameSet := {}
+  let mut todo := [start]
+  while !todo.isEmpty do
+    let name := todo.head!
+    todo := todo.tail!
+    if seen.contains name then continue
+    seen := seen.insert name
+    if let some index := env.getModuleIdx? name then
+      for imported in env.header.moduleData[index.toNat]!.imports do
+        todo := imported.module :: todo
+  return seen
+
+private def digitsAfter (s p : String) : Bool :=
+  let rest := s.toList.drop p.length
+  s.startsWith p && !rest.isEmpty && rest.all Char.isDigit
+
+/-- The theorems that a data module may hold, in the subject's name space: the package's (with the
+equation `elaborated<k>.eq` of each definition that the kernel elaborated) and the lookups'. -/
+def allowedTheorem (space : Name) : Name → Bool
+  | .str (.str parent definition) "eq" => parent == space && digitsAfter definition "elaborated"
+  | .str parent last => parent == space &&
+    (["admitted_exists", "elaborated", "readback", "found'root"].contains last ||
+      digitsAfter last "found'fn" || digitsAfter last "written'goalAt")
+  | _ => false
+
+private def numeral (e : Expr) : Bool :=
+  match e.consumeMData with
+  | .lit (.natVal _) => true
+  | e => e.isAppOfArity ``OfNat.ofNat 3 && (e.getArg! 1).consumeMData.isRawNatLit
+
+elab "#data_module " m:ident : command => do
+  let env ← getEnv
+  let some index := env.getModuleIdx? m.getId | throwError "data control: no module {m.getId}"
+  for imported in (closure env m.getId).toList do
+    if (`ZkcFormal).isPrefixOf imported then
+      throwError "data control: {m.getId} imports the formal library's {imported}"
+  let listed := `Init :: Zkc.Frontend.Written.Statements.dataImports.map String.toName
+  for imported in env.header.moduleData[index.toNat]!.imports do
+    unless listed.contains imported.module do
+      throwError "data control: {m.getId} imports {imported.module}, which is none of the issuer's list"
+  let names := env.header.moduleData[index.toNat]!.constNames
+  let some subject := names.find? (fun name => name matches .str _ "written'subject")
+    | throwError "data control: {m.getId} holds no typed subject"
+  let space := subject.getPrefix
+  for name in names do
+    if name.isInternalDetail then continue
+    let some info := env.find? name | continue
+    let .str _ last := name | continue
+    match info with
+    | .thmInfo _ =>
+      unless allowedTheorem space name do
+        throwError "data control: {m.getId} states the theorem {name}, which is none of a data module's"
+    | .defnInfo d =>
+      if d.type.getForallBody.isProp then
+        throwError "data control: {m.getId} defines the proposition {name}"
+      if Lean.Meta.isInstanceCore env name then
+        throwError "data control: {m.getId} declares the instance {name}"
+      if digitsAfter last "written'bound" then
+        unless d.value.isAppOfArity ``Zkc.Subject.Bound.mk 3 && numeral (d.value.getArg! 0) &&
+            numeral (d.value.getArg! 1) do
+          throwError "data control: the bound {name} is not two numerals:{indentExpr d.value}"
+    | .opaqueInfo _ | .axiomInfo _ =>
+      throwError "data control: {m.getId} declares {name} without a value"
+    | .inductInfo _ =>
+      throwError "data control: {m.getId} declares the inductive type {name}"
+    | _ => pure ()
+  logInfo m!"{m.getId}: a data module"
+
+elab "#challenge_module " c:ident " over " m:ident : command => do
+  let env ← getEnv
+  unless (env.getModuleIdx? c.getId).isSome do throwError "challenge control: no module {c.getId}"
+  let allowed := (closure env m.getId).union (closure env `ZkcFormal.Written.Publish)
+  for imported in (closure env c.getId).toList do
+    unless imported == c.getId || allowed.contains imported do
+      throwError "challenge control: {c.getId} imports {imported}, which neither the data module nor the publication command imports"
+  logInfo m!"{c.getId}: a challenge over {m.getId}"
+
+end ZkcFormalTests.PublicationControl

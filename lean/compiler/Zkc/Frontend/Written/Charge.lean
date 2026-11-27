@@ -12,7 +12,7 @@ structure DeclaredDraw where
   event : Nat
   ceiling : Rat
 
-/-- The rational total at the root, compared with a source ceiling under GL4. -/
+/-- The rational total at the root: the bound of a goal that writes no ceiling (GL4). -/
 def _root_.Zkc.Subject.CapTable.ratio (table : CapTable) : Rat := table.totalAt Rat table.root
 
 /-- Resolve the authored clause in its closed instance, before looking up realized addresses. -/

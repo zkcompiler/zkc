@@ -28,8 +28,7 @@ open Goal.Internal
 
 variable {pkg : Package V} {scheme : WrittenRoot pkg} (app : ShortApplication scheme)
 
-/-- The rejection expression at a short application, elaborated where it is used: here and
-at a goal's short application in `ZkcFormal.Written.Goal`. -/
+/-- The rejection expression at a short application, elaborated where it is used. -/
 scoped macro "rejectionAt%(" M:term ", " app:term ", " p:term ", " relation:term ", " xs:term ")" : term =>
   `(let statement := ($app).statement.map (G := ($M).Val) fun t port ↦
       reveal $M (a := ⟨t, port.holders⟩) port.heldByVerifier (valueAt port.member $xs)

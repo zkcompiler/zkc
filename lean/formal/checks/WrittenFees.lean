@@ -48,16 +48,16 @@ open ZkcFormalTests ZkcFormalTests.WrittenSubject
 
 namespace WrittenFees
 
-/-- The statements module of the goals of a source, in the name space `space`. -/
-def statementsOf (text : String) (goals : List String) (space : String) : IO String := do
+/-- What the issuer publishes for the goals of a source, in the name space `space`. -/
+def publicationOf (text : String) (goals : List String) (space : String) : IO Publication := do
   let assembly ← Driver.assembleFiles ⟨"source.zkc", Syntax.parseString "source.zkc" text⟩
     ["../../libraries"]
   let some first := goals.head? | throw (IO.userError "no goal")
   let root ← IO.ofExcept (admitSoundnessGoal assembly first)
   let claims ← IO.ofExcept (goalClaims root goals)
-  let issued ← IO.ofExcept ((⟨claims, claims.functionsBeforeRoot⟩ : Statements).module space {})
+  let issued ← IO.ofExcept ((⟨claims, claims.functionsBeforeRoot⟩ : Statements).publication space)
   unless issued.refusals.isEmpty do throw (IO.userError s!"{issued.refusals}")
-  return issued.statements
+  return issued
 
 /-- A verifier that draws twice and returns whatever the claim, with a cap at each draw. -/
 def payingSource (first second : String) : String :=
@@ -192,22 +192,22 @@ def run (work : System.FilePath) : IO Unit := do
   let path := "guard_bound.loose"
   let command (name : String) (imports : List String) (subject : String) (before := "") :=
     String.join (imports.map (s!"import {·}\n")) ++ s!"\n{before}{name} {subject}\n"
-  -- a source with its challenge, its views, its fee facts and the author's text, judged
+  -- a source as the issuer publishes it (the data module, the challenge, the views and the fees
+  -- module), with the author's text in the issuer's frame, judged
   let sourced (space text judgment : String) (judged := true) : IO Unit := do
-    add s!"{space}.Stated" (← statementsOf text ["loose"] space) .statements
-    add s!"{space}.Challenge"
-      (command "publish_goals" [s!"{space}.Stated", "ZkcFormal.Written.Publish"] s!"{space}.written'subject") .challenge
-    add s!"{space}.Views"
-      (command "publish_views" [s!"{space}.Stated", "ZkcFormal.Written.Views"] s!"{space}.written'subject") .statements
-    add s!"{space}.Fees"
-      (command "publish_fees" [s!"{space}.Stated", "ZkcFormal.Written.FeeFacts"] s!"{space}.written'subject") .statements
+    let issued ← publicationOf text ["loose"] space
+    add (toString issued.dataName) issued.data .statements
+    add (toString issued.challengeName) issued.challenge .challenge
+    add (toString issued.viewsName) issued.views .statements
+    add (toString issued.feesName) issued.fees .statements
     add s!"{space}Facts" (factsOf s!"{space}.Fees" s!"{space}.{path}.fees" ++
       s!"#check @{space}.{path}.fees.budget\n#check @{space}.{path}.fees.installed_of_judged\n") .statements
-    add s!"{space}.Proof" (s!"import {space}.Views\nimport {space}.Fees\nimport ZkcFormal.Written.Publish\n\n" ++ opens ++
-      s!"namespace {space}\n\n" ++ authorText "written'subject" path judgment ++ s!"\nend {space}\n") .module
+    add s!"{space}.Proof" (issued.proof (authorText "written'subject" path judgment)) .module
+    unless issued.published == [s!"{space}.{path}.sound".toName, s!"{space}.{path}.met".toName] do
+      throw (IO.userError s!"{space}: the issuer's published theorems are {issued.published}")
     if judged then
-      SubjectProject.expect project space [(s!"{space}.Challenge".toName, s!"{space}.Proof".toName)]
-        [s!"{space}.{path}.sound".toName, s!"{space}.{path}.met".toName] WrittenSubject.allowed
+      SubjectProject.expect project space [(issued.challengeName, s!"{space}.Proof".toName)]
+        issued.published WrittenSubject.allowed
   let source ← IO.FS.readFile "fixtures/written-bound-guard.zkc"
   sourced "AtBound" source guardedJudgment
   sourced "Below" (← replaceOnce source "stage = written) <= 1 / 4" "stage = written) <= 1 / 2") guardedJudgment

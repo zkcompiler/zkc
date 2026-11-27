@@ -213,7 +213,7 @@ goal {goal} = soundness({name})
   let .ok ref := base.outcome | failure "the control goal failed"
   let .ok issued := good.outcome | failure "the valid goal inherited the sibling's failure"
   let .error why := bad.outcome | failure "the invalid relation was accepted by its own goal"
-  expectTrue (why.contains "TY5" && ref.publication.statements == issued.publication.statements &&
+  expectTrue (why.contains "TY5" && ref.publication.data == issued.publication.data &&
     ref.publication.challenge == issued.publication.challenge)
     s!"named goals lost the selected relation's outcome or bytes: {why}"
 

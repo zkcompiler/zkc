@@ -11,7 +11,7 @@ The types of a statement, computed.
 A value of a type of the vocabulary is written with a type that only computation makes the
 field, the group or the natural numbers (`Model.Val M ty`, `RV M role lty`). A statement that a
 text reads is stated with those types computed, so that it is about the same terms as a lemma
-about the carrier. The presentation of a goal and `claim_intro` use these types for its inputs.
+about the carrier. The views of a goal and `claim_intro` use these types for its inputs.
 -/
 
 open Lean Meta

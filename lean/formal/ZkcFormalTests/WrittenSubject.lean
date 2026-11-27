@@ -94,30 +94,6 @@ def read (text : String) (reading : Reading) : IO Subject := do
   let statements : Statements := ⟨claims, claims.functionsBeforeRoot⟩
   return ⟨text, statements⟩
 
-/-- The text of a subject's proofs: the text, the theorems that it proves, what it imports
-beside what every module of statements imports, and what the check writes after the closing
-theorems (a consumer of the published theorems). -/
-structure Proof where
-  text : String
-  theorems : List String
-  imports : List String := []
-  after : List Consumer := []
-
-/-- The two modules of a subject, as the generator assembles them: the module of the statements
-and the proof module, in the name space `name`. A goal of the subject that the generator
-refuses fails the assembly. A control gives the text that it altered, and
-`statements` names the module
-of the statements where it is not `<name>.Stated`. -/
-def Subject.module (s : Subject) (name : String) (proof : Proof) (text : String := proof.text)
-    (statements : Option Lean.Name := none) : IO Module := do
-  let written : ProofText := { text, theorems := proof.theorems, imports := proof.imports }
-  let issued ← IO.ofExcept (s.statements.module name written (after := proof.after)
-    (statements := statements))
-  -- a subject asks for each of its goals: one that is not issued fails the subject
-  unless issued.refusals.isEmpty do
-    throw (IO.userError s!"{name}: not every goal is issued: {"; ".intercalate issued.refusals}")
-  return issued
-
 /-- The axioms beyond which no theorem of a subject may rest. -/
 def allowed : List String := ["propext", "Classical.choice", "Quot.sound"]
 
@@ -139,6 +115,118 @@ A recipe judges once for all its checks: with `ZKC_SUBJECTS` naming a folder, a 
 each pair that it accepts there instead, and leaves the judgment to the recipe's last step
 (`checks/Judgment.lean`). The folder is read-only to every text, as everything outside a
 project's `.lake` is. -/
+
+
+/-- A theorem that a check writes after the closing theorems of a proof module: a consumer of
+the published theorems, as a reader of the source could write it. It is given in parts, so
+that its statement can stand in the challenge with no proof (`Module.challenge`): the lines
+before it (a section and its variables), its signature from `theorem` up to the `:=`, its
+proof, and the lines after it. The statement is elaborated on both sides and compared as
+terms, so it should make no auxiliary declaration (a `match`, a nested proof): a text with a
+declaration of the same shape would have Lean reuse its own, and the pair would be refused. -/
+structure Consumer where
+  name : String
+  before : String := ""
+  signature : String
+  proof : String
+  after : String := ""
+  imports : List String := []
+
+/-- A consumer as it stands in the proof module. -/
+def Consumer.text (c : Consumer) : String :=
+  c.before ++ c.signature ++ " := " ++ c.proof ++ "\n" ++ c.after
+
+/-- A consumer as it stands in the challenge: its statement, with no proof. -/
+def Consumer.stated (c : Consumer) : String :=
+  c.before ++ c.signature ++ " := by sorry\n" ++ c.after
+
+/-- **A pair that the comparator judges**, as Lean reads its modules: the module of the
+statements (the issuer's data module, with what a check states after it), which holds no word of
+an author; the challenge; and the proof module. A check builds one from the issuer's publication
+or by hand. -/
+structure Module where
+  /-- The name space of the declarations of both modules. -/
+  space : String
+  /-- The name of the module of the statements, under which the proof module imports it. -/
+  statementsName : Lean.Name
+  /-- The module of the statements. It ends with a request for the axioms of each of its
+  theorems. -/
+  statements : String
+  /-- The theorems of the module of the statements, in its order. -/
+  stated : List String
+  /-- The proof module: the import of the statements and of what the text asks for, the name
+  space with the names that a text may use, the text, and what is proved after it. It asks for
+  no axioms: a module that is accepted is judged by its published theorems, and a control appends
+  `requests`. -/
+  proof : String
+  /-- The theorems of the proof module, in its order. -/
+  proved : List String
+  /-- The line of the proof module at which the author's text starts, the first line being 1,
+  and the number of lines of the text. -/
+  textLine : Nat
+  textLines : Nat
+  /-- The published theorems of the proof module, each with its proposition, under their full
+  names. A check writes them as Lean prints a name and reads them again (`String.toName`
+  reads the quotation of a component that is no identifier). -/
+  published : List (Lean.Name × Lean.Name) := []
+  /-- The consumers that a check wrote after the closing theorems, which are judged with the
+  published theorems. -/
+  consumers : List Consumer := []
+  /-- Diagnostics for goals omitted because their reach has no standard interpretation. -/
+  refusals : List String := []
+  /-- The issuer's challenge and the names of its theorems, for a pair made from a publication:
+  the challenge is then this text, and the judgment is of these names. -/
+  issued : Option (String × List Lean.Name) := none
+  /-- The modules that the proof module imports beside the statements and that hold no word of an
+  author (an issuer's views and fee facts): they go wherever the proof module goes. -/
+  support : List (Lean.Name × String) := []
+
+/-- The pair of what the issuer publishes with an author's text in the issuer's frame: the data
+module, the issuer's challenge, and the proof module. -/
+def Module.ofPublication (p : Publication) (text : String := "") (proved : List String := [])
+    (consumers : List Consumer := []) : Module :=
+  { space := p.space, statementsName := p.dataName, statements := p.data, stated := p.stated
+    proof := p.proof (text ++ "\n" ++ String.join (consumers.map (·.text))), proved := proved ++ consumers.map (·.name)
+    textLine := p.textLine, textLines := (text.splitOn "\n").length
+    consumers, refusals := p.refusals, issued := some (p.challenge, p.published)
+    support := [(p.viewsName, p.views), (p.feesName, p.fees)] }
+
+/-- The challenge of a pair, as `lake comparator` takes one: a module that imports the module
+of the statements and states each published theorem over its proposition, and each consumer
+as the check wrote its statement, with no proof. It is the trusted side with the statements;
+the proof module is the solution. A consumer is stated in the name space and under the names
+that the proof module opens, so that its statement is read as it is there. -/
+def Module.challenge (m : Module) : String :=
+  if let some (challenge, _) := m.issued then
+    if m.consumers.isEmpty then challenge else
+      -- the issuer's imports with the consumers', the issuer's line, then the consumers' statements
+      let (imports, line) := (challenge.splitOn "\n").partition (·.startsWith "import ")
+      let more := (statementOpenImports ++ m.consumers.flatMap (·.imports)).eraseDups.map (s!"import {·}")
+      "\n".intercalate ((imports ++ more).eraseDups ++ line) ++
+        s!"\nopen Zkc.Core\nnamespace {m.space}\n" ++ statementOpens ++
+        String.join (m.consumers.map (·.stated)) ++ s!"end {m.space}\n"
+  else
+  let scope := if m.consumers.isEmpty then [] else statementOpenImports
+  s!"import {m.statementsName}\n" ++
+    String.join ((scope ++ m.consumers.flatMap (·.imports)).eraseDups.map (s!"import {·}\n")) ++
+    String.join (m.published.map fun (theorem_, proposition) =>
+      s!"theorem {theorem_} : {proposition} := by sorry\n") ++
+    (if m.consumers.isEmpty then "" else
+      s!"\nopen Zkc.Core\nnamespace {m.space}\n" ++ statementOpens ++ String.join (m.consumers.map (·.stated)) ++
+        s!"end {m.space}\n")
+
+/-- The theorems of a pair that the judgment is of: the published ones and the consumers,
+under their full names (a name is its components, as in `publicationPairs`). -/
+def Module.judged (m : Module) : List Lean.Name :=
+  if let some (_, names) := m.issued then names ++ m.consumers.map fun c => .str m.space.toName c.name else
+  m.published.map (·.1) ++ m.consumers.map fun c => .str m.space.toName c.name
+
+/-- Requests for the axioms of the theorems of the proof module, by their full names: what a
+control appends to the proof module, to read from Lean's reports which theorems are left
+unproved. -/
+def Module.requests (m : Module) : String :=
+  String.join (m.proved.map fun theorem_ => s!"#print axioms {m.space}.{theorem_}\n")
+
 
 open ZkcFormalTests in
 /-- The project of a check, in its work folder. -/
@@ -196,13 +284,13 @@ def startLakeLean (work : System.FilePath) (name source : String) (text := true)
 /-- Compare the named values in the issued statements with the frontend run on the original
 source and selectors. The same values must be the fields of the package used for admission. -/
 def startSourceComparison (work : System.FilePath) (name : String) (module : Module)
-    (source : String) (goals : List String) (labels := goals.map Statements.labelOfSpelling)
-    (fees := true) : IO Pending := do
+    (source : String) (goals : List String) (labels := goals.map Statements.labelOfSpelling) :
+    IO Pending := do
   unless goals.length == labels.length do throw (IO.userError "a public label is required for each selector")
-  let observation ← IO.ofExcept (WrittenSource.consumer source (goals.zip labels) fees)
+  let observation ← IO.ofExcept (WrittenSource.consumer source (goals.zip labels))
   startLakeLean work name
     (s!"import {module.statementsName}\nimport Zkc.Tests.Frontend.PrintedPackageSupport\n" ++
-      "import ZkcFormalTests.WrittenBinding\nopen ZkcFormal.Written\n\n" ++
+      "import ZkcFormalTests.WrittenBinding\n\n" ++
       s!"namespace {module.space}\n" ++
       "example : subjectPackage.stored = stored := rfl\n" ++
       "example : subjectPackage.association = association := rfl\n" ++
@@ -269,11 +357,22 @@ def atText (source : System.FilePath) (module : Module) (output : String) : Stri
         s!"text:{line + 1 - module.textLine}" ++ String.ofList (piece.toList.drop digits.length)
       else mark ++ piece)
 
+/-- The modules that a proof module imports beside its statements, added to a project. A name
+holds one text in a project. -/
+def addSupport (project : System.FilePath) (module : Module) : IO Unit := do
+  for (name, text) in module.support do
+    let file := project / SubjectProject.fileOf name
+    if ← file.pathExists then
+      unless (← IO.FS.readFile file) == text do
+        throw (IO.userError s!"two modules of a project are named {name} and are not the same")
+    else discard <| SubjectProject.add project name text .statements
+
 /-- A proof module of `module`, added under the name `name`: Lean's result on it, with the
 positions of the text. `text` is the proof module as it is built (a control appends its
 requests for axioms). -/
 def addProof (work : System.FilePath) (name : String) (module : Module)
     (text : String := module.proof) : IO Pending := do
+  addSupport (projectOf work) module
   let file ← SubjectProject.add (projectOf work) name.toName text
   return do
     let (ok, output) ← leanOn work name.toName
@@ -289,7 +388,7 @@ def addChallenge (work : System.FilePath) (name : String) (module : Module) : IO
 check's project, or, with `ZKC_SUBJECTS` naming a folder, in that folder, for the recipe's one
 judgment of all its checks. -/
 def noteAccepted (work : System.FilePath) (name : String) (module : Module) : IO Unit := do
-  if module.published.isEmpty then
+  if module.judged.isEmpty then
     throw (IO.userError s!"{name}: the module names no published theorem to judge")
   let challenge : Lean.Name := .str name.toName "Challenge"
   let line := s!"{challenge}\t{name}\t{" ".intercalate (module.judged.map toString)}\n"
@@ -303,7 +402,8 @@ def noteAccepted (work : System.FilePath) (name : String) (module : Module) : IO
   | some shared =>
     let shared : System.FilePath := shared
     for (module, text, kind) in [(module.statementsName, module.statements, SubjectProject.Kind.statements),
-        (challenge, module.challenge, .challenge), (name.toName, module.proof, .module)] do
+        (challenge, module.challenge, .challenge), (name.toName, module.proof, .module)] ++
+        module.support.map (fun (support, text) => (support, text, .statements)) do
       let file := shared / SubjectProject.fileOf module
       if ← file.pathExists then
         unless (← IO.FS.readFile file) == text do
@@ -361,6 +461,8 @@ def acceptedByJudgment (work : System.FilePath) (name : String) : IO Unit := do
 theorems on the allowed axioms, and the proof module by Lean and by the judgment. The result is
 Lean's output on the proof module. -/
 def startModule (work : System.FilePath) (name : String) (module : Module) : IO Pending := do
+  unless module.refusals.isEmpty do
+    throw (IO.userError s!"{name}: the publication left goals out: {module.refusals}")
   let stated ← addStated work module
   let proved ← addProof work name module
   noteAccepted work name module
@@ -402,154 +504,5 @@ def refusedOutside (work : System.FilePath) (title name : String) (module : Modu
     (places : List String) : IO (IO Unit) := do
   let outside ← readOutside work name module
   return do (← outside).refused title name places
-
-/-- Where a control is refused. -/
-inductive Refusal where
-  /-- By Lean, in the proof module: the statements are accepted. -/
-  | text
-  /-- By Lean, in the module of the statements: what is generated before the text does not
-  hold of the altered source, and the proof module is not read. -/
-  | generated
-  /-- By the judgment: Lean accepts both modules. -/
-  | outside
-  deriving DecidableEq, Repr
-
-/-- A control: the subject altered, in a module that must be refused. -/
-structure Control where
-  /-- What the control changes, for a message. -/
-  title : String
-  /-- The name of its module. The name space of its declarations is the subject's. -/
-  name : String
-  /-- The subject, with its source altered where the control alters the source. -/
-  subject : Subject
-  /-- The text of the proofs, altered where the control alters the text. -/
-  text : String
-
-  /-- Where it is refused. -/
-  refusal : Refusal := .text
-  /-- The theorems that are left unproved, themselves or by what they use, and no other: of the
-  theorems of the module that Lean refuses (the proof module, or the module of the statements
-  of a control that is refused there). Nothing is unproved in a control that the judgment
-  refuses. -/
-  unproved : List String := []
-  /-- The texts of the places at which the module is refused: each occurs in Lean's output, or
-  in what the comparator says. -/
-  places : List String := []
-  /-- The module is refused at those places and at no other: its errors are as many. -/
-  only : Bool := false
-  /-- Texts with the number of times that each occurs in Lean's output: a refusal that two
-  proofs of one module both meet is counted, since one text twice among the places says only
-  that it occurs. -/
-  occurrences : List (String × Nat) := []
-
-/-- What the run of a control gave: which module was refused or accepted, with its theorems,
-and what was said of it. -/
-structure Ran where
-  refusal : Refusal
-  theorems : List String
-  outside : Outside
-
-/-- A control whose modules the check added. -/
-structure Running where
-  control : Control
-  space : String
-  ran : IO Ran
-
-/-- The modules of a control, added. The name space is the subject's (`space`). A control
-whose statements are those of the subject, character for character (it alters only the text),
-imports the subject's module of statements; another has a module of statements of its own,
-`<control>.Stated`. A control that Lean must refuse has the requests for the axioms of its
-theorems appended, from which the unproved ones are read. -/
-def Control.start (work : System.FilePath) (space : String) (proof : Proof) (honest : Module)
-    (honestStated : Stated) (control : Control) : IO Running := do
-  let plain ← control.subject.module space proof control.text
-  let own := plain.statements != honest.statements
-  let module ← if own then
-      control.subject.module space proof control.text
-        (statements := some (.str control.name.toName "Stated"))
-    else pure plain
-  let stated ← if own then addStated work module else pure honestStated
-  if control.refusal == .outside then
-    let outside ← readOutside work control.name module
-    return ⟨control, space, do
-      let statements ← stated.lean
-      unless statements.1 do
-        return { refusal := .generated, theorems := module.stated, outside := { lean := statements } }
-      return { refusal := .outside, theorems := [], outside := ← outside }⟩
-  let proved ← addProof work control.name module (module.proof ++ module.requests)
-  return ⟨control, space, do
-    let statements ← stated.lean
-    unless statements.1 do
-      return { refusal := .generated, theorems := module.stated, outside := { lean := statements } }
-    return { refusal := .text, theorems := module.proved, outside := { lean := ← proved } }⟩
-
-/-- A control judged: it was refused where it says, the theorems left unproved are those that
-it names, and it was refused at the places that it names. -/
-def Running.finish (running : Running) : IO Unit := do
-  let control := running.control
-  let ran ← running.ran
-  let (ok, output) := ran.outside.lean
-  unless ran.refusal == control.refusal do
-    throw (IO.userError s!"{control.title}: the control is one refused in `{repr control.refusal}`, and was read as `{repr ran.refusal}`\n{output}")
-  if control.refusal == .outside then
-    return ← ran.outside.refused control.title running.space control.places
-  expectUnprovedIn control.title running.space ran.theorems ok output control.unproved
-  if control.only then expectPlacesIn control.title output control.places
-  for place in control.places do
-    unless output.contains place do
-      throw (IO.userError s!"{control.title}: not refused at `{place}`\n{output}")
-  for (place, times) in control.occurrences do
-    unless (output.splitOn place).length == times + 1 do
-      throw (IO.userError s!"{control.title}: `{place}` does not occur {times} times\n{output}")
-
-/-- A subject whose modules the check added: its two modules, the module in which Lean reads
-the source again, and its controls. -/
-structure Checking where
-  name : String
-  work : System.FilePath
-  /-- Lean on the two modules of the subject: the statements accepted, and the proof module. -/
-  honest : Pending
-  comparison : Pending
-  controls : List Running
-
-/-- The modules of a subject, added: the module of the statements, the proof module, which is
-judged, each control, and the comparison of the package with the frontend. -/
-def start (work : System.FilePath) (name : String) (subject : Subject) (proof : Proof)
-    (controls : List Control := []) : IO Checking := do
-  let module ← subject.module name proof
-  let stated ← addStated work module
-  let proved ← addProof work name module
-  noteAccepted work name module
-  let honest : Pending := do
-    stated.accepted name
-    let lean ← proved
-    acceptedByLean name lean
-    return lean
-  -- `read` checked these selectors against the requested goals, in order, before issuance.
-  let comparison ← startSourceComparison work s!"{name}Source" module subject.text
-    (subject.goals.map (·.goal))
-  return ⟨name, work, honest, comparison, ← controls.mapM (·.start work name proof module stated)⟩
-
-/-- A subject judged: Lean accepts the module of its statements, with every theorem on the
-allowed axioms; Lean accepts its proof module, and the judgment accepts it; Lean accepts the
-module in which it reads the source again; each control is refused as it says. What Lean said is
-read first, of every module, and the judgments after it, since a judgment costs the more. The
-result is Lean's output on the proof module. -/
-def Checking.finish (checking : Checking) : IO (Bool × String) := do
-  let (ok, output) ← checking.honest
-  let (sourceOk, sourceOutput) ← checking.comparison
-  acceptedOutput s!"{checking.name}Source" sourceOk sourceOutput []
-  let (outside, inside) := checking.controls.partition (·.control.refusal == .outside)
-  for control in inside do
-    control.finish
-  acceptedByJudgment checking.work checking.name
-  for control in outside do
-    control.finish
-  return (ok, output)
-
-/-- A subject checked: `start`, then `finish`. -/
-def check (work : System.FilePath) (name : String) (subject : Subject) (proof : Proof)
-    (controls : List Control := []) : IO (Bool × String) := do
-  (← start work name subject proof controls).finish
 
 end ZkcFormalTests.WrittenSubject

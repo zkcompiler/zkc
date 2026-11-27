@@ -160,6 +160,12 @@ private def tableTerm (row : Nat → String) (count : Nat) : String :=
   | 1 => s!"⟨1, fun _ => {row 0}⟩"
   | n + 2 => s!"⟨{n + 2}, fun i => {selector row 0 (n + 2)}⟩"
 
+/-- The path of each goal row, in the order of the table: the components of the qualified name of
+the goal's declaration. What a goal publishes is named by its path. -/
+def paths (layout : SubjectLayout owner) : List (List String) :=
+  layout.goals.toList.map fun (goal, _) =>
+    (Static.qualifiedName owner.state.program goal.declaration).splitOn "::"
+
 /-- Close the typed subject over the package, physical members, role facts and lookup proofs
 already in scope. Mathematical issuance supports deciding proofs of soundness. -/
 def text (layout : SubjectLayout owner) : Except String String := do
@@ -185,8 +191,7 @@ def text (layout : SubjectLayout owner) : Except String String := do
   lines := lines.push ("noncomputable def written'clauses : " ++
     "Zkc.Subject.BoundedTable (Zkc.Subject.Decision written'root) :=\n" ++
     s!"  {tableTerm decisionName layout.decisions.size}\n")
-  for ((goal, d), i) in layout.goals.toList.zipIdx do
-    let path := (Static.qualifiedName program goal.declaration).splitOn "::"
+  for (((goal, d), path), i) in (layout.goals.toList.zip layout.paths).zipIdx do
     lines := lines.push (s!"noncomputable def {goalName i} : Zkc.Subject.WrittenGoal " ++
       s!"written'root := ⟨{decisionName d}, {fieldsName i}⟩\n" ++
       s!"noncomputable def {slotName i} : Zkc.Subject.GoalSlot written'clauses.size :=\n" ++

@@ -7,7 +7,7 @@ private theorem neverRejected (x : Bool) :
 
 theorem allBounds : allBoundsStatement := by
   intro b
-  refine ⟨loose_covered, (Soundness.installed_iff_admitted model written'application0 draws b).mp ?_⟩
+  refine ⟨by decide +kernel, (Soundness.installed_iff_admitted model written'application0 draws b).mp ?_⟩
   exact fun _ x _ rejected ↦ (neverRejected x rejected).elim
 
 theorem noWitness : noWitnessStatement := by

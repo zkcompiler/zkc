@@ -87,7 +87,7 @@ def proof (stated space : String) : String :=
   "local notation \"MappedResult\" => (published% written'subject probes.mapped sound)\n" ++
   "example : MappedResult = published% written'subject probes.mapped sound := rfl\n\n" ++
   "theorem probes.mapped.sound : published% written'subject probes.mapped sound :=\n" ++
-  "  Soundness.result_of_installed model written'application0 draws mapped_covered installedBound\n\n" ++
+  "  Soundness.result_of_installed model written'application0 draws (by decide +kernel) installedBound\n\n" ++
   "theorem probes.mapped.met : published% written'subject probes.mapped met :=\n" ++
   "  Soundness.witnessed_of model written'application0 draws served true trivial false trivial\n" ++
   "    (fun b n _ _ accepted => by\n" ++
@@ -114,16 +114,58 @@ private def refusedReader (name : String) (lean : Bool × String) : IO Unit := d
 
 def run (work : System.FilePath) : IO Unit := do
   let project := projectOf work
-  let honest ← IO.ofExcept ((← statements source).module "Published" {})
+  let honest ← IO.ofExcept ((← statements source).publication "Published")
   unless honest.refusals.isEmpty do throw (IO.userError s!"{honest.refusals}")
-  let low ← IO.ofExcept ((← statements (source.replace "clause = explicit)\n" "clause = explicit) <= 1 / 2\n")).module
-    "Published" {} (statements := some `Low.Stated))
+  let low ← IO.ofExcept ((← statements (source.replace "clause = explicit)\n" "clause = explicit) <= 1 / 2\n")).publication
+    "Published" (data := some `Low.Stated))
   unless low.refusals.isEmpty do throw (IO.userError s!"{low.refusals}")
-  discard <| SubjectProject.add project `Published.Stated honest.statements .statements
-  discard <| SubjectProject.add project `Published.Challenge (challenge "Published.Stated" "Published") .challenge
+  -- the issuer's challenge is the three lines, and its published theorems are the two of the row
+  unless honest.challenge == challenge "Published.Stated" "Published" && low.challenge == challenge "Low.Stated" "Published" do
+    throw (IO.userError s!"the issuer's challenge is not the three lines:\n{honest.challenge}")
+  unless honest.published == [`Published.probes.mapped.sound, `Published.probes.mapped.met] do
+    throw (IO.userError s!"the issuer's published theorems are {honest.published}")
+  discard <| SubjectProject.add project `Published.Stated honest.data .statements
+  discard <| SubjectProject.add project `Published.Challenge honest.challenge .challenge
   discard <| SubjectProject.add project `Published.Proof (proof "Published.Stated" "Published")
-  discard <| SubjectProject.add project `Low.Stated low.statements .statements
-  discard <| SubjectProject.add project `Low.Challenge (challenge "Low.Stated" "Published") .challenge
+  discard <| SubjectProject.add project `Low.Stated low.data .statements
+  discard <| SubjectProject.add project `Low.Challenge low.challenge .challenge
+  -- the shape of what the issuer publishes, and ten changes of it that the controls refuse
+  let control (command : String) (imported : String) :=
+    s!"import {imported}\nimport ZkcFormalTests.PublicationControl\n\n{command}\n"
+  let shape ← startLakeLean work "PublishedShape" (control
+    "#data_module Published.Stated\n#challenge_module Published.Challenge over Published.Stated" "Published.Challenge")
+    (text := false)
+  let ending := "#print axioms admitted_exists"
+  let bound := "def written'bound0 : Zkc.Subject.Bound := "
+  let mutants : List (String × String × String) := [
+    ("WithProposition", ← replaceOnce honest.data ending ("def extra : Prop := True\n" ++ ending),
+      "data control: WithProposition.Stated defines the proposition Published.extra"),
+    ("WithTheorem", ← replaceOnce honest.data ending ("theorem extra : True := trivial\n" ++ ending),
+      "data control: WithTheorem.Stated states the theorem Published.extra"),
+    ("WithPredicate", ← replaceOnce honest.data ending ("def extraOf (n : Nat) : Prop := n = n\n" ++ ending),
+      "data control: WithPredicate.Stated defines the proposition Published.extraOf"),
+    ("WithInductive", ← replaceOnce honest.data ending ("inductive Extra : Prop where | intro\n" ++ ending),
+      "data control: WithInductive.Stated declares the inductive type Published.Extra"),
+    ("WithNamedTheorem", ← replaceOnce honest.data ending ("theorem extra.found'root : True := trivial\n" ++ ending),
+      "data control: WithNamedTheorem.Stated states the theorem Published.extra.found'root"),
+    ("WithInstance", ← replaceOnce honest.data ending ("instance : Inhabited Zkc.Subject.Bound := ⟨written'bound0⟩\n" ++ ending),
+      "data control: WithInstance.Stated declares the instance"),
+    ("WithImport", "import Std.Data.HashMap\n" ++ honest.data,
+      "data control: WithImport.Stated imports Std.Data.HashMap, which is none of the issuer's list"),
+    ("WithLibrary", "import ZkcFormal.Written.Bound\n" ++ honest.data,
+      "data control: WithLibrary.Stated imports the formal library's ZkcFormal.Written.Bound"),
+    ("WithComputedBound", ← replaceOnce honest.data (bound ++ "⟨0, 1, by decide⟩") (bound ++ "⟨0 + 0, 1, by decide⟩"),
+      "data control: the bound Published.written'bound0 is not two numerals")]
+  let mut shapes := []
+  for (name, text, refusal) in mutants do
+    discard <| SubjectProject.add project s!"{name}.Stated".toName text .statements
+    shapes := shapes ++ [(name, refusal, ← startLakeLean work (name ++ "Shape")
+      (control s!"#data_module {name}.Stated" s!"{name}.Stated") (text := false))]
+  discard <| SubjectProject.add project `Published.Views honest.views .statements
+  discard <| SubjectProject.add project `Wide.Challenge
+    ("import Published.Views\n" ++ honest.challenge) .challenge
+  let wide ← startLakeLean work "WideShape"
+    (control "#challenge_module Wide.Challenge over Published.Stated" "Wide.Challenge") (text := false)
   let reads ← startLakeLean work "PublishedReads" (reader resultSpelling boundSpelling) (text := false)
   let installed ← startLakeLean work "PublishedReadsInstalled"
     (reader "Soundness.Installed model Published.written'application0 draws" boundSpelling) (text := false)
@@ -133,6 +175,13 @@ def run (work : System.FilePath) : IO Unit := do
   SubjectProject.expect project "Published" [(`Published.Challenge, `Published.Proof)] theorems WrittenSubject.allowed
   SubjectProject.expect project "Low" [(`Low.Challenge, `Published.Proof)] theorems WrittenSubject.allowed
   acceptedByLean "the reader of the built challenge" (← reads)
+  acceptedByLean "the shape of the data module and of the challenge" (← shape)
+  for (name, refusal, pending) in shapes do
+    let (ok, output) ← pending
+    expectErrorsAt s!"the data module {name}" ok output [refusal]
+  let (ok, output) ← wide
+  expectErrorsAt "a challenge that imports a views module" ok output
+    ["challenge control: Wide.Challenge imports Published.Views"]
   refusedReader "the installed bound where the result stands" (← installed)
   refusedReader "the bound's number where its constant stands" (← number)
   let (verdict, said) ← SubjectProject.judge project "Published"
@@ -141,6 +190,9 @@ def run (work : System.FilePath) : IO Unit := do
   let (verdict, said) ← SubjectProject.judge project "Low"
   unless verdict == .refused && said.contains "Const does not match" && said.contains "written'bound0" do
     throw (IO.userError s!"the challenge at another bound was not refused at the bound\n{said}")
+  IO.println ("The issuer's data module holds definitions that are no propositions, the package's " ++
+    "theorems and a bound of numerals, and imports no module of the formal library; its challenge " ++
+    "imports what the publication command does; 10 of 10 changes of that shape are refused.")
   IO.println ("The library states what a goal publishes from its row: the built challenge holds " ++
     "exactly the statements that the check spells; the proof module that states them as " ++
     "`published%` is accepted, and refused against a subject at another bound.")

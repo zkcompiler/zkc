@@ -5,11 +5,11 @@ public import Zkc.Frontend.Written.Statement
 @[expose] public section
 namespace Zkc.Frontend.Written
 
-/-- A single goal's admitted package and the module that states its challenge. Issuance
-records the proposition. A submitted proof requires its own judgment. -/
+/-- A single goal's admitted package and what the issuer publishes for it: the data module, the
+challenge, the views module and the fees module. A submitted proof requires its own judgment. -/
 structure IssuedGoal where
   statements : Statements
-  publication : Module
+  publication : Publication
 
 /-- One occurrence on the command line. Aliases share the decision for the canonical path.
 A failure before name resolution has only the selector. -/
@@ -40,7 +40,7 @@ private def issueGoal (root : AdmittedRoot) (id : DeclarationId) (path : String)
     ExportM IssuedGoal := do
   let claims ← singleGoalClaims root id
   let statements : Statements := ⟨claims, claims.functionsBeforeRoot⟩
-  let publication ← statements.module (goalNamespace path) {}
+  let publication ← statements.publication (goalNamespace path)
   return ⟨statements, publication⟩
 
 /-- Select each requested occurrence in the same source environment. Schemes can close

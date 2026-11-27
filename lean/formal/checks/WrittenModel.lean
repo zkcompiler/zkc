@@ -10,62 +10,52 @@ private def statementsFor (input : SourceInput) (goals : List String) : IO State
   let claims ← IO.ofExcept (goalClaims root goals)
   return ⟨claims, claims.functionsBeforeRoot⟩
 
-def checkLinkedCeilings (work : System.FilePath) : IO Unit := do
+/-- A package that links a project primitive has no model of it: its goals are not issued, with or
+without a ceiling. -/
+def checkLinkedPrimitive : IO Unit := do
   let file := "../../examples/gkr_example.zkc"
   let scheme ← IO.FS.readFile file
   let subject (bound : Nat) := statementsFor ⟨file, Syntax.parseString file
     (scheme ++ s!"\ngoal bound = soundness(Proof, stage = written, statement = fixed) <= {bound}\n")⟩ ["bound"]
-  let high ← subject 1
-  unless !high.package.bindings.rows.isEmpty do throw (IO.userError "expected project bindings")
-  let issued ← IO.ofExcept (high.ceilingModule "LayerCeiling")
-  match (← subject 0).ceilingModule "LayerCeiling" with
-  | .error why => unless why.contains "GL4" do throw (IO.userError why)
-  | .ok _ => throw (IO.userError "accepted a ceiling below the total")
-  let checked ← startLakeLean work "LayerCeiling" issued.text (text := false)
-  let (ok, output) ← checked
-  acceptedOutput "LayerCeiling" ok output issued.theorems allowed
+  for bound in [1, 0] do
+    let statements ← subject bound
+    unless !statements.package.bindings.rows.isEmpty do throw (IO.userError "expected project bindings")
+    match statements.publication "LayerCeiling" with
+    | .error why => unless why.contains "project primitive" do throw (IO.userError why)
+    | .ok _ => throw (IO.userError "issued the goals of a package that links a project primitive")
 
-/-- A subject of a check asks for every one of its goals: the harness refuses a subject one of
-whose goals is not issued, and does not judge the rest in its place. -/
-def checkEveryGoalIssued : IO Unit := do
-  let statements ← statementsFor (← source "fixtures/hash-relation.zkc" []) ["good", "bad"]
-  let subject : Subject := ⟨"", statements⟩
-  let attempt ← (subject.module "HashRelation" { text := "", theorems := [] }).toBaseIO
-  match attempt with
-  | .ok _ => throw (IO.userError "a subject with a refused goal was assembled")
-  | .error why =>
-    unless (toString why).contains "bad:" && (toString why).contains "sha256" do throw why
-
-/-- Interleaved goals reuse their relation's coverage decision. Refusals keep the
-name of each goal, including a second goal for the unsupported relation. -/
+/-- Interleaved goals of one scheme: a goal whose relation the standard interpretation does not
+cover is reported by its name, also a second one of the same relation, and the rows that are
+issued are the covered goals', named by their paths. -/
 def checkSharedCoverage : IO Unit := do
   let bad := "goal bad = soundness(Checked, spec e = 1)"
   let more := bad ++ "\ngoal again = soundness(Checked, spec e = 0)\ngoal alsoBad = soundness(Checked, spec e = 1)"
   let input ← source "fixtures/hash-relation.zkc" [(bad, more)]
   let statements ← statementsFor input ["good", "bad", "again", "alsoBad"]
-  let issued ← IO.ofExcept (statements.coverageModule "SharedCoverage")
-  unless issued.theorems == ["good_covered", "again_covered"] &&
-      issued.text.contains "rootKey goodKey = true := by decide +kernel" &&
-      issued.text.contains "rootKey againKey = true := good_covered" do
-    throw (IO.userError "expected two coverage names and one decision")
+  let issued ← IO.ofExcept (statements.publication "SharedCoverage")
+  let rows := issued.published.map fun name => (name.toString.splitOn ".").reverse.take 2 |>.reverse
+  unless rows == [["good", "sound"], ["good", "met"], ["again", "sound"], ["again", "met"]] do
+    throw (IO.userError s!"expected the published theorems of good and again, got {issued.published}")
   let [first, second] := issued.refusals | throw (IO.userError s!"unexpected refusals {issued.refusals}")
   unless first.startsWith "bad:" && second.startsWith "alsoBad:" &&
       first.contains "sha256" && second.contains "sha256" do
     throw (IO.userError s!"unexpected refusals {issued.refusals}")
 
-/-- Check both sides of issuance with exactly their declared imports. The shared package
-has two labels that used to collide with fixed declarations; a second source calls a
-helper whose old fallback label was itself the goal's name. -/
+/-- Check both sides of issuance with exactly their declared imports: the data module and the
+challenge of each publication are read by Lean. The shared package has goals named `root` and
+`verifier`, whose labels are names of the installation; a second source calls helpers whose
+names are like generated ones; a third names a goal and a port like a view's binders. A
+published theorem is named by the path of its goal. -/
 private def checkPublicationNames (work : System.FilePath) : IO Unit := do
   let goal (name : String) := s!"goal {name} = soundness(Checked, spec e = 0)"
   let long := String.ofList (List.replicate 42 '가')
   let input ← source "fixtures/hash-relation.zkc"
     [(goal "good", "\n".intercalate (["root", "verifier", long].map goal))]
   let shared ← statementsFor input ["root", "verifier"]
-  unless (shared.publicationPairs "SharedLabels").map (·.1.getString!) ==
-      ["root_installed", "root_sound", "root_result", "root_met",
-       "verifier_installed", "verifier_sound", "verifier_result", "verifier_met"] do
-    throw (IO.userError "the public challenge lost the source names")
+  let sharedIssued ← IO.ofExcept (shared.publication "SharedLabels")
+  unless sharedIssued.published.map (fun name => (name.toString.splitOn ".").reverse.take 2 |>.reverse) ==
+      [["root", "sound"], ["root", "met"], ["verifier", "sound"], ["verifier", "met"]] do
+    throw (IO.userError s!"the published theorems lost the source names: {sharedIssued.published}")
   let assembly ← Driver.assembleFiles input ["../../libraries"]
   let #[result] := issueSoundnessGoals assembly [long] | throw (IO.userError "missing goal")
   let issued ← IO.ofExcept result.outcome
@@ -82,8 +72,9 @@ private def checkPublicationNames (work : System.FilePath) : IO Unit := do
     ("(b: bool @(P,V), xs:", "(bCaps: bool @(P,V), xs:"),
     ("guard @V b", "guard @V bCaps"), ("Holds(b, xs)", "Holds(bCaps, xs)")]
   let binderStatements ← statementsFor binders ["input_b"]
-  let modules := [← IO.ofExcept (shared.module "SharedLabels" {}), issued.publication,
-    ← IO.ofExcept (called.module "HelperLabels" {}), ← IO.ofExcept (binderStatements.module "InputLabels" {})]
+  let modules := [sharedIssued, issued.publication,
+    ← IO.ofExcept (called.publication "HelperLabels"), ← IO.ofExcept (binderStatements.publication "InputLabels")].map
+      (Module.ofPublication ·)
   let pending ← modules.mapM fun publication => do
     let stated ← addStated work publication
     let challenge ← addChallenge work publication.space publication
@@ -93,7 +84,6 @@ private def checkPublicationNames (work : System.FilePath) : IO Unit := do
     let (ok, output) ← leanOn work challenge
     unless ok do throw (IO.userError s!"{challenge}: {output}")
 
-#eval IO.FS.withTempDir checkLinkedCeilings
-#eval checkEveryGoalIssued
+#eval checkLinkedPrimitive
 #eval checkSharedCoverage
 #eval IO.FS.withTempDir checkPublicationNames

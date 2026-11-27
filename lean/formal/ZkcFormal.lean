@@ -11,7 +11,6 @@ public import ZkcFormal.RoleRules
 public import ZkcFormal.Application
 public import ZkcFormal.ComputedTypes
 public import ZkcFormal.Written.ClaimIntro
-public import ZkcFormal.Written.GoalPresentation
 public import ZkcFormal.Written.Blind
 public import ZkcFormal.Written.PortSamplers
 public import ZkcFormal.Written.PortFees

@@ -89,18 +89,18 @@ def run (corpus : System.FilePath) (work : System.FilePath) : IO Unit := do
   unless refusal.contains "nonnegative" do
     throw (IO.userError s!"Count<4> was refused for another reason: {refusal}")
 
-  -- A goal that states a ceiling. At the total of its table, 3/8, the statement is issued with the
-  -- comparison, which the kernel decides; below it no statement is issued (GL4).
+  -- A goal that states a ceiling is issued at its ceiling, whatever its table adds up to: at the
+  -- total of its table, 3/8, and below it, at 1/4, where the fee facts of the row say that the
+  -- budget is above the bound (`checks/WrittenFees.lean`).
   let goalLine := "goal loose = soundness(Checked, spec e = 4)"
-  let atTotal ← read (← edit source goalLine (goalLine ++ " <= 3/8"))
-  let ceilingProof ← startLakeLean work "CeilingAtTotal"
-    (← IO.ofExcept (atTotal.statements.ceilingModule "CeilingAtTotal")).text (text := false)
-  let below ← read (← edit source goalLine (goalLine ++ " <= 1/4"))
-  match below.statements.ceilings with
-  | .ok _ => throw (IO.userError "a goal whose ceiling is below the total of its table was issued a statement")
-  | .error why =>
-    unless why.contains "GL4" && why.contains "1/4" && why.contains "3/8" do
-      throw (IO.userError s!"the ceiling below the total was refused for another reason: {why}")
+  for (ceiling, bound) in [(" <= 3/8", (3 : Rat) / 8), (" <= 1/4", (1 : Rat) / 4)] do
+    let stated ← read (← edit source goalLine (goalLine ++ ceiling))
+    let some goal := stated.goals.find? (·.goal == "loose") | throw (IO.userError "no goal loose")
+    unless goal.bound == bound && goal.total == 3 / 8 do
+      throw (IO.userError s!"the goal with the ceiling{ceiling}: bound {goal.bound}, total {goal.total}")
+    let issued ← IO.ofExcept (stated.statements.publication "Ceiling")
+    unless issued.refusals.isEmpty && issued.published.length == 4 do
+      throw (IO.userError s!"the goal with the ceiling{ceiling} is not issued: {issued.refusals}")
 
   -- The roles exchanged in the source: with `V` the prover of the scheme the verifier is `P`,
   -- and the clause, which `V` decides, is not decided by the verifier of the scheme.
@@ -143,27 +143,33 @@ def run (corpus : System.FilePath) (work : System.FilePath) : IO Unit := do
   let uncovered ← WrittenSubject.read
     (← edit source "if xs[i] == 0 then 0 else 1" "if xs[i] ^ 2 == 0 then 0 else 1")
     reading
-  for issue in [(uncovered.statements.coverageModule "CoverageControl").map (fun _ => ()),
-      (uncovered.statements.module "UncoveredControl" {}).map (fun _ => ())] do
-    match issue with
-    | .ok _ => throw (IO.userError "issued a statement for an uninterpreted power")
-    | .error why => unless why.contains "pow" && why.contains "loose" && why.contains "strict" do
-        throw (IO.userError why)
+  match uncovered.statements.publication "UncoveredControl" with
+  | .ok _ => throw (IO.userError "issued the goals of an uninterpreted power")
+  | .error why => unless why.contains "pow" && why.contains "loose" && why.contains "strict" do
+      throw (IO.userError why)
 
-  -- Independently ask the kernel about the actual program, including the power in the relation.
-  let testCoverage (goal : ClaimedGoal) := Statements.header Statements.imports ++ "namespace CoverageControl\n" ++
-    (Written.package uncovered.statements.package).text ++ statementOpens ++ uncovered.statements.facts ++
-    Statements.coverage [goal] ++ "end CoverageControl\n"
-  let coverageChecks ← uncovered.goals.mapM fun goal => do
-    let checked ← startLakeLean work (goal.goal ++ "CoverageControl") (testCoverage goal) (text := false)
-    return (goal.goal, checked)
-  let (ok, output) ← finishLean ceilingProof
-  acceptedOutput "CeilingAtTotal" ok output ["loose_ceiling"] allowed
-  for (goal, checked) in coverageChecks do
-    let (covered, reason) ← finishLean checked
-    if covered then throw (IO.userError s!"accepted the power in the relation of {goal}")
-    unless reason.contains s!"covers stored rootKey {goal}Key = true" && reason.contains "is false" do
-      throw (IO.userError reason)
+  -- The same rows given to the library without the issuer's filter: the kernel decides the
+  -- coverage of each, the views are declared, and the coverage fact and the step to the published
+  -- result are not.
+  let statements := uncovered.statements
+  let data ← IO.ofExcept (statements.dataModule "Uncovered" (SubjectLayout.ofGoals statements.claims))
+  let stated ← startLakeLean work "Uncovered.Stated" data (text := false)
+  let rows := ["loose", "strict"].map (s!"Uncovered.t.{·}")
+  let views ← startLakeLean work "Uncovered.Views"
+    ("import Uncovered.Stated\nimport ZkcFormal.Written.Views\n\npublish_views Uncovered.written'subject\n" ++
+      "open Lean in\nrun_cmd do\n" ++
+      s!"  for row in [{", ".intercalate (rows.map (s!"`{·}"))}] do\n" ++
+      "    for name in [`sound.view, `met.view, `installed.view, `sound.view_iff, `met.view_iff, `installed.view_iff] do\n" ++
+      "      unless (← getEnv).contains (row ++ name) do throwError \"no {row ++ name}\"\n" ++
+      "    for name in [`covered, `sound_of_installed] do\n" ++
+      "      if (← getEnv).contains (row ++ name) then throwError \"{row ++ name} is declared\"\n") (text := false)
+  let (ok, output) ← finishLean stated
+  unless ok do throw (IO.userError s!"the data module of the uncovered rows: {output}")
+  let (ok, output) ← finishLean views
+  unless ok do throw (IO.userError s!"the views of the uncovered rows: {output}")
+  for goal in ["loose", "strict"] do
+    unless output.contains s!"publish_views: t.{goal}: the standard interpretation does not cover the stored program of this goal" do
+      throw (IO.userError s!"no line for the uncovered row {goal}\n{output}")
 
 end CountCharge
 

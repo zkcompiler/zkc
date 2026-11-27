@@ -156,13 +156,16 @@ def twiceSource (charge : String) : String :=
   "scheme Checked = Twice:\n    prover P\n    construction interactive\n" ++
   "goal twice = soundness(Checked, stage = written)\n"
 
-/-- The statements module of a source's goal, in the name space `space`. -/
+/-- The data module that the issuer publishes for a source's goal, in the name space `space`. The
+issuer's views module is the line that this check also writes over other subjects. -/
 def statementsOf (text goal space : String) : IO String := do
   let root ← admitted text goal
   let claims ← IO.ofExcept (goalClaims root [goal])
-  let issued ← IO.ofExcept ((⟨claims, claims.functionsBeforeRoot⟩ : Statements).module space {})
+  let issued ← IO.ofExcept ((⟨claims, claims.functionsBeforeRoot⟩ : Statements).publication space)
   unless issued.refusals.isEmpty do throw (IO.userError s!"{issued.refusals}")
-  return issued.statements
+  unless issued.views == s!"import {space}.Stated\nimport ZkcFormal.Written.Views\n\npublish_views {space}.written'subject\n" do
+    throw (IO.userError s!"the issuer's views module is not the line of this check:\n{issued.views}")
+  return issued.data
 
 /-- The views module of a subject. -/
 def viewsModule (stated subject : String) (namer := "ZkcFormal.Written.Views") (before := "") : String :=

@@ -18,8 +18,7 @@ private def equation (lhs rhs : String) := s!"example : {lhs} = {rhs} := rfl\n"
 /-- Each request gives the selector to resolve and the public spelling the client expects.
 Two distinct spellings may belong to one source declaration. The ordinary charge subjects
 have simple public names. Fixtures for escaped labels specify the expected spelling literally. -/
-def consumerAt (root : AdmittedRoot) (requests : List (String × String)) (fees : Bool) :
-    Except String String := do
+def consumerAt (root : AdmittedRoot) (requests : List (String × String)) : Except String String := do
   let some (first, _) := requests.head? | throw "expected a goal"
   let compiled ← goalClaims root (requests.map Prod.fst)
   let head ← SourceClause.rootHead root
@@ -78,22 +77,15 @@ def consumerAt (root : AdmittedRoot) (requests : List (String × String)) (fees 
       equation s!"{atIndex}.fields.caps" (Zkc.Subject.Print.capsTerm caps) ++
       equation s!"({atIndex}.fields.bound.numerator, {atIndex}.fields.bound.denominator)"
         s!"({bound.num.toNat}, {bound.den})" ++
-      s!"run_cmd ZkcFormalTests.WrittenBinding.checkReferences (← Lean.getCurrNamespace) {reprStr label} {index} {d} {relation} {fees} {goal.specification.size}\n"
+      s!"run_cmd ZkcFormalTests.WrittenBinding.checkReferences (← Lean.getCurrNamespace) {reprStr label} {index} {d} {relation} {goal.specification.size}\n"
     for (argument, i) in goal.specification.toList.zipIdx do
       text := text ++ equation s!"{label}Argument{i}" (toString argument)
-    let standard := s!"StandardInterpretation.model {atIndex} StandardInterpretation.draws"
-    for (publicSuffix, property) in [("ClaimOf", "ClaimOf"), ("Claim", "Claim"), ("Goal", "Goal"),
-        ("Result", "Result"), ("Witnessed", "Witnessed")] do
-      let args := if property == "Result" then standard ++ " StandardInterpretation.covers" else standard
-      text := text ++ equation s!"{label}{publicSuffix}" s!"ZkcFormal.Written.Goal.{property} {args}"
-    if fees then text := text ++ equation s!"{label}Judged" s!"ZkcFormal.Written.Goal.Judged {standard}"
   return text ++ equation "written'subject.clauses.size" (toString decisions.size) ++
     equation "written'subject.goals.size" (toString declarations.size)
 
 /-- Assemble the original single-file source before observing the issued module. -/
-def consumer (source : String) (requests : List (String × String)) (fees : Bool) :
-    Except String String := do
+def consumer (source : String) (requests : List (String × String)) : Except String String := do
   let some (first, _) := requests.head? | throw "expected a goal"
-  consumerAt (← goalRoot source first) requests fees
+  consumerAt (← goalRoot source first) requests
 
 end ZkcFormalTests.WrittenSource
