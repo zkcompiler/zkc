@@ -6,7 +6,7 @@ public import Zkc.Core.Facts.Facts
 public import Zkc.Core.Program.EraseProgram
 public import Zkc.Core.Transform.Assured
 public import Zkc.Core.Admission.Programs
-public import Zkc.Core.Scheme.Deploy
+public import Zkc.Core.Scheme.Deploy.Compile
 
 @[expose] public section
 

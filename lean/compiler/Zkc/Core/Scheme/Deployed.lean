@@ -50,8 +50,9 @@ def Deployed.retry (d : Deployed V) : Option (Nat × Site) :=
 def Deployed.roles (d : Deployed V) : Option (Role × Role) :=
   proverAndVerifier d.entry d.declaration
 
-/-- The definitions of a module. -/
-def ModuleRef.definitions (m : ModuleRef) : List Key := m.members.map (·.2)
+/-- The definitions of a module, including any law-specific bindings. -/
+def ModuleRef.definitions (m : ModuleRef) : List Key :=
+  m.members.map (·.2) ++ m.lawMembers.map (·.2.2)
 
 /-- The definitions that a declaration names: those of its suite, of its layout and of its
 commitments, those that recover values, and the one that derives the samples. -/
@@ -439,13 +440,16 @@ def Deployed.WellNestedRetry (d : Deployed V) : Prop :=
   ∀ bound site, d.retry = some (bound, site) → Shape.noNestedAttempt site [] d.entry.shape = true
 
 /-- The Fiat–Shamir suite of a deployment satisfies its semantic laws in model `M`:
-1. Every derived coin emitted by a `SuiteSlot.derive` function on valid inputs lies in the support
-   of the drawn coin's law (`Allows M (.coin law)`).
+1. Every derived coin emitted by a `SuiteSlot.derive` function (in `members` or `lawMembers`) on
+   valid inputs lies in the support of the drawn coin's law (`Allows M (.coin law)`).
 2. Every `SuiteSlot.encode` function is injective on valid values (collision-free message framing).
-Determinism, validity preservation, and non-halting already follow from admission. -/
+Determinism, validity preservation, and non-halting already follow from admission.
+For distribution-specific suites where distinct sampling laws share one Core type via
+`ModuleRef.lawMembers`, see the weaker law-keyed predicate `Deployed.SuiteLawfulFor`. -/
 def Deployed.SuiteLawful (M : Model V) (d : Deployed V) : Prop :=
   ∀ suite sessionTag, d.declaration.construction = .derived suite sessionTag →
-    (∀ defKey, (SuiteSlot.derive, defKey) ∈ suite.members →
+    (∀ defKey, ((SuiteSlot.derive, defKey) ∈ suite.members ∨
+        ∃ lawBytes, (SuiteSlot.derive, lawBytes, defKey) ∈ suite.lawMembers) →
       ∀ (hdr : FnHeader V) (f : Member d.admitted.program.headers.fns hdr),
         d.admitted.program.find defKey = some (.fn f) →
         ∀ (stateTy : V.Ty) (drawIns : List V.Ty) (e : ShapeEvent V)
@@ -477,6 +481,35 @@ def Deployed.SuiteLawful (M : Model V) (d : Deployed V) : Prop :=
             (cast (congrArg (HList M.Val) hIn.symm) (.cons v₂ .nil)) =
             .done (cast (congrArg (HList M.Val) hOut.symm) (.cons u .nil)) →
           v₁ = v₂)
+
+/-- The deterministic prover-sampling function (`samples derived by`) of a deployment satisfies
+the sampling laws of every prover private coin in model `M`: every coin derived from valid prover
+inputs, valid session/site bytes, and any attempt/call counters lies in `Allows M (.coin law)`. -/
+def Deployed.SamplesLawful (M : Model V) (d : Deployed V) : Prop :=
+  ∀ sKey prover verifier,
+    d.declaration.samples = some sKey →
+    d.roles = some (prover, verifier) →
+    ∀ (hdr : FnHeader V) (f : Member d.admitted.program.headers.fns hdr),
+      d.admitted.program.find sKey = some (.fn f) →
+      ∀ (e : ShapeEvent V) (law : V.LawKey) (drawIns : List V.Ty),
+        e ∈ d.entry.shape.events [] id →
+        e.cls = .given (.coin law) prover [] →
+        V.law law = some ⟨drawIns, e.τ⟩ →
+        ∀ (hins : hdr.ins = held prover d.entry.ins ++ [.seq (.fin 256) none, .seq (.fin 256) none, .nat, .nat])
+          (houts : hdr.outs = [e.τ])
+          (heldVals : HList M.Val (held prover d.entry.ins))
+          (sessBytes siteBytes : List (M.Val (.fin 256)))
+          (attemptNum callSeq : Nat) (payload : HList M.Val drawIns) (coin : M.Val e.τ),
+          heldVals.All M.Valid →
+          (∀ b, b ∈ sessBytes → b < 256) →
+          (∀ b, b ∈ siteBytes → b < 256) →
+          payload.All M.Valid →
+          Defs.fnTable M d.admitted.program.defs hdr f
+            (cast (congrArg (HList M.Val) hins.symm)
+              (HList.append heldVals
+                (.cons sessBytes (.cons siteBytes (.cons (a := Ty.nat) attemptNum (.cons (a := Ty.nat) callSeq .nil)))))) =
+            .done (cast (congrArg (HList M.Val) houts.symm) (.cons coin .nil)) →
+          Allows M (.coin law) drawIns payload e.τ coin
 
 /-- The proof layout of a deployment satisfies its canonical codec laws (round-trip, non-malleable
 canonical decoding, and exact equality) in model `M`:

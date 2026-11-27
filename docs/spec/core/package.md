@@ -37,9 +37,10 @@ proof identity.
 A definition number and a site are positions in one package. The proof identity
 is what separates the proofs of two packages. In the Core library,
 `Functions.identity` computes the canonical injective pre-image byte encoding
-(`zkc.core.proof/0`) over the declaration (including its `application` context)
-and the erased reachability closure of the entry and declaration, while the
-serialized package format hashes canonical JSON with SHA-256.
+(`zkc.core.proof/0`) over the declaration (including its `application` context
+and any law-specific module bindings) and the erased reachability closure of the
+entry and declaration, while the serialized package format hashes canonical JSON
+with SHA-256.
 
 ## Envelope
 

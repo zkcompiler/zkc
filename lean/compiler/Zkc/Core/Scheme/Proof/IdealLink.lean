@@ -1,17 +1,19 @@
 module
 
-public import Zkc.Core.Scheme.Completeness
+public import Zkc.Core.Scheme.Proof.CompletenessHelpers
 
 @[expose] public section
 
 /-!
-Ideal random-oracle verifier linkage (`deployIdeal_link`), collision-free ideal transcript path
-step injectivity (`idealPath_msgStep_injective`, `idealPath_drawStep_injective`,
-`idealPath_msg_ne_draw`), and non-malleable canonical compact proof parsing
-(`buildCompactParse_written`, `compactLayoutVStart_written`).
+Ideal random-oracle verifier linkage (`deployIdeal_link`), pure ideal-path step injectivity,
+and non-malleable canonical compact proof parsing (`buildCompactParse_written`,
+`compactLayoutVStart_written`).
 -/
 
 namespace Zkc.Core
+
+open LayerBuild
+
 
 open LayerBuild
 
@@ -1836,11 +1838,11 @@ theorem buildCompactParse_written {d : Deployed V} {layout : Layout}
         (env.get bufVar).drop (env.get offVar) = chunks.flatten
   | Γ, fresh, hfresh, env, bufVar, offVar, parsedAcc, accVars, [], hMatch, out, _, hOff, _, hDone => by
       unfold buildCompactParse at hDone
-      erw [letOp1_denote, localSem_op_owned] at hDone
+      rw [letOp1_local_owned_denote] at hDone
       simp only [Env.all] at hDone
       rw [ownedOp_seqLength] at hDone
       simp only [Process.bind, HList.single] at hDone
-      erw [letOp1_denote, localSem_op_owned] at hDone
+      rw [letOp1_local_owned_denote] at hDone
       simp only [Env.all] at hDone
       rw [env_get_insert_reindex env hfresh, env_get_insert_self, ownedOp_natEqual] at hDone
       simp only [Process.bind, HList.single] at hDone

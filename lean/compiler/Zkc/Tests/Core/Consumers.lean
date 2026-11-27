@@ -76,9 +76,9 @@ def sigmaScheme : Declaration where
   key := ⟨1⟩
   entry := ⟨0⟩
   kinds := [.online, .online]
-  construction := .derived ⟨[]⟩
+  construction := .derived ⟨[], []⟩
   prover := none
-  layout := some ⟨⟨[]⟩, [], []⟩
+  layout := some ⟨⟨[], []⟩, [], []⟩
   retry := none
   samples := none
   context := []

@@ -310,7 +310,7 @@ def derivedScheme (entry : Key) (kinds : List RoleKind) (prover : Option Role) :
   key := ⟨1⟩
   entry := entry
   kinds := kinds
-  construction := .derived ⟨[]⟩
+  construction := .derived ⟨[], []⟩
   prover := prover
   layout := Option.none
   retry := Option.none

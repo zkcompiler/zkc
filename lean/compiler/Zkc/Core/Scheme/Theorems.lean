@@ -1,9 +1,14 @@
 module
 
-public import Zkc.Core.Scheme.DeployElim
-public import Zkc.Core.Scheme.Safety
-public import Zkc.Core.Scheme.Completeness
-public import Zkc.Core.Scheme.IdealLink
+public import Zkc.Core.Scheme.Deploy.Elim
+public import Zkc.Core.Scheme.Deploy.Structural
+public import Zkc.Core.Scheme.Proof.Safety
+public import Zkc.Core.Scheme.Proof.Coverage
+public import Zkc.Core.Scheme.Proof.Completeness
+public import Zkc.Core.Scheme.Proof.CompactCompleteness
+public import Zkc.Core.Scheme.Proof.RetryCompleteness
+public import Zkc.Core.Scheme.Proof.IdealLink
+public import Zkc.Core.Scheme.Proof.QuerySeparation
 public import Zkc.Core.Format.Canonical
 public import Zkc.Core.Statements
 
@@ -14,15 +19,21 @@ Top-level `Statements` proofs for canonical wire formats, deployed-scheme identi
 and non-interactive / ideal random-oracle deployment.
 
 The underlying proofs are split across focused modules:
-- `Zkc.Core.Scheme.DeployElim`: elimination witnesses and structural theorems
-  (`deploy_keeps`, `deploy_findsRoles`, `deploy_matches`, `deploy_scoped`,
+- `Zkc.Core.Scheme.Deploy.Elim`, `Zkc.Core.Scheme.Deploy.Structural`: elimination witnesses and
+  structural theorems (`deploy_keeps`, `deploy_findsRoles`, `deploy_matches`, `deploy_scoped`,
   `deploy_wellNestedRetry`, `deploy_fresh`, and their `deployIdeal_*` counterparts)
-- `Zkc.Core.Scheme.Safety`: validity safety (`deploy_safe`, `deployIdeal_safe`)
-  and effect coverage (`deploy_coverage`, `deployIdeal_verifier_covered`)
-- `Zkc.Core.Scheme.Completeness`: streaming completeness (`deploy_complete`)
-- `Zkc.Core.Scheme.IdealLink`: ideal random-oracle verifier linkage (`deployIdeal_link`),
-  pure ideal-path step injectivity, and compact proof wire-layout canonicality
-  (`buildCompactParse_written`, `compactLayoutVStart_written`)
+- `Zkc.Core.Scheme.Proof.Safety`, `Zkc.Core.Scheme.Proof.Coverage`: validity safety
+  (`deploy_safe`, `deployIdeal_safe`) and effect coverage (`deploy_coverage`,
+  `deployIdeal_verifier_covered`)
+- `Zkc.Core.Scheme.Proof.Completeness`, `CompactCompleteness`, `RetryCompleteness`: generalized
+  completeness across streaming, derived-samples, compact carry/recover, and abort-and-retry
+  deployments (`deploy_complete`, `deploy_complete_samples`, `deploy_complete_compact`,
+  `deploy_complete_retry`, `deploy_complete_retry_nonaborting`)
+- `Zkc.Core.Scheme.Proof.IdealLink`, `QuerySeparation`: ideal random-oracle verifier linkage
+  (`deployIdeal_link`), compact proof canonicality (`buildCompactParse_written`,
+  `compactLayoutVStart_written`), and RO query uniqueness / cross-session / cross-statement
+  domain separation (`deployIdeal_queries_nodup`, `deployIdeal_cross_session_disjoint`,
+  `deployIdeal_cross_statement_disjoint`)
 -/
 
 namespace Zkc.Core
@@ -101,7 +112,7 @@ theorem statements_completeStreaming (enc : VocabEncoder V) (c : Functions V)
     (hadm : c.admit = admit) (hdep : c.deploy = deploy enc) : Statements.completeStreaming c := by
   intro named assoc a hA decl d hD hNI hNR hNS hRec p v hR first matched M ins hIns hSL hLL hNH src hLP hFed
   rw [hadm] at hA; rw [hdep] at hD
-  exact deploy_complete M enc hA hD hNI hNR hNS hRec p v hR first matched ins hIns hSL hLL hNH src hLP hFed
+  exact deploy_complete M enc hA hD hNI hNR hNS hRec p v hR first matched ins hIns (hSL.toFor enc M) hLL hNH src hLP hFed
 
 /-- `deployIdeal` satisfies `Statements.idealLink`. -/
 theorem statements_idealLink (enc : VocabEncoder V) : Statements.idealLink enc := by

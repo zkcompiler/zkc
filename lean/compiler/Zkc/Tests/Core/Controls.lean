@@ -532,7 +532,7 @@ theorem interactive_roles : proverAndVerifier twoWayHeader interactiveScheme = s
 
 /-- Not declared interactive, nothing is inferred from two senders. -/
 theorem derived_two_senders_refused :
-    proverAndVerifier twoWayHeader { interactiveScheme with construction := .derived ⟨[]⟩ } =
+    proverAndVerifier twoWayHeader { interactiveScheme with construction := .derived ⟨[], []⟩ } =
       Option.none := by
   decide +kernel
 

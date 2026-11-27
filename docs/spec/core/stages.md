@@ -71,6 +71,15 @@ this stage.
   coin is derived from all prover-held inputs (witness and statement), the
   resolved session bytes, the full canonical `Site`, the retry attempt counter,
   and a monotonically increasing call sequence number preserved across retries.
+- A suite may bind distribution-specific decoders by canonical sampling-law key
+  (`ModuleRef.lawMembers`) so distinct sampling laws sharing one Core signature
+  select distinct decoders; law-specific bindings are committed into the proof
+  identity alongside ordinary module members.
+- Under ideal random-oracle deployment (`deployIdeal`), every draw appends its
+  labeled coin onto the pure transcript path, guaranteeing strictly growing,
+  duplicate-free random-oracle queries within every execution path and
+  unconditional cross-scheme, cross-session, and (under injective encoding)
+  cross-statement query disjointness.
 - Every value the suite absorbs is an explicit operation with an explicit
   encoding.
 - A decoder that rejects and retries is a sampling law with a stated factor; its

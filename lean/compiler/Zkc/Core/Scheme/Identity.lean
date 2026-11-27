@@ -87,9 +87,10 @@ def encodeRoleKind : RoleKind → List Nat
   | .offline => [1]
   | .service => [2]
 
-/-- Encode a `ModuleRef`. -/
+/-- Encode a `ModuleRef`, committing both ordinary members and law-specific bindings. -/
 def encodeModuleRef (m : ModuleRef) : List Nat :=
-  encodeList (fun p => encodeKey p.1 ++ encodeKey p.2) m.members
+  encodeList (fun p => encodeKey p.1 ++ encodeKey p.2) m.members ++
+    encodeList (fun p => encodeKey p.1 ++ encodeList encodeNat p.2.1 ++ encodeKey p.2.2) m.lawMembers
 
 /-- Encode a `Construction`. -/
 def encodeConstruction : Construction → List Nat
@@ -462,8 +463,14 @@ theorem encodeRoleKind_bytes : ∀ rk b, b ∈ encodeRoleKind rk → b < 256
   | .service, b, h => by simp [encodeRoleKind] at h; omega
 
 theorem encodeModuleRef_bytes (m : ModuleRef) : ∀ b, b ∈ encodeModuleRef m → b < 256 :=
-  encodeList_bytes (fun p : Key × Key => encodeKey p.1 ++ encodeKey p.2)
-    (fun p => mem_append_lt (encodeKey_bytes p.1) (encodeKey_bytes p.2)) m.members
+  mem_append_lt
+    (encodeList_bytes (fun p : Key × Key => encodeKey p.1 ++ encodeKey p.2)
+      (fun p => mem_append_lt (encodeKey_bytes p.1) (encodeKey_bytes p.2)) m.members)
+    (encodeList_bytes (fun p : Key × List Nat × Key =>
+        encodeKey p.1 ++ encodeList encodeNat p.2.1 ++ encodeKey p.2.2)
+      (fun p => mem_append_lt
+        (mem_append_lt (encodeKey_bytes p.1) (encodeList_bytes encodeNat encodeNat_bytes p.2.1))
+        (encodeKey_bytes p.2.2)) m.lawMembers)
 
 theorem encodeConstruction_bytes : ∀ c b, b ∈ encodeConstruction c → b < 256
   | .interactive, b, h => by simp [encodeConstruction] at h; omega
@@ -1032,15 +1039,25 @@ theorem encodeRoleKind_prefixFree : PrefixFree encodeRoleKind := by
     first | exact ⟨rfl, (List.cons.inj h).2⟩ | cases (List.cons.inj h).1
 
 theorem encodeModuleRef_prefixFree : PrefixFree encodeModuleRef := by
-  intro ⟨m₁⟩ ⟨m₂⟩ r₁ r₂ h
+  intro ⟨m₁, lm₁⟩ ⟨m₂, lm₂⟩ r₁ r₂ h
+  simp only [encodeModuleRef, List.append_assoc] at h
   have hPair : PrefixFree (fun p : Key × Key => encodeKey p.1 ++ encodeKey p.2) := by
     intro ⟨a₁, a₂⟩ ⟨b₁, b₂⟩ s₁ s₂ hp
     simp only [List.append_assoc] at hp
     obtain ⟨h1, hs⟩ := encodeKey_prefixFree a₁ b₁ _ _ hp
     obtain ⟨h2, hr⟩ := encodeKey_prefixFree a₂ b₂ s₁ s₂ hs
     exact ⟨by rw [h1, h2], hr⟩
-  obtain ⟨hm, hr⟩ := encodeList_prefixFree hPair m₁ m₂ r₁ r₂ h
-  exact ⟨congrArg ModuleRef.mk hm, hr⟩
+  have hLawPair : PrefixFree (fun p : Key × List Nat × Key =>
+      encodeKey p.1 ++ (encodeList encodeNat p.2.1 ++ encodeKey p.2.2)) := by
+    intro ⟨a₁, a₂, a₃⟩ ⟨b₁, b₂, b₃⟩ s₁ s₂ hp
+    simp only [List.append_assoc] at hp
+    obtain ⟨h1, hs1⟩ := encodeKey_prefixFree a₁ b₁ _ _ hp
+    obtain ⟨h2, hs2⟩ := encodeList_prefixFree encodeNat_prefixFree a₂ b₂ _ _ hs1
+    obtain ⟨h3, hr⟩ := encodeKey_prefixFree a₃ b₃ s₁ s₂ hs2
+    exact ⟨by rw [h1, h2, h3], hr⟩
+  obtain ⟨hm, h1⟩ := encodeList_prefixFree hPair m₁ m₂ _ _ h
+  obtain ⟨hlm, hr⟩ := encodeList_prefixFree hLawPair lm₁ lm₂ r₁ r₂ h1
+  exact ⟨by rw [hm, hlm], hr⟩
 
 theorem encodeConstruction_prefixFree : PrefixFree encodeConstruction := by
   intro a b r₁ r₂ h
@@ -1711,5 +1728,67 @@ theorem deployedIdentity_injective {V : Vocabulary} (enc : VocabEncoder V) (hEnc
     ((erase d₁.admitted.program).definitions.filter fun d => decide (d.key ∈ d₁.closure)) =
     ((erase d₂.admitted.program).definitions.filter fun d => decide (d.key ∈ d₂.closure)) :=
   schemeIdentity_injective enc hEnc d₁.admitted d₂.admitted d₁.declaration d₂.declaration hEq
+
+/-- Distribution-aware (`V.LawKey`-keyed) semantic lawfulness of a deployment's Fiat–Shamir suite
+under vocabulary encoder `enc`:
+1. Every law-specific `(SuiteSlot.derive, enc.lawKey law, defKey) ∈ suite.lawMembers` entry only
+   needs to satisfy `Allows M (.coin law)` for that exact `law`, allowing distinct sampling laws
+   that share one Core signature to select distinct decoders.
+2. Every fallback `(SuiteSlot.derive, defKey) ∈ suite.members` entry satisfies `Allows M (.coin law)`
+   for every heard coin `law` of matching signature.
+3. Every `SuiteSlot.encode` function is injective on valid values. -/
+def Deployed.SuiteLawfulFor {V : Vocabulary} (enc : VocabEncoder V) (M : Model V)
+    (d : Deployed V) : Prop :=
+  ∀ suite sessionTag, d.declaration.construction = .derived suite sessionTag →
+    (∀ (e : ShapeEvent V) (law : V.LawKey) (owner h0 : Role) (hs : List Role)
+        (drawIns : List V.Ty) (defKey : Key),
+      e ∈ d.entry.shape.events [] id →
+      e.cls = .given (.coin law) owner (h0 :: hs) →
+      V.law law = some ⟨drawIns, e.τ⟩ →
+      ((SuiteSlot.derive, enc.lawKey law, defKey) ∈ suite.lawMembers ∨
+        (SuiteSlot.derive, defKey) ∈ suite.members) →
+      ∀ (hdr : FnHeader V) (f : Member d.admitted.program.headers.fns hdr),
+        d.admitted.program.find defKey = some (.fn f) →
+        ∀ (stateTy : V.Ty)
+          (hins : hdr.ins = stateTy :: .seq (.fin 256) none :: drawIns)
+          (houts : hdr.outs = [e.τ, stateTy])
+          (st : M.Val stateTy) (label : List (M.Val (.fin 256)))
+          (payload : HList M.Val drawIns) (coin : M.Val e.τ) (st' : M.Val stateTy),
+          M.Valid stateTy st →
+          (∀ b, b ∈ label → b < 256) →
+          payload.All M.Valid →
+          Defs.fnTable M d.admitted.program.defs hdr f
+            (cast (congrArg (HList M.Val) hins.symm) (.cons st (.cons label payload))) =
+            .done (cast (congrArg (HList M.Val) houts.symm) (.cons coin (.cons st' .nil))) →
+          Allows M (.coin law) drawIns payload e.τ coin) ∧
+    (∀ eKey, (SuiteSlot.encode, eKey) ∈ suite.members →
+      ∀ (hdr : FnHeader V) (f : Member d.admitted.program.headers.fns hdr),
+        d.admitted.program.find eKey = some (.fn f) →
+        ∀ (unitTy τ : V.Ty) (hIn : hdr.ins = [τ]) (hOut : hdr.outs = [.seq unitTy none])
+          (v₁ v₂ : M.Val τ) (u : List (M.Val unitTy)),
+          M.Valid τ v₁ → M.Valid τ v₂ →
+          Defs.fnTable M d.admitted.program.defs hdr f
+            (cast (congrArg (HList M.Val) hIn.symm) (.cons v₁ .nil)) =
+            .done (cast (congrArg (HList M.Val) hOut.symm) (.cons u .nil)) →
+          Defs.fnTable M d.admitted.program.defs hdr f
+            (cast (congrArg (HList M.Val) hIn.symm) (.cons v₂ .nil)) =
+            .done (cast (congrArg (HList M.Val) hOut.symm) (.cons u .nil)) →
+          v₁ = v₂)
+
+/-- Universal `SuiteLawful` implies the distribution-aware `SuiteLawfulFor` for every encoder `enc`. -/
+theorem Deployed.SuiteLawful.toFor {V : Vocabulary} (enc : VocabEncoder V) (M : Model V)
+    {d : Deployed V} (h : d.SuiteLawful M) : d.SuiteLawfulFor enc M := by
+  intro suite tag hCon
+  obtain ⟨hDer, hEnc⟩ := h suite tag hCon
+  refine ⟨?_, hEnc⟩
+  intro e law owner h0 hs drawIns defKey hE hCls hLaw hMem
+  have hMem' : (SuiteSlot.derive, defKey) ∈ suite.members ∨
+      ∃ lawBytes, (SuiteSlot.derive, lawBytes, defKey) ∈ suite.lawMembers := by
+    rcases hMem with hL | hM
+    · exact .inr ⟨enc.lawKey law, hL⟩
+    · exact .inl hM
+  intro hdr f hFind stateTy hins houts st label payload coin st' hSt hLbl hPay hRun
+  exact hDer defKey hMem' hdr f hFind stateTy drawIns e law owner h0 hs hE hCls hLaw
+    hins houts st label payload coin st' hSt hLbl hPay hRun
 
 end Zkc.Core

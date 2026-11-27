@@ -82,4 +82,12 @@ def Shape.heardCoins {V : Vocabulary} (s : Shape V) : List Site :=
     | .given (.coin ..) _ (_ :: _) => some e.site
     | _ => none
 
+/-- The sites of private coins owned by `prover` (with no hearers): the coins that
+`samples derived by` replaces deterministically. -/
+def Shape.proverPrivateCoins {V : Vocabulary} (prover : Role) (s : Shape V) : List Site :=
+  (s.events [] id).filterMap fun e =>
+    match e.cls with
+    | .given (.coin ..) owner [] => if owner = prover then some e.site else none
+    | _ => none
+
 end Zkc.Core

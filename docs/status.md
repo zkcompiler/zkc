@@ -151,13 +151,17 @@ static arguments and operands. A concrete call checks the selected row against t
 In a generic definition the opaque pass uses the interface alone.
 
 The Core library (`Zkc.Core`) now implements canonical wire formats (`canonicalFormat`),
-canonical scheme identity (`deployedIdentity`), non-interactive and ideal random-oracle
-deployment (`deploy`, `deployIdeal`), handler specialization (`specialize`), and a total
-fuel-bounded reference executor (`execute`), with kernel-checked proofs of `Statements.formats`,
-`identityReads`, `deployKeeps`, `deployFindsRoles`, `deployMatches`, `deployScoped`,
-`deployFresh`, `deployedSafe`, `deployCoverage`, `completeStreaming`, `idealLink`,
-`executorRuns`, and `specialize_sound`. Frontend emission of derived scheme declarations,
-a standard runtime model for participant programs, and CLI execution commands remain pending.
+canonical scheme identity (`deployedIdentity`), distribution-aware non-interactive and ideal
+random-oracle deployment (`deploy`, `deployIdeal`), DAG-preserving multi-procedure handler
+specialization (`specialize`), and a total fuel-bounded reference executor (`execute`), with
+kernel-checked proofs of `Statements.formats`, `identityReads`, `deployKeeps`,
+`deployFindsRoles`, `deployMatches`, `deployScoped`, `deployFresh`, `deployedSafe`,
+`deployCoverage`, `completeStreaming`, `idealLink`, `executorRuns`, plus
+`deploy_complete_samples`, `deploy_complete_compact`, `deploy_complete_retry`,
+`deployIdeal_queries_nodup`, cross-scheme/session/statement query disjointness,
+and `specialize_sound`. Frontend emission
+of derived scheme declarations, a standard runtime model for participant programs, and CLI
+execution commands remain pending.
 The historical commands to run, prove, verify and read trees have been removed. Frontend
 derived construction awaits emitting scheme declarations against the Core deployment stage.
 Written scheme selection checks the deployed roles (SC3) and checks that the statement operands

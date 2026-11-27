@@ -24,14 +24,19 @@ deriving DecidableEq, Repr
 
 /-- A module of the source at its static arguments, as a scheme names one (a suite, a
 layout, a commitment scheme): the definition of each member that a handler applies, by the
-key of the member in its interface. The definitions are functions of the admitted program. -/
+key of the member in its interface. The definitions are functions of the admitted program.
+Optional `lawMembers` entries bind `(slot, canonicalLawKeyBytes, defKey)` so overloaded
+distribution slots such as `SuiteSlot.derive` can select distinct decoders for distinct
+sampling laws that share one Core signature. -/
 structure ModuleRef where
   members : List (Key × Key)
+  lawMembers : List (Key × List Nat × Key) := []
 deriving DecidableEq, Repr
 
 /- Standard member slot keys for a Fiat–Shamir `Suite` module reference.
 Each slot identifies a role in the `Suite` interface; overloaded slots (`encode`, `derive`) are
-disambiguated by their admitted function header signatures. -/
+disambiguated by their admitted function header signatures, and `derive` may additionally be
+disambiguated per sampling law via `ModuleRef.lawMembers`. -/
 namespace SuiteSlot
   /-- `[.seq (.fin 256) none] → [stateTy]` -/
   def start : Key := ⟨0⟩
