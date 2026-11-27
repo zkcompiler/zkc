@@ -1,6 +1,5 @@
 import ZkcFormalTests.WrittenSubject
-import Zkc.Tests.Frontend.SourceClause
-import Zkc.Subject.SourceNames
+import ZkcFormalTests.ViewRows
 
 /-!
 Views declared by the library's command over a subject, and the reader of their names.
@@ -42,7 +41,7 @@ With `ZKC_WORK` naming a folder the check's project is kept there.
 -/
 
 open Zkc.Frontend Zkc.Frontend.Written Zkc.Tests.Frontend Zkc.Tests.Frontend.PrintedPackageSupport
-open ZkcFormalTests ZkcFormalTests.WrittenSubject
+open ZkcFormalTests ZkcFormalTests.WrittenSubject ZkcFormalTests.ViewRows
 
 namespace WrittenViews
 
@@ -101,33 +100,6 @@ def statementsOf (text goal space : String) : IO String := do
   let issued ← IO.ofExcept ((⟨claims, claims.functionsBeforeRoot⟩ : Statements).module space {})
   unless issued.refusals.isEmpty do throw (IO.userError s!"{issued.refusals}")
   return issued.statements
-
-/-- **The second reading of the source**: the binders of a source's shape that a view of the
-goal gives, as rows of the reader. For each deployed input that the deciding role holds, in the
-order of the protocol's ports: its name by the rule of names, and its validity where the
-telescope is universal; then a witness for each witness parameter that the declaration of the
-clause's relation has, whether the clause writes its witness operands or not. -/
-def expectedRows (text goal : String) (existential : Bool) : IO String := do
-  let c ← IO.ofExcept (goalRoot text goal)
-  let head ← IO.ofExcept (SourceClause.rootHead c)
-  let seen ← IO.ofExcept (SourceClause.seen c goal)
-  let some role := head.roster.idxOf? seen.role | throw (IO.userError "no deciding role")
-  let names := head.ports.map (·.binder.name)
-  let mut rows := ""
-  for (port, k) in head.ports.toList.zipIdx do
-    if port.holders.mask.testBit role then
-      let count := (names.filter (· == port.binder.name)).size
-      let x := Zkc.Subject.inputBinderName port.binder.name k count
-      rows := rows ++ s!"  | {x} := input {k}\n"
-      unless existential do rows := rows ++ s!"  | {Zkc.Subject.validBinderName x} := valid {k}\n"
-  for i in [:(← IO.ofExcept (SourceClause.witnessParameters c goal)).length] do
-    rows := rows ++ s!"  | {Zkc.Subject.witnessBinderName i} := witness {i}\n"
-  return rows
-
-/-- A reader module over the views module `views`: one `#view_reads` for each view. -/
-def reader (imports : List String) (reads : List (String × String × String)) (before := "") : String :=
-  String.join (imports.map (s!"import {·}\n")) ++ "import ZkcFormalTests.ViewReader\n\n" ++ before ++
-  String.join (reads.map fun (view, subject, rows) => s!"#view_reads {view} of {subject} at 0\n{rows}")
 
 /-- The views module of a subject. -/
 def viewsModule (stated subject : String) (namer := "ZkcFormal.Written.Views") (before := "") : String :=

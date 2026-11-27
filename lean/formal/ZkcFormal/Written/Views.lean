@@ -2,7 +2,6 @@ module
 
 public import Zkc.Subject.WrittenGoal
 public import ZkcFormal.Written.Soundness
-public import ZkcFormal.Written.Fees
 public import ZkcFormal.Written.Publish
 public import ZkcFormal.Written.ViewLabels
 public import ZkcFormal.Written.FunctionMeaning
@@ -59,7 +58,7 @@ open Lean Meta Elab Term Command
 /-- The library's definitions that naming unfolds where their value leads to a telescope. -/
 def libraryUnfolds : List Name :=
   [``Soundness.Result, ``Soundness.AdmittedBound, ``Soundness.admission, ``Soundness.BoundOf,
-    ``Soundness.Witnessed, ``Soundness.Rejected, ``Soundness.Installed, ``Fees.JudgedWithin]
+    ``Soundness.Witnessed, ``Soundness.Rejected, ``Soundness.Installed]
 
 /-- The library's propositions whose premise after an input telescope is named after its head. -/
 def libraryPremises : List Name := [``Soundness.Rejected]
