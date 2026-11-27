@@ -181,8 +181,10 @@ elab "published% " s:ident path:ident which:ident : term => do
   throwError "publish: no goal at the path {wanted} in {subject}"
 
 open Lean.Elab.Term.Quotation in
-/-- A notation may abbreviate a published statement: the subject is checked where the notation
-is declared, and the path and the theorem's name are data, not names to resolve. -/
+/-- A notation may abbreviate a published statement. Where the notation is declared the subject
+gets Lean's precheck of an identifier, which accepts a dotted name whose prefix resolves; the
+term itself asks for a constant of that name where the notation is used. The path and the
+theorem's name are data, not names to resolve. -/
 @[quot_precheck ZkcFormal.Written.Publish.«termPublished%___»]
 def precheckPublished : Precheck
   | `(published% $s:ident $_:ident $_:ident) => precheck s

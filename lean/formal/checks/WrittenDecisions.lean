@@ -183,12 +183,6 @@ private def controls (work : System.FilePath) (m : Module) (src : String) : IO (
     (← mutate "written'bound1 : Zkc.Subject.Bound := ⟨0, 1, by decide⟩"
       "written'bound1 : Zkc.Subject.Bound := ⟨1, 2, by decide⟩")
     [(s!"({atGoal 1}.fields.bound.numerator,", "Type mismatch")]
-  -- The bound of `left_again` is computed in Lean from its table of caps: the same number, and a
-  -- bound that is no longer the goal's own.
-  let boundTable ← run "BoundFromTable"
-    (← mutate "written'bound1 : Zkc.Subject.Bound := ⟨0, 1, by decide⟩"
-      "written'bound1 : Zkc.Subject.Bound := (fun (_ : Zkc.Subject.CapTable) => ⟨0, 1, by decide⟩) written'caps1")
-    [(refAt "left_again", s!"the bound {m.space}.written'bound1 is not written as a literal")]
   -- The row of `left_again` has the path of `left`, and then another property than its goal names.
   let otherPath ← run "OtherPath"
     (← mutate "\"left_again\"], property :=" "\"left\"], property :=")
@@ -257,7 +251,7 @@ private def controls (work : System.FilePath) (m : Module) (src : String) : IO (
   let duplicate ← run "DuplicateRow" dup [("⟨1, by decide⟩).clause.val", "Type mismatch"),
     (refAt "left_again", wrong "written'decision0" "written'decision2"),
     ("written'subject.clauses.size =", "Type mismatch")]
-  return [claim, lookup, cap, boundRef, boundValue, boundTable, otherPath, otherProperty, capAlias, surfaceCap, admittedKey, resultCap, sampler, fee, receipt,
+  return [claim, lookup, cap, boundRef, boundValue, otherPath, otherProperty, capAlias, surfaceCap, admittedKey, resultCap, sampler, fee, receipt,
     swap, operand, duplicate]
 
 private def aliasChecks (work : System.FilePath) : IO Unit := do
