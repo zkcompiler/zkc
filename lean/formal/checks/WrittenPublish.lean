@@ -136,7 +136,7 @@ def run (work : System.FilePath) : IO Unit := do
   discard <| SubjectProject.add project `Published.Proof (proof "Published.Stated" "Published")
   discard <| SubjectProject.add project `Low.Stated low.data .statements
   discard <| SubjectProject.add project `Low.Challenge low.challenge .challenge
-  -- the shape of what the issuer publishes, and twenty-five changes of it that the controls refuse
+  -- the shape of what the issuer publishes, and twenty-six changes of it that the controls refuse
   let control (command : String) (imported : String) :=
     s!"import {imported}\nimport ZkcFormalTests.PublicationControl\n\n{command}\n"
   let shape ← startLakeLean work "PublishedShape" (control
@@ -215,9 +215,11 @@ def run (work : System.FilePath) : IO Unit := do
     ("WithSelectorTwice", ← replaceOnce honest.data "⟨1, fun _ => written'decision0⟩"
         "⟨1, fun i => if i.val < 1 then written'decision0 else written'decision0⟩",
       "data control: the selector of the table of decisions of Published.written'subject does not give 1 elements, each at one index"),
-    -- a private proposition
+    -- a private proposition, and one under a name that looks like an auxiliary declaration's
     ("WithPrivateTheorem", ← replaceOnce honest.data ending ("private theorem hidden : stored = stored := rfl\n" ++ ending),
-      "data control: WithPrivateTheorem.Stated states the theorem")]
+      "data control: WithPrivateTheorem.Stated states the theorem"),
+    ("WithAuxiliaryName", ← replaceOnce honest.data ending ("theorem proof_1 : stored = stored := rfl\n" ++ ending),
+      "data control: WithAuxiliaryName.Stated states the theorem Published.proof_1")]
   let mut shapes := []
   for (name, text, refusal) in mutants do
     discard <| SubjectProject.add project s!"{name}.Stated".toName text .statements
@@ -302,7 +304,7 @@ def run (work : System.FilePath) : IO Unit := do
     throw (IO.userError s!"the challenge at another bound was not refused at the bound\n{said}")
   IO.println ("The issuer's data module holds definitions that are no propositions, the package's " ++
     "theorems and a bound of numerals, and imports no module of the formal library; its challenge " ++
-    "imports what the publication command does; 25 of 25 changes of that shape are refused.")
+    "imports what the publication command does; 26 of 26 changes of that shape are refused.")
   IO.println ("The library states what a goal publishes from its row: the built challenge holds " ++
     "exactly the statements that the check spells, and the control by rows refuses 3 of 3 " ++
     "changes of what is stated or judged; the proof module that states them as " ++

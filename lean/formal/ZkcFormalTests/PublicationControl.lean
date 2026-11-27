@@ -33,7 +33,8 @@ library fails a check. They are no defence against a module written to deceive t
 the issuer's. Within a module that passes, these are not held to any shape, and a statement does
 not rest on them being so: a proposition wrapped in a data type (`PLift`, a subtype); the
 statement of a theorem that has one of the package's listed names; the key of a lookup; an
-auxiliary declaration that Lean makes (a nested proof, a matcher); the root's and a short
+auxiliary declaration that Lean makes under a declaration of the module (a nested proof, a
+matcher); the root's and a short
 application's own term; a constructor's parameters and implicit fields; the source's names. What
 holds a published statement to the source is the comparison of the subject with a second reading
 of the source by value, in the checks that run it, and the comparator's comparison of constants.
@@ -171,8 +172,8 @@ its fields and a decision:
 * the subject is its constructor; its table of decisions and its table of rows are each a
   declaration of the module or a table in place;
 * a table is its constructor at a numeral, and its selector has the issuer's shape: one
-  element, or conditionals on the index's value against numerals over elements, each element
-  given at one index;
+  element, or conditionals on the index's value against numerals over elements; run at each
+  index, it gives the elements in their order, each at one index;
 * a row is its constructor: its path, its property and its clause's place are terms of
   constructors, literals and numerals (a declaration of the module that stands at such a place
   is itself such a term), and its fields are a declaration of the module;
@@ -212,6 +213,16 @@ def subjectAsItStands (inModule : Name → Bool) (subject : Name) : MetaM Unit :
       | throwError "data control: the selector of {what} is not one element or conditionals on the index's value against numerals:{indentExpr (table.getArg! 2)}"
     unless leaves.length == size && leaves.eraseDups.length == size do
       throwError "data control: the selector of {what} does not give {size} elements, each at one index: {leaves}"
+    -- and what it gives at each index is the element that stands there: the selector is run at
+    -- every index, so a threshold or a comparison that sends two indexes to one element is seen
+    let sizeTerm := table.getArg! 1
+    for (leaf, at_) in leaves.zipIdx do
+      let position := mkNatLit at_
+      let below ← Meta.mkDecideProof (← Meta.mkAppM ``LT.lt #[position, sizeTerm])
+      let index ← Meta.mkAppM ``Fin.mk #[position, below]
+      let given ← Meta.whnfUntil (mkApp (table.getArg! 2) index) leaf
+      unless given.any (·.isConstOf leaf) do
+        throwError "data control: the selector of {what} does not give {leaf} at the index {at_}"
     return read
   let value ← valueOf subject
   unless value.isAppOfArity ``Zkc.Subject.WrittenSubject.mk 6 do
@@ -295,9 +306,11 @@ elab "#data_module " m:ident " of " s:ident : command => do
   -- subject reaches (a lookup of the root or of a relation) or one of the package's.
   let fromSubject := reached env index [subject] {}
   for name in env.header.moduleData[index.toNat]!.constNames do
-    -- an auxiliary declaration of Lean's (a nested proof, a matcher) is not looked at; a private
-    -- declaration is the module's own and is held to the rules
-    if name.isInternalDetail && (privateToUserName? name).isNone then continue
+    -- an auxiliary declaration that Lean makes for a declaration of the module (a nested proof, a
+    -- matcher: its name is under that declaration's) is not looked at; a private declaration,
+    -- and one whose name only looks auxiliary, is the module's own and is held to the rules
+    if name.isInternalDetail && (privateToUserName? name).isNone &&
+        (env.find? name.getPrefix).isSome && inModule name.getPrefix then continue
     let some info := env.find? name | continue
     match info with
     | .thmInfo _ =>
