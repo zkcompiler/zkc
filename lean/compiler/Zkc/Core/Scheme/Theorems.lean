@@ -11,7 +11,7 @@ public import Zkc.Core.Statements
 
 /-!
 Top-level `Statements` proofs for canonical wire formats, deployed-scheme identity,
-and non-interactive / ideal-RO deployment.
+and non-interactive / ideal random-oracle deployment.
 
 The underlying proofs are split across focused modules:
 - `Zkc.Core.Scheme.DeployElim`: elimination witnesses and structural theorems
@@ -96,12 +96,19 @@ theorem statements_deployCoverage (enc : VocabEncoder V) (c : Functions V)
   rw [hdep] at hD
   exact deploy_coverage enc hD hni
 
-/-- `deploy` satisfies `Statements.complete`. -/
-theorem statements_complete (enc : VocabEncoder V) (c : Functions V)
-    (hadm : c.admit = admit) (hdep : c.deploy = deploy enc) : Statements.complete c := by
+/-- `deploy` satisfies `Statements.completeStreaming`. -/
+theorem statements_completeStreaming (enc : VocabEncoder V) (c : Functions V)
+    (hadm : c.admit = admit) (hdep : c.deploy = deploy enc) : Statements.completeStreaming c := by
   intro named assoc a hA decl d hD hNI hNR hNS hRec p v hR first matched M ins hIns hSL hLL hNH src hLP hFed
   rw [hadm] at hA; rw [hdep] at hD
   exact deploy_complete M enc hA hD hNI hNR hNS hRec p v hR first matched ins hIns hSL hLL hNH src hLP hFed
+
+/-- `deployIdeal` satisfies `Statements.idealLink`. -/
+theorem statements_idealLink (enc : VocabEncoder V) : Statements.idealLink enc := by
+  intro M serviceKey a decl suite sessionTag layout dIdeal hDep hCon hLay hNoRetry hNoCarry hNoRec
+    prover verifier hRoles ins hIns
+  exact deployIdeal_link M enc serviceKey hDep hCon hLay hNoRetry hNoCarry hNoRec
+    prover verifier hRoles ins hIns
 
 end StatementTheorems
 

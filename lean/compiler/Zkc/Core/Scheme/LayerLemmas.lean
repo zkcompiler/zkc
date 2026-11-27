@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Core.Scheme.Deploy
+public import Zkc.Core.Admission.Theorems
 public import Zkc.Core.Meaning.Validity
 public import Zkc.Core.Meaning.Stops
 
@@ -707,21 +708,15 @@ theorem ownedOp_seqConcat (item : V.Ty) (s₁ s₂ : Option Nat) (xs ys : List (
       .done (.cons (xs ++ ys) .nil) :=
   rfl
 
+theorem ownedOp_natAdd (a b : Nat) :
+    ownedOp M .natAdd (.cons a (.cons b .nil)) = .done (.cons (a + b) .nil) :=
+  rfl
+
 theorem ownedOp_takeTuple (items : Tys V.TypeKey) (v : items.Val M.toCarriers) :
     ownedOp M (.takeTuple items) (.cons v .nil) = .done (Tys.toHList M items v) :=
   rfl
 
 /-! ## `TypedFnRef` and `SafeFnRef` evaluation and safety -/
-
-/-- Evaluate a `TypedFnRef` directly in a function table. -/
-def TypedFnRef.eval {fns : List (FnHeader V)} (fnTable : FnTable M fns) {ins outs : List V.Ty}
-    (ref : TypedFnRef V fns ins outs) (args : HList M.Val ins) : Local (HList M.Val outs) :=
-  localOp M fnTable (callLocal ref) args
-
-/-- Evaluate a `SafeFnRef` directly in a function table. -/
-def SafeFnRef.eval {fns : List (FnHeader V)} (fnTable : FnTable M fns) {ins outs : List V.Ty}
-    (ref : SafeFnRef V fns ins outs) (args : HList M.Val ins) : Local (HList M.Val outs) :=
-  localOp M fnTable (callLocalSafe ref) args
 
 theorem TypedFnRef.eval_eq_fnTable {fns : List (FnHeader V)} (fnTable : FnTable M fns)
     {ins outs : List V.Ty} (ref : TypedFnRef V fns ins outs) (args : HList M.Val ins) :
@@ -800,14 +795,126 @@ theorem restoreAgain_denote {fns : List (FnHeader V)} (fnTable : FnTable M fns) 
   show Process.done (HList.cons ((Env.positional _).get (posVar _ 1 rfl)) .nil) = _
   rw [env_get_positional_1]
 
-theorem attemptNumAgain_denote {fns : List (FnHeader V)} (fnTable : FnTable M fns)
-    (i entry stop : Nat) :
-    (attemptNumAgain (V := V) (fns := fns)).denote (localSem M fns fnTable) []
-      (Env.positional (.cons i (.cons entry (.cons stop .nil)))) = .done (.cons i .nil) := by
-  unfold attemptNumAgain
-  rw [Term.denote_ret]
-  show Process.done (HList.cons ((Env.positional _).get (posVar _ 0 rfl)) .nil) = _
-  rw [env_get_positional_0]
+theorem env_all_positionalVars {T : Type} {F : T → Type} (start : Nat) {Γ : Ctx T}
+    (env : Env F Γ) :
+    ∀ (types : List T) (vals : HList F types)
+      (hΓ : ∀ k a, types[k]? = some a → Γ.find? (start + k) = some a)
+      (_hEnv : ∀ k a (ha : types[k]? = some a), env.get ⟨start + k, hΓ k a ha⟩ = HList.getAt vals k ha),
+      env.all (positionalVars types start hΓ) = vals
+  | [], .nil, _, _ => rfl
+  | a :: as, .cons v vs, hΓ, hEnv => by
+      show HList.cons (env.get ⟨start, hΓ 0 a rfl⟩)
+          (env.all (positionalVars as (start + 1) _)) = HList.cons v vs
+      congr 1
+      · exact hEnv 0 a rfl
+      · exact env_all_positionalVars (start + 1) env as vs _ fun k b hb => by
+          have hk := hEnv (k + 1) b hb
+          simpa [HList.getAt, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hk
+
+private theorem env_all_cast {T : Type} {F : T → Type} {Γ : Ctx T} {as bs : List T} (h : as = bs)
+    (env : Env F Γ) (xs : HList (Var Γ) as) :
+    env.all (cast (congrArg (HList (Var Γ)) h) xs) =
+      cast (congrArg (HList F) h) (env.all xs) := by
+  subst h; rfl
+
+private theorem env_all_append {T : Type} {F : T → Type} {Γ : Ctx T} (env : Env F Γ) :
+    ∀ {as bs : List T} (xs : HList (Var Γ) as) (ys : HList (Var Γ) bs),
+      env.all (HList.append xs ys) = HList.append (env.all xs) (env.all ys)
+  | [], _, .nil, _ => rfl
+  | _ :: _, _, .cons _ xs, ys => congrArg (HList.cons _) (env_all_append env xs ys)
+
+private theorem aloneIn_append (r : Role) :
+    ∀ {as bs : List V.Ty} (xs : HList M.Val as) (ys : HList M.Val bs),
+      aloneIn M r (HList.append xs ys) =
+        cast (congrArg (HList (RV M r)) (by simp [alone, List.map_append]))
+          (HList.append (aloneIn M r xs) (aloneIn M r ys))
+  | [], _, .nil, _ => rfl
+  | a :: as, bs, .cons x xs, ys => by
+      have ih := aloneIn_append r xs ys
+      change HList.cons (hide M r ⟨a, [r]⟩ x) (aloneIn M r (HList.append xs ys)) = _
+      rw [ih]
+      have hApp : alone r (as ++ bs) = alone r as ++ alone r bs := by simp [alone, List.map_append]
+      exact (cast_hlist_cons hApp.symm (hide M r ⟨a, [r]⟩ x) (HList.append (aloneIn M r xs) (aloneIn M r ys))).symm
+
+private theorem aloneIn_cast (r : Role) {as bs : List V.Ty} (h : as = bs) (xs : HList M.Val as) :
+    aloneIn M r (cast (congrArg (HList M.Val) h) xs) =
+      cast (congrArg (fun ts => HList (RV M r) (alone r ts)) h) (aloneIn M r xs) := by
+  subst h; rfl
+
+private theorem tysOfList_ofHList_valid :
+    ∀ (ts : List V.Ty) (vals : HList M.Val ts),
+      vals.All M.Valid →
+      Tys.Valid M.toCarriers (tysOfList ts)
+        (Tys.ofHList M (tysOfList ts) (cast (congrArg (HList M.Val) (tysOfList_toList ts).symm) vals))
+  | [], .nil, _ => trivial
+  | t :: ts, .cons v vs, ⟨hv, hvs⟩ => by
+      have hcast :
+          cast (congrArg (HList M.Val) (tysOfList_toList (t :: ts)).symm) (HList.cons v vs) =
+            HList.cons v (cast (congrArg (HList M.Val) (tysOfList_toList ts).symm) vs) :=
+        cast_hlist_cons (tysOfList_toList ts).symm v vs
+      rw [hcast]
+      exact ⟨hv, tysOfList_ofHList_valid ts vs hvs⟩
+
+theorem samplesAgain_denote {fns : List (FnHeader V)} (fnTable : FnTable M fns)
+    (heldP : List V.Ty) (htfree : Tys.anyLinear V (samplesStateTys heldP) = false)
+    (i : Nat) (entry stop : M.Val (samplesStateTy heldP)) :
+    (samplesAgain (V := V) (fns := fns) heldP htfree).denote (localSem M fns fnTable) []
+      (Env.positional (.cons i (.cons entry (.cons stop .nil)))) =
+      .done (.cons (a := samplesStateTy heldP) (i, (stop.2.1, (stop.2.2.1, ()))) .nil) := by
+  rcases stop with ⟨sAtt, sSeq, sHeld, ⟨⟩⟩
+  let env0 := Env.positional (V := M.Val)
+    (.cons (a := Ty.nat) i (.cons (a := samplesStateTy heldP) entry
+      (.cons (a := samplesStateTy heldP) (sAtt, (sSeq, (sHeld, ()))) .nil)))
+  unfold samplesAgain
+  erw [letOp1_denote, localSem_op_owned]
+  simp only [Env.all]
+  change (ownedOp M (.getTuple (samplesStateTys heldP) (.tail .head) htfree)
+    (.cons (env0.get (posVar [.nat, samplesStateTy heldP, samplesStateTy heldP] 2 rfl)) .nil)).bind _ = _
+  rw [env_get_positional_2]
+  refine (congrFun (congrArg Process.bind
+    (ownedOp_getTuple M (samplesStateTys heldP) (.tail .head) htfree (sAtt, (sSeq, (sHeld, ()))))) _).trans ?_
+  dsimp only [Tys.getAt, Process.bind, HList.single]
+  erw [letOp1_denote, localSem_op_owned]
+  simp only [Env.all]
+  change (ownedOp M (.getTuple (samplesStateTys heldP) (.tail (.tail .head)) htfree)
+    (.cons ((env0.insert 3 sSeq).get
+      ((posVar [.nat, samplesStateTy heldP, samplesStateTy heldP] 2 rfl).reindex _)) .nil)).bind _ = _
+  have hGet2 : ∀ (w), (env0.insert 3 sSeq).get
+      ((posVar [.nat, samplesStateTy heldP, samplesStateTy heldP] 2 rfl).reindex w) =
+      (sAtt, (sSeq, (sHeld, ()))) := fun w => by
+    rw [env_get_insert_ne _ _ _ (by simp [Var.reindex, posVar])]
+    exact env_get_positional_2 (τ₀ := Ty.nat) (τ₁ := samplesStateTy heldP) (τ₂ := samplesStateTy heldP)
+      i entry (sAtt, (sSeq, (sHeld, ()))) .nil
+  rw [hGet2]
+  refine (congrFun (congrArg Process.bind
+    (ownedOp_getTuple M (samplesStateTys heldP) (.tail (.tail .head)) htfree (sAtt, (sSeq, (sHeld, ()))))) _).trans ?_
+  dsimp only [Tys.getAt, Process.bind, HList.single]
+  erw [letOp1_denote, localSem_op_owned]
+  let Γ0 : Ctx V.Ty := Ctx.positional [Ty.nat, samplesStateTy heldP, samplesStateTy heldP]
+  have hAll : ∀ (w0 : Γ0.Within ((Γ0.insert 3 Ty.nat).insert 4 (Ty.tuple (tysOfList heldP))))
+      (w1 : (Γ0.insert 3 Ty.nat).Within ((Γ0.insert 3 Ty.nat).insert 4 (Ty.tuple (tysOfList heldP)))),
+      ((env0.insert 3 sSeq).insert 4 sHeld).all
+        (.cons ((posVar [Ty.nat, samplesStateTy heldP, samplesStateTy heldP] 0 rfl).reindex w0)
+          (.cons ((freshVar Γ0 3 Ty.nat).reindex w1)
+            (.cons (freshVar (Γ0.insert 3 Ty.nat) 4 (Ty.tuple (tysOfList heldP))) .nil))) =
+      HList.cons (V := M.Val) (a := Ty.nat) i
+        (.cons (a := Ty.nat) sSeq (.cons (a := Ty.tuple (tysOfList heldP)) sHeld .nil)) := fun w0 w1 => by
+    show HList.cons _ (.cons _ (.cons _ .nil)) = _
+    have h0 : ((env0.insert 3 sSeq).insert 4 sHeld).get
+        ((posVar [Ty.nat, samplesStateTy heldP, samplesStateTy heldP] 0 rfl).reindex w0) = i := by
+      rw [env_get_insert_ne _ _ _ (by simp [Var.reindex, posVar]),
+          env_get_insert_ne _ _ _ (by simp [Var.reindex, posVar])]
+      exact env_get_positional_0 (τ := Ty.nat) i
+        (.cons entry (.cons (a := samplesStateTy heldP) (sAtt, (sSeq, (sHeld, ()))) .nil))
+    have h1 : ((env0.insert 3 sSeq).insert 4 sHeld).get ((freshVar Γ0 3 Ty.nat).reindex w1) = sSeq := by
+      rw [env_get_insert_ne _ _ _ (by simp [Var.reindex, freshVar]), env_get_insert_eq _ _ _ rfl]
+    rw [h0, h1, env_get_insert_self]
+  erw [hAll]
+  refine (congrFun (congrArg Process.bind
+    (ownedOp_makeTuple M (samplesStateTys heldP)
+      (.cons (a := Ty.nat) i (.cons (a := Ty.nat) sSeq (.cons (a := Ty.tuple (tysOfList heldP)) sHeld .nil))))) _).trans ?_
+  simp only [Process.bind, HList.single, Term.denote_ret, Env.all, env_get_insert_self]
+  rfl
 
 theorem emptyFinish_denote {fns : List (FnHeader V)} (fnTable : FnTable M fns) (state : V.Ty)
     (s : M.Val state) :
@@ -827,11 +934,94 @@ theorem identityFinish_denote {fns : List (FnHeader V)} (fnTable : FnTable M fns
 theorem samplesStart_denote {fns : List (FnHeader V)} (fnTable : FnTable M fns)
     {r : Role} {ins : List (LTy V)} (vals : HList M.Val (held r ins)) :
     (samplesStart (V := V) (fns := fns) (r := r) (ins := ins)).denote (localSem M fns fnTable) []
-      (Env.positional vals) = .done (.cons (0 : Nat) .nil) := by
+      (Env.positional vals) =
+      .done (.cons (a := samplesStateTy (held r ins))
+        ((0 : Nat), ((0 : Nat),
+          (Tys.ofHList M (tysOfList (held r ins))
+            (cast (congrArg (HList M.Val) (tysOfList_toList (held r ins)).symm) vals), ()))) .nil) := by
   unfold samplesStart
-  erw [letOp1_denote, localSem_op_literal]
+  erw [letOp1_denote, localSem_op_natLiteral]
+  simp only [Process.bind, HList.single]
+  erw [letOp1_denote, localSem_op_natLiteral]
+  simp only [Process.bind, HList.single]
+  erw [letOp1_denote, localSem_op_owned]
+  have hInVars :
+      (((Env.positional vals).insert (held r ins).length (0 : Nat)).insert
+        ((held r ins).length + 1) (0 : Nat)).all
+        (cast (congrArg (HList (Var _)) (tysOfList_toList (held r ins)).symm)
+          ((positionalVars (held r ins) 0 fun k a ha => by
+              rw [Ctx.find?_positional]; simpa using ha).reindex
+            (((positional_freshFrom (held r ins)).within .nat).trans
+              (((positional_freshFrom (held r ins)).insert .nat).within .nat)))) =
+      cast (congrArg (HList M.Val) (tysOfList_toList (held r ins)).symm) vals := by
+    rw [env_all_cast (tysOfList_toList (held r ins)).symm]
+    congr 1
+    have hRe : ∀ {ts : List V.Ty} (xs : HList (Var (Ctx.positional (held r ins))) ts),
+        (((Env.positional vals).insert (held r ins).length (0 : Nat)).insert
+          ((held r ins).length + 1) (0 : Nat)).all
+          (xs.reindex (((positional_freshFrom (held r ins)).within .nat).trans
+            (((positional_freshFrom (held r ins)).insert .nat).within .nat))) =
+        (Env.positional vals).all xs := by
+      intro ts xs
+      induction xs with
+      | nil => rfl
+      | cons x rest ih =>
+          show HList.cons _ _ = HList.cons _ _
+          rw [env_get_insert2_reindex _ (positional_freshFrom (held r ins)), ih]
+    rw [hRe]
+    exact env_all_positionalVars 0 (Env.positional vals) (held r ins) vals _ fun k a ha => by
+      simpa [posVar, Nat.zero_add] using env_get_positional vals k ha
+  erw [hInVars, ownedOp_makeTuple]
+  simp only [Process.bind, HList.single]
+  erw [letOp1_denote, localSem_op_owned]
+  let Γ0 : Ctx V.Ty := Ctx.positional (held r ins)
+  let Γ1 : Ctx V.Ty := Γ0.insert (held r ins).length Ty.nat
+  let Γ2 : Ctx V.Ty := Γ1.insert ((held r ins).length + 1) Ty.nat
+  let Γ3 : Ctx V.Ty := Γ2.insert ((held r ins).length + 2) (Ty.tuple (tysOfList (held r ins)))
+  have hFinal : ∀ (w0 : Γ1.Within Γ3) (w1 : Γ2.Within Γ3),
+      ((((Env.positional vals).insert (held r ins).length (τ := Ty.nat) (0 : Nat)).insert
+        ((held r ins).length + 1) (τ := Ty.nat) (0 : Nat)).insert ((held r ins).length + 2)
+        (τ := Ty.tuple (tysOfList (held r ins)))
+        (Tys.ofHList M (tysOfList (held r ins))
+          (cast (congrArg (HList M.Val) (tysOfList_toList (held r ins)).symm) vals))).all
+        (.cons ((freshVar Γ0 (held r ins).length Ty.nat).reindex w0)
+          (.cons ((freshVar Γ1 ((held r ins).length + 1) Ty.nat).reindex w1)
+            (.cons (freshVar Γ2 ((held r ins).length + 2) (Ty.tuple (tysOfList (held r ins)))) .nil))) =
+      HList.cons (V := M.Val) (a := Ty.nat) (0 : Nat)
+        (.cons (a := Ty.nat) (0 : Nat)
+          (.cons (a := Ty.tuple (tysOfList (held r ins)))
+            (Tys.ofHList M (tysOfList (held r ins))
+              (cast (congrArg (HList M.Val) (tysOfList_toList (held r ins)).symm) vals)) .nil)) := fun w0 w1 => by
+    show HList.cons _ (.cons _ (.cons _ .nil)) = _
+    have h0 : ((((Env.positional vals).insert (held r ins).length (τ := Ty.nat) (0 : Nat)).insert
+        ((held r ins).length + 1) (τ := Ty.nat) (0 : Nat)).insert ((held r ins).length + 2)
+        (τ := Ty.tuple (tysOfList (held r ins)))
+        (Tys.ofHList M (tysOfList (held r ins))
+          (cast (congrArg (HList M.Val) (tysOfList_toList (held r ins)).symm) vals))).get
+        ((freshVar Γ0 (held r ins).length Ty.nat).reindex w0) = (0 : Nat) := by
+      rw [env_get_insert_ne _ _ _
+            (Nat.ne_of_lt (Nat.lt_trans (Nat.lt_succ_self _) (Nat.lt_succ_self _))),
+          env_get_insert_ne _ _ _ (Nat.ne_of_lt (Nat.lt_succ_self _)),
+          env_get_insert_eq _ _ _ rfl]
+    have h1 : ((((Env.positional vals).insert (held r ins).length (τ := Ty.nat) (0 : Nat)).insert
+        ((held r ins).length + 1) (τ := Ty.nat) (0 : Nat)).insert ((held r ins).length + 2)
+        (τ := Ty.tuple (tysOfList (held r ins)))
+        (Tys.ofHList M (tysOfList (held r ins))
+          (cast (congrArg (HList M.Val) (tysOfList_toList (held r ins)).symm) vals))).get
+        ((freshVar Γ1 ((held r ins).length + 1) Ty.nat).reindex w1) = (0 : Nat) := by
+      rw [env_get_insert_ne _ _ _ (Nat.ne_of_lt (Nat.lt_succ_self _)),
+          env_get_insert_eq _ _ _ rfl]
+    rw [h0, h1, env_get_insert_self]
+  erw [hFinal, ownedOp_makeTuple]
   simp only [Process.bind, HList.single, Term.denote_ret, Env.all, env_get_insert_self]
   rfl
+
+theorem samplesStart_valid {fns : List (FnHeader V)} (fnTable : FnTable M fns)
+    {r : Role} {ins : List (LTy V)} (vals : HList M.Val (held r ins)) (hvals : vals.All M.Valid) :
+    ((samplesStart (V := V) (fns := fns) (r := r) (ins := ins)).denote (localSem M fns fnTable) []
+      (Env.positional vals)).Every (fun _ _ => True) (fun outs => outs.All M.Valid) (· ≠ .undefined) := by
+  rw [samplesStart_denote]
+  exact ⟨⟨trivial, trivial, tysOfList_ofHList_valid M (held r ins) vals hvals, trivial⟩, trivial⟩
 
 theorem layoutPStart_denote {fns : List (FnHeader V)} (fnTable : FnTable M fns)
     {r : Role} {ins : List (LTy V)} (unitTy : V.Ty) (vals : HList M.Val (held r ins)) :
@@ -1281,15 +1471,6 @@ theorem constructionStart_agree (a : Admitted V) (suite : ModuleRef) {stateTy un
 
 /-! ## Pure collision-free ideal transcript path lemmas (`idealStart`, `idealAbsorbClause`, `idealDeriveClause`) -/
 
-/-- Initial pure ideal transcript path `([0 :: sessionBytes], [])`. -/
-def idealPathInit (unitTy : V.Ty) (sessionBytes : List Nat) : M.Val (idealPathTy unitTy) :=
-  ([0 :: sessionBytes], ([], ()))
-
-/-- Pure ideal transcript path extension appending `(tagLbl, encVal)` to `(metaLog, dataLog)`. -/
-def idealPathPush {unitTy : V.Ty} (st : M.Val (idealPathTy unitTy))
-    (tagLbl : List Nat) (encVal : List (M.Val unitTy)) : M.Val (idealPathTy unitTy) :=
-  (st.1 ++ [tagLbl], (st.2.1 ++ [encVal], ()))
-
 private theorem append_singleton_inj {α : Type} :
     ∀ {xs ys : List α} {a b : α}, xs ++ [a] = ys ++ [b] → xs = ys ∧ a = b
   | [], [], _, _, h => ⟨rfl, (List.cons.inj h).1⟩
@@ -1627,6 +1808,81 @@ theorem idealStart_done (a : Admitted V) {unitTy : V.Ty}
   rw [idealStart_denote, hend]
   rfl
 
+/-- `idealInitialPath` agrees identically with `idealStart` on any valid verifier input. -/
+theorem idealInitialPath_eq_idealStart (a : Admitted V) (suite : ModuleRef) {unitTy : V.Ty}
+    (hfree : Ty.isLinear V unitTy = false)
+    (prover verifier : Role) {ins : List (LTy V)} (declKey : Key)
+    (sessionBytes : List Nat) (hsess : ∀ b, b ∈ sessionBytes → b < 256)
+    (stmtV : List (StmtAbsorbItem V a.program.headers.fns unitTy (Ctx.positional (held verifier ins))))
+    (hSV : buildStmtAbsorbItems a suite unitTy verifier prover verifier (.inr rfl) ins declKey = .ok stmtV)
+    (vals : HList (RV M verifier) ins) (hvals : vals.All (RV.Valid M verifier)) :
+    ∃ st0,
+      (idealStart hfree sessionBytes hsess stmtV).denote
+        (localSem M a.program.headers.fns (Defs.fnTable M a.program.defs)) []
+        (Env.positional (heldValues M verifier vals)) = .done (.cons st0 .nil) ∧
+      idealInitialPath M a suite unitTy prover verifier sessionBytes vals = some st0 ∧
+      M.Valid (idealPathTy unitTy) st0 := by
+  have hHeldV := heldValues_valid M verifier vals hvals
+  have hGo : ∀ (sps : List (StmtPos V verifier ins))
+      (items : List (StmtAbsorbItem V a.program.headers.fns unitTy (Ctx.positional (held verifier ins))))
+      (st : M.Val (idealPathTy unitTy)),
+      M.Valid (idealPathTy unitTy) st →
+      sps.mapM (fun sp => match findSuiteEncode a suite unitTy sp.ty with
+        | some encRef => Except.ok ⟨sp.ty, posVar (held verifier ins) sp.heldIndex sp.atHeld,
+            stmtLabel sp.stmtIndex, stmtLabel_bytes sp.stmtIndex, encRef⟩
+        | none => Except.error (deployErr (V := V) declKey .callee)) = Except.ok items →
+      ∃ stEnd,
+        idealPathChainFold M (Defs.fnTable M a.program.defs) st
+          (Env.positional (heldValues M verifier vals)) items = .done stEnd ∧
+        idealInitialPath.go M a suite unitTy verifier vals st sps = some stEnd ∧
+        M.Valid (idealPathTy unitTy) stEnd := by
+    intro sps
+    induction sps with
+    | nil =>
+        intro items st hst hm
+        simp only [List.mapM_nil, pure, Except.pure, Except.ok.injEq] at hm
+        subst hm
+        exact ⟨st, rfl, rfl, hst⟩
+    | cons sp rest ih =>
+        intro items st hst hm
+        simp only [List.mapM_cons] at hm
+        cases hEnc : findSuiteEncode a suite unitTy sp.ty with
+        | none => simp [hEnc, bind, Except.bind] at hm
+        | some encRef =>
+            simp only [hEnc, bind, Except.bind] at hm
+            split at hm
+            · cases hm
+            · rename_i restItems hRestM
+              simp only [pure, Except.pure, Except.ok.injEq] at hm
+              subst hm
+              have hv : M.Valid sp.ty
+                  ((Env.positional (heldValues M verifier vals)).get
+                    (posVar (held verifier ins) sp.heldIndex sp.atHeld)) := by
+                rw [env_get_positional]
+                exact HList.getAt_valid (heldValues M verifier vals) sp.heldIndex sp.atHeld hHeldV
+              obtain ⟨enc, henc, hencV⟩ := encRef.eval_done M a
+                (.cons ((Env.positional (heldValues M verifier vals)).get
+                  (posVar (held verifier ins) sp.heldIndex sp.atHeld)) .nil) ⟨hv, trivial⟩
+              cases enc with
+              | cons encV encNil =>
+                  cases encNil
+                  have hTagLbl : ∀ b, b ∈ (1 :: stmtLabel sp.stmtIndex) → b < 256 := fun b hb => by
+                    rcases List.mem_cons.mp hb with rfl | hm'
+                    · decide
+                    · exact stmtLabel_bytes sp.stmtIndex b hm'
+                  have hNextV := idealPathPush_valid M st (1 :: stmtLabel sp.stmtIndex) encV
+                    hst hTagLbl hencV.1
+                  obtain ⟨stEnd, hFold, hInit, hEndV⟩ := ih restItems _ hNextV hRestM
+                  refine ⟨stEnd, ?_, ?_, hEndV⟩
+                  · simp only [idealPathChainFold, henc, Process.bind, HList.single, hFold]
+                  · unfold idealInitialPath.go
+                    simp only [hEnc, henc, HList.single, hInit]
+  obtain ⟨st0, hFold, hInit, hStV⟩ := hGo _ stmtV (idealPathInit M unitTy sessionBytes)
+    (idealPathInit_valid M unitTy sessionBytes hsess) hSV
+  refine ⟨st0, ?_, hInit, hStV⟩
+  rw [idealStart_denote, hFold]
+  rfl
+
 theorem appendIdealPathRole_denote_eq {hs : Headers V} (r : Role) (fnTable : FnTable M hs.fns)
     (rTable : RTable M hs.protocols) {unitTy : V.Ty} (hfree : Ty.isLinear V unitTy = false)
     {Γ : Ctx (LTy V)} {outs : List (LTy V)} (fresh : Nat) (hfresh : FreshFrom Γ fresh)
@@ -1716,11 +1972,6 @@ theorem appendIdealPathRole_denote_eq {hs : Headers V} (r : Role) (fnTable : FnT
       first | rfl | exact Nat.ne_of_lt hxLt | exact name_ne_of_lt_add _ hxLt
 
 /-! ## Compact layout `start` safety -/
-
-private theorem env_all_cast {T : Type} {V : T → Type} {Γ : Ctx T} {as bs : List T} (h : as = bs)
-    (e : Env V Γ) (xs : HList (Var Γ) as) :
-    e.all (cast (congrArg (HList (Var Γ)) h) xs) = cast (congrArg (HList V) h) (e.all xs) := by
-  subst h; rfl
 
 private theorem hlist_all_cast {T : Type} {V : T → Type} {P : ∀ t, V t → Prop}
     {as bs : List T} (h : as = bs) (vs : HList V as) (hv : vs.All P) :
@@ -2372,30 +2623,223 @@ theorem idealDeriveClause_denote_nil {hs : Headers V} (fnTable : FnTable M hs.fn
         · dsimp only [Var.reindex, freshVar]; decide
 
 theorem proverSampleClause_denote {hs : Headers V} (fnTable : FnTable M hs.fns)
-    (rTable : RTable M hs.protocols) {τ : V.Ty}
+    (rTable : RTable M hs.protocols) {heldP : List V.Ty} {τ : V.Ty}
+    (htfree : Tys.anyLinear V (samplesStateTys heldP) = false)
     (prover : Role) (site : Site) (law : V.LawKey)
-    (sampleRef : TypedFnRef V hs.fns [.nat, .nat] [τ])
-    (path : List Frame) (att : Nat) :
-    (proverSampleClause prover site law sampleRef).code.denote
+    (sessionBytes : List Nat) (hsess : ∀ b, b ∈ sessionBytes → b < 256)
+    (siteBytes : List Nat) (hsite : ∀ b, b ∈ siteBytes → b < 256)
+    (sampleRef : TypedFnRef V hs.fns (heldP ++ [bytesTy, bytesTy, .nat, .nat]) [τ])
+    (path : List Frame) (att seq : Nat) (heldTuple : (tysOfList heldP).Val M.toCarriers) :
+    (proverSampleClause htfree prover site law sessionBytes hsess siteBytes hsite sampleRef).code.denote
       (roleSem M prover fnTable rTable) path
-      (Env.positional (aloneIn M prover (.cons att .nil))) =
-      (liftLocal id (sampleRef.eval M fnTable (.cons att (.cons site.key.number .nil)))).map
-        fun coin => aloneIn M prover (.cons coin.single (.cons att .nil)) := by
+      (Env.positional (aloneIn M prover
+        (.cons (a := samplesStateTy heldP) (att, (seq, (heldTuple, ()))) .nil))) =
+      (liftLocal id (sampleRef.eval M fnTable
+        (HList.append
+          (cast (congrArg (HList M.Val) (tysOfList_toList heldP))
+            (Tys.toHList M (tysOfList heldP) heldTuple))
+          (.cons sessionBytes (.cons siteBytes (.cons att (.cons seq .nil))))))).map
+        fun coin => aloneIn M prover
+          (.cons coin.single (.cons (a := samplesStateTy heldP) (att, (seq + 1, (heldTuple, ()))) .nil)) := by
+  let st : M.Val (samplesStateTy heldP) := (att, (seq, (heldTuple, ())))
   unfold proverSampleClause
   dsimp only
+  refine (letOp1_computeAlone1_eq M prover fnTable rTable _ _ _ st _ _ _ _ _
+    (env_get_positional_alone_0 M prover (τ := samplesStateTy heldP) st .nil _ rfl)).trans ?_
+  dsimp only [localOp]
+  have hGet0 : ownedOp M (.getTuple (samplesStateTys heldP) .head htfree) (.cons st .nil) =
+      .done (.cons (a := Ty.nat) att .nil) :=
+    ownedOp_getTuple M (samplesStateTys heldP) .head htfree st
+  refine (congrFun (congrArg Process.bind (congrArg (liftLocal id) hGet0)) _).trans ?_
+  simp only [liftLocal_done, Process.bind, HList.single]
+  refine (letOp1_computeAlone1_eq M prover fnTable rTable _ _ _ st _ _ _ _ _ ?_).trans ?_
+  · rw [env_get_insert_ne _ _ _ (by simp [Var.reindex, alonePosVar, posVar])]
+    exact env_get_positional_alone_0 M prover (τ := samplesStateTy heldP) st .nil _ rfl
+  dsimp only [localOp]
+  have hGet1 : ownedOp M (.getTuple (samplesStateTys heldP) (.tail .head) htfree) (.cons st .nil) =
+      .done (.cons (a := Ty.nat) seq .nil) :=
+    ownedOp_getTuple M (samplesStateTys heldP) (.tail .head) htfree st
+  refine (congrFun (congrArg Process.bind (congrArg (liftLocal id) hGet1)) _).trans ?_
+  simp only [liftLocal_done, Process.bind, HList.single]
+  refine (letOp1_computeAlone1_eq M prover fnTable rTable _ _ _ st _ _ _ _ _ ?_).trans ?_
+  · rw [env_get_insert_ne _ _ _ (by simp [Var.reindex, alonePosVar, posVar]),
+        env_get_insert_ne _ _ _ (by simp [Var.reindex, alonePosVar, posVar])]
+    exact env_get_positional_alone_0 M prover (τ := samplesStateTy heldP) st .nil _ rfl
+  dsimp only [localOp]
+  have hGet2 : ownedOp M (.getTuple (samplesStateTys heldP) (.tail (.tail .head)) htfree) (.cons st .nil) =
+      .done (.cons (a := Ty.tuple (tysOfList heldP)) heldTuple .nil) :=
+    ownedOp_getTuple M (samplesStateTys heldP) (.tail (.tail .head)) htfree st
+  refine (congrFun (congrArg Process.bind (congrArg (liftLocal id) hGet2)) _).trans ?_
+  simp only [liftLocal_done, Process.bind, HList.single]
+  let env3 := (((Env.positional (aloneIn M prover (.cons (a := samplesStateTy heldP) st .nil))).insert 1
+      (hide M prover ⟨.nat, [prover]⟩ att)).insert 2
+      (hide M prover ⟨.nat, [prover]⟩ seq)).insert 3
+      (hide M prover ⟨.tuple (tysOfList heldP), [prover]⟩ heldTuple)
+  refine (Term.denote_op (roleSem M prover fnTable rTable) _ _ _ _ _ _ _).trans ?_
+  have hOp3 :
+      (roleSem M prover fnTable rTable).op ⟨3⟩
+          (computeAlone prover (.owned (.takeTuple (tysOfList heldP)))) path
+          (env3.all (.cons (freshVar _ 3 (⟨.tuple (tysOfList heldP), [prover]⟩ : LTy V)) .nil)) =
+        .done (aloneIn M prover (Tys.toHList M (tysOfList heldP) heldTuple)) := by
+    have hAll :
+        env3.all (.cons (freshVar _ 3 (⟨.tuple (tysOfList heldP), [prover]⟩ : LTy V)) .nil) =
+        aloneIn M prover (.cons (a := .tuple (tysOfList heldP)) heldTuple .nil) := by
+      show HList.cons _ .nil = HList.cons _ .nil
+      exact congrArg (fun v => HList.cons v .nil) (env_get_insert_eq _ _ _ rfl)
+    erw [hAll, computeAlone_denote]
+    dsimp only [localOp]
+    rw [ownedOp_takeTuple]
+    rfl
+  refine (congrFun (congrArg Process.bind hOp3) _).trans ?_
+  simp only [Process.bind]
   refine (letOp1_computeAlone0_denote M prover fnTable rTable _ _ _ _ _ _ _).trans ?_
-  have hlit : localOp M fnTable (.literal .nat [site.key.number] rfl) .nil =
-      .done (.cons (a := Ty.nat) site.key.number .nil) := rfl
-  rw [hlit]
-  dsimp only [liftLocal_done, Process.bind, HList.single]
-  refine (letOp1_computeAlone2_eq M prover fnTable rTable _ _ _ _ att site.key.number _ _ _ _ _
-    (by
-      rw [env_get_insert_ne _ _ _ (by simp [Var.reindex, alonePosVar, posVar])]
-      exact env_get_positional_alone_0 M prover (τ := Ty.nat) att .nil _ (by rfl))
-    (by exact env_get_insert_eq _ _ _ rfl)).trans ?_
-  change (liftLocal id (sampleRef.eval M fnTable (.cons att (.cons site.key.number .nil)))).bind _ = _
+  dsimp only [localOp]
+  rw [bytesLiteral_val M sessionBytes hsess]
+  simp only [liftLocal_done, Process.bind, HList.single]
+  refine (letOp1_computeAlone0_denote M prover fnTable rTable _ _ _ _ _ _ _).trans ?_
+  dsimp only [localOp]
+  rw [bytesLiteral_val M siteBytes hsite]
+  simp only [liftLocal_done, Process.bind, HList.single]
+  let fields := alone prover (tysOfList heldP).toList
+  let fBase := 4 + fields.length
+  let env4 := env3.extend (Names.counting 4 fields)
+      (aloneIn M prover (Tys.toHList M (tysOfList heldP) heldTuple))
+  let env5 := env4.insert fBase (hide M prover ⟨bytesTy, [prover]⟩ sessionBytes)
+  let env6 := env5.insert (fBase + 1) (hide M prover ⟨bytesTy, [prover]⟩ siteBytes)
+  have hEnv4Outside : ∀ (k : Nat) (hk : k < 4) {a : LTy V}
+      (hIn : (_ : Ctx (LTy V)).find? k = some a),
+      env4.get ⟨k, hIn⟩ = env3.get ⟨k, by
+        rw [Ctx.find?_extend_counting] at hIn
+        have hout : ¬ (4 ≤ k ∧ k < 4 + fields.length) := fun hm => Nat.not_le_of_lt hk hm.1
+        rwa [ite_eq_right hout] at hIn⟩ := fun k hk _ hIn =>
+    env_extend_counting_outside env3 4 _ k (.inl hk) hIn
+  have hNeBase : ∀ (k m : Nat), k < 4 → k ≠ fBase + m := fun k m hk => by
+    show k ≠ (4 + fields.length) + m; omega
+  have hNeBase0 : ∀ (k : Nat), k < 4 → k ≠ fBase := fun k hk => by
+    show k ≠ 4 + fields.length; omega
+  have hAtt6 : ∀ (hIn : _), env6.get ⟨1, hIn⟩ = hide M prover ⟨.nat, [prover]⟩ att := fun hIn => by
+    rw [env_get_insert_ne _ _ _ (hNeBase 1 1 (by omega)),
+        env_get_insert_ne _ _ _ (hNeBase0 1 (by omega)),
+        hEnv4Outside 1 (by omega),
+        env_get_insert_ne _ _ _ (by dsimp only; decide),
+        env_get_insert_ne _ _ _ (by dsimp only; decide),
+        env_get_insert_eq _ _ _ rfl]
+  have hSeq6 : ∀ (hIn : _), env6.get ⟨2, hIn⟩ = hide M prover ⟨.nat, [prover]⟩ seq := fun hIn => by
+    rw [env_get_insert_ne _ _ _ (hNeBase 2 1 (by omega)),
+        env_get_insert_ne _ _ _ (hNeBase0 2 (by omega)),
+        hEnv4Outside 2 (by omega),
+        env_get_insert_ne _ _ _ (by dsimp only; decide),
+        env_get_insert_eq _ _ _ rfl]
+  have hSess6 : ∀ (hIn : _), env6.get ⟨fBase, hIn⟩ = hide M prover ⟨bytesTy, [prover]⟩ sessionBytes := fun hIn => by
+    rw [env_get_insert_ne _ _ _ (by show fBase ≠ fBase + 1; omega),
+        env_get_insert_eq _ _ _ rfl]
+  have hSite6 : ∀ (hIn : _), env6.get ⟨fBase + 1, hIn⟩ = hide M prover ⟨bytesTy, [prover]⟩ siteBytes := fun hIn =>
+    env_get_insert_eq _ _ _ rfl
+  refine (letOp1_computeAlone_eq M prover fnTable rTable _ _ _
+    (HList.append
+      (cast (congrArg (HList M.Val) (tysOfList_toList heldP))
+        (Tys.toHList M (tysOfList heldP) heldTuple))
+      (.cons sessionBytes (.cons siteBytes (.cons att (.cons seq .nil)))))
+    _ _ _ _ _ ?_).trans ?_
+  · erw [env_all_cast (by simp [alone, List.map_append]) env6, env_all_append env6, aloneIn_append]
+    congr 1
+    have hReCast : ∀ {ts₁ ts₂ : List V.Ty} (heq : ts₁ = ts₂)
+        {Γ Δ : Ctx (LTy V)} (w : Γ.Within Δ)
+        (xs : HList (Var Γ) (alone prover ts₁)),
+        (cast (congrArg (fun ts => HList (Var Γ) (alone prover ts)) heq) xs).reindex w =
+          cast (congrArg (fun ts => HList (Var Δ) (alone prover ts)) heq) (xs.reindex w) := by
+      intro _ _ heq _ _ _ _; subst heq; rfl
+    have hAllCast : ∀ {ts₁ ts₂ : List V.Ty} (heq : ts₁ = ts₂)
+        (xs : HList (Var _) (alone prover ts₁)),
+        env6.all (cast (congrArg (fun ts => HList (Var _) (alone prover ts)) heq) xs) =
+          cast (congrArg (fun ts => HList (RV M prover) (alone prover ts)) heq) (env6.all xs) := by
+      intro _ _ heq _; subst heq; rfl
+    have hRePos : ∀ {Γ Δ : Ctx (LTy V)} (w : Γ.Within Δ) (start : Nat) (rem : List (LTy V)) (hIn),
+        (positionalVars rem start hIn).reindex w =
+          positionalVars rem start (fun k a ha => w _ _ (hIn k a ha)) := by
+      intro Γ Δ w start rem
+      induction rem generalizing start with
+      | nil => intro _; rfl
+      | cons _ _ ih => intro _; exact congrArg (HList.cons _) (ih _ _)
+    congr 1
+    · erw [hReCast (tysOfList_toList heldP), hAllCast (tysOfList_toList heldP),
+          aloneIn_cast M prover (tysOfList_toList heldP)]
+      congr 1
+      rw [hRePos]
+      exact env_all_positionalVars 4 env6 fields
+        (aloneIn M prover (Tys.toHList M (tysOfList heldP) heldTuple)) _
+        fun k a ha => by
+          have hk : k < fields.length := by
+            cases Nat.lt_or_ge k fields.length with
+            | inl h => exact h
+            | inr h => rw [List.getElem?_eq_none h] at ha; cases ha
+          have h4k : 4 + k < 4 + fields.length := Nat.add_lt_add_left hk 4
+          rw [env_get_insert_ne _ _ _ (Nat.ne_of_lt (Nat.lt_succ_of_lt h4k)),
+              env_get_insert_ne _ _ _ (Nat.ne_of_lt h4k)]
+          exact env_get_extend_counting_getAt env3 4 _ k ha _
+    · show HList.cons _ (.cons _ (.cons _ (.cons _ .nil))) =
+        HList.cons _ (.cons _ (.cons _ (.cons _ .nil)))
+      erw [hSess6, hSite6, hAtt6, hSeq6]
+  change (liftLocal id (sampleRef.eval M fnTable _)).bind _ = _
   rw [Process.map_eq_bind]
-  congr 1
+  congr 1; funext coin
+  cases coin with
+  | cons coinV coinNil =>
+      cases coinNil
+      refine (letOp1_computeAlone0_denote M prover fnTable rTable _ _ _ _ _ _ _).trans ?_
+      have hOne : localOp M fnTable (.literal .nat [1] rfl) .nil = .done (.cons (a := Ty.nat) 1 .nil) := rfl
+      rw [hOne]
+      simp only [liftLocal_done, Process.bind, HList.single]
+      refine (letOp1_computeAlone2_eq M prover fnTable rTable _ _ _ _ seq (1 : Nat) _ _ _ _ _ ?_ ?_).trans ?_
+      · rw [env_get_insert_ne _ _ _ (hNeBase 2 3 (by omega)),
+            env_get_insert_ne _ _ _ (hNeBase 2 2 (by omega)),
+            env_get_insert_ne _ _ _ (hNeBase 2 1 (by omega)),
+            env_get_insert_ne _ _ _ (hNeBase0 2 (by omega))]
+        dsimp only [Var.reindex, freshVar]
+        erw [hEnv4Outside 2 (by omega)]
+        dsimp only [env3]
+        rw [env_get_insert_ne _ _ _ (by dsimp only; decide),
+            env_get_insert_eq _ _ _ rfl]
+      · exact env_get_insert_eq _ _ _ rfl
+      dsimp only [localOp]
+      rw [ownedOp_natAdd]
+      simp only [liftLocal_done, Process.bind, HList.single]
+      refine (letOp1_computeAlone3_eq M prover fnTable rTable _ _ _ _ _ att (seq + 1) heldTuple _ _ _ _ _ ?_ ?_ ?_).trans ?_
+      · rw [env_get_insert_ne _ _ _ (hNeBase 1 4 (by omega)),
+            env_get_insert_ne _ _ _ (hNeBase 1 3 (by omega)),
+            env_get_insert_ne _ _ _ (hNeBase 1 2 (by omega)),
+            env_get_insert_ne _ _ _ (hNeBase 1 1 (by omega)),
+            env_get_insert_ne _ _ _ (hNeBase0 1 (by omega))]
+        dsimp only [Var.reindex, freshVar]
+        erw [hEnv4Outside 1 (by omega)]
+        dsimp only [env3]
+        rw [env_get_insert_ne _ _ _ (by dsimp only; decide),
+            env_get_insert_ne _ _ _ (by dsimp only; decide),
+            env_get_insert_eq _ _ _ rfl]
+      · exact env_get_insert_eq _ _ _ rfl
+      · rw [env_get_insert_ne _ _ _ (hNeBase 3 4 (by omega)),
+            env_get_insert_ne _ _ _ (hNeBase 3 3 (by omega)),
+            env_get_insert_ne _ _ _ (hNeBase 3 2 (by omega)),
+            env_get_insert_ne _ _ _ (hNeBase 3 1 (by omega)),
+            env_get_insert_ne _ _ _ (hNeBase0 3 (by omega))]
+        dsimp only [Var.reindex, freshVar]
+        erw [hEnv4Outside 3 (by omega)]
+        dsimp only [env3]
+        rw [env_get_insert_eq _ _ _ rfl]
+      dsimp only [localOp]
+      have hMake : ownedOp M (.makeTuple (samplesStateTys heldP))
+          (.cons (a := Ty.nat) att (.cons (a := Ty.nat) (seq + 1)
+            (.cons (a := Ty.tuple (tysOfList heldP)) heldTuple .nil))) =
+          .done (.cons (a := samplesStateTy heldP) (att, (seq + 1, (heldTuple, ()))) .nil) :=
+        ownedOp_makeTuple M (samplesStateTys heldP) _
+      refine (congrFun (congrArg Process.bind (congrArg (liftLocal id) hMake)) _).trans ?_
+      simp only [liftLocal_done, Process.bind, HList.single]
+      refine term_denote_ret2 M prover fnTable rTable _ _ _ _ _ _ ?_ ?_
+      · rw [env_get_insert_ne _ _ _ (by dsimp only [Var.reindex, freshVar]; show fBase + 2 ≠ fBase + 5; omega),
+            env_get_insert_ne _ _ _ (by dsimp only [Var.reindex, freshVar]; show fBase + 2 ≠ fBase + 4; omega),
+            env_get_insert_ne _ _ _ (by dsimp only [Var.reindex, freshVar]; show fBase + 2 ≠ fBase + 3; omega),
+            env_get_insert_eq _ _ _ rfl]
+      · exact env_get_insert_eq _ _ _ rfl
 
 theorem compactReadSlotClause_denote {hs : Headers V} (fnTable : FnTable M hs.fns)
     (rTable : RTable M hs.protocols) {stateTys : Tys V.TypeKey} {τ : V.Ty}
@@ -2632,11 +3076,16 @@ theorem layoutVCarryClause_eventKeys {V : Vocabulary} {hs : Headers V} {unitTy �
       (layoutVCarryClause hfree verifier prover toldSite guardKey readRef eqRef).code = [] :=
   rfl
 
-theorem proverSampleClause_eventKeys {V : Vocabulary} {hs : Headers V} {τ : V.Ty}
+theorem proverSampleClause_eventKeys {V : Vocabulary} {hs : Headers V}
+    {heldP : List V.Ty} {τ : V.Ty}
+    (htfree : Tys.anyLinear V (samplesStateTys heldP) = false)
     (prover : Role) (site : Site) (law : V.LawKey)
-    (sampleRef : TypedFnRef V hs.fns [.nat, .nat] [τ]) :
+    (sessionBytes : List Nat) (hsess : ∀ b, b ∈ sessionBytes → b < 256)
+    (siteBytes : List Nat) (hsite : ∀ b, b ∈ siteBytes → b < 256)
+    (sampleRef : TypedFnRef V hs.fns (heldP ++ [bytesTy, bytesTy, .nat, .nat]) [τ]) :
     Term.eventKeys (fun o => RoleOp.isEvent o)
-      (proverSampleClause prover site law sampleRef).code = [] :=
+      (proverSampleClause htfree prover site law sessionBytes hsess siteBytes hsite sampleRef).code =
+      [] :=
   rfl
 
 theorem compactReadSlotClause_eventKeys {V : Vocabulary} {hs : Headers V}

@@ -51,13 +51,26 @@ this stage.
 
 ### Transcript discipline
 
-- The suite's domain separator is absorbed first and names the proof: it includes
-  the [proof identity](package.md#identities), which is fixed before this stage
-  runs.
-- The statement is absorbed next, by an operation of the constructed program.
-- A label is the site: the definition and its local site number. The path of
-  applications and the iteration number are not absorbed. Two executions of one
-  site differ in the transcript absorbed before them.
+- The suite's domain separator is absorbed first and names the proof: it binds the
+  versioned canonical `zkc.core.proof/0` [proof identity](package.md#identities)
+  (fixing the declaration, including its `application` context, and the erased
+  reachability closure) together with any optional non-empty, byte-bounded
+  `sessionTag`. A `sessionTag` augments rather than overrides the proof identity.
+- The statement is absorbed next, by an operation of the constructed program,
+  each input prefixed with its versioned statement label (`zkc.core.stmt/0` and
+  input index) and canonical encoding.
+- Site labels encode the full canonical `Site` (its `through` application call
+  path and local site key), prefixed with versioned tags (`zkc.core.msg/0` for
+  exchanged messages and `zkc.core.draw/0` for verifier draws). Iteration numbers
+  are not absorbed directly because earlier messages and draws already separate
+  distinct iterations.
+- Trailing prover messages that precede no subsequent verifier draw are elided
+  from transcript absorption, with site-consistent closure across applications
+  (Chiesa and Orrù (2025), Construction 4.3).
+- When deterministic prover sampling (`samples`) is declared, each prover private
+  coin is derived from all prover-held inputs (witness and statement), the
+  resolved session bytes, the full canonical `Site`, the retry attempt counter,
+  and a monotonically increasing call sequence number preserved across retries.
 - Every value the suite absorbs is an explicit operation with an explicit
   encoding.
 - A decoder that rejects and retries is a sampling law with a stated factor; its

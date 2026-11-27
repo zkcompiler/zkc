@@ -29,7 +29,7 @@ structure ModuleRef where
   members : List (Key × Key)
 deriving DecidableEq, Repr
 
-/- Standard member slot keys for a Fiat-Shamir `Suite` module reference.
+/- Standard member slot keys for a Fiat–Shamir `Suite` module reference.
 Each slot identifies a role in the `Suite` interface; overloaded slots (`encode`, `derive`) are
 disambiguated by their admitted function header signatures. -/
 namespace SuiteSlot
@@ -55,7 +55,7 @@ namespace LayoutSlot
 end LayoutSlot
 
 /-- How a scheme is made from its protocol: run as it is between online roles, derived
-with a Fiat-Shamir suite module (and an optional published session tag), or authored in source. -/
+with a Fiat–Shamir suite module (and an optional published session tag), or authored in source. -/
 inductive Construction where
   | interactive
   | derived (suite : ModuleRef) (sessionTag : Option (List Nat) := none)

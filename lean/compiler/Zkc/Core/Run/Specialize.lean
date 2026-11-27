@@ -270,7 +270,7 @@ mutual
         ClosedArms V fns σ Γ mid (payload :: payloads)
 end
 
-/-- A specialized, handler-free role program ready for direct execution or Rust emission. -/
+/-- A specialized, handler-free role program ready for direct execution. -/
 structure ClosedRole (V : Vocabulary) (fns : List (FnHeader V)) (r : Role)
     (ins outs : List (LTy V)) (taken gives : List V.Ty) where
   states : List V.Ty
@@ -2426,7 +2426,953 @@ private theorem pickAt_eq_liftPick (r : Role) (ps : Holders) :
   | .cons _ _, .inr v => congrArg Pick.there (pickAt_eq_liftPick r ps _ v)
 
 /-! CPS soundness theorems for `specializeTerm` and `specializeArms`. -/
-set_option maxHeartbeats 1600000 in
+
+private def SpecTermHyp {fullFns : List (FnHeader V)} (fullTable : FnTable M fullFns)
+    {σ : List V.Ty} (h : Handler (RSig M) (RSig M) Stop (HList M.Val σ))
+    (specOp : EffectSpecializer V fullFns σ)
+    {hs : Headers V} (fnTable : FnTable M hs.fns) (rTable : RTable M hs.protocols)
+    (fnLift : ∀ {hdr}, Member hs.fns hdr → Member fullFns hdr)
+    (specApply : Option (Nat × Site × StackAgain V fullFns σ) →
+      {hdr : ProtocolHeader V} → Member hs.protocols hdr →
+      List Key → (Role → Role) → (r : Role) →
+      (inputs : Names (held r hdr.ins)) ×
+        ClosedTerm V fullFns σ (Ctx.empty.extend inputs) (held r hdr.outs))
+    (through : List Key) (ρ : Role → Role) (r : Role)
+    (retryCfg : Option (Nat × Site × StackAgain V fullFns σ))
+    {Γ : Ctx (LTy V)} {Δ : Ctx V.Ty} (hCtx : CtxRel r Γ Δ)
+    {outs : List (LTy V)} (t : Term (roleDialect V hs r) Γ outs) : Prop :=
+  ∀ (path : List Frame) (env : Env (RV M r) Γ) (cenv : Env M.Val Δ) (s : HList M.Val σ)
+    {B : Type} (cont : HList (RV M r) outs → Program M B),
+    EnvRel M r hCtx env cenv →
+    Frame.applications path = through →
+    (∀ b site ag, retryCfg = some (b, site, ag) →
+      RoleTermWellNested M fnTable rTable r site through t) →
+    h.run (retryOfCfg M retryCfg)
+      ((mapR M ρ (t.denote (roleSem M r fnTable rTable) path env)).bind cont) s =
+      ((specializeTerm specOp fnLift specApply retryCfg through ρ r hCtx t).denote
+        M fullTable path cenv s).bind
+        fun out => h.run (retryOfCfg M retryCfg) (cont (unheldValues M r out.1)) out.2
+
+private theorem specializeTerm_sound_compute {fullFns : List (FnHeader V)} (fullTable : FnTable M fullFns)
+    {σ : List V.Ty} (h : Handler (RSig M) (RSig M) Stop (HList M.Val σ))
+    (specOp : EffectSpecializer V fullFns σ)
+    {hs : Headers V} (fnTable : FnTable M hs.fns) (rTable : RTable M hs.protocols)
+    (fnLift : ∀ {hdr}, Member hs.fns hdr → Member fullFns hdr)
+    (hLift : ∀ hdr (f : Member hs.fns hdr), fullTable hdr (fnLift f) = fnTable hdr f)
+    (specApply : Option (Nat × Site × StackAgain V fullFns σ) →
+      {hdr : ProtocolHeader V} → Member hs.protocols hdr →
+      List Key → (Role → Role) → (r : Role) →
+      (inputs : Names (held r hdr.ins)) ×
+        ClosedTerm V fullFns σ (Ctx.empty.extend inputs) (held r hdr.outs))
+    (through : List Key) (ρ : Role → Role) (r : Role)
+    (retryCfg : Option (Nat × Site × StackAgain V fullFns σ))
+    {Γ : Ctx (LTy V)} {Δ : Ctx V.Ty} (hCtx : CtxRel r Γ Δ)
+    {insOp outsOp : List V.Ty} {outsTerm : List (LTy V)}
+    (key : Key) (R : Holders) (lo : LocalOp V hs.fns insOp outsOp)
+    (opTys : List (LTy V)) (types : opTys.map LTy.ty = insOp) (mine : r ∈ R)
+    (here : ∀ a ∈ opTys, r ∈ a.holders)
+    (operands : HList (Var Γ) opTys) (results : Names (outsOp.map fun τ => ⟨τ, R⟩))
+    (rest : Term (roleDialect V hs r) (Γ.extend results) outsTerm)
+    (hRest : SpecTermHyp M fullTable h specOp fnTable rTable fnLift specApply through ρ r retryCfg
+      (hCtx.extend results) rest) :
+    SpecTermHyp M fullTable h specOp fnTable rTable fnLift specApply through ρ r retryCfg hCtx
+      (.op key (.compute R lo opTys types mine here) operands results rest) := by
+  intro path env cenv s _ cont hEnv hPath hWN
+  have hWNRest : ∀ b site ag, retryCfg = some (b, site, ag) →
+      RoleTermWellNested M fnTable rTable r site through rest :=
+    fun b site ag hc => (hWN b site ag hc).2
+  rw [Term.denote_op]
+  conv => rhs; rw [specializeTerm]; dsimp only; rw [ClosedTerm.denote]
+  change h.run (retryOfCfg M retryCfg)
+    ((mapR M ρ (((liftLocal id (localOp M fnTable lo (computeArgs M types (revealAll M here (env.all operands))))).map
+      fun outs => hideAll M r (HList.located M R outs)).bind fun vs =>
+        rest.denote (roleSem M r fnTable rTable) path (env.extend results vs))).bind cont) s = _
+  rw [mapR_bind, mapR_map, mapR_liftLocal, Process.bind_assoc, Process.bind_map,
+    handler_run_liftLocal]
+  have hArgs : cenv.all (cast (congrArg (HList (Var Δ)) types) (varsAllHeld hCtx here operands)) =
+      computeArgs M types (revealAll M here (env.all operands)) := by
+    unfold computeArgs
+    rw [← env_all_varsAllHeld M hEnv here operands]
+    have hc : ∀ {ts₁ ts₂ : List V.Ty} (e : ts₁ = ts₂) (xs : HList (Var Δ) ts₁),
+        cenv.all (cast (congrArg (HList (Var Δ)) e) xs) =
+          cast (congrArg (HList M.Val) e) (cenv.all xs) := by
+      intro _ _ e _; subst e; rfl
+    exact hc types _
+  rw [hArgs, localOp_lift_eq M fnTable fullTable fnLift hLift, Process.bind_assoc]
+  congr 1; funext vs
+  have hRest' := hRest path
+    (env.extend results (hideAll M r (HList.located M R vs)))
+    (cenv.extend (heldNames r results) (heldValues M r (hideAll M r (HList.located M R vs))))
+    s cont (hEnv.extend M results _) hPath hWNRest
+  rw [hRest']
+  have hRes : held r (outsOp.map fun τ => ⟨τ, R⟩) = outsOp := held_map_holders r R mine outsOp
+  have hVs : cast (congrArg (HList M.Val) hRes) (heldValues M r (hideAll M r (HList.located M R vs))) = vs := by
+    rw [heldValues_hideAll_located M r R mine vs, cast_cast, cast_eq]
+  conv => rhs; rw [← hVs, closedTerm_denote_castExt M fullTable hRes (heldNames r results)]
+
+private theorem specializeTerm_sound_absent {fullFns : List (FnHeader V)} (fullTable : FnTable M fullFns)
+    {σ : List V.Ty} (h : Handler (RSig M) (RSig M) Stop (HList M.Val σ))
+    (specOp : EffectSpecializer V fullFns σ)
+    {hs : Headers V} (fnTable : FnTable M hs.fns) (rTable : RTable M hs.protocols)
+    (fnLift : ∀ {hdr}, Member hs.fns hdr → Member fullFns hdr)
+    (specApply : Option (Nat × Site × StackAgain V fullFns σ) →
+      {hdr : ProtocolHeader V} → Member hs.protocols hdr →
+      List Key → (Role → Role) → (r : Role) →
+      (inputs : Names (held r hdr.ins)) ×
+        ClosedTerm V fullFns σ (Ctx.empty.extend inputs) (held r hdr.outs))
+    (through : List Key) (ρ : Role → Role) (r : Role)
+    (retryCfg : Option (Nat × Site × StackAgain V fullFns σ))
+    {Γ : Ctx (LTy V)} {Δ : Ctx V.Ty} (hCtx : CtxRel r Γ Δ)
+    {outs : List (LTy V)} (key : Key) (items : List (LTy V)) (out : ∀ a ∈ items, r ∉ a.holders)
+    (results : Names items) (rest : Term (roleDialect V hs r) (Γ.extend results) outs)
+    (hRest : SpecTermHyp M fullTable h specOp fnTable rTable fnLift specApply through ρ r retryCfg
+      (hCtx.extend results) rest) :
+    SpecTermHyp M fullTable h specOp fnTable rTable fnLift specApply through ρ r retryCfg hCtx
+      (.op key (.absent items out) .nil results rest) := by
+  intro path env cenv s _ cont hEnv hPath hWN
+  have hWNRest : ∀ b site ag, retryCfg = some (b, site, ag) →
+      RoleTermWellNested M fnTable rTable r site through rest :=
+    fun b site ag hc => (hWN b site ag hc).2
+  rw [Term.denote_op]
+  conv => rhs; rw [specializeTerm]; dsimp only
+  change h.run (retryOfCfg M retryCfg)
+    ((mapR M ρ (rest.denote (roleSem M r fnTable rTable) path (env.extend results (nothings M out)))).bind cont) s = _
+  have hEmpty : held r items = [] := held_all_out r items out
+  have hExt : Δ.extend (heldNames r results) = Δ := by
+    have hNil : cast (congrArg Names hEmpty) (heldNames r results) = .nil := by
+      cases cast (congrArg Names hEmpty) (heldNames r results); rfl
+    rw [← ctx_extend_cast Δ hEmpty (heldNames r results), hNil]; rfl
+  have hCenv : cast (congrArg (Env M.Val) hExt.symm) cenv =
+      cenv.extend (heldNames r results) (heldValues M r (nothings M out)) := by
+    have hNilN : cast (congrArg Names hEmpty) (heldNames r results) = .nil := by
+      cases cast (congrArg Names hEmpty) (heldNames r results); rfl
+    have hHeq : HEq (cenv.extend (heldNames r results) (heldValues M r (nothings M out))) cenv := by
+      rw [heldValues_nothings M r out]
+      have h1 := env_extend_cast cenv hEmpty (heldNames r results)
+        (cast (congrArg (HList M.Val) hEmpty.symm) .nil)
+      rw [hNilN, cast_cast, cast_eq] at h1
+      exact h1.symm
+    exact eq_of_heq ((cast_heq _ _).trans hHeq.symm)
+  rw [closedTerm_denote_castCT, Process.bind_map, hCenv]
+  exact hRest path (env.extend results (nothings M out)) _ s cont (hEnv.extend M results _) hPath hWNRest
+
+private theorem specializeTerm_sound_give {fullFns : List (FnHeader V)} (fullTable : FnTable M fullFns)
+    {σ : List V.Ty} (h : Handler (RSig M) (RSig M) Stop (HList M.Val σ))
+    (specOp : EffectSpecializer V fullFns σ) (hSpec : SpecOpSound M fullTable h specOp)
+    {hs : Headers V} (fnTable : FnTable M hs.fns) (rTable : RTable M hs.protocols)
+    (fnLift : ∀ {hdr}, Member hs.fns hdr → Member fullFns hdr)
+    (specApply : Option (Nat × Site × StackAgain V fullFns σ) →
+      {hdr : ProtocolHeader V} → Member hs.protocols hdr →
+      List Key → (Role → Role) → (r : Role) →
+      (inputs : Names (held r hdr.ins)) ×
+        ClosedTerm V fullFns σ (Ctx.empty.extend inputs) (held r hdr.outs))
+    (through : List Key) (ρ : Role → Role) (r : Role)
+    (retryCfg : Option (Nat × Site × StackAgain V fullFns σ))
+    {Γ : Ctx (LTy V)} {Δ : Ctx V.Ty} (hCtx : CtxRel r Γ Δ)
+    {outs : List (LTy V)} {τ : V.Ty} {H : Holders}
+    (key : Key) (kind : FlowKind) (getters : List Role) (here : r ∈ H)
+    (x : Var Γ ⟨τ, H⟩) (resName : Name)
+    (rest : Term (roleDialect V hs r) (Γ.extend (.cons (a := ⟨τ, Holders.ofList (getters ++ H)⟩) resName .nil)) outs)
+    (hRest : SpecTermHyp M fullTable h specOp fnTable rTable fnLift specApply through ρ r retryCfg
+      (hCtx.extend (.cons resName .nil)) rest) :
+    SpecTermHyp M fullTable h specOp fnTable rTable fnLift specApply through ρ r retryCfg hCtx
+      (.op key (.give (τ := τ) (H := H) kind getters here) (.cons x .nil) (.cons resName .nil) rest) := by
+  intro path env cenv s _ cont hEnv hPath hWN
+  have hWNRest : ∀ b site ag, retryCfg = some (b, site, ag) →
+      RoleTermWellNested M fnTable rTable r site through rest :=
+    fun b site ag hc => (hWN b site ag hc).2
+  have hIn : r ∈ Holders.ofList (getters ++ H) :=
+    Holders.mem_ofList.mpr (List.mem_append_right _ here)
+  have hRes : held r [⟨τ, Holders.ofList (getters ++ H)⟩] = [τ] := held_cons_pos r _ [] hIn
+  have hExt : Δ.extend (heldNames r (.cons (a := ⟨τ, Holders.ofList (getters ++ H)⟩) resName .nil)) =
+      Δ.insert resName τ := by
+    rw [heldNames_cons_pos hIn,
+      ctx_extend_cast Δ (held_cons_pos r ⟨τ, Holders.ofList (getters ++ H)⟩ [] hIn).symm]; rfl
+  have hRHS : (specializeTerm specOp fnLift specApply retryCfg through ρ r hCtx
+        (.op key (.give (τ := τ) (H := H) kind getters here) (.cons x .nil) (.cons resName .nil) rest)).denote
+        M fullTable path cenv s =
+      ((specOp through key ((ResidualOp.give kind getters τ).mapPeers ρ) (.cons (varHeld hCtx x here) .nil)).denote
+        M fullTable path cenv s).bind fun out =>
+        ((specializeTerm specOp fnLift specApply retryCfg through ρ r
+            (hCtx.extend (.cons resName .nil)) rest).castCT hExt rfl).denote
+          M fullTable path ((cenv.extend .nil out.1).insert resName ((cenv.extend .nil out.1).get (varHeld hCtx x here))) out.2 := rfl
+  rw [Term.denote_op, hRHS]
+  change h.run (retryOfCfg M retryCfg)
+    ((mapR M ρ ((Process.call (ROp.give kind getters ⟨path, key⟩ τ (reveal M (a := ⟨τ, H⟩) here (env.get x)))
+      fun _ => Process.done (HList.cons (hide M r ⟨τ, Holders.ofList (getters ++ H)⟩ (reveal M (a := ⟨τ, H⟩) here (env.get x))) HList.nil)).bind
+      fun vs => rest.denote (roleSem M r fnTable rTable) path (env.extend (.cons resName .nil) vs))).bind cont) s = _
+  rw [mapR_bind, Process.bind_assoc]
+  dsimp only [mapR, Process.bind]
+  rw [handler_run_call_nonBegin M h _ _ (retryOfCfg_not_begin M retryCfg _ trivial)]
+  have hSpecG := hSpec through key ((ResidualOp.give kind getters τ).mapPeers ρ)
+    (.cons (varHeld hCtx x here) .nil) path cenv s hPath
+  rw [hSpecG, Process.bind_assoc, Process.bind_map]
+  change _ = ((h.clause (ROp.give kind (getters.map ρ) ⟨path, key⟩ τ (cenv.get (varHeld hCtx x here))) s).bind fun a =>
+    (((specializeTerm specOp fnLift specApply retryCfg through ρ r
+        (hCtx.extend (.cons resName .nil)) rest).castCT hExt rfl).denote
+      M fullTable path (cenv.insert resName (cenv.get (varHeld hCtx x here))) a.2).bind
+      fun out => h.run (retryOfCfg M retryCfg) (cont (unheldValues M r out.1)) out.2)
+  rw [env_get_varHeld M hEnv x here]
+  congr 1; funext out
+  have hCenvEq : cast (congrArg (Env M.Val) hExt.symm) (cenv.insert resName (reveal M (a := ⟨τ, H⟩) here (env.get x))) =
+      cenv.extend (heldNames r (.cons resName .nil))
+        (heldValues M r (.cons (hide M r ⟨τ, Holders.ofList (getters ++ H)⟩ (reveal M (a := ⟨τ, H⟩) here (env.get x))) .nil)) := by
+    have hHeq : HEq
+        (cenv.extend (heldNames r (.cons resName .nil))
+          (heldValues M r (.cons (hide M r ⟨τ, Holders.ofList (getters ++ H)⟩ (reveal M (a := ⟨τ, H⟩) here (env.get x))) .nil)))
+        (cenv.insert resName (reveal M (a := ⟨τ, H⟩) here (env.get x))) := by
+      rw [heldNames_cons_pos hIn, heldValues_cons_pos M hIn, reveal_hide]
+      exact env_extend_cast cenv hRes.symm (HList.cons resName .nil)
+        (HList.cons (reveal M (a := ⟨τ, H⟩) here (env.get x)) .nil)
+    exact eq_of_heq ((cast_heq _ _).trans hHeq.symm)
+  rw [closedTerm_denote_castCT, Process.bind_map, hCenvEq]
+  exact hRest path _ _ out.2 cont (hEnv.extend M (.cons resName .nil) _) hPath hWNRest
+
+private theorem specializeTerm_sound_get {fullFns : List (FnHeader V)} (fullTable : FnTable M fullFns)
+    {σ : List V.Ty} (h : Handler (RSig M) (RSig M) Stop (HList M.Val σ))
+    (specOp : EffectSpecializer V fullFns σ) (hSpec : SpecOpSound M fullTable h specOp)
+    {hs : Headers V} (fnTable : FnTable M hs.fns) (rTable : RTable M hs.protocols)
+    (fnLift : ∀ {hdr}, Member hs.fns hdr → Member fullFns hdr)
+    (specApply : Option (Nat × Site × StackAgain V fullFns σ) →
+      {hdr : ProtocolHeader V} → Member hs.protocols hdr →
+      List Key → (Role → Role) → (r : Role) →
+      (inputs : Names (held r hdr.ins)) ×
+        ClosedTerm V fullFns σ (Ctx.empty.extend inputs) (held r hdr.outs))
+    (through : List Key) (ρ : Role → Role) (r : Role)
+    (retryCfg : Option (Nat × Site × StackAgain V fullFns σ))
+    {Γ : Ctx (LTy V)} {Δ : Ctx V.Ty} (hCtx : CtxRel r Γ Δ)
+    {outs : List (LTy V)} (key : Key) (τ : V.Ty) (H : Holders)
+    (kind : FlowKind) (giver : Role) (getters : List Role) (mine : r ∈ getters)
+    (resName : Name)
+    (rest : Term (roleDialect V hs r) (Γ.extend (.cons (a := ⟨τ, Holders.ofList (getters ++ H)⟩) resName .nil)) outs)
+    (hRest : SpecTermHyp M fullTable h specOp fnTable rTable fnLift specApply through ρ r retryCfg
+      (hCtx.extend (.cons resName .nil)) rest) :
+    SpecTermHyp M fullTable h specOp fnTable rTable fnLift specApply through ρ r retryCfg hCtx
+      (.op key (.get τ H kind giver getters mine) .nil (.cons resName .nil) rest) := by
+  intro path env cenv s _ cont hEnv hPath hWN
+  have hWNRest : ∀ b site ag, retryCfg = some (b, site, ag) →
+      RoleTermWellNested M fnTable rTable r site through rest :=
+    fun b site ag hc => (hWN b site ag hc).2
+  have hIn : r ∈ Holders.ofList (getters ++ H) :=
+    Holders.mem_ofList.mpr (List.mem_append_left _ mine)
+  have hRes : held r [⟨τ, Holders.ofList (getters ++ H)⟩] = [τ] := held_cons_pos r _ [] hIn
+  have hRHS : (specializeTerm specOp fnLift specApply retryCfg through ρ r hCtx
+        (.op key (.get τ H kind giver getters mine) .nil (.cons resName .nil) rest)).denote
+        M fullTable path cenv s =
+      ((specOp through key ((ResidualOp.get kind giver τ).mapPeers ρ) .nil).denote
+        M fullTable path cenv s).bind fun out =>
+        ((specializeTerm specOp fnLift specApply retryCfg through ρ r
+            (hCtx.extend (.cons resName .nil)) rest).castCT
+          (ctx_extend_cast Δ hRes (heldNames r (.cons resName .nil))).symm rfl).denote
+          M fullTable path
+          (cenv.extend (cast (congrArg Names hRes) (heldNames r (.cons resName .nil))) out.1) out.2 := rfl
+  rw [Term.denote_op, hRHS]
+  change h.run (retryOfCfg M retryCfg)
+    ((mapR M ρ ((Process.call (ROp.get kind giver ⟨path, key⟩ τ)
+      fun v => Process.done (HList.cons (hide M r ⟨τ, Holders.ofList (getters ++ H)⟩ v) HList.nil)).bind
+      fun vs => rest.denote (roleSem M r fnTable rTable) path (env.extend (.cons resName .nil) vs))).bind cont) s = _
+  rw [mapR_bind, Process.bind_assoc]
+  dsimp only [mapR, Process.bind]
+  rw [handler_run_call_nonBegin M h _ _ (retryOfCfg_not_begin M retryCfg _ trivial)]
+  have hSpecG := hSpec through key ((ResidualOp.get kind giver τ).mapPeers ρ)
+    .nil path cenv s hPath
+  rw [hSpecG, Process.bind_assoc, Process.bind_map]
+  dsimp only [ResidualOp.mapPeers, ResidualOp.toROp, Env.all, ResidualOp.replyOf]
+  congr 1; funext out
+  have hOutEq : cast (congrArg (HList M.Val) hRes)
+      (heldValues M r (.cons (hide M r ⟨τ, Holders.ofList (getters ++ H)⟩ out.1) .nil)) =
+      .cons out.1 .nil := by
+    rw [heldValues_cons_pos M hIn, reveal_hide, cast_cast]; rfl
+  conv => rhs; rw [← hOutEq, closedTerm_denote_castExt M fullTable hRes (heldNames r (.cons resName .nil))]
+  exact hRest path _ _ out.2 cont (hEnv.extend M (.cons resName .nil) _) hPath hWNRest
+
+private theorem specializeTerm_sound_keep {fullFns : List (FnHeader V)} (fullTable : FnTable M fullFns)
+    {σ : List V.Ty} (h : Handler (RSig M) (RSig M) Stop (HList M.Val σ))
+    (specOp : EffectSpecializer V fullFns σ)
+    {hs : Headers V} (fnTable : FnTable M hs.fns) (rTable : RTable M hs.protocols)
+    (fnLift : ∀ {hdr}, Member hs.fns hdr → Member fullFns hdr)
+    (specApply : Option (Nat × Site × StackAgain V fullFns σ) →
+      {hdr : ProtocolHeader V} → Member hs.protocols hdr →
+      List Key → (Role → Role) → (r : Role) →
+      (inputs : Names (held r hdr.ins)) ×
+        ClosedTerm V fullFns σ (Ctx.empty.extend inputs) (held r hdr.outs))
+    (through : List Key) (ρ : Role → Role) (r : Role)
+    (retryCfg : Option (Nat × Site × StackAgain V fullFns σ))
+    {Γ : Ctx (LTy V)} {Δ : Ctx V.Ty} (hCtx : CtxRel r Γ Δ)
+    {outs : List (LTy V)} {τ : V.Ty} {H : Holders}
+    (key : Key) (H' : Holders) (same : r ∈ H ↔ r ∈ H')
+    (x : Var Γ ⟨τ, H⟩) (resName : Name)
+    (rest : Term (roleDialect V hs r) (Γ.extend (.cons (a := ⟨τ, H'⟩) resName .nil)) outs)
+    (hRest : SpecTermHyp M fullTable h specOp fnTable rTable fnLift specApply through ρ r retryCfg
+      (hCtx.extend (.cons resName .nil)) rest) :
+    SpecTermHyp M fullTable h specOp fnTable rTable fnLift specApply through ρ r retryCfg hCtx
+      (.op key (.keep (τ := τ) (H := H) H' same) (.cons x .nil) (.cons resName .nil) rest) := by
+  intro path env cenv s _ cont hEnv hPath hWN
+  have hWNRest : ∀ b site ag, retryCfg = some (b, site, ag) →
+      RoleTermWellNested M fnTable rTable r site through rest :=
+    fun b site ag hc => (hWN b site ag hc).2
+  rw [Term.denote_op]
+  conv => rhs; rw [specializeTerm]; dsimp only
+  change h.run (retryOfCfg M retryCfg)
+    ((mapR M ρ (rest.denote (roleSem M r fnTable rTable) path
+      (env.extend (.cons resName .nil) (.cons (carry M same (env.get x)) .nil)))).bind cont) s = _
+  by_cases hIn : r ∈ H
+  · rw [dite_eq_left hIn]
+    conv => rhs; rw [ClosedTerm.denote]
+    have hIn' : r ∈ H' := same.mp hIn
+    have hExt : Δ.extend (heldNames r (.cons (a := ⟨τ, H'⟩) resName .nil)) = Δ.insert resName τ := by
+      rw [heldNames_cons_pos hIn', ctx_extend_cast Δ (held_cons_pos r ⟨τ, H'⟩ [] hIn').symm]; rfl
+    have hRevCarry : reveal M hIn' (carry M same (env.get x)) = reveal M hIn (env.get x) := by
+      simp [reveal, carry]
+    have hCenvEq : cast (congrArg (Env M.Val) hExt.symm) (cenv.insert resName (cenv.get (varHeld hCtx x hIn))) =
+        cenv.extend (heldNames r (.cons (a := ⟨τ, H'⟩) resName .nil))
+          (heldValues M r (.cons (carry M same (env.get x)) .nil)) := by
+      rw [env_get_varHeld M hEnv x hIn, ← hRevCarry]
+      have hHeq : HEq
+          (cenv.extend (heldNames r (.cons (a := ⟨τ, H'⟩) resName .nil))
+            (heldValues M r (.cons (carry M same (env.get x)) .nil)))
+          (cenv.insert resName (reveal M hIn' (carry M same (env.get x)))) := by
+        rw [heldNames_cons_pos hIn', heldValues_cons_pos M hIn']
+        exact env_extend_cast cenv (held_cons_pos r ⟨τ, H'⟩ [] hIn').symm (HList.cons resName .nil)
+          (HList.cons (reveal M hIn' (carry M same (env.get x))) .nil)
+      exact eq_of_heq ((cast_heq _ _).trans hHeq.symm)
+    rw [closedTerm_denote_castCT, Process.bind_map, hCenvEq]
+    exact hRest path _ _ s cont (hEnv.extend M (.cons resName .nil) _) hPath hWNRest
+  · rw [dite_eq_right hIn]
+    have hOut' : r ∉ H' := fun m => hIn (same.mpr m)
+    have hExt : Δ.extend (heldNames r (.cons (a := ⟨τ, H'⟩) resName .nil)) = Δ := by
+      rw [heldNames_cons_neg hOut', ctx_extend_cast Δ (held_cons_neg r ⟨τ, H'⟩ [] hOut').symm]; rfl
+    have hCenvEq : cast (congrArg (Env M.Val) hExt.symm) cenv =
+        cenv.extend (heldNames r (.cons (a := ⟨τ, H'⟩) resName .nil))
+          (heldValues M r (.cons (carry M same (env.get x)) .nil)) := by
+      have hHeq : HEq
+          (cenv.extend (heldNames r (.cons (a := ⟨τ, H'⟩) resName .nil))
+            (heldValues M r (.cons (carry M same (env.get x)) .nil))) cenv := by
+        rw [heldNames_cons_neg hOut', heldValues_cons_neg M hOut']
+        exact env_extend_cast cenv (held_cons_neg r ⟨τ, H'⟩ [] hOut').symm .nil .nil
+      exact eq_of_heq ((cast_heq _ _).trans hHeq.symm)
+    rw [closedTerm_denote_castCT, Process.bind_map, hCenvEq]
+    exact hRest path _ _ s cont (hEnv.extend M (.cons resName .nil) _) hPath hWNRest
+
+private theorem specializeTerm_sound_own {fullFns : List (FnHeader V)} (fullTable : FnTable M fullFns)
+    {σ : List V.Ty} (h : Handler (RSig M) (RSig M) Stop (HList M.Val σ))
+    (specOp : EffectSpecializer V fullFns σ) (hSpec : SpecOpSound M fullTable h specOp)
+    {hs : Headers V} (fnTable : FnTable M hs.fns) (rTable : RTable M hs.protocols)
+    (fnLift : ∀ {hdr}, Member hs.fns hdr → Member fullFns hdr)
+    (specApply : Option (Nat × Site × StackAgain V fullFns σ) →
+      {hdr : ProtocolHeader V} → Member hs.protocols hdr →
+      List Key → (Role → Role) → (r : Role) →
+      (inputs : Names (held r hdr.ins)) ×
+        ClosedTerm V fullFns σ (Ctx.empty.extend inputs) (held r hdr.outs))
+    (through : List Key) (ρ : Role → Role) (r : Role)
+    (retryCfg : Option (Nat × Site × StackAgain V fullFns σ))
+    {Γ : Ctx (LTy V)} {Δ : Ctx V.Ty} (hCtx : CtxRel r Γ Δ)
+    {outs : List (LTy V)} (key : Key) (kind : GivenKind V) (hearers : List Role)
+    (opTys : List (LTy V)) (τ : V.Ty) (typed : kind.Typed (opTys.map LTy.ty) τ)
+    (here : ∀ a ∈ opTys, r ∈ a.holders) (operands : HList (Var Γ) opTys) (resName : Name)
+    (rest : Term (roleDialect V hs r) (Γ.extend (.cons (a := ⟨τ, Holders.ofList (r :: hearers)⟩) resName .nil)) outs)
+    (hRest : SpecTermHyp M fullTable h specOp fnTable rTable fnLift specApply through ρ r retryCfg
+      (hCtx.extend (.cons resName .nil)) rest) :
+    SpecTermHyp M fullTable h specOp fnTable rTable fnLift specApply through ρ r retryCfg hCtx
+      (.op key (.own kind hearers opTys τ typed here) operands (.cons resName .nil) rest) := by
+  intro path env cenv s _ cont hEnv hPath hWN
+  have hWNRest : ∀ b site ag, retryCfg = some (b, site, ag) →
+      RoleTermWellNested M fnTable rTable r site through rest :=
+    fun b site ag hc => (hWN b site ag hc).2
+  have hIn : r ∈ Holders.ofList (r :: hearers) := Holders.mem_ofList.mpr List.mem_cons_self
+  have hRes : held r [⟨τ, Holders.ofList (r :: hearers)⟩] = [τ] := held_cons_pos r _ [] hIn
+  have hRHS : (specializeTerm specOp fnLift specApply retryCfg through ρ r hCtx
+        (.op key (.own kind hearers opTys τ typed here) operands (.cons resName .nil) rest)).denote
+        M fullTable path cenv s =
+      ((specOp through key ((ResidualOp.own kind hearers (opTys.map LTy.ty) τ).mapPeers ρ)
+          (varsAllHeld hCtx here operands)).denote
+        M fullTable path cenv s).bind fun out =>
+        ((specializeTerm specOp fnLift specApply retryCfg through ρ r
+            (hCtx.extend (.cons resName .nil)) rest).castCT
+          (ctx_extend_cast Δ hRes (heldNames r (.cons resName .nil))).symm rfl).denote
+          M fullTable path
+          (cenv.extend (cast (congrArg Names hRes) (heldNames r (.cons resName .nil))) out.1) out.2 := rfl
+  rw [Term.denote_op, hRHS]
+  change h.run (retryOfCfg M retryCfg)
+    ((mapR M ρ ((Process.call (ROp.own kind hearers ⟨path, key⟩ (opTys.map LTy.ty)
+        (HList.ofLocated M (revealAll M here (env.all operands))) τ)
+      fun v => Process.done (HList.cons (hide M r ⟨τ, Holders.ofList (r :: hearers)⟩ v) HList.nil)).bind
+      fun vs => rest.denote (roleSem M r fnTable rTable) path (env.extend (.cons resName .nil) vs))).bind cont) s = _
+  rw [mapR_bind, Process.bind_assoc]
+  dsimp only [mapR, Process.bind]
+  rw [handler_run_call_nonBegin M h _ _ (retryOfCfg_not_begin M retryCfg _ trivial)]
+  have hSpecO := hSpec through key
+    ((ResidualOp.own kind hearers (opTys.map LTy.ty) τ).mapPeers ρ)
+    (varsAllHeld hCtx here operands) path cenv s hPath
+  rw [hSpecO, Process.bind_assoc, Process.bind_map]
+  dsimp only [ResidualOp.mapPeers, ResidualOp.toROp, ResidualOp.replyOf]
+  rw [env_all_varsAllHeld M hEnv here operands]
+  congr 1; funext out
+  have hOutEq : cast (congrArg (HList M.Val) hRes)
+      (heldValues M r (.cons (hide M r ⟨τ, Holders.ofList (r :: hearers)⟩ out.1) .nil)) =
+      .cons out.1 .nil := by
+    rw [heldValues_cons_pos M hIn, reveal_hide, cast_cast]; rfl
+  conv => rhs; rw [← hOutEq, closedTerm_denote_castExt M fullTable hRes (heldNames r (.cons resName .nil))]
+  exact hRest path _ _ out.2 cont (hEnv.extend M (.cons resName .nil) _) hPath hWNRest
+
+private theorem specializeTerm_sound_hear {fullFns : List (FnHeader V)} (fullTable : FnTable M fullFns)
+    {σ : List V.Ty} (h : Handler (RSig M) (RSig M) Stop (HList M.Val σ))
+    (specOp : EffectSpecializer V fullFns σ) (hSpec : SpecOpSound M fullTable h specOp)
+    {hs : Headers V} (fnTable : FnTable M hs.fns) (rTable : RTable M hs.protocols)
+    (fnLift : ∀ {hdr}, Member hs.fns hdr → Member fullFns hdr)
+    (specApply : Option (Nat × Site × StackAgain V fullFns σ) →
+      {hdr : ProtocolHeader V} → Member hs.protocols hdr →
+      List Key → (Role → Role) → (r : Role) →
+      (inputs : Names (held r hdr.ins)) ×
+        ClosedTerm V fullFns σ (Ctx.empty.extend inputs) (held r hdr.outs))
+    (through : List Key) (ρ : Role → Role) (r : Role)
+    (retryCfg : Option (Nat × Site × StackAgain V fullFns σ))
+    {Γ : Ctx (LTy V)} {Δ : Ctx V.Ty} (hCtx : CtxRel r Γ Δ)
+    {outs : List (LTy V)} (key : Key) (kind : GivenKind V) (owner : Role) (hearers : List Role)
+    (τ : V.Ty) (mine : r ∈ hearers) (resName : Name)
+    (rest : Term (roleDialect V hs r) (Γ.extend (.cons (a := ⟨τ, Holders.ofList (owner :: hearers)⟩) resName .nil)) outs)
+    (hRest : SpecTermHyp M fullTable h specOp fnTable rTable fnLift specApply through ρ r retryCfg
+      (hCtx.extend (.cons resName .nil)) rest) :
+    SpecTermHyp M fullTable h specOp fnTable rTable fnLift specApply through ρ r retryCfg hCtx
+      (.op key (.hear kind owner hearers τ mine) .nil (.cons resName .nil) rest) := by
+  intro path env cenv s _ cont hEnv hPath hWN
+  have hWNRest : ∀ b site ag, retryCfg = some (b, site, ag) →
+      RoleTermWellNested M fnTable rTable r site through rest :=
+    fun b site ag hc => (hWN b site ag hc).2
+  have hIn : r ∈ Holders.ofList (owner :: hearers) :=
+    Holders.mem_ofList.mpr (List.mem_cons_of_mem _ mine)
+  have hRes : held r [⟨τ, Holders.ofList (owner :: hearers)⟩] = [τ] := held_cons_pos r _ [] hIn
+  have hRHS : (specializeTerm specOp fnLift specApply retryCfg through ρ r hCtx
+        (.op key (.hear kind owner hearers τ mine) .nil (.cons resName .nil) rest)).denote
+        M fullTable path cenv s =
+      ((specOp through key ((ResidualOp.hear kind owner τ).mapPeers ρ) .nil).denote
+        M fullTable path cenv s).bind fun out =>
+        ((specializeTerm specOp fnLift specApply retryCfg through ρ r
+            (hCtx.extend (.cons resName .nil)) rest).castCT
+          (ctx_extend_cast Δ hRes (heldNames r (.cons resName .nil))).symm rfl).denote
+          M fullTable path
+          (cenv.extend (cast (congrArg Names hRes) (heldNames r (.cons resName .nil))) out.1) out.2 := rfl
+  rw [Term.denote_op, hRHS]
+  change h.run (retryOfCfg M retryCfg)
+    ((mapR M ρ ((Process.call (ROp.hear kind owner ⟨path, key⟩ τ)
+      fun v => Process.done (HList.cons (hide M r ⟨τ, Holders.ofList (owner :: hearers)⟩ v) HList.nil)).bind
+      fun vs => rest.denote (roleSem M r fnTable rTable) path (env.extend (.cons resName .nil) vs))).bind cont) s = _
+  rw [mapR_bind, Process.bind_assoc]
+  dsimp only [mapR, Process.bind]
+  rw [handler_run_call_nonBegin M h _ _ (retryOfCfg_not_begin M retryCfg _ trivial)]
+  have hSpecH := hSpec through key ((ResidualOp.hear kind owner τ).mapPeers ρ)
+    .nil path cenv s hPath
+  rw [hSpecH, Process.bind_assoc, Process.bind_map]
+  dsimp only [ResidualOp.mapPeers, ResidualOp.toROp, Env.all, ResidualOp.replyOf]
+  congr 1; funext out
+  have hOutEq : cast (congrArg (HList M.Val) hRes)
+      (heldValues M r (.cons (hide M r ⟨τ, Holders.ofList (owner :: hearers)⟩ out.1) .nil)) =
+      .cons out.1 .nil := by
+    rw [heldValues_cons_pos M hIn, reveal_hide, cast_cast]; rfl
+  conv => rhs; rw [← hOutEq, closedTerm_denote_castExt M fullTable hRes (heldNames r (.cons resName .nil))]
+  exact hRest path _ _ out.2 cont (hEnv.extend M (.cons resName .nil) _) hPath hWNRest
+
+private theorem specializeTerm_sound_apply {fullFns : List (FnHeader V)} (fullTable : FnTable M fullFns)
+    {σ : List V.Ty} (h : Handler (RSig M) (RSig M) Stop (HList M.Val σ))
+    (specOp : EffectSpecializer V fullFns σ)
+    {hs : Headers V} (fnTable : FnTable M hs.fns) (rTable : RTable M hs.protocols)
+    (fnLift : ∀ {hdr}, Member hs.fns hdr → Member fullFns hdr)
+    (specApply : Option (Nat × Site × StackAgain V fullFns σ) →
+      {hdr : ProtocolHeader V} → Member hs.protocols hdr →
+      List Key → (Role → Role) → (r : Role) →
+      (inputs : Names (held r hdr.ins)) ×
+        ClosedTerm V fullFns σ (Ctx.empty.extend inputs) (held r hdr.outs))
+    (hApply : ∀ (retryCfg : Option (Nat × Site × StackAgain V fullFns σ)),
+      RetryCfgOk M fullTable h retryCfg →
+      ∀ {hdr : ProtocolHeader V} (callee : Member hs.protocols hdr)
+      (through : List Key) (ρ : Role → Role) (r : Role)
+      (path : List Frame) (ins : HList (RV M r) hdr.ins)
+      (s : HList M.Val σ) {B : Type} (cont : HList (RV M r) hdr.outs → Program M B),
+      Frame.applications path = through →
+      (∀ b site ag, retryCfg = some (b, site, ag) → Shape.noNestedAttempt site through hdr.shape = true) →
+      h.run (retryOfCfg M retryCfg) ((mapR M ρ (rTable hdr callee r path ins)).bind cont) s =
+        ((specApply retryCfg callee through ρ r).2.denote M fullTable path
+          (Env.empty.extend (specApply retryCfg callee through ρ r).1 (heldValues M r ins)) s).bind
+          fun out => h.run (retryOfCfg M retryCfg) (cont (unheldValues M r out.1)) out.2)
+    (through : List Key) (ρ : Role → Role) (r : Role)
+    (retryCfg : Option (Nat × Site × StackAgain V fullFns σ))
+    (hRC : RetryCfgOk M fullTable h retryCfg)
+    {Γ : Ctx (LTy V)} {Δ : Ctx V.Ty} (hCtx : CtxRel r Γ Δ)
+    {outs : List (LTy V)} {hdr : ProtocolHeader V}
+    (key : Key) (callee : Member hs.protocols hdr) (roles : List Role)
+    (distinct : roles.Nodup) (covers : roles.length = hdr.roles)
+    (opTys : List (LTy V)) (fits : Fits opTys (hdr.ins.map (LTy.map (RoleMap.ofList roles distinct).to)))
+    (operands : HList (Var Γ) opTys)
+    (results : Names (hdr.outs.map (LTy.map (RoleMap.ofList roles distinct).to)))
+    (rest : Term (roleDialect V hs r) (Γ.extend results) outs)
+    (hRest : SpecTermHyp M fullTable h specOp fnTable rTable fnLift specApply through ρ r retryCfg
+      (hCtx.extend results) rest) :
+    SpecTermHyp M fullTable h specOp fnTable rTable fnLift specApply through ρ r retryCfg hCtx
+      (.op key (.apply callee roles distinct covers opTys fits) operands results rest) := by
+  intro path env cenv s _ cont hEnv hPath hWN
+  have hWNRest : ∀ b site ag, retryCfg = some (b, site, ag) →
+      RoleTermWellNested M fnTable rTable r site through rest :=
+    fun b site ag hc => (hWN b site ag hc).2
+  rw [Term.denote_op]
+  conv => rhs; rw [specializeTerm]; dsimp only; rw [ClosedTerm.denote]
+  let rm := RoleMap.ofList roles distinct
+  change h.run (retryOfCfg M retryCfg)
+    ((mapR M ρ (((mapR M rm.to (rTable hdr callee (rm.back r) (path ++ [Frame.application key])
+      (enterAll M rm r (fitAllRV M fits (env.all operands))))).map (leaveAll M rm r)).bind
+      fun vs => rest.denote (roleSem M r fnTable rTable) path (env.extend results vs))).bind cont) s = _
+  rw [mapR_bind, mapR_map, mapR_comp, Process.bind_assoc, Process.bind_map]
+  have hPath' : Frame.applications (path ++ [Frame.application key]) = through ++ [key] := by
+    rw [Frame.applications_append, hPath]; rfl
+  have hCalWN : ∀ b site ag, retryCfg = some (b, site, ag) →
+      Shape.noNestedAttempt site (through ++ [key]) hdr.shape = true :=
+    fun b site ag hc => (hWN b site ag hc).1
+  rw [env_all_fitVars M hEnv rm fits operands, Process.bind_assoc]
+  have hApp := hApply retryCfg hRC callee (through ++ [key]) (fun q => ρ (rm.to q)) (rm.back r)
+    (path ++ [Frame.application key]) (enterAll M rm r (fitAllRV M fits (env.all operands))) s
+    (fun a => (mapR M ρ (rest.denote (roleSem M r fnTable rTable) path
+      (env.extend results (leaveAll M rm r a)))).bind cont) hPath' hCalWN
+  rw [hApp]
+  congr 1; funext out
+  have hOut : held r (hdr.outs.map (LTy.map rm.to)) = held (rm.back r) hdr.outs :=
+    held_map_roleMap rm r hdr.outs
+  have hLeave : cast (congrArg (HList M.Val) hOut)
+      (heldValues M r (leaveAll M rm r (unheldValues M (rm.back r) out.1))) = out.1 := by
+    rw [heldValues_leaveAll, heldValues_unheldValues, cast_cast, cast_eq]
+  conv => rhs; rw [← hLeave, closedTerm_denote_castExt M fullTable hOut (heldNames r results)]
+  exact hRest path (env.extend results (leaveAll M rm r (unheldValues M (rm.back r) out.1)))
+    _ out.2 cont (hEnv.extend M results _) hPath hWNRest
+
+private theorem specializeTerm_sound_choose {fullFns : List (FnHeader V)} (fullTable : FnTable M fullFns)
+    {σ : List V.Ty} (h : Handler (RSig M) (RSig M) Stop (HList M.Val σ))
+    (specOp : EffectSpecializer V fullFns σ)
+    {hs : Headers V} (fnTable : FnTable M hs.fns) (rTable : RTable M hs.protocols)
+    (fnLift : ∀ {hdr}, Member hs.fns hdr → Member fullFns hdr)
+    (specApply : Option (Nat × Site × StackAgain V fullFns σ) →
+      {hdr : ProtocolHeader V} → Member hs.protocols hdr →
+      List Key → (Role → Role) → (r : Role) →
+      (inputs : Names (held r hdr.ins)) ×
+        ClosedTerm V fullFns σ (Ctx.empty.extend inputs) (held r hdr.outs))
+    (through : List Key) (ρ : Role → Role) (r : Role)
+    (retryCfg : Option (Nat × Site × StackAgain V fullFns σ))
+    {Γ : Ctx (LTy V)} {Δ : Ctx V.Ty} (hCtx : CtxRel r Γ Δ)
+    {outs mid : List (LTy V)} {t : LTy V}
+    (key : Key) (w : Holders) (c : Var Γ t) (ok : t.ty = .bool ∧ r ∈ t.holders ∧ r ∈ w)
+    (gives : ∀ a, a ∈ mid → (roleDialect V hs r).Gives w a)
+    (onTrue onFalse : Term (roleDialect V hs r) Γ mid)
+    (results : Names mid) (rest : Term (roleDialect V hs r) (Γ.extend results) outs)
+    (hTrue : SpecTermHyp M fullTable h specOp fnTable rTable fnLift specApply through ρ r retryCfg hCtx onTrue)
+    (hFalse : SpecTermHyp M fullTable h specOp fnTable rTable fnLift specApply through ρ r retryCfg hCtx onFalse)
+    (hRest : SpecTermHyp M fullTable h specOp fnTable rTable fnLift specApply through ρ r retryCfg
+      (hCtx.extend results) rest) :
+    SpecTermHyp M fullTable h specOp fnTable rTable fnLift specApply through ρ r retryCfg hCtx
+      (.choose key w c ok gives onTrue onFalse results rest) := by
+  intro path env cenv s _ cont hEnv hPath hWN
+  rw [Term.denote_choose]
+  conv => rhs; rw [specializeTerm]; dsimp only; rw [ClosedTerm.denote]
+  change h.run (retryOfCfg M retryCfg)
+    ((mapR M ρ ((bif asBool M ok.1 (reveal M ok.2.1 (env.get c)) then
+      onTrue.denote (roleSem M r fnTable rTable) path env
+    else onFalse.denote (roleSem M r fnTable rTable) path env).bind
+      fun mids => rest.denote (roleSem M r fnTable rTable) path (env.extend results mids))).bind cont) s = _
+  have hBool : cenv.get (cast (congrArg (Var Δ) ok.1) (varHeld hCtx c ok.2.1)) =
+      asBool M ok.1 (reveal M ok.2.1 (env.get c)) := by
+    unfold asBool
+    rw [← env_get_varHeld M hEnv c ok.2.1]
+    have hc : ∀ {τ₁ τ₂ : V.Ty} (e : τ₁ = τ₂) (v : Var Δ τ₁),
+        cenv.get (cast (congrArg (Var Δ) e) v) = cast (congrArg M.Val e) (cenv.get v) := by
+      intro _ _ e _; subst e; rfl
+    exact hc ok.1 _
+  rw [hBool, mapR_bind, Process.bind_assoc, Process.bind_assoc]
+  cases asBool M ok.1 (reveal M ok.2.1 (env.get c)) with
+  | false =>
+      dsimp only [cond]
+      rw [hFalse path env cenv s _ hEnv hPath (fun b site ag hc => (hWN b site ag hc).2.1)]
+      congr 1; funext out
+      have hEx := hEnv.extend M results (unheldValues M r out.1)
+      rw [heldValues_unheldValues] at hEx
+      exact hRest path _ _ out.2 cont hEx hPath (fun b site ag hc => (hWN b site ag hc).2.2)
+  | true =>
+      dsimp only [cond]
+      rw [hTrue path env cenv s _ hEnv hPath (fun b site ag hc => (hWN b site ag hc).1)]
+      congr 1; funext out
+      have hEx := hEnv.extend M results (unheldValues M r out.1)
+      rw [heldValues_unheldValues] at hEx
+      exact hRest path _ _ out.2 cont hEx hPath (fun b site ag hc => (hWN b site ag hc).2.2)
+
+private theorem specializeTerm_sound_loop {fullFns : List (FnHeader V)} (fullTable : FnTable M fullFns)
+    {σ : List V.Ty} (h : Handler (RSig M) (RSig M) Stop (HList M.Val σ))
+    (specOp : EffectSpecializer V fullFns σ)
+    {hs : Headers V} (fnTable : FnTable M hs.fns) (rTable : RTable M hs.protocols)
+    (fnLift : ∀ {hdr}, Member hs.fns hdr → Member fullFns hdr)
+    (specApply : Option (Nat × Site × StackAgain V fullFns σ) →
+      {hdr : ProtocolHeader V} → Member hs.protocols hdr →
+      List Key → (Role → Role) → (r : Role) →
+      (inputs : Names (held r hdr.ins)) ×
+        ClosedTerm V fullFns σ (Ctx.empty.extend inputs) (held r hdr.outs))
+    (through : List Key) (ρ : Role → Role) (r : Role)
+    (retryCfg : Option (Nat × Site × StackAgain V fullFns σ))
+    {Γ : Ctx (LTy V)} {Δ : Ctx V.Ty} (hCtx : CtxRel r Γ Δ)
+    {outs carried each : List (LTy V)}
+    (key : Key) (ps : Holders) (times : Times (roleDialect V hs r) ps Γ)
+    (gives : ∀ a, a ∈ carried ++ each → (roleDialect V hs r).Gives ps a)
+    (initial : HList (Var Γ) carried)
+    (idxNm : Name) (carriedInNames : Names carried)
+    (body : Term (roleDialect V hs r) (Γ.extend (.cons (a := LTy.index ps) idxNm carriedInNames)) (carried ++ each))
+    (results : Names (carried ++ each.map (LTy.collected times.size)))
+    (rest : Term (roleDialect V hs r) (Γ.extend results) outs)
+    (hBody : ∀ {ΔB : Ctx V.Ty} (hCtxB : CtxRel r (Γ.extend (.cons (a := LTy.index ps) idxNm carriedInNames)) ΔB),
+      SpecTermHyp M fullTable h specOp fnTable rTable fnLift specApply through ρ r retryCfg hCtxB body)
+    (hRest : SpecTermHyp M fullTable h specOp fnTable rTable fnLift specApply through ρ r retryCfg
+      (hCtx.extend results) rest) :
+    SpecTermHyp M fullTable h specOp fnTable rTable fnLift specApply through ρ r retryCfg hCtx
+      (.loop key ps times gives initial (.cons idxNm carriedInNames) body results rest) := by
+  intro path env cenv s _ cont hEnv hPath hWN
+  rw [Term.denote_loop]
+  conv => rhs; rw [specializeTerm]; dsimp only
+  rw [mapR_bind, Process.bind_assoc]
+  have hTimesEq : (specializeTimes hCtx times).eval M cenv =
+      (roleSem M r fnTable rTable).times times env := by
+    cases times with
+    | fixed _ => rfl
+    | value cnt ok =>
+        dsimp only [specializeTimes, ClosedTimes.eval, Semantics.times, roleSem, asNat]
+        rw [← env_get_varHeld M hEnv cnt ok.2.1]
+        have hc : ∀ {τ₁ τ₂ : V.Ty} (e : τ₁ = τ₂) (v : Var Δ τ₁),
+            cenv.get (cast (congrArg (Var Δ) e) v) = cast (congrArg M.Val e) (cenv.get v) := by
+          intro _ _ e _; subst e; rfl
+        exact hc ok.1 _
+  have hSize : (specializeTimes hCtx times).size = times.size := specializeTimes_size hCtx times
+  have hBodyOut : held r (carried ++ each) = held r carried ++ held r each :=
+    held_append r carried each
+  have hResTy : held r (carried ++ each.map (LTy.collected times.size)) =
+      held r carried ++ (held r each).map (fun τ => .seq τ (specializeTimes hCtx times).size) := by
+    rw [held_append, held_map_collected, hSize]
+  have hLoopProof : ∀ (idxOpt : Option Name)
+      (hCtxB : CtxRel r (Γ.extend (.cons idxNm carriedInNames))
+        (loopBodyCtx Δ idxOpt (heldNames r carriedInNames)))
+      (hEnvStep : ∀ (i : Nat) (cv : HList (RV M r) carried),
+        EnvRel M r hCtxB
+          (env.extend (.cons idxNm carriedInNames) (.cons (hide M r (LTy.index ps) i) cv))
+          (loopBodyEnv M cenv idxOpt i (heldNames r carriedInNames) (heldValues M r cv))),
+      h.run (retryOfCfg M retryCfg)
+        ((mapR M ρ (Process.iterate ((roleSem M r fnTable rTable).times times env)
+            ((roleSem M r fnTable rTable).loopStep ps (.cons idxNm carriedInNames)
+              (fun path' env' => body.denote (roleSem M r fnTable rTable) path' env')
+              key path env)
+            0 (env.all initial, HList.empties each))).bind fun ls =>
+          (mapR M ρ (rest.denote (roleSem M r fnTable rTable) path
+            (env.extend results (ls.1.append ((roleSem M r fnTable rTable).collected times.size ls.2))))).bind cont) s =
+      ((ClosedTerm.loop key (specializeTimes hCtx times) (varsHeld hCtx initial) idxOpt
+          (heldNames r carriedInNames)
+          ((specializeTerm specOp fnLift specApply retryCfg through ρ r hCtxB body).castCT rfl hBodyOut)
+          (cast (congrArg Names hResTy) (heldNames r results))
+          ((specializeTerm specOp fnLift specApply retryCfg through ρ r (hCtx.extend results) rest).castCT
+            (ctx_extend_cast Δ hResTy (heldNames r results)).symm rfl)).denote
+        M fullTable path cenv s).bind fun out =>
+        h.run (retryOfCfg M retryCfg) (cont (unheldValues M r out.1)) out.2 := by
+    intro idxOpt hCtxB hEnvStep
+    conv => rhs; rw [ClosedTerm.denote]
+    rw [hTimesEq, env_all_varsHeld M hEnv initial, ← heldAcc_empties M r each, Process.bind_assoc]
+    let n0 := (roleSem M r fnTable rTable).times times env
+    suffices hIter : ∀ (n i : Nat)
+        (ls : HList (RV M r) carried × HList (fun a => List (RV M r a)) each)
+        (st0 : HList M.Val σ),
+        h.run (retryOfCfg M retryCfg)
+          ((mapR M ρ (Process.iterate n
+              ((roleSem M r fnTable rTable).loopStep ps (.cons idxNm carriedInNames)
+                (fun path' env' => body.denote (roleSem M r fnTable rTable) path' env')
+                key path env)
+              i ls)).bind fun lsEnd =>
+            (mapR M ρ (rest.denote (roleSem M r fnTable rTable) path
+              (env.extend results (lsEnd.1.append ((roleSem M r fnTable rTable).collected times.size lsEnd.2))))).bind cont) st0 =
+        (Process.iterate n
+            (fun j (cls : (HList M.Val (held r carried) × HList (fun τ => List (M.Val τ)) (held r each)) × HList M.Val σ) =>
+              (((specializeTerm specOp fnLift specApply retryCfg through ρ r hCtxB body).castCT rfl hBodyOut).denote
+                  M fullTable (path ++ [Frame.iteration key j])
+                  (loopBodyEnv M cenv idxOpt j (heldNames r carriedInNames) cls.1.1) cls.2).bind fun out =>
+                let sp := HList.split (held r carried) out.1
+                .done ((sp.1, cls.1.2.push sp.2), out.2))
+            i ((heldValues M r ls.1, heldAcc M r ls.2), st0)).bind fun clsEnd =>
+          (((specializeTerm specOp fnLift specApply retryCfg through ρ r (hCtx.extend results) rest).castCT
+              (ctx_extend_cast Δ hResTy (heldNames r results)).symm rfl).denote
+            M fullTable path
+            (cenv.extend (cast (congrArg Names hResTy) (heldNames r results))
+              (clsEnd.1.1.append (closedCollected M (specializeTimes hCtx times).size clsEnd.1.2)))
+            clsEnd.2).bind fun out =>
+            h.run (retryOfCfg M retryCfg) (cont (unheldValues M r out.1)) out.2 from
+      hIter n0 0 (env.all initial, HList.empties each) s
+    intro n
+    induction n with
+    | zero =>
+        intro i ls st0
+        dsimp only [Process.iterate, mapR, Process.bind]
+        have hValEq : cast (congrArg (HList M.Val) hResTy)
+            (heldValues M r (ls.1.append ((roleSem M r fnTable rTable).collected times.size ls.2))) =
+            (heldValues M r ls.1).append (closedCollected M (specializeTimes hCtx times).size (heldAcc M r ls.2)) := by
+          rw [heldValues_append, heldValues_collected M fnTable rTable]
+          have hValCast : ∀ {s1 s2 : Option Nat} (hs : s2 = s1)
+              {ts1 ts2 : List V.Ty}
+              (h1 : ts1 = held r carried ++ ts2)
+              (h2 : ts2 = (held r each).map (fun τ => .seq τ s1))
+              (hr : ts1 = held r carried ++ (held r each).map (fun τ => .seq τ s2))
+              (x : HList M.Val (held r carried)) (y : HList (fun τ => List (M.Val τ)) (held r each)),
+              cast (congrArg (HList M.Val) hr)
+                (cast (congrArg (HList M.Val) h1.symm)
+                  (x.append (cast (congrArg (HList M.Val) h2.symm) (closedCollected M s1 y)))) =
+                x.append (closedCollected M s2 y) := by
+            intro _ _ hs _ _ h1 h2 hr _ _; subst hs; subst h2; subst h1; rfl
+          exact hValCast hSize (held_append _ _ _) (held_map_collected _ _ _) hResTy _ _
+        rw [← hValEq, closedTerm_denote_castExt M fullTable hResTy (heldNames r results)]
+        exact hRest path _ _ st0 cont (hEnv.extend M results _) hPath (fun b site ag hc => (hWN b site ag hc).2)
+    | succ m ihM =>
+        intro i ls st0
+        dsimp only [Process.iterate, Semantics.loopStep]
+        change h.run (retryOfCfg M retryCfg)
+          ((mapR M ρ (((body.denote (roleSem M r fnTable rTable) (path ++ [Frame.iteration key i])
+              (env.extend (.cons idxNm carriedInNames) (.cons (hide M r (LTy.index ps) i) ls.1))).bind
+            fun a => Process.done ((HList.split carried a).1, ls.2.push (HList.split carried a).2)).bind
+            fun a2 => Process.iterate m
+              ((roleSem M r fnTable rTable).loopStep ps (.cons idxNm carriedInNames)
+                (fun path' env' => body.denote (roleSem M r fnTable rTable) path' env')
+                key path env) (i + 1) a2)).bind fun lsEnd =>
+            (mapR M ρ (rest.denote (roleSem M r fnTable rTable) path
+              (env.extend results (lsEnd.1.append ((roleSem M r fnTable rTable).collected times.size lsEnd.2))))).bind cont) st0 = _
+        rw [mapR_bind, mapR_bind, Process.bind_assoc, Process.bind_assoc, Process.bind_assoc,
+          closedTerm_denote_castCT, cast_eq, Process.bind_map, Process.bind_assoc]
+        have hPathI : Frame.applications (path ++ [Frame.iteration key i]) = through := by
+          rw [Frame.applications_append, hPath]; exact List.append_nil _
+        have hStepBody := hBody hCtxB (path ++ [Frame.iteration key i])
+          (env.extend (.cons idxNm carriedInNames) (.cons (hide M r (LTy.index ps) i) ls.1))
+          (loopBodyEnv M cenv idxOpt i (heldNames r carriedInNames) (heldValues M r ls.1)) st0
+          (fun a =>
+            (mapR M ρ (Process.done ((HList.split carried a).1, ls.2.push (HList.split carried a).2))).bind fun a2 =>
+              (mapR M ρ (Process.iterate m
+                ((roleSem M r fnTable rTable).loopStep ps (.cons idxNm carriedInNames)
+                  (fun path' env' => body.denote (roleSem M r fnTable rTable) path' env')
+                  key path env) (i + 1) a2)).bind fun lsEnd =>
+                (mapR M ρ (rest.denote (roleSem M r fnTable rTable) path
+                  (env.extend results (lsEnd.1.append ((roleSem M r fnTable rTable).collected times.size lsEnd.2))))).bind cont)
+          (hEnvStep i ls.1) hPathI (fun b site ag hc => (hWN b site ag hc).1)
+        rw [hStepBody]
+        congr 1; funext out
+        dsimp only [mapR, Process.bind]
+        have hSp := heldValues_split M r (unheldValues M r out.1)
+        rw [heldValues_unheldValues] at hSp
+        rw [hSp.1, hSp.2, ← heldAcc_push M r ls.2]
+        exact ihM (i + 1) _ out.2
+  by_cases hIn : r ∈ ps
+  · rw [dite_eq_left hIn]
+    refine hLoopProof (some idxNm) _ fun i cv => ?_
+    have h1 := (hEnv.insert_held M idxNm (a := LTy.index ps) hIn (hide M r (LTy.index ps) i)).extend M carriedInNames cv
+    rw [reveal_hide] at h1
+    exact h1
+  · rw [dite_eq_right hIn]
+    refine hLoopProof none _ fun i cv => ?_
+    exact (hEnv.insert_unheld M idxNm (a := LTy.index ps) hIn (hide M r (LTy.index ps) i)).extend M carriedInNames cv
+
+private theorem specializeTerm_sound_attempt {fullFns : List (FnHeader V)} (fullTable : FnTable M fullFns)
+    {σ : List V.Ty} (h : Handler (RSig M) (RSig M) Stop (HList M.Val σ))
+    (specOp : EffectSpecializer V fullFns σ) (hSpec : SpecOpSound M fullTable h specOp)
+    {hs : Headers V} (fnTable : FnTable M hs.fns) (rTable : RTable M hs.protocols)
+    (fnLift : ∀ {hdr}, Member hs.fns hdr → Member fullFns hdr)
+    (specApply : Option (Nat × Site × StackAgain V fullFns σ) →
+      {hdr : ProtocolHeader V} → Member hs.protocols hdr →
+      List Key → (Role → Role) → (r : Role) →
+      (inputs : Names (held r hdr.ins)) ×
+        ClosedTerm V fullFns σ (Ctx.empty.extend inputs) (held r hdr.outs))
+    (through : List Key) (ρ : Role → Role) (r : Role)
+    (retryCfg : Option (Nat × Site × StackAgain V fullFns σ))
+    (hRC : RetryCfgOk M fullTable h retryCfg)
+    {Γ : Ctx (LTy V)} {Δ : Ctx V.Ty} (hCtx : CtxRel r Γ Δ)
+    {outs mid : List (LTy V)} (key : Key) (w : Holders) (owns : (roleDialect V hs r).Attempt w)
+    (idxNm : Name)
+    (body : Term (roleDialect V hs r) (Γ.extend (.cons (a := LTy.index w) idxNm .nil)) mid)
+    (results : Names mid) (rest : Term (roleDialect V hs r) (Γ.extend results) outs)
+    (hBody : ∀ {ΔB : Ctx V.Ty} (hCtxB : CtxRel r (Γ.extend (.cons (a := LTy.index w) idxNm .nil)) ΔB),
+      SpecTermHyp M fullTable h specOp fnTable rTable fnLift specApply through ρ r retryCfg hCtxB body)
+    (hBodyNone : ∀ {ΔB : Ctx V.Ty} (hCtxB : CtxRel r (Γ.extend (.cons (a := LTy.index w) idxNm .nil)) ΔB),
+      SpecTermHyp M fullTable h specOp fnTable rTable fnLift specApply through ρ r none hCtxB body)
+    (hRest : SpecTermHyp M fullTable h specOp fnTable rTable fnLift specApply through ρ r retryCfg
+      (hCtx.extend results) rest) :
+    SpecTermHyp M fullTable h specOp fnTable rTable fnLift specApply through ρ r retryCfg hCtx
+      (.attempt key w owns (.cons idxNm .nil) body results rest) := by
+  intro path env cenv s _ cont hEnv hPath hWN
+  rw [Term.denote_attempt]
+  conv => rhs; rw [specializeTerm]; dsimp only
+  rw [mapR_bind, Process.bind_assoc]
+  by_cases hw : r ∈ w
+  · have hBeg : (roleSem M r fnTable rTable).begin w key path =
+        Process.call (ROp.begin ⟨path, key⟩) fun n => Process.done (hide M r (LTy.index w) n) := by
+      dsimp only [roleSem]; exact ite_eq_left hw
+    have hSet : (roleSem M r fnTable rTable).settle w key path =
+        Process.call (ROp.settle ⟨path, key⟩) fun _ => Process.done () := by
+      dsimp only [roleSem]; exact ite_eq_left hw
+    rw [hBeg, hSet, dite_eq_left hw]
+    dsimp only [mapR, Process.bind]
+    have hCtxB : CtxRel r (Γ.extend (.cons (a := LTy.index w) idxNm .nil))
+        (Δ.extend (.cons (a := Ty.nat) idxNm .nil)) :=
+      hCtx.insert_held idxNm (a := LTy.index w)
+    have hNonRetry : ∀ (hNotBeg : (retryOfCfg M retryCfg).begins (.begin ⟨path, key⟩) = none),
+        h.run (retryOfCfg M retryCfg)
+          (.call (.begin ⟨path, key⟩) fun n =>
+            (mapR M ρ (body.denote (roleSem M r fnTable rTable) path
+              (env.extend (.cons (a := LTy.index w) idxNm .nil) (.cons (hide M r (LTy.index w) n) .nil)))).bind
+              fun mids => .call (.settle ⟨path, key⟩) fun _ =>
+                (mapR M ρ (rest.denote (roleSem M r fnTable rTable) path (env.extend results mids))).bind cont) s =
+        ((ClosedTerm.letBind
+            (.letBind (specOp through key .begin .nil) (.cons (a := Ty.nat) idxNm .nil)
+              (.seq (specializeTerm specOp fnLift specApply retryCfg through ρ r hCtxB body)
+                (specOp through key .settle .nil)))
+            (heldNames r results)
+            (specializeTerm specOp fnLift specApply retryCfg through ρ r (hCtx.extend results) rest)).denote
+          M fullTable path cenv s).bind fun out =>
+          h.run (retryOfCfg M retryCfg) (cont (unheldValues M r out.1)) out.2 := by
+      intro hNotBeg
+      rw [handler_run_call_nonBegin M h _ _ hNotBeg]
+      dsimp only [ClosedTerm.denote]
+      rw [hSpec through key .begin .nil path cenv s hPath, Process.bind_assoc,
+        Process.bind_assoc, Process.bind_map]
+      dsimp only [ResidualOp.toROp, Env.all, ResidualOp.replyOf]
+      congr 1; funext outB
+      have hInsEnv : EnvRel M r hCtxB
+          (env.extend (.cons (a := LTy.index w) idxNm .nil) (.cons (hide M r (LTy.index w) outB.1) .nil))
+          (cenv.extend (.cons (a := Ty.nat) idxNm .nil) (.cons outB.1 .nil)) := by
+        have h1 := hEnv.insert_held M idxNm hw (hide M r (LTy.index w) outB.1)
+        rw [reveal_hide] at h1
+        exact h1
+      rw [Process.bind_assoc,
+        hBody hCtxB path _ _ outB.2 _ hInsEnv hPath (fun b site ag hc => (hWN b site ag hc).2.1)]
+      congr 1; funext outM
+      rw [handler_run_call_nonBegin M h _ _ (retryOfCfg_not_begin M retryCfg _ trivial),
+        hSpec through key .settle .nil path _ outM.2 hPath,
+        Process.bind_map, Process.bind_map]
+      dsimp only [ResidualOp.toROp, Env.all, ResidualOp.replyOf]
+      congr 1; funext outS
+      have hEx := hEnv.extend M results (unheldValues M r outM.1)
+      rw [heldValues_unheldValues] at hEx
+      exact hRest path _ _ outS.2 cont hEx hPath (fun b site ag hc => (hWN b site ag hc).2.2)
+    cases retryCfg with
+    | none =>
+        dsimp only
+        simpa only [mapR_bind, mapR, Process.bind_assoc, Process.bind] using hNonRetry rfl
+    | some cfg =>
+        cases cfg with
+        | mk bound sr =>
+            cases sr with
+            | mk retrySite again =>
+                dsimp only
+                by_cases hSite : (⟨through, key⟩ : Site) = retrySite
+                · rw [ite_eq_left hSite]
+                  have hOccSite : (⟨path, key⟩ : Occurrence).site = retrySite := by
+                    simpa [Occurrence.site, hPath] using hSite
+                  have hBegHit : (retryOf M (some (bound, retrySite))).begins (.begin ⟨path, key⟩) =
+                      some (.declared .exhausted ⟨path, key⟩, fun i => i) := by
+                    dsimp only [retryOf]; exact ite_eq_left hOccSite
+                  dsimp only [ClosedTerm.denote, retryOfCfg]
+                  conv => lhs; rw [Handler.run, hBegHit]
+                  dsimp only
+                  have hRetr : (retryOf M (some (bound, retrySite))).retriable = Stop.isAbort := rfl
+                  have hBnd : (retryOf M (some (bound, retrySite))).bound = bound := rfl
+                  rw [hRetr, hBnd]
+                  dsimp only [RetryCfgOk] at hRC
+                  rw [← hRC]
+                  have hKeyEq : retrySite.key = key := by
+                    cases hSite; rfl
+                  have hBodyEq : ∀ (i : Nat) (s' : HList M.Val σ),
+                      h.inside (retryOf M (some (bound, retrySite))) i
+                        ((mapR M ρ ((body.denote (roleSem M r fnTable rTable) path
+                            (env.extend (.cons (a := LTy.index w) idxNm .nil) (.cons (hide M r (LTy.index w) i) .nil))).bind
+                          fun mids => .call (.settle ⟨path, key⟩) fun _ =>
+                            rest.denote (roleSem M r fnTable rTable) path (env.extend results mids))).bind cont) s' =
+                      ((Process.markOwn M (.attempt key i)
+                          ((specializeTerm specOp fnLift specApply none through ρ r hCtxB body).denote
+                            M fullTable path (cenv.extend (.cons (a := Ty.nat) idxNm .nil) (.cons (i : Nat) .nil)) s')).mapHalt
+                          fun stop => ((true, stop.1), stop.2)).bind fun outM =>
+                        (((specializeTerm specOp fnLift specApply (some (bound, retrySite, again))
+                            through ρ r (hCtx.extend results) rest).denote
+                          M fullTable path (cenv.extend (heldNames r results) outM.1) outM.2).bind fun outR =>
+                          h.run (retryOf M (some (bound, retrySite))) (cont (unheldValues M r outR.1)) outR.2).mapHalt
+                          fun stop => ((false, stop.1), stop.2) := by
+                    intro i s'
+                    rw [mapR_bind, Process.bind_assoc]
+                    dsimp only [mapR, Process.bind]
+                    have hNoS : NoSettleAt M retrySite
+                        (mapR M ρ (body.denote (roleSem M r fnTable rTable) path
+                          (env.extend (.cons (a := LTy.index w) idxNm .nil) (.cons (hide M r (LTy.index w) i) .nil)))) :=
+                      noSettleAt_mapR M ρ ((hWN bound retrySite again rfl).1 hw hSite path _ hPath)
+                    rw [handler_inside_settle_bind M h bound retrySite i _ hNoS ⟨path, key⟩ hOccSite _ s',
+                      hKeyEq]
+                    have hInsEnv : EnvRel M r hCtxB
+                        (env.extend (.cons (a := LTy.index w) idxNm .nil) (.cons (hide M r (LTy.index w) i) .nil))
+                        (cenv.extend (.cons (a := Ty.nat) idxNm .nil) (.cons (i : Nat) .nil)) := by
+                      have h1 := hEnv.insert_held M idxNm hw (hide M r (LTy.index w) i)
+                      rw [reveal_hide] at h1
+                      exact h1
+                    have hBodyPure := hBodyNone hCtxB path _ _ s'
+                      Process.done hInsEnv hPath (fun _ _ _ hc => nomatch hc)
+                    rw [Process.bind_pure] at hBodyPure
+                    dsimp only [retryOfCfg] at hBodyPure
+                    rw [hBodyPure, markOwn_bind, mapHalt_bind, Process.bind_assoc]
+                    congr 1; funext outM
+                    dsimp only [Handler.run, Process.markOwn, Process.mapHalt, Process.bind, mapR]
+                    congr 1
+                    have hEx := hEnv.extend M results (unheldValues M r outM.1)
+                    rw [heldValues_unheldValues] at hEx
+                    exact hRest path _ _ outM.2 cont hEx hPath (fun b' s' ag' hc => by
+                      cases hc; exact (hWN bound retrySite again rfl).2.2)
+                  have hFun : (fun i s' => h.inside (retryOf M (some (bound, retrySite))) i
+                      ((mapR M ρ ((body.denote (roleSem M r fnTable rTable) path
+                          (env.extend (.cons (a := LTy.index w) idxNm .nil) (.cons (hide M r (LTy.index w) i) .nil))).bind
+                        fun mids => .call (.settle ⟨path, key⟩) fun _ =>
+                          rest.denote (roleSem M r fnTable rTable) path (env.extend results mids))).bind cont) s') =
+                      (fun i s' => ((Process.markOwn M (.attempt key i)
+                          ((specializeTerm specOp fnLift specApply none through ρ r hCtxB body).denote
+                            M fullTable path (cenv.extend (.cons (a := Ty.nat) idxNm .nil) (.cons (i : Nat) .nil)) s')).mapHalt
+                          fun stop => ((true, stop.1), stop.2)).bind fun outM =>
+                        (((specializeTerm specOp fnLift specApply (some (bound, retrySite, again))
+                            through ρ r (hCtx.extend results) rest).denote
+                          M fullTable path (cenv.extend (heldNames r results) outM.1) outM.2).bind fun outR =>
+                          h.run (retryOf M (some (bound, retrySite))) (cont (unheldValues M r outR.1)) outR.2).mapHalt
+                          fun stop => ((false, stop.1), stop.2)) := by
+                    funext i s'; exact hBodyEq i s'
+                  rw [hFun, Process.bind_assoc]
+                  exact attempts_bind_settle M (.declared .exhausted ⟨path, key⟩)
+                    (StackAgain.eval M fullTable again)
+                    (fun j s' => Process.markOwn M (.attempt key j)
+                      ((specializeTerm specOp fnLift specApply none through ρ r hCtxB body).denote
+                        M fullTable path (cenv.extend (.cons (a := Ty.nat) idxNm .nil) (.cons (j : Nat) .nil)) s'))
+                    (fun a st => ((specializeTerm specOp fnLift specApply (some (bound, retrySite, again))
+                        through ρ r (hCtx.extend results) rest).denote
+                      M fullTable path (cenv.extend (heldNames r results) a) st).bind fun outR =>
+                      h.run (retryOf M (some (bound, retrySite))) (cont (unheldValues M r outR.1)) outR.2)
+                    s bound 0 s
+                · rw [ite_eq_right hSite]
+                  have hOccNe : (⟨path, key⟩ : Occurrence).site ≠ retrySite := by
+                    simpa [Occurrence.site, hPath] using hSite
+                  have hNotBeg : (retryOfCfg M (some (bound, retrySite, again))).begins (.begin ⟨path, key⟩) = none := by
+                    dsimp only [retryOfCfg, retryOf]
+                    exact ite_eq_right hOccNe
+                  simpa only [mapR_bind, mapR, Process.bind_assoc, Process.bind] using hNonRetry hNotBeg
+  · have hBeg : (roleSem M r fnTable rTable).begin w key path =
+        Process.done (hide M r (LTy.index w) 0) := by
+      dsimp only [roleSem]; exact ite_eq_right hw
+    have hSet : (roleSem M r fnTable rTable).settle w key path = Process.done () := by
+      dsimp only [roleSem]; exact ite_eq_right hw
+    rw [hBeg, hSet, dite_eq_right hw]
+    conv => rhs; rw [ClosedTerm.denote]
+    dsimp only [mapR, Process.bind]
+    rw [mapR_bind, Process.bind_assoc, Process.bind_assoc]
+    have hCtxB : CtxRel r (Γ.extend (.cons (a := LTy.index w) idxNm .nil)) Δ :=
+      hCtx.insert_unheld idxNm (a := LTy.index w) hw
+    have hInsEnv : EnvRel M r hCtxB
+        (env.extend (.cons (a := LTy.index w) idxNm .nil) (.cons (hide M r (LTy.index w) (0 : Nat)) .nil)) cenv :=
+      hEnv.insert_unheld M idxNm hw (hide M r (LTy.index w) (0 : Nat))
+    rw [hBody hCtxB path _ cenv s _ hInsEnv hPath (fun b site ag hc => (hWN b site ag hc).2.1)]
+    congr 1; funext outM
+    have hEx := hEnv.extend M results (unheldValues M r outM.1)
+    rw [heldValues_unheldValues] at hEx
+    exact hRest path _ _ outM.2 cont hEx hPath (fun b site ag hc => (hWN b site ag hc).2.2)
+
 mutual
   private theorem specializeTerm_sound {fullFns : List (FnHeader V)} (fullTable : FnTable M fullFns)
       {σ : List V.Ty} (h : Handler (RSig M) (RSig M) Stop (HList M.Val σ))
@@ -2471,334 +3417,68 @@ mutual
         rw [Term.denote_ret, specializeTerm, ClosedTerm.denote]
         dsimp only [mapR, Process.bind]
         rw [env_all_varsHeld M hEnv exit, unheldValues_heldValues]
-    | retryCfg, hRC, Γ, Δ, hCtx, _, .op key (.compute (outs := outsOp) R lo opTys types mine here) operands results rest,
-        path, env, cenv, s, _, cont, hEnv, hPath, hWN => by
-        have hWNRest : ∀ b site ag, retryCfg = some (b, site, ag) →
-            RoleTermWellNested M fnTable rTable r site through rest :=
-          fun b site ag hc => (hWN b site ag hc).2
-        rw [Term.denote_op]
-        conv => rhs; rw [specializeTerm]; dsimp only; rw [ClosedTerm.denote]
-        change h.run (retryOfCfg M retryCfg)
-          ((mapR M ρ (((liftLocal id (localOp M fnTable lo (computeArgs M types (revealAll M here (env.all operands))))).map
-            fun outs => hideAll M r (HList.located M R outs)).bind fun vs =>
-              rest.denote (roleSem M r fnTable rTable) path (env.extend results vs))).bind cont) s = _
-        rw [mapR_bind, mapR_map, mapR_liftLocal, Process.bind_assoc, Process.bind_map,
-          handler_run_liftLocal]
-        have hArgs : cenv.all (cast (congrArg (HList (Var Δ)) types) (varsAllHeld hCtx here operands)) =
-            computeArgs M types (revealAll M here (env.all operands)) := by
-          unfold computeArgs
-          rw [← env_all_varsAllHeld M hEnv here operands]
-          have hc : ∀ {ts₁ ts₂ : List V.Ty} (e : ts₁ = ts₂) (xs : HList (Var Δ) ts₁),
-              cenv.all (cast (congrArg (HList (Var Δ)) e) xs) =
-                cast (congrArg (HList M.Val) e) (cenv.all xs) := by
-            intro _ _ e _; subst e; rfl
-          exact hc types _
-        rw [hArgs, localOp_lift_eq M fnTable fullTable fnLift hLift, Process.bind_assoc]
-        congr 1; funext vs
-        have hRest := specializeTerm_sound fullTable h specOp hSpec fnTable rTable fnLift hLift specApply hApply
-          through ρ r retryCfg hRC (hCtx.extend results) rest path
-          (env.extend results (hideAll M r (HList.located M R vs)))
-          (cenv.extend (heldNames r results) (heldValues M r (hideAll M r (HList.located M R vs))))
-          s cont (hEnv.extend M results _) hPath hWNRest
-        rw [hRest]
-        have hRes : held r (outsOp.map fun τ => ⟨τ, R⟩) = outsOp := held_map_holders r R mine outsOp
-        have hVs : cast (congrArg (HList M.Val) hRes) (heldValues M r (hideAll M r (HList.located M R vs))) = vs := by
-          rw [heldValues_hideAll_located M r R mine vs, cast_cast, cast_eq]
-        conv => rhs; rw [← hVs, closedTerm_denote_castExt M fullTable hRes (heldNames r results)]
+    | retryCfg, hRC, Γ, Δ, hCtx, _, .op key (.compute R lo opTys types mine here) operands results rest,
+        path, env, cenv, s, _, cont, hEnv, hPath, hWN =>
+        specializeTerm_sound_compute M fullTable h specOp fnTable rTable fnLift hLift specApply
+          through ρ r retryCfg hCtx key R lo opTys types mine here operands results rest
+          (specializeTerm_sound fullTable h specOp hSpec fnTable rTable fnLift hLift specApply hApply
+            through ρ r retryCfg hRC (hCtx.extend results) rest)
+          path env cenv s cont hEnv hPath hWN
     | retryCfg, hRC, Γ, Δ, hCtx, _, .op key (.absent items out) .nil results rest,
-        path, env, cenv, s, _, cont, hEnv, hPath, hWN => by
-        have hWNRest : ∀ b site ag, retryCfg = some (b, site, ag) →
-            RoleTermWellNested M fnTable rTable r site through rest :=
-          fun b site ag hc => (hWN b site ag hc).2
-        rw [Term.denote_op]
-        conv => rhs; rw [specializeTerm]; dsimp only
-        change h.run (retryOfCfg M retryCfg)
-          ((mapR M ρ (rest.denote (roleSem M r fnTable rTable) path (env.extend results (nothings M out)))).bind cont) s = _
-        have hEmpty : held r items = [] := held_all_out r items out
-        have hExt : Δ.extend (heldNames r results) = Δ := by
-          have hNil : cast (congrArg Names hEmpty) (heldNames r results) = .nil := by
-            cases cast (congrArg Names hEmpty) (heldNames r results); rfl
-          rw [← ctx_extend_cast Δ hEmpty (heldNames r results), hNil]; rfl
-        have hCenv : cast (congrArg (Env M.Val) hExt.symm) cenv =
-            cenv.extend (heldNames r results) (heldValues M r (nothings M out)) := by
-          have hNilN : cast (congrArg Names hEmpty) (heldNames r results) = .nil := by
-            cases cast (congrArg Names hEmpty) (heldNames r results); rfl
-          have hHeq : HEq (cenv.extend (heldNames r results) (heldValues M r (nothings M out))) cenv := by
-            rw [heldValues_nothings M r out]
-            have h1 := env_extend_cast cenv hEmpty (heldNames r results)
-              (cast (congrArg (HList M.Val) hEmpty.symm) .nil)
-            rw [hNilN, cast_cast, cast_eq] at h1
-            exact h1.symm
-          exact eq_of_heq ((cast_heq _ _).trans hHeq.symm)
-        rw [closedTerm_denote_castCT, Process.bind_map, hCenv]
-        exact specializeTerm_sound fullTable h specOp hSpec fnTable rTable fnLift hLift specApply hApply
-          through ρ r retryCfg hRC (hCtx.extend results) rest path
-          (env.extend results (nothings M out)) _ s cont (hEnv.extend M results _) hPath hWNRest
+        path, env, cenv, s, _, cont, hEnv, hPath, hWN =>
+        specializeTerm_sound_absent M fullTable h specOp fnTable rTable fnLift specApply
+          through ρ r retryCfg hCtx key items out results rest
+          (specializeTerm_sound fullTable h specOp hSpec fnTable rTable fnLift hLift specApply hApply
+            through ρ r retryCfg hRC (hCtx.extend results) rest)
+          path env cenv s cont hEnv hPath hWN
     | retryCfg, hRC, Γ, Δ, hCtx, _,
-        .op key (.give (τ := τ) (H := H) kind getters here) (.cons x .nil) (.cons resName .nil) rest,
-        path, env, cenv, s, _, cont, hEnv, hPath, hWN => by
-        have hWNRest : ∀ b site ag, retryCfg = some (b, site, ag) →
-            RoleTermWellNested M fnTable rTable r site through rest :=
-          fun b site ag hc => (hWN b site ag hc).2
-        have hIn : r ∈ Holders.ofList (getters ++ H) :=
-          Holders.mem_ofList.mpr (List.mem_append_right _ here)
-        have hRes : held r [⟨τ, Holders.ofList (getters ++ H)⟩] = [τ] := held_cons_pos r _ [] hIn
-        have hExt : Δ.extend (heldNames r (.cons (a := ⟨τ, Holders.ofList (getters ++ H)⟩) resName .nil)) =
-            Δ.insert resName τ := by
-          rw [heldNames_cons_pos hIn,
-            ctx_extend_cast Δ (held_cons_pos r ⟨τ, Holders.ofList (getters ++ H)⟩ [] hIn).symm]; rfl
-        have hRHS : (specializeTerm specOp fnLift specApply retryCfg through ρ r hCtx
-              (.op key (.give (τ := τ) (H := H) kind getters here) (.cons x .nil) (.cons resName .nil) rest)).denote
-              M fullTable path cenv s =
-            ((specOp through key ((ResidualOp.give kind getters τ).mapPeers ρ) (.cons (varHeld hCtx x here) .nil)).denote
-              M fullTable path cenv s).bind fun out =>
-              ((specializeTerm specOp fnLift specApply retryCfg through ρ r
-                  (hCtx.extend (.cons resName .nil)) rest).castCT hExt rfl).denote
-                M fullTable path ((cenv.extend .nil out.1).insert resName ((cenv.extend .nil out.1).get (varHeld hCtx x here))) out.2 := rfl
-        rw [Term.denote_op, hRHS]
-        change h.run (retryOfCfg M retryCfg)
-          ((mapR M ρ ((Process.call (ROp.give kind getters ⟨path, key⟩ τ (reveal M (a := ⟨τ, H⟩) here (env.get x)))
-            fun _ => Process.done (HList.cons (hide M r ⟨τ, Holders.ofList (getters ++ H)⟩ (reveal M (a := ⟨τ, H⟩) here (env.get x))) HList.nil)).bind
-            fun vs => rest.denote (roleSem M r fnTable rTable) path (env.extend (.cons resName .nil) vs))).bind cont) s = _
-        rw [mapR_bind, Process.bind_assoc]
-        dsimp only [mapR, Process.bind]
-        rw [handler_run_call_nonBegin M h _ _ (retryOfCfg_not_begin M retryCfg _ trivial)]
-        have hSpecG := hSpec through key ((ResidualOp.give kind getters τ).mapPeers ρ)
-          (.cons (varHeld hCtx x here) .nil) path cenv s hPath
-        rw [hSpecG, Process.bind_assoc, Process.bind_map]
-        change _ = ((h.clause (ROp.give kind (getters.map ρ) ⟨path, key⟩ τ (cenv.get (varHeld hCtx x here))) s).bind fun a =>
-          (((specializeTerm specOp fnLift specApply retryCfg through ρ r
-              (hCtx.extend (.cons resName .nil)) rest).castCT hExt rfl).denote
-            M fullTable path (cenv.insert resName (cenv.get (varHeld hCtx x here))) a.2).bind
-            fun out => h.run (retryOfCfg M retryCfg) (cont (unheldValues M r out.1)) out.2)
-        rw [env_get_varHeld M hEnv x here]
-        congr 1; funext out
-        have hCenvEq : cast (congrArg (Env M.Val) hExt.symm) (cenv.insert resName (reveal M (a := ⟨τ, H⟩) here (env.get x))) =
-            cenv.extend (heldNames r (.cons resName .nil))
-              (heldValues M r (.cons (hide M r ⟨τ, Holders.ofList (getters ++ H)⟩ (reveal M (a := ⟨τ, H⟩) here (env.get x))) .nil)) := by
-          have hHeq : HEq
-              (cenv.extend (heldNames r (.cons resName .nil))
-                (heldValues M r (.cons (hide M r ⟨τ, Holders.ofList (getters ++ H)⟩ (reveal M (a := ⟨τ, H⟩) here (env.get x))) .nil)))
-              (cenv.insert resName (reveal M (a := ⟨τ, H⟩) here (env.get x))) := by
-            rw [heldNames_cons_pos hIn, heldValues_cons_pos M hIn, reveal_hide]
-            exact env_extend_cast cenv hRes.symm (HList.cons resName .nil)
-              (HList.cons (reveal M (a := ⟨τ, H⟩) here (env.get x)) .nil)
-          exact eq_of_heq ((cast_heq _ _).trans hHeq.symm)
-        rw [closedTerm_denote_castCT, Process.bind_map, hCenvEq]
-        exact specializeTerm_sound fullTable h specOp hSpec fnTable rTable fnLift hLift specApply hApply
-          through ρ r retryCfg hRC (hCtx.extend (.cons resName .nil)) rest path
-          _ _ out.2 cont (hEnv.extend M (.cons resName .nil) _) hPath hWNRest
+        .op key (.give kind getters here) (.cons x .nil) (.cons resName .nil) rest,
+        path, env, cenv, s, _, cont, hEnv, hPath, hWN =>
+        specializeTerm_sound_give M fullTable h specOp hSpec fnTable rTable fnLift specApply
+          through ρ r retryCfg hCtx key kind getters here x resName rest
+          (specializeTerm_sound fullTable h specOp hSpec fnTable rTable fnLift hLift specApply hApply
+            through ρ r retryCfg hRC (hCtx.extend (.cons resName .nil)) rest)
+          path env cenv s cont hEnv hPath hWN
     | retryCfg, hRC, Γ, Δ, hCtx, _,
         .op key (.get τ H kind giver getters mine) .nil (.cons resName .nil) rest,
-        path, env, cenv, s, _, cont, hEnv, hPath, hWN => by
-        have hWNRest : ∀ b site ag, retryCfg = some (b, site, ag) →
-            RoleTermWellNested M fnTable rTable r site through rest :=
-          fun b site ag hc => (hWN b site ag hc).2
-        have hIn : r ∈ Holders.ofList (getters ++ H) :=
-          Holders.mem_ofList.mpr (List.mem_append_left _ mine)
-        have hRes : held r [⟨τ, Holders.ofList (getters ++ H)⟩] = [τ] := held_cons_pos r _ [] hIn
-        have hRHS : (specializeTerm specOp fnLift specApply retryCfg through ρ r hCtx
-              (.op key (.get τ H kind giver getters mine) .nil (.cons resName .nil) rest)).denote
-              M fullTable path cenv s =
-            ((specOp through key ((ResidualOp.get kind giver τ).mapPeers ρ) .nil).denote
-              M fullTable path cenv s).bind fun out =>
-              ((specializeTerm specOp fnLift specApply retryCfg through ρ r
-                  (hCtx.extend (.cons resName .nil)) rest).castCT
-                (ctx_extend_cast Δ hRes (heldNames r (.cons resName .nil))).symm rfl).denote
-                M fullTable path
-                (cenv.extend (cast (congrArg Names hRes) (heldNames r (.cons resName .nil))) out.1) out.2 := rfl
-        rw [Term.denote_op, hRHS]
-        change h.run (retryOfCfg M retryCfg)
-          ((mapR M ρ ((Process.call (ROp.get kind giver ⟨path, key⟩ τ)
-            fun v => Process.done (HList.cons (hide M r ⟨τ, Holders.ofList (getters ++ H)⟩ v) HList.nil)).bind
-            fun vs => rest.denote (roleSem M r fnTable rTable) path (env.extend (.cons resName .nil) vs))).bind cont) s = _
-        rw [mapR_bind, Process.bind_assoc]
-        dsimp only [mapR, Process.bind]
-        rw [handler_run_call_nonBegin M h _ _ (retryOfCfg_not_begin M retryCfg _ trivial)]
-        have hSpecG := hSpec through key ((ResidualOp.get kind giver τ).mapPeers ρ)
-          .nil path cenv s hPath
-        rw [hSpecG, Process.bind_assoc, Process.bind_map]
-        dsimp only [ResidualOp.mapPeers, ResidualOp.toROp, Env.all, ResidualOp.replyOf]
-        congr 1; funext out
-        have hOutEq : cast (congrArg (HList M.Val) hRes)
-            (heldValues M r (.cons (hide M r ⟨τ, Holders.ofList (getters ++ H)⟩ out.1) .nil)) =
-            .cons out.1 .nil := by
-          rw [heldValues_cons_pos M hIn, reveal_hide, cast_cast]; rfl
-        conv => rhs; rw [← hOutEq, closedTerm_denote_castExt M fullTable hRes (heldNames r (.cons resName .nil))]
-        exact specializeTerm_sound fullTable h specOp hSpec fnTable rTable fnLift hLift specApply hApply
-          through ρ r retryCfg hRC (hCtx.extend (.cons resName .nil)) rest path
-          _ _ out.2 cont (hEnv.extend M (.cons resName .nil) _) hPath hWNRest
+        path, env, cenv, s, _, cont, hEnv, hPath, hWN =>
+        specializeTerm_sound_get M fullTable h specOp hSpec fnTable rTable fnLift specApply
+          through ρ r retryCfg hCtx key τ H kind giver getters mine resName rest
+          (specializeTerm_sound fullTable h specOp hSpec fnTable rTable fnLift hLift specApply hApply
+            through ρ r retryCfg hRC (hCtx.extend (.cons resName .nil)) rest)
+          path env cenv s cont hEnv hPath hWN
     | retryCfg, hRC, Γ, Δ, hCtx, _,
-        .op key (.keep (τ := τ) (H := H) H' same) (.cons x .nil) (.cons resName .nil) rest,
-        path, env, cenv, s, _, cont, hEnv, hPath, hWN => by
-        have hWNRest : ∀ b site ag, retryCfg = some (b, site, ag) →
-            RoleTermWellNested M fnTable rTable r site through rest :=
-          fun b site ag hc => (hWN b site ag hc).2
-        rw [Term.denote_op]
-        conv => rhs; rw [specializeTerm]; dsimp only
-        change h.run (retryOfCfg M retryCfg)
-          ((mapR M ρ (rest.denote (roleSem M r fnTable rTable) path
-            (env.extend (.cons resName .nil) (.cons (carry M same (env.get x)) .nil)))).bind cont) s = _
-        by_cases hIn : r ∈ H
-        · rw [dite_eq_left hIn]
-          conv => rhs; rw [ClosedTerm.denote]
-          have hIn' : r ∈ H' := same.mp hIn
-          have hExt : Δ.extend (heldNames r (.cons (a := ⟨τ, H'⟩) resName .nil)) = Δ.insert resName τ := by
-            rw [heldNames_cons_pos hIn', ctx_extend_cast Δ (held_cons_pos r ⟨τ, H'⟩ [] hIn').symm]; rfl
-          have hRevCarry : reveal M hIn' (carry M same (env.get x)) = reveal M hIn (env.get x) := by
-            simp [reveal, carry]
-          have hCenvEq : cast (congrArg (Env M.Val) hExt.symm) (cenv.insert resName (cenv.get (varHeld hCtx x hIn))) =
-              cenv.extend (heldNames r (.cons (a := ⟨τ, H'⟩) resName .nil))
-                (heldValues M r (.cons (carry M same (env.get x)) .nil)) := by
-            rw [env_get_varHeld M hEnv x hIn, ← hRevCarry]
-            have hHeq : HEq
-                (cenv.extend (heldNames r (.cons (a := ⟨τ, H'⟩) resName .nil))
-                  (heldValues M r (.cons (carry M same (env.get x)) .nil)))
-                (cenv.insert resName (reveal M hIn' (carry M same (env.get x)))) := by
-              rw [heldNames_cons_pos hIn', heldValues_cons_pos M hIn']
-              exact env_extend_cast cenv (held_cons_pos r ⟨τ, H'⟩ [] hIn').symm (HList.cons resName .nil)
-                (HList.cons (reveal M hIn' (carry M same (env.get x))) .nil)
-            exact eq_of_heq ((cast_heq _ _).trans hHeq.symm)
-          rw [closedTerm_denote_castCT, Process.bind_map, hCenvEq]
-          exact specializeTerm_sound fullTable h specOp hSpec fnTable rTable fnLift hLift specApply hApply
-            through ρ r retryCfg hRC (hCtx.extend (.cons resName .nil)) rest path
-            _ _ s cont (hEnv.extend M (.cons resName .nil) _) hPath hWNRest
-        · rw [dite_eq_right hIn]
-          have hOut' : r ∉ H' := fun m => hIn (same.mpr m)
-          have hExt : Δ.extend (heldNames r (.cons (a := ⟨τ, H'⟩) resName .nil)) = Δ := by
-            rw [heldNames_cons_neg hOut', ctx_extend_cast Δ (held_cons_neg r ⟨τ, H'⟩ [] hOut').symm]; rfl
-          have hCenvEq : cast (congrArg (Env M.Val) hExt.symm) cenv =
-              cenv.extend (heldNames r (.cons (a := ⟨τ, H'⟩) resName .nil))
-                (heldValues M r (.cons (carry M same (env.get x)) .nil)) := by
-            have hHeq : HEq
-                (cenv.extend (heldNames r (.cons (a := ⟨τ, H'⟩) resName .nil))
-                  (heldValues M r (.cons (carry M same (env.get x)) .nil))) cenv := by
-              rw [heldNames_cons_neg hOut', heldValues_cons_neg M hOut']
-              exact env_extend_cast cenv (held_cons_neg r ⟨τ, H'⟩ [] hOut').symm .nil .nil
-            exact eq_of_heq ((cast_heq _ _).trans hHeq.symm)
-          rw [closedTerm_denote_castCT, Process.bind_map, hCenvEq]
-          exact specializeTerm_sound fullTable h specOp hSpec fnTable rTable fnLift hLift specApply hApply
-            through ρ r retryCfg hRC (hCtx.extend (.cons resName .nil)) rest path
-            _ _ s cont (hEnv.extend M (.cons resName .nil) _) hPath hWNRest
+        .op key (.keep H' same) (.cons x .nil) (.cons resName .nil) rest,
+        path, env, cenv, s, _, cont, hEnv, hPath, hWN =>
+        specializeTerm_sound_keep M fullTable h specOp fnTable rTable fnLift specApply
+          through ρ r retryCfg hCtx key H' same x resName rest
+          (specializeTerm_sound fullTable h specOp hSpec fnTable rTable fnLift hLift specApply hApply
+            through ρ r retryCfg hRC (hCtx.extend (.cons resName .nil)) rest)
+          path env cenv s cont hEnv hPath hWN
     | retryCfg, hRC, Γ, Δ, hCtx, _,
         .op key (.own kind hearers opTys τ typed here) operands (.cons resName .nil) rest,
-        path, env, cenv, s, _, cont, hEnv, hPath, hWN => by
-        have hWNRest : ∀ b site ag, retryCfg = some (b, site, ag) →
-            RoleTermWellNested M fnTable rTable r site through rest :=
-          fun b site ag hc => (hWN b site ag hc).2
-        have hIn : r ∈ Holders.ofList (r :: hearers) := Holders.mem_ofList.mpr List.mem_cons_self
-        have hRes : held r [⟨τ, Holders.ofList (r :: hearers)⟩] = [τ] := held_cons_pos r _ [] hIn
-        have hRHS : (specializeTerm specOp fnLift specApply retryCfg through ρ r hCtx
-              (.op key (.own kind hearers opTys τ typed here) operands (.cons resName .nil) rest)).denote
-              M fullTable path cenv s =
-            ((specOp through key ((ResidualOp.own kind hearers (opTys.map LTy.ty) τ).mapPeers ρ)
-                (varsAllHeld hCtx here operands)).denote
-              M fullTable path cenv s).bind fun out =>
-              ((specializeTerm specOp fnLift specApply retryCfg through ρ r
-                  (hCtx.extend (.cons resName .nil)) rest).castCT
-                (ctx_extend_cast Δ hRes (heldNames r (.cons resName .nil))).symm rfl).denote
-                M fullTable path
-                (cenv.extend (cast (congrArg Names hRes) (heldNames r (.cons resName .nil))) out.1) out.2 := rfl
-        rw [Term.denote_op, hRHS]
-        change h.run (retryOfCfg M retryCfg)
-          ((mapR M ρ ((Process.call (ROp.own kind hearers ⟨path, key⟩ (opTys.map LTy.ty)
-              (HList.ofLocated M (revealAll M here (env.all operands))) τ)
-            fun v => Process.done (HList.cons (hide M r ⟨τ, Holders.ofList (r :: hearers)⟩ v) HList.nil)).bind
-            fun vs => rest.denote (roleSem M r fnTable rTable) path (env.extend (.cons resName .nil) vs))).bind cont) s = _
-        rw [mapR_bind, Process.bind_assoc]
-        dsimp only [mapR, Process.bind]
-        rw [handler_run_call_nonBegin M h _ _ (retryOfCfg_not_begin M retryCfg _ trivial)]
-        have hSpecO := hSpec through key
-          ((ResidualOp.own kind hearers (opTys.map LTy.ty) τ).mapPeers ρ)
-          (varsAllHeld hCtx here operands) path cenv s hPath
-        rw [hSpecO, Process.bind_assoc, Process.bind_map]
-        dsimp only [ResidualOp.mapPeers, ResidualOp.toROp, ResidualOp.replyOf]
-        rw [env_all_varsAllHeld M hEnv here operands]
-        congr 1; funext out
-        have hOutEq : cast (congrArg (HList M.Val) hRes)
-            (heldValues M r (.cons (hide M r ⟨τ, Holders.ofList (r :: hearers)⟩ out.1) .nil)) =
-            .cons out.1 .nil := by
-          rw [heldValues_cons_pos M hIn, reveal_hide, cast_cast]; rfl
-        conv => rhs; rw [← hOutEq, closedTerm_denote_castExt M fullTable hRes (heldNames r (.cons resName .nil))]
-        exact specializeTerm_sound fullTable h specOp hSpec fnTable rTable fnLift hLift specApply hApply
-          through ρ r retryCfg hRC (hCtx.extend (.cons resName .nil)) rest path
-          _ _ out.2 cont (hEnv.extend M (.cons resName .nil) _) hPath hWNRest
+        path, env, cenv, s, _, cont, hEnv, hPath, hWN =>
+        specializeTerm_sound_own M fullTable h specOp hSpec fnTable rTable fnLift specApply
+          through ρ r retryCfg hCtx key kind hearers opTys τ typed here operands resName rest
+          (specializeTerm_sound fullTable h specOp hSpec fnTable rTable fnLift hLift specApply hApply
+            through ρ r retryCfg hRC (hCtx.extend (.cons resName .nil)) rest)
+          path env cenv s cont hEnv hPath hWN
     | retryCfg, hRC, Γ, Δ, hCtx, _,
         .op key (.hear kind owner hearers τ mine) .nil (.cons resName .nil) rest,
-        path, env, cenv, s, _, cont, hEnv, hPath, hWN => by
-        have hWNRest : ∀ b site ag, retryCfg = some (b, site, ag) →
-            RoleTermWellNested M fnTable rTable r site through rest :=
-          fun b site ag hc => (hWN b site ag hc).2
-        have hIn : r ∈ Holders.ofList (owner :: hearers) :=
-          Holders.mem_ofList.mpr (List.mem_cons_of_mem _ mine)
-        have hRes : held r [⟨τ, Holders.ofList (owner :: hearers)⟩] = [τ] := held_cons_pos r _ [] hIn
-        have hRHS : (specializeTerm specOp fnLift specApply retryCfg through ρ r hCtx
-              (.op key (.hear kind owner hearers τ mine) .nil (.cons resName .nil) rest)).denote
-              M fullTable path cenv s =
-            ((specOp through key ((ResidualOp.hear kind owner τ).mapPeers ρ) .nil).denote
-              M fullTable path cenv s).bind fun out =>
-              ((specializeTerm specOp fnLift specApply retryCfg through ρ r
-                  (hCtx.extend (.cons resName .nil)) rest).castCT
-                (ctx_extend_cast Δ hRes (heldNames r (.cons resName .nil))).symm rfl).denote
-                M fullTable path
-                (cenv.extend (cast (congrArg Names hRes) (heldNames r (.cons resName .nil))) out.1) out.2 := rfl
-        rw [Term.denote_op, hRHS]
-        change h.run (retryOfCfg M retryCfg)
-          ((mapR M ρ ((Process.call (ROp.hear kind owner ⟨path, key⟩ τ)
-            fun v => Process.done (HList.cons (hide M r ⟨τ, Holders.ofList (owner :: hearers)⟩ v) HList.nil)).bind
-            fun vs => rest.denote (roleSem M r fnTable rTable) path (env.extend (.cons resName .nil) vs))).bind cont) s = _
-        rw [mapR_bind, Process.bind_assoc]
-        dsimp only [mapR, Process.bind]
-        rw [handler_run_call_nonBegin M h _ _ (retryOfCfg_not_begin M retryCfg _ trivial)]
-        have hSpecH := hSpec through key ((ResidualOp.hear kind owner τ).mapPeers ρ)
-          .nil path cenv s hPath
-        rw [hSpecH, Process.bind_assoc, Process.bind_map]
-        dsimp only [ResidualOp.mapPeers, ResidualOp.toROp, Env.all, ResidualOp.replyOf]
-        congr 1; funext out
-        have hOutEq : cast (congrArg (HList M.Val) hRes)
-            (heldValues M r (.cons (hide M r ⟨τ, Holders.ofList (owner :: hearers)⟩ out.1) .nil)) =
-            .cons out.1 .nil := by
-          rw [heldValues_cons_pos M hIn, reveal_hide, cast_cast]; rfl
-        conv => rhs; rw [← hOutEq, closedTerm_denote_castExt M fullTable hRes (heldNames r (.cons resName .nil))]
-        exact specializeTerm_sound fullTable h specOp hSpec fnTable rTable fnLift hLift specApply hApply
-          through ρ r retryCfg hRC (hCtx.extend (.cons resName .nil)) rest path
-          _ _ out.2 cont (hEnv.extend M (.cons resName .nil) _) hPath hWNRest
+        path, env, cenv, s, _, cont, hEnv, hPath, hWN =>
+        specializeTerm_sound_hear M fullTable h specOp hSpec fnTable rTable fnLift specApply
+          through ρ r retryCfg hCtx key kind owner hearers τ mine resName rest
+          (specializeTerm_sound fullTable h specOp hSpec fnTable rTable fnLift hLift specApply hApply
+            through ρ r retryCfg hRC (hCtx.extend (.cons resName .nil)) rest)
+          path env cenv s cont hEnv hPath hWN
     | retryCfg, hRC, Γ, Δ, hCtx, _,
-        .op key (.apply (hdr := hdr) callee roles distinct covers opTys fits) operands results rest,
-        path, env, cenv, s, _, cont, hEnv, hPath, hWN => by
-        have hWNRest : ∀ b site ag, retryCfg = some (b, site, ag) →
-            RoleTermWellNested M fnTable rTable r site through rest :=
-          fun b site ag hc => (hWN b site ag hc).2
-        rw [Term.denote_op]
-        conv => rhs; rw [specializeTerm]; dsimp only; rw [ClosedTerm.denote]
-        let rm := RoleMap.ofList roles distinct
-        change h.run (retryOfCfg M retryCfg)
-          ((mapR M ρ (((mapR M rm.to (rTable hdr callee (rm.back r) (path ++ [Frame.application key])
-            (enterAll M rm r (fitAllRV M fits (env.all operands))))).map (leaveAll M rm r)).bind
-            fun vs => rest.denote (roleSem M r fnTable rTable) path (env.extend results vs))).bind cont) s = _
-        rw [mapR_bind, mapR_map, mapR_comp, Process.bind_assoc, Process.bind_map]
-        have hPath' : Frame.applications (path ++ [Frame.application key]) = through ++ [key] := by
-          rw [Frame.applications_append, hPath]; rfl
-        have hCalWN : ∀ b site ag, retryCfg = some (b, site, ag) →
-            Shape.noNestedAttempt site (through ++ [key]) hdr.shape = true :=
-          fun b site ag hc => (hWN b site ag hc).1
-        rw [env_all_fitVars M hEnv rm fits operands, Process.bind_assoc]
-        have hApp := hApply retryCfg hRC callee (through ++ [key]) (fun q => ρ (rm.to q)) (rm.back r)
-          (path ++ [Frame.application key]) (enterAll M rm r (fitAllRV M fits (env.all operands))) s
-          (fun a => (mapR M ρ (rest.denote (roleSem M r fnTable rTable) path
-            (env.extend results (leaveAll M rm r a)))).bind cont) hPath' hCalWN
-        rw [hApp]
-        congr 1; funext out
-        have hOut : held r (hdr.outs.map (LTy.map rm.to)) = held (rm.back r) hdr.outs :=
-          held_map_roleMap rm r hdr.outs
-        have hLeave : cast (congrArg (HList M.Val) hOut)
-            (heldValues M r (leaveAll M rm r (unheldValues M (rm.back r) out.1))) = out.1 := by
-          rw [heldValues_leaveAll, heldValues_unheldValues, cast_cast, cast_eq]
-        conv => rhs; rw [← hLeave, closedTerm_denote_castExt M fullTable hOut (heldNames r results)]
-        exact specializeTerm_sound fullTable h specOp hSpec fnTable rTable fnLift hLift specApply hApply
-          through ρ r retryCfg hRC (hCtx.extend results) rest path
-          (env.extend results (leaveAll M rm r (unheldValues M (rm.back r) out.1)))
-          _ out.2 cont (hEnv.extend M results _) hPath hWNRest
+        .op key (.apply callee roles distinct covers opTys fits) operands results rest,
+        path, env, cenv, s, _, cont, hEnv, hPath, hWN =>
+        specializeTerm_sound_apply M fullTable h specOp fnTable rTable fnLift specApply hApply
+          through ρ r retryCfg hRC hCtx key callee roles distinct covers opTys fits operands results rest
+          (specializeTerm_sound fullTable h specOp hSpec fnTable rTable fnLift hLift specApply hApply
+            through ρ r retryCfg hRC (hCtx.extend results) rest)
+          path env cenv s cont hEnv hPath hWN
     | retryCfg, hRC, Γ, Δ, hCtx, _, .guard key w c ok why rest,
         path, env, cenv, s, _, cont, hEnv, hPath, hWN => by
         rw [Term.denote_guard]
@@ -2823,46 +3503,16 @@ mutual
               through ρ r retryCfg hRC hCtx rest path env cenv s cont hEnv hPath
               (fun b site ag hc => hWN b site ag hc)
     | retryCfg, hRC, Γ, Δ, hCtx, _, .choose key w c ok gives onTrue onFalse results rest,
-        path, env, cenv, s, _, cont, hEnv, hPath, hWN => by
-        rw [Term.denote_choose]
-        conv => rhs; rw [specializeTerm]; dsimp only; rw [ClosedTerm.denote]
-        change h.run (retryOfCfg M retryCfg)
-          ((mapR M ρ ((bif asBool M ok.1 (reveal M ok.2.1 (env.get c)) then
-            onTrue.denote (roleSem M r fnTable rTable) path env
-          else onFalse.denote (roleSem M r fnTable rTable) path env).bind
-            fun mids => rest.denote (roleSem M r fnTable rTable) path (env.extend results mids))).bind cont) s = _
-        have hBool : cenv.get (cast (congrArg (Var Δ) ok.1) (varHeld hCtx c ok.2.1)) =
-            asBool M ok.1 (reveal M ok.2.1 (env.get c)) := by
-          unfold asBool
-          rw [← env_get_varHeld M hEnv c ok.2.1]
-          have hc : ∀ {τ₁ τ₂ : V.Ty} (e : τ₁ = τ₂) (v : Var Δ τ₁),
-              cenv.get (cast (congrArg (Var Δ) e) v) = cast (congrArg M.Val e) (cenv.get v) := by
-            intro _ _ e _; subst e; rfl
-          exact hc ok.1 _
-        rw [hBool, mapR_bind, Process.bind_assoc, Process.bind_assoc]
-        cases asBool M ok.1 (reveal M ok.2.1 (env.get c)) with
-        | false =>
-            dsimp only [cond]
-            rw [specializeTerm_sound fullTable h specOp hSpec fnTable rTable fnLift hLift specApply hApply
-              through ρ r retryCfg hRC hCtx onFalse path env cenv s _ hEnv hPath
-              (fun b site ag hc => (hWN b site ag hc).2.1)]
-            congr 1; funext out
-            have hEx := hEnv.extend M results (unheldValues M r out.1)
-            rw [heldValues_unheldValues] at hEx
-            exact specializeTerm_sound fullTable h specOp hSpec fnTable rTable fnLift hLift specApply hApply
-              through ρ r retryCfg hRC (hCtx.extend results) rest path _ _ out.2 cont
-              hEx hPath (fun b site ag hc => (hWN b site ag hc).2.2)
-        | true =>
-            dsimp only [cond]
-            rw [specializeTerm_sound fullTable h specOp hSpec fnTable rTable fnLift hLift specApply hApply
-              through ρ r retryCfg hRC hCtx onTrue path env cenv s _ hEnv hPath
-              (fun b site ag hc => (hWN b site ag hc).1)]
-            congr 1; funext out
-            have hEx := hEnv.extend M results (unheldValues M r out.1)
-            rw [heldValues_unheldValues] at hEx
-            exact specializeTerm_sound fullTable h specOp hSpec fnTable rTable fnLift hLift specApply hApply
-              through ρ r retryCfg hRC (hCtx.extend results) rest path _ _ out.2 cont
-              hEx hPath (fun b site ag hc => (hWN b site ag hc).2.2)
+        path, env, cenv, s, _, cont, hEnv, hPath, hWN =>
+        specializeTerm_sound_choose M fullTable h specOp fnTable rTable fnLift specApply
+          through ρ r retryCfg hCtx key w c ok gives onTrue onFalse results rest
+          (specializeTerm_sound fullTable h specOp hSpec fnTable rTable fnLift hLift specApply hApply
+            through ρ r retryCfg hRC hCtx onTrue)
+          (specializeTerm_sound fullTable h specOp hSpec fnTable rTable fnLift hLift specApply hApply
+            through ρ r retryCfg hRC hCtx onFalse)
+          (specializeTerm_sound fullTable h specOp hSpec fnTable rTable fnLift hLift specApply hApply
+            through ρ r retryCfg hRC (hCtx.extend results) rest)
+          path env cenv s cont hEnv hPath hWN
     | retryCfg, hRC, Γ, Δ, hCtx, _,
         .cases (t := t) (payloads := payloads) key ps x ok gives arms results rest,
         path, env, cenv, s, _, cont, hEnv, hPath, hWN => by
@@ -2904,153 +3554,15 @@ mutual
           through ρ r retryCfg hRC (hCtx.extend results) rest path _ _ out.2 cont
           hEx hPath (fun b site ag hc => (hWN b site ag hc).2)
     | retryCfg, hRC, Γ, Δ, hCtx, _,
-        .loop (carried := carried) (each := each) key ps times gives initial (.cons idxNm carriedInNames) body results rest,
-        path, env, cenv, s, _, cont, hEnv, hPath, hWN => by
-        rw [Term.denote_loop]
-        conv => rhs; rw [specializeTerm]; dsimp only
-        rw [mapR_bind, Process.bind_assoc]
-        have hTimesEq : (specializeTimes hCtx times).eval M cenv =
-            (roleSem M r fnTable rTable).times times env := by
-          cases times with
-          | fixed _ => rfl
-          | value cnt ok =>
-              dsimp only [specializeTimes, ClosedTimes.eval, Semantics.times, roleSem, asNat]
-              rw [← env_get_varHeld M hEnv cnt ok.2.1]
-              have hc : ∀ {τ₁ τ₂ : V.Ty} (e : τ₁ = τ₂) (v : Var Δ τ₁),
-                  cenv.get (cast (congrArg (Var Δ) e) v) = cast (congrArg M.Val e) (cenv.get v) := by
-                intro _ _ e _; subst e; rfl
-              exact hc ok.1 _
-        have hSize : (specializeTimes hCtx times).size = times.size := specializeTimes_size hCtx times
-        have hBodyOut : held r (carried ++ each) = held r carried ++ held r each :=
-          held_append r carried each
-        have hResTy : held r (carried ++ each.map (LTy.collected times.size)) =
-            held r carried ++ (held r each).map (fun τ => .seq τ (specializeTimes hCtx times).size) := by
-          rw [held_append, held_map_collected, hSize]
-        have hLoopProof : ∀ (idxOpt : Option Name)
-            (hCtxB : CtxRel r (Γ.extend (.cons idxNm carriedInNames))
-              (loopBodyCtx Δ idxOpt (heldNames r carriedInNames)))
-            (hEnvStep : ∀ (i : Nat) (cv : HList (RV M r) carried),
-              EnvRel M r hCtxB
-                (env.extend (.cons idxNm carriedInNames) (.cons (hide M r (LTy.index ps) i) cv))
-                (loopBodyEnv M cenv idxOpt i (heldNames r carriedInNames) (heldValues M r cv))),
-            h.run (retryOfCfg M retryCfg)
-              ((mapR M ρ (Process.iterate ((roleSem M r fnTable rTable).times times env)
-                  ((roleSem M r fnTable rTable).loopStep ps (.cons idxNm carriedInNames)
-                    (fun path' env' => body.denote (roleSem M r fnTable rTable) path' env')
-                    key path env)
-                  0 (env.all initial, HList.empties each))).bind fun ls =>
-                (mapR M ρ (rest.denote (roleSem M r fnTable rTable) path
-                  (env.extend results (ls.1.append ((roleSem M r fnTable rTable).collected times.size ls.2))))).bind cont) s =
-            ((ClosedTerm.loop key (specializeTimes hCtx times) (varsHeld hCtx initial) idxOpt
-                (heldNames r carriedInNames)
-                ((specializeTerm specOp fnLift specApply retryCfg through ρ r hCtxB body).castCT rfl hBodyOut)
-                (cast (congrArg Names hResTy) (heldNames r results))
-                ((specializeTerm specOp fnLift specApply retryCfg through ρ r (hCtx.extend results) rest).castCT
-                  (ctx_extend_cast Δ hResTy (heldNames r results)).symm rfl)).denote
-              M fullTable path cenv s).bind fun out =>
-              h.run (retryOfCfg M retryCfg) (cont (unheldValues M r out.1)) out.2 := by
-          intro idxOpt hCtxB hEnvStep
-          conv => rhs; rw [ClosedTerm.denote]
-          rw [hTimesEq, env_all_varsHeld M hEnv initial, ← heldAcc_empties M r each, Process.bind_assoc]
-          let n0 := (roleSem M r fnTable rTable).times times env
-          suffices hIter : ∀ (n i : Nat)
-              (ls : HList (RV M r) carried × HList (fun a => List (RV M r a)) each)
-              (st0 : HList M.Val σ),
-              h.run (retryOfCfg M retryCfg)
-                ((mapR M ρ (Process.iterate n
-                    ((roleSem M r fnTable rTable).loopStep ps (.cons idxNm carriedInNames)
-                      (fun path' env' => body.denote (roleSem M r fnTable rTable) path' env')
-                      key path env)
-                    i ls)).bind fun lsEnd =>
-                  (mapR M ρ (rest.denote (roleSem M r fnTable rTable) path
-                    (env.extend results (lsEnd.1.append ((roleSem M r fnTable rTable).collected times.size lsEnd.2))))).bind cont) st0 =
-              (Process.iterate n
-                  (fun j (cls : (HList M.Val (held r carried) × HList (fun τ => List (M.Val τ)) (held r each)) × HList M.Val σ) =>
-                    (((specializeTerm specOp fnLift specApply retryCfg through ρ r hCtxB body).castCT rfl hBodyOut).denote
-                        M fullTable (path ++ [Frame.iteration key j])
-                        (loopBodyEnv M cenv idxOpt j (heldNames r carriedInNames) cls.1.1) cls.2).bind fun out =>
-                      let sp := HList.split (held r carried) out.1
-                      .done ((sp.1, cls.1.2.push sp.2), out.2))
-                  i ((heldValues M r ls.1, heldAcc M r ls.2), st0)).bind fun clsEnd =>
-                (((specializeTerm specOp fnLift specApply retryCfg through ρ r (hCtx.extend results) rest).castCT
-                    (ctx_extend_cast Δ hResTy (heldNames r results)).symm rfl).denote
-                  M fullTable path
-                  (cenv.extend (cast (congrArg Names hResTy) (heldNames r results))
-                    (clsEnd.1.1.append (closedCollected M (specializeTimes hCtx times).size clsEnd.1.2)))
-                  clsEnd.2).bind fun out =>
-                  h.run (retryOfCfg M retryCfg) (cont (unheldValues M r out.1)) out.2 from
-            hIter n0 0 (env.all initial, HList.empties each) s
-          intro n
-          induction n with
-          | zero =>
-              intro i ls st0
-              dsimp only [Process.iterate, mapR, Process.bind]
-              have hValEq : cast (congrArg (HList M.Val) hResTy)
-                  (heldValues M r (ls.1.append ((roleSem M r fnTable rTable).collected times.size ls.2))) =
-                  (heldValues M r ls.1).append (closedCollected M (specializeTimes hCtx times).size (heldAcc M r ls.2)) := by
-                rw [heldValues_append, heldValues_collected M fnTable rTable]
-                have hValCast : ∀ {s1 s2 : Option Nat} (hs : s2 = s1)
-                    {ts1 ts2 : List V.Ty}
-                    (h1 : ts1 = held r carried ++ ts2)
-                    (h2 : ts2 = (held r each).map (fun τ => .seq τ s1))
-                    (hr : ts1 = held r carried ++ (held r each).map (fun τ => .seq τ s2))
-                    (x : HList M.Val (held r carried)) (y : HList (fun τ => List (M.Val τ)) (held r each)),
-                    cast (congrArg (HList M.Val) hr)
-                      (cast (congrArg (HList M.Val) h1.symm)
-                        (x.append (cast (congrArg (HList M.Val) h2.symm) (closedCollected M s1 y)))) =
-                      x.append (closedCollected M s2 y) := by
-                  intro _ _ hs _ _ h1 h2 hr _ _; subst hs; subst h2; subst h1; rfl
-                exact hValCast hSize (held_append _ _ _) (held_map_collected _ _ _) hResTy _ _
-              rw [← hValEq, closedTerm_denote_castExt M fullTable hResTy (heldNames r results)]
-              exact specializeTerm_sound fullTable h specOp hSpec fnTable rTable fnLift hLift specApply hApply
-                through ρ r retryCfg hRC (hCtx.extend results) rest path
-                _ _ st0 cont (hEnv.extend M results _) hPath (fun b site ag hc => (hWN b site ag hc).2)
-          | succ m ihM =>
-              intro i ls st0
-              dsimp only [Process.iterate, Semantics.loopStep]
-              change h.run (retryOfCfg M retryCfg)
-                ((mapR M ρ (((body.denote (roleSem M r fnTable rTable) (path ++ [Frame.iteration key i])
-                    (env.extend (.cons idxNm carriedInNames) (.cons (hide M r (LTy.index ps) i) ls.1))).bind
-                  fun a => Process.done ((HList.split carried a).1, ls.2.push (HList.split carried a).2)).bind
-                  fun a2 => Process.iterate m
-                    ((roleSem M r fnTable rTable).loopStep ps (.cons idxNm carriedInNames)
-                      (fun path' env' => body.denote (roleSem M r fnTable rTable) path' env')
-                      key path env) (i + 1) a2)).bind fun lsEnd =>
-                  (mapR M ρ (rest.denote (roleSem M r fnTable rTable) path
-                    (env.extend results (lsEnd.1.append ((roleSem M r fnTable rTable).collected times.size lsEnd.2))))).bind cont) st0 = _
-              rw [mapR_bind, mapR_bind, Process.bind_assoc, Process.bind_assoc, Process.bind_assoc,
-                closedTerm_denote_castCT, cast_eq, Process.bind_map, Process.bind_assoc]
-              have hPathI : Frame.applications (path ++ [Frame.iteration key i]) = through := by
-                rw [Frame.applications_append, hPath]; exact List.append_nil _
-              have hStepBody := specializeTerm_sound fullTable h specOp hSpec fnTable rTable fnLift hLift specApply hApply
-                through ρ r retryCfg hRC hCtxB body (path ++ [Frame.iteration key i])
-                (env.extend (.cons idxNm carriedInNames) (.cons (hide M r (LTy.index ps) i) ls.1))
-                (loopBodyEnv M cenv idxOpt i (heldNames r carriedInNames) (heldValues M r ls.1)) st0
-                (fun a =>
-                  (mapR M ρ (Process.done ((HList.split carried a).1, ls.2.push (HList.split carried a).2))).bind fun a2 =>
-                    (mapR M ρ (Process.iterate m
-                      ((roleSem M r fnTable rTable).loopStep ps (.cons idxNm carriedInNames)
-                        (fun path' env' => body.denote (roleSem M r fnTable rTable) path' env')
-                        key path env) (i + 1) a2)).bind fun lsEnd =>
-                      (mapR M ρ (rest.denote (roleSem M r fnTable rTable) path
-                        (env.extend results (lsEnd.1.append ((roleSem M r fnTable rTable).collected times.size lsEnd.2))))).bind cont)
-                (hEnvStep i ls.1) hPathI (fun b site ag hc => (hWN b site ag hc).1)
-              rw [hStepBody]
-              congr 1; funext out
-              dsimp only [mapR, Process.bind]
-              have hSp := heldValues_split M r (unheldValues M r out.1)
-              rw [heldValues_unheldValues] at hSp
-              rw [hSp.1, hSp.2, ← heldAcc_push M r ls.2]
-              exact ihM (i + 1) _ out.2
-        by_cases hIn : r ∈ ps
-        · rw [dite_eq_left hIn]
-          refine hLoopProof (some idxNm) _ fun i cv => ?_
-          have h1 := (hEnv.insert_held M idxNm (a := LTy.index ps) hIn (hide M r (LTy.index ps) i)).extend M carriedInNames cv
-          rw [reveal_hide] at h1
-          exact h1
-        · rw [dite_eq_right hIn]
-          refine hLoopProof none _ fun i cv => ?_
-          exact (hEnv.insert_unheld M idxNm (a := LTy.index ps) hIn (hide M r (LTy.index ps) i)).extend M carriedInNames cv
+        .loop key ps times gives initial (.cons idxNm carriedInNames) body results rest,
+        path, env, cenv, s, _, cont, hEnv, hPath, hWN =>
+        specializeTerm_sound_loop M fullTable h specOp fnTable rTable fnLift specApply
+          through ρ r retryCfg hCtx key ps times gives initial idxNm carriedInNames body results rest
+          (fun hCtxB => specializeTerm_sound fullTable h specOp hSpec fnTable rTable fnLift hLift specApply hApply
+            through ρ r retryCfg hRC hCtxB body)
+          (specializeTerm_sound fullTable h specOp hSpec fnTable rTable fnLift hLift specApply hApply
+            through ρ r retryCfg hRC (hCtx.extend results) rest)
+          path env cenv s cont hEnv hPath hWN
     | retryCfg, hRC, Γ, Δ, hCtx, _, .block key number body results rest,
         path, env, cenv, s, _, cont, hEnv, hPath, hWN => by
         rw [Term.denote_block]
@@ -3071,193 +3583,16 @@ mutual
           hEx hPath (fun b site ag hc => (hWN b site ag hc).2)
     | retryCfg, hRC, Γ, Δ, hCtx, _,
         .attempt key w owns (.cons idxNm .nil) body results rest,
-        path, env, cenv, s, _, cont, hEnv, hPath, hWN => by
-        rw [Term.denote_attempt]
-        conv => rhs; rw [specializeTerm]; dsimp only
-        rw [mapR_bind, Process.bind_assoc]
-        by_cases hw : r ∈ w
-        · have hBeg : (roleSem M r fnTable rTable).begin w key path =
-              Process.call (ROp.begin ⟨path, key⟩) fun n => Process.done (hide M r (LTy.index w) n) := by
-            dsimp only [roleSem]; exact ite_eq_left hw
-          have hSet : (roleSem M r fnTable rTable).settle w key path =
-              Process.call (ROp.settle ⟨path, key⟩) fun _ => Process.done () := by
-            dsimp only [roleSem]; exact ite_eq_left hw
-          rw [hBeg, hSet, dite_eq_left hw]
-          dsimp only [mapR, Process.bind]
-          have hCtxB : CtxRel r (Γ.extend (.cons (a := LTy.index w) idxNm .nil))
-              (Δ.extend (.cons (a := Ty.nat) idxNm .nil)) :=
-            hCtx.insert_held idxNm (a := LTy.index w)
-          have hNonRetry : ∀ (hNotBeg : (retryOfCfg M retryCfg).begins (.begin ⟨path, key⟩) = none),
-              h.run (retryOfCfg M retryCfg)
-                (.call (.begin ⟨path, key⟩) fun n =>
-                  (mapR M ρ (body.denote (roleSem M r fnTable rTable) path
-                    (env.extend (.cons (a := LTy.index w) idxNm .nil) (.cons (hide M r (LTy.index w) n) .nil)))).bind
-                    fun mids => .call (.settle ⟨path, key⟩) fun _ =>
-                      (mapR M ρ (rest.denote (roleSem M r fnTable rTable) path (env.extend results mids))).bind cont) s =
-              ((ClosedTerm.letBind
-                  (.letBind (specOp through key .begin .nil) (.cons (a := Ty.nat) idxNm .nil)
-                    (.seq (specializeTerm specOp fnLift specApply retryCfg through ρ r hCtxB body)
-                      (specOp through key .settle .nil)))
-                  (heldNames r results)
-                  (specializeTerm specOp fnLift specApply retryCfg through ρ r (hCtx.extend results) rest)).denote
-                M fullTable path cenv s).bind fun out =>
-                h.run (retryOfCfg M retryCfg) (cont (unheldValues M r out.1)) out.2 := by
-            intro hNotBeg
-            rw [handler_run_call_nonBegin M h _ _ hNotBeg]
-            dsimp only [ClosedTerm.denote]
-            rw [hSpec through key .begin .nil path cenv s hPath, Process.bind_assoc,
-              Process.bind_assoc, Process.bind_map]
-            dsimp only [ResidualOp.toROp, Env.all, ResidualOp.replyOf]
-            congr 1; funext outB
-            have hInsEnv : EnvRel M r hCtxB
-                (env.extend (.cons (a := LTy.index w) idxNm .nil) (.cons (hide M r (LTy.index w) outB.1) .nil))
-                (cenv.extend (.cons (a := Ty.nat) idxNm .nil) (.cons outB.1 .nil)) := by
-              have h1 := hEnv.insert_held M idxNm hw (hide M r (LTy.index w) outB.1)
-              rw [reveal_hide] at h1
-              exact h1
-            rw [Process.bind_assoc,
-              specializeTerm_sound fullTable h specOp hSpec fnTable rTable fnLift hLift specApply hApply
-                through ρ r retryCfg hRC hCtxB body path _ _ outB.2 _
-                hInsEnv hPath (fun b site ag hc => (hWN b site ag hc).2.1)]
-            congr 1; funext outM
-            rw [handler_run_call_nonBegin M h _ _ (retryOfCfg_not_begin M retryCfg _ trivial),
-              hSpec through key .settle .nil path _ outM.2 hPath,
-              Process.bind_map, Process.bind_map]
-            dsimp only [ResidualOp.toROp, Env.all, ResidualOp.replyOf]
-            congr 1; funext outS
-            have hEx := hEnv.extend M results (unheldValues M r outM.1)
-            rw [heldValues_unheldValues] at hEx
-            exact specializeTerm_sound fullTable h specOp hSpec fnTable rTable fnLift hLift specApply hApply
-              through ρ r retryCfg hRC (hCtx.extend results) rest path _ _ outS.2 cont
-              hEx hPath (fun b site ag hc => (hWN b site ag hc).2.2)
-          cases retryCfg with
-          | none =>
-              dsimp only
-              simpa only [mapR_bind, mapR, Process.bind_assoc, Process.bind] using hNonRetry rfl
-          | some cfg =>
-              cases cfg with
-              | mk bound sr =>
-                  cases sr with
-                  | mk retrySite again =>
-                      dsimp only
-                      by_cases hSite : (⟨through, key⟩ : Site) = retrySite
-                      · rw [ite_eq_left hSite]
-                        have hOccSite : (⟨path, key⟩ : Occurrence).site = retrySite := by
-                          simpa [Occurrence.site, hPath] using hSite
-                        have hBegHit : (retryOf M (some (bound, retrySite))).begins (.begin ⟨path, key⟩) =
-                            some (.declared .exhausted ⟨path, key⟩, fun i => i) := by
-                          dsimp only [retryOf]; exact ite_eq_left hOccSite
-                        dsimp only [ClosedTerm.denote, retryOfCfg]
-                        conv => lhs; rw [Handler.run, hBegHit]
-                        dsimp only
-                        have hRetr : (retryOf M (some (bound, retrySite))).retriable = Stop.isAbort := rfl
-                        have hBnd : (retryOf M (some (bound, retrySite))).bound = bound := rfl
-                        rw [hRetr, hBnd]
-                        dsimp only [RetryCfgOk] at hRC
-                        rw [← hRC]
-                        have hKeyEq : retrySite.key = key := by
-                          cases hSite; rfl
-                        have hBodyEq : ∀ (i : Nat) (s' : HList M.Val σ),
-                            h.inside (retryOf M (some (bound, retrySite))) i
-                              ((mapR M ρ ((body.denote (roleSem M r fnTable rTable) path
-                                  (env.extend (.cons (a := LTy.index w) idxNm .nil) (.cons (hide M r (LTy.index w) i) .nil))).bind
-                                fun mids => .call (.settle ⟨path, key⟩) fun _ =>
-                                  rest.denote (roleSem M r fnTable rTable) path (env.extend results mids))).bind cont) s' =
-                            ((Process.markOwn M (.attempt key i)
-                                ((specializeTerm specOp fnLift specApply none through ρ r hCtxB body).denote
-                                  M fullTable path (cenv.extend (.cons (a := Ty.nat) idxNm .nil) (.cons (i : Nat) .nil)) s')).mapHalt
-                                fun stop => ((true, stop.1), stop.2)).bind fun outM =>
-                              (((specializeTerm specOp fnLift specApply (some (bound, retrySite, again))
-                                  through ρ r (hCtx.extend results) rest).denote
-                                M fullTable path (cenv.extend (heldNames r results) outM.1) outM.2).bind fun outR =>
-                                h.run (retryOf M (some (bound, retrySite))) (cont (unheldValues M r outR.1)) outR.2).mapHalt
-                                fun stop => ((false, stop.1), stop.2) := by
-                          intro i s'
-                          rw [mapR_bind, Process.bind_assoc]
-                          dsimp only [mapR, Process.bind]
-                          have hNoS : NoSettleAt M retrySite
-                              (mapR M ρ (body.denote (roleSem M r fnTable rTable) path
-                                (env.extend (.cons (a := LTy.index w) idxNm .nil) (.cons (hide M r (LTy.index w) i) .nil)))) :=
-                            noSettleAt_mapR M ρ ((hWN bound retrySite again rfl).1 hw hSite path _ hPath)
-                          rw [handler_inside_settle_bind M h bound retrySite i _ hNoS ⟨path, key⟩ hOccSite _ s',
-                            hKeyEq]
-                          have hInsEnv : EnvRel M r hCtxB
-                              (env.extend (.cons (a := LTy.index w) idxNm .nil) (.cons (hide M r (LTy.index w) i) .nil))
-                              (cenv.extend (.cons (a := Ty.nat) idxNm .nil) (.cons (i : Nat) .nil)) := by
-                            have h1 := hEnv.insert_held M idxNm hw (hide M r (LTy.index w) i)
-                            rw [reveal_hide] at h1
-                            exact h1
-                          have hBodyPure := specializeTerm_sound fullTable h specOp hSpec fnTable rTable fnLift hLift specApply hApply
-                            through ρ r none trivial hCtxB body path _ _ s'
-                            Process.done hInsEnv hPath (fun _ _ _ hc => nomatch hc)
-                          rw [Process.bind_pure] at hBodyPure
-                          dsimp only [retryOfCfg] at hBodyPure
-                          rw [hBodyPure, markOwn_bind, mapHalt_bind, Process.bind_assoc]
-                          congr 1; funext outM
-                          dsimp only [Handler.run, Process.markOwn, Process.mapHalt, Process.bind, mapR]
-                          congr 1
-                          have hEx := hEnv.extend M results (unheldValues M r outM.1)
-                          rw [heldValues_unheldValues] at hEx
-                          exact specializeTerm_sound fullTable h specOp hSpec fnTable rTable fnLift hLift specApply hApply
-                            through ρ r (some (bound, retrySite, again)) hRC (hCtx.extend results)
-                            rest path _ _ outM.2 cont hEx hPath (fun b' s' ag' hc => by
-                              cases hc; exact (hWN bound retrySite again rfl).2.2)
-                        have hFun : (fun i s' => h.inside (retryOf M (some (bound, retrySite))) i
-                            ((mapR M ρ ((body.denote (roleSem M r fnTable rTable) path
-                                (env.extend (.cons (a := LTy.index w) idxNm .nil) (.cons (hide M r (LTy.index w) i) .nil))).bind
-                              fun mids => .call (.settle ⟨path, key⟩) fun _ =>
-                                rest.denote (roleSem M r fnTable rTable) path (env.extend results mids))).bind cont) s') =
-                            (fun i s' => ((Process.markOwn M (.attempt key i)
-                                ((specializeTerm specOp fnLift specApply none through ρ r hCtxB body).denote
-                                  M fullTable path (cenv.extend (.cons (a := Ty.nat) idxNm .nil) (.cons (i : Nat) .nil)) s')).mapHalt
-                                fun stop => ((true, stop.1), stop.2)).bind fun outM =>
-                              (((specializeTerm specOp fnLift specApply (some (bound, retrySite, again))
-                                  through ρ r (hCtx.extend results) rest).denote
-                                M fullTable path (cenv.extend (heldNames r results) outM.1) outM.2).bind fun outR =>
-                                h.run (retryOf M (some (bound, retrySite))) (cont (unheldValues M r outR.1)) outR.2).mapHalt
-                                fun stop => ((false, stop.1), stop.2)) := by
-                          funext i s'; exact hBodyEq i s'
-                        rw [hFun, Process.bind_assoc]
-                        exact attempts_bind_settle M (.declared .exhausted ⟨path, key⟩)
-                          (StackAgain.eval M fullTable again)
-                          (fun j s' => Process.markOwn M (.attempt key j)
-                            ((specializeTerm specOp fnLift specApply none through ρ r hCtxB body).denote
-                              M fullTable path (cenv.extend (.cons (a := Ty.nat) idxNm .nil) (.cons (j : Nat) .nil)) s'))
-                          (fun a st => ((specializeTerm specOp fnLift specApply (some (bound, retrySite, again))
-                              through ρ r (hCtx.extend results) rest).denote
-                            M fullTable path (cenv.extend (heldNames r results) a) st).bind fun outR =>
-                            h.run (retryOf M (some (bound, retrySite))) (cont (unheldValues M r outR.1)) outR.2)
-                          s bound 0 s
-                      · rw [ite_eq_right hSite]
-                        have hOccNe : (⟨path, key⟩ : Occurrence).site ≠ retrySite := by
-                          simpa [Occurrence.site, hPath] using hSite
-                        have hNotBeg : (retryOfCfg M (some (bound, retrySite, again))).begins (.begin ⟨path, key⟩) = none := by
-                          dsimp only [retryOfCfg, retryOf]
-                          exact ite_eq_right hOccNe
-                        simpa only [mapR_bind, mapR, Process.bind_assoc, Process.bind] using hNonRetry hNotBeg
-        · have hBeg : (roleSem M r fnTable rTable).begin w key path =
-              Process.done (hide M r (LTy.index w) 0) := by
-            dsimp only [roleSem]; exact ite_eq_right hw
-          have hSet : (roleSem M r fnTable rTable).settle w key path = Process.done () := by
-            dsimp only [roleSem]; exact ite_eq_right hw
-          rw [hBeg, hSet, dite_eq_right hw]
-          conv => rhs; rw [ClosedTerm.denote]
-          dsimp only [mapR, Process.bind]
-          rw [mapR_bind, Process.bind_assoc, Process.bind_assoc]
-          have hCtxB : CtxRel r (Γ.extend (.cons (a := LTy.index w) idxNm .nil)) Δ :=
-            hCtx.insert_unheld idxNm (a := LTy.index w) hw
-          have hInsEnv : EnvRel M r hCtxB
-              (env.extend (.cons (a := LTy.index w) idxNm .nil) (.cons (hide M r (LTy.index w) (0 : Nat)) .nil)) cenv :=
-            hEnv.insert_unheld M idxNm hw (hide M r (LTy.index w) (0 : Nat))
-          rw [specializeTerm_sound fullTable h specOp hSpec fnTable rTable fnLift hLift specApply hApply
-            through ρ r retryCfg hRC hCtxB body path _ cenv s _
-            hInsEnv hPath (fun b site ag hc => (hWN b site ag hc).2.1)]
-          congr 1; funext outM
-          have hEx := hEnv.extend M results (unheldValues M r outM.1)
-          rw [heldValues_unheldValues] at hEx
-          exact specializeTerm_sound fullTable h specOp hSpec fnTable rTable fnLift hLift specApply hApply
-            through ρ r retryCfg hRC (hCtx.extend results) rest path _ _ outM.2 cont
-            hEx hPath (fun b site ag hc => (hWN b site ag hc).2.2)
+        path, env, cenv, s, _, cont, hEnv, hPath, hWN =>
+        specializeTerm_sound_attempt M fullTable h specOp hSpec fnTable rTable fnLift specApply
+          through ρ r retryCfg hRC hCtx key w owns idxNm body results rest
+          (fun hCtxB => specializeTerm_sound fullTable h specOp hSpec fnTable rTable fnLift hLift specApply hApply
+            through ρ r retryCfg hRC hCtxB body)
+          (fun hCtxB => specializeTerm_sound fullTable h specOp hSpec fnTable rTable fnLift hLift specApply hApply
+            through ρ r none trivial hCtxB body)
+          (specializeTerm_sound fullTable h specOp hSpec fnTable rTable fnLift hLift specApply hApply
+            through ρ r retryCfg hRC (hCtx.extend results) rest)
+          path env cenv s cont hEnv hPath hWN
 
   private theorem specializeArms_sound {fullFns : List (FnHeader V)} (fullTable : FnTable M fullFns)
       {σ : List V.Ty} (h : Handler (RSig M) (RSig M) Stop (HList M.Val σ))
@@ -3656,12 +3991,33 @@ private theorem roleMeaning_eq_rTable (p : Typed V) {hdr : ProtocolHeader V}
     (ins : HList (RV M r) hdr.ins) :
     roleMeaning M p x r path ins = Defs.rTable M p.defs hdr x r path ins := rfl
 
+private theorem closedRole_denote_eq {fns : List (FnHeader V)} (fnTable : FnTable M fns)
+    {r : Role} {ins outs : List (LTy V)} {takes gives : List V.Ty}
+    (cr : ClosedRole V fns r ins outs takes gives)
+    (inputVals : HList (RV M r) ins) (takenVals : HList M.Val takes) :
+    cr.denote M fnTable inputVals takenVals =
+      ((cr.start.denote M fnTable (heldValues M r inputVals) takenVals).bind fun st0 =>
+        ((cr.body.denote M fnTable [] (Env.empty.extend cr.inputs (heldValues M r inputVals)) st0).mapHalt Prod.fst).bind
+          fun out => (cr.finish.denote M fnTable out.2).map fun g => (out.1, g)).map
+        fun out => (unheldValues M r out.1, out.2) := rfl
+
+private theorem deployed_run_unfold (d : Deployed V) (r : Role)
+    (ins : HList (RV M r) d.entry.ins) (taken : HList M.Val (Stack.Takes (d.stack r))) :
+    d.run M r ins taken =
+      (Stack.start M (Defs.fnTable M d.admitted.program.defs) (d.stack r) ins taken).bind fun first =>
+        (((Stack.handler M (Defs.fnTable M d.admitted.program.defs) (Defs.rTable M d.admitted.program.defs)
+            (d.stack r)).run (retryOf M d.retry) (roleMeaning M d.admitted.program d.callee r [] ins) first).mapHalt
+          Prod.fst).bind fun out =>
+          (Stack.finish M (Defs.fnTable M d.admitted.program.defs) (d.stack r) out.2).map
+            fun gives => (out.1, gives) := rfl
+
 /-! ### Main soundness theorem (`specialize_sound`) -/
 
 /-- **Handler specialization soundness.**
-For any deployed scheme `d` with well-nested retry (trivially satisfied whenever `d.retry = none`
-and for all standard retried schemes), the specialized `ClosedRole` has the exact same denotation
-as `d.run` on every model `M`, role `r`, inputs `ins`, and taken values `taken`. -/
+For any deployed scheme `d` with well-nested retry (satisfied whenever `d.retry = none`
+and for every scheme returned by `deploy` or `deployIdeal`), the specialized `ClosedRole`
+has the exact same denotation as `d.run` on every model `M`, role `r`, inputs `ins`, and
+taken values `taken`. -/
 theorem specialize_sound (d : Deployed V) (r : Role)
     (hRetry : d.WellNestedRetry)
     (ins : HList (RV M r) d.entry.ins) (taken : HList M.Val (Stack.Takes (d.stack r))) :
@@ -3672,23 +4028,9 @@ theorem specialize_sound (d : Deployed V) (r : Role)
       (heldValues M r ins) taken =
       Stack.start M (Defs.fnTable M d.admitted.program.defs) (d.stack r) ins taken :=
     stackInit_denote M (Defs.fnTable M d.admitted.program.defs) (d.stack r) ins taken
-  change Process.map (fun out => (unheldValues M r out.1, out.2))
-    (((stackInit (d.stack r)).denote M (Defs.fnTable M d.admitted.program.defs)
-        (heldValues M r ins) taken).bind fun st0 =>
-      (((specializeProtocolInDefs (specializeStack d.admitted.program.defs (d.stack r))
-          d.admitted.program.defs id retryCfg d.callee [] id r).2.denote
-        M (Defs.fnTable M d.admitted.program.defs) []
-        (Env.empty.extend (specializeProtocolInDefs (specializeStack d.admitted.program.defs (d.stack r))
-          d.admitted.program.defs id retryCfg d.callee [] id r).1 (heldValues M r ins)) st0).mapHalt Prod.fst).bind
-        fun out => ((stackFinish (d.stack r)).denote M (Defs.fnTable M d.admitted.program.defs) out.2).map
-          fun g => (out.1, g)) =
-    (Stack.start M (Defs.fnTable M d.admitted.program.defs) (d.stack r) ins taken).bind fun first =>
-      (((Stack.handler M (Defs.fnTable M d.admitted.program.defs) (Defs.rTable M d.admitted.program.defs)
-          (d.stack r)).run (retryOf M d.retry) (roleMeaning M d.admitted.program d.callee r [] ins) first).mapHalt
-        Prod.fst).bind fun out =>
-        (Stack.finish M (Defs.fnTable M d.admitted.program.defs) (d.stack r) out.2).map
-          fun gives => (out.1, gives)
-  rw [hInit, Process.map_bind]
+  rw [closedRole_denote_eq, deployed_run_unfold]
+  dsimp only [specialize]
+  erw [hInit, Process.map_bind]
   congr 1; funext st0
   rw [Process.map_bind]
   have hSpec := specializeStack_sound M d.admitted.program.defs (d.stack r)
@@ -3733,16 +4075,16 @@ theorem specialize_sound (d : Deployed V) (r : Role)
   congr 1; funext out
   rw [stackFinish_denote M (Defs.fnTable M d.admitted.program.defs) (d.stack r) out.2, Process.map_map]
 
-/-- Unconditional corollary of `specialize_sound` for deployments without retry (`d.retry = none`). -/
+/-- Corollary of `specialize_sound` for deployments without retry (`d.retry = none`). -/
 theorem specialize_sound_noRetry (d : Deployed V) (r : Role) (hNoRetry : d.retry = none)
     (ins : HList (RV M r) d.entry.ins) (taken : HList M.Val (Stack.Takes (d.stack r))) :
     (specialize d r).denote M (Defs.fnTable M d.admitted.program.defs) ins taken =
       d.run M r ins taken :=
   specialize_sound M d r (fun _ _ h => by rw [hNoRetry] at h; cases h) ins taken
 
-/-- **Unconditional handler specialization soundness for every deployed scheme.**
-Because `deploy` rejects nested self-retry in `checkScope`, every deployed scheme satisfies
-`Deployed.WellNestedRetry` automatically. -/
+/-- **Handler specialization soundness for every scheme returned by `deploy`.**
+Because `deploy` rejects nested self-retry in `checkNonInteractiveScope` and forbids retry in
+`checkInteractiveScope`, every deployed scheme satisfies `Deployed.WellNestedRetry`. -/
 theorem specialize_deploy_sound (enc : VocabEncoder V) (a : Admitted V) (declaration : Declaration)
     (d : Deployed V) (hDep : deploy enc a declaration = .ok d) (r : Role)
     (ins : HList (RV M r) d.entry.ins) (taken : HList M.Val (Stack.Takes (d.stack r))) :
@@ -3750,7 +4092,7 @@ theorem specialize_deploy_sound (enc : VocabEncoder V) (a : Admitted V) (declara
       d.run M r ins taken :=
   specialize_sound M d r (deploy_wellNestedRetry enc a declaration d hDep) ins taken
 
-/-- **Unconditional handler specialization soundness for every ideal-RO deployed scheme.** -/
+/-- **Handler specialization soundness for every scheme returned by `deployIdeal`.** -/
 theorem specialize_deployIdeal_sound (enc : VocabEncoder V) (serviceKey : Key) (a : Admitted V)
     (declaration : Declaration) (d : Deployed V)
     (hDep : deployIdeal enc serviceKey a declaration = .ok d) (r : Role)

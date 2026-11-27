@@ -6,8 +6,8 @@ public import Zkc.Core.Scheme.Safety
 
 /-!
 Streaming completeness (`deploy_complete`) and shared clause-stepping / lawfulness lemmas
-for deployed schemes (supporting Chiesa-Orru trailing-message absorption elision in lockstep
-on both prover and verifier).
+for deployed schemes (supporting trailing-message absorption elision per Chiesa and Orrù (2025),
+Construction 4.3, in lockstep on both prover and verifier).
 -/
 
 namespace Zkc.Core
@@ -417,14 +417,13 @@ private theorem layoutVCarryClause_answer {hs : Headers V} (fnTable : FnTable M 
 private theorem construction_clauses_answer_prover_flow_abs {a : Admitted V} {suite : ModuleRef}
     {stateTy unitTy : V.Ty}
     {absRef : TypedFnRef V a.program.headers.fns [stateTy, bytesTy, .seq unitTy none] [stateTy]}
-    {prover verifier : Role} {samplesKey : Option Key} {declKey : Key}
+    {prover verifier : Role} {declKey : Key}
     {events : List (ShapeEvent V)} :
     ∀ (idx : Nat) (es : List (ShapeEvent V × Bool))
       {cP : List (Clause V a.program.headers prover stateTy)}
-      {cV : List (Clause V a.program.headers verifier stateTy)}
-      {cS : List (Clause V a.program.headers prover .nat)},
-      buildConstructionClauses.go a suite stateTy unitTy absRef prover verifier samplesKey
-        declKey events idx es = .ok (cP, cV, cS) →
+      {cV : List (Clause V a.program.headers verifier stateTy)},
+      buildConstructionClauses.go a suite stateTy unitTy absRef prover verifier
+        declKey events idx es = .ok (cP, cV) →
       ∀ (kind : FlowKind) (getters : List Role) (at_ : Occurrence) (τ : V.Ty)
         (msg : M.Val τ) (st : M.Val stateTy),
         M.Valid τ msg → M.Valid stateTy st →
@@ -439,14 +438,14 @@ private theorem construction_clauses_answer_prover_flow_abs {a : Admitted V} {su
           Clause.answer M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs)
             cP (.give kind getters at_ τ msg) st =
             .call (.give kind getters ⟨at_.path, at_.site.key⟩ τ msg) fun _ => .done ((), st')
-  | _, [], _, _, _, _, _, _, _, _, _, _, _, _, ⟨_, hc, _⟩ => nomatch hc
-  | idx, (e, needAbs) :: rest, cP, cV, cS, h, kind, getters, at_, τ, msg, st, hMsgV, hStV,
+  | _, [], _, _, _, _, _, _, _, _, _, _, _, ⟨_, hc, _⟩ => nomatch hc
+  | idx, (e, needAbs) :: rest, cP, cV, h, kind, getters, at_, τ, msg, st, hMsgV, hStV,
       ⟨e', he', hSite, hTy, hECls⟩ => by
       unfold buildConstructionClauses.go at h
       cases hRec : buildConstructionClauses.go a suite stateTy unitTy absRef prover verifier
-          samplesKey declKey events (idx + 1) rest with
+          declKey events (idx + 1) rest with
       | error _ => rw [hRec] at h; cases h
-      | ok triple =>
+      | ok pair =>
           rw [hRec] at h; dsimp only [bind, Except.bind] at h
           have ih := fun hIn => construction_clauses_answer_prover_flow_abs (idx + 1) rest hRec
             kind getters at_ τ msg st hMsgV hStV hIn
@@ -489,7 +488,7 @@ private theorem construction_clauses_answer_prover_flow_abs {a : Admitted V} {su
                                   rw [← hSiteEq]
                                   exact proverAbsorbClause_answer M _ _ prover e.site kind getters
                                     (msgLabel e.site) (msgLabel_bytes e.site) encRef absRef
-                                    at_ hSiteEq msg st enc st' hEncD hAbsD triple.1
+                                    at_ hSiteEq msg st enc st' hEncD hAbsD pair.1
                         · rcases List.mem_cons.mp he' with hEqPair | hmem
                           · cases hEqPair
                             rw [hCls] at hECls; cases hECls
@@ -539,17 +538,10 @@ private theorem construction_clauses_answer_prover_flow_abs {a : Admitted V} {su
                               · cases h
                         · cases h
                   · split at h
-                    · rcases List.mem_cons.mp he' with hEqPair | hmem
+                    · cases h
+                      rcases List.mem_cons.mp he' with hEqPair | hmem
                       · cases hEqPair; rw [hCls] at hECls; cases hECls
-                      · split at h
-                        · cases samplesKey with
-                          | none => cases h; exact ih ⟨e', hmem, hSite, hTy, hECls⟩
-                          | some sKey =>
-                              dsimp only at h
-                              cases hS : findTypedFnRef a sKey [.nat, .nat] [e.τ] with
-                              | none => rw [hS] at h; cases h
-                              | some _ => rw [hS] at h; cases h; exact ih ⟨e', hmem, hSite, hTy, hECls⟩
-                        · cases h; exact ih ⟨e', hmem, hSite, hTy, hECls⟩
+                      · exact ih ⟨e', hmem, hSite, hTy, hECls⟩
                     · cases h
               | request _ =>
                   dsimp only at h
@@ -563,14 +555,13 @@ private theorem construction_clauses_answer_prover_flow_abs {a : Admitted V} {su
 private theorem construction_clauses_answer_verifier_flow_abs {a : Admitted V} {suite : ModuleRef}
     {stateTy unitTy : V.Ty}
     {absRef : TypedFnRef V a.program.headers.fns [stateTy, bytesTy, .seq unitTy none] [stateTy]}
-    {prover verifier : Role} {samplesKey : Option Key} {declKey : Key}
+    {prover verifier : Role} {declKey : Key}
     {events : List (ShapeEvent V)} :
     ∀ (idx : Nat) (es : List (ShapeEvent V × Bool))
       {cP : List (Clause V a.program.headers prover stateTy)}
-      {cV : List (Clause V a.program.headers verifier stateTy)}
-      {cS : List (Clause V a.program.headers prover .nat)},
-      buildConstructionClauses.go a suite stateTy unitTy absRef prover verifier samplesKey
-        declKey events idx es = .ok (cP, cV, cS) →
+      {cV : List (Clause V a.program.headers verifier stateTy)},
+      buildConstructionClauses.go a suite stateTy unitTy absRef prover verifier
+        declKey events idx es = .ok (cP, cV) →
       ∀ (kind : FlowKind) (at_ : Occurrence) (τ : V.Ty) (st : M.Val stateTy),
         (∃ e, (e, true) ∈ es ∧ e.site = at_.site ∧ e.τ = τ ∧
           ∃ getters, verifier ∈ getters ∧ e.cls = .flow kind prover getters) →
@@ -585,14 +576,14 @@ private theorem construction_clauses_answer_verifier_flow_abs {a : Admitted V} {
                   fun nextSt => aloneIn M verifier (.cons msg nextSt)).mapHalt fun why => (why, st)).map fun out =>
                 let values := HList.split [τ] (aloneOut M verifier out)
                 (values.1.single, values.2.single)
-  | _, [], _, _, _, _, _, _, _, _, ⟨_, hc, _⟩ => nomatch hc
-  | idx, (e, needAbs) :: rest, cP, cV, cS, h, kind, at_, τ, st,
+  | _, [], _, _, _, _, _, _, _, ⟨_, hc, _⟩ => nomatch hc
+  | idx, (e, needAbs) :: rest, cP, cV, h, kind, at_, τ, st,
       ⟨e', he', hSite, hTy, gs', hVin, hECls⟩ => by
       unfold buildConstructionClauses.go at h
       cases hRec : buildConstructionClauses.go a suite stateTy unitTy absRef prover verifier
-          samplesKey declKey events (idx + 1) rest with
+          declKey events (idx + 1) rest with
       | error _ => rw [hRec] at h; cases h
-      | ok triple =>
+      | ok pair =>
           rw [hRec] at h; dsimp only [bind, Except.bind] at h
           have ih := fun hIn => construction_clauses_answer_verifier_flow_abs (idx + 1) rest hRec
             kind at_ τ st hIn
@@ -622,7 +613,7 @@ private theorem construction_clauses_answer_verifier_flow_abs {a : Admitted V} {
                           refine ⟨encRef, hEnc, ?_⟩
                           rw [← hSiteEq]
                           exact verifierAbsorbClause_answer M _ _ verifier prover e.site kind
-                            (msgLabel e.site) (msgLabel_bytes e.site) encRef absRef at_ hSiteEq st triple.2.1
+                            (msgLabel e.site) (msgLabel_bytes e.site) encRef absRef at_ hSiteEq st pair.2
                         · rcases List.mem_cons.mp he' with hEqPair | hmem
                           · cases hEqPair
                             rw [hCls] at hECls; cases hECls
@@ -671,17 +662,10 @@ private theorem construction_clauses_answer_verifier_flow_abs {a : Admitted V} {
                               · cases h
                         · cases h
                   · split at h
-                    · rcases List.mem_cons.mp he' with hEqPair | hmem
+                    · cases h
+                      rcases List.mem_cons.mp he' with hEqPair | hmem
                       · cases hEqPair; rw [hCls] at hECls; cases hECls
-                      · split at h
-                        · cases samplesKey with
-                          | none => cases h; exact ih ⟨e', hmem, hSite, hTy, gs', hVin, hECls⟩
-                          | some sKey =>
-                              dsimp only at h
-                              cases hS : findTypedFnRef a sKey [.nat, .nat] [e.τ] with
-                              | none => rw [hS] at h; cases h
-                              | some _ => rw [hS] at h; cases h; exact ih ⟨e', hmem, hSite, hTy, gs', hVin, hECls⟩
-                        · cases h; exact ih ⟨e', hmem, hSite, hTy, gs', hVin, hECls⟩
+                      · exact ih ⟨e', hmem, hSite, hTy, gs', hVin, hECls⟩
                     · cases h
               | request _ =>
                   dsimp only at h
@@ -697,27 +681,26 @@ neither `cP` nor `cV` matches the flow, so both layers pass the flow straight th
 private theorem construction_clauses_unmatched_elided_flow {a : Admitted V} {suite : ModuleRef}
     {stateTy unitTy : V.Ty}
     {absRef : TypedFnRef V a.program.headers.fns [stateTy, bytesTy, .seq unitTy none] [stateTy]}
-    {prover verifier : Role} {samplesKey : Option Key} {declKey : Key}
+    {prover verifier : Role} {declKey : Key}
     {events : List (ShapeEvent V)} :
     ∀ (idx : Nat) (es : List (ShapeEvent V × Bool))
       {cP : List (Clause V a.program.headers prover stateTy)}
-      {cV : List (Clause V a.program.headers verifier stateTy)}
-      {cS : List (Clause V a.program.headers prover .nat)},
-      buildConstructionClauses.go a suite stateTy unitTy absRef prover verifier samplesKey
-        declKey events idx es = .ok (cP, cV, cS) →
+      {cV : List (Clause V a.program.headers verifier stateTy)},
+      buildConstructionClauses.go a suite stateTy unitTy absRef prover verifier
+        declKey events idx es = .ok (cP, cV) →
       ∀ (kind : FlowKind) (getters : List Role) (at_ : Occurrence) (τ : V.Ty) (msg : M.Val τ),
         (∀ e b, (e, b) ∈ es → e.site = at_.site → e.τ = τ →
           (∃ gs, verifier ∈ gs ∧ e.cls = .flow kind prover gs) → b = false) →
         (∀ c ∈ cP, ¬ ClauseMatches M c (.give kind getters at_ τ msg)) ∧
         (∀ c ∈ cV, ¬ ClauseMatches M c (.get kind prover at_ τ))
-  | _, [], _, _, _, h, _, _, _, _, _, _ => by
+  | _, [], _, _, h, _, _, _, _, _, _ => by
       cases h; exact ⟨(fun _ hc => nomatch hc), (fun _ hc => nomatch hc)⟩
-  | idx, (e, needAbs) :: rest, cP, cV, cS, h, kind, getters, at_, τ, msg, hNoAbs => by
+  | idx, (e, needAbs) :: rest, cP, cV, h, kind, getters, at_, τ, msg, hNoAbs => by
       unfold buildConstructionClauses.go at h
       cases hRec : buildConstructionClauses.go a suite stateTy unitTy absRef prover verifier
-          samplesKey declKey events (idx + 1) rest with
+          declKey events (idx + 1) rest with
       | error _ => rw [hRec] at h; cases h
-      | ok triple =>
+      | ok pair =>
           rw [hRec] at h; dsimp only [bind, Except.bind] at h
           have hNoAbsRest : ∀ e' b', (e', b') ∈ rest → e'.site = at_.site → e'.τ = τ →
               (∃ gs, verifier ∈ gs ∧ e'.cls = .flow kind prover gs) → b' = false :=
@@ -790,15 +773,7 @@ private theorem construction_clauses_unmatched_elided_flow {a : Admitted V} {sui
                               · cases h
                         · cases h
                   · split at h
-                    · split at h
-                      · cases samplesKey with
-                        | none => cases h; exact ⟨ihP, ihV⟩
-                        | some sKey =>
-                            dsimp only at h
-                            cases hS : findTypedFnRef a sKey [.nat, .nat] [e.τ] with
-                            | none => rw [hS] at h; cases h
-                            | some _ => rw [hS] at h; cases h; exact ⟨ihP, ihV⟩
-                      · cases h; exact ⟨ihP, ihV⟩
+                    · cases h; exact ⟨ihP, ihV⟩
                     · cases h
               | request _ =>
                   dsimp only at h
@@ -809,15 +784,14 @@ private theorem construction_clauses_unmatched_elided_flow {a : Admitted V} {sui
 private theorem construction_clauses_answer_prover_coin {a : Admitted V} {suite : ModuleRef}
     {stateTy unitTy : V.Ty}
     {absRef : TypedFnRef V a.program.headers.fns [stateTy, bytesTy, .seq unitTy none] [stateTy]}
-    {prover verifier : Role} {samplesKey : Option Key} {declKey : Key}
+    {prover verifier : Role} {declKey : Key}
     {events : List (ShapeEvent V)} :
     ∀ (idx : Nat) (es : List (ShapeEvent V × Bool)),
       (∀ k p, es[k]? = some p → events[idx + k]? = some p.1) →
       ∀ {cP : List (Clause V a.program.headers prover stateTy)}
-        {cV : List (Clause V a.program.headers verifier stateTy)}
-        {cS : List (Clause V a.program.headers prover .nat)},
-      buildConstructionClauses.go a suite stateTy unitTy absRef prover verifier samplesKey
-        declKey events idx es = .ok (cP, cV, cS) →
+        {cV : List (Clause V a.program.headers verifier stateTy)},
+      buildConstructionClauses.go a suite stateTy unitTy absRef prover verifier
+        declKey events idx es = .ok (cP, cV) →
       ∀ (law : V.LawKey) (at_ : Occurrence) (τ : V.Ty) (st : M.Val stateTy),
         M.Valid stateTy st →
         (∃ p ∈ es, p.1.site = at_.site ∧ p.1.τ = τ ∧
@@ -835,8 +809,8 @@ private theorem construction_clauses_answer_prover_coin {a : Admitted V} {suite 
             cP (.hear (.coin law) verifier at_ τ) st =
             .call (.give .message [verifier] ⟨at_.path, drawToldKey events idxP⟩ τ coin)
               fun _ => .done (coin, st')
-  | _, [], _, _, _, _, _, _, _, _, _, _, ⟨_, hc, _⟩ => nomatch hc
-  | idx, (e, needAbs) :: rest, hSuf, cP, cV, cS, h, law, at_, τ, st, hStV,
+  | _, [], _, _, _, _, _, _, _, _, _, ⟨_, hc, _⟩ => nomatch hc
+  | idx, (e, needAbs) :: rest, hSuf, cP, cV, h, law, at_, τ, st, hStV,
       ⟨p', hp', hSite, hTy, hs', hPin, hECls⟩ => by
       unfold buildConstructionClauses.go at h
       have hSufRest : ∀ k p'', rest[k]? = some p'' → events[(idx + 1) + k]? = some p''.1 := by
@@ -845,9 +819,9 @@ private theorem construction_clauses_answer_prover_coin {a : Admitted V} {suite 
         simpa [Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using this
       have hIdx : events[idx]? = some e := by simpa using hSuf 0 (e, needAbs) rfl
       cases hRec : buildConstructionClauses.go a suite stateTy unitTy absRef prover verifier
-          samplesKey declKey events (idx + 1) rest with
+          declKey events (idx + 1) rest with
       | error _ => rw [hRec] at h; cases h
-      | ok triple =>
+      | ok pair =>
           rw [hRec] at h; dsimp only [bind, Except.bind] at h
           have ih := fun hIn => construction_clauses_answer_prover_coin (idx + 1) rest hSufRest hRec
             law at_ τ st hStV hIn
@@ -932,7 +906,7 @@ private theorem construction_clauses_answer_prover_coin {a : Admitted V} {suite 
                                           exact deriveClause_answer_hear M _ _ prover verifier e.site law₀
                                             (drawToldKey events idx) (drawLabel e.site)
                                             (drawLabel_bytes e.site) derRefP at_ hSiteEq st coin st'
-                                            hDerD triple.1
+                                            hDerD pair.1
                                 · rcases List.mem_cons.mp hp' with rfl | hmem
                                   · rw [hCls] at hECls; cases hECls
                                     exact absurd ⟨hSite, rfl, rfl, by cases hTy; rfl⟩ hMatch
@@ -945,17 +919,10 @@ private theorem construction_clauses_answer_prover_coin {a : Admitted V} {suite 
                         · cases h
                   · split at h
                     · rename_i hNil
+                      cases h
                       rcases List.mem_cons.mp hp' with rfl | hmem
                       · rw [hCls] at hECls; cases hECls; subst hNil; cases hPin
-                      · split at h
-                        · cases samplesKey with
-                          | none => cases h; exact ih ⟨p', hmem, hSite, hTy, hs', hPin, hECls⟩
-                          | some sKey =>
-                              dsimp only at h
-                              cases hS : findTypedFnRef a sKey [.nat, .nat] [e.τ] with
-                              | none => rw [hS] at h; cases h
-                              | some _ => rw [hS] at h; cases h; exact ih ⟨p', hmem, hSite, hTy, hs', hPin, hECls⟩
-                        · cases h; exact ih ⟨p', hmem, hSite, hTy, hs', hPin, hECls⟩
+                      · exact ih ⟨p', hmem, hSite, hTy, hs', hPin, hECls⟩
                     · cases h
               | request _ =>
                   dsimp only at h
@@ -969,15 +936,14 @@ private theorem construction_clauses_answer_prover_coin {a : Admitted V} {suite 
 private theorem construction_clauses_answer_verifier_coin {a : Admitted V} {suite : ModuleRef}
     {stateTy unitTy : V.Ty}
     {absRef : TypedFnRef V a.program.headers.fns [stateTy, bytesTy, .seq unitTy none] [stateTy]}
-    {prover verifier : Role} {samplesKey : Option Key} {declKey : Key}
+    {prover verifier : Role} {declKey : Key}
     {events : List (ShapeEvent V)} :
     ∀ (idx : Nat) (es : List (ShapeEvent V × Bool)),
       (∀ k p, es[k]? = some p → events[idx + k]? = some p.1) →
       ∀ {cP : List (Clause V a.program.headers prover stateTy)}
-        {cV : List (Clause V a.program.headers verifier stateTy)}
-        {cS : List (Clause V a.program.headers prover .nat)},
-      buildConstructionClauses.go a suite stateTy unitTy absRef prover verifier samplesKey
-        declKey events idx es = .ok (cP, cV, cS) →
+        {cV : List (Clause V a.program.headers verifier stateTy)},
+      buildConstructionClauses.go a suite stateTy unitTy absRef prover verifier
+        declKey events idx es = .ok (cP, cV) →
       ∀ (law : V.LawKey) (hearers : List Role) (at_ : Occurrence) (τ : V.Ty) (st : M.Val stateTy),
         M.Valid stateTy st →
         (∃ p ∈ es, p.1.site = at_.site ∧ p.1.τ = τ ∧ prover ∈ hearers ∧
@@ -996,8 +962,8 @@ private theorem construction_clauses_answer_verifier_coin {a : Admitted V} {suit
             cV (.own (.coin law) hearers at_ [] .nil τ) st =
             .call (.give .message [prover] ⟨at_.path, drawToldKey events idxV⟩ τ coin)
               fun _ => .done (coin, st')
-  | _, [], _, _, _, _, _, _, _, _, _, _, _, ⟨_, hc, _⟩ => nomatch hc
-  | idx, (e, needAbs) :: rest, hSuf, cP, cV, cS, h, law, hearers, at_, τ, st, hStV,
+  | _, [], _, _, _, _, _, _, _, _, _, _, ⟨_, hc, _⟩ => nomatch hc
+  | idx, (e, needAbs) :: rest, hSuf, cP, cV, h, law, hearers, at_, τ, st, hStV,
       ⟨p', hp', hSite, hTy, hPin, hECls⟩ => by
       unfold buildConstructionClauses.go at h
       have hSufRest : ∀ k p'', rest[k]? = some p'' → events[(idx + 1) + k]? = some p''.1 := by
@@ -1006,9 +972,9 @@ private theorem construction_clauses_answer_verifier_coin {a : Admitted V} {suit
         simpa [Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using this
       have hIdx : events[idx]? = some e := by simpa using hSuf 0 (e, needAbs) rfl
       cases hRec : buildConstructionClauses.go a suite stateTy unitTy absRef prover verifier
-          samplesKey declKey events (idx + 1) rest with
+          declKey events (idx + 1) rest with
       | error _ => rw [hRec] at h; cases h
-      | ok triple =>
+      | ok pair =>
           rw [hRec] at h; dsimp only [bind, Except.bind] at h
           have ih := fun hIn => construction_clauses_answer_verifier_coin (idx + 1) rest hSufRest hRec
             law hearers at_ τ st hStV hIn
@@ -1093,7 +1059,7 @@ private theorem construction_clauses_answer_verifier_coin {a : Admitted V} {suit
                                           exact deriveClause_answer_own M _ _ verifier prover e.site law
                                             hearers (drawToldKey events idx) (drawLabel e.site)
                                             (drawLabel_bytes e.site) derRef at_ hSiteEq st coin st'
-                                            hDerD triple.2.1
+                                            hDerD pair.2
                                 · rcases List.mem_cons.mp hp' with rfl | hmem
                                   · rw [hCls] at hECls; cases hECls
                                     exact absurd ⟨hSite, rfl, rfl, by cases hTy; rfl⟩ hMatch
@@ -1106,17 +1072,10 @@ private theorem construction_clauses_answer_verifier_coin {a : Admitted V} {suit
                         · cases h
                   · split at h
                     · rename_i hNil
+                      cases h
                       rcases List.mem_cons.mp hp' with rfl | hmem
                       · rw [hCls] at hECls; cases hECls; subst hNil; cases hPin
-                      · split at h
-                        · cases samplesKey with
-                          | none => cases h; exact ih ⟨p', hmem, hSite, hTy, hPin, hECls⟩
-                          | some sKey =>
-                              dsimp only at h
-                              cases hS : findTypedFnRef a sKey [.nat, .nat] [e.τ] with
-                              | none => rw [hS] at h; cases h
-                              | some _ => rw [hS] at h; cases h; exact ih ⟨p', hmem, hSite, hTy, hPin, hECls⟩
-                        · cases h; exact ih ⟨p', hmem, hSite, hTy, hPin, hECls⟩
+                      · exact ih ⟨p', hmem, hSite, hTy, hPin, hECls⟩
                     · cases h
               | request _ =>
                   dsimp only at h
@@ -1132,23 +1091,22 @@ private theorem construction_clauses_answer_verifier_coin {a : Admitted V} {suit
 private theorem construction_clauses_unmatched_closed {a : Admitted V} {suite : ModuleRef}
     {stateTy unitTy : V.Ty}
     {absRef : TypedFnRef V a.program.headers.fns [stateTy, bytesTy, .seq unitTy none] [stateTy]}
-    {prover verifier : Role} {samplesKey : Option Key} {declKey : Key}
+    {prover verifier : Role} {declKey : Key}
     {events : List (ShapeEvent V)} :
     ∀ (idx : Nat) (es : List (ShapeEvent V × Bool))
       {cP : List (Clause V a.program.headers prover stateTy)}
-      {cV : List (Clause V a.program.headers verifier stateTy)}
-      {cS : List (Clause V a.program.headers prover .nat)},
-      buildConstructionClauses.go a suite stateTy unitTy absRef prover verifier samplesKey
-        declKey events idx es = .ok (cP, cV, cS) →
+      {cV : List (Clause V a.program.headers verifier stateTy)},
+      buildConstructionClauses.go a suite stateTy unitTy absRef prover verifier
+        declKey events idx es = .ok (cP, cV) →
       ∀ op, ROp.IsClosed M op →
         (∀ c ∈ cP, ¬ ClauseMatches M c op) ∧ (∀ c ∈ cV, ¬ ClauseMatches M c op)
-  | _, [], _, _, _, h, _, _ => by cases h; exact ⟨(fun _ hc => nomatch hc), (fun _ hc => nomatch hc)⟩
-  | idx, (e, needAbs) :: rest, cP, cV, cS, h, op, hCl => by
+  | _, [], _, _, h, _, _ => by cases h; exact ⟨(fun _ hc => nomatch hc), (fun _ hc => nomatch hc)⟩
+  | idx, (e, needAbs) :: rest, cP, cV, h, op, hCl => by
       unfold buildConstructionClauses.go at h
       cases hRec : buildConstructionClauses.go a suite stateTy unitTy absRef prover verifier
-          samplesKey declKey events (idx + 1) rest with
+          declKey events (idx + 1) rest with
       | error _ => rw [hRec] at h; cases h
-      | ok triple =>
+      | ok pair =>
           rw [hRec] at h; dsimp only [bind, Except.bind] at h
           obtain ⟨ihP, ihV⟩ := construction_clauses_unmatched_closed (idx + 1) rest hRec op hCl
           cases hCls : e.cls with
@@ -1216,15 +1174,7 @@ private theorem construction_clauses_unmatched_closed {a : Admitted V} {suite : 
                               · cases h
                         · cases h
                   · split at h
-                    · split at h
-                      · cases samplesKey with
-                        | none => cases h; exact ⟨ihP, ihV⟩
-                        | some sKey =>
-                            dsimp only at h
-                            cases hS : findTypedFnRef a sKey [.nat, .nat] [e.τ] with
-                            | none => rw [hS] at h; cases h
-                            | some _ => rw [hS] at h; cases h; exact ⟨ihP, ihV⟩
-                      · cases h; exact ⟨ihP, ihV⟩
+                    · cases h; exact ⟨ihP, ihV⟩
                     · cases h
               | request _ =>
                   dsimp only at h
@@ -1730,8 +1680,7 @@ theorem suiteLawful_allows {d : Deployed V} {suite : ModuleRef} {sessionTag : Op
       .done (.cons coin (.cons st' .nil))) :
     Allows M (.coin law) [] .nil τ coin := by
   subst hTy
-  unfold Deployed.SuiteLawful at hSuite
-  rw [hCon] at hSuite
+  have hSuite' := hSuite suite sessionTag hCon
   obtain ⟨defKey, hInSuite, hProgFind⟩ := findSuiteDerive_some hFind
   have hFnEq : Defs.fnTable M d.admitted.program.defs derRef.hdr derRef.member
       (cast (congrArg (HList M.Val) derRef.insEq.symm) (.cons st (.cons label .nil))) =
@@ -1742,7 +1691,7 @@ theorem suiteLawful_allows {d : Deployed V} {suite : ModuleRef} {sessionTag : Op
     dsimp only at hIn hOut
     cases hIn; cases hOut
     exact hEq.symm
-  exact hSuite.1 defKey hInSuite derRef.hdr derRef.member hProgFind stateTy [] e law owner h0 hs
+  exact hSuite'.1 defKey hInSuite derRef.hdr derRef.member hProgFind stateTy [] e law owner h0 hs
     hE hCls hLaw derRef.insEq derRef.outsEq st label .nil coin st' hStV hLbl trivial hFnEq
 
 theorem suiteLawful_encode_injective {d : Deployed V} {suite : ModuleRef}
@@ -1756,8 +1705,7 @@ theorem suiteLawful_encode_injective {d : Deployed V} {suite : ModuleRef}
     (hE₁ : encRef.eval M (Defs.fnTable M d.admitted.program.defs) (.cons v₁ .nil) = .done (.cons u .nil))
     (hE₂ : encRef.eval M (Defs.fnTable M d.admitted.program.defs) (.cons v₂ .nil) = .done (.cons u .nil)) :
     v₁ = v₂ := by
-  unfold Deployed.SuiteLawful at hSuite
-  rw [hCon] at hSuite
+  have hSuite' := hSuite suite sessionTag hCon
   obtain ⟨eKey, hInSuite, hProgFind⟩ := findSuiteEncode_some hFind
   have hFn₁ : Defs.fnTable M d.admitted.program.defs encRef.hdr encRef.member
       (cast (congrArg (HList M.Val) encRef.insEq.symm) (.cons v₁ .nil)) =
@@ -1773,7 +1721,7 @@ theorem suiteLawful_encode_injective {d : Deployed V} {suite : ModuleRef}
     rw [hE₂] at hEq
     rcases encRef with ⟨⟨_, _, _, _, _⟩, member, hIn, hOut, _, _⟩
     dsimp only at hIn hOut; cases hIn; cases hOut; exact hEq.symm
-  exact hSuite.2 eKey hInSuite encRef.hdr encRef.member hProgFind unitTy τ
+  exact hSuite'.2 eKey hInSuite encRef.hdr encRef.member hProgFind unitTy τ
     encRef.insEq encRef.outsEq v₁ v₂ u hV₁ hV₂ hFn₁ hFn₂
 
 theorem layoutLawful_roundTrip {d : Deployed V} {layout : Layout}
@@ -1790,8 +1738,7 @@ theorem layoutLawful_roundTrip {d : Deployed V} {layout : Layout}
     rRef.eval M (Defs.fnTable M d.admitted.program.defs)
       (.cons (pre ++ chunk ++ post) (.cons pre.length .nil)) =
       .done (.cons v (.cons (pre.length + chunk.length) .nil)) := by
-  unfold Deployed.LayoutLawful at hLayLaw
-  rw [hLayOpt] at hLayLaw
+  have hLay' := hLayLaw layout hLayOpt
   obtain ⟨wKey, hInW, hFindW⟩ := findLayoutWrite_some hW
   obtain ⟨rKey, hInR, hFindR⟩ := findLayoutRead_some hR
   have hWF : Defs.fnTable M d.admitted.program.defs wRef.hdr wRef.member
@@ -1803,7 +1750,7 @@ theorem layoutLawful_roundTrip {d : Deployed V} {layout : Layout}
     dsimp only at hIn hOut
     cases hIn; cases hOut
     exact hEq.symm
-  have hRF := hLayLaw.1 wKey rKey hInW hInR wRef.hdr rRef.hdr wRef.member rRef.member
+  have hRF := hLay'.1 wKey rKey hInW hInR wRef.hdr rRef.hdr wRef.member rRef.member
     hFindW hFindR unitTy τ wRef.insEq wRef.outsEq rRef.insEq rRef.outsEq v chunk pre post
     hV hPre hPost hWF
   have hEqR := rRef.eval_eq_fnTable M (Defs.fnTable M d.admitted.program.defs)
@@ -1830,8 +1777,7 @@ theorem layoutLawful_written {d : Deployed V} {layout : Layout}
       wRef.eval M (Defs.fnTable M d.admitted.program.defs) (.cons v .nil) =
         .done (.cons chunk .nil) ∧
       buf = buf.take off ++ chunk ++ buf.drop nextOff := by
-  unfold Deployed.LayoutLawful at hLayLaw
-  rw [hLayOpt] at hLayLaw
+  have hLay' := hLayLaw layout hLayOpt
   obtain ⟨wKey, hInW, hFindW⟩ := findLayoutWrite_some hW
   obtain ⟨rKey, hInR, hFindR⟩ := findLayoutRead_some hR
   have hRF : Defs.fnTable M d.admitted.program.defs rRef.hdr rRef.member
@@ -1842,7 +1788,7 @@ theorem layoutLawful_written {d : Deployed V} {layout : Layout}
     rcases rRef with ⟨⟨_, _, _, _, _⟩, member, hIn, hOut, _⟩
     dsimp only at hIn hOut; cases hIn; cases hOut; exact hEq.symm
   obtain ⟨hV, hLe1, hLe2, chunk, hWF, hBufEq⟩ :=
-    hLayLaw.2.1 wKey rKey hInW hInR wRef.hdr rRef.hdr wRef.member rRef.member
+    hLay'.2.1 wKey rKey hInW hInR wRef.hdr rRef.hdr wRef.member rRef.member
       hFindW hFindR unitTy τ wRef.insEq wRef.outsEq rRef.insEq rRef.outsEq
       buf off v nextOff hBuf hOff hRF
   refine ⟨hV, hLe1, hLe2, chunk, ?_, hBufEq⟩
@@ -1858,8 +1804,7 @@ theorem layoutLawful_equal_refl {d : Deployed V} {layout : Layout}
     {v : M.Val τ} (hV : M.Valid τ v) :
     eqRef.eval M (Defs.fnTable M d.admitted.program.defs) (.cons v (.cons v .nil)) =
       .done (.cons true .nil) := by
-  unfold Deployed.LayoutLawful at hLayLaw
-  rw [hLayOpt] at hLayLaw
+  have hLay' := hLayLaw layout hLayOpt
   obtain ⟨eqKey, hInE, hFindE⟩ := findLayoutEqual_some hE
   obtain ⟨resH, hDone, _⟩ := eqRef.eval_done M d.admitted (.cons v (.cons v .nil)) ⟨hV, hV, trivial⟩
   cases resH with
@@ -1872,7 +1817,7 @@ theorem layoutLawful_equal_refl {d : Deployed V} {layout : Layout}
         rw [hDone] at hEq
         rcases eqRef with ⟨⟨_, _, _, _, _⟩, member, hIn, hOut, _, _⟩
         dsimp only at hIn hOut; cases hIn; cases hOut; exact hEq.symm
-      have hIff := hLayLaw.2.2 eqKey hInE eqRef.hdr eqRef.member hFindE τ
+      have hIff := hLay'.2.2 eqKey hInE eqRef.hdr eqRef.member hFindE τ
         eqRef.insEq eqRef.outsEq v v b hV hV hFn
       have hb : b = true := hIff.mpr rfl
       subst hb
@@ -2092,11 +2037,10 @@ private theorem simulate_derived {d : Deployed V} {suite : ModuleRef} {sessionTa
     (hSuiteLaw : d.SuiteLawful M) (hLayLaw : d.LayoutLawful M)
     (hConPState : conP.state = stateTy) (hConVState : conV.state = stateTy)
     (hLayPState : layP.state = .seq unitTy none) (hLayVState : layV.state = streamStateTy unitTy)
-    {cS : List (Clause V d.admitted.program.headers prover .nat)}
     (hCC : buildConstructionClauses.go d.admitted suite stateTy suiteUnitTy absRef prover verifier
-      none declKey (d.entry.shape.events [] id) 0
+      declKey (d.entry.shape.events [] id) 0
       (d.entry.shape.eventsWithAbsorb prover verifier [] id false) =
-      .ok (hConPState ▸ conP.clauses, hConVState ▸ conV.clauses, cS))
+      .ok (hConPState ▸ conP.clauses, hConVState ▸ conV.clauses))
     (hSL : buildStreamingLayoutClauses.go d.admitted layout unitTy hfree prover verifier declKey
       (d.entry.shape.events [] id) 0 (d.entry.shape.events [] id) =
       .ok (hLayPState ▸ layP.clauses, hLayVState ▸ layV.clauses)) :
@@ -2191,9 +2135,9 @@ private theorem simulate_derived {d : Deployed V} {suite : ModuleRef} {sessionTa
                            hearers = []
                        | .given (.request _) owner hearers =>
                            (owner = prover ∨ prover ∉ hearers) ∧ (owner = verifier ∨ verifier ∉ hearers)) := by
-                    have hGo : ∀ (idx : Nat) (es : List (ShapeEvent V × Bool)) {cP' cV' cS'},
+                    have hGo : ∀ (idx : Nat) (es : List (ShapeEvent V × Bool)) {cP' cV'},
                         buildConstructionClauses.go d.admitted suite stateTy suiteUnitTy absRef
-                          prover verifier none declKey events idx es = .ok (cP', cV', cS') →
+                          prover verifier declKey events idx es = .ok (cP', cV') →
                         ∀ p ∈ es, match p.1.cls with
                           | .flow _ giver getters =>
                               (giver = prover ∧ verifier ∈ getters) ∨
@@ -2206,12 +2150,12 @@ private theorem simulate_derived {d : Deployed V} {suite : ModuleRef} {sessionTa
                               (owner = prover ∨ prover ∉ hearers) ∧ (owner = verifier ∨ verifier ∉ hearers) := by
                       intro idx es
                       induction es generalizing idx with
-                      | nil => intro _ _ _ _ _ hp; cases hp
+                      | nil => intro _ _ _ _ hp; cases hp
                       | cons p rest ih =>
-                          intro cP' cV' cS' hGo' p' hp'
+                          intro cP' cV' hGo' p' hp'
                           unfold buildConstructionClauses.go at hGo'
                           cases hRec : buildConstructionClauses.go d.admitted suite stateTy suiteUnitTy
-                              absRef prover verifier none declKey events (idx + 1) rest with
+                              absRef prover verifier declKey events (idx + 1) rest with
                           | error _ => rw [hRec] at hGo'; cases hGo'
                           | ok tr =>
                               rw [hRec] at hGo'; dsimp only [bind, Except.bind] at hGo'
@@ -3005,9 +2949,8 @@ private theorem simulate_authored {d : Deployed V} {layout : Layout} {unitTy : V
     (hLayDecl : d.declaration.layout = some layout)
     (hLayLaw : d.LayoutLawful M)
     (hLayPState : layP.state = .seq unitTy none) (hLayVState : layV.state = streamStateTy unitTy)
-    {cS : List (Clause V d.admitted.program.headers prover .nat)}
-    (hAuth : checkAuthoredEvents d.admitted prover verifier none declKey
-      (d.entry.shape.events [] id) = .ok cS)
+    (hAuth : checkAuthoredEvents prover verifier declKey
+      (d.entry.shape.events [] id) = .ok ())
     (hSL : buildStreamingLayoutClauses.go d.admitted layout unitTy hfree prover verifier declKey
       (d.entry.shape.events [] id) 0 (d.entry.shape.events [] id) =
       .ok (hLayPState ▸ layP.clauses, hLayVState ▸ layV.clauses)) :
@@ -3081,8 +3024,8 @@ private theorem simulate_authored {d : Deployed V} {layout : Layout} {unitTy : V
               | .given (.coin _) _ hearers => hearers = []
               | .given (.request _) owner hearers =>
                   (owner = prover ∨ prover ∉ hearers) ∧ (owner = verifier ∨ verifier ∉ hearers) := by
-            have hGo : ∀ (es : List (ShapeEvent V)) {cS'},
-                checkAuthoredEvents d.admitted prover verifier none declKey es = .ok cS' →
+            have hGo : ∀ (es : List (ShapeEvent V)),
+                checkAuthoredEvents prover verifier declKey es = .ok () →
                 ∀ e ∈ es, match e.cls with
                   | .flow _ giver getters =>
                       (giver = prover ∧ verifier ∈ getters) ∨
@@ -3092,13 +3035,14 @@ private theorem simulate_authored {d : Deployed V} {layout : Layout} {unitTy : V
                       (owner = prover ∨ prover ∉ hearers) ∧ (owner = verifier ∨ verifier ∉ hearers) := by
               intro es
               induction es with
-              | nil => intro _ _ _ he; cases he
+              | nil => intro _ _ he; cases he
               | cons e rest ih =>
-                  intro cS' hGo' e' he'
+                  intro hGo' e' he'
                   unfold checkAuthoredEvents at hGo'
-                  cases hRec : checkAuthoredEvents d.admitted prover verifier none declKey rest with
+                  cases hRec : checkAuthoredEvents prover verifier declKey rest with
                   | error _ => rw [hRec] at hGo'; cases hGo'
-                  | ok sRest =>
+                  | ok u =>
+                      cases u
                       rw [hRec] at hGo'; dsimp only [bind, Except.bind] at hGo'
                       rcases List.mem_cons.mp he' with rfl | hmem
                       · cases hCls : e'.cls with
@@ -3463,7 +3407,12 @@ private theorem simulate_authored {d : Deployed V} {layout : Layout} {unitTy : V
                           exact ⟨a, outP, outV, suf, recP, src'', hSufV, hAlP, hAlV,
                             hPostP, hPostV, hL'', hAg'', hGEx''⟩
 
-/-- Top-level streaming completeness (`Statements.complete`) for `deploy`. -/
+private theorem cast_ins_eq_cast_hdr {hs : Headers V} {r : Role} {hdr₁ hdr₂ : ProtocolHeader V}
+    (h : hdr₁ = hdr₂) (ls : List (Layer V hs r hdr₂.ins)) :
+    (congrArg ProtocolHeader.ins h) ▸ ls = h ▸ ls := by
+  subst h; rfl
+
+/-- Top-level streaming completeness (`Statements.completeStreaming`) for `deploy`. -/
 theorem deploy_complete (enc : VocabEncoder V) {named : NamedProgram V} {assoc : Association}
     {a : Admitted V} (hAdmit : admit named assoc = .ok a)
     {declaration : Declaration} {d : Deployed V} (hDep : deploy enc a declaration = .ok d)
@@ -3531,10 +3480,10 @@ theorem deploy_complete (enc : VocabEncoder V) {named : NamedProgram V} {assoc :
           let layV0 : Layer V a.program.headers w.verifier w.foundPair.1.ins := wL.layV
           let layP' : Layer V a.program.headers w.prover _ := hEntryF ▸ layP0
           let layV' : Layer V a.program.headers w.verifier _ := hEntryF ▸ layV0
-          have hAuth' : checkAuthoredEvents a w.prover w.verifier none declaration.key
+          have hAuth' : checkAuthoredEvents w.prover w.verifier declaration.key
               ((((a.program.findProtocol declaration.entry).get
-                (by rw [w.hFound]; rfl)).1).shape.events [] id) = .ok w.sClauses := by
-            rw [hEntryF, ← hNoSamp]; exact w.hAuth
+                (by rw [w.hFound]; rfl)).1).shape.events [] id) = .ok () := by
+            rw [hEntryF]; exact w.hAuth
           have hLayPSt : layP'.state = .seq wL.unitTy none := layer_cast_state hEntryF layP0
           have hLayVSt : layV'.state = streamStateTy wL.unitTy := layer_cast_state hEntryF layV0
           have hSL' : buildStreamingLayoutClauses.go a w.layout wL.unitTy wL.hfree
@@ -3646,7 +3595,7 @@ theorem deploy_complete (enc : VocabEncoder V) {named : NamedProgram V} {assoc :
           simp only [List.nil_append, List.append_nil, List.length_nil, Nat.zero_add] at hAlV0
           have hStackPEq : w.toDeployed.stack w.prover = hEntryF ▸ [layP0] := by
             dsimp only [DeployAuthored.toDeployed]
-            rw [dite_eq_left rfl, hNoSamp, hLPW]
+            rw [dite_eq_left rfl, hLPW]
           have hStackVEq : w.toDeployed.stack w.verifier = hEntryF ▸ [layV0] := by
             dsimp only [DeployAuthored.toDeployed]
             rw [dite_eq_right (Ne.symm w.hNe), dite_eq_left rfl, hLVW]
@@ -3722,13 +3671,13 @@ theorem deploy_complete (enc : VocabEncoder V) {named : NamedProgram V} {assoc :
           have hLPSt : layP'.state = .seq wL.unitTy none := layer_cast_state hEntryF layPL
           have hLVSt : layV'.state = streamStateTy wL.unitTy := layer_cast_state hEntryF layVL
           have hCC' : buildConstructionClauses.go a w.suite w.stateTy w.suiteUnitTy
-              w.absorbRef w.prover w.verifier none declaration.key
+              w.absorbRef w.prover w.verifier declaration.key
               ((((a.program.findProtocol declaration.entry).get
                 (by rw [w.hFound]; rfl)).1).shape.events [] id) 0
               ((((a.program.findProtocol declaration.entry).get
                 (by rw [w.hFound]; rfl)).1).shape.eventsWithAbsorb w.prover w.verifier [] id false) =
-              .ok (hCPSt ▸ conP'.clauses, hCVSt ▸ conV'.clauses, w.sClauses) := by
-            rw [layer_cast_clauses hEntryF conPL, layer_cast_clauses hEntryF conVL, hEntryF, ← hNoSamp]
+              .ok (hCPSt ▸ conP'.clauses, hCVSt ▸ conV'.clauses) := by
+            rw [layer_cast_clauses hEntryF conPL, layer_cast_clauses hEntryF conVL, hEntryF]
             exact w.hCC
           have hSL' : buildStreamingLayoutClauses.go a w.layout wL.unitTy
               wL.hfree w.prover w.verifier declaration.key
@@ -3869,12 +3818,19 @@ theorem deploy_complete (enc : VocabEncoder V) {named : NamedProgram V} {assoc :
                 simp only [Nat.beq_refl, Bool.cond_true]; rfl
               rw [hFinV]; exact .done
           simp only [List.nil_append, List.append_nil, List.length_nil, Nat.zero_add] at hAlV0
+          have hNoSampLayer : w.prep.sampLayer = none := by
+            have h := w.prep.hSamp
+            unfold buildSamplesLayer at h
+            rw [hNoSamp] at h
+            exact (Except.ok.inj h).symm
           have hStackPEq : w.toDeployed.stack w.prover = hEntryF ▸ [conPL, layPL] := by
             dsimp only [DeployDerived.toDeployed]
-            rw [dite_eq_left rfl, hNoSamp, hLPW]
+            rw [dite_eq_left rfl, hNoSampLayer, hLPW]
+            exact cast_ins_eq_cast_hdr hEntryF _
           have hStackVEq : w.toDeployed.stack w.verifier = hEntryF ▸ [conVL, layVL] := by
             dsimp only [DeployDerived.toDeployed]
             rw [dite_eq_right (Ne.symm w.hNe), dite_eq_left rfl, hLVW]
+            exact cast_ins_eq_cast_hdr hEntryF _
           have hFirst' : Stack.Takes (hEntryF ▸ [conPL, layPL]) = [] := by
             rw [← hStackPEq]; exact first
           have hMatched' : Stack.Gives (hEntryF ▸ [conPL, layPL]) = Stack.Takes (hEntryF ▸ [conVL, layVL]) := by

@@ -15,7 +15,7 @@ namespace Zkc.Core
 
 open LayerBuild
 
-/-! ## Section 1: Pure collision-free ideal random-oracle linkage (`deployIdeal_link`) -/
+/-! ## Pure collision-free ideal random-oracle linkage (`deployIdeal_link`) -/
 
 section IdealLink
 
@@ -67,91 +67,114 @@ private theorem answerService_map {H A B : Type} (service : Key)
   rw [Process.map_eq_bind, Process.map_eq_bind, answerService_bind]
   rfl
 
-/-- Whether the prover→verifier flow `(site, kind, τ)` is marked for transcript absorption in
-`eventsAbs` (false for trailing messages elided under Chiesa-Orru Construction 4.3). -/
-def needIdealAbsorb (prover verifier : Role) (eventsAbs : List (ShapeEvent V × Bool))
-    (site : Site) (kind : FlowKind) (τ : V.Ty) : Bool :=
-  eventsAbs.any fun p =>
-    p.2 && decide (p.1.site = site) && decide (p.1.τ = τ) &&
-      match p.1.cls with
-      | .flow k g gs => decide (k = kind ∧ g = prover ∧ verifier ∈ gs)
-      | _ => false
+private theorem idealRO_asOracle_query {unitTy : V.Ty} (ro : IdealRO M unitTy)
+    (st : M.Val (idealPathTy unitTy)) (lbl : List Nat) (τ : V.Ty) :
+    IdealRO.asOracle M ro [idealQueryTy unitTy] (.cons (st, (lbl, ())) .nil) τ = ro st lbl τ := by
+  change (if h : idealQueryTy unitTy = idealQueryTy unitTy then
+      let q' : M.Val (idealQueryTy unitTy) := cast (congrArg M.Val h) (st, (lbl, ()))
+      ro q'.1 q'.2.1 τ
+    else none) = ro st lbl τ
+  rw [dite_eq_left rfl]
+  rfl
 
-/-- Direct pure-path ideal-RO verifier state machine (completely independent of `Layer`/`Stack`/
-`Handler`/`Clause` and of concrete `SuiteSlot.start`/`SuiteSlot.absorb`), parameterized directly
-by a total random oracle `ro` on `(idealPath, drawLabel, ty)` for a non-carry streaming verifier. -/
-def evalIdealVerifierLoop {A : Type} (a : Admitted V) (suite : ModuleRef) (layout : Layout)
-    {suiteUnitTy unitTy : V.Ty}
-    (serviceKey : Key) (prover verifier : Role) (finishGuard : Key)
-    (eventsAbs : List (ShapeEvent V × Bool))
+private theorem answerService_request_some {H A : Type} (service : Key)
     (oracle : (ins : List V.Ty) → HList M.Val ins → (τ : V.Ty) → Option (M.Val τ))
-    (ro : M.Val (idealPathTy suiteUnitTy) → List Nat → (τ : V.Ty) → M.Val τ) :
-    Program M A → M.Val (idealPathTy suiteUnitTy) → List (M.Val unitTy) → Nat →
-    Process (RSig M) Stop (A × HList M.Val [])
-  | .done outV, _, buf, off =>
-      bif Nat.beq off buf.length then .done (outV, .nil)
-      else .halt (.declared .reject ⟨[], finishGuard⟩)
-  | .halt why, _, _, _ => .halt why
-  | .call op k, st, buf, off =>
-      match op with
-      | .get knd giver at_ τ =>
-          if giver = prover then
-            if needIdealAbsorb prover verifier eventsAbs at_.site knd τ then
-              match findLayoutRead a layout.module unitTy τ, findSuiteEncode a suite suiteUnitTy τ with
-              | some rRef, some encRef =>
-                  (liftLocal id (rRef.eval M (Defs.fnTable M a.program.defs) (.cons buf (.cons off .nil)))).bind
-                    fun res => match res with
-                    | .cons msg (.cons nextOff .nil) =>
-                        (liftLocal id (encRef.eval M (Defs.fnTable M a.program.defs) (.cons msg .nil))).bind
-                          fun enc =>
-                            evalIdealVerifierLoop a suite layout serviceKey prover verifier finishGuard
-                              eventsAbs oracle ro (k msg)
-                              (idealPathPush M st (2 :: msgLabel at_.site) enc.single) buf nextOff
-              | _, _ => .call (.get knd giver at_ τ) fun v =>
-                  evalIdealVerifierLoop a suite layout serviceKey prover verifier finishGuard
-                    eventsAbs oracle ro (k v) st buf off
-            else
-              match findLayoutRead a layout.module unitTy τ with
-              | some rRef =>
-                  (liftLocal id (rRef.eval M (Defs.fnTable M a.program.defs) (.cons buf (.cons off .nil)))).bind
-                    fun res => match res with
-                    | .cons msg (.cons nextOff .nil) =>
-                        evalIdealVerifierLoop a suite layout serviceKey prover verifier finishGuard
-                          eventsAbs oracle ro (k msg) st buf nextOff
-              | none => .call (.get knd giver at_ τ) fun v =>
-                  evalIdealVerifierLoop a suite layout serviceKey prover verifier finishGuard
-                    eventsAbs oracle ro (k v) st buf off
-          else
-            .call (.get knd giver at_ τ) fun v =>
-              evalIdealVerifierLoop a suite layout serviceKey prover verifier finishGuard
-                eventsAbs oracle ro (k v) st buf off
-      | .own (.coin law) (h0 :: hs) at_ [] .nil τ =>
-          match findSuiteEncode a suite suiteUnitTy τ with
-          | some encRef =>
-              let coin := ro st (drawLabel at_.site) τ
-              (liftLocal id (encRef.eval M (Defs.fnTable M a.program.defs) (.cons coin .nil))).bind
-                fun enc =>
-                  evalIdealVerifierLoop a suite layout serviceKey prover verifier finishGuard
-                    eventsAbs oracle ro (k coin)
-                    (idealPathPush M st (3 :: drawLabel at_.site) enc.single) buf off
-          | none => .call (.own (.coin law) (h0 :: hs) at_ [] .nil τ) fun v =>
-              evalIdealVerifierLoop a suite layout serviceKey prover verifier finishGuard
-                eventsAbs oracle ro (k v) st buf off
-      | .own (.request svc) hearers at_ ins payload τ =>
-          if svc = serviceKey then
-            match oracle ins payload τ with
-            | some v =>
-                evalIdealVerifierLoop a suite layout serviceKey prover verifier finishGuard
-                  eventsAbs oracle ro (k v) st buf off
-            | none => .call (.own (.request svc) hearers at_ ins payload τ) fun v =>
-                evalIdealVerifierLoop a suite layout serviceKey prover verifier finishGuard
-                  eventsAbs oracle ro (k v) st buf off
-          else .call (.own (.request svc) hearers at_ ins payload τ) fun v =>
-            evalIdealVerifierLoop a suite layout serviceKey prover verifier finishGuard
-              eventsAbs oracle ro (k v) st buf off
-      | op' => .call op' fun v =>
-          evalIdealVerifierLoop a suite layout serviceKey prover verifier finishGuard
-            eventsAbs oracle ro (k v) st buf off
+    {hearers : List Role} {at_ : Occurrence} {ins : List V.Ty}
+    {payload : HList M.Val ins} {τ : V.Ty} {k : M.Val τ → Process (RSig M) H A}
+    {v : M.Val τ} (hAns : oracle ins payload τ = some v) :
+    Process.answerService service oracle
+      (.call (.own (.request service) hearers at_ ins payload τ) k) =
+      Process.answerService service oracle (k v) := by
+  conv => lhs; unfold Process.answerService
+  rw [ite_eq_left rfl, hAns]
+
+private theorem tag_bytes_cons (tag : Nat) (htag : tag < 256) (lbl : List Nat)
+    (hlbl : ∀ b, b ∈ lbl → b < 256) : ∀ b, b ∈ tag :: lbl → b < 256 := fun b hb => by
+  rcases List.mem_cons.mp hb with rfl | hm
+  · exact htag
+  · exact hlbl b hm
+
+private theorem alone_own_returned_iff {source : Source M} {r : Role} {H A : Type}
+    {gk : GivenKind V} {hs : List Role} {at_ : Occurrence} {gIns : List V.Ty}
+    {payload : HList M.Val gIns} {τ : V.Ty} {k : M.Val τ → Process (RSig M) H A} {x : A} :
+    (∃ rec, Alone M source r (.call (.own gk hs at_ gIns payload τ) k) rec (.returned x)) ↔
+      ∃ v, source at_ τ = some v ∧ ∃ rec, Alone M source r (k v) rec (.returned x) := by
+  constructor
+  · rintro ⟨rec, hAl⟩
+    cases hAl with
+    | own hSrc hRest => exact ⟨_, hSrc, _, hRest⟩
+  · rintro ⟨v, hSrc, rec, hRest⟩
+    exact ⟨_, .own hSrc hRest⟩
+
+private theorem alone_begin_returned_iff {source : Source M} {r : Role} {H A : Type}
+    {at_ : Occurrence} {k : Nat → Process (RSig M) H A} {x : A} :
+    (∃ rec, Alone M source r (.call (.begin at_) k) rec (.returned x)) ↔
+      ∃ rec, Alone M source r (k 0) rec (.returned x) := by
+  constructor
+  · rintro ⟨rec, hAl⟩; cases hAl with | «begin» hRest => exact ⟨_, hRest⟩
+  · rintro ⟨rec, hRest⟩; exact ⟨_, .begin hRest⟩
+
+private theorem alone_settle_returned_iff {source : Source M} {r : Role} {H A : Type}
+    {at_ : Occurrence} {k : Unit → Process (RSig M) H A} {x : A} :
+    (∃ rec, Alone M source r (.call (.settle at_) k) rec (.returned x)) ↔
+      ∃ rec, Alone M source r (k ()) rec (.returned x) := by
+  constructor
+  · rintro ⟨rec, hAl⟩; cases hAl with | settle hRest => exact ⟨_, hRest⟩
+  · rintro ⟨rec, hRest⟩; exact ⟨_, .settle hRest⟩
+
+private theorem alone_map_nil_iff {source : Source M} {r : Role} {H A : Type}
+    {gTys : List V.Ty} (hG : gTys = [])
+    (p : Process (RSig M) H (A × HList M.Val gTys)) (outV : A) :
+    (∃ rec givesV, Alone M source r p rec (.returned (outV, givesV))) ↔
+      ∃ rec, Alone M source r
+        (p.map fun out => (out.1, cast (congrArg (HList M.Val) hG) out.2))
+        rec (.returned (outV, .nil)) := by
+  subst hG
+  simp only [cast_eq]
+  have hMap : p.map (fun out : A × HList M.Val [] => (out.1, out.2)) = p :=
+    (congrArg (fun f => p.map f) (funext fun ⟨_, _⟩ => rfl)).trans (Process.map_id' p)
+  rw [hMap]
+  constructor
+  · rintro ⟨rec, givesV, hAl⟩
+    cases givesV
+    exact ⟨rec, hAl⟩
+  · rintro ⟨rec, hAl⟩
+    exact ⟨rec, .nil, hAl⟩
+
+private theorem stack2_lay_enc_step {hs : Headers V} (fnTable : FnTable M hs.fns)
+    (rTable : RTable M hs.protocols) {verifier : Role} {ins : List (LTy V)}
+    {suiteUnitTy τ : V.Ty}
+    (layV' : Layer V hs verifier ins)
+    (st : M.Val (idealPathTy suiteUnitTy))
+    (lst : M.Val layV'.state)
+    (val : M.Val τ) (tagLbl : List Nat)
+    (encRef : TypedFnRef V hs.fns [τ] [.seq suiteUnitTy none])
+    (encV : List (M.Val suiteUnitTy))
+    (hEnc : encRef.eval M fnTable (.cons val .nil) = .done (.cons encV .nil)) :
+    Process.map
+      (fun (out : M.Val τ × M.Val (idealPathTy suiteUnitTy) × HList M.Val (Stack.States [layV'])) =>
+        (out.1, HList.cons out.2.1 out.2.2))
+      (Process.mapHalt
+        (fun (stop : Stop × M.Val (idealPathTy suiteUnitTy) × HList M.Val (Stack.States [layV'])) =>
+          (stop.1, HList.cons stop.2.1 stop.2.2))
+        ((Process.mapHalt
+          (fun (stop : Stop × M.Val (idealPathTy suiteUnitTy) × HList M.Val (Stack.States [layV'])) =>
+            (stop.1, stop.2.1, stop.2.2))
+          ((Stack.handler M fnTable rTable [layV']).answer
+            (Process.map
+              (fun out =>
+                let values := HList.split [τ] (aloneOut M verifier out)
+                (values.1.single, values.2.single))
+              (Process.mapHalt (fun why => (why, st))
+                (Process.map
+                  (fun enc => aloneIn M verifier (.cons val (.cons (idealPathPush M st tagLbl enc.single) .nil)))
+                  (liftLocal (S := RSig M) id (encRef.eval M fnTable (.cons val .nil))))))
+            st (HList.cons lst .nil))).bind
+          fun out => Process.done (out.1.1, out.1.2, out.2))) =
+    .done (val, HList.cons (idealPathPush M st tagLbl encV) (HList.cons lst .nil)) := by
+  rw [hEnc, liftLocal_done]
+  dsimp only [Process.map, Process.mapHalt, Handler.answer, Process.bind, HList.single]
+  rw [aloneOut_aloneIn]; rfl
 
 private theorem idealAbsorbClause_answer {hs : Headers V} (fnTable : FnTable M hs.fns)
     (rTable : RTable M hs.protocols) {unitTy τ : V.Ty}
@@ -835,7 +858,7 @@ private theorem streaming_layout_answer_told_drop {a : Admitted V} {layout : Lay
                       · cases h; exact ih
                   | request _ => cases h; exact ih
 
-private theorem ideal_verifier_loop_eq {a : Admitted V} {suite : ModuleRef} {layout : Layout}
+private theorem ideal_verifier_bare_iff {a : Admitted V} {suite : ModuleRef} {layout : Layout}
     (hNoCarry : layout.carry = []) {suiteUnitTy unitTy : V.Ty}
     {hSuiteFree : Ty.isLinear V suiteUnitTy = false}
     {hfree : Ty.isLinear V unitTy = false}
@@ -851,25 +874,27 @@ private theorem ideal_verifier_loop_eq {a : Admitted V} {suite : ModuleRef} {lay
       .ok (hConSt ▸ idealConV.clauses))
     (hSL : ∃ pCs, buildStreamingLayoutClauses.go a layout unitTy hfree prover verifier declKey
       (shape.events [] id) 0 (shape.events [] id) = .ok (pCs, hLaySt ▸ layV.clauses))
-    (oracle : (ins : List V.Ty) → HList M.Val ins → (τ : V.Ty) → Option (M.Val τ))
-    (ro : M.Val (idealPathTy suiteUnitTy) → List Nat → (τ : V.Ty) → M.Val τ)
-    (hOracleRo : ∀ st lbl τ,
-      oracle [idealQueryTy suiteUnitTy] (.cons (st, (lbl, ())) .nil) τ = some (ro st lbl τ)) :
+    (source : Source M) (ro : IdealRO M suiteUnitTy)
+    (hRo : ro.AnswersDraws M prover verifier (shape.events [] id)) :
     ∀ {A : Type} (p : Program M A) (st : M.Val (idealPathTy suiteUnitTy))
-      (buf : List (M.Val unitTy)) (off : Nat),
+      (buf : List (M.Val unitTy)) (off : Nat) (outV : A),
+      M.Valid (idealPathTy suiteUnitTy) st →
+      M.Valid (.seq unitTy none) buf →
       p.SafeWith M (fun _ _ => True) (ROp.MatchesShape M verifier (shape.events [] id))
         (fun _ => True) (fun _ => True) →
-      Process.answerService serviceKey oracle
-        ((((Stack.handler M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs)
-          [idealConV, layV]).run (retryOf M none) p
-            (.cons (hConSt.symm ▸ st) (.cons (hLaySt.symm ▸ (buf, (off, ())))
-              (.nil : HList M.Val (Stack.States ([] : List (Layer V a.program.headers verifier entryIns))))))).mapHalt Prod.fst).bind
-          fun out => (Stack.finish M (Defs.fnTable M a.program.defs) [idealConV, layV] out.2).map
-            fun gives => (out.1, cast (by simp [Stack.Gives, hConGives, hLayGives]) gives)) =
-        evalIdealVerifierLoop M a suite layout serviceKey prover verifier
-          (finishGuardKey (shape.events [] id))
-          (shape.eventsWithAbsorb prover verifier [] id false)
-          oracle ro p st buf off := by
+      ((∃ record,
+        Alone M source verifier
+          (Process.answerService serviceKey (IdealRO.asOracle M ro)
+            ((((Stack.handler M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs)
+              [idealConV, layV]).run (retryOf M none) p
+                (.cons (hConSt.symm ▸ st) (.cons (hLaySt.symm ▸ (buf, (off, ())))
+                  (.nil : HList M.Val (Stack.States ([] : List (Layer V a.program.headers verifier entryIns))))))).mapHalt Prod.fst).bind
+              fun out => (Stack.finish M (Defs.fnTable M a.program.defs) [idealConV, layV] out.2).map
+                fun gives => (out.1, cast (by simp [Stack.Gives, hConGives, hLayGives]) gives)))
+          record (.returned (outV, (.nil : HList M.Val [])))) ↔
+      BareIdealReturn M a suite layout serviceKey prover verifier
+        (shape.eventsWithAbsorb prover verifier [] id false)
+        source ro p st buf off outV) := by
   cases idealConV with
   | mk cLine cSt cTakes cGives cClauses cAgain cStart cFin =>
       cases layV with
@@ -1005,8 +1030,8 @@ private theorem ideal_verifier_loop_eq {a : Admitted V} {suite : ModuleRef} {lay
             exact hAns0 _
           intro A p
           induction p with
-          | done outV =>
-              intro st buf off _
+          | done aOut =>
+              intro st buf off outV _ _ _
               have hFin : Stack.finish M (Defs.fnTable M a.program.defs) [idealConV', layV']
                   (.cons st (.cons (buf, (off, ())) .nil)) =
                   bif Nat.beq off buf.length then .done .nil
@@ -1016,13 +1041,29 @@ private theorem ideal_verifier_loop_eq {a : Admitted V} {suite : ModuleRef} {lay
                 dsimp only [liftLocal_done, Process.bind]
                 rw [layoutVFinish_denote]
                 cases Nat.beq off buf.length <;> rfl
-              dsimp only [Handler.run, Process.mapHalt, Process.bind, evalIdealVerifierLoop]
+              dsimp only [Handler.run, Process.mapHalt, Process.bind]
               rw [hFin]
-              cases Nat.beq off buf.length <;> rfl
+              cases hBeq : Nat.beq off buf.length with
+              | false =>
+                  dsimp only [cond, Process.map, Process.answerService]
+                  constructor
+                  · rintro ⟨_, hAl⟩; cases hAl
+                  · intro hBare; cases hBare with
+                    | done hLen => rw [hLen, Nat.beq_refl] at hBeq; cases hBeq
+              | true =>
+                  dsimp only [cond, Process.map, Process.answerService]
+                  have hLen : off = buf.length := Nat.eq_of_beq_eq_true hBeq
+                  constructor
+                  · rintro ⟨_, hAl⟩; cases hAl; exact .done hLen
+                  · intro hBare; cases hBare; exact ⟨[], .done⟩
           | halt why =>
-              intro _ _ _ _; rfl
+              intro _ _ _ _ _ _ _
+              dsimp only [Handler.run, Process.mapHalt, Process.bind, Process.answerService]
+              constructor
+              · rintro ⟨_, hAl⟩; cases hAl
+              · intro hBare; cases hBare
           | call op k ih =>
-              intro st buf off ⟨hOpSh, hKSh⟩
+              intro st buf off outV hStV hBufV ⟨hOpSh, hKSh⟩
               cases op with
               | give kind getters at_ τ x =>
                   obtain ⟨e, he, _, _, hCls⟩ := hOpSh
@@ -1067,121 +1108,98 @@ private theorem ideal_verifier_loop_eq {a : Admitted V} {suite : ModuleRef} {lay
                       obtain ⟨rRef, hRFind, hLayAns⟩ :=
                         streaming_layout_answer_verifier_flow_full M 0 events hSL' kind ⟨at_.path, at_.site.key⟩ τ buf off
                           ⟨e, he, hSite, hTy, gs', hVin, hCls⟩
-                      conv =>
-                        rhs
-                        rw [evalIdealVerifierLoop]
-                        dsimp only
-                        rw [ite_eq_left rfl, hNeedTrue]
-                        simp only [↓reduceIte]
-                        rw [hRFind, hEncFind]
-                      dsimp only [Handler.run]
-                      change Process.answerService serviceKey oracle
-                        (((((Stack.handler M fnTable rTable [idealConV', layV']).clause (.get kind giver at_ τ)
-                          (.cons st (.cons (buf, (off, ())) .nil))).bind _).mapHalt _).bind _) = _
-                      have hClauseEq : (Stack.handler M fnTable rTable [idealConV', layV']).clause (.get kind giver at_ τ)
-                          (.cons st (.cons (buf, (off, ())) .nil)) =
-                          (liftLocal (fun why => (why, .cons st (.cons (buf, (off, ())) .nil)))
-                            (rRef.eval M fnTable (.cons buf (.cons off .nil)))).bind fun res =>
-                            match res with
-                            | .cons msg (.cons nextOff .nil) =>
-                                (liftLocal (fun why => (why, .cons st (.cons (buf, (nextOff, ())) .nil)))
-                                  (encRef.eval M fnTable (.cons msg .nil))).map fun enc =>
-                                    (msg, .cons (idealPathPush M st (2 :: msgLabel at_.site) enc.single)
-                                      (.cons (buf, (nextOff, ())) .nil)) := by
-                        change ((((Layer.handler M fnTable rTable idealConV').over
-                            (Stack.handler M fnTable rTable [layV'])).clause (.get kind giver at_ τ)
-                            (st, .cons (buf, (off, ())) .nil)).mapHalt _).map _ = _
-                        dsimp only [Layer.handler, Handler.over, idealConV']
-                        rw [hConAns]
-                        dsimp only [Handler.answer]
-                        rw [hLay1Step, hLayAns]
-                        cases rRef.eval M fnTable (.cons buf (.cons off .nil)) with
-                        | halt why => rfl
-                        | call op _ => cases op
-                        | done res =>
-                            cases res with
-                            | cons msg r1 =>
-                                cases r1 with
-                                | cons nextOff r2 =>
-                                    cases r2
-                                    change Process.map
-                                      (fun (out : M.Val τ × M.Val (idealPathTy suiteUnitTy) × HList M.Val (Stack.States [layV'])) =>
-                                        (out.1, HList.cons out.2.1 out.2.2))
-                                      (Process.mapHalt
-                                        (fun (stop : Stop × M.Val (idealPathTy suiteUnitTy) × HList M.Val (Stack.States [layV'])) =>
-                                          (stop.1, HList.cons stop.2.1 stop.2.2))
-                                        ((Process.mapHalt
-                                          (fun (stop : Stop × M.Val (idealPathTy suiteUnitTy) × HList M.Val (Stack.States [layV'])) =>
-                                            (stop.1, stop.2.1, stop.2.2))
-                                          ((Stack.handler M fnTable rTable [layV']).answer
-                                            (Process.map
-                                              (fun out =>
-                                                ((HList.split [τ] (aloneOut M verifier out)).1.single,
-                                                  (HList.split [τ] (aloneOut M verifier out)).2.single))
-                                              (Process.mapHalt (fun why => (why, st))
-                                                (Process.map
-                                                  (fun enc => aloneIn M verifier (.cons msg (.cons (idealPathPush M st (2 :: msgLabel at_.site) enc.single) .nil)))
-                                                  (liftLocal (S := RSig M) id (encRef.eval M fnTable (.cons msg .nil))))))
-                                            st (HList.cons (a := streamStateTy unitTy) (buf, (nextOff, ())) .nil))).bind
-                                          fun out => Process.done (out.1.1, out.1.2, out.2))) =
-                                      Process.map
-                                        (fun enc => (msg, HList.cons (idealPathPush M st (2 :: msgLabel at_.site) enc.single)
-                                          (HList.cons (a := streamStateTy unitTy) (buf, (nextOff, ())) .nil)))
-                                        (liftLocal (fun why => (why, HList.cons st (HList.cons (a := streamStateTy unitTy) (buf, (nextOff, ())) .nil)))
-                                          (encRef.eval M fnTable (.cons msg .nil)))
-                                    cases encRef.eval M fnTable (.cons msg .nil) with
-                                    | halt why => rfl
-                                    | call op _ => cases op
-                                    | done enc =>
-                                        cases enc with
-                                        | cons encV en =>
-                                            cases en
-                                            change Process.done
-                                              ((HList.split [τ] (aloneOut M verifier (aloneIn M verifier
-                                                (.cons msg (.cons (idealPathPush M st (2 :: msgLabel at_.site) encV) .nil))))).1.single,
-                                                HList.cons ((HList.split [τ] (aloneOut M verifier (aloneIn M verifier
-                                                  (.cons msg (.cons (idealPathPush M st (2 :: msgLabel at_.site) encV) .nil))))).2.single)
-                                                  (HList.cons (a := streamStateTy unitTy) (buf, (nextOff, ())) .nil)) =
-                                              Process.done (msg, HList.cons (idealPathPush M st (2 :: msgLabel at_.site) encV)
-                                                (HList.cons (a := streamStateTy unitTy) (buf, (nextOff, ())) .nil))
-                                            rw [aloneOut_aloneIn]; rfl
-                      rw [hClauseEq]
-                      change Process.answerService serviceKey oracle
-                        ((Process.mapHalt Prod.fst
-                          (((liftLocal (fun why => (why, HList.cons st (HList.cons (a := streamStateTy unitTy) (buf, (off, ())) .nil)))
-                            (rRef.eval M fnTable (.cons buf (.cons off .nil)))).bind _).bind _)).bind _) =
-                        (liftLocal id (rRef.eval M fnTable (.cons buf (.cons off .nil)))).bind _
-                      cases rRef.eval M fnTable (.cons buf (.cons off .nil)) with
-                      | halt why => rfl
+                      have hReadSafe := rRef.eval_safe M a (.cons buf (.cons off .nil)) ⟨hBufV, trivial, trivial⟩
+                      cases hREval : rRef.eval M fnTable (.cons buf (.cons off .nil)) with
                       | call op _ => cases op
+                      | halt why =>
+                          have hClauseHalt : (Stack.handler M fnTable rTable [idealConV', layV']).clause (.get kind giver at_ τ)
+                              (.cons st (.cons (buf, (off, ())) .nil)) =
+                              .halt (why, .cons st (.cons (buf, (off, ())) .nil)) := by
+                            change ((((Layer.handler M fnTable rTable idealConV').over
+                                (Stack.handler M fnTable rTable [layV'])).clause (.get kind giver at_ τ)
+                                (st, .cons (buf, (off, ())) .nil)).mapHalt _).map _ = _
+                            dsimp only [Layer.handler, Handler.over, idealConV']
+                            rw [hConAns]
+                            dsimp only [Handler.answer]
+                            rw [hLay1Step, hLayAns, hREval]
+                            rfl
+                          dsimp only [Handler.run]
+                          change (∃ record, Alone M source verifier
+                            (Process.answerService serviceKey (IdealRO.asOracle M ro)
+                              (((((Stack.handler M fnTable rTable [idealConV', layV']).clause (.get kind giver at_ τ)
+                                (.cons st (.cons (buf, (off, ())) .nil))).bind _).mapHalt _).bind _))
+                            record (.returned (outV, HList.nil))) ↔ _
+                          rw [hClauseHalt]
+                          dsimp only [Process.bind, Process.mapHalt, Process.answerService]
+                          constructor
+                          · rintro ⟨_, hAl⟩; cases hAl
+                          · intro hBare
+                            cases hBare with
+                            | getAbsorb _ hRead' hEvalR' _ _ _ =>
+                                have hrEq := Option.some.inj (hRFind.symm.trans hRead')
+                                subst hrEq
+                                rw [hREval] at hEvalR'; cases hEvalR'
+                            | getElided hNoNeed _ _ _ =>
+                                rw [hNeedTrue] at hNoNeed; cases hNoNeed
                       | done res =>
                           cases res with
                           | cons msg r1 =>
                               cases r1 with
                               | cons nextOff r2 =>
                                   cases r2
-                                  change Process.answerService serviceKey oracle
-                                    ((Process.mapHalt Prod.fst
-                                      (((Process.map
-                                          (fun enc => (msg, HList.cons (idealPathPush M st (2 :: msgLabel at_.site) enc.single)
-                                            (HList.cons (a := streamStateTy unitTy) (buf, (nextOff, ())) .nil)))
-                                          (liftLocal (fun why => (why, HList.cons st (HList.cons (a := streamStateTy unitTy) (buf, (nextOff, ())) .nil)))
-                                            (encRef.eval M fnTable (.cons msg .nil)))).bind _))).bind _) =
-                                    (liftLocal id (encRef.eval M fnTable (.cons msg .nil))).bind fun enc =>
-                                      evalIdealVerifierLoop M a suite layout serviceKey giver verifier
-                                        (finishGuardKey events) eventsAbs oracle ro (k msg)
-                                        (idealPathPush M st (2 :: msgLabel at_.site) enc.single) buf nextOff
-                                  cases encRef.eval M fnTable (.cons msg .nil) with
-                                  | halt why => rfl
-                                  | call op _ => cases op
-                                  | done enc =>
-                                      cases enc with
-                                      | cons encV en =>
-                                          cases en
-                                          exact ih msg (idealPathPush M st (2 :: msgLabel at_.site) encV)
-                                            buf nextOff (hKSh msg trivial)
+                                  rw [hREval] at hReadSafe
+                                  have hMsgV : M.Valid τ msg := hReadSafe.1
+                                  obtain ⟨encH, hEncD, hEncV⟩ := encRef.eval_done M a (.cons msg .nil) ⟨hMsgV, trivial⟩
+                                  cases encH with
+                                  | cons encV en =>
+                                      cases en
+                                      have hClauseDone : (Stack.handler M fnTable rTable [idealConV', layV']).clause
+                                          (.get kind giver at_ τ) (.cons st (.cons (buf, (off, ())) .nil)) =
+                                          .done (msg, .cons (idealPathPush M st (2 :: msgLabel at_.site) encV)
+                                            (.cons (buf, (nextOff, ())) .nil)) := by
+                                        change ((((Layer.handler M fnTable rTable idealConV').over
+                                            (Stack.handler M fnTable rTable [layV'])).clause (.get kind giver at_ τ)
+                                            (st, .cons (buf, (off, ())) .nil)).mapHalt _).map _ = _
+                                        dsimp only [Layer.handler, Handler.over, idealConV']
+                                        rw [hConAns]
+                                        dsimp only [Handler.answer]
+                                        rw [hLay1Step, hLayAns, hREval]
+                                        dsimp only [liftLocal_done, Process.map, Process.mapHalt, Process.bind]
+                                        exact stack2_lay_enc_step M fnTable rTable layV' st (buf, (nextOff, ()))
+                                          msg (2 :: msgLabel at_.site) encRef encV hEncD
+                                      dsimp only [Handler.run]
+                                      change (∃ record, Alone M source verifier
+                                        (Process.answerService serviceKey (IdealRO.asOracle M ro)
+                                          (((((Stack.handler M fnTable rTable [idealConV', layV']).clause
+                                            (.get kind giver at_ τ) (.cons st (.cons (buf, (off, ())) .nil))).bind _).mapHalt _).bind _))
+                                        record (.returned (outV, HList.nil))) ↔ _
+                                      rw [hClauseDone]
+                                      dsimp only [Process.bind]
+                                      have hSt'V : M.Valid (idealPathTy suiteUnitTy)
+                                          (idealPathPush M st (2 :: msgLabel at_.site) encV) :=
+                                        idealPathPush_valid M st (2 :: msgLabel at_.site) encV hStV
+                                          (tag_bytes_cons 2 (by decide) (msgLabel at_.site) (msgLabel_bytes at_.site))
+                                          hEncV.1
+                                      rw [ih msg (idealPathPush M st (2 :: msgLabel at_.site) encV)
+                                        buf nextOff outV hSt'V hBufV (hKSh msg trivial)]
+                                      constructor
+                                      · exact fun hRest =>
+                                          .getAbsorb hNeedTrue hRFind hREval hEncFind hEncD hRest
+                                      · intro hBare
+                                        cases hBare with
+                                        | getAbsorb _ hRead' hEvalR' hEnc' hEvalE' hRest =>
+                                            have hrEq := Option.some.inj (hRFind.symm.trans hRead')
+                                            subst hrEq
+                                            have hRRes := Process.done.inj (hREval.symm.trans hEvalR')
+                                            cases hRRes
+                                            have heEq := Option.some.inj (hEncFind.symm.trans hEnc')
+                                            subst heEq
+                                            have hERes := Process.done.inj (hEncD.symm.trans hEvalE')
+                                            cases hERes
+                                            exact hRest
+                                        | getElided hNoNeed _ _ _ =>
+                                            rw [hNeedTrue] at hNoNeed; cases hNoNeed
                   | false =>
-                      -- Trailing message elided: construction passes through, layout reads without changing `st`
                       have hNoAbs : ∀ e' b', (e', b') ∈ eventsAbs → e'.site = at_.site →
                           e'.τ = τ → (∃ gs, verifier ∈ gs ∧ e'.cls = .flow kind giver gs) →
                           b' = false := by
@@ -1209,64 +1227,97 @@ private theorem ideal_verifier_loop_eq {a : Admitted V} {suite : ModuleRef} {lay
                       obtain ⟨rRef, hRFind, hLayAns⟩ :=
                         streaming_layout_answer_verifier_flow_full M 0 events hSL' kind at_ τ buf off
                           ⟨e, he, hSite, hTy, gs', hVin, hCls⟩
-                      conv =>
-                        rhs
-                        rw [evalIdealVerifierLoop]
-                        dsimp only
-                        rw [ite_eq_left rfl, hNeedFalse]
-                        simp only [Bool.false_eq_true, ↓reduceIte]
-                        rw [hRFind]
-                      dsimp only [Handler.run]
-                      change Process.answerService serviceKey oracle
-                        (((((Stack.handler M fnTable rTable [idealConV', layV']).clause (.get kind giver at_ τ)
-                          (.cons st (.cons (buf, (off, ())) .nil))).bind _).mapHalt _).bind _) = _
-                      have hClauseEq : (Stack.handler M fnTable rTable [idealConV', layV']).clause (.get kind giver at_ τ)
-                          (.cons st (.cons (buf, (off, ())) .nil)) =
-                          (liftLocal (fun why => (why, .cons st (.cons (buf, (off, ())) .nil)))
-                            (rRef.eval M fnTable (.cons buf (.cons off .nil)))).map fun res =>
-                            match res with
-                            | .cons msg (.cons nextOff .nil) =>
-                                (msg, .cons st (.cons (buf, (nextOff, ())) .nil)) := by
-                        change ((((Layer.handler M fnTable rTable idealConV').over
-                            (Stack.handler M fnTable rTable [layV'])).clause (.get kind giver at_ τ)
-                            (st, .cons (buf, (off, ())) .nil)).mapHalt _).map _ = _
-                        dsimp only [Layer.handler, Handler.over, idealConV']
-                        rw [hConPass]
-                        dsimp only [Handler.answer]
-                        rw [hLay1Step, hLayAns]
-                        cases rRef.eval M fnTable (.cons buf (.cons off .nil)) with
-                        | halt why => rfl
-                        | call op _ => cases op
-                        | done res =>
-                            cases res with
-                            | cons msg r1 =>
-                                cases r1 with
-                                | cons nextOff r2 =>
-                                    cases r2; rfl
-                      rw [hClauseEq]
-                      cases rRef.eval M fnTable (.cons buf (.cons off .nil)) with
-                      | halt why => rfl
+                      cases hREval : rRef.eval M fnTable (.cons buf (.cons off .nil)) with
                       | call op _ => cases op
+                      | halt why =>
+                          have hClauseHalt : (Stack.handler M fnTable rTable [idealConV', layV']).clause (.get kind giver at_ τ)
+                              (.cons st (.cons (buf, (off, ())) .nil)) =
+                              .halt (why, .cons st (.cons (buf, (off, ())) .nil)) := by
+                            change ((((Layer.handler M fnTable rTable idealConV').over
+                                (Stack.handler M fnTable rTable [layV'])).clause (.get kind giver at_ τ)
+                                (st, .cons (buf, (off, ())) .nil)).mapHalt _).map _ = _
+                            dsimp only [Layer.handler, Handler.over, idealConV']
+                            rw [hConPass]
+                            dsimp only [Handler.answer]
+                            rw [hLay1Step, hLayAns, hREval]
+                            rfl
+                          dsimp only [Handler.run]
+                          change (∃ record, Alone M source verifier
+                            (Process.answerService serviceKey (IdealRO.asOracle M ro)
+                              (((((Stack.handler M fnTable rTable [idealConV', layV']).clause (.get kind giver at_ τ)
+                                (.cons st (.cons (buf, (off, ())) .nil))).bind _).mapHalt _).bind _))
+                            record (.returned (outV, HList.nil))) ↔ _
+                          rw [hClauseHalt]
+                          dsimp only [Process.bind, Process.mapHalt, Process.answerService]
+                          constructor
+                          · rintro ⟨_, hAl⟩; cases hAl
+                          · intro hBare
+                            cases hBare with
+                            | getAbsorb hNeedT _ _ _ _ _ =>
+                                rw [hNeedFalse] at hNeedT; cases hNeedT
+                            | getElided _ hRead' hEvalR' _ =>
+                                have hrEq := Option.some.inj (hRFind.symm.trans hRead')
+                                subst hrEq
+                                rw [hREval] at hEvalR'; cases hEvalR'
                       | done res =>
                           cases res with
                           | cons msg r1 =>
                               cases r1 with
                               | cons nextOff r2 =>
                                   cases r2
-                                  exact ih msg st buf nextOff (hKSh msg trivial)
+                                  have hClauseDone : (Stack.handler M fnTable rTable [idealConV', layV']).clause
+                                      (.get kind giver at_ τ) (.cons st (.cons (buf, (off, ())) .nil)) =
+                                      .done (msg, .cons st (.cons (buf, (nextOff, ())) .nil)) := by
+                                    change ((((Layer.handler M fnTable rTable idealConV').over
+                                        (Stack.handler M fnTable rTable [layV'])).clause (.get kind giver at_ τ)
+                                        (st, .cons (buf, (off, ())) .nil)).mapHalt _).map _ = _
+                                    dsimp only [Layer.handler, Handler.over, idealConV']
+                                    rw [hConPass]
+                                    dsimp only [Handler.answer]
+                                    rw [hLay1Step, hLayAns, hREval]
+                                    rfl
+                                  dsimp only [Handler.run]
+                                  change (∃ record, Alone M source verifier
+                                    (Process.answerService serviceKey (IdealRO.asOracle M ro)
+                                      (((((Stack.handler M fnTable rTable [idealConV', layV']).clause
+                                        (.get kind giver at_ τ) (.cons st (.cons (buf, (off, ())) .nil))).bind _).mapHalt _).bind _))
+                                    record (.returned (outV, HList.nil))) ↔ _
+                                  rw [hClauseDone]
+                                  dsimp only [Process.bind]
+                                  rw [ih msg st buf nextOff outV hStV hBufV (hKSh msg trivial)]
+                                  constructor
+                                  · exact fun hRest => .getElided hNeedFalse hRFind hREval hRest
+                                  · intro hBare
+                                    cases hBare with
+                                    | getAbsorb hNeedT _ _ _ _ _ =>
+                                        rw [hNeedFalse] at hNeedT; cases hNeedT
+                                    | getElided _ hRead' hEvalR' hRest =>
+                                        have hrEq := Option.some.inj (hRFind.symm.trans hRead')
+                                        subst hrEq
+                                        have hRRes := Process.done.inj (hREval.symm.trans hEvalR')
+                                        cases hRRes
+                                        exact hRest
               | own gkind hearers at_ gIns payload τ =>
                   cases gkind with
                   | coin law =>
                       cases hearers with
                       | nil =>
                           have hP := hPassV (.own (.coin law) [] at_ gIns payload τ) st (buf, (off, ())) trivial
-                          dsimp only [evalIdealVerifierLoop, Handler.run]
-                          change Process.answerService serviceKey oracle
-                            (((((Stack.handler M fnTable rTable [_, _]).clause _ _).bind _).mapHalt _).bind _) = _
+                          dsimp only [Handler.run]
+                          change (∃ record, Alone M source verifier
+                            (Process.answerService serviceKey (IdealRO.asOracle M ro)
+                              (((((Stack.handler M fnTable rTable [_, _]).clause _ _).bind _).mapHalt _).bind _))
+                            record (.returned (outV, HList.nil))) ↔ _
                           rw [hP]
                           dsimp only [Process.bind, Process.mapHalt, Process.answerService]
-                          congr 1; funext v
-                          exact ih v st buf off (hKSh v trivial)
+                          rw [alone_own_returned_iff]
+                          constructor
+                          · rintro ⟨v, hSrc, hRest⟩
+                            exact .privateCoin hSrc ((ih v st buf off outV hStV hBufV (hKSh v trivial)).mp hRest)
+                          · intro hBare
+                            cases hBare with
+                            | privateCoin hSrc hRest =>
+                                exact ⟨_, hSrc, (ih _ st buf off outV hStV hBufV (hKSh _ trivial)).mpr hRest⟩
                       | cons h0 hs =>
                           obtain ⟨e, he, hSite, hTy, hCls, hTyped⟩ := hOpSh
                           have hD := hIdealDisc e he; rw [hCls] at hD
@@ -1314,194 +1365,183 @@ private theorem ideal_verifier_loop_eq {a : Admitted V} {suite : ModuleRef} {lay
                                 (streaming_layout_unmatched_closed M 0 events hSL'
                                   (.own (.request serviceKey) [] ⟨at_.path, idealReqKey events idxV⟩
                                     [idealQueryTy suiteUnitTy] (.cons (st, (drawLabel at_.site, ())) .nil) τ) trivial).2
-                            conv =>
-                              rhs
-                              rw [evalIdealVerifierLoop]
-                              dsimp only
-                              rw [hEncFind]
-                            dsimp only [Handler.run]
-                            change Process.answerService serviceKey oracle
-                              (((((Stack.handler M fnTable rTable [idealConV', layV']).clause _ _).bind _).mapHalt _).bind _) = _
-                            have hClauseEq : (Stack.handler M fnTable rTable [idealConV', layV']).clause
-                                (.own (.coin law) (h0 :: hs) at_ [] .nil τ)
-                                (.cons st (.cons (buf, (off, ())) .nil)) =
-                                .call (.own (.request serviceKey) [] ⟨at_.path, idealReqKey events idxV⟩
-                                    [idealQueryTy suiteUnitTy] (.cons (st, (drawLabel at_.site, ())) .nil) τ) fun coin =>
-                                  (liftLocal (fun why => (why, .cons st (.cons (buf, (off, ())) .nil)))
-                                    (encRef.eval M fnTable (.cons coin .nil))).map fun enc =>
-                                      (coin, .cons (idealPathPush M st (3 :: drawLabel at_.site) enc.single)
-                                        (.cons (buf, (off, ())) .nil)) := by
-                              change ((((Layer.handler M fnTable rTable idealConV').over
-                                  (Stack.handler M fnTable rTable [layV'])).clause
-                                  (.own (.coin law) (h0 :: hs) at_ [] .nil τ)
-                                  (st, .cons (buf, (off, ())) .nil)).mapHalt _).map _ = _
-                              dsimp only [Layer.handler, Handler.over, idealConV']
-                              rw [hConAns]
-                              dsimp only [Handler.answer]
-                              have hReqLay : (Stack.handler M fnTable rTable [layV']).clause
-                                  (.own (.request serviceKey) [] ⟨at_.path, idealReqKey events idxV⟩
-                                    [idealQueryTy suiteUnitTy] (.cons (st, (drawLabel at_.site, ())) .nil) τ)
-                                  (.cons (buf, (off, ())) .nil) =
-                                  .call (.own (.request serviceKey) [] ⟨at_.path, idealReqKey events idxV⟩
-                                    [idealQueryTy suiteUnitTy] (.cons (st, (drawLabel at_.site, ())) .nil) τ)
-                                    fun reply => .done (reply, .cons (buf, (off, ())) .nil) :=
-                                stack1_clause_pass M fnTable rTable layV' _ (buf, (off, ())) hReqUnm
-                              rw [hReqLay]
-                              dsimp only [Process.map, Process.mapHalt, Process.bind]
-                              congr 1; funext coin
-                              have hDropLay : (Stack.handler M fnTable rTable [layV']).clause
-                                  (.give .message [prover] ⟨at_.path, drawToldKey events idxV⟩ τ coin)
-                                  (.cons (buf, (off, ())) .nil) =
-                                  .done ((), .cons (buf, (off, ())) .nil) := by
-                                change ((((Layer.handler M fnTable rTable layV').over
-                                    (Stack.handler M fnTable rTable [])).clause
-                                    (.give .message [prover] ⟨at_.path, drawToldKey events idxV⟩ τ coin)
-                                    ((buf, (off, ())), .nil)).mapHalt _).map _ = _
-                                dsimp only [Layer.handler, Handler.over, layV']
-                                rw [hLayDrop coin]; rfl
-                              change Process.map
-                                (fun (out : M.Val τ × M.Val (idealPathTy suiteUnitTy) × HList M.Val (Stack.States [layV'])) =>
-                                  (out.1, HList.cons out.2.1 out.2.2))
-                                (Process.mapHalt
-                                  (fun (stop : Stop × M.Val (idealPathTy suiteUnitTy) × HList M.Val (Stack.States [layV'])) =>
-                                    (stop.1, HList.cons stop.2.1 stop.2.2))
-                                  ((Process.mapHalt
-                                    (fun (stop : Stop × M.Val (idealPathTy suiteUnitTy) × HList M.Val (Stack.States [layV'])) =>
-                                      (stop.1, stop.2.1, stop.2.2))
-                                    ((Process.mapHalt
-                                      (fun (stop : Stop × HList M.Val (Stack.States [layV'])) =>
-                                        (stop.1, st, stop.2))
-                                      ((Stack.handler M fnTable rTable [layV']).clause
-                                        (.give .message [prover] ⟨at_.path, drawToldKey events idxV⟩ τ coin)
-                                        (HList.cons (a := streamStateTy unitTy) (buf, (off, ())) .nil))).bind
-                                      fun out =>
-                                        (Stack.handler M fnTable rTable [layV']).answer
+                            have hCoinEx : ∃ coin, ro st (drawLabel at_.site) τ = some coin ∧ M.Valid τ coin := by
+                              obtain ⟨c, hRoC, hCV⟩ := hRo eV (List.mem_of_getElem? hIdxV) law (h0 :: hs)
+                                hClsV hPin st (drawLabel at_.site) hStV (drawLabel_bytes at_.site)
+                              subst hTyV
+                              exact ⟨c, hRoC, hCV⟩
+                            obtain ⟨coin, hRoCoin, hCoinV⟩ := hCoinEx
+                            obtain ⟨encH, hEncD, hEncV⟩ := encRef.eval_done M a (.cons coin .nil) ⟨hCoinV, trivial⟩
+                            cases encH with
+                            | cons encV en =>
+                                cases en
+                                let stepCont : M.Val τ → Process (RSig M)
+                                    (Stop × HList M.Val (Stack.States [idealConV', layV']))
+                                    (M.Val τ × HList M.Val (Stack.States [idealConV', layV'])) := fun c =>
+                                  Process.map
+                                    (fun (out : M.Val τ × M.Val (idealPathTy suiteUnitTy) × HList M.Val (Stack.States [layV'])) =>
+                                      (out.1, HList.cons out.2.1 out.2.2))
+                                    (Process.mapHalt
+                                      (fun (stop : Stop × M.Val (idealPathTy suiteUnitTy) × HList M.Val (Stack.States [layV'])) =>
+                                        (stop.1, HList.cons stop.2.1 stop.2.2))
+                                      ((Process.mapHalt
+                                        (fun (stop : Stop × M.Val (idealPathTy suiteUnitTy) × HList M.Val (Stack.States [layV'])) =>
+                                          (stop.1, stop.2.1, stop.2.2))
+                                        ((Stack.handler M fnTable rTable [layV']).answer
                                           (Process.map
                                             (fun out =>
-                                              ((HList.split [τ] (aloneOut M verifier out)).1.single,
-                                                (HList.split [τ] (aloneOut M verifier out)).2.single))
+                                              let values := HList.split [τ] (aloneOut M verifier out)
+                                              (values.1.single, values.2.single))
                                             (Process.mapHalt (fun why => (why, st))
                                               (Process.map
-                                                (fun enc => aloneIn M verifier (.cons coin (.cons (idealPathPush M st (3 :: drawLabel at_.site) enc.single) .nil)))
-                                                (liftLocal (S := RSig M) id (encRef.eval M fnTable (.cons coin .nil))))))
-                                          st out.2)).bind
-                                    fun out => Process.done (out.1.1, out.1.2, out.2))) = _
-                              rw [hDropLay]
-                              change Process.map
-                                (fun (out : M.Val τ × M.Val (idealPathTy suiteUnitTy) × HList M.Val (Stack.States [layV'])) =>
-                                  (out.1, HList.cons out.2.1 out.2.2))
-                                (Process.mapHalt
-                                  (fun (stop : Stop × M.Val (idealPathTy suiteUnitTy) × HList M.Val (Stack.States [layV'])) =>
-                                    (stop.1, HList.cons stop.2.1 stop.2.2))
-                                  ((Process.mapHalt
-                                    (fun (stop : Stop × M.Val (idealPathTy suiteUnitTy) × HList M.Val (Stack.States [layV'])) =>
-                                      (stop.1, stop.2.1, stop.2.2))
-                                    ((Stack.handler M fnTable rTable [layV']).answer
-                                      (Process.map
-                                        (fun out =>
-                                          ((HList.split [τ] (aloneOut M verifier out)).1.single,
-                                            (HList.split [τ] (aloneOut M verifier out)).2.single))
-                                        (Process.mapHalt (fun why => (why, st))
-                                          (Process.map
-                                            (fun enc => aloneIn M verifier (.cons coin (.cons (idealPathPush M st (3 :: drawLabel at_.site) enc.single) .nil)))
-                                            (liftLocal (S := RSig M) id (encRef.eval M fnTable (.cons coin .nil))))))
-                                      st (HList.cons (a := streamStateTy unitTy) (buf, (off, ())) .nil))).bind
-                                    fun out => Process.done (out.1.1, out.1.2, out.2))) =
-                                Process.map
-                                  (fun enc => (coin, HList.cons (idealPathPush M st (3 :: drawLabel at_.site) enc.single)
-                                    (HList.cons (a := streamStateTy unitTy) (buf, (off, ())) .nil)))
-                                  (liftLocal (fun why => (why, HList.cons st (HList.cons (a := streamStateTy unitTy) (buf, (off, ())) .nil)))
-                                    (encRef.eval M fnTable (.cons coin .nil)))
-                              cases encRef.eval M fnTable (.cons coin .nil) with
-                              | halt why => rfl
-                              | call op _ => cases op
-                              | done enc =>
-                                  cases enc with
-                                  | cons encV en =>
-                                      cases en
-                                      change Process.done
-                                        ((HList.split [τ] (aloneOut M verifier (aloneIn M verifier
-                                          (.cons coin (.cons (idealPathPush M st (3 :: drawLabel at_.site) encV) .nil))))).1.single,
-                                          HList.cons ((HList.split [τ] (aloneOut M verifier (aloneIn M verifier
-                                            (.cons coin (.cons (idealPathPush M st (3 :: drawLabel at_.site) encV) .nil))))).2.single)
-                                            (HList.cons (a := streamStateTy unitTy) (buf, (off, ())) .nil)) =
-                                        Process.done (coin, HList.cons (idealPathPush M st (3 :: drawLabel at_.site) encV)
-                                          (HList.cons (a := streamStateTy unitTy) (buf, (off, ())) .nil))
-                                      rw [aloneOut_aloneIn]; rfl
-                            rw [hClauseEq]
-                            dsimp only [Process.bind, Process.mapHalt]
-                            unfold Process.answerService
-                            rw [ite_eq_left rfl, hOracleRo st (drawLabel at_.site) τ]
-                            let coin := ro st (drawLabel at_.site) τ
-                            change Process.answerService serviceKey oracle
-                              ((Process.mapHalt Prod.fst
-                                (((Process.map
-                                    (fun enc => (coin, HList.cons (idealPathPush M st (3 :: drawLabel at_.site) enc.single)
-                                      (HList.cons (a := streamStateTy unitTy) (buf, (off, ())) .nil)))
-                                    (liftLocal (fun why => (why, HList.cons st (HList.cons (a := streamStateTy unitTy) (buf, (off, ())) .nil)))
-                                      (encRef.eval M fnTable (.cons coin .nil)))).bind _))).bind _) =
-                              (liftLocal id (encRef.eval M fnTable (.cons coin .nil))).bind fun enc =>
-                                evalIdealVerifierLoop M a suite layout serviceKey prover verifier
-                                  (finishGuardKey events) eventsAbs oracle ro (k coin)
-                                  (idealPathPush M st (3 :: drawLabel at_.site) enc.single) buf off
-                            cases encRef.eval M fnTable (.cons coin .nil) with
-                            | halt why => rfl
-                            | call op _ => cases op
-                            | done enc =>
-                                cases enc with
-                                | cons encV en =>
-                                    cases en
-                                    exact ih coin (idealPathPush M st (3 :: drawLabel at_.site) encV)
-                                      buf off (hKSh coin trivial)
+                                                (fun enc => aloneIn M verifier (.cons c (.cons (idealPathPush M st (3 :: drawLabel at_.site) enc.single) .nil)))
+                                                (liftLocal (S := RSig M) id (encRef.eval M fnTable (.cons c .nil))))))
+                                          st (HList.cons (a := streamStateTy unitTy) (buf, (off, ())) .nil))).bind
+                                        fun out => Process.done (out.1.1, out.1.2, out.2)))
+                                have hClauseStep : (Stack.handler M fnTable rTable [idealConV', layV']).clause
+                                    (.own (.coin law) (h0 :: hs) at_ [] .nil τ)
+                                    (.cons st (.cons (buf, (off, ())) .nil)) =
+                                    .call (.own (.request serviceKey) [] ⟨at_.path, idealReqKey events idxV⟩
+                                        [idealQueryTy suiteUnitTy] (.cons (st, (drawLabel at_.site, ())) .nil) τ)
+                                      stepCont := by
+                                  change ((((Layer.handler M fnTable rTable idealConV').over
+                                      (Stack.handler M fnTable rTable [layV'])).clause
+                                      (.own (.coin law) (h0 :: hs) at_ [] .nil τ)
+                                      (st, .cons (buf, (off, ())) .nil)).mapHalt _).map _ = _
+                                  dsimp only [Layer.handler, Handler.over, idealConV']
+                                  rw [hConAns]
+                                  dsimp only [Handler.answer]
+                                  rw [stack1_clause_pass M fnTable rTable layV' _ (buf, (off, ())) hReqUnm]
+                                  dsimp only [Process.map, Process.mapHalt, Process.bind]
+                                  congr 1; funext c
+                                  have hDropLay : (Stack.handler M fnTable rTable [layV']).clause
+                                      (.give .message [prover] ⟨at_.path, drawToldKey events idxV⟩ τ c)
+                                      (.cons (buf, (off, ())) .nil) =
+                                      .done ((), .cons (buf, (off, ())) .nil) :=
+                                    stack1_clause_done M fnTable rTable layV'
+                                      (.give .message [prover] ⟨at_.path, drawToldKey events idxV⟩ τ c)
+                                      (buf, (off, ())) (buf, (off, ())) () (hLayDrop c)
+                                  change Process.map _ (Process.mapHalt _ ((Process.mapHalt _
+                                    ((Process.mapHalt _ ((Stack.handler M fnTable rTable [layV']).clause
+                                      (.give .message [prover] ⟨at_.path, drawToldKey events idxV⟩ τ c)
+                                      (HList.cons (a := streamStateTy unitTy) (buf, (off, ())) .nil))).bind _)).bind _)) = _
+                                  rw [hDropLay]; rfl
+                                have hStepCoin : stepCont coin =
+                                    .done (coin, HList.cons (idealPathPush M st (3 :: drawLabel at_.site) encV)
+                                      (HList.cons (a := streamStateTy unitTy) (buf, (off, ())) .nil)) :=
+                                  stack2_lay_enc_step M fnTable rTable layV' st (buf, (off, ()))
+                                    coin (3 :: drawLabel at_.site) encRef encV hEncD
+                                dsimp only [Handler.run]
+                                change (∃ record, Alone M source verifier
+                                  (Process.answerService serviceKey (IdealRO.asOracle M ro)
+                                    (((((Stack.handler M fnTable rTable [idealConV', layV']).clause _ _).bind _).mapHalt _).bind _))
+                                  record (.returned (outV, HList.nil))) ↔ _
+                                rw [hClauseStep]
+                                dsimp only [Process.bind, Process.mapHalt]
+                                rw [answerService_request_some M serviceKey (IdealRO.asOracle M ro)
+                                  ((idealRO_asOracle_query M ro st (drawLabel at_.site) τ).trans hRoCoin),
+                                  hStepCoin]
+                                dsimp only [Process.bind]
+                                have hSt'V : M.Valid (idealPathTy suiteUnitTy)
+                                    (idealPathPush M st (3 :: drawLabel at_.site) encV) :=
+                                  idealPathPush_valid M st (3 :: drawLabel at_.site) encV hStV
+                                    (tag_bytes_cons 3 (by decide) (drawLabel at_.site) (drawLabel_bytes at_.site))
+                                    hEncV.1
+                                rw [ih coin (idealPathPush M st (3 :: drawLabel at_.site) encV)
+                                  buf off outV hSt'V hBufV (hKSh coin trivial)]
+                                constructor
+                                · exact fun hRest => .draw hRoCoin hEncFind hEncD hRest
+                                · intro hBare
+                                  cases hBare with
+                                  | draw hRo' hEnc' hEvalE' hRest =>
+                                      have hcEq := Option.some.inj (hRoCoin.symm.trans hRo')
+                                      subst hcEq
+                                      have heEq := Option.some.inj (hEncFind.symm.trans hEnc')
+                                      subst heEq
+                                      have hERes := Process.done.inj (hEncD.symm.trans hEvalE')
+                                      cases hERes
+                                      exact hRest
                           · cases hNil
                   | request svc =>
                       have hP := hPassV (.own (.request svc) hearers at_ gIns payload τ) st (buf, (off, ())) trivial
-                      dsimp only [evalIdealVerifierLoop, Handler.run]
-                      change Process.answerService serviceKey oracle
-                        (((((Stack.handler M fnTable rTable [_, _]).clause _ _).bind _).mapHalt _).bind _) = _
+                      dsimp only [Handler.run]
+                      change (∃ record, Alone M source verifier
+                        (Process.answerService serviceKey (IdealRO.asOracle M ro)
+                          (((((Stack.handler M fnTable rTable [_, _]).clause _ _).bind _).mapHalt _).bind _))
+                        record (.returned (outV, HList.nil))) ↔ _
                       rw [hP]
                       dsimp only [Process.bind, Process.mapHalt]
                       unfold Process.answerService
                       by_cases hs : svc = serviceKey
                       · rw [ite_eq_left hs]
-                        conv =>
-                          rhs
-                          rw [evalIdealVerifierLoop]
-                          dsimp only
-                          rw [ite_eq_left hs]
-                        cases oracle gIns payload τ with
-                        | some v => dsimp only; exact ih v st buf off (hKSh v trivial)
-                        | none => dsimp only; congr 1; funext v; exact ih v st buf off (hKSh v trivial)
+                        cases hAns : IdealRO.asOracle M ro gIns payload τ with
+                        | some v =>
+                            dsimp only
+                            rw [ih v st buf off outV hStV hBufV (hKSh v trivial)]
+                            constructor
+                            · exact fun hRest => .requestOracle hs hAns hRest
+                            · intro hBare
+                              cases hBare with
+                              | requestOracle _ hAns' hRest =>
+                                  have hvEq := Option.some.inj (hAns.symm.trans hAns')
+                                  subst hvEq; exact hRest
+                              | requestSource hNot _ _ =>
+                                  rcases hNot with hNeS | hNone
+                                  · exact absurd hs hNeS
+                                  · rw [hAns] at hNone; cases hNone
+                        | none =>
+                            dsimp only
+                            rw [alone_own_returned_iff]
+                            constructor
+                            · rintro ⟨v, hSrc, hRest⟩
+                              exact .requestSource (.inr hAns) hSrc
+                                ((ih v st buf off outV hStV hBufV (hKSh v trivial)).mp hRest)
+                            · intro hBare
+                              cases hBare with
+                              | requestOracle _ hAns' _ => rw [hAns] at hAns'; cases hAns'
+                              | requestSource _ hSrc hRest =>
+                                  exact ⟨_, hSrc, (ih _ st buf off outV hStV hBufV (hKSh _ trivial)).mpr hRest⟩
                       · rw [ite_eq_right hs]
-                        conv =>
-                          rhs
-                          rw [evalIdealVerifierLoop]
-                          dsimp only
-                          rw [ite_eq_right hs]
-                        congr 1; funext v; exact ih v st buf off (hKSh v trivial)
+                        rw [alone_own_returned_iff]
+                        constructor
+                        · rintro ⟨v, hSrc, hRest⟩
+                          exact .requestSource (.inl hs) hSrc
+                            ((ih v st buf off outV hStV hBufV (hKSh v trivial)).mp hRest)
+                        · intro hBare
+                          cases hBare with
+                          | requestOracle hEq _ _ => exact absurd hEq hs
+                          | requestSource _ hSrc hRest =>
+                              exact ⟨_, hSrc, (ih _ st buf off outV hStV hBufV (hKSh _ trivial)).mpr hRest⟩
               | «begin» at_ =>
                   have hP := hPassV (.begin at_) st (buf, (off, ())) trivial
-                  dsimp only [evalIdealVerifierLoop, Handler.run]
-                  change Process.answerService serviceKey oracle
-                    (((((Stack.handler M fnTable rTable [_, _]).clause _ _).bind _).mapHalt _).bind _) = _
+                  dsimp only [Handler.run]
+                  change (∃ record, Alone M source verifier
+                    (Process.answerService serviceKey (IdealRO.asOracle M ro)
+                      (((((Stack.handler M fnTable rTable [_, _]).clause _ _).bind _).mapHalt _).bind _))
+                    record (.returned (outV, HList.nil))) ↔ _
                   rw [hP]
                   dsimp only [Process.bind, Process.mapHalt, Process.answerService]
-                  congr 1; funext n; exact ih n st buf off (hKSh n trivial)
+                  rw [alone_begin_returned_iff, ih 0 st buf off outV hStV hBufV (hKSh 0 trivial)]
+                  exact ⟨fun hRest => .begin hRest, fun hBare => by cases hBare with | «begin» hRest => exact hRest⟩
               | settle at_ =>
                   have hP := hPassV (.settle at_) st (buf, (off, ())) trivial
-                  dsimp only [evalIdealVerifierLoop, Handler.run]
-                  change Process.answerService serviceKey oracle
-                    (((((Stack.handler M fnTable rTable [_, _]).clause _ _).bind _).mapHalt _).bind _) = _
+                  dsimp only [Handler.run]
+                  change (∃ record, Alone M source verifier
+                    (Process.answerService serviceKey (IdealRO.asOracle M ro)
+                      (((((Stack.handler M fnTable rTable [_, _]).clause _ _).bind _).mapHalt _).bind _))
+                    record (.returned (outV, HList.nil))) ↔ _
                   rw [hP]
                   dsimp only [Process.bind, Process.mapHalt, Process.answerService]
-                  congr 1; funext u; exact ih u st buf off (hKSh u trivial)
+                  rw [alone_settle_returned_iff, ih () st buf off outV hStV hBufV (hKSh () trivial)]
+                  exact ⟨fun hRest => .settle hRest, fun hBare => by cases hBare with | settle hRest => exact hRest⟩
 
-/-- Exact pure-path ideal-RO linkage theorem:
-for any non-carry streaming `deployIdeal` verifier without retry, answering
-`.own (.request serviceKey)` with any oracle extending a total random oracle `ro` on the
-collision-free transcript path `idealPathTy suiteUnitTy` yields the direct state-machine
-interpreter `evalIdealVerifierLoop` over the bare verifier role program `roleMeaning`, completely
-eliminating `Layer`, `Stack`, `Handler`, `Clause`, and concrete `SuiteSlot.start`/`SuiteSlot.absorb`. -/
+/-- Exact non-vacuous ideal random-oracle linkage theorem (`Statements.idealLink`):
+for any non-carry streaming `deployIdeal` verifier without retry, starting from the canonical
+initial collision-free transcript path `st0` (explicitly pinned to `resolveSessionBytes` and every
+statement input via `idealInitialPath`), answering `.own (.request serviceKey)` with any partial
+random oracle `ro : IdealRO M suiteUnitTy` that answers the protocol's verifier draws makes the
+deployed ideal verifier return `outV` on a valid proof if and only if the bare verifier role
+program `roleMeaning` satisfies `BareIdealReturn` from `(st0, proof, 0)`. -/
 theorem deployIdeal_link (enc : VocabEncoder V) (serviceKey : Key)
     {a : Admitted V} {declaration : Declaration} {suite : ModuleRef} {sessionTag : Option (List Nat)}
     {layout : Layout} {dIdeal : Deployed V}
@@ -1514,27 +1554,33 @@ theorem deployIdeal_link (enc : VocabEncoder V) (serviceKey : Key)
     (ins : HList (RV M verifier) dIdeal.entry.ins) (hIns : ins.All (RV.Valid M verifier)) :
     ∃ (suiteUnitTy unitTy : V.Ty)
       (hSuiteFree : Ty.isLinear V suiteUnitTy = false)
+      (sessBytes : List Nat) (hSess : ∀ b, b ∈ sessBytes → b < 256)
       (st0 : M.Val (idealPathTy suiteUnitTy))
-      (hTakes : Stack.Takes (dIdeal.stack verifier) = [.seq unitTy none])
-      (hGives : Stack.Gives (dIdeal.stack verifier) = []),
+      (hTakes : Stack.Takes (dIdeal.stack verifier) = [.seq unitTy none]),
       findSuiteUnit a suite = some ⟨suiteUnitTy, ⟨hSuiteFree⟩⟩ ∧
-      ∀ (proof : List (M.Val unitTy))
-        (oracle : (ins : List V.Ty) → HList M.Val ins → (τ : V.Ty) → Option (M.Val τ))
-        (ro : M.Val (idealPathTy suiteUnitTy) → List Nat → (τ : V.Ty) → M.Val τ),
-        (∀ st lbl τ, oracle [idealQueryTy suiteUnitTy] (.cons (st, (lbl, ())) .nil) τ = some (ro st lbl τ)) →
-        (Process.answerService serviceKey oracle
-          (dIdeal.run M verifier ins (cast (congrArg (HList M.Val) hTakes.symm) (.cons proof .nil)))).map
-          (fun out => (out.1, cast (congrArg (HList M.Val) hGives) out.2)) =
-          evalIdealVerifierLoop M a suite layout serviceKey prover verifier
-            (finishGuardKey (dIdeal.entry.shape.events [] id))
-            (dIdeal.entry.shape.eventsWithAbsorb prover verifier [] id false)
-            oracle ro
-            (roleMeaning M dIdeal.admitted.program dIdeal.callee verifier [] ins) st0 proof 0 := by
+      resolveSessionBytes enc a declaration sessionTag = .ok ⟨sessBytes, hSess⟩ ∧
+      idealInitialPath M a suite suiteUnitTy prover verifier sessBytes ins = some st0 ∧
+      ∀ (proof : List (M.Val unitTy)), M.Valid (.seq unitTy none) proof →
+        ∀ (source : Source M) (ro : IdealRO M suiteUnitTy),
+          ro.AnswersDraws M prover verifier (dIdeal.entry.shape.events [] id) →
+          ∀ (outV : HList (RV M verifier) dIdeal.entry.outs),
+            (∃ record givesV,
+              Alone M source verifier
+                (Process.answerService serviceKey (IdealRO.asOracle M ro)
+                  (dIdeal.run M verifier ins
+                    (cast (congrArg (HList M.Val) hTakes.symm) (.cons proof .nil))))
+                record (.returned (outV, givesV))) ↔
+            BareIdealReturn M a suite layout serviceKey prover verifier
+              (dIdeal.entry.shape.eventsWithAbsorb prover verifier [] id false)
+              source ro
+              (roleMeaning M dIdeal.admitted.program dIdeal.callee verifier [] ins)
+              st0 proof 0 outV := by
   let ⟨w, hEq⟩ := deployIdeal_ok_elim enc serviceKey a declaration dIdeal hDep
   subst hEq
   have hConEq : Construction.derived w.suite w.sessionTag = .derived suite sessionTag :=
     w.hCon.symm.trans hCon
   have hSuiteEq : w.suite = suite := (Construction.derived.inj hConEq).1
+  have hTagEq : w.sessionTag = sessionTag := (Construction.derived.inj hConEq).2
   have hLayEq : w.layout = layout := Option.some.inj (w.hLayOpt.symm.trans hLay)
   have hRolesEq : proverAndVerifier w.foundPair.1 declaration = some (prover, verifier) := by
     simpa [Deployed.roles, Deployed.entry, w.hFound] using hRoles
@@ -1542,15 +1588,25 @@ theorem deployIdeal_link (enc : VocabEncoder V) (serviceKey : Key)
   cases buildLayoutLayers_ok_elim w.hLay with
   | compact wL _ =>
       have hne := wL.hNonEmpty
+      dsimp only [DeployIdealWitness.layout] at hLayEq
       rw [hLayEq, hNoRec] at hne; cases hne
   | streaming wL hLPW hLVW =>
       have hEntryF : ((a.program.findProtocol declaration.entry).get
           (by rw [w.hFound]; rfl)).1 = w.foundPair.1 := by simp [w.hFound]
       have hInsF := insRV_cast_valid M hEntryF ins hIns
-      obtain ⟨st0, hSt0Done, _⟩ := idealStart_done M a w.hSuiteFree
-        w.sessBytes w.hSessBytes w.stmtV
-        (heldValues M w.verifier (cast (congrArg (fun hdr => HList (RV M w.verifier) hdr.ins) hEntryF) ins))
-        (heldValues_valid M w.verifier _ hInsF)
+      obtain ⟨st0, hSt0Done, hInitF, hSt0V⟩ := idealInitialPath_eq_idealStart M a w.suite w.hSuiteFree
+        w.prover w.verifier declaration.key w.sessBytes w.hSessBytes w.stmtV w.hSV
+        (cast (congrArg (fun hdr => HList (RV M w.verifier) hdr.ins) hEntryF) ins) hInsF
+      have hInit : idealInitialPath M a suite w.suiteUnitTy w.prover w.verifier w.sessBytes ins = some st0 := by
+        have hCast : ∀ {hdr₁ hdr₂ : ProtocolHeader V} (h : hdr₁ = hdr₂)
+            (xs : HList (RV M w.verifier) hdr₁.ins),
+            idealInitialPath M a w.suite w.suiteUnitTy w.prover w.verifier w.sessBytes xs =
+              idealInitialPath M a w.suite w.suiteUnitTy w.prover w.verifier w.sessBytes
+                (cast (congrArg (fun hdr => HList (RV M w.verifier) hdr.ins) h) xs) := by
+          intro _ _ h _; subst h; rfl
+        rw [← hSuiteEq]
+        erw [hCast hEntryF ins]
+        exact hInitF
       let idealConV0 : Layer V a.program.headers w.verifier w.foundPair.1.ins :=
         { line := .construction, state := idealPathTy w.suiteUnitTy,
           takes := [], gives := [], clauses := w.idealVClauses,
@@ -1561,12 +1617,24 @@ theorem deployIdeal_link (enc : VocabEncoder V) (serviceKey : Key)
       have hStackVEq : w.toDeployed.stack w.verifier = hEntryF ▸ [idealConV0, layV0] := by
         dsimp only [DeployIdealWitness.toDeployed]
         rw [dite_eq_left rfl, hLVW]
+        have hC : ∀ {hdr₁ hdr₂ : ProtocolHeader V} (h : hdr₁ = hdr₂)
+            (ls : List (Layer V a.program.headers w.verifier hdr₂.ins)),
+            (congrArg ProtocolHeader.ins h) ▸ ls = h ▸ ls := by intro _ _ h _; subst h; rfl
+        exact hC hEntryF _
       have hTakes : Stack.Takes (w.toDeployed.stack w.verifier) = [.seq wL.unitTy none] := by
         rw [hStackVEq, stack_takes_cast_hdr hEntryF]; rfl
       have hGives : Stack.Gives (w.toDeployed.stack w.verifier) = [] := by
         rw [hStackVEq, stack_gives_cast_hdr hEntryF]; rfl
-      refine ⟨w.suiteUnitTy, wL.unitTy, w.hSuiteFree, st0, hTakes, hGives,
-        hSuiteEq ▸ w.hUnit, fun proof oracle ro hOR => ?_⟩
+      refine ⟨w.suiteUnitTy, wL.unitTy, w.hSuiteFree, w.sessBytes, w.hSessBytes, st0, hTakes,
+        hSuiteEq ▸ w.hUnit, hTagEq ▸ w.hSess, hInit, fun proof hProofV source ro hRo outV => ?_⟩
+      rw [alone_map_nil_iff M hGives]
+      have hT2 : Stack.Takes (hEntryF ▸ [idealConV0, layV0]) = [.seq wL.unitTy none] := by
+        rw [stack_takes_cast_hdr hEntryF]; rfl
+      have hG2 : Stack.Gives (hEntryF ▸ [idealConV0, layV0]) = [] := by
+        rw [stack_gives_cast_hdr hEntryF]; rfl
+      rw [ideal_deployed_run_congr M (d := w.toDeployed) rfl hNoRetry hStackVEq
+        ((cast_heq _ _).trans (cast_heq _ _).symm)
+        (hG₁ := hGives) (hG₂ := hG2) serviceKey (IdealRO.asOracle M ro)]
       have hBridge : ∀ (hdr : ProtocolHeader V) (hE : hdr = w.foundPair.1)
           (callee : Member a.program.headers.protocols hdr)
           (ins' : HList (RV M w.verifier) hdr.ins)
@@ -1575,26 +1643,25 @@ theorem deployIdeal_link (enc : VocabEncoder V) (serviceKey : Key)
             (Env.positional (heldValues M w.verifier (cast (congrArg (fun h => HList (RV M w.verifier) h.ins) hE) ins'))) =
             .done (.cons st0 .nil))
           (hT' : Stack.Takes (hE ▸ [idealConV0, layV0]) = [.seq wL.unitTy none])
-          (hG' : Stack.Gives (hE ▸ [idealConV0, layV0]) = []),
-          (Process.answerService serviceKey oracle
-            (runStack a M callee none w.verifier
-              (hE ▸ [idealConV0, layV0])
-              ins' (cast (congrArg (HList M.Val) hT'.symm) (.cons proof .nil)))).map
-            (fun out => (out.1, cast (congrArg (HList M.Val) hG') out.2)) =
-            evalIdealVerifierLoop M a suite layout serviceKey w.prover w.verifier
-              (finishGuardKey (hdr.shape.events [] id))
-              (hdr.shape.eventsWithAbsorb w.prover w.verifier [] id false)
-              oracle ro
-              (roleMeaning M a.program callee w.verifier [] ins') st0 proof 0 := by
-        intro hdr hE callee ins' hStart' hT' hG'
+          (hG' : Stack.Gives (hE ▸ [idealConV0, layV0]) = [])
+          (hRo' : ro.AnswersDraws M w.prover w.verifier (hdr.shape.events [] id))
+          (outV' : HList (RV M w.verifier) hdr.outs),
+          (∃ record, Alone M source w.verifier
+            ((Process.answerService serviceKey (IdealRO.asOracle M ro)
+              (runStack a M callee none w.verifier
+                (hE ▸ [idealConV0, layV0])
+                ins' (cast (congrArg (HList M.Val) hT'.symm) (.cons proof .nil)))).map
+              (fun out => (out.1, cast (congrArg (HList M.Val) hG') out.2)))
+            record (.returned (outV', .nil))) ↔
+          BareIdealReturn M a suite layout serviceKey w.prover w.verifier
+            (hdr.shape.eventsWithAbsorb w.prover w.verifier [] id false)
+            source ro
+            (roleMeaning M a.program callee w.verifier [] ins') st0 proof 0 outV' := by
+        intro hdr hE callee ins' hStart' hT' hG' hRo' outV'
         subst hE
         dsimp only at hStart'
         simp only [cast_eq] at hStart'
         unfold runStack
-        change Process.map (fun (out : HList (RV M w.verifier) w.foundPair.1.outs × HList M.Val (Stack.Gives [idealConV0, layV0])) => (out.1, cast (congrArg (HList M.Val) hG') out.2))
-          (Process.answerService serviceKey oracle
-            ((Stack.start M (Defs.fnTable M a.program.defs) [idealConV0, layV0]
-              ins' (.cons proof .nil)).bind _)) = _
         have hStV : Stack.start M (Defs.fnTable M a.program.defs)
             [idealConV0, layV0] ins' (.cons proof .nil) =
             .done (.cons st0 (.cons (proof, ((0 : Nat), ())) .nil)) := by
@@ -1610,35 +1677,50 @@ theorem deployIdeal_link (enc : VocabEncoder V) (serviceKey : Key)
           dsimp only [Process.bind, HList.single]
           rw [layoutVStart_denote]
           rfl
-        rw [hStV]
-        dsimp only [Process.bind]
-        rw [← answerService_map]
-        have hLoop := ideal_verifier_loop_eq M (suite := suite) (layout := layout)
+        have hProcEq :
+            (Process.answerService serviceKey (IdealRO.asOracle M ro)
+              ((Stack.start M (Defs.fnTable M a.program.defs) [idealConV0, layV0]
+                ins' (cast (congrArg (HList M.Val) hT'.symm) (.cons proof .nil))).bind fun first =>
+                (((Stack.handler M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs)
+                    [idealConV0, layV0]).run (retryOf M none)
+                    (roleMeaning M a.program callee w.verifier [] ins') first).mapHalt Prod.fst).bind
+                  fun out => (Stack.finish M (Defs.fnTable M a.program.defs) [idealConV0, layV0] out.2).map
+                    fun gives => (out.1, gives))).map
+              (fun out => (out.1, cast (congrArg (HList M.Val) hG') out.2)) =
+            Process.answerService serviceKey (IdealRO.asOracle M ro)
+              ((((Stack.handler M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs)
+                [idealConV0, layV0]).run (retryOf M none)
+                (roleMeaning M a.program callee w.verifier [] ins')
+                (.cons st0 (.cons (proof, ((0 : Nat), ())) .nil))).mapHalt Prod.fst).bind
+                fun out => (Stack.finish M (Defs.fnTable M a.program.defs) [idealConV0, layV0] out.2).map
+                  fun gives => (out.1, cast (by simp [Stack.Gives, idealConV0, layV0]) gives)) := by
+          change (Process.answerService serviceKey (IdealRO.asOracle M ro)
+            ((Stack.start M (Defs.fnTable M a.program.defs) [idealConV0, layV0]
+              ins' (.cons proof .nil)).bind _)).map _ = _
+          rw [hStV]
+          dsimp only [Process.bind]
+          rw [← answerService_map]
+          congr 1
+          simp [Process.map_bind, Process.map_map]
+        rw [hProcEq]
+        exact ideal_verifier_bare_iff M (suite := suite) (layout := layout) (serviceKey := serviceKey)
           hNoCarry w.hNe idealConV0 layV0
           rfl rfl rfl rfl rfl rfl (hSuiteEq ▸ w.hIV) ⟨wL.pClauses, hLayEq ▸ wL.hStr⟩
-          oracle ro hOR
-          (roleMeaning M a.program callee w.verifier [] ins') st0 proof 0
-          (roleMeaning_matchesShape M a.program callee w.verifier [] ins')
-        simpa [Process.map_id', Process.map_bind, Process.map_map] using hLoop
-      have hT2 : Stack.Takes (hEntryF ▸ [idealConV0, layV0]) = [.seq wL.unitTy none] := by
-        rw [stack_takes_cast_hdr hEntryF]; rfl
-      have hG2 : Stack.Gives (hEntryF ▸ [idealConV0, layV0]) = [] := by
-        rw [stack_gives_cast_hdr hEntryF]; rfl
-      exact (ideal_deployed_run_congr M (d := w.toDeployed) rfl hNoRetry hStackVEq
-        ((cast_heq _ _).trans (cast_heq _ _).symm)
-        (hG₁ := hGives) (hG₂ := hG2) serviceKey oracle).trans
-        (hBridge _ hEntryF w.toDeployed.callee ins hSt0Done hT2 hG2)
+          source ro hRo'
+          (roleMeaning M a.program callee w.verifier [] ins') st0 proof 0 outV'
+          hSt0V hProofV (roleMeaning_matchesShape M a.program callee w.verifier [] ins')
+      exact hBridge _ hEntryF w.toDeployed.callee ins hSt0Done hT2 hG2 hRo outV
 
 end IdealLink
 
-/-! ## Section 2: Collision-free ideal transcript step injectivity -/
+/-! ## Collision-free ideal transcript step injectivity -/
 
 section IdealPathInjectivity
 
 variable {V : Vocabulary} (M : Model V)
 
 /-- Message absorption steps on the pure ideal transcript path are unconditionally injective
-under `Deployed.SuiteLawful` (encoding injectivity + collision-free path append). -/
+under `Deployed.SuiteLawful` (encoding injectivity + site-label injectivity + collision-free path append). -/
 theorem idealPath_msgStep_injective {d : Deployed V} {suite : ModuleRef}
     {sessionTag : Option (List Nat)}
     (hCon : d.declaration.construction = .derived suite sessionTag)
@@ -1653,12 +1735,12 @@ theorem idealPath_msgStep_injective {d : Deployed V} {suite : ModuleRef}
     (hE₂ : encRef.eval M (Defs.fnTable M d.admitted.program.defs) (.cons v₂ .nil) = .done (.cons enc₂ .nil))
     (hPath : idealPathPush M st₁ (2 :: msgLabel s₁) enc₁ =
       idealPathPush M st₂ (2 :: msgLabel s₂) enc₂) :
-    st₁ = st₂ ∧ msgLabel s₁ = msgLabel s₂ ∧ v₁ = v₂ := by
+    st₁ = st₂ ∧ s₁ = s₂ ∧ v₁ = v₂ := by
   obtain ⟨hSt, hLbl, hEnc⟩ := idealPathPush_injective M hPath
-  have hLbl' : msgLabel s₁ = msgLabel s₂ := (List.cons.inj hLbl).2
+  have hSite : s₁ = s₂ := msgLabel_injective (List.cons.inj hLbl).2
   subst hEnc
   have hVal := suiteLawful_encode_injective M hCon hSuite hFind hV₁ hV₂ hE₁ hE₂
-  exact ⟨hSt, hLbl', hVal⟩
+  exact ⟨hSt, hSite, hVal⟩
 
 /-- Draw absorption steps on the pure ideal transcript path are unconditionally injective
 under `Deployed.SuiteLawful`. -/
@@ -1676,12 +1758,12 @@ theorem idealPath_drawStep_injective {d : Deployed V} {suite : ModuleRef}
     (hE₂ : encRef.eval M (Defs.fnTable M d.admitted.program.defs) (.cons c₂ .nil) = .done (.cons enc₂ .nil))
     (hPath : idealPathPush M st₁ (3 :: drawLabel s₁) enc₁ =
       idealPathPush M st₂ (3 :: drawLabel s₂) enc₂) :
-    st₁ = st₂ ∧ drawLabel s₁ = drawLabel s₂ ∧ c₁ = c₂ := by
+    st₁ = st₂ ∧ s₁ = s₂ ∧ c₁ = c₂ := by
   obtain ⟨hSt, hLbl, hEnc⟩ := idealPathPush_injective M hPath
-  have hLbl' : drawLabel s₁ = drawLabel s₂ := (List.cons.inj hLbl).2
+  have hSite : s₁ = s₂ := drawLabel_injective (List.cons.inj hLbl).2
   subst hEnc
   have hVal := suiteLawful_encode_injective M hCon hSuite hFind hV₁ hV₂ hE₁ hE₂
-  exact ⟨hSt, hLbl', hVal⟩
+  exact ⟨hSt, hSite, hVal⟩
 
 /-- A message absorption step (`tag 2`) can never collide with a draw absorption step (`tag 3`). -/
 theorem idealPath_msg_ne_draw {unitTy : V.Ty}
@@ -1696,7 +1778,7 @@ theorem idealPath_msg_ne_draw {unitTy : V.Ty}
 
 end IdealPathInjectivity
 
-/-! ## Section 3: Non-malleable canonical compact proof parsing (`compact_parse_written`) -/
+/-! ## Non-malleable canonical compact proof parsing (`compact_parse_written`) -/
 
 section CompactCanonical
 

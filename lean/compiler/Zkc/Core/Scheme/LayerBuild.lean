@@ -214,6 +214,18 @@ def callLocalSafe {V : Vocabulary} {fns : List (FnHeader V)} {ins outs : List V.
     (ref : SafeFnRef V fns ins outs) : LocalOp V fns ins outs :=
   cast (by rw [ref.insEq, ref.outsEq]) (LocalOp.call ref.member)
 
+/-- Evaluate a `TypedFnRef` directly in `fnTable`. -/
+def TypedFnRef.eval {V : Vocabulary} (M : Model V) {fns : List (FnHeader V)} {ins outs : List V.Ty}
+    (ref : TypedFnRef V fns ins outs) (fnTable : FnTable M fns) (args : HList M.Val ins) :
+    Local (HList M.Val outs) :=
+  localOp M fnTable (callLocal ref) args
+
+/-- Evaluate a `SafeFnRef` directly in `fnTable`. -/
+def SafeFnRef.eval {V : Vocabulary} (M : Model V) {fns : List (FnHeader V)} {ins outs : List V.Ty}
+    (ref : SafeFnRef V fns ins outs) (fnTable : FnTable M fns) (args : HList M.Val ins) :
+    Local (HList M.Val outs) :=
+  localOp M fnTable (callLocalSafe ref) args
+
 theorem alone_map_ty {V : Vocabulary} (r : Role) (tys : List V.Ty) :
     (alone r tys).map (·.ty) = tys := by
   simp [alone, Function.comp_def]
@@ -238,10 +250,54 @@ def restoreAgain {V : Vocabulary} {fns : List (FnHeader V)} (state : V.Ty) :
     Term (localDialect V fns) (Ctx.positional [.nat, state, state]) [state] :=
   .ret (.cons (posVar ([.nat, state, state] : List V.Ty) 1 rfl) .nil)
 
-/-- `again` term for `samples derived by`: sets state to the new attempt number (`var 0`). -/
-def attemptNumAgain {V : Vocabulary} {fns : List (FnHeader V)} :
-    Term (localDialect V fns) (Ctx.positional [.nat, .nat, .nat]) [.nat] :=
-  .ret (.cons (posVar ([.nat, .nat, .nat] : List V.Ty) 0 rfl) .nil)
+/-- Convert a `List V.Ty` to `Tys V.TypeKey`. -/
+def tysOfList {V : Vocabulary} : List V.Ty → Tys V.TypeKey
+  | [] => .nil
+  | t :: ts => .cons t (tysOfList ts)
+
+theorem tysOfList_toList {V : Vocabulary} : ∀ (ts : List V.Ty), (tysOfList ts).toList = ts
+  | [] => rfl
+  | _ :: ts => congrArg _ (tysOfList_toList ts)
+
+/-- Build positional variables `0, 1, ..., types.length - 1` in `Ctx.positional types`. -/
+def positionalVars {T : Type} : (types : List T) → {Γ : Ctx T} →
+    (start : Nat) → (∀ k a, types[k]? = some a → Γ.find? (start + k) = some a) →
+    HList (Var Γ) types
+  | [], _, _, _ => .nil
+  | a :: as, _, start, hΓ =>
+      .cons ⟨start, hΓ 0 a rfl⟩
+        (positionalVars as (start + 1) fun k b hb => by
+          have := hΓ (k + 1) b hb
+          rwa [show start + (k + 1) = start + 1 + k by omega] at this)
+
+/-- State tuple types for `samples derived by`:
+`(attemptNum : nat, callSeq : nat, proverHeld : tuple (held prover ins))`. -/
+abbrev samplesStateTys {V : Vocabulary} (heldP : List V.Ty) : Tys V.TypeKey :=
+  .cons .nat (.cons .nat (.cons (.tuple (tysOfList heldP)) .nil))
+
+abbrev samplesStateTy {V : Vocabulary} (heldP : List V.Ty) : V.Ty :=
+  .tuple (samplesStateTys heldP)
+
+/-- `again` term for `samples derived by`: advances `attemptNum` to the new attempt (`var 0`),
+while preserving the monotonically growing `callSeq` and `proverHeld` tuple from `stopState`
+(`var 2`), preventing nonce reuse across retries and retries inside loops. -/
+def samplesAgain {V : Vocabulary} {fns : List (FnHeader V)} (heldP : List V.Ty)
+    (htfree : Tys.anyLinear V (samplesStateTys heldP) = false) :
+    Term (localDialect V fns)
+      (Ctx.positional [.nat, samplesStateTy heldP, samplesStateTy heldP])
+      [samplesStateTy heldP] :=
+  let stTy := samplesStateTy heldP
+  let tys : List V.Ty := [.nat, stTy, stTy]
+  let attVar : Var (Ctx.positional tys) .nat := posVar tys 0 rfl
+  let stopVar : Var (Ctx.positional tys) stTy := posVar tys 2 rfl
+  letOp1 ⟨0⟩ (.owned (.getTuple (samplesStateTys heldP) (.tail .head) htfree))
+      (.cons stopVar .nil) 3 (positional_freshFrom tys) fun _ h1 w01 seqVar =>
+  letOp1 ⟨1⟩ (.owned (.getTuple (samplesStateTys heldP) (.tail (.tail .head)) htfree))
+      (.cons (stopVar.reindex w01) .nil) 4 h1 fun _ h2 w12 heldVar =>
+  letOp1 ⟨2⟩ (.owned (.makeTuple (samplesStateTys heldP)))
+      (.cons (attVar.reindex (w01.trans w12)) (.cons (seqVar.reindex w12) (.cons heldVar .nil)))
+      5 h2 fun _ _ _ nextStVar =>
+  .ret (.cons nextStVar .nil)
 
 /-- `finish` term returning nothing. -/
 def emptyFinish {V : Vocabulary} {fns : List (FnHeader V)} (state : V.Ty) :
@@ -353,12 +409,24 @@ def layoutVFinish {V : Vocabulary} {fns : List (FnHeader V)} (unitTy : V.Ty)
   .guard guardKey () eqVar rfl .reject <|
   .ret .nil
 
-/-- Initial state `0 : nat` for `samples derived by` layer. -/
+/-- Initial state `(0, 0, proverHeld)` for `samples derived by` layer, capturing all prover secret
+and statement inputs from `Ctx.positional (held r ins)`. -/
 def samplesStart {V : Vocabulary} {fns : List (FnHeader V)} {r : Role} {ins : List (LTy V)} :
-    Term (localDialect V fns) (Ctx.positional (held r ins)) [.nat] :=
-  let base := (held r ins).length
-  letOp1 ⟨0⟩ (.literal .nat [0] rfl) .nil base (positional_freshFrom (held r ins)) fun _ _ _ v0 =>
-  .ret (.cons v0 .nil)
+    Term (localDialect V fns) (Ctx.positional (held r ins)) [samplesStateTy (held r ins)] :=
+  let heldP := held r ins
+  let base := heldP.length
+  let inVars : HList (Var (Ctx.positional heldP)) heldP :=
+    positionalVars heldP 0 fun k a ha => by rw [Ctx.find?_positional]; simpa using ha
+  letOp1 ⟨0⟩ (.literal .nat [0] rfl) .nil base (positional_freshFrom heldP) fun _ h1 w01 z0 =>
+  letOp1 ⟨1⟩ (.literal .nat [0] rfl) .nil (base + 1) h1 fun _ h2 w12 z1 =>
+  letOp1 ⟨2⟩ (.owned (.makeTuple (tysOfList heldP)))
+      (cast (congrArg (HList (Var _)) (tysOfList_toList heldP).symm)
+        (inVars.reindex (w01.trans w12)))
+      (base + 2) h2 fun _ h3 w23 heldVar =>
+  letOp1 ⟨3⟩ (.owned (.makeTuple (samplesStateTys heldP)))
+      (.cons (z0.reindex (w12.trans w23)) (.cons (z1.reindex w23) (.cons heldVar .nil)))
+      (base + 3) h3 fun _ _ _ stVar =>
+  .ret (.cons stVar .nil)
 
 /-! ## Role `Clause` builders (`roleDialect`) -/
 
@@ -469,12 +537,49 @@ abbrev idealPathTys {V : Vocabulary} (unitTy : V.Ty) : Tys V.TypeKey :=
 abbrev idealPathTy {V : Vocabulary} (unitTy : V.Ty) : V.Ty :=
   .tuple (idealPathTys unitTy)
 
-/-- Request payload type for an ideal RO query: `(idealPath, drawLabel)`. -/
+/-- Request payload type for an ideal random-oracle query: `(idealPath, drawLabel)`. -/
 abbrev idealQueryTys {V : Vocabulary} (unitTy : V.Ty) : Tys V.TypeKey :=
   .cons (idealPathTy unitTy) (.cons bytesTy .nil)
 
 abbrev idealQueryTy {V : Vocabulary} (unitTy : V.Ty) : V.Ty :=
   .tuple (idealQueryTys unitTy)
+
+/-- Initial pure ideal transcript path `([0 :: sessionBytes], [])`. -/
+def idealPathInit {V : Vocabulary} (M : Model V) (unitTy : V.Ty) (sessionBytes : List Nat) :
+    M.Val (idealPathTy unitTy) :=
+  ([0 :: sessionBytes], ([], ()))
+
+/-- Pure ideal transcript path extension appending `(tagLbl, encVal)` to `(metaLog, dataLog)`. -/
+def idealPathPush {V : Vocabulary} (M : Model V) {unitTy : V.Ty}
+    (st : M.Val (idealPathTy unitTy)) (tagLbl : List Nat) (encVal : List (M.Val unitTy)) :
+    M.Val (idealPathTy unitTy) :=
+  (st.1 ++ [tagLbl], (st.2.1 ++ [encVal], ()))
+
+/-- A partial ideal random oracle keyed by `(idealPath, drawLabel, τ)`. Partiality keeps models
+with uninhabited types non-vacuous: `ro` only needs to answer types actually drawn by the
+protocol (`IdealRO.AnswersDraws`). -/
+abbrev IdealRO {V : Vocabulary} (M : Model V) (unitTy : V.Ty) : Type :=
+  M.Val (idealPathTy unitTy) → List Nat → (τ : V.Ty) → Option (M.Val τ)
+
+/-- Lift an `IdealRO` into a service oracle answering `[idealQueryTy unitTy]` requests. -/
+def IdealRO.asOracle {V : Vocabulary} (M : Model V) {unitTy : V.Ty} (ro : IdealRO M unitTy) :
+    (ins : List V.Ty) → HList M.Val ins → (τ : V.Ty) → Option (M.Val τ)
+  | [ty], .cons q .nil, τ =>
+      if h : ty = idealQueryTy unitTy then
+        let q' : M.Val (idealQueryTy unitTy) := cast (congrArg M.Val h) q
+        ro q'.1 q'.2.1 τ
+      else none
+  | _, _, _ => none
+
+/-- An ideal random oracle answers every verifier-owned heard coin draw in `events` with a valid
+value on every valid ideal transcript path and valid byte label. -/
+def IdealRO.AnswersDraws {V : Vocabulary} (M : Model V) {unitTy : V.Ty}
+    (prover verifier : Role) (events : List (ShapeEvent V)) (ro : IdealRO M unitTy) : Prop :=
+  ∀ e ∈ events, ∀ law hearers,
+    e.cls = .given (.coin law) verifier hearers → prover ∈ hearers →
+    ∀ (st : M.Val (idealPathTy unitTy)) (lbl : List Nat),
+      M.Valid (idealPathTy unitTy) st → (∀ b, b ∈ lbl → b < 256) →
+      ∃ v, ro st lbl e.τ = some v ∧ M.Valid e.τ v
 
 /-- Pure local combinator appending `(tagLblVar, encVar)` onto `stVar : idealPathTy unitTy`. -/
 def appendIdealPathLocal {V : Vocabulary} {fns : List (FnHeader V)} {unitTy : V.Ty}
@@ -603,8 +708,9 @@ def appendIdealPathRole {V : Vocabulary} {hs : Headers V} {unitTy : V.Ty}
   let wAll : Γ.Within Γ9 := (((((((w01.trans w12).trans w23).trans w34).trans w45).trans w56).trans w67).trans w78).trans w89
   rest Γ9 h9 wAll nextSt
 
-/-- Ideal RO verifier message clause: delegates `.get` to the layout layer below, encodes `msg`,
-and appends `(2 :: label, encode(msg))` onto the pure transcript path `(metaLog, dataLog)`. -/
+/-- Ideal random-oracle verifier message clause: delegates `.get` to the layout layer below,
+encodes `msg`, and appends `(2 :: label, encode(msg))` onto the pure transcript path
+`(metaLog, dataLog)`. -/
 def idealAbsorbClause {V : Vocabulary} {hs : Headers V} {unitTy τ : V.Ty}
     (hfree : Ty.isLinear V unitTy = false)
     (verifier prover : Role) (site : Site) (kind : FlowKind)
@@ -634,8 +740,8 @@ def idealAbsorbClause {V : Vocabulary} {hs : Headers V} {unitTy τ : V.Ty}
         (lblVar.reindex w34) encVar fun _ _ w413 nextStVar =>
     .ret (.cons (msgVar.reindex ((w23.trans w34).trans w413)) (.cons nextStVar .nil))
 
-/-- Ideal RO construction clause at a verifier draw: requests the coin from `serviceKey` on
-`(idealPath, label)` at fresh key `reqKey`, tells the coin below at `toldKey`, appends
+/-- Ideal random-oracle construction clause at a verifier draw: requests the coin from `serviceKey`
+on `(idealPath, label)` at fresh key `reqKey`, tells the coin below at `toldKey`, appends
 `(3 :: label, encode(coin))` onto the pure transcript path (so consecutive draws query distinct
 collision-free paths without calling any concrete hash/sponge), and returns `(coin, nextPath)`. -/
 def idealDeriveClause {V : Vocabulary} {hs : Headers V} {unitTy τ : V.Ty}
@@ -765,32 +871,98 @@ def layoutVCarryClause {V : Vocabulary} {hs : Headers V} {unitTy τ : V.Ty}
         7 h5 fun _ _ _ nextStVar =>
     .ret (.cons nextStVar .nil)
 
-/-- Prover `samples derived by` clause: derives a private coin from `(attemptNum, siteKey)` via
-`sampleRef`, leaving `attemptNum` unchanged (`again` updates it on retry). -/
-def proverSampleClause {V : Vocabulary} {hs : Headers V} {τ : V.Ty}
+/-- Prover `samples derived by` clause: derives a private coin from all prover inputs
+(secret witness and public statement), the resolved session bytes, the full canonical site bytes
+(`through` and `key`), the attempt number, and a monotonically increasing sample sequence counter
+(`callSeq`), incrementing `callSeq` on every invocation to prevent nonce reuse across witnesses,
+statements, applications, sub-protocols, loops, and retries. -/
+def proverSampleClause {V : Vocabulary} {hs : Headers V} {heldP : List V.Ty} {τ : V.Ty}
+    (htfree : Tys.anyLinear V (samplesStateTys heldP) = false)
     (prover : Role) (site : Site) (law : V.LawKey)
-    (sampleRef : TypedFnRef V hs.fns [.nat, .nat] [τ]) :
-    Clause V hs prover .nat where
+    (sessionBytes : List Nat) (hsess : ∀ b, b ∈ sessionBytes → b < 256)
+    (siteBytes : List Nat) (hsite : ∀ b, b ∈ siteBytes → b < 256)
+    (sampleRef : TypedFnRef V hs.fns (heldP ++ [bytesTy, bytesTy, .nat, .nat]) [τ]) :
+    Clause V hs prover (samplesStateTy heldP) where
   site := ⟨site, .own (.coin law) [], [], [τ]⟩
   code :=
-    let tys := alone prover [.nat]
-    let attVar : Var (Ctx.positional tys) ⟨.nat, [prover]⟩ := alonePosVar prover [.nat] 0 rfl
-    letOp1 ⟨0⟩ (computeAlone prover (.literal .nat [site.key.number] rfl))
-        .nil 1 (alone_positional_freshFrom prover [.nat]) fun _ h1 w01 keyVar =>
-    letOp1 ⟨1⟩ (computeAlone prover (callLocal sampleRef))
-        (.cons (attVar.reindex w01) (.cons keyVar .nil)) 2 h1 fun _ _ w12 coinVar =>
-    .ret (.cons coinVar (.cons (attVar.reindex (w01.trans w12)) .nil))
+    let stTy := samplesStateTy heldP
+    let tys := alone prover [stTy]
+    let stVar : Var (Ctx.positional tys) ⟨stTy, [prover]⟩ := alonePosVar prover [stTy] 0 rfl
+    letOp1 ⟨0⟩ (computeAlone prover (.owned (.getTuple (samplesStateTys heldP) .head htfree)))
+        (.cons stVar .nil) 1 (alone_positional_freshFrom prover [stTy]) fun _ h1 w01 attVar =>
+    letOp1 ⟨1⟩ (computeAlone prover (.owned (.getTuple (samplesStateTys heldP) (.tail .head) htfree)))
+        (.cons (stVar.reindex w01) .nil) 2 h1 fun _ h2 w12 seqVar =>
+    letOp1 ⟨2⟩ (computeAlone prover (.owned (.getTuple (samplesStateTys heldP) (.tail (.tail .head)) htfree)))
+        (.cons (stVar.reindex (w01.trans w12)) .nil) 3 h2 fun Γ3 h3 w23 heldVar =>
+    let fields := alone prover (tysOfList heldP).toList
+    let fieldNames : Names fields := Names.counting 4 fields
+    let Γ4 := Γ3.extend fieldNames
+    have hW34 : Γ3.Within Γ4 := by
+      intro name a ha
+      rw [show Γ4 = Γ3.extend (Names.counting 4 fields) from rfl, Ctx.find?_extend_counting]
+      have hlt : name < 4 := by
+        cases Nat.lt_or_ge name 4 with
+        | inl h => exact h
+        | inr h => rw [h3 name h] at ha; cases ha
+      have hout : ¬ (4 ≤ name ∧ name < 4 + fields.length) := fun hm =>
+        Nat.not_le_of_lt hlt hm.1
+      rw [ite_eq_right hout]; exact ha
+    have hFieldsIn : ∀ k a, fields[k]? = some a → Γ4.find? (4 + k) = some a := by
+      intro k a ha
+      have hlt : k < fields.length := by
+        cases Nat.lt_or_ge k fields.length with
+        | inl h => exact h
+        | inr h => rw [List.getElem?_eq_none h] at ha; cases ha
+      rw [show Γ4 = Γ3.extend (Names.counting 4 fields) from rfl, Ctx.find?_extend_counting]
+      have hbounds : 4 ≤ 4 + k ∧ 4 + k < 4 + fields.length :=
+        ⟨Nat.le_add_right 4 k, Nat.add_lt_add_left hlt 4⟩
+      rw [ite_eq_left hbounds, Nat.add_sub_cancel_left]; exact ha
+    have hFresh4 : FreshFrom Γ4 (4 + fields.length) := by
+      intro k hk
+      rw [show Γ4 = Γ3.extend (Names.counting 4 fields) from rfl, Ctx.find?_extend_counting]
+      have hout : ¬ (4 ≤ k ∧ k < 4 + fields.length) := fun hm =>
+        Nat.not_lt_of_ge hk hm.2
+      rw [ite_eq_right hout]
+      exact h3 k (Nat.le_trans (Nat.le_add_right 4 fields.length) hk)
+    let fVars : HList (Var Γ4) (alone prover heldP) :=
+      cast (congrArg (fun ts => HList (Var Γ4) (alone prover ts)) (tysOfList_toList heldP))
+        (positionalVars fields 4 hFieldsIn)
+    let fBase := 4 + fields.length
+    .op ⟨3⟩ (computeAlone prover (.owned (.takeTuple (tysOfList heldP))))
+        (.cons heldVar .nil) fieldNames <|
+    letOp1 ⟨4⟩ (computeAlone prover (.literal bytesTy (sessionBytes.length :: sessionBytes)
+        (bytesLiteral_reads sessionBytes hsess))) .nil fBase hFresh4
+        fun _ h5 w45 sessVar =>
+    letOp1 ⟨5⟩ (computeAlone prover (.literal bytesTy (siteBytes.length :: siteBytes)
+        (bytesLiteral_reads siteBytes hsite))) .nil (fBase + 1) h5
+        fun Γ6 h6 w56 siteVar =>
+    let w46 := w45.trans w56
+    let w36 := hW34.trans w46
+    let tailArgs : HList (Var Γ6) (alone prover [bytesTy, bytesTy, .nat, .nat]) :=
+      .cons (sessVar.reindex w56)
+        (.cons siteVar
+          (.cons (attVar.reindex ((w12.trans w23).trans w36))
+            (.cons (seqVar.reindex (w23.trans w36)) .nil)))
+    have hApp : alone prover (heldP ++ [bytesTy, bytesTy, .nat, .nat]) =
+        alone prover heldP ++ alone prover [bytesTy, bytesTy, .nat, .nat] := by
+      simp [alone, List.map_append]
+    let allArgs : HList (Var Γ6) (alone prover (heldP ++ [bytesTy, bytesTy, .nat, .nat])) :=
+      cast (congrArg (HList (Var Γ6)) hApp.symm) (HList.append (fVars.reindex w46) tailArgs)
+    letOp1 ⟨6⟩ (computeAlone prover (callLocal sampleRef)) allArgs (fBase + 2) h6
+        fun _ h7 w67 coinVar =>
+    letOp1 ⟨7⟩ (computeAlone prover (.literal .nat [1] rfl)) .nil (fBase + 3) h7
+        fun _ h8 w78 oneVar =>
+    letOp1 ⟨8⟩ (computeAlone prover (.owned .natAdd))
+        (.cons (seqVar.reindex (((w23.trans w36).trans w67).trans w78)) (.cons oneVar .nil))
+        (fBase + 4) h8 fun _ h9 w89 nextSeqVar =>
+    letOp1 ⟨9⟩ (computeAlone prover (.owned (.makeTuple (samplesStateTys heldP))))
+        (.cons (attVar.reindex (((((w12.trans w23).trans w36).trans w67).trans w78).trans w89))
+          (.cons nextSeqVar
+            (.cons (heldVar.reindex (((w36.trans w67).trans w78).trans w89)) .nil)))
+        (fBase + 5) h9 fun _ _ w910 nextStVar =>
+    .ret (.cons (coinVar.reindex ((w78.trans w89).trans w910)) (.cons nextStVar .nil))
 
 /-! ## Compact layout (`carry` + `recover`) builders -/
-
-/-- Convert a `List V.Ty` to `Tys V.TypeKey`. -/
-def tysOfList {V : Vocabulary} : List V.Ty → Tys V.TypeKey
-  | [] => .nil
-  | t :: ts => .cons t (tysOfList ts)
-
-theorem tysOfList_toList {V : Vocabulary} : ∀ (ts : List V.Ty), (tysOfList ts).toList = ts
-  | [] => rfl
-  | _ :: ts => congrArg _ (tysOfList_toList ts)
 
 /-- Build `compactLayoutV.start`: sequentially parse every wire item from `(proof, 0)`, reject any
 trailing bytes, and pack all parsed wire items (plus verifier statement inputs) into the tuple

@@ -425,24 +425,6 @@ theorem layer_again_restore_valid (M : Model V) {hs : Headers V}
   rw [hAgain, restoreAgain_denote]
   exact hentry
 
-theorem layer_again_attempt_valid (M : Model V) {hs : Headers V}
-    (fnTable : FnTable M hs.fns) (rTable : RTable M hs.protocols)
-    {r : Role} {ins : List (LTy V)} (l : Layer V hs r ins)
-    (hState : l.state = .nat) (hAgain : l.again = hState.symm ▸ attemptNumAgain)
-    (i : Nat) (entry stop : M.Val l.state) :
-    match (Layer.handler M fnTable rTable l).again i entry stop with
-    | .ok next => M.Valid l.state next
-    | .error why => why ≠ .undefined := by
-  cases l with
-  | mk line state takes gives clauses again start finish =>
-      dsimp only at hState hAgain
-      subst hState
-      dsimp only at hAgain
-      subst hAgain
-      dsimp only [Layer.handler]
-      rw [attemptNumAgain_denote]
-      trivial
-
 end Helpers
 
 /-! ## Structured elimination lemmas for `buildLayoutLayers`, `deploy`, and `deployIdeal` -/
@@ -547,8 +529,9 @@ structure DeployInteractive (a : Admitted V) (declaration : Declaration) where
   foundPair : (hdr : ProtocolHeader V) × Member a.program.headers.protocols hdr
   hFound : a.program.findProtocol declaration.entry = some foundPair
   hSupp : checkDeclarationSupported foundPair.1 declaration = true
-  hScope : checkScope foundPair.1 declaration = true
   hCon : declaration.construction = .interactive
+  hInt : checkInteractive declaration = true
+  hScope : checkInteractiveScope foundPair.1 declaration = true
 
 abbrev DeployInteractive.toDeployed {a : Admitted V} {declaration : Declaration}
     (w : DeployInteractive a declaration) : Deployed V :=
@@ -562,15 +545,15 @@ structure DeployAuthored (a : Admitted V) (declaration : Declaration) where
   foundPair : (hdr : ProtocolHeader V) × Member a.program.headers.protocols hdr
   hFound : a.program.findProtocol declaration.entry = some foundPair
   hSupp : checkDeclarationSupported foundPair.1 declaration = true
-  hScope : checkScope foundPair.1 declaration = true
   hCon : declaration.construction = .authored
+  hNoSamp : declaration.samples = none
   prover : Role
   verifier : Role
   hPV : proverAndVerifier foundPair.1 declaration = some (prover, verifier)
   hNe : prover ≠ verifier
-  sClauses : List (Clause V a.program.headers prover .nat)
-  hAuth : checkAuthoredEvents a prover verifier declaration.samples declaration.key
-    (foundPair.1.shape.events [] id) = .ok sClauses
+  hScope : checkNonInteractiveScope foundPair.1 prover declaration = true
+  hAuth : checkAuthoredEvents prover verifier declaration.key
+    (foundPair.1.shape.events [] id) = .ok ()
   layout : Layout
   hLayOpt : declaration.layout = some layout
   layP : Layer V a.program.headers prover foundPair.1.ins
@@ -583,18 +566,11 @@ abbrev DeployAuthored.toDeployed {a : Admitted V} {declaration : Declaration}
   let hIsSome : (a.program.findProtocol declaration.entry).isSome := by rw [w.hFound]; rfl
   let hEntryEq : ((a.program.findProtocol declaration.entry).get hIsSome).1 = w.foundPair.1 := by
     simp [w.hFound]
-  let proverStack : List (Layer V a.program.headers w.prover w.foundPair.1.ins) :=
-    match declaration.samples with
-    | none => [w.layP]
-    | some _ =>
-        [{ line := .samples, state := .nat, takes := [], gives := [],
-           clauses := w.sClauses, again := attemptNumAgain,
-           start := samplesStart, finish := emptyFinish .nat }, w.layP]
   { admitted := a
     declaration := declaration
     found := hIsSome
     stack := fun r =>
-      if hP : r = w.prover then hP ▸ hEntryEq ▸ proverStack
+      if hP : r = w.prover then hP ▸ hEntryEq ▸ [w.layP]
       else if hV : r = w.verifier then hV ▸ hEntryEq ▸ [w.layV]
       else [] }
 
@@ -603,75 +579,90 @@ structure DeployDerived (enc : VocabEncoder V) (a : Admitted V) (declaration : D
   foundPair : (hdr : ProtocolHeader V) × Member a.program.headers.protocols hdr
   hFound : a.program.findProtocol declaration.entry = some foundPair
   hSupp : checkDeclarationSupported foundPair.1 declaration = true
-  hScope : checkScope foundPair.1 declaration = true
   suite : ModuleRef
   sessionTag : Option (List Nat)
   hCon : declaration.construction = .derived suite sessionTag
-  prover : Role
-  verifier : Role
-  hPV : proverAndVerifier foundPair.1 declaration = some (prover, verifier)
-  hNe : prover ≠ verifier
-  layout : Layout
-  hLayOpt : declaration.layout = some layout
+  prep : DerivedPrepared enc a declaration foundPair.1 sessionTag
+  hPrep : prepareDerivedBody enc a declaration foundPair.1 sessionTag = .ok prep
   stateTy : V.Ty
   startRef : TypedFnRef V a.program.headers.fns [bytesTy] [stateTy]
   hStart : findSuiteStart a suite = some ⟨stateTy, startRef⟩
   suiteUnitTy : V.Ty
   absorbRef : TypedFnRef V a.program.headers.fns [stateTy, bytesTy, .seq suiteUnitTy none] [stateTy]
   hAbs : findSuiteAbsorb a suite stateTy = some ⟨suiteUnitTy, absorbRef⟩
-  sessBytes : List Nat
-  hSessBytes : ∀ b, b ∈ sessBytes → b < 256
-  hSess : resolveSessionBytes enc a declaration sessionTag = .ok ⟨sessBytes, hSessBytes⟩
   stmtP : List (StmtAbsorbItem V a.program.headers.fns suiteUnitTy
-    (Ctx.positional (held prover foundPair.1.ins)))
-  hSP : buildStmtAbsorbItems a suite suiteUnitTy prover prover verifier (.inl rfl)
+    (Ctx.positional (held prep.prover foundPair.1.ins)))
+  hSP : buildStmtAbsorbItems a suite suiteUnitTy prep.prover prep.prover prep.verifier (.inl rfl)
     foundPair.1.ins declaration.key = .ok stmtP
   stmtV : List (StmtAbsorbItem V a.program.headers.fns suiteUnitTy
-    (Ctx.positional (held verifier foundPair.1.ins)))
-  hSV : buildStmtAbsorbItems a suite suiteUnitTy verifier prover verifier (.inr rfl)
+    (Ctx.positional (held prep.verifier foundPair.1.ins)))
+  hSV : buildStmtAbsorbItems a suite suiteUnitTy prep.verifier prep.prover prep.verifier (.inr rfl)
     foundPair.1.ins declaration.key = .ok stmtV
-  cPClauses : List (Clause V a.program.headers prover stateTy)
-  cVClauses : List (Clause V a.program.headers verifier stateTy)
-  sClauses : List (Clause V a.program.headers prover .nat)
-  hCC : buildConstructionClauses a suite stateTy suiteUnitTy absorbRef prover verifier
-    declaration.samples declaration.key (foundPair.1.shape.events [] id)
-    (foundPair.1.shape.eventsWithAbsorb prover verifier [] id false) =
-    .ok (cPClauses, cVClauses, sClauses)
-  layP : Layer V a.program.headers prover foundPair.1.ins
-  layV : Layer V a.program.headers verifier foundPair.1.ins
-  hLay : buildLayoutLayers a foundPair.1 layout prover verifier declaration.key
-    (foundPair.1.shape.events [] id) = .ok (layP, layV)
+  cPClauses : List (Clause V a.program.headers prep.prover stateTy)
+  cVClauses : List (Clause V a.program.headers prep.verifier stateTy)
+  hCC : buildConstructionClauses a suite stateTy suiteUnitTy absorbRef prep.prover prep.verifier
+    declaration.key (foundPair.1.shape.events [] id)
+    (foundPair.1.shape.eventsWithAbsorb prep.prover prep.verifier [] id false) =
+    .ok (cPClauses, cVClauses)
+
+abbrev DeployDerived.prover {enc : VocabEncoder V} {a : Admitted V} {declaration : Declaration}
+    (w : DeployDerived enc a declaration) : Role := w.prep.prover
+abbrev DeployDerived.verifier {enc : VocabEncoder V} {a : Admitted V} {declaration : Declaration}
+    (w : DeployDerived enc a declaration) : Role := w.prep.verifier
+abbrev DeployDerived.hPV {enc : VocabEncoder V} {a : Admitted V} {declaration : Declaration}
+    (w : DeployDerived enc a declaration) := w.prep.hPV
+abbrev DeployDerived.hNe {enc : VocabEncoder V} {a : Admitted V} {declaration : Declaration}
+    (w : DeployDerived enc a declaration) := w.prep.hNe
+abbrev DeployDerived.hScope {enc : VocabEncoder V} {a : Admitted V} {declaration : Declaration}
+    (w : DeployDerived enc a declaration) := w.prep.hScope
+abbrev DeployDerived.layout {enc : VocabEncoder V} {a : Admitted V} {declaration : Declaration}
+    (w : DeployDerived enc a declaration) := w.prep.layout
+abbrev DeployDerived.hLayOpt {enc : VocabEncoder V} {a : Admitted V} {declaration : Declaration}
+    (w : DeployDerived enc a declaration) := w.prep.hLayOpt
+abbrev DeployDerived.sessBytes {enc : VocabEncoder V} {a : Admitted V} {declaration : Declaration}
+    (w : DeployDerived enc a declaration) := w.prep.sessBytes
+abbrev DeployDerived.hSessBytes {enc : VocabEncoder V} {a : Admitted V} {declaration : Declaration}
+    (w : DeployDerived enc a declaration) := w.prep.hSessBytes
+abbrev DeployDerived.hSess {enc : VocabEncoder V} {a : Admitted V} {declaration : Declaration}
+    (w : DeployDerived enc a declaration) := w.prep.hSess
+abbrev DeployDerived.sampLayer {enc : VocabEncoder V} {a : Admitted V} {declaration : Declaration}
+    (w : DeployDerived enc a declaration) := w.prep.sampLayer
+abbrev DeployDerived.hSamp {enc : VocabEncoder V} {a : Admitted V} {declaration : Declaration}
+    (w : DeployDerived enc a declaration) := w.prep.hSamp
+abbrev DeployDerived.layP {enc : VocabEncoder V} {a : Admitted V} {declaration : Declaration}
+    (w : DeployDerived enc a declaration) := w.prep.layP
+abbrev DeployDerived.layV {enc : VocabEncoder V} {a : Admitted V} {declaration : Declaration}
+    (w : DeployDerived enc a declaration) := w.prep.layV
+abbrev DeployDerived.hLay {enc : VocabEncoder V} {a : Admitted V} {declaration : Declaration}
+    (w : DeployDerived enc a declaration) := w.prep.hLay
 
 abbrev DeployDerived.toDeployed {enc : VocabEncoder V} {a : Admitted V} {declaration : Declaration}
     (w : DeployDerived enc a declaration) : Deployed V :=
   let hIsSome : (a.program.findProtocol declaration.entry).isSome := by rw [w.hFound]; rfl
   let hEntryEq : ((a.program.findProtocol declaration.entry).get hIsSome).1 = w.foundPair.1 := by
     simp [w.hFound]
-  let conP : Layer V a.program.headers w.prover w.foundPair.1.ins := {
+  let conP : Layer V a.program.headers w.prep.prover w.foundPair.1.ins := {
     line := .construction, state := w.stateTy, takes := [], gives := [],
     clauses := w.cPClauses, again := restoreAgain w.stateTy,
-    start := constructionStart w.sessBytes w.hSessBytes w.startRef w.absorbRef w.stmtP,
+    start := constructionStart w.prep.sessBytes w.prep.hSessBytes w.startRef w.absorbRef w.stmtP,
     finish := emptyFinish w.stateTy
   }
-  let conV : Layer V a.program.headers w.verifier w.foundPair.1.ins := {
+  let conV : Layer V a.program.headers w.prep.verifier w.foundPair.1.ins := {
     line := .construction, state := w.stateTy, takes := [], gives := [],
     clauses := w.cVClauses, again := restoreAgain w.stateTy,
-    start := constructionStart w.sessBytes w.hSessBytes w.startRef w.absorbRef w.stmtV,
+    start := constructionStart w.prep.sessBytes w.prep.hSessBytes w.startRef w.absorbRef w.stmtV,
     finish := emptyFinish w.stateTy
   }
-  let proverStack : List (Layer V a.program.headers w.prover w.foundPair.1.ins) :=
-    match declaration.samples with
-    | none => [conP, w.layP]
-    | some _ =>
-        [{ line := .samples, state := .nat, takes := [], gives := [],
-           clauses := w.sClauses, again := attemptNumAgain,
-           start := samplesStart, finish := emptyFinish .nat }, conP, w.layP]
+  let proverStack : List (Layer V a.program.headers w.prep.prover w.foundPair.1.ins) :=
+    match w.prep.sampLayer with
+    | none => [conP, w.prep.layP]
+    | some sampP => [sampP, conP, w.prep.layP]
   { admitted := a
     declaration := declaration
     found := hIsSome
     stack := fun r =>
-      if hP : r = w.prover then hP ▸ hEntryEq ▸ proverStack
-      else if hV : r = w.verifier then hV ▸ hEntryEq ▸ [conV, w.layV]
+      if hP : r = w.prep.prover then hP ▸ (congrArg ProtocolHeader.ins hEntryEq) ▸ proverStack
+      else if hV : r = w.prep.verifier then hV ▸ (congrArg ProtocolHeader.ins hEntryEq) ▸ [conV, w.prep.layV]
       else [] }
 
 /-- Structured witness for a successful `deploy` call, eliminating all nested checks once. -/
@@ -680,6 +671,11 @@ inductive DeployOk (enc : VocabEncoder V) (a : Admitted V) (declaration : Declar
   | interactive (w : DeployInteractive a declaration) (hEq : d = w.toDeployed)
   | authored (w : DeployAuthored a declaration) (hEq : d = w.toDeployed)
   | derived (w : DeployDerived enc a declaration) (hEq : d = w.toDeployed)
+
+theorem eqRec_hdr_eq_ins {V : Vocabulary} {hs : Headers V} {r : Role}
+    {h₁ h₂ : ProtocolHeader V} (h : h₁ = h₂) (ls : List (Layer V hs r h₂.ins)) :
+    (h ▸ ls : List (Layer V hs r h₁.ins)) = (congrArg ProtocolHeader.ins h ▸ ls) := by
+  subst h; rfl
 
 /-- Unpack any successful `deploy` result into its exact structured witness (`DeployOk`). -/
 def deploy_ok_elim (enc : VocabEncoder V) (a : Admitted V) (declaration : Declaration)
@@ -695,17 +691,26 @@ def deploy_ok_elim (enc : VocabEncoder V) (a : Admitted V) (declaration : Declar
     | true =>
         rw [hSupp] at h
         simp only [Bool.not_true, Bool.false_eq_true, ↓reduceIte] at h
-        cases hScope : checkScope foundPair.1 declaration with
-        | false => rw [hScope] at h; cases h
-        | true =>
-            rw [hScope] at h
-            simp only [Bool.not_true, Bool.false_eq_true, ↓reduceIte] at h
-            cases hCon : declaration.construction with
-            | interactive =>
-                rw [hCon] at h
-                exact .interactive ⟨foundPair, hFound, hSupp, hScope, hCon⟩ (Except.ok.inj h).symm
-            | authored =>
-                rw [hCon] at h; dsimp only at h
+        cases hCon : declaration.construction with
+        | interactive =>
+            rw [hCon] at h; dsimp only at h
+            cases hInt : checkInteractive declaration with
+            | false => rw [hInt] at h; cases h
+            | true =>
+                rw [hInt] at h
+                simp only [Bool.not_true, Bool.false_eq_true, ↓reduceIte] at h
+                cases hScope : checkInteractiveScope foundPair.1 declaration with
+                | false => rw [hScope] at h; cases h
+                | true =>
+                    rw [hScope] at h
+                    simp only [Bool.not_true, Bool.false_eq_true, ↓reduceIte] at h
+                    exact .interactive ⟨foundPair, hFound, hSupp, hCon, hInt, hScope⟩ (Except.ok.inj h).symm
+        | authored =>
+            rw [hCon] at h; dsimp only at h
+            cases hSamp : declaration.samples with
+            | some _ => rw [hSamp] at h; cases h
+            | none =>
+                rw [hSamp] at h; simp only [Option.isNone_none, Bool.not_true, Bool.false_eq_true, ↓reduceIte] at h
                 cases hPV : proverAndVerifier foundPair.1 declaration with
                 | none => rw [hPV] at h; cases h
                 | some pv =>
@@ -713,129 +718,158 @@ def deploy_ok_elim (enc : VocabEncoder V) (a : Admitted V) (declaration : Declar
                     by_cases hEqPV : pv.1 = pv.2
                     · rw [dite_eq_left hEqPV] at h; cases h
                     · rw [dite_eq_right hEqPV] at h
-                      cases hAuth : checkAuthoredEvents a pv.1 pv.2 declaration.samples
-                          declaration.key (foundPair.1.shape.events [] id) with
-                      | error _ => rw [hAuth] at h; cases h
-                      | ok sClauses =>
-                          rw [hAuth] at h; dsimp only [bind, Except.bind] at h
-                          cases hLayOpt : declaration.layout with
-                          | none => rw [hLayOpt] at h; cases h
-                          | some layout =>
-                              rw [hLayOpt] at h; dsimp only at h
-                              cases hLay : buildLayoutLayers a foundPair.1 layout pv.1 pv.2
-                                  declaration.key (foundPair.1.shape.events [] id) with
-                              | error _ => rw [hLay] at h; cases h
-                              | ok lays =>
-                                  rw [hLay] at h
-                                  exact .authored ⟨foundPair, hFound, hSupp, hScope, hCon, pv.1, pv.2,
-                                    hPV, hEqPV, sClauses, hAuth, layout, hLayOpt, lays.1, lays.2, hLay⟩
-                                    (Except.ok.inj h).symm
-            | derived suite sessionTag =>
-                rw [hCon] at h; dsimp only at h
-                cases hPV : proverAndVerifier foundPair.1 declaration with
-                | none => rw [hPV] at h; cases h
-                | some pv =>
-                    rw [hPV] at h; dsimp only at h
-                    by_cases hEqPV : pv.1 = pv.2
-                    · rw [dite_eq_left hEqPV] at h; cases h
-                    · rw [dite_eq_right hEqPV] at h
-                      cases hLayOpt : declaration.layout with
-                      | none => rw [hLayOpt] at h; cases h
-                      | some layout =>
-                          rw [hLayOpt] at h; dsimp only at h
-                          cases hStart : findSuiteStart a suite with
-                          | none => rw [hStart] at h; cases h
-                          | some stPair =>
-                              rw [hStart] at h; dsimp only at h
-                              cases hAbs : findSuiteAbsorb a suite stPair.1 with
-                              | none => rw [hAbs] at h; cases h
-                              | some absPair =>
-                                  rw [hAbs] at h; dsimp only at h
-                                  cases hSess : resolveSessionBytes enc a declaration sessionTag with
-                                  | error _ => rw [hSess] at h; cases h
-                                  | ok sess =>
-                                      rw [hSess] at h; dsimp only [bind, Except.bind] at h
-                                      cases hSP : buildStmtAbsorbItems a suite absPair.1 pv.1 pv.1
-                                          pv.2 (.inl rfl) foundPair.1.ins declaration.key with
-                                      | error _ => rw [hSP] at h; cases h
-                                      | ok stmtP =>
-                                          rw [hSP] at h; dsimp only [bind, Except.bind] at h
-                                          cases hSV : buildStmtAbsorbItems a suite absPair.1 pv.2
-                                              pv.1 pv.2 (.inr rfl) foundPair.1.ins declaration.key with
-                                          | error _ => rw [hSV] at h; cases h
-                                          | ok stmtV =>
-                                              rw [hSV] at h; dsimp only [bind, Except.bind] at h
-                                              cases hCC : buildConstructionClauses a suite stPair.1
-                                                  absPair.1 absPair.2 pv.1 pv.2 declaration.samples
-                                                  declaration.key (foundPair.1.shape.events [] id)
-                                                  (foundPair.1.shape.eventsWithAbsorb pv.1 pv.2 [] id false) with
-                                              | error _ => rw [hCC] at h; cases h
-                                              | ok cc =>
-                                                  rw [hCC] at h; dsimp only [bind, Except.bind] at h
-                                                  cases hLay : buildLayoutLayers a foundPair.1 layout
-                                                      pv.1 pv.2 declaration.key
-                                                      (foundPair.1.shape.events [] id) with
-                                                  | error _ => rw [hLay] at h; cases h
-                                                  | ok lays =>
-                                                      rw [hLay] at h
-                                                      exact .derived ⟨foundPair, hFound, hSupp, hScope,
-                                                        suite, sessionTag, hCon, pv.1, pv.2, hPV, hEqPV,
-                                                        layout, hLayOpt, stPair.1, stPair.2, hStart,
-                                                        absPair.1, absPair.2, hAbs, sess.1, sess.2, hSess,
-                                                        stmtP, hSP, stmtV, hSV, cc.1, cc.2.1, cc.2.2, hCC,
-                                                        lays.1, lays.2, hLay⟩ (Except.ok.inj h).symm
+                      cases hScope : checkNonInteractiveScope foundPair.1 pv.1 declaration with
+                      | false => rw [hScope] at h; cases h
+                      | true =>
+                          rw [hScope] at h
+                          simp only [Bool.not_true, Bool.false_eq_true, ↓reduceIte] at h
+                          cases hAuth : checkAuthoredEvents pv.1 pv.2
+                              declaration.key (foundPair.1.shape.events [] id) with
+                          | error _ => rw [hAuth] at h; cases h
+                          | ok u =>
+                              cases u
+                              rw [hAuth] at h; dsimp only [bind, Except.bind] at h
+                              cases hLayOpt : declaration.layout with
+                              | none => rw [hLayOpt] at h; cases h
+                              | some layout =>
+                                  rw [hLayOpt] at h; dsimp only at h
+                                  cases hLay : buildLayoutLayers a foundPair.1 layout pv.1 pv.2
+                                      declaration.key (foundPair.1.shape.events [] id) with
+                                  | error _ => rw [hLay] at h; cases h
+                                  | ok lays =>
+                                      rw [hLay] at h
+                                      exact .authored ⟨foundPair, hFound, hSupp, hCon, hSamp, pv.1, pv.2,
+                                        hPV, hEqPV, hScope, hAuth, layout, hLayOpt, lays.1, lays.2, hLay⟩
+                                        (Except.ok.inj h).symm
+        | derived suite sessionTag =>
+            rw [hCon] at h; dsimp only at h
+            cases hPrep : prepareDerivedBody enc a declaration foundPair.1 sessionTag with
+            | error _ => rw [hPrep] at h; cases h
+            | ok prep =>
+                rw [hPrep] at h; dsimp only [bind, Except.bind] at h
+                cases prep with
+                | mk prover verifier hPV hNe hScope layout hLayOpt sessBytes hSessBytes hSess
+                    sampLayer hSamp layP layV hLay =>
+                    dsimp only at h
+                    cases hStart : findSuiteStart a suite with
+                    | none => rw [hStart] at h; cases h
+                    | some stPair =>
+                        rw [hStart] at h; dsimp only at h
+                        cases hAbs : findSuiteAbsorb a suite stPair.1 with
+                        | none => rw [hAbs] at h; cases h
+                        | some absPair =>
+                            rw [hAbs] at h; dsimp only at h
+                            cases hSP : buildStmtAbsorbItems a suite absPair.1 prover prover
+                                verifier (.inl rfl) foundPair.1.ins declaration.key with
+                            | error _ => rw [hSP] at h; cases h
+                            | ok stmtP =>
+                                rw [hSP] at h; dsimp only [bind, Except.bind] at h
+                                cases hSV : buildStmtAbsorbItems a suite absPair.1 verifier
+                                    prover verifier (.inr rfl) foundPair.1.ins declaration.key with
+                                | error _ => rw [hSV] at h; cases h
+                                | ok stmtV =>
+                                    rw [hSV] at h; dsimp only [bind, Except.bind] at h
+                                    cases hCC : buildConstructionClauses a suite stPair.1
+                                        absPair.1 absPair.2 prover verifier
+                                        declaration.key (foundPair.1.shape.events [] id)
+                                        (foundPair.1.shape.eventsWithAbsorb prover verifier [] id false) with
+                                    | error _ => rw [hCC] at h; cases h
+                                    | ok cc =>
+                                        rw [hCC] at h
+                                        have hEqD : d = (DeployDerived.toDeployed
+                                            ⟨foundPair, hFound, hSupp, suite, sessionTag, hCon,
+                                              ⟨prover, verifier, hPV, hNe, hScope, layout, hLayOpt,
+                                               sessBytes, hSessBytes, hSess, sampLayer, hSamp,
+                                               layP, layV, hLay⟩, hPrep,
+                                              stPair.1, stPair.2, hStart, absPair.1, absPair.2, hAbs,
+                                              stmtP, hSP, stmtV, hSV, cc.1, cc.2, hCC⟩) := by
+                                          have he := (Except.ok.inj h).symm
+                                          cases he
+                                          congr 1
+                                          funext r
+                                          by_cases hP : r = prover
+                                          · subst hP; simp only [↓reduceDIte]
+                                            cases sampLayer <;> (refine eqRec_hdr_eq_ins ?_ _; simp [hFound])
+                                          · simp only [hP, ↓reduceDIte]
+                                            by_cases hV : r = verifier
+                                            · subst hV; simp only [↓reduceDIte]
+                                              refine eqRec_hdr_eq_ins ?_ _; simp [hFound]
+                                            · simp only [hV, ↓reduceDIte]
+                                        exact .derived ⟨foundPair, hFound, hSupp, suite, sessionTag, hCon,
+                                          ⟨prover, verifier, hPV, hNe, hScope, layout, hLayOpt,
+                                           sessBytes, hSessBytes, hSess, sampLayer, hSamp,
+                                           layP, layV, hLay⟩, hPrep,
+                                          stPair.1, stPair.2, hStart, absPair.1, absPair.2, hAbs,
+                                          stmtP, hSP, stmtV, hSV, cc.1, cc.2, hCC⟩ hEqD
 
-/-- Structured witness for a successful `deployIdeal` call (pure collision-free ideal RO path). -/
+/-- Structured witness for a successful `deployIdeal` call (pure collision-free ideal
+random-oracle path). -/
 structure DeployIdealWitness (enc : VocabEncoder V) (serviceKey : Key) (a : Admitted V)
     (declaration : Declaration) where
   foundPair : (hdr : ProtocolHeader V) × Member a.program.headers.protocols hdr
   hFound : a.program.findProtocol declaration.entry = some foundPair
   hSupp : checkDeclarationSupported foundPair.1 declaration = true
-  hScope : checkScope foundPair.1 declaration = true
   suite : ModuleRef
   sessionTag : Option (List Nat)
   hCon : declaration.construction = .derived suite sessionTag
-  prover : Role
-  verifier : Role
-  hPV : proverAndVerifier foundPair.1 declaration = some (prover, verifier)
-  hNe : prover ≠ verifier
-  layout : Layout
-  hLayOpt : declaration.layout = some layout
+  prep : DerivedPrepared enc a declaration foundPair.1 sessionTag
+  hPrep : prepareDerivedBody enc a declaration foundPair.1 sessionTag = .ok prep
   suiteUnitTy : V.Ty
   hSuiteFree : Ty.isLinear V suiteUnitTy = false
   hUnit : findSuiteUnit a suite = some ⟨suiteUnitTy, ⟨hSuiteFree⟩⟩
-  sessBytes : List Nat
-  hSessBytes : ∀ b, b ∈ sessBytes → b < 256
-  hSess : resolveSessionBytes enc a declaration sessionTag = .ok ⟨sessBytes, hSessBytes⟩
   stmtV : List (StmtAbsorbItem V a.program.headers.fns suiteUnitTy
-    (Ctx.positional (held verifier foundPair.1.ins)))
-  hSV : buildStmtAbsorbItems a suite suiteUnitTy verifier prover verifier (.inr rfl)
+    (Ctx.positional (held prep.verifier foundPair.1.ins)))
+  hSV : buildStmtAbsorbItems a suite suiteUnitTy prep.verifier prep.prover prep.verifier (.inr rfl)
     foundPair.1.ins declaration.key = .ok stmtV
-  idealVClauses : List (Clause V a.program.headers verifier (idealPathTy suiteUnitTy))
-  hIV : buildIdealVerifierClauses a suite suiteUnitTy hSuiteFree serviceKey prover verifier
+  idealVClauses : List (Clause V a.program.headers prep.verifier (idealPathTy suiteUnitTy))
+  hIV : buildIdealVerifierClauses a suite suiteUnitTy hSuiteFree serviceKey prep.prover prep.verifier
     declaration.key (foundPair.1.shape.events [] id)
-    (foundPair.1.shape.eventsWithAbsorb prover verifier [] id false) = .ok idealVClauses
-  layP : Layer V a.program.headers prover foundPair.1.ins
-  layV : Layer V a.program.headers verifier foundPair.1.ins
-  hLay : buildLayoutLayers a foundPair.1 layout prover verifier declaration.key
-    (foundPair.1.shape.events [] id) = .ok (layP, layV)
+    (foundPair.1.shape.eventsWithAbsorb prep.prover prep.verifier [] id false) = .ok idealVClauses
+
+abbrev DeployIdealWitness.prover {enc : VocabEncoder V} {serviceKey : Key} {a : Admitted V}
+    {declaration : Declaration} (w : DeployIdealWitness enc serviceKey a declaration) := w.prep.prover
+abbrev DeployIdealWitness.verifier {enc : VocabEncoder V} {serviceKey : Key} {a : Admitted V}
+    {declaration : Declaration} (w : DeployIdealWitness enc serviceKey a declaration) := w.prep.verifier
+abbrev DeployIdealWitness.hPV {enc : VocabEncoder V} {serviceKey : Key} {a : Admitted V}
+    {declaration : Declaration} (w : DeployIdealWitness enc serviceKey a declaration) := w.prep.hPV
+abbrev DeployIdealWitness.hNe {enc : VocabEncoder V} {serviceKey : Key} {a : Admitted V}
+    {declaration : Declaration} (w : DeployIdealWitness enc serviceKey a declaration) := w.prep.hNe
+abbrev DeployIdealWitness.hScope {enc : VocabEncoder V} {serviceKey : Key} {a : Admitted V}
+    {declaration : Declaration} (w : DeployIdealWitness enc serviceKey a declaration) := w.prep.hScope
+abbrev DeployIdealWitness.layout {enc : VocabEncoder V} {serviceKey : Key} {a : Admitted V}
+    {declaration : Declaration} (w : DeployIdealWitness enc serviceKey a declaration) := w.prep.layout
+abbrev DeployIdealWitness.hLayOpt {enc : VocabEncoder V} {serviceKey : Key} {a : Admitted V}
+    {declaration : Declaration} (w : DeployIdealWitness enc serviceKey a declaration) := w.prep.hLayOpt
+abbrev DeployIdealWitness.sessBytes {enc : VocabEncoder V} {serviceKey : Key} {a : Admitted V}
+    {declaration : Declaration} (w : DeployIdealWitness enc serviceKey a declaration) := w.prep.sessBytes
+abbrev DeployIdealWitness.hSessBytes {enc : VocabEncoder V} {serviceKey : Key} {a : Admitted V}
+    {declaration : Declaration} (w : DeployIdealWitness enc serviceKey a declaration) := w.prep.hSessBytes
+abbrev DeployIdealWitness.hSess {enc : VocabEncoder V} {serviceKey : Key} {a : Admitted V}
+    {declaration : Declaration} (w : DeployIdealWitness enc serviceKey a declaration) := w.prep.hSess
+abbrev DeployIdealWitness.layP {enc : VocabEncoder V} {serviceKey : Key} {a : Admitted V}
+    {declaration : Declaration} (w : DeployIdealWitness enc serviceKey a declaration) := w.prep.layP
+abbrev DeployIdealWitness.layV {enc : VocabEncoder V} {serviceKey : Key} {a : Admitted V}
+    {declaration : Declaration} (w : DeployIdealWitness enc serviceKey a declaration) := w.prep.layV
+abbrev DeployIdealWitness.hLay {enc : VocabEncoder V} {serviceKey : Key} {a : Admitted V}
+    {declaration : Declaration} (w : DeployIdealWitness enc serviceKey a declaration) := w.prep.hLay
 
 abbrev DeployIdealWitness.toDeployed {enc : VocabEncoder V} {serviceKey : Key} {a : Admitted V}
     {declaration : Declaration} (w : DeployIdealWitness enc serviceKey a declaration) : Deployed V :=
   let hIsSome : (a.program.findProtocol declaration.entry).isSome := by rw [w.hFound]; rfl
   let hEntryEq : ((a.program.findProtocol declaration.entry).get hIsSome).1 = w.foundPair.1 := by
     simp [w.hFound]
-  let idealConV : Layer V a.program.headers w.verifier w.foundPair.1.ins := {
+  let idealConV : Layer V a.program.headers w.prep.verifier w.foundPair.1.ins := {
     line := .construction, state := idealPathTy w.suiteUnitTy, takes := [], gives := [],
     clauses := w.idealVClauses, again := restoreAgain (idealPathTy w.suiteUnitTy),
-    start := idealStart w.hSuiteFree w.sessBytes w.hSessBytes w.stmtV,
+    start := idealStart w.hSuiteFree w.prep.sessBytes w.prep.hSessBytes w.stmtV,
     finish := emptyFinish (idealPathTy w.suiteUnitTy)
   }
   { admitted := a
     declaration := declaration
     found := hIsSome
     stack := fun r =>
-      if hV : r = w.verifier then hV ▸ hEntryEq ▸ [idealConV, w.layV] else [] }
+      if hV : r = w.prep.verifier then hV ▸ (congrArg ProtocolHeader.ins hEntryEq) ▸ [idealConV, w.prep.layV]
+      else [] }
 
 /-- Packed witness + equality for `deployIdeal ... = .ok d`. -/
 structure DeployIdealOk (enc : VocabEncoder V) (serviceKey : Key) (a : Admitted V)
@@ -858,57 +892,56 @@ def deployIdeal_ok_elim (enc : VocabEncoder V) (serviceKey : Key) (a : Admitted 
     | true =>
         rw [hSupp] at h
         simp only [Bool.not_true, Bool.false_eq_true, ↓reduceIte] at h
-        cases hScope : checkScope foundPair.1 declaration with
-        | false => rw [hScope] at h; cases h
-        | true =>
-            rw [hScope] at h
-            simp only [Bool.not_true, Bool.false_eq_true, ↓reduceIte] at h
-            cases hCon : declaration.construction with
-            | interactive => rw [hCon] at h; cases h
-            | authored => rw [hCon] at h; cases h
-            | derived suite sessionTag =>
-                rw [hCon] at h; dsimp only at h
-                cases hPV : proverAndVerifier foundPair.1 declaration with
-                | none => rw [hPV] at h; cases h
-                | some pv =>
-                    rw [hPV] at h; dsimp only at h
-                    by_cases hEqPV : pv.1 = pv.2
-                    · rw [dite_eq_left hEqPV] at h; cases h
-                    · rw [dite_eq_right hEqPV] at h
-                      cases hLayOpt : declaration.layout with
-                      | none => rw [hLayOpt] at h; cases h
-                      | some layout =>
-                          rw [hLayOpt] at h; dsimp only at h
-                          cases hUnit : findSuiteUnit a suite with
-                          | none => rw [hUnit] at h; cases h
-                          | some uPair =>
-                              rw [hUnit] at h; dsimp only at h
-                              cases hSess : resolveSessionBytes enc a declaration sessionTag with
-                              | error _ => rw [hSess] at h; cases h
-                              | ok sess =>
-                                  rw [hSess] at h; dsimp only [bind, Except.bind] at h
-                                  cases hSV : buildStmtAbsorbItems a suite uPair.1 pv.2 pv.1 pv.2
-                                      (.inr rfl) foundPair.1.ins declaration.key with
-                                  | error _ => rw [hSV] at h; cases h
-                                  | ok stmtV =>
-                                      rw [hSV] at h; dsimp only [bind, Except.bind] at h
-                                      cases hIV : buildIdealVerifierClauses a suite uPair.1
-                                          uPair.2.down serviceKey pv.1 pv.2 declaration.key
-                                          (foundPair.1.shape.events [] id)
-                                          (foundPair.1.shape.eventsWithAbsorb pv.1 pv.2 [] id false) with
-                                      | error _ => rw [hIV] at h; cases h
-                                      | ok idealVClauses =>
-                                          rw [hIV] at h; dsimp only [bind, Except.bind] at h
-                                          cases hLay : buildLayoutLayers a foundPair.1 layout pv.1
-                                              pv.2 declaration.key (foundPair.1.shape.events [] id) with
-                                          | error _ => rw [hLay] at h; cases h
-                                          | ok lays =>
-                                              rw [hLay] at h
-                                              exact ⟨⟨foundPair, hFound, hSupp, hScope, suite, sessionTag,
-                                                hCon, pv.1, pv.2, hPV, hEqPV, layout, hLayOpt, uPair.1,
-                                                uPair.2.down, hUnit, sess.1, sess.2, hSess, stmtV, hSV,
-                                                idealVClauses, hIV, lays.1, lays.2, hLay⟩,
-                                                (Except.ok.inj h).symm⟩
+        cases hCon : declaration.construction with
+        | interactive => rw [hCon] at h; cases h
+        | authored => rw [hCon] at h; cases h
+        | derived suite sessionTag =>
+            rw [hCon] at h; dsimp only at h
+            cases hPrep : prepareDerivedBody enc a declaration foundPair.1 sessionTag with
+            | error _ => rw [hPrep] at h; cases h
+            | ok prep =>
+                rw [hPrep] at h; dsimp only [bind, Except.bind] at h
+                cases prep with
+                | mk prover verifier hPV hNe hScope layout hLayOpt sessBytes hSessBytes hSess
+                    sampLayer hSamp layP layV hLay =>
+                    dsimp only at h
+                    cases hUnit : findSuiteUnit a suite with
+                    | none => rw [hUnit] at h; cases h
+                    | some uPair =>
+                        rw [hUnit] at h; dsimp only at h
+                        cases hSV : buildStmtAbsorbItems a suite uPair.1 verifier prover verifier
+                            (.inr rfl) foundPair.1.ins declaration.key with
+                        | error _ => rw [hSV] at h; cases h
+                        | ok stmtV =>
+                            rw [hSV] at h; dsimp only [bind, Except.bind] at h
+                            cases hIV : buildIdealVerifierClauses a suite uPair.1
+                                uPair.2.down serviceKey prover verifier declaration.key
+                                (foundPair.1.shape.events [] id)
+                                (foundPair.1.shape.eventsWithAbsorb prover verifier [] id false) with
+                            | error _ => rw [hIV] at h; cases h
+                            | ok idealVClauses =>
+                                rw [hIV] at h
+                                have hEqD : d = (DeployIdealWitness.toDeployed
+                                    ⟨foundPair, hFound, hSupp, suite, sessionTag, hCon,
+                                      ⟨prover, verifier, hPV, hNe, hScope, layout, hLayOpt,
+                                       sessBytes, hSessBytes, hSess, sampLayer, hSamp,
+                                       layP, layV, hLay⟩, hPrep,
+                                      uPair.1, uPair.2.down, hUnit, stmtV, hSV,
+                                      idealVClauses, hIV⟩) := by
+                                  have he := (Except.ok.inj h).symm
+                                  cases he
+                                  congr 1
+                                  funext r
+                                  by_cases hV : r = verifier
+                                  · subst hV; simp only [↓reduceDIte]
+                                    refine eqRec_hdr_eq_ins ?_ _; simp [hFound]
+                                  · simp only [hV, ↓reduceDIte]
+                                exact ⟨⟨foundPair, hFound, hSupp, suite, sessionTag, hCon,
+                                  ⟨prover, verifier, hPV, hNe, hScope, layout, hLayOpt,
+                                   sessBytes, hSessBytes, hSess, sampLayer, hSamp,
+                                   layP, layV, hLay⟩, hPrep,
+                                  uPair.1, uPair.2.down, hUnit, stmtV, hSV,
+                                  idealVClauses, hIV⟩, hEqD⟩
 
 end Elimination
 
@@ -967,6 +1000,44 @@ theorem buildLayoutLayers_io {a : Admitted V} {entry : ProtocolHeader V} {layout
                 exact ⟨w.unitTy, rfl, rfl, rfl, rfl⟩
           · cases hComp
 
+/-- Every `samples` layer produced by `buildSamplesLayer` takes and gives nothing. -/
+theorem buildSamplesLayer_io {a : Admitted V} {entry : ProtocolHeader V} {prover : Role}
+    {samplesKey : Option Key} {sessBytes : List Nat} {hSess : ∀ b, b ∈ sessBytes → b < 256}
+    {declKey : Key} {events : List (ShapeEvent V)}
+    {sampP : Layer V a.program.headers prover entry.ins}
+    (h : buildSamplesLayer a entry prover samplesKey sessBytes hSess declKey events = .ok (some sampP)) :
+    sampP.takes = [] ∧ sampP.gives = [] := by
+  unfold buildSamplesLayer at h
+  cases samplesKey with
+  | none => cases h
+  | some sKey =>
+      dsimp only at h
+      cases hF : a.program.find sKey with
+      | none => rw [hF] at h; cases h
+      | some found =>
+          rw [hF] at h
+          cases found with
+          | protocol _ => cases h
+          | fn _ =>
+              dsimp only at h
+              split at h
+              · cases hC : buildSamplesClauses a (held prover entry.ins) _ prover sKey sessBytes hSess declKey events with
+                | error _ => rw [hC] at h; cases h
+                | ok cs => rw [hC] at h; cases h; exact ⟨rfl, rfl⟩
+              · cases h
+
+theorem stack_takes_cast_ins {hs : Headers V} {ins₁ ins₂ : List (LTy V)}
+    (hIns : ins₁ = ins₂) {r : Role}
+    (layers : List (Layer V hs r ins₂)) :
+    Stack.Takes (hIns ▸ layers) = Stack.Takes layers := by
+  subst hIns; rfl
+
+theorem stack_gives_cast_ins {hs : Headers V} {ins₁ ins₂ : List (LTy V)}
+    (hIns : ins₁ = ins₂) {r : Role}
+    (layers : List (Layer V hs r ins₂)) :
+    Stack.Gives (hIns ▸ layers) = Stack.Gives layers := by
+  subst hIns; rfl
+
 /-- Prover's stack takes nothing from outside and its output types equal the verifier's input types. -/
 theorem deploy_matches (enc : VocabEncoder V) (a : Admitted V) (declaration : Declaration)
     (d : Deployed V) (h : deploy enc a declaration = .ok d)
@@ -987,7 +1058,7 @@ theorem deploy_matches (enc : VocabEncoder V) (a : Admitted V) (declaration : De
           stack_takes_cast_hdr (by simp [w.hFound]),
           stack_gives_cast_hdr (by simp [w.hFound]),
           stack_takes_cast_hdr (by simp [w.hFound])]
-      cases declaration.samples <;> simp [Stack.Takes, Stack.Gives, hPt, hPg, hVt]
+      simp [Stack.Takes, Stack.Gives, hPt, hPg, hVt]
   | derived w hEq =>
       subst hEq
       have hRolesEq : proverAndVerifier w.foundPair.1 declaration = some (prover, verifier) := by
@@ -997,10 +1068,14 @@ theorem deploy_matches (enc : VocabEncoder V) (a : Admitted V) (declaration : De
       have hNeSym : w.verifier ≠ w.prover := Ne.symm w.hNe
       dsimp only
       rw [dite_eq_left rfl, dite_eq_right hNeSym, dite_eq_left rfl,
-          stack_takes_cast_hdr (by simp [w.hFound]),
-          stack_gives_cast_hdr (by simp [w.hFound]),
-          stack_takes_cast_hdr (by simp [w.hFound])]
-      cases declaration.samples <;> simp [Stack.Takes, Stack.Gives, hPt, hPg, hVt]
+          stack_takes_cast_ins (by simp [w.hFound]),
+          stack_gives_cast_ins (by simp [w.hFound]),
+          stack_takes_cast_ins (by simp [w.hFound])]
+      cases hS : w.prep.sampLayer with
+      | none => simp [Stack.Takes, Stack.Gives, hPt, hPg, hVt]
+      | some sampP =>
+          obtain ⟨hSt, hSg⟩ := buildSamplesLayer_io (hS ▸ w.prep.hSamp)
+          simp [Stack.Takes, Stack.Gives, hSt, hSg, hPt, hPg, hVt]
 
 /-- Every accepted deployment satisfies `Deployed.Scoped`. -/
 theorem deploy_scoped (enc : VocabEncoder V) (a : Admitted V) (declaration : Declaration)
@@ -1008,21 +1083,21 @@ theorem deploy_scoped (enc : VocabEncoder V) (a : Admitted V) (declaration : Dec
   cases deploy_ok_elim enc a declaration d h with
   | interactive w hEq =>
       subst hEq; unfold Deployed.Scoped Deployed.entry
-      simpa [w.hFound] using checkScope_sound w.foundPair.1 declaration w.hScope
+      simpa [w.hFound] using (checkInteractiveScope_sound w.foundPair.1 declaration w.hScope).2
   | authored w hEq =>
       subst hEq; unfold Deployed.Scoped Deployed.entry
-      simpa [w.hFound] using checkScope_sound w.foundPair.1 declaration w.hScope
+      simpa [w.hFound] using checkNonInteractiveScope_sound w.foundPair.1 w.prover declaration w.hScope
   | derived w hEq =>
       subst hEq; unfold Deployed.Scoped Deployed.entry
-      simpa [w.hFound] using checkScope_sound w.foundPair.1 declaration w.hScope
+      simpa [w.hFound] using checkNonInteractiveScope_sound w.foundPair.1 w.prover declaration w.hScope
 
-/-- Every accepted ideal-RO deployment satisfies `Deployed.Scoped`. -/
+/-- Every accepted ideal random-oracle deployment satisfies `Deployed.Scoped`. -/
 theorem deployIdeal_scoped (enc : VocabEncoder V) (serviceKey : Key) (a : Admitted V)
     (declaration : Declaration) (d : Deployed V)
     (h : deployIdeal enc serviceKey a declaration = .ok d) : d.Scoped := by
   let ⟨w, hEq⟩ := deployIdeal_ok_elim enc serviceKey a declaration d h
   subst hEq; unfold Deployed.Scoped Deployed.entry
-  simpa [w.hFound] using checkScope_sound w.foundPair.1 declaration w.hScope
+  simpa [w.hFound] using checkNonInteractiveScope_sound w.foundPair.1 w.prover declaration w.hScope
 
 /-- Every accepted deployment satisfies `Deployed.WellNestedRetry` unconditionally. -/
 theorem deploy_wellNestedRetry (enc : VocabEncoder V) (a : Admitted V) (declaration : Declaration)
@@ -1031,35 +1106,28 @@ theorem deploy_wellNestedRetry (enc : VocabEncoder V) (a : Admitted V) (declarat
   | interactive w hEq =>
       subst hEq
       intro bound site hret
-      have hwn := checkScope_wellNested w.foundPair.1 declaration w.hScope
+      have hNone := (checkInteractiveScope_sound w.foundPair.1 declaration w.hScope).1
       dsimp only [Deployed.retry] at hret
-      rw [hret] at hwn
-      simpa [Deployed.entry, w.hFound] using hwn
+      rw [hNone] at hret; cases hret
   | authored w hEq =>
       subst hEq
       intro bound site hret
-      have hwn := checkScope_wellNested w.foundPair.1 declaration w.hScope
-      dsimp only [Deployed.retry] at hret
-      rw [hret] at hwn
+      have hwn := checkNonInteractiveScope_wellNested w.foundPair.1 w.prover declaration w.hScope bound site hret
       simpa [Deployed.entry, w.hFound] using hwn
   | derived w hEq =>
       subst hEq
       intro bound site hret
-      have hwn := checkScope_wellNested w.foundPair.1 declaration w.hScope
-      dsimp only [Deployed.retry] at hret
-      rw [hret] at hwn
+      have hwn := checkNonInteractiveScope_wellNested w.foundPair.1 w.prover declaration w.hScope bound site hret
       simpa [Deployed.entry, w.hFound] using hwn
 
-/-- Every accepted ideal-RO deployment satisfies `Deployed.WellNestedRetry` unconditionally. -/
+/-- Every accepted ideal random-oracle deployment satisfies `Deployed.WellNestedRetry` unconditionally. -/
 theorem deployIdeal_wellNestedRetry (enc : VocabEncoder V) (serviceKey : Key) (a : Admitted V)
     (declaration : Declaration) (d : Deployed V)
     (h : deployIdeal enc serviceKey a declaration = .ok d) : d.WellNestedRetry := by
   let ⟨w, hEq⟩ := deployIdeal_ok_elim enc serviceKey a declaration d h
   subst hEq
   intro bound site hret
-  have hwn := checkScope_wellNested w.foundPair.1 declaration w.hScope
-  dsimp only [Deployed.retry] at hret
-  rw [hret] at hwn
+  have hwn := checkNonInteractiveScope_wellNested w.foundPair.1 w.prover declaration w.hScope bound site hret
   simpa [Deployed.entry, w.hFound] using hwn
 
 /-! ### Freshness (`Deployed.Fresh`) -/
@@ -1070,31 +1138,93 @@ def ClauseFresh {hs : Headers V} {r : Role} {state : V.Ty}
   ∀ key, key ∈ Term.eventKeys (fun o => RoleOp.isEvent o) c.code → key ≠ c.site.site.key →
     key ∉ events.map (·.site.key)
 
+theorem buildSamplesClauses_fresh {a : Admitted V} {heldP : List V.Ty}
+    {htfree : Tys.anyLinear V (samplesStateTys heldP) = false}
+    {prover : Role} {sKey : Key}
+    {sessBytes : List Nat} {hSess : ∀ b, b ∈ sessBytes → b < 256}
+    {declKey : Key} {events : List (ShapeEvent V)} :
+    ∀ (es : List (ShapeEvent V))
+      {cS : List (Clause V a.program.headers prover (samplesStateTy heldP))},
+      buildSamplesClauses a heldP htfree prover sKey sessBytes hSess declKey es = .ok cS →
+      ∀ c ∈ cS, ClauseFresh events c
+  | [], _, h => by cases h; exact fun _ hc => nomatch hc
+  | e :: rest, cS, h => by
+      unfold buildSamplesClauses at h
+      cases hRec : buildSamplesClauses a heldP htfree prover sKey sessBytes hSess declKey rest with
+      | error _ => rw [hRec] at h; cases h
+      | ok sRest =>
+          rw [hRec] at h; dsimp only [bind, Except.bind] at h
+          have ihS := buildSamplesClauses_fresh (events := events) rest hRec
+          cases hCls : e.cls with
+          | flow _ _ _ => rw [hCls] at h; cases h; exact ihS
+          | given gkind owner hearers =>
+              rw [hCls] at h
+              cases gkind with
+              | request _ => cases h; exact ihS
+              | coin law =>
+                  cases hearers with
+                  | cons _ _ => cases h; exact ihS
+                  | nil =>
+                      dsimp only at h
+                      split at h
+                      · cases hS : findTypedFnRef a sKey (heldP ++ [bytesTy, bytesTy, .nat, .nat]) [e.τ] with
+                        | none => rw [hS] at h; cases h
+                        | some sRef =>
+                            rw [hS] at h; cases h
+                            intro c hc
+                            rcases List.mem_cons.mp hc with rfl | hm
+                            · intro key hk _; rw [proverSampleClause_eventKeys] at hk; cases hk
+                            · exact ihS c hm
+                      · cases h; exact ihS
+
+theorem buildSamplesLayer_fresh {a : Admitted V} {entry : ProtocolHeader V} {prover : Role}
+    {samplesKey : Option Key} {sessBytes : List Nat} {hSess : ∀ b, b ∈ sessBytes → b < 256}
+    {declKey : Key} {events : List (ShapeEvent V)}
+    {sampP : Layer V a.program.headers prover entry.ins}
+    (h : buildSamplesLayer a entry prover samplesKey sessBytes hSess declKey events = .ok (some sampP)) :
+    ∀ c ∈ sampP.clauses, ClauseFresh events c := by
+  unfold buildSamplesLayer at h
+  cases samplesKey with
+  | none => cases h
+  | some sKey =>
+      dsimp only at h
+      cases hF : a.program.find sKey with
+      | none => rw [hF] at h; cases h
+      | some found =>
+          rw [hF] at h
+          cases found with
+          | protocol _ => cases h
+          | fn _ =>
+              dsimp only at h
+              split at h
+              · cases hC : buildSamplesClauses a (held prover entry.ins) _ prover sKey sessBytes hSess declKey events with
+                | error _ => rw [hC] at h; cases h
+                | ok cs => rw [hC] at h; cases h; exact buildSamplesClauses_fresh events hC
+              · cases h
+
 theorem buildConstructionClauses_go_fresh {a : Admitted V} {suite : ModuleRef}
     {stateTy unitTy : V.Ty}
     {absorbRef : TypedFnRef V a.program.headers.fns [stateTy, bytesTy, .seq unitTy none] [stateTy]}
-    {prover verifier : Role} {samplesKey : Option Key} {declKey : Key}
+    {prover verifier : Role} {declKey : Key}
     {events : List (ShapeEvent V)} :
     ∀ (idx : Nat) (es : List (ShapeEvent V × Bool))
       {cP : List (Clause V a.program.headers prover stateTy)}
-      {cV : List (Clause V a.program.headers verifier stateTy)}
-      {cS : List (Clause V a.program.headers prover .nat)},
-      buildConstructionClauses.go a suite stateTy unitTy absorbRef prover verifier samplesKey
-        declKey events idx es = .ok (cP, cV, cS) →
+      {cV : List (Clause V a.program.headers verifier stateTy)},
+      buildConstructionClauses.go a suite stateTy unitTy absorbRef prover verifier
+        declKey events idx es = .ok (cP, cV) →
       (∀ c ∈ cP, ClauseFresh events c) ∧
-      (∀ c ∈ cV, ClauseFresh events c) ∧
-      (∀ c ∈ cS, ClauseFresh events c)
-  | _, [], _, _, _, h => by
-      cases h; exact ⟨(fun _ hc => nomatch hc), (fun _ hc => nomatch hc), (fun _ hc => nomatch hc)⟩
-  | idx, (e, needAbs) :: rest, cP, cV, cS, h => by
+      (∀ c ∈ cV, ClauseFresh events c)
+  | _, [], _, _, h => by
+      cases h; exact ⟨(fun _ hc => nomatch hc), (fun _ hc => nomatch hc)⟩
+  | idx, (e, needAbs) :: rest, cP, cV, h => by
       unfold buildConstructionClauses.go at h
       cases hRec : buildConstructionClauses.go a suite stateTy unitTy absorbRef prover verifier
-          samplesKey declKey events (idx + 1) rest with
+          declKey events (idx + 1) rest with
       | error _ => rw [hRec] at h; cases h
-      | ok triple =>
+      | ok pair =>
           rw [hRec] at h
           dsimp only [bind, Except.bind] at h
-          obtain ⟨ihP, ihV, ihS⟩ := buildConstructionClauses_go_fresh (idx + 1) rest hRec
+          obtain ⟨ihP, ihV⟩ := buildConstructionClauses_go_fresh (idx + 1) rest hRec
           cases hCls : e.cls with
           | flow kind giver getters =>
               rw [hCls] at h; dsimp only at h
@@ -1102,14 +1232,14 @@ theorem buildConstructionClauses_go_fresh {a : Admitted V} {suite : ModuleRef}
               · cases needAbs with
                 | false =>
                     simp only [Bool.false_eq_true, ↓reduceIte] at h
-                    cases h; exact ⟨ihP, ihV, ihS⟩
+                    cases h; exact ⟨ihP, ihV⟩
                 | true =>
                     simp only [↓reduceIte] at h
                     cases hEnc : findSuiteEncode a suite unitTy e.τ with
                     | none => rw [hEnc] at h; cases h
                     | some encRef =>
                         rw [hEnc] at h; cases h
-                        refine ⟨?_, ?_, ihS⟩
+                        refine ⟨?_, ?_⟩
                         · intro c hc
                           rcases List.mem_cons.mp hc with rfl | hmem
                           · intro key hk hne
@@ -1125,7 +1255,7 @@ theorem buildConstructionClauses_go_fresh {a : Admitted V} {suite : ModuleRef}
                             exact absurd hk hne
                           · exact ihV c hmem
               · split at h
-                · cases h; exact ⟨ihP, ihV, ihS⟩
+                · cases h; exact ⟨ihP, ihV⟩
                 · cases h
           | given gkind owner hearers =>
               rw [hCls] at h
@@ -1144,7 +1274,7 @@ theorem buildConstructionClauses_go_fresh {a : Admitted V} {suite : ModuleRef}
                               rw [hDer] at h; dsimp only at h
                               split at h
                               · cases h
-                                refine ⟨?_, ?_, ihS⟩
+                                refine ⟨?_, ?_⟩
                                 · intro c hc
                                   rcases List.mem_cons.mp hc with rfl | hmem
                                   · intro key hk _
@@ -1164,25 +1294,12 @@ theorem buildConstructionClauses_go_fresh {a : Admitted V} {suite : ModuleRef}
                               · cases h
                         · cases h
                   · split at h
-                    · split at h
-                      · cases samplesKey with
-                        | none => cases h; exact ⟨ihP, ihV, ihS⟩
-                        | some sKey =>
-                            dsimp only at h
-                            cases hS : findTypedFnRef a sKey [.nat, .nat] [e.τ] with
-                            | none => rw [hS] at h; cases h
-                            | some sRef =>
-                                rw [hS] at h; cases h
-                                refine ⟨ihP, ihV, fun c hc => ?_⟩
-                                rcases List.mem_cons.mp hc with rfl | hmem
-                                · intro key hk _; rw [proverSampleClause_eventKeys] at hk; cases hk
-                                · exact ihS c hmem
-                      · cases h; exact ⟨ihP, ihV, ihS⟩
+                    · cases h; exact ⟨ihP, ihV⟩
                     · cases h
               | request svc =>
                   dsimp only at h
                   split at h
-                  · cases h; exact ⟨ihP, ihV, ihS⟩
+                  · cases h; exact ⟨ihP, ihV⟩
                   · cases h
 
 theorem buildIdealVerifierClauses_go_fresh {a : Admitted V} {suite : ModuleRef}
@@ -1263,52 +1380,6 @@ theorem buildIdealVerifierClauses_go_fresh {a : Admitted V} {suite : ModuleRef}
                   dsimp only at h
                   split at h
                   · cases h; exact ihV
-                  · cases h
-
-theorem checkAuthoredEvents_fresh {a : Admitted V} {prover verifier : Role}
-    {samplesKey : Option Key} {declKey : Key} {events : List (ShapeEvent V)} :
-    ∀ (es : List (ShapeEvent V)) {cS : List (Clause V a.program.headers prover .nat)},
-      checkAuthoredEvents a prover verifier samplesKey declKey es = .ok cS →
-      ∀ c ∈ cS, ClauseFresh events c
-  | [], _, h => by cases h; exact fun _ hc => nomatch hc
-  | e :: rest, cS, h => by
-      unfold checkAuthoredEvents at h
-      cases hRec : checkAuthoredEvents a prover verifier samplesKey declKey rest with
-      | error _ => rw [hRec] at h; cases h
-      | ok sRest =>
-          rw [hRec] at h; dsimp only [bind, Except.bind] at h
-          have ihS := checkAuthoredEvents_fresh (events := events) rest hRec
-          cases hCls : e.cls with
-          | flow _ _ _ =>
-              rw [hCls] at h; dsimp only at h
-              split at h
-              · cases h; exact ihS
-              · cases h
-          | given gkind owner hearers =>
-              rw [hCls] at h
-              cases gkind with
-              | coin law =>
-                  dsimp only at h
-                  split at h
-                  · split at h
-                    · cases samplesKey with
-                      | none => cases h; exact ihS
-                      | some sKey =>
-                          dsimp only at h
-                          cases hS : findTypedFnRef a sKey [.nat, .nat] [e.τ] with
-                          | none => rw [hS] at h; cases h
-                          | some sRef =>
-                              rw [hS] at h; cases h
-                              intro c hc
-                              rcases List.mem_cons.mp hc with rfl | hmem
-                              · intro key hk _; rw [proverSampleClause_eventKeys] at hk; cases hk
-                              · exact ihS c hmem
-                    · cases h; exact ihS
-                  · cases h
-              | request _ =>
-                  dsimp only at h
-                  split at h
-                  · cases h; exact ihS
                   · cases h
 
 theorem buildStreamingLayoutClauses_go_fresh {a : Admitted V} {layout : Layout}
@@ -1562,6 +1633,14 @@ theorem stack_fresh_cast {hs : Headers V} {hdr₁ hdr₂ : ProtocolHeader V}
   cast_layer_stack_elim hHdr hr layers
     (fun hdr _ ls => ∀ l ∈ ls, ∀ c ∈ l.clauses, ClauseFresh (hdr.shape.events [] id) c) h
 
+theorem stack_fresh_cast_ins {hs : Headers V} {hdr₁ hdr₂ : ProtocolHeader V}
+    (hHdr : hdr₁ = hdr₂) {r₁ r₂ : Role} (hr : r₁ = r₂)
+    (layers : List (Layer V hs r₂ hdr₂.ins))
+    (h : ∀ l ∈ layers, ∀ c ∈ l.clauses, ClauseFresh (hdr₂.shape.events [] id) c) :
+    ∀ l ∈ (hr ▸ (congrArg ProtocolHeader.ins hHdr) ▸ layers),
+      ∀ c ∈ l.clauses, ClauseFresh (hdr₁.shape.events [] id) c := by
+  subst hHdr; subst hr; exact h
+
 /-- Every accepted deployment satisfies `Deployed.Fresh`. -/
 theorem deploy_fresh (enc : VocabEncoder V) (a : Admitted V) (declaration : Declaration)
     (d : Deployed V) (h : deploy enc a declaration = .ok d) : d.Fresh := by
@@ -1571,23 +1650,14 @@ theorem deploy_fresh (enc : VocabEncoder V) (a : Admitted V) (declaration : Decl
       intro _ _ hl; cases hl
   | authored w hEq =>
       subst hEq
-      have hS := checkAuthoredEvents_fresh (events := w.foundPair.1.shape.events [] id) _ w.hAuth
       obtain ⟨hLP, hLV⟩ := buildLayoutLayers_fresh w.hLay
       intro r
       dsimp only [Deployed.entry]
       by_cases hP : r = w.prover
       · rw [dite_eq_left hP]
         apply stack_fresh_cast (by simp [w.hFound]) hP
-        cases declaration.samples with
-        | none =>
-            intro l hl
-            simp only [List.mem_singleton] at hl; subst hl; exact hLP
-        | some _ =>
-            intro l hl
-            simp only [List.mem_cons, List.not_mem_nil, or_false] at hl
-            rcases hl with rfl | rfl
-            · exact hS
-            · exact hLP
+        intro l hl
+        simp only [List.mem_singleton] at hl; subst hl; exact hLP
       · rw [dite_eq_right hP]
         by_cases hV : r = w.verifier
         · rw [dite_eq_left hV]
@@ -1598,21 +1668,22 @@ theorem deploy_fresh (enc : VocabEncoder V) (a : Admitted V) (declaration : Decl
           intro _ hl; cases hl
   | derived w hEq =>
       subst hEq
-      obtain ⟨hCP, hCV, hCS⟩ := buildConstructionClauses_go_fresh 0 _ w.hCC
+      obtain ⟨hCP, hCV⟩ := buildConstructionClauses_go_fresh 0 _ w.hCC
       obtain ⟨hLP, hLV⟩ := buildLayoutLayers_fresh w.hLay
       intro r
       dsimp only [Deployed.entry]
       by_cases hP : r = w.prover
       · rw [dite_eq_left hP]
-        apply stack_fresh_cast (by simp [w.hFound]) hP
-        cases declaration.samples with
+        apply stack_fresh_cast_ins (by simp [w.hFound]) hP
+        cases hS : w.prep.sampLayer with
         | none =>
             intro l hl
             simp only [List.mem_cons, List.not_mem_nil, or_false] at hl
             rcases hl with rfl | rfl
             · exact hCP
             · exact hLP
-        | some _ =>
+        | some sampP =>
+            have hCS := buildSamplesLayer_fresh (hS ▸ w.prep.hSamp)
             intro l hl
             simp only [List.mem_cons, List.not_mem_nil, or_false] at hl
             rcases hl with rfl | rfl | rfl
@@ -1622,7 +1693,7 @@ theorem deploy_fresh (enc : VocabEncoder V) (a : Admitted V) (declaration : Decl
       · rw [dite_eq_right hP]
         by_cases hV : r = w.verifier
         · rw [dite_eq_left hV]
-          apply stack_fresh_cast (by simp [w.hFound]) hV
+          apply stack_fresh_cast_ins (by simp [w.hFound]) hV
           intro l hl
           simp only [List.mem_cons, List.not_mem_nil, or_false] at hl
           rcases hl with rfl | rfl
@@ -1631,7 +1702,7 @@ theorem deploy_fresh (enc : VocabEncoder V) (a : Admitted V) (declaration : Decl
         · rw [dite_eq_right hV]
           intro _ hl; cases hl
 
-/-- Every accepted ideal-RO deployment satisfies `Deployed.Fresh`. -/
+/-- Every accepted ideal random-oracle deployment satisfies `Deployed.Fresh`. -/
 theorem deployIdeal_fresh (enc : VocabEncoder V) (serviceKey : Key) (a : Admitted V)
     (declaration : Declaration) (d : Deployed V)
     (h : deployIdeal enc serviceKey a declaration = .ok d) : d.Fresh := by
@@ -1643,7 +1714,7 @@ theorem deployIdeal_fresh (enc : VocabEncoder V) (serviceKey : Key) (a : Admitte
   dsimp only [Deployed.entry]
   by_cases hV : r = w.verifier
   · rw [dite_eq_left hV]
-    apply stack_fresh_cast (by simp [w.hFound]) hV
+    apply stack_fresh_cast_ins (by simp [w.hFound]) hV
     intro l hl
     simp only [List.mem_cons, List.not_mem_nil, or_false] at hl
     rcases hl with rfl | rfl

@@ -41,7 +41,7 @@ theorem site_told_from_match {occ : Occurrence} {s : Site} {k : Key} (h : s = oc
 
 end MatchHelpers
 
-/-! ## Section 1: Validity safety (`deploy_safe`, `deployIdeal_safe`) -/
+/-! ## Validity safety (`deploy_safe`, `deployIdeal_safe`) -/
 
 section ValiditySafety
 
@@ -377,26 +377,39 @@ private theorem idealDeriveClause_nil_validSafe (a : Admitted V) {unitTy τ : V.
   rw [aloneOut_aloneIn]
   exact ⟨hcoin, idealPathPush_valid M st (3 :: label) enc.single hst hTagLbl hencS, trivial⟩
 
-private theorem proverSampleClause_validSafe (a : Admitted V) {τ : V.Ty}
+private theorem proverSampleClause_validSafe (a : Admitted V) {heldP : List V.Ty} {τ : V.Ty}
+    (htfree : Tys.anyLinear V (samplesStateTys heldP) = false)
     (prover : Role) (site : Site) (law : V.LawKey)
-    (sampleRef : TypedFnRef V a.program.headers.fns [.nat, .nat] [τ]) :
+    (sessionBytes : List Nat) (hsess : ∀ b, b ∈ sessionBytes → b < 256)
+    (siteBytes : List Nat) (hsite : ∀ b, b ∈ siteBytes → b < 256)
+    (sampleRef : TypedFnRef V a.program.headers.fns (heldP ++ [bytesTy, bytesTy, .nat, .nat]) [τ]) :
     ClauseValidSafe M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs)
-      (proverSampleClause prover site law sampleRef) := by
-  intro path args att _ _
+      (proverSampleClause htfree prover site law sessionBytes hsess siteBytes hsite sampleRef) := by
+  intro path args st _ hst
   cases args
-  show ((proverSampleClause prover site law sampleRef).code.denote
+  rcases st with ⟨att, seq, heldTuple, ⟨⟩⟩
+  show ((proverSampleClause htfree prover site law sessionBytes hsess siteBytes hsite sampleRef).code.denote
     (roleSem M prover (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs)) path
-    (Env.positional (aloneIn M prover (.cons att .nil)))).SafeWith M
+    (Env.positional (aloneIn M prover
+      (.cons (a := samplesStateTy heldP) (att, (seq, (heldTuple, ()))) .nil)))).SafeWith M
       (ValidReply M) (ROp.ValidPayload M) (fun out => (aloneOut M prover out).All M.Valid) (· ≠ .undefined)
   rw [proverSampleClause_denote]
-  obtain ⟨coin, hcoin, hcoinV⟩ := sampleRef.eval_done M a (.cons att (.cons site.key.number .nil))
-    ⟨trivial, trivial, trivial⟩
+  have hArgsV : (HList.append
+      (cast (congrArg (HList M.Val) (tysOfList_toList heldP))
+        (Tys.toHList M (tysOfList heldP) heldTuple))
+      (.cons (a := bytesTy) sessionBytes (.cons (a := bytesTy) siteBytes
+        (.cons (a := Ty.nat) att (.cons (a := Ty.nat) seq .nil))))).All M.Valid := by
+    apply hlist_all_append
+    · exact hlist_all_cast (tysOfList_toList heldP) (tys_toHList_valid M (tysOfList heldP) heldTuple hst.2.2.1)
+    · exact ⟨⟨hsess, fun _ h => nomatch h⟩, ⟨hsite, fun _ h => nomatch h⟩, trivial, trivial, trivial⟩
+  obtain ⟨coin, hcoin, hcoinV⟩ := sampleRef.eval_done M a _ hArgsV
   rw [hcoin]
-  change (aloneOut M prover (aloneIn M prover (.cons coin.single (.cons att .nil)))).All M.Valid
+  change (aloneOut M prover (aloneIn M prover
+    (.cons coin.single (.cons (a := samplesStateTy heldP) (att, (seq + 1, (heldTuple, ()))) .nil)))).All M.Valid
   rw [aloneOut_aloneIn]
   have hcS : M.Valid τ coin.single := by
     cases coin with | cons c cn => cases cn; exact hcoinV.1
-  exact ⟨hcS, trivial, trivial⟩
+  exact ⟨hcS, ⟨trivial, trivial, hst.2.2.1, trivial⟩, trivial⟩
 
 private theorem compactReadSlotClause_validSafe {hs : Headers V} (fnTable : FnTable M hs.fns)
     (rTable : RTable M hs.protocols) {stateTys : Tys V.TypeKey} {τ : V.Ty}
@@ -467,30 +480,66 @@ private theorem compactRecoverClause_validSafe (a : Admitted V) {stateTys : Tys 
     cases res with | cons v vn => cases vn; exact hres.1
   exact ⟨hrS, hst, trivial⟩
 
+private theorem buildSamplesClauses_validSafe {a : Admitted V} {heldP : List V.Ty}
+    {htfree : Tys.anyLinear V (samplesStateTys heldP) = false}
+    {prover : Role} {sKey : Key}
+    {sessBytes : List Nat} {hSess : ∀ b, b ∈ sessBytes → b < 256} {declKey : Key} :
+    ∀ (es : List (ShapeEvent V))
+      {cS : List (Clause V a.program.headers prover (samplesStateTy heldP))},
+      buildSamplesClauses a heldP htfree prover sKey sessBytes hSess declKey es = .ok cS →
+      ∀ c ∈ cS, ClauseValidSafe M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs) c
+  | [], _, h => by cases h; exact fun _ hc => nomatch hc
+  | e :: rest, cS, h => by
+      unfold buildSamplesClauses at h
+      cases hRec : buildSamplesClauses a heldP htfree prover sKey sessBytes hSess declKey rest with
+      | error _ => rw [hRec] at h; cases h
+      | ok sRest =>
+          rw [hRec] at h; dsimp only [bind, Except.bind] at h
+          have ihS := buildSamplesClauses_validSafe rest hRec
+          cases hCls : e.cls with
+          | flow _ _ _ => rw [hCls] at h; cases h; exact ihS
+          | given gkind owner hearers =>
+              rw [hCls] at h
+              cases gkind with
+              | request _ => cases h; exact ihS
+              | coin law =>
+                  cases hearers with
+                  | cons _ _ => cases h; exact ihS
+                  | nil =>
+                      dsimp only at h
+                      split at h
+                      · cases hS : findTypedFnRef a sKey (heldP ++ [bytesTy, bytesTy, .nat, .nat]) [e.τ] with
+                        | none => rw [hS] at h; cases h
+                        | some sRef =>
+                            rw [hS] at h; cases h
+                            intro c hc
+                            rcases List.mem_cons.mp hc with rfl | hm
+                            · apply proverSampleClause_validSafe M a
+                            · exact ihS c hm
+                      · cases h; exact ihS
+
 private theorem buildConstructionClauses_go_validSafe {a : Admitted V} {suite : ModuleRef}
     {stateTy unitTy : V.Ty}
     {absorbRef : TypedFnRef V a.program.headers.fns [stateTy, bytesTy, .seq unitTy none] [stateTy]}
-    {prover verifier : Role} {samplesKey : Option Key} {declKey : Key}
+    {prover verifier : Role} {declKey : Key}
     {events : List (ShapeEvent V)} :
     ∀ (idx : Nat) (es : List (ShapeEvent V × Bool))
       {cP : List (Clause V a.program.headers prover stateTy)}
-      {cV : List (Clause V a.program.headers verifier stateTy)}
-      {cS : List (Clause V a.program.headers prover .nat)},
-      buildConstructionClauses.go a suite stateTy unitTy absorbRef prover verifier samplesKey
-        declKey events idx es = .ok (cP, cV, cS) →
+      {cV : List (Clause V a.program.headers verifier stateTy)},
+      buildConstructionClauses.go a suite stateTy unitTy absorbRef prover verifier
+        declKey events idx es = .ok (cP, cV) →
       (∀ c ∈ cP, ClauseValidSafe M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs) c) ∧
-      (∀ c ∈ cV, ClauseValidSafe M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs) c) ∧
-      (∀ c ∈ cS, ClauseValidSafe M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs) c)
-  | _, [], _, _, _, h => by
-      cases h; exact ⟨(fun _ hc => nomatch hc), (fun _ hc => nomatch hc), (fun _ hc => nomatch hc)⟩
-  | idx, (e, needAbs) :: rest, cP, cV, cS, h => by
+      (∀ c ∈ cV, ClauseValidSafe M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs) c)
+  | _, [], _, _, h => by
+      cases h; exact ⟨(fun _ hc => nomatch hc), (fun _ hc => nomatch hc)⟩
+  | idx, (e, needAbs) :: rest, cP, cV, h => by
       unfold buildConstructionClauses.go at h
       cases hRec : buildConstructionClauses.go a suite stateTy unitTy absorbRef prover verifier
-          samplesKey declKey events (idx + 1) rest with
+          declKey events (idx + 1) rest with
       | error _ => rw [hRec] at h; cases h
-      | ok triple =>
+      | ok pair =>
           rw [hRec] at h; dsimp only [bind, Except.bind] at h
-          obtain ⟨ihP, ihV, ihS⟩ := buildConstructionClauses_go_validSafe (idx + 1) rest hRec
+          obtain ⟨ihP, ihV⟩ := buildConstructionClauses_go_validSafe (idx + 1) rest hRec
           cases hCls : e.cls with
           | flow kind giver getters =>
               rw [hCls] at h; dsimp only at h
@@ -498,14 +547,14 @@ private theorem buildConstructionClauses_go_validSafe {a : Admitted V} {suite : 
               · cases needAbs with
                 | false =>
                     simp only [Bool.false_eq_true, ↓reduceIte] at h
-                    cases h; exact ⟨ihP, ihV, ihS⟩
+                    cases h; exact ⟨ihP, ihV⟩
                 | true =>
                     simp only [↓reduceIte] at h
                     cases hEnc : findSuiteEncode a suite unitTy e.τ with
                     | none => rw [hEnc] at h; cases h
                     | some encRef =>
                         rw [hEnc] at h; cases h
-                        refine ⟨fun c hc => ?_, fun c hc => ?_, ihS⟩
+                        refine ⟨fun c hc => ?_, fun c hc => ?_⟩
                         · rcases List.mem_cons.mp hc with rfl | hm
                           · apply proverAbsorbClause_validSafe M a
                           · exact ihP c hm
@@ -513,7 +562,7 @@ private theorem buildConstructionClauses_go_validSafe {a : Admitted V} {suite : 
                           · apply verifierAbsorbClause_validSafe M a
                           · exact ihV c hm
               · split at h
-                · cases h; exact ⟨ihP, ihV, ihS⟩
+                · cases h; exact ⟨ihP, ihV⟩
                 · cases h
           | given gkind owner hearers =>
               rw [hCls] at h
@@ -533,7 +582,7 @@ private theorem buildConstructionClauses_go_validSafe {a : Admitted V} {suite : 
                               split at h
                               · rename_i hIns
                                 cases h
-                                refine ⟨fun c hc => ?_, fun c hc => ?_, ihS⟩
+                                refine ⟨fun c hc => ?_, fun c hc => ?_⟩
                                 · rcases List.mem_cons.mp hc with rfl | hm
                                   · apply deriveClause_nil_validSafe M a
                                   · exact ihP c hm
@@ -546,25 +595,12 @@ private theorem buildConstructionClauses_go_validSafe {a : Admitted V} {suite : 
                               · cases h
                         · cases h
                   · split at h
-                    · split at h
-                      · cases samplesKey with
-                        | none => cases h; exact ⟨ihP, ihV, ihS⟩
-                        | some sKey =>
-                            dsimp only at h
-                            cases hS : findTypedFnRef a sKey [.nat, .nat] [e.τ] with
-                            | none => rw [hS] at h; cases h
-                            | some sRef =>
-                                rw [hS] at h; cases h
-                                refine ⟨ihP, ihV, fun c hc => ?_⟩
-                                rcases List.mem_cons.mp hc with rfl | hm
-                                · apply proverSampleClause_validSafe M a
-                                · exact ihS c hm
-                      · cases h; exact ⟨ihP, ihV, ihS⟩
+                    · cases h; exact ⟨ihP, ihV⟩
                     · cases h
               | request _ =>
                   dsimp only at h
                   split at h
-                  · cases h; exact ⟨ihP, ihV, ihS⟩
+                  · cases h; exact ⟨ihP, ihV⟩
                   · cases h
 
 private theorem buildIdealVerifierClauses_go_validSafe {a : Admitted V} {suite : ModuleRef}
@@ -637,52 +673,6 @@ private theorem buildIdealVerifierClauses_go_validSafe {a : Admitted V} {suite :
                   dsimp only at h
                   split at h
                   · cases h; exact ihV
-                  · cases h
-
-private theorem checkAuthoredEvents_validSafe {a : Admitted V} {prover verifier : Role}
-    {samplesKey : Option Key} {declKey : Key} :
-    ∀ (es : List (ShapeEvent V)) {cS : List (Clause V a.program.headers prover .nat)},
-      checkAuthoredEvents a prover verifier samplesKey declKey es = .ok cS →
-      ∀ c ∈ cS, ClauseValidSafe M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs) c
-  | [], _, h => by cases h; exact fun _ hc => nomatch hc
-  | e :: rest, cS, h => by
-      unfold checkAuthoredEvents at h
-      cases hRec : checkAuthoredEvents a prover verifier samplesKey declKey rest with
-      | error _ => rw [hRec] at h; cases h
-      | ok sRest =>
-          rw [hRec] at h; dsimp only [bind, Except.bind] at h
-          have ihS := checkAuthoredEvents_validSafe rest hRec
-          cases hCls : e.cls with
-          | flow _ _ _ =>
-              rw [hCls] at h; dsimp only at h
-              split at h
-              · cases h; exact ihS
-              · cases h
-          | given gkind owner hearers =>
-              rw [hCls] at h
-              cases gkind with
-              | coin law =>
-                  dsimp only at h
-                  split at h
-                  · split at h
-                    · cases samplesKey with
-                      | none => cases h; exact ihS
-                      | some sKey =>
-                          dsimp only at h
-                          cases hS : findTypedFnRef a sKey [.nat, .nat] [e.τ] with
-                          | none => rw [hS] at h; cases h
-                          | some sRef =>
-                              rw [hS] at h; cases h
-                              intro c hc
-                              rcases List.mem_cons.mp hc with rfl | hm
-                              · apply proverSampleClause_validSafe M a
-                              · exact ihS c hm
-                    · cases h; exact ihS
-                  · cases h
-              | request _ =>
-                  dsimp only at h
-                  split at h
-                  · cases h; exact ihS
                   · cases h
 
 private theorem buildStreamingLayoutClauses_go_validSafe {a : Admitted V} {layout : Layout}
@@ -1085,24 +1075,45 @@ private theorem layer_validSafe_idealConstruction {a : Admitted V} {unitTy : V.T
     rw [emptyFinish_denote]
     trivial
 
-private theorem layer_validSafe_samples {a : Admitted V} {r : Role} {ins : List (LTy V)}
-    (clauses : List (Clause V a.program.headers r .nat))
-    (hClauses : ∀ c ∈ clauses, ClauseValidSafe M (Defs.fnTable M a.program.defs)
-      (Defs.rTable M a.program.defs) c) :
-    LayerValidSafe M a
-      ({ line := .samples, state := .nat, takes := [], gives := [],
-         clauses := clauses, again := attemptNumAgain,
-         start := samplesStart, finish := emptyFinish .nat } : Layer V a.program.headers r ins) := by
-  refine ⟨⟨clause_answer_validSafe M _ _ _ hClauses,
-            fun _ _ _ _ _ => by dsimp only [Layer.handler]; rw [attemptNumAgain_denote]; trivial⟩, ?_, ?_⟩
-  · intro inputs t _ _
-    cases t
-    dsimp only [HList.append]
-    rw [samplesStart_denote]
-    exact ⟨trivial, trivial⟩
-  · intro s _
-    rw [emptyFinish_denote]
-    trivial
+private theorem buildSamplesLayer_validSafe {a : Admitted V} {entry : ProtocolHeader V}
+    {prover : Role} {samplesKey : Option Key}
+    {sessBytes : List Nat} {hSess : ∀ b, b ∈ sessBytes → b < 256}
+    {declKey : Key} {events : List (ShapeEvent V)}
+    {sampP : Layer V a.program.headers prover entry.ins}
+    (h : buildSamplesLayer a entry prover samplesKey sessBytes hSess declKey events = .ok (some sampP)) :
+    LayerValidSafe M a sampP := by
+  unfold buildSamplesLayer at h
+  cases samplesKey with
+  | none => cases h
+  | some sKey =>
+      dsimp only at h
+      cases hF : a.program.find sKey with
+      | none => rw [hF] at h; cases h
+      | some found =>
+          rw [hF] at h
+          cases found with
+          | protocol _ => cases h
+          | fn _ =>
+              dsimp only at h
+              split at h
+              · rename_i htfree
+                cases hC : buildSamplesClauses a (held prover entry.ins) htfree prover sKey
+                    sessBytes hSess declKey events with
+                | error _ => rw [hC] at h; cases h
+                | ok cs =>
+                    rw [hC] at h; cases h
+                    have hCS := buildSamplesClauses_validSafe M events hC
+                    refine ⟨⟨clause_answer_validSafe M _ _ _ hCS, fun i e stop _ hstop => ?_⟩, ?_, ?_⟩
+                    · dsimp only [Layer.handler]
+                      rw [samplesAgain_denote]
+                      exact ⟨trivial, trivial, hstop.2.2.1, trivial⟩
+                    · intro inputs t hin _
+                      cases t
+                      dsimp only [HList.append]
+                      exact samplesStart_valid M _ (heldValues M prover inputs)
+                        (heldValues_valid M prover inputs hin)
+                    · intro s _; rw [emptyFinish_denote]; trivial
+              · cases h
 
 private theorem layer_validSafe_cast {a : Admitted V} {hdr₁ hdr₂ : ProtocolHeader V}
     (hHdr : hdr₁ = hdr₂) {r₁ r₂ : Role} (hr : r₁ = r₂)
@@ -1110,6 +1121,13 @@ private theorem layer_validSafe_cast {a : Admitted V} {hdr₁ hdr₂ : ProtocolH
     (h : ∀ l ∈ layers, LayerValidSafe M a l) :
     ∀ l ∈ (hr ▸ hHdr ▸ layers), LayerValidSafe M a l :=
   cast_layer_stack_elim hHdr hr layers (fun _ _ ls => ∀ l ∈ ls, LayerValidSafe M a l) h
+
+private theorem layer_validSafe_cast_ins {a : Admitted V} {hdr₁ hdr₂ : ProtocolHeader V}
+    (hHdr : hdr₁ = hdr₂) {r₁ r₂ : Role} (hr : r₁ = r₂)
+    (layers : List (Layer V a.program.headers r₂ hdr₂.ins))
+    (h : ∀ l ∈ layers, LayerValidSafe M a l) :
+    ∀ l ∈ (hr ▸ (congrArg ProtocolHeader.ins hHdr) ▸ layers), LayerValidSafe M a l := by
+  subst hHdr; subst hr; exact h
 
 /-- Every deployed role of an admitted program never stops `.undefined` on valid inputs, valid
 taken values, and permitted replies (even without requiring `Unconditional`). -/
@@ -1129,21 +1147,12 @@ theorem deploy_safe (enc : VocabEncoder V) {named : NamedProgram V} {assoc : Ass
   | authored w hEq =>
       subst hEq
       apply runStack_validSafe M hAdmit _ _ r _ _ ins taken hIns hTaken
-      have hS := checkAuthoredEvents_validSafe M _ w.hAuth
       obtain ⟨hLP, hLV⟩ := buildLayoutLayers_validSafe M w.hLay
       dsimp only [Deployed.entry]
       by_cases hP : r = w.prover
       · rw [dite_eq_left hP]
         apply layer_validSafe_cast M (by simp [w.hFound]) hP
-        cases declaration.samples with
-        | none =>
-            intro l hl; simp only [List.mem_singleton] at hl; subst hl; exact hLP
-        | some _ =>
-            intro l hl
-            simp only [List.mem_cons, List.not_mem_nil, or_false] at hl
-            rcases hl with rfl | rfl
-            · exact layer_validSafe_samples M w.sClauses hS
-            · exact hLP
+        intro l hl; simp only [List.mem_singleton] at hl; subst hl; exact hLP
       · rw [dite_eq_right hP]
         by_cases hV : r = w.verifier
         · rw [dite_eq_left hV]
@@ -1153,30 +1162,31 @@ theorem deploy_safe (enc : VocabEncoder V) {named : NamedProgram V} {assoc : Ass
   | derived w hEq =>
       subst hEq
       apply runStack_validSafe M hAdmit _ _ r _ _ ins taken hIns hTaken
-      obtain ⟨hCP, hCV, hCS⟩ := buildConstructionClauses_go_validSafe M 0 _ w.hCC
+      obtain ⟨hCP, hCV⟩ := buildConstructionClauses_go_validSafe M 0 _ w.hCC
       obtain ⟨hLP, hLV⟩ := buildLayoutLayers_validSafe M w.hLay
       dsimp only [Deployed.entry]
       by_cases hP : r = w.prover
       · rw [dite_eq_left hP]
-        apply layer_validSafe_cast M (by simp [w.hFound]) hP
-        cases declaration.samples with
+        apply layer_validSafe_cast_ins M (by simp [w.hFound]) hP
+        cases hS : w.prep.sampLayer with
         | none =>
             intro l hl
             simp only [List.mem_cons, List.not_mem_nil, or_false] at hl
             rcases hl with rfl | rfl
             · exact layer_validSafe_construction M _ _ _ _ _ _ hCP
             · exact hLP
-        | some _ =>
+        | some sampP =>
+            have hSamp := buildSamplesLayer_validSafe M (hS ▸ w.prep.hSamp)
             intro l hl
             simp only [List.mem_cons, List.not_mem_nil, or_false] at hl
             rcases hl with rfl | rfl | rfl
-            · exact layer_validSafe_samples M _ hCS
+            · exact hSamp
             · exact layer_validSafe_construction M _ _ _ _ _ _ hCP
             · exact hLP
       · rw [dite_eq_right hP]
         by_cases hV : r = w.verifier
         · rw [dite_eq_left hV]
-          apply layer_validSafe_cast M (by simp [w.hFound]) hV
+          apply layer_validSafe_cast_ins M (by simp [w.hFound]) hV
           intro l hl
           simp only [List.mem_cons, List.not_mem_nil, or_false] at hl
           rcases hl with rfl | rfl
@@ -1184,8 +1194,8 @@ theorem deploy_safe (enc : VocabEncoder V) {named : NamedProgram V} {assoc : Ass
           · exact hLV
         · rw [dite_eq_right hV]; intro _ hl; cases hl
 
-/-- Every role of an ideal-RO deployment never stops `.undefined` on valid inputs, valid taken
-values, and permitted replies. -/
+/-- Every role of an ideal random-oracle deployment never stops `.undefined` on valid inputs,
+valid taken values, and permitted replies. -/
 theorem deployIdeal_safe (enc : VocabEncoder V) (serviceKey : Key)
     {named : NamedProgram V} {assoc : Association} {a : Admitted V}
     (hAdmit : admit named assoc = .ok a)
@@ -1204,7 +1214,7 @@ theorem deployIdeal_safe (enc : VocabEncoder V) (serviceKey : Key)
   dsimp only [Deployed.entry]
   by_cases hV : r = w.verifier
   · rw [dite_eq_left hV]
-    apply layer_validSafe_cast M (by simp [w.hFound]) hV
+    apply layer_validSafe_cast_ins M (by simp [w.hFound]) hV
     intro l hl
     simp only [List.mem_cons, List.not_mem_nil, or_false] at hl
     rcases hl with rfl | rfl
@@ -1214,7 +1224,7 @@ theorem deployIdeal_safe (enc : VocabEncoder V) (serviceKey : Key)
 
 end ValiditySafety
 
-/-! ## Section 2: Effect coverage (`deploy_coverage`, `deployIdeal_verifier_covered`) -/
+/-! ## Effect coverage (`deploy_coverage`, `deployIdeal_verifier_covered`) -/
 
 section Coverage
 
@@ -1536,16 +1546,22 @@ private theorem layoutClause_emits_any_vCarry {hs : Headers V} (fnTable : FnTabl
               cases eqRes.single <;> trivial
 
 private theorem proverSampleClause_emits_any {hs : Headers V} (fnTable : FnTable M hs.fns)
-    (rTable : RTable M hs.protocols) {τ : V.Ty} {opOk : ROp M → Prop}
+    (rTable : RTable M hs.protocols) {heldP : List V.Ty} {τ : V.Ty} {opOk : ROp M → Prop}
+    (htfree : Tys.anyLinear V (samplesStateTys heldP) = false)
     (prover : Role) (site : Site) (law : V.LawKey)
-    (sRef : TypedFnRef V hs.fns [.nat, .nat] [τ]) :
-    ClauseEmits M fnTable rTable opOk (proverSampleClause prover site law sRef) := by
-  intro op hMatch att
+    (sessionBytes : List Nat) (hsess : ∀ b, b ∈ sessionBytes → b < 256)
+    (siteBytes : List Nat) (hsite : ∀ b, b ∈ siteBytes → b < 256)
+    (sRef : TypedFnRef V hs.fns (heldP ++ [bytesTy, bytesTy, .nat, .nat]) [τ]) :
+    ClauseEmits M fnTable rTable opOk
+      (proverSampleClause htfree prover site law sessionBytes hsess siteBytes hsite sRef) := by
+  intro op hMatch st
   generalize hArgs : cast (congrArg (HList M.Val) hMatch.2.2.1.symm) (ROp.payload M op) = args
   cases args
-  show ((proverSampleClause prover site law sRef).code.denote
+  rcases st with ⟨att, seq, heldTuple, ⟨⟩⟩
+  show ((proverSampleClause htfree prover site law sessionBytes hsess siteBytes hsite sRef).code.denote
     (roleSem M prover fnTable rTable) (ROp.occurrence M op).path
-    (Env.positional (aloneIn M prover (.cons att .nil)))).SafeWith
+    (Env.positional (aloneIn M prover
+      (.cons (a := samplesStateTy heldP) (att, (seq, (heldTuple, ()))) .nil)))).SafeWith
       M (fun _ _ => True) opOk (fun _ => True) (fun _ => True)
   rw [proverSampleClause_denote]
   dsimp only [roleSem, proverSampleClause, Clause.site, List.cons_append, List.nil_append]
@@ -1607,31 +1623,100 @@ private theorem compactRecoverClause_emits_any {hs : Headers V} (fnTable : FnTab
   rw [Process.safeWith_map]
   exact liftLocal_safeWith_any M id _
 
+private theorem buildSamplesClauses_emits_any {a : Admitted V} {heldP : List V.Ty}
+    {htfree : Tys.anyLinear V (samplesStateTys heldP) = false}
+    {prover : Role} {sKey : Key}
+    {sessBytes : List Nat} {hSess : ∀ b, b ∈ sessBytes → b < 256}
+    {declKey : Key} {opOk : ROp M → Prop} :
+    ∀ (es : List (ShapeEvent V))
+      {cS : List (Clause V a.program.headers prover (samplesStateTy heldP))},
+      buildSamplesClauses a heldP htfree prover sKey sessBytes hSess declKey es = .ok cS →
+      ∀ c ∈ cS, ClauseEmits M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs) opOk c
+  | [], _, h => by cases h; exact fun _ hc => nomatch hc
+  | e :: rest, cS, h => by
+      unfold buildSamplesClauses at h
+      cases hRec : buildSamplesClauses a heldP htfree prover sKey sessBytes hSess declKey rest with
+      | error _ => rw [hRec] at h; cases h
+      | ok sRest =>
+          rw [hRec] at h; dsimp only [bind, Except.bind] at h
+          have ihS := buildSamplesClauses_emits_any (opOk := opOk) rest hRec
+          cases hCls : e.cls with
+          | flow _ _ _ => rw [hCls] at h; cases h; exact ihS
+          | given gkind owner hearers =>
+              rw [hCls] at h
+              cases gkind with
+              | request _ => cases h; exact ihS
+              | coin law =>
+                  cases hearers with
+                  | cons _ _ => cases h; exact ihS
+                  | nil =>
+                      dsimp only at h
+                      split at h
+                      · cases hS : findTypedFnRef a sKey (heldP ++ [bytesTy, bytesTy, .nat, .nat]) [e.τ] with
+                        | none => rw [hS] at h; cases h
+                        | some sRef =>
+                            rw [hS] at h; cases h
+                            intro c hc
+                            rcases List.mem_cons.mp hc with rfl | hm
+                            · apply proverSampleClause_emits_any M
+                            · exact ihS c hm
+                      · cases h; exact ihS
+
+private theorem buildSamplesLayer_covers {a : Admitted V} {entry : ProtocolHeader V}
+    {prover : Role} {samplesKey : Option Key}
+    {sessBytes : List Nat} {hSess : ∀ b, b ∈ sessBytes → b < 256}
+    {declKey : Key} {events : List (ShapeEvent V)} {opOk : ROp M → Prop}
+    {sampP : Layer V a.program.headers prover entry.ins}
+    (h : buildSamplesLayer a entry prover samplesKey sessBytes hSess declKey events = .ok (some sampP)) :
+    Handler.Covers M
+      (Layer.handler M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs) sampP)
+      opOk opOk := by
+  unfold buildSamplesLayer at h
+  cases samplesKey with
+  | none => cases h
+  | some sKey =>
+      dsimp only at h
+      cases hF : a.program.find sKey with
+      | none => rw [hF] at h; cases h
+      | some found =>
+          rw [hF] at h
+          cases found with
+          | protocol _ => cases h
+          | fn _ =>
+              dsimp only at h
+              split at h
+              · rename_i htfree
+                cases hC : buildSamplesClauses a (held prover entry.ins) htfree prover sKey
+                    sessBytes hSess declKey events with
+                | error _ => rw [hC] at h; cases h
+                | ok cs =>
+                    rw [hC] at h; cases h
+                    have hEm := buildSamplesClauses_emits_any M (opOk := opOk) events hC
+                    exact fun op s ho => clause_answer_covers M _ _ _ hEm op s (.inl ho)
+              · cases h
+
 private theorem buildConstructionClauses_go_covers {a : Admitted V} {suite : ModuleRef}
     {stateTy unitTy : V.Ty}
     {absorbRef : TypedFnRef V a.program.headers.fns [stateTy, bytesTy, .seq unitTy none] [stateTy]}
-    {prover verifier : Role} (hNe : prover ≠ verifier) {samplesKey : Option Key} {declKey : Key}
+    {prover verifier : Role} (hNe : prover ≠ verifier) {declKey : Key}
     {events : List (ShapeEvent V)} :
     ∀ (idx : Nat) (es : List (ShapeEvent V × Bool)),
       (∀ k p, es[k]? = some p → events[idx + k]? = some p.1) →
       ∀ {cP : List (Clause V a.program.headers prover stateTy)}
-        {cV : List (Clause V a.program.headers verifier stateTy)}
-        {cS : List (Clause V a.program.headers prover .nat)},
-      buildConstructionClauses.go a suite stateTy unitTy absorbRef prover verifier samplesKey
-        declKey events idx es = .ok (cP, cV, cS) →
+        {cV : List (Clause V a.program.headers verifier stateTy)},
+      buildConstructionClauses.go a suite stateTy unitTy absorbRef prover verifier
+        declKey events idx es = .ok (cP, cV) →
       (∀ c ∈ cP, ClauseEmits M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs)
         (LayoutInputP M prover verifier events) c) ∧
       (∀ c ∈ cV, ClauseEmits M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs)
         (LayoutInputV M prover verifier events) c) ∧
-      (∀ c ∈ cS, ClauseEmits M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs)
-        (ROp.MatchesShape M prover events) c) ∧
       (∀ op, ROp.MatchesShape M prover (es.map Prod.fst) op →
         LayoutInputP M prover verifier events op ∨ ∃ c ∈ cP, ClauseMatches M c op) ∧
       (∀ op, ROp.MatchesShape M verifier (es.map Prod.fst) op →
         LayoutInputV M prover verifier events op ∨ ∃ c ∈ cV, ClauseMatches M c op)
-  | _, [], _, _, _, _, h => by
+  | _, [], _, _, _, h => by
       cases h
-      refine ⟨(fun _ hc => nomatch hc), (fun _ hc => nomatch hc), (fun _ hc => nomatch hc), ?_, ?_⟩
+      refine ⟨(fun _ hc => nomatch hc), (fun _ hc => nomatch hc), ?_, ?_⟩
       · intro op ho
         cases op with
         | «begin» | settle => exact .inl (.inl trivial)
@@ -1640,7 +1725,7 @@ private theorem buildConstructionClauses_go_covers {a : Admitted V} {suite : Mod
         cases op with
         | «begin» | settle => exact .inl (.inl trivial)
         | give | get | own | hear => obtain ⟨_, hc, _⟩ := ho; cases hc
-  | idx, (e, needAbs) :: rest, hSuf, cP, cV, cS, h => by
+  | idx, (e, needAbs) :: rest, hSuf, cP, cV, h => by
       unfold buildConstructionClauses.go at h
       have hSufRest : ∀ k p, rest[k]? = some p → events[(idx + 1) + k]? = some p.1 := by
         intro k p hk
@@ -1650,21 +1735,21 @@ private theorem buildConstructionClauses_go_covers {a : Admitted V} {suite : Mod
         simpa using hSuf 0 (e, needAbs) rfl
       have hMem : e ∈ events := List.mem_of_getElem? hIdx
       cases hRec : buildConstructionClauses.go a suite stateTy unitTy absorbRef prover verifier
-          samplesKey declKey events (idx + 1) rest with
+          declKey events (idx + 1) rest with
       | error _ => rw [hRec] at h; cases h
-      | ok triple =>
+      | ok pair =>
           rw [hRec] at h; dsimp only [bind, Except.bind] at h
-          obtain ⟨ihEmP, ihEmV, ihEmS, ihCovP, ihCovV⟩ :=
+          obtain ⟨ihEmP, ihEmV, ihCovP, ihCovV⟩ :=
             buildConstructionClauses_go_covers hNe (idx + 1) rest hSufRest hRec
           have liftRestP : ∀ op, (∃ e' ∈ rest.map Prod.fst, ROp.MatchesShapeEvent M prover e' op) →
-              LayoutInputP M prover verifier events op ∨ ∃ c ∈ triple.1, ClauseMatches M c op := by
+              LayoutInputP M prover verifier events op ∨ ∃ c ∈ pair.1, ClauseMatches M c op := by
             intro op ho
             apply ihCovP op
             cases op with
             | «begin» | settle => trivial
             | give | get | own | hear => exact ho
           have liftRestV : ∀ op, (∃ e' ∈ rest.map Prod.fst, ROp.MatchesShapeEvent M verifier e' op) →
-              LayoutInputV M prover verifier events op ∨ ∃ c ∈ triple.2.1, ClauseMatches M c op := by
+              LayoutInputV M prover verifier events op ∨ ∃ c ∈ pair.2, ClauseMatches M c op := by
             intro op ho
             apply ihCovV op
             cases op with
@@ -1679,7 +1764,7 @@ private theorem buildConstructionClauses_go_covers {a : Admitted V} {suite : Mod
                 | false =>
                     simp only [Bool.false_eq_true, ↓reduceIte] at h
                     cases h
-                    refine ⟨ihEmP, ihEmV, ihEmS, ?_, ?_⟩
+                    refine ⟨ihEmP, ihEmV, ?_, ?_⟩
                     · intro op ho
                       cases op with
                       | «begin» | settle => exact .inl (.inl trivial)
@@ -1734,7 +1819,7 @@ private theorem buildConstructionClauses_go_covers {a : Admitted V} {suite : Mod
                     | none => rw [hEnc] at h; cases h
                     | some encRef =>
                         rw [hEnc] at h; cases h
-                        refine ⟨?_, ?_, ihEmS, ?_, ?_⟩
+                        refine ⟨?_, ?_, ?_, ?_⟩
                         · intro c hc
                           rcases List.mem_cons.mp hc with rfl | hm
                           · intro op hMatch st
@@ -1847,7 +1932,7 @@ private theorem buildConstructionClauses_go_covers {a : Admitted V} {suite : Mod
               · split at h
                 · rename_i hOut
                   cases h
-                  refine ⟨ihEmP, ihEmV, ihEmS, ?_, ?_⟩
+                  refine ⟨ihEmP, ihEmV, ?_, ?_⟩
                   · intro op ho
                     cases op with
                     | «begin» | settle => exact .inl (.inl trivial)
@@ -1918,7 +2003,7 @@ private theorem buildConstructionClauses_go_covers {a : Admitted V} {suite : Mod
                                 rcases sig with ⟨sIns, sOut⟩
                                 dsimp only at hIns
                                 subst hIns
-                                refine ⟨?_, ?_, ihEmS, ?_, ?_⟩
+                                refine ⟨?_, ?_, ?_, ?_⟩
                                 · intro c hc
                                   rcases List.mem_cons.mp hc with rfl | hm
                                   · intro op hMatch st
@@ -2045,9 +2130,9 @@ private theorem buildConstructionClauses_go_covers {a : Admitted V} {suite : Mod
                         · cases h
                   · split at h
                     · rename_i hNil
-                      have hStepP : ∀ op, ROp.MatchesShape M prover (e :: rest.map Prod.fst) op →
-                          LayoutInputP M prover verifier events op ∨ ∃ c ∈ triple.1, ClauseMatches M c op := by
-                        intro op ho
+                      cases h
+                      refine ⟨ihEmP, ihEmV, ?_, ?_⟩
+                      · intro op ho
                         cases op with
                         | «begin» | settle => exact .inl (.inl trivial)
                         | give k' gs' at_ τ' x' =>
@@ -2070,9 +2155,7 @@ private theorem buildConstructionClauses_go_covers {a : Admitted V} {suite : Mod
                             rcases List.mem_cons.mp he' with rfl | hmem
                             · rw [hCls] at hECls; cases hECls; subst hNil; cases hrIn
                             · exact liftRestP (.hear gk ow' at_ τ') ⟨e', hmem, hNeO, hSite, hTy, hs', hrIn, hECls⟩
-                      have hStepV : ∀ op, ROp.MatchesShape M verifier (e :: rest.map Prod.fst) op →
-                          LayoutInputV M prover verifier events op ∨ ∃ c ∈ triple.2.1, ClauseMatches M c op := by
-                        intro op ho
+                      · intro op ho
                         cases op with
                         | «begin» | settle => exact .inl (.inl trivial)
                         | give k' gs' at_ τ' x' =>
@@ -2095,27 +2178,13 @@ private theorem buildConstructionClauses_go_covers {a : Admitted V} {suite : Mod
                             rcases List.mem_cons.mp he' with rfl | hmem
                             · rw [hCls] at hECls; cases hECls; subst hNil; cases hrIn
                             · exact liftRestV (.hear gk ow' at_ τ') ⟨e', hmem, hNeO, hSite, hTy, hs', hrIn, hECls⟩
-                      split at h
-                      · cases samplesKey with
-                        | none => cases h; exact ⟨ihEmP, ihEmV, ihEmS, hStepP, hStepV⟩
-                        | some sKey =>
-                            dsimp only at h
-                            cases hS : findTypedFnRef a sKey [.nat, .nat] [e.τ] with
-                            | none => rw [hS] at h; cases h
-                            | some sRef =>
-                                rw [hS] at h; cases h
-                                refine ⟨ihEmP, ihEmV, fun c hc => ?_, hStepP, hStepV⟩
-                                rcases List.mem_cons.mp hc with rfl | hm
-                                · apply proverSampleClause_emits_any M
-                                · exact ihEmS c hm
-                      · cases h; exact ⟨ihEmP, ihEmV, ihEmS, hStepP, hStepV⟩
                     · cases h
               | request _ =>
                   dsimp only at h
                   split at h
                   · rename_i hReq
                     cases h
-                    refine ⟨ihEmP, ihEmV, ihEmS, ?_, ?_⟩
+                    refine ⟨ihEmP, ihEmV, ?_, ?_⟩
                     · intro op ho
                       cases op with
                       | «begin» | settle => exact .inl (.inl trivial)
@@ -2468,19 +2537,15 @@ private theorem buildIdealVerifierClauses_go_covers {a : Admitted V} {suite : Mo
                         · exact liftRestV (.hear gk ow' at_ τ') ⟨e', hmem, hNeO, hSite, hTy, hs', hrIn, hECls⟩
                   · cases h
 
-private theorem checkAuthoredEvents_covers {a : Admitted V} {prover verifier : Role}
-    (hNe : prover ≠ verifier) {samplesKey : Option Key} {declKey : Key}
-    {events : List (ShapeEvent V)} :
+private theorem checkAuthoredEvents_covers {prover verifier : Role}
+    (hNe : prover ≠ verifier) {declKey : Key} {events : List (ShapeEvent V)} :
     ∀ (es : List (ShapeEvent V)), (∀ e ∈ es, e ∈ events) →
-      {cS : List (Clause V a.program.headers prover .nat)} →
-      checkAuthoredEvents a prover verifier samplesKey declKey es = .ok cS →
-      (∀ c ∈ cS, ClauseEmits M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs)
-        (ROp.MatchesShape M prover events) c) ∧
+      checkAuthoredEvents prover verifier declKey es = .ok () →
       (∀ op, ROp.MatchesShape M prover es op → LayoutInputP M prover verifier events op) ∧
       (∀ op, ROp.MatchesShape M verifier es op → LayoutInputV M prover verifier events op)
-  | [], _, _, h => by
+  | [], _, h => by
       cases h
-      refine ⟨(fun _ hc => nomatch hc), ?_, ?_⟩
+      refine ⟨?_, ?_⟩
       · intro op ho
         cases op with
         | «begin» | settle => exact .inl trivial
@@ -2489,15 +2554,16 @@ private theorem checkAuthoredEvents_covers {a : Admitted V} {prover verifier : R
         cases op with
         | «begin» | settle => exact .inl trivial
         | give | get | own | hear => obtain ⟨_, hc, _⟩ := ho; cases hc
-  | e :: rest, hSub, cS, h => by
+  | e :: rest, hSub, h => by
       unfold checkAuthoredEvents at h
       have hSubRest : ∀ e' ∈ rest, e' ∈ events := fun e' he' => hSub e' (List.mem_cons_of_mem _ he')
       have hMem : e ∈ events := hSub e List.mem_cons_self
-      cases hRec : checkAuthoredEvents a prover verifier samplesKey declKey rest with
+      cases hRec : checkAuthoredEvents prover verifier declKey rest with
       | error _ => rw [hRec] at h; cases h
-      | ok sRest =>
+      | ok u =>
+          cases u
           rw [hRec] at h; dsimp only [bind, Except.bind] at h
-          obtain ⟨ihS, ihP, ihV⟩ := checkAuthoredEvents_covers hNe rest hSubRest hRec
+          obtain ⟨ihP, ihV⟩ := checkAuthoredEvents_covers hNe rest hSubRest hRec
           have liftP : ∀ op, (∃ e' ∈ rest, ROp.MatchesShapeEvent M prover e' op) →
               LayoutInputP M prover verifier events op := fun op ho => by
             apply ihP op
@@ -2516,7 +2582,7 @@ private theorem checkAuthoredEvents_covers {a : Admitted V} {prover verifier : R
               split at h
               · rename_i hFl
                 cases h
-                refine ⟨ihS, ?_, ?_⟩
+                refine ⟨?_, ?_⟩
                 · intro op ho
                   cases op with
                   | «begin» | settle => exact .inl trivial
@@ -2583,9 +2649,9 @@ private theorem checkAuthoredEvents_covers {a : Admitted V} {prover verifier : R
                   dsimp only at h
                   split at h
                   · rename_i hNil
-                    have hStepP : ∀ op, ROp.MatchesShape M prover (e :: rest) op →
-                        LayoutInputP M prover verifier events op := by
-                      intro op ho
+                    cases h
+                    refine ⟨?_, ?_⟩
+                    · intro op ho
                       cases op with
                       | «begin» | settle => exact .inl trivial
                       | give k' gs' at_ τ' x' =>
@@ -2608,9 +2674,7 @@ private theorem checkAuthoredEvents_covers {a : Admitted V} {prover verifier : R
                           rcases List.mem_cons.mp he' with rfl | hmem
                           · rw [hCls] at hECls; cases hECls; subst hNil; cases hrIn
                           · exact liftP (.hear gk ow' at_ τ') ⟨e', hmem, hNeO, hSite, hTy, hs', hrIn, hECls⟩
-                    have hStepV : ∀ op, ROp.MatchesShape M verifier (e :: rest) op →
-                        LayoutInputV M prover verifier events op := by
-                      intro op ho
+                    · intro op ho
                       cases op with
                       | «begin» | settle => exact .inl trivial
                       | give k' gs' at_ τ' x' =>
@@ -2633,27 +2697,13 @@ private theorem checkAuthoredEvents_covers {a : Admitted V} {prover verifier : R
                           rcases List.mem_cons.mp he' with rfl | hmem
                           · rw [hCls] at hECls; cases hECls; subst hNil; cases hrIn
                           · exact liftV (.hear gk ow' at_ τ') ⟨e', hmem, hNeO, hSite, hTy, hs', hrIn, hECls⟩
-                    split at h
-                    · cases samplesKey with
-                      | none => cases h; exact ⟨ihS, hStepP, hStepV⟩
-                      | some sKey =>
-                          dsimp only at h
-                          cases hS : findTypedFnRef a sKey [.nat, .nat] [e.τ] with
-                          | none => rw [hS] at h; cases h
-                          | some sRef =>
-                              rw [hS] at h; cases h
-                              refine ⟨fun c hc => ?_, hStepP, hStepV⟩
-                              rcases List.mem_cons.mp hc with rfl | hm
-                              · apply proverSampleClause_emits_any M
-                              · exact ihS c hm
-                    · cases h; exact ⟨ihS, hStepP, hStepV⟩
                   · cases h
               | request _ =>
                   dsimp only at h
                   split at h
                   · rename_i hReq
                     cases h
-                    refine ⟨ihS, ?_, ?_⟩
+                    refine ⟨?_, ?_⟩
                     · intro op ho
                       cases op with
                       | «begin» | settle => exact .inl trivial
@@ -3397,6 +3447,18 @@ private theorem stack_covers_cast {a : Admitted V} {hdr₁ hdr₂ : ProtocolHead
       (Stack.handler M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs) ls)
       (ROp.MatchesShape M r (hdr.shape.events [] id)) (ROp.IsClosed M)) h
 
+private theorem stack_covers_cast_ins {a : Admitted V} {hdr₁ hdr₂ : ProtocolHeader V}
+    (hHdr : hdr₁ = hdr₂) {r₁ r₂ : Role} (hr : r₁ = r₂)
+    (layers : List (Layer V a.program.headers r₂ hdr₂.ins))
+    (h : Handler.Covers M
+      (Stack.handler M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs) layers)
+      (ROp.MatchesShape M r₂ (hdr₂.shape.events [] id)) (ROp.IsClosed M)) :
+    Handler.Covers M
+      (Stack.handler M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs)
+        (hr ▸ (congrArg ProtocolHeader.ins hHdr) ▸ layers))
+      (ROp.MatchesShape M r₁ (hdr₁.shape.events [] id)) (ROp.IsClosed M) := by
+  subst hHdr; subst hr; exact h
+
 /-- Every non-interactive deployment covers all non-closed effects on both prover and verifier. -/
 theorem deploy_coverage (enc : VocabEncoder V) {a : Admitted V} {declaration : Declaration}
     {d : Deployed V} (hDep : deploy enc a declaration = .ok d)
@@ -3411,7 +3473,7 @@ theorem deploy_coverage (enc : VocabEncoder V) {a : Admitted V} {declaration : D
       have hRolesEq : proverAndVerifier w.foundPair.1 declaration = some (prover, verifier) := by
         simpa [Deployed.roles, Deployed.entry, w.hFound] using hRoles
       rw [w.hPV] at hRolesEq; cases hRolesEq
-      obtain ⟨hEmS, hAuthP, hAuthV⟩ := checkAuthoredEvents_covers M w.hNe _ (fun _ h => h) w.hAuth
+      obtain ⟨hAuthP, hAuthV⟩ := checkAuthoredEvents_covers M w.hNe _ (fun _ h => h) w.hAuth
       obtain ⟨hLayP, hLayV⟩ := buildLayoutLayers_covers M w.hLay
       have hLayP' : Handler.Covers M (Layer.handler M (Defs.fnTable M a.program.defs)
           (Defs.rTable M a.program.defs) w.layP)
@@ -3424,21 +3486,7 @@ theorem deploy_coverage (enc : VocabEncoder V) {a : Admitted V} {declaration : D
       rcases hRole with rfl | rfl
       · dsimp only; rw [dite_eq_left rfl]
         apply stack_covers_cast M (by simp [w.hFound]) rfl
-        cases declaration.samples with
-        | none =>
-            exact stack_handler_covers_cons M _ _ hLayP' (stack_handler_covers_nil M _ _ _)
-        | some _ =>
-            have hSamp : Handler.Covers M
-                (Layer.handler M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs)
-                  ({ line := .samples, state := .nat, takes := [], gives := [],
-                     clauses := w.sClauses, again := attemptNumAgain,
-                     start := samplesStart, finish := emptyFinish .nat } :
-                    Layer V a.program.headers w.prover w.foundPair.1.ins))
-                (ROp.MatchesShape M w.prover (w.foundPair.1.shape.events [] id))
-                (ROp.MatchesShape M w.prover (w.foundPair.1.shape.events [] id)) :=
-              fun op s ho => clause_answer_covers M _ _ _ hEmS op s (.inl ho)
-            exact stack_handler_covers_cons M _ _ hSamp
-              (stack_handler_covers_cons M _ _ hLayP' (stack_handler_covers_nil M _ _ _))
+        exact stack_handler_covers_cons M _ _ hLayP' (stack_handler_covers_nil M _ _ _)
       · dsimp only; rw [dite_eq_right (Ne.symm w.hNe), dite_eq_left rfl]
         apply stack_covers_cast M (by simp [w.hFound]) rfl
         exact stack_handler_covers_cons M _ _ hLayV' (stack_handler_covers_nil M _ _ _)
@@ -3448,13 +3496,13 @@ theorem deploy_coverage (enc : VocabEncoder V) {a : Admitted V} {declaration : D
         simpa [Deployed.roles, Deployed.entry, w.hFound] using hRoles
       rw [w.hPV] at hRolesEq; cases hRolesEq
       have hFst := eventsWithAbsorb_fst w.prover w.verifier [] id false w.foundPair.1.shape
-      obtain ⟨hEmP, hEmV, hEmS, hCovP, hCovV⟩ := buildConstructionClauses_go_covers M w.hNe 0 _
+      obtain ⟨hEmP, hEmV, hCovP, hCovV⟩ := buildConstructionClauses_go_covers M w.hNe 0 _
         (fun k p hk => by rw [Nat.zero_add, ← hFst, List.getElem?_map, hk]; rfl) w.hCC
       rw [hFst] at hCovP hCovV
       obtain ⟨hLayP, hLayV⟩ := buildLayoutLayers_covers M w.hLay
       rcases hRole with rfl | rfl
       · dsimp only; rw [dite_eq_left rfl]
-        apply stack_covers_cast M (by simp [w.hFound]) rfl
+        apply stack_covers_cast_ins M (by simp [w.hFound]) rfl
         have hConP : Handler.Covers M
             (Layer.handler M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs)
               ({ line := .construction, state := w.stateTy, takes := [], gives := [],
@@ -3465,25 +3513,19 @@ theorem deploy_coverage (enc : VocabEncoder V) {a : Admitted V} {declaration : D
             (ROp.MatchesShape M w.prover (w.foundPair.1.shape.events [] id))
             (LayoutInputP M w.prover w.verifier (w.foundPair.1.shape.events [] id)) :=
           fun op s ho => clause_answer_covers M _ _ _ hEmP op s (hCovP op ho)
-        cases declaration.samples with
+        cases hS : w.prep.sampLayer with
         | none =>
             exact stack_handler_covers_cons M _ _ hConP
               (stack_handler_covers_cons M _ _ hLayP (stack_handler_covers_nil M _ _ _))
-        | some _ =>
-            have hSamp : Handler.Covers M
-                (Layer.handler M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs)
-                  ({ line := .samples, state := .nat, takes := [], gives := [],
-                     clauses := w.sClauses, again := attemptNumAgain,
-                     start := samplesStart, finish := emptyFinish .nat } :
-                    Layer V a.program.headers w.prover w.foundPair.1.ins))
-                (ROp.MatchesShape M w.prover (w.foundPair.1.shape.events [] id))
-                (ROp.MatchesShape M w.prover (w.foundPair.1.shape.events [] id)) :=
-              fun op s ho => clause_answer_covers M _ _ _ hEmS op s (.inl ho)
+        | some sampP =>
+            have hSamp := buildSamplesLayer_covers M
+              (opOk := ROp.MatchesShape M w.prover (w.foundPair.1.shape.events [] id))
+              (hS ▸ w.prep.hSamp)
             exact stack_handler_covers_cons M _ _ hSamp
               (stack_handler_covers_cons M _ _ hConP
                 (stack_handler_covers_cons M _ _ hLayP (stack_handler_covers_nil M _ _ _)))
       · dsimp only; rw [dite_eq_right (Ne.symm w.hNe), dite_eq_left rfl]
-        apply stack_covers_cast M (by simp [w.hFound]) rfl
+        apply stack_covers_cast_ins M (by simp [w.hFound]) rfl
         have hConV : Handler.Covers M
             (Layer.handler M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs)
               ({ line := .construction, state := w.stateTy, takes := [], gives := [],
@@ -3497,8 +3539,8 @@ theorem deploy_coverage (enc : VocabEncoder V) {a : Admitted V} {declaration : D
         exact stack_handler_covers_cons M _ _ hConV
           (stack_handler_covers_cons M _ _ hLayV (stack_handler_covers_nil M _ _ _))
 
-/-- An ideal-RO deployment's verifier asks the world only closed effects (its own private coins,
-service requests — including `serviceKey` — and local attempt marks). -/
+/-- An ideal random-oracle deployment's verifier asks the world only closed effects (its own
+private coins, service requests — including `serviceKey` — and local attempt marks). -/
 theorem deployIdeal_verifier_covered (enc : VocabEncoder V) (serviceKey : Key)
     {a : Admitted V} {declaration : Declaration} {d : Deployed V}
     (hDep : deployIdeal enc serviceKey a declaration = .ok d)
@@ -3519,7 +3561,7 @@ theorem deployIdeal_verifier_covered (enc : VocabEncoder V) (serviceKey : Key)
   rw [hFst] at hCovV
   obtain ⟨_, hLayV⟩ := buildLayoutLayers_covers M w.hLay
   dsimp only; rw [dite_eq_left rfl]
-  apply stack_covers_cast M (by simp [w.hFound]) rfl
+  apply stack_covers_cast_ins M (by simp [w.hFound]) rfl
   have hConV : Handler.Covers M
       (Layer.handler M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs)
         ({ line := .construction, state := idealPathTy w.suiteUnitTy, takes := [], gives := [],

@@ -49,24 +49,37 @@ def encodeOption {A : Type} (f : A → List Nat) : Option A → List Nat
   | none => [0]
   | some a => 1 :: f a
 
-/-- Encode a UTF-8 string as length-prefixed bytes. -/
-def encodeString (s : String) : List Nat :=
-  let bytes := s.toUTF8.toList.map UInt8.toNat
-  encodeNat bytes.length ++ bytes
+/-- Canonical length-prefixed ASCII domain tag `"zkc.core.proof/0"`. -/
+def proofDomainTag : List Nat :=
+  [16, 122, 107, 99, 46, 99, 111, 114, 101, 46, 112, 114, 111, 111, 102, 47, 48]
 
-/-- Encode an ASCII/UTF-8 label string directly as its raw bytes (`< 256`). -/
-def encodeLabelBytes (s : String) : List Nat :=
-  s.toUTF8.toList.map UInt8.toNat
+/-- Canonical length-prefixed ASCII domain tag `"zkc.core.stmt/0"`. -/
+def stmtDomainTag : List Nat :=
+  [15, 122, 107, 99, 46, 99, 111, 114, 101, 46, 115, 116, 109, 116, 47, 48]
 
-/-- Encode a site domain label including the full call path `s.through` and local key `s.key`,
-preventing label collisions between distinct sub-protocol call sites with the same local key. -/
-def encodeSiteLabel (prefix_ : String) (s : Site) : List Nat :=
-  let pathStr := "/".intercalate (s.through.map fun k => toString k.number)
-  encodeLabelBytes s!"{prefix_}:{pathStr}:{s.key.number}"
+/-- Canonical length-prefixed ASCII domain tag `"zkc.core.msg/0"`. -/
+def msgDomainTag : List Nat :=
+  [14, 122, 107, 99, 46, 99, 111, 114, 101, 46, 109, 115, 103, 47, 48]
+
+/-- Canonical length-prefixed ASCII domain tag `"zkc.core.draw/0"`. -/
+def drawDomainTag : List Nat :=
+  [15, 122, 107, 99, 46, 99, 111, 114, 101, 46, 100, 114, 97, 119, 47, 48]
 
 /-- Encode a site (`through`, `key`) canonically. -/
 def encodeSite (s : Site) : List Nat :=
   encodeList encodeKey s.through ++ encodeKey s.key
+
+/-- Versioned canonical domain label for a statement input at index `i`. -/
+def stmtLabel (i : Nat) : List Nat :=
+  stmtDomainTag ++ encodeNat i
+
+/-- Versioned canonical domain label for a message at site `s` (binding full `s.through` and `s.key`). -/
+def msgLabel (s : Site) : List Nat :=
+  msgDomainTag ++ encodeSite s
+
+/-- Versioned canonical domain label for a verifier draw at site `s` (binding full `s.through` and `s.key`). -/
+def drawLabel (s : Site) : List Nat :=
+  drawDomainTag ++ encodeSite s
 
 /-- Encode a `RoleKind` as a single canonical tag byte. -/
 def encodeRoleKind : RoleKind → List Nat
@@ -262,15 +275,90 @@ end
 
 end
 
-/-- Canonical byte encoding of an erased `Definition` (excluding non-semantic analysis notes). -/
+/-- Canonical byte encoding of a positional operand over `Empty`. -/
+def encodeOperandEmpty : Operand Empty → List Nat
+  | .arg pos => encodeNat pos
+  | .apply w _ => nomatch w
+
+/-- Canonical byte encoding of a positional requirement over `Empty`. -/
+def encodeReqEmpty : Requirement Empty → List Nat
+  | .le a b => 0 :: encodeOperandEmpty a ++ encodeOperandEmpty b
+  | .lt a b => 1 :: encodeOperandEmpty a ++ encodeOperandEmpty b
+  | .atLeast a n => 2 :: encodeOperandEmpty a ++ encodeNat n
+  | .below a n => 3 :: encodeOperandEmpty a ++ encodeNat n
+  | .exactly a n => 4 :: encodeOperandEmpty a ++ encodeNat n
+  | .difference a b n => 5 :: encodeOperandEmpty a ++ encodeOperandEmpty b ++ encodeNat n
+  | .holds a => 6 :: encodeOperandEmpty a
+  | .bounded a => 7 :: encodeOperandEmpty a
+
+section
+variable {Raw : Type} (encRaw : Raw → List Nat)
+
+mutual
+  /-- Canonical byte encoding of a stored assertion expression. -/
+  def encodeExpr : BodyAnalysis.Expr Raw → List Nat
+    | .arg pos => 0 :: encodeNat pos
+    | .apply w ops res => 1 :: encRaw w ++ encodeExprs ops ++ encodeNat res
+
+  /-- Canonical byte encoding of stored assertion expression lists. -/
+  def encodeExprs : BodyAnalysis.Exprs Raw → List Nat
+    | .nil => [0]
+    | .cons e rest => 1 :: encodeExpr e ++ encodeExprs rest
+end
+
+/-- Canonical byte encoding of a `ContractClause`. -/
+def encodeContractClause (c : BodyAnalysis.ContractClause Raw) : List Nat :=
+  encodeExpr encRaw c.assertion ++ encodeOption (encodeExpr encRaw) c.staticBound
+
+/-- Canonical byte encoding of a `StaticRegion`. -/
+def encodeStaticRegion : BodyAnalysis.StaticRegion → List Nat
+  | .root => [0]
+  | .body p ord k => 1 :: encodeStaticRegion p ++ encodeNat ord ++ encodeKey k
+  | .otherwise p ord k => 2 :: encodeStaticRegion p ++ encodeNat ord ++ encodeKey k
+  | .arm p ord => 3 :: encodeStaticRegion p ++ encodeNat ord
+  | .block p ord k n => 4 :: encodeStaticRegion p ++ encodeNat ord ++ encodeKey k ++ encodeNat n
+
+/-- Canonical byte encoding of a `StaticCursor`. -/
+def encodeStaticCursor (c : BodyAnalysis.StaticCursor) : List Nat :=
+  encodeStaticRegion c.enclosing ++ encodeNat c.ordinal
+
+/-- Canonical byte encoding of an `AnnotationSite`. -/
+def encodeAnnotationSite : BodyAnalysis.AnnotationSite → List Nat
+  | .instruction c k => 0 :: encodeStaticCursor c ++ encodeKey k
+  | .block c k n => 1 :: encodeStaticCursor c ++ encodeKey k ++ encodeNat n
+
+/-- Canonical byte encoding of a body analysis `Annotation`. -/
+def encodeAnnotation : BodyAnalysis.Annotation Raw → List Nat
+  | .invariant uses as => 0 :: encodeList encodeNat uses ++ encodeList (encodeExpr encRaw) as
+  | .step lem names => 1 :: encodeNat lem ++ encodeList encodeNat names
+  | .fact uses a => 2 :: encodeList encodeNat uses ++ encodeExpr encRaw a
+
+/-- Canonical byte encoding of `BodyAnalysis.Annotations`. -/
+def encodeAnnotations (notes : BodyAnalysis.Annotations Raw) : List Nat :=
+  encodeList (fun p => encodeAnnotationSite p.1 ++ encodeAnnotation encRaw p.2) notes
+
+end
+
+/-- Canonical byte encoding of a `HeaderClause`. -/
+def encodeHeaderClause {V : Vocabulary} (enc : VocabEncoder V) : HeaderClause V → List Nat
+  | .positional req => 0 :: encodeReqEmpty req
+  | .assertion c => 1 :: encodeContractClause (encodeLocalRaw enc) c
+
+/-- Canonical byte encoding of a `HeaderSummary`. -/
+def encodeHeaderSummary {V : Vocabulary} (enc : VocabEncoder V) (s : HeaderSummary V) : List Nat :=
+  encodeList (encodeHeaderClause enc) s.requires ++ encodeList (encodeHeaderClause enc) s.ensures
+
+/-- Canonical byte encoding of an erased `Definition` (including function summaries and notes). -/
 def encodeDefinition {V : Vocabulary} (enc : VocabEncoder V) : Definition V → List Nat
-  | .fn key ins outs canStop kernel _ body _ =>
+  | .fn key ins outs canStop kernel summary body notes =>
       0 :: encodeKey key ++
         encodeList (encodeTy enc) ins ++
         encodeList (encodeTy enc) outs ++
         encodeBool canStop ++
         encodeOption encodeKey kernel ++
-        encodeRegion (encodeLocalRaw enc) (fun _ => []) body
+        encodeHeaderSummary enc summary ++
+        encodeRegion (encodeLocalRaw enc) (fun _ => []) body ++
+        encodeAnnotations (encodeLocalRaw enc) notes
   | .protocol key roles ins outs body =>
       1 :: encodeKey key ++
         encodeNat roles ++
@@ -278,13 +366,15 @@ def encodeDefinition {V : Vocabulary} (enc : VocabEncoder V) : Definition V → 
         encodeList (encodeLTy enc) outs ++
         encodeRegion (encodeProtocolRaw enc) (encodeList encodeNat) body
 
-/-- Canonical identity bytes of a scheme over an admitted program: binds the declaration
-(including application context) and the reachable erased definitions in `closure`. -/
+/-- Versioned canonical identity bytes (`zkc.core.proof/0`) of a scheme over an admitted program:
+binds the declaration (including application context) and all reachable erased definitions in
+`closure`. -/
 def schemeIdentity {V : Vocabulary} (enc : VocabEncoder V) (a : Admitted V)
     (declaration : Declaration) : List Nat :=
   let closure := (declaration.entry :: declaration.definitions).flatMap a.program.defs.closureOf
   let defs := (erase a.program).definitions.filter fun d => decide (d.key ∈ closure)
-  encodeDeclaration declaration ++ encodeList (encodeDefinition enc) defs
+  proofDomainTag ++ encodeDeclaration declaration ++
+    encodeList (encodeDefinition enc) defs
 
 /-- Canonical identity bytes of a deployed scheme (`Functions.identity`). -/
 def deployedIdentity {V : Vocabulary} (enc : VocabEncoder V) (d : Deployed V) : List Nat :=
@@ -349,18 +439,22 @@ theorem encodeOption_bytes {A : Type} (f : A → List Nat) (hf : ∀ a b, b ∈ 
   | none, b, h => by simp [encodeOption] at h; omega
   | some a, b, h => mem_cons_lt (by omega) (hf a) b h
 
-theorem encodeLabelBytes_bytes (s : String) : ∀ b, b ∈ encodeLabelBytes s → b < 256 := by
-  intro b hb
-  simp only [encodeLabelBytes, List.mem_map] at hb
-  obtain ⟨u, _, rfl⟩ := hb
-  exact u.toNat_lt
-
-theorem encodeSiteLabel_bytes (prefix_ : String) (s : Site) :
-    ∀ b, b ∈ encodeSiteLabel prefix_ s → b < 256 :=
-  encodeLabelBytes_bytes _
+theorem proofDomainTag_bytes : ∀ b, b ∈ proofDomainTag → b < 256 := by decide
+theorem stmtDomainTag_bytes : ∀ b, b ∈ stmtDomainTag → b < 256 := by decide
+theorem msgDomainTag_bytes : ∀ b, b ∈ msgDomainTag → b < 256 := by decide
+theorem drawDomainTag_bytes : ∀ b, b ∈ drawDomainTag → b < 256 := by decide
 
 theorem encodeSite_bytes (s : Site) : ∀ b, b ∈ encodeSite s → b < 256 :=
   mem_append_lt (encodeList_bytes encodeKey encodeKey_bytes s.through) (encodeKey_bytes s.key)
+
+theorem stmtLabel_bytes (i : Nat) : ∀ b, b ∈ stmtLabel i → b < 256 :=
+  mem_append_lt stmtDomainTag_bytes (encodeNat_bytes i)
+
+theorem msgLabel_bytes (s : Site) : ∀ b, b ∈ msgLabel s → b < 256 :=
+  mem_append_lt msgDomainTag_bytes (encodeSite_bytes s)
+
+theorem drawLabel_bytes (s : Site) : ∀ b, b ∈ drawLabel s → b < 256 :=
+  mem_append_lt drawDomainTag_bytes (encodeSite_bytes s)
 
 theorem encodeRoleKind_bytes : ∀ rk b, b ∈ encodeRoleKind rk → b < 256
   | .online, b, h => by simp [encodeRoleKind] at h; omega
@@ -654,19 +748,190 @@ end
 
 end
 
+theorem encodeOperandEmpty_bytes : ∀ o b, b ∈ encodeOperandEmpty o → b < 256
+  | .arg pos, b, h => encodeNat_bytes pos b h
+  | .apply w _, _, _ => nomatch w
+
+theorem encodeReqEmpty_bytes : ∀ req b, b ∈ encodeReqEmpty req → b < 256
+  | .le a b, x, h => by
+      simp only [encodeReqEmpty, List.mem_cons, List.mem_append, or_assoc] at h
+      rcases h with rfl | h | h
+      · omega
+      · exact encodeOperandEmpty_bytes a x h
+      · exact encodeOperandEmpty_bytes b x h
+  | .lt a b, x, h => by
+      simp only [encodeReqEmpty, List.mem_cons, List.mem_append, or_assoc] at h
+      rcases h with rfl | h | h
+      · omega
+      · exact encodeOperandEmpty_bytes a x h
+      · exact encodeOperandEmpty_bytes b x h
+  | .atLeast a n, x, h => by
+      simp only [encodeReqEmpty, List.mem_cons, List.mem_append, or_assoc] at h
+      rcases h with rfl | h | h
+      · omega
+      · exact encodeOperandEmpty_bytes a x h
+      · exact encodeNat_bytes n x h
+  | .below a n, x, h => by
+      simp only [encodeReqEmpty, List.mem_cons, List.mem_append, or_assoc] at h
+      rcases h with rfl | h | h
+      · omega
+      · exact encodeOperandEmpty_bytes a x h
+      · exact encodeNat_bytes n x h
+  | .exactly a n, x, h => by
+      simp only [encodeReqEmpty, List.mem_cons, List.mem_append, or_assoc] at h
+      rcases h with rfl | h | h
+      · omega
+      · exact encodeOperandEmpty_bytes a x h
+      · exact encodeNat_bytes n x h
+  | .difference a b n, x, h => by
+      simp only [encodeReqEmpty, List.mem_cons, List.mem_append, or_assoc] at h
+      rcases h with rfl | h | h | h
+      · omega
+      · exact encodeOperandEmpty_bytes a x h
+      · exact encodeOperandEmpty_bytes b x h
+      · exact encodeNat_bytes n x h
+  | .holds a, x, h => mem_cons_lt (by omega) (encodeOperandEmpty_bytes a) x h
+  | .bounded a, x, h => mem_cons_lt (by omega) (encodeOperandEmpty_bytes a) x h
+
+section
+variable {Raw : Type}
+
+mutual
+  theorem encodeExpr_bytes (encRaw : Raw → List Nat) (hRaw : ∀ r b, b ∈ encRaw r → b < 256) :
+      ∀ (e : BodyAnalysis.Expr Raw) b, b ∈ encodeExpr encRaw e → b < 256
+    | .arg pos, b, h => mem_cons_lt (by omega) (encodeNat_bytes pos) b h
+    | .apply w ops res, b, h => by
+        simp only [encodeExpr, List.mem_cons, List.mem_append, or_assoc] at h
+        rcases h with rfl | h | h | h
+        · omega
+        · exact hRaw w b h
+        · exact encodeExprs_bytes encRaw hRaw ops b h
+        · exact encodeNat_bytes res b h
+
+  theorem encodeExprs_bytes (encRaw : Raw → List Nat) (hRaw : ∀ r b, b ∈ encRaw r → b < 256) :
+      ∀ (es : BodyAnalysis.Exprs Raw) b, b ∈ encodeExprs encRaw es → b < 256
+    | .nil, b, h => by simp [encodeExprs] at h; omega
+    | .cons e rest, b, h => by
+        simp only [encodeExprs, List.mem_cons, List.mem_append, or_assoc] at h
+        rcases h with rfl | h | h
+        · omega
+        · exact encodeExpr_bytes encRaw hRaw e b h
+        · exact encodeExprs_bytes encRaw hRaw rest b h
+end
+
+theorem encodeContractClause_bytes (encRaw : Raw → List Nat) (hRaw : ∀ r b, b ∈ encRaw r → b < 256)
+    (c : BodyAnalysis.ContractClause Raw) :
+    ∀ b, b ∈ encodeContractClause encRaw c → b < 256 :=
+  mem_append_lt (encodeExpr_bytes encRaw hRaw c.assertion)
+    (encodeOption_bytes _ (encodeExpr_bytes encRaw hRaw) c.staticBound)
+
+theorem encodeStaticRegion_bytes : ∀ (r : BodyAnalysis.StaticRegion) b, b ∈ encodeStaticRegion r → b < 256
+  | .root, b, h => by simp [encodeStaticRegion] at h; omega
+  | .body p ord k, b, h => by
+      simp only [encodeStaticRegion, List.mem_cons, List.mem_append, or_assoc] at h
+      rcases h with rfl | h | h | h
+      · omega
+      · exact encodeStaticRegion_bytes p b h
+      · exact encodeNat_bytes ord b h
+      · exact encodeKey_bytes k b h
+  | .otherwise p ord k, b, h => by
+      simp only [encodeStaticRegion, List.mem_cons, List.mem_append, or_assoc] at h
+      rcases h with rfl | h | h | h
+      · omega
+      · exact encodeStaticRegion_bytes p b h
+      · exact encodeNat_bytes ord b h
+      · exact encodeKey_bytes k b h
+  | .arm p ord, b, h => by
+      simp only [encodeStaticRegion, List.mem_cons, List.mem_append, or_assoc] at h
+      rcases h with rfl | h | h
+      · omega
+      · exact encodeStaticRegion_bytes p b h
+      · exact encodeNat_bytes ord b h
+  | .block p ord k n, b, h => by
+      simp only [encodeStaticRegion, List.mem_cons, List.mem_append, or_assoc] at h
+      rcases h with rfl | h | h | h | h
+      · omega
+      · exact encodeStaticRegion_bytes p b h
+      · exact encodeNat_bytes ord b h
+      · exact encodeKey_bytes k b h
+      · exact encodeNat_bytes n b h
+
+theorem encodeStaticCursor_bytes (c : BodyAnalysis.StaticCursor) :
+    ∀ b, b ∈ encodeStaticCursor c → b < 256 :=
+  mem_append_lt (encodeStaticRegion_bytes c.enclosing) (encodeNat_bytes c.ordinal)
+
+theorem encodeAnnotationSite_bytes : ∀ (s : BodyAnalysis.AnnotationSite) b, b ∈ encodeAnnotationSite s → b < 256
+  | .instruction c k, b, h => by
+      simp only [encodeAnnotationSite, List.mem_cons, List.mem_append, or_assoc] at h
+      rcases h with rfl | h | h
+      · omega
+      · exact encodeStaticCursor_bytes c b h
+      · exact encodeKey_bytes k b h
+  | .block c k n, b, h => by
+      simp only [encodeAnnotationSite, List.mem_cons, List.mem_append, or_assoc] at h
+      rcases h with rfl | h | h | h
+      · omega
+      · exact encodeStaticCursor_bytes c b h
+      · exact encodeKey_bytes k b h
+      · exact encodeNat_bytes n b h
+
+theorem encodeAnnotation_bytes (encRaw : Raw → List Nat) (hRaw : ∀ r b, b ∈ encRaw r → b < 256) :
+    ∀ (a : BodyAnalysis.Annotation Raw) b, b ∈ encodeAnnotation encRaw a → b < 256
+  | .invariant uses as, b, h => by
+      simp only [encodeAnnotation, List.mem_cons, List.mem_append, or_assoc] at h
+      rcases h with rfl | h | h
+      · omega
+      · exact encodeList_bytes encodeNat encodeNat_bytes uses b h
+      · exact encodeList_bytes (encodeExpr encRaw) (encodeExpr_bytes encRaw hRaw) as b h
+  | .step lem names, b, h => by
+      simp only [encodeAnnotation, List.mem_cons, List.mem_append, or_assoc] at h
+      rcases h with rfl | h | h
+      · omega
+      · exact encodeNat_bytes lem b h
+      · exact encodeList_bytes encodeNat encodeNat_bytes names b h
+  | .fact uses a, b, h => by
+      simp only [encodeAnnotation, List.mem_cons, List.mem_append, or_assoc] at h
+      rcases h with rfl | h | h
+      · omega
+      · exact encodeList_bytes encodeNat encodeNat_bytes uses b h
+      · exact encodeExpr_bytes encRaw hRaw a b h
+
+theorem encodeAnnotations_bytes (encRaw : Raw → List Nat) (hRaw : ∀ r b, b ∈ encRaw r → b < 256)
+    (notes : BodyAnalysis.Annotations Raw) :
+    ∀ b, b ∈ encodeAnnotations encRaw notes → b < 256 :=
+  encodeList_bytes (fun p : BodyAnalysis.AnnotationSite × BodyAnalysis.Annotation Raw =>
+      encodeAnnotationSite p.1 ++ encodeAnnotation encRaw p.2)
+    (fun p => mem_append_lt (encodeAnnotationSite_bytes p.1)
+      (encodeAnnotation_bytes encRaw hRaw p.2)) notes
+
+end
+
+theorem encodeHeaderClause_bytes {V : Vocabulary} (enc : VocabEncoder V) :
+    ∀ (c : HeaderClause V) b, b ∈ encodeHeaderClause enc c → b < 256
+  | .positional req, b, h => mem_cons_lt (by omega) (encodeReqEmpty_bytes req) b h
+  | .assertion c, b, h =>
+      mem_cons_lt (by omega) (encodeContractClause_bytes _ (encodeLocalRaw_bytes enc) c) b h
+
+theorem encodeHeaderSummary_bytes {V : Vocabulary} (enc : VocabEncoder V) (s : HeaderSummary V) :
+    ∀ b, b ∈ encodeHeaderSummary enc s → b < 256 :=
+  mem_append_lt (encodeList_bytes _ (encodeHeaderClause_bytes enc) s.requires)
+    (encodeList_bytes _ (encodeHeaderClause_bytes enc) s.ensures)
+
 theorem encodeDefinition_bytes {V : Vocabulary} (enc : VocabEncoder V) :
     ∀ (d : Definition V) b, b ∈ encodeDefinition enc d → b < 256
-  | .fn key ins outs canStop kernel _ body _, b, h => by
+  | .fn key ins outs canStop kernel summary body notes, b, h => by
       simp only [encodeDefinition, List.mem_cons, List.mem_append, or_assoc] at h
-      rcases h with rfl | h | h | h | h | h | h
+      rcases h with rfl | h | h | h | h | h | h | h | h
       · omega
       · exact encodeKey_bytes key b h
       · exact encodeList_bytes (encodeTy enc) (encodeTy_bytes enc) ins b h
       · exact encodeList_bytes (encodeTy enc) (encodeTy_bytes enc) outs b h
       · exact encodeBool_bytes canStop b h
       · exact encodeOption_bytes encodeKey encodeKey_bytes kernel b h
+      · exact encodeHeaderSummary_bytes enc summary b h
       · exact encodeRegion_bytes _ _ (encodeLocalRaw_bytes enc)
           (fun _ _ h => absurd h (List.not_mem_nil)) body b h
+      · exact encodeAnnotations_bytes _ (encodeLocalRaw_bytes enc) notes b h
   | .protocol key roles ins outs body, b, h => by
       simp only [encodeDefinition, List.mem_cons, List.mem_append, or_assoc] at h
       rcases h with rfl | h | h | h | h | h
@@ -681,7 +946,7 @@ theorem encodeDefinition_bytes {V : Vocabulary} (enc : VocabEncoder V) :
 /-- Every element of `schemeIdentity` is a valid byte (`< 256`). -/
 theorem schemeIdentity_bytes {V : Vocabulary} (enc : VocabEncoder V) (a : Admitted V)
     (declaration : Declaration) : ∀ b, b ∈ schemeIdentity enc a declaration → b < 256 :=
-  mem_append_lt (encodeDeclaration_bytes declaration)
+  mem_append_lt (mem_append_lt proofDomainTag_bytes (encodeDeclaration_bytes declaration))
     (encodeList_bytes (encodeDefinition enc) (encodeDefinition_bytes enc) _)
 
 /-- Every element of `deployedIdentity` is a valid byte (`< 256`). -/
@@ -1153,35 +1418,256 @@ end
 
 end RegionInjectivity
 
-/-- Pairwise relation over two equal-length lists (Core-local, zero external dependencies). -/
-inductive ListRel {A : Type} (R : A → A → Prop) : List A → List A → Prop where
-  | nil : ListRel R [] []
-  | cons {x y : A} {xs ys : List A} : R x y → ListRel R xs ys → ListRel R (x :: xs) (y :: ys)
+/-- Statement domain labels are injective. -/
+theorem stmtLabel_injective {i₁ i₂ : Nat} (h : stmtLabel i₁ = stmtLabel i₂) : i₁ = i₂ := by
+  unfold stmtLabel at h
+  have h1 := List.append_cancel_left h
+  exact (encodeNat_prefixFree i₁ i₂ [] [] (by simpa using h1)).1
 
-/-- Two erased definitions are semantically identical (ignoring non-semantic `HeaderSummary` and
-analysis notes on functions). -/
-def Definition.SameErased {V : Vocabulary} : Definition V → Definition V → Prop
-  | .fn k₁ i₁ o₁ s₁ ker₁ _ b₁ _, .fn k₂ i₂ o₂ s₂ ker₂ _ b₂ _ =>
-      k₁ = k₂ ∧ i₁ = i₂ ∧ o₁ = o₂ ∧ s₁ = s₂ ∧ ker₁ = ker₂ ∧ b₁ = b₂
-  | .protocol k₁ r₁ i₁ o₁ b₁, .protocol k₂ r₂ i₂ o₂ b₂ =>
-      k₁ = k₂ ∧ r₁ = r₂ ∧ i₁ = i₂ ∧ o₁ = o₂ ∧ b₁ = b₂
-  | _, _ => False
+/-- Message site domain labels are injective on full `Site` (`through` and `key`). -/
+theorem msgLabel_injective {s₁ s₂ : Site} (h : msgLabel s₁ = msgLabel s₂) : s₁ = s₂ := by
+  unfold msgLabel at h
+  have h1 := List.append_cancel_left h
+  exact (encodeSite_prefixFree s₁ s₂ [] [] (by simpa using h1)).1
 
-theorem encodeDefinition_prefixFree {V : Vocabulary} (enc : VocabEncoder V) (hEnc : enc.Injective)
-    (d₁ d₂ : Definition V) (r₁ r₂ : List Nat)
-    (h : encodeDefinition enc d₁ ++ r₁ = encodeDefinition enc d₂ ++ r₂) :
-    d₁.SameErased d₂ ∧ r₁ = r₂ := by
+/-- Draw site domain labels are injective on full `Site` (`through` and `key`). -/
+theorem drawLabel_injective {s₁ s₂ : Site} (h : drawLabel s₁ = drawLabel s₂) : s₁ = s₂ := by
+  unfold drawLabel at h
+  have h1 := List.append_cancel_left h
+  exact (encodeSite_prefixFree s₁ s₂ [] [] (by simpa using h1)).1
+
+/-- Message and draw domain labels are disjoint for all sites. -/
+theorem msgLabel_ne_drawLabel (s₁ s₂ : Site) : msgLabel s₁ ≠ drawLabel s₂ := by
+  intro h
+  simp only [msgLabel, drawLabel, msgDomainTag, drawDomainTag, List.cons_append] at h
+  cases h
+
+/-- Statement and message domain labels are disjoint. -/
+theorem stmtLabel_ne_msgLabel (i : Nat) (s : Site) : stmtLabel i ≠ msgLabel s := by
+  intro h
+  simp only [stmtLabel, msgLabel, stmtDomainTag, msgDomainTag, List.cons_append] at h
+  cases h
+
+/-- Statement and draw domain labels are disjoint. -/
+theorem stmtLabel_ne_drawLabel (i : Nat) (s : Site) : stmtLabel i ≠ drawLabel s := by
+  intro h
+  simp only [stmtLabel, drawLabel, stmtDomainTag, drawDomainTag, List.cons_append] at h
+  cases h
+
+theorem encodeOperandEmpty_prefixFree : PrefixFree encodeOperandEmpty := by
+  intro a b r₁ r₂ h
+  cases a with
+  | arg p₁ =>
+      cases b with
+      | arg p₂ =>
+          obtain ⟨hp, hr⟩ := encodeNat_prefixFree p₁ p₂ r₁ r₂ h
+          exact ⟨congrArg Operand.arg hp, hr⟩
+      | apply w _ => nomatch w
+  | apply w _ => nomatch w
+
+theorem encodeReqEmpty_prefixFree : PrefixFree encodeReqEmpty := by
+  intro a b r₁ r₂ h
+  cases a <;> cases b <;> simp only [encodeReqEmpty, List.cons_append, List.append_assoc] at h
+  · obtain ⟨h1, hr1⟩ := encodeOperandEmpty_prefixFree _ _ _ _ (List.cons.inj h).2
+    obtain ⟨h2, hr2⟩ := encodeOperandEmpty_prefixFree _ _ r₁ r₂ hr1
+    exact ⟨by rw [h1, h2], hr2⟩
+  all_goals try cases (List.cons.inj h).1
+  · obtain ⟨h1, hr1⟩ := encodeOperandEmpty_prefixFree _ _ _ _ (List.cons.inj h).2
+    obtain ⟨h2, hr2⟩ := encodeOperandEmpty_prefixFree _ _ r₁ r₂ hr1
+    exact ⟨by rw [h1, h2], hr2⟩
+  · obtain ⟨h1, hr1⟩ := encodeOperandEmpty_prefixFree _ _ _ _ (List.cons.inj h).2
+    obtain ⟨h2, hr2⟩ := encodeNat_prefixFree _ _ r₁ r₂ hr1
+    exact ⟨by rw [h1, h2], hr2⟩
+  · obtain ⟨h1, hr1⟩ := encodeOperandEmpty_prefixFree _ _ _ _ (List.cons.inj h).2
+    obtain ⟨h2, hr2⟩ := encodeNat_prefixFree _ _ r₁ r₂ hr1
+    exact ⟨by rw [h1, h2], hr2⟩
+  · obtain ⟨h1, hr1⟩ := encodeOperandEmpty_prefixFree _ _ _ _ (List.cons.inj h).2
+    obtain ⟨h2, hr2⟩ := encodeNat_prefixFree _ _ r₁ r₂ hr1
+    exact ⟨by rw [h1, h2], hr2⟩
+  · obtain ⟨h1, hr1⟩ := encodeOperandEmpty_prefixFree _ _ _ _ (List.cons.inj h).2
+    obtain ⟨h2, hr2⟩ := encodeOperandEmpty_prefixFree _ _ _ _ hr1
+    obtain ⟨h3, hr3⟩ := encodeNat_prefixFree _ _ r₁ r₂ hr2
+    exact ⟨by rw [h1, h2, h3], hr3⟩
+  · obtain ⟨h1, hr1⟩ := encodeOperandEmpty_prefixFree _ _ r₁ r₂ (List.cons.inj h).2
+    exact ⟨by rw [h1], hr1⟩
+  · obtain ⟨h1, hr1⟩ := encodeOperandEmpty_prefixFree _ _ r₁ r₂ (List.cons.inj h).2
+    exact ⟨by rw [h1], hr1⟩
+
+section SummaryInjectivity
+variable {Raw : Type}
+
+mutual
+  theorem encodeExpr_prefixFree {encRaw : Raw → List Nat} (hRaw : PrefixFree encRaw) :
+      ∀ (a b : BodyAnalysis.Expr Raw) (r₁ r₂ : List Nat),
+      encodeExpr encRaw a ++ r₁ = encodeExpr encRaw b ++ r₂ → a = b ∧ r₁ = r₂
+    | .arg p₁, .arg p₂, r₁, r₂, h => by
+        simp only [encodeExpr, List.cons_append] at h
+        obtain ⟨hp, hr⟩ := encodeNat_prefixFree p₁ p₂ r₁ r₂ (List.cons.inj h).2
+        exact ⟨by rw [hp], hr⟩
+    | .arg _, .apply .., _, _, h => by simp only [encodeExpr, List.cons_append] at h; cases (List.cons.inj h).1
+    | .apply .., .arg _, _, _, h => by simp only [encodeExpr, List.cons_append] at h; cases (List.cons.inj h).1
+    | .apply w₁ o₁ res₁, .apply w₂ o₂ res₂, r₁, r₂, h => by
+        simp only [encodeExpr, List.cons_append, List.append_assoc] at h
+        obtain ⟨hw, h1⟩ := hRaw w₁ w₂ _ _ (List.cons.inj h).2
+        obtain ⟨ho, h2⟩ := encodeExprs_prefixFree hRaw o₁ o₂ _ _ h1
+        obtain ⟨hres, hr⟩ := encodeNat_prefixFree res₁ res₂ r₁ r₂ h2
+        exact ⟨by rw [hw, ho, hres], hr⟩
+
+  theorem encodeExprs_prefixFree {encRaw : Raw → List Nat} (hRaw : PrefixFree encRaw) :
+      ∀ (a b : BodyAnalysis.Exprs Raw) (r₁ r₂ : List Nat),
+      encodeExprs encRaw a ++ r₁ = encodeExprs encRaw b ++ r₂ → a = b ∧ r₁ = r₂
+    | .nil, .nil, _, _, h => by
+        simp only [encodeExprs, List.cons_append, List.nil_append] at h
+        exact ⟨rfl, (List.cons.inj h).2⟩
+    | .nil, .cons .., _, _, h => by simp only [encodeExprs, List.cons_append] at h; cases (List.cons.inj h).1
+    | .cons .., .nil, _, _, h => by simp only [encodeExprs, List.cons_append] at h; cases (List.cons.inj h).1
+    | .cons e₁ rest₁, .cons e₂ rest₂, r₁, r₂, h => by
+        simp only [encodeExprs, List.cons_append, List.append_assoc] at h
+        obtain ⟨he, h1⟩ := encodeExpr_prefixFree hRaw e₁ e₂ _ _ (List.cons.inj h).2
+        obtain ⟨hrest, hr⟩ := encodeExprs_prefixFree hRaw rest₁ rest₂ r₁ r₂ h1
+        exact ⟨by rw [he, hrest], hr⟩
+end
+
+theorem encodeContractClause_prefixFree {encRaw : Raw → List Nat} (hRaw : PrefixFree encRaw) :
+    PrefixFree (encodeContractClause encRaw) := by
+  intro ⟨a₁, b₁⟩ ⟨a₂, b₂⟩ r₁ r₂ h
+  simp only [encodeContractClause, List.append_assoc] at h
+  obtain ⟨ha, h1⟩ := encodeExpr_prefixFree hRaw a₁ a₂ _ _ h
+  obtain ⟨hb, hr⟩ := encodeOption_prefixFree (encodeExpr_prefixFree hRaw) b₁ b₂ r₁ r₂ h1
+  exact ⟨by rw [ha, hb], hr⟩
+
+theorem encodeStaticRegion_prefixFree : PrefixFree encodeStaticRegion := by
+  intro a b r₁ r₂ h
+  induction a generalizing b r₁ r₂ with
+  | root =>
+      cases b <;> simp only [encodeStaticRegion, List.cons_append, List.nil_append] at h
+      · exact ⟨rfl, (List.cons.inj h).2⟩
+      all_goals cases (List.cons.inj h).1
+  | body p₁ o₁ k₁ ih =>
+      cases b <;> simp only [encodeStaticRegion, List.cons_append, List.append_assoc] at h
+      · cases (List.cons.inj h).1
+      · obtain ⟨hp, h1⟩ := ih _ _ _ (List.cons.inj h).2
+        obtain ⟨ho, h2⟩ := encodeNat_prefixFree _ _ _ _ h1
+        obtain ⟨hk, hr⟩ := encodeKey_prefixFree _ _ r₁ r₂ h2
+        exact ⟨by rw [hp, ho, hk], hr⟩
+      all_goals cases (List.cons.inj h).1
+  | otherwise p₁ o₁ k₁ ih =>
+      cases b <;> simp only [encodeStaticRegion, List.cons_append, List.append_assoc] at h
+      · cases (List.cons.inj h).1
+      · cases (List.cons.inj h).1
+      · obtain ⟨hp, h1⟩ := ih _ _ _ (List.cons.inj h).2
+        obtain ⟨ho, h2⟩ := encodeNat_prefixFree _ _ _ _ h1
+        obtain ⟨hk, hr⟩ := encodeKey_prefixFree _ _ r₁ r₂ h2
+        exact ⟨by rw [hp, ho, hk], hr⟩
+      all_goals cases (List.cons.inj h).1
+  | arm p₁ o₁ ih =>
+      cases b <;> simp only [encodeStaticRegion, List.cons_append, List.append_assoc] at h
+      · cases (List.cons.inj h).1
+      · cases (List.cons.inj h).1
+      · cases (List.cons.inj h).1
+      · obtain ⟨hp, h1⟩ := ih _ _ _ (List.cons.inj h).2
+        obtain ⟨ho, hr⟩ := encodeNat_prefixFree _ _ r₁ r₂ h1
+        exact ⟨by rw [hp, ho], hr⟩
+      · cases (List.cons.inj h).1
+  | block p₁ o₁ k₁ n₁ ih =>
+      cases b <;> simp only [encodeStaticRegion, List.cons_append, List.append_assoc] at h
+      · cases (List.cons.inj h).1
+      · cases (List.cons.inj h).1
+      · cases (List.cons.inj h).1
+      · cases (List.cons.inj h).1
+      · obtain ⟨hp, h1⟩ := ih _ _ _ (List.cons.inj h).2
+        obtain ⟨ho, h2⟩ := encodeNat_prefixFree _ _ _ _ h1
+        obtain ⟨hk, h3⟩ := encodeKey_prefixFree _ _ _ _ h2
+        obtain ⟨hn, hr⟩ := encodeNat_prefixFree _ _ r₁ r₂ h3
+        exact ⟨by rw [hp, ho, hk, hn], hr⟩
+
+theorem encodeStaticCursor_prefixFree : PrefixFree encodeStaticCursor := by
+  intro ⟨e₁, o₁⟩ ⟨e₂, o₂⟩ r₁ r₂ h
+  simp only [encodeStaticCursor, List.append_assoc] at h
+  obtain ⟨he, h1⟩ := encodeStaticRegion_prefixFree e₁ e₂ _ _ h
+  obtain ⟨ho, hr⟩ := encodeNat_prefixFree o₁ o₂ r₁ r₂ h1
+  exact ⟨by rw [he, ho], hr⟩
+
+theorem encodeAnnotationSite_prefixFree : PrefixFree encodeAnnotationSite := by
+  intro a b r₁ r₂ h
+  cases a <;> cases b <;> simp only [encodeAnnotationSite, List.cons_append, List.append_assoc] at h
+  · obtain ⟨hc, h1⟩ := encodeStaticCursor_prefixFree _ _ _ _ (List.cons.inj h).2
+    obtain ⟨hk, hr⟩ := encodeKey_prefixFree _ _ r₁ r₂ h1
+    exact ⟨by rw [hc, hk], hr⟩
+  · cases (List.cons.inj h).1
+  · cases (List.cons.inj h).1
+  · obtain ⟨hc, h1⟩ := encodeStaticCursor_prefixFree _ _ _ _ (List.cons.inj h).2
+    obtain ⟨hk, h2⟩ := encodeKey_prefixFree _ _ _ _ h1
+    obtain ⟨hn, hr⟩ := encodeNat_prefixFree _ _ r₁ r₂ h2
+    exact ⟨by rw [hc, hk, hn], hr⟩
+
+theorem encodeAnnotation_prefixFree {encRaw : Raw → List Nat} (hRaw : PrefixFree encRaw) :
+    PrefixFree (encodeAnnotation encRaw) := by
+  intro a b r₁ r₂ h
+  cases a <;> cases b <;> simp only [encodeAnnotation, List.cons_append, List.append_assoc] at h
+  · obtain ⟨hu, h1⟩ := encodeList_prefixFree encodeNat_prefixFree _ _ _ _ (List.cons.inj h).2
+    obtain ⟨ha, hr⟩ := encodeList_prefixFree (encodeExpr_prefixFree hRaw) _ _ r₁ r₂ h1
+    exact ⟨by rw [hu, ha], hr⟩
+  · cases (List.cons.inj h).1
+  · cases (List.cons.inj h).1
+  · cases (List.cons.inj h).1
+  · obtain ⟨hl, h1⟩ := encodeNat_prefixFree _ _ _ _ (List.cons.inj h).2
+    obtain ⟨hn, hr⟩ := encodeList_prefixFree encodeNat_prefixFree _ _ r₁ r₂ h1
+    exact ⟨by rw [hl, hn], hr⟩
+  · cases (List.cons.inj h).1
+  · cases (List.cons.inj h).1
+  · cases (List.cons.inj h).1
+  · obtain ⟨hu, h1⟩ := encodeList_prefixFree encodeNat_prefixFree _ _ _ _ (List.cons.inj h).2
+    obtain ⟨ha, hr⟩ := encodeExpr_prefixFree hRaw _ _ r₁ r₂ h1
+    exact ⟨by rw [hu, ha], hr⟩
+
+theorem encodeAnnotations_prefixFree {encRaw : Raw → List Nat} (hRaw : PrefixFree encRaw) :
+    PrefixFree (encodeAnnotations encRaw) := by
+  apply encodeList_prefixFree
+  intro ⟨s₁, a₁⟩ ⟨s₂, a₂⟩ r₁ r₂ h
+  simp only [List.append_assoc] at h
+  obtain ⟨hs, h1⟩ := encodeAnnotationSite_prefixFree s₁ s₂ _ _ h
+  obtain ⟨ha, hr⟩ := encodeAnnotation_prefixFree hRaw a₁ a₂ r₁ r₂ h1
+  exact ⟨by rw [hs, ha], hr⟩
+
+end SummaryInjectivity
+
+theorem encodeHeaderClause_prefixFree {V : Vocabulary} (enc : VocabEncoder V) (hEnc : enc.Injective) :
+    PrefixFree (encodeHeaderClause enc) := by
+  intro a b r₁ r₂ h
+  cases a <;> cases b <;> simp only [encodeHeaderClause, List.cons_append] at h
+  · obtain ⟨hrq, hr⟩ := encodeReqEmpty_prefixFree _ _ r₁ r₂ (List.cons.inj h).2
+    exact ⟨by rw [hrq], hr⟩
+  · cases (List.cons.inj h).1
+  · cases (List.cons.inj h).1
+  · obtain ⟨hc, hr⟩ := encodeContractClause_prefixFree (encodeLocalRaw_prefixFree enc hEnc)
+      _ _ r₁ r₂ (List.cons.inj h).2
+    exact ⟨by rw [hc], hr⟩
+
+theorem encodeHeaderSummary_prefixFree {V : Vocabulary} (enc : VocabEncoder V) (hEnc : enc.Injective) :
+    PrefixFree (encodeHeaderSummary enc) := by
+  intro ⟨req₁, ens₁⟩ ⟨req₂, ens₂⟩ r₁ r₂ h
+  simp only [encodeHeaderSummary, List.append_assoc] at h
+  obtain ⟨hreq, h1⟩ := encodeList_prefixFree (encodeHeaderClause_prefixFree enc hEnc) req₁ req₂ _ _ h
+  obtain ⟨hens, hr⟩ := encodeList_prefixFree (encodeHeaderClause_prefixFree enc hEnc) ens₁ ens₂ r₁ r₂ h1
+  exact ⟨by rw [hreq, hens], hr⟩
+
+theorem encodeDefinition_prefixFree {V : Vocabulary} (enc : VocabEncoder V) (hEnc : enc.Injective) :
+    PrefixFree (encodeDefinition enc) := by
+  intro d₁ d₂ r₁ r₂ h
   cases d₁ <;> cases d₂ <;> simp only [encodeDefinition, List.cons_append, List.append_assoc] at h
   · obtain ⟨hk, h1⟩ := encodeKey_prefixFree _ _ _ _ (List.cons.inj h).2
     obtain ⟨hi, h2⟩ := encodeList_prefixFree (encodeTy_prefixFree enc hEnc) _ _ _ _ h1
     obtain ⟨ho, h3⟩ := encodeList_prefixFree (encodeTy_prefixFree enc hEnc) _ _ _ _ h2
     obtain ⟨hs, h4⟩ := encodeBool_prefixFree _ _ _ _ h3
     obtain ⟨hker, h5⟩ := encodeOption_prefixFree encodeKey_prefixFree _ _ _ _ h4
+    obtain ⟨hsum, h6⟩ := encodeHeaderSummary_prefixFree enc hEnc _ _ _ _ h5
     have hUnit : PrefixFree (fun _ : Unit => ([] : List Nat)) := fun u₁ u₂ s₁ s₂ hs' => by
       cases u₁; cases u₂; exact ⟨rfl, hs'⟩
-    obtain ⟨hb, hr⟩ := encodeRegion_prefixFree (encodeLocalRaw enc) (fun _ => [])
-      (encodeLocalRaw_prefixFree enc hEnc) hUnit _ _ r₁ r₂ h5
-    exact ⟨⟨hk, hi, ho, hs, hker, hb⟩, hr⟩
+    obtain ⟨hb, h7⟩ := encodeRegion_prefixFree (encodeLocalRaw enc) (fun _ => [])
+      (encodeLocalRaw_prefixFree enc hEnc) hUnit _ _ _ _ h6
+    obtain ⟨hn, hr⟩ := encodeAnnotations_prefixFree (encodeLocalRaw_prefixFree enc hEnc) _ _ r₁ r₂ h7
+    exact ⟨by rw [hk, hi, ho, hs, hker, hsum, hb, hn], hr⟩
   · cases (List.cons.inj h).1
   · cases (List.cons.inj h).1
   · obtain ⟨hk, h1⟩ := encodeKey_prefixFree _ _ _ _ (List.cons.inj h).2
@@ -1190,50 +1676,40 @@ theorem encodeDefinition_prefixFree {V : Vocabulary} (enc : VocabEncoder V) (hEn
     obtain ⟨ho, h4⟩ := encodeList_prefixFree (encodeLTy_prefixFree enc hEnc) _ _ _ _ h3
     obtain ⟨hb, hr⟩ := encodeRegion_prefixFree (encodeProtocolRaw enc) (encodeList encodeNat)
       (encodeProtocolRaw_prefixFree enc hEnc) (encodeList_prefixFree encodeNat_prefixFree) _ _ r₁ r₂ h4
-    exact ⟨⟨hk, hrol, hi, ho, hb⟩, hr⟩
+    exact ⟨by rw [hk, hrol, hi, ho, hb], hr⟩
 
-private theorem encodeDefinitionList_sameErased {V : Vocabulary} (enc : VocabEncoder V)
-    (hEnc : enc.Injective) :
-    ∀ (xs ys : List (Definition V)) (r₁ r₂ : List Nat), xs.length = ys.length →
-      writeCanonicalMany (encodeDefinition enc) xs ++ r₁ =
-      writeCanonicalMany (encodeDefinition enc) ys ++ r₂ →
-      ListRel Definition.SameErased xs ys ∧ r₁ = r₂
-  | [], [], _, _, _, h => ⟨.nil, h⟩
-  | _ :: _, [], _, _, hlen, _ => nomatch hlen
-  | [], _ :: _, _, _, hlen, _ => nomatch hlen
-  | x :: xs, y :: ys, r₁, r₂, hlen, h => by
-      simp only [writeCanonicalMany, List.append_assoc] at h
-      obtain ⟨hxy, hrest⟩ := encodeDefinition_prefixFree enc hEnc x y _ _ h
-      obtain ⟨hxs, hr⟩ := encodeDefinitionList_sameErased enc hEnc xs ys r₁ r₂ (Nat.succ.inj hlen) hrest
-      exact ⟨.cons hxy hxs, hr⟩
-
-/-- Injectivity of `schemeIdentity` under an injective `VocabEncoder`: equal canonical identities
-imply identical declarations and semantically identical reachable erased definitions. -/
+/-- Exact converse of `deployedIdentity_reads` under an injective `VocabEncoder`: equal canonical
+identities imply literal equality of the declarations and of the reachable erased definitions. -/
 theorem schemeIdentity_injective {V : Vocabulary} (enc : VocabEncoder V) (hEnc : enc.Injective)
     (a₁ a₂ : Admitted V) (decl₁ decl₂ : Declaration)
     (hEq : schemeIdentity enc a₁ decl₁ = schemeIdentity enc a₂ decl₂) :
     decl₁ = decl₂ ∧
-    ListRel Definition.SameErased
-      ((erase a₁.program).definitions.filter fun d =>
-        decide (d.key ∈ (decl₁.entry :: decl₁.definitions).flatMap a₁.program.defs.closureOf))
-      ((erase a₂.program).definitions.filter fun d =>
-        decide (d.key ∈ (decl₂.entry :: decl₂.definitions).flatMap a₂.program.defs.closureOf)) := by
+    ((erase a₁.program).definitions.filter fun d =>
+      decide (d.key ∈ (decl₁.entry :: decl₁.definitions).flatMap a₁.program.defs.closureOf)) =
+    ((erase a₂.program).definitions.filter fun d =>
+      decide (d.key ∈ (decl₂.entry :: decl₂.definitions).flatMap a₂.program.defs.closureOf)) := by
   unfold schemeIdentity at hEq
   dsimp only at hEq
-  obtain ⟨hDecl, hRest⟩ := encodeDeclaration_prefixFree decl₁ decl₂ _ _ hEq
-  simp only [encodeList] at hRest
-  obtain ⟨hLen, hMany⟩ := encodeNat_prefixFree _ _ _ _ hRest
-  have hDefs := (encodeDefinitionList_sameErased enc hEnc _ _ [] [] hLen
-    (by simpa using hMany)).1
+  simp only [List.append_assoc] at hEq
+  have h1 := List.append_cancel_left hEq
+  obtain ⟨hDecl, hRest⟩ := encodeDeclaration_prefixFree decl₁ decl₂ _ _ h1
+  obtain ⟨hDefs, _⟩ := encodeList_prefixFree (encodeDefinition_prefixFree enc hEnc)
+    ((erase a₁.program).definitions.filter fun d =>
+      decide (d.key ∈ (decl₁.entry :: decl₁.definitions).flatMap a₁.program.defs.closureOf))
+    ((erase a₂.program).definitions.filter fun d =>
+      decide (d.key ∈ (decl₂.entry :: decl₂.definitions).flatMap a₂.program.defs.closureOf))
+    [] [] (by rw [List.append_nil, List.append_nil]; exact hRest)
   exact ⟨hDecl, hDefs⟩
 
-/-- Injectivity of `deployedIdentity` under an injective `VocabEncoder`. -/
+/-- Exact converse of `deployedIdentity_reads` (`Statements.identityReads`) under an injective
+`VocabEncoder`: two deployed schemes have equal identity bytes iff they agree on their declaration
+and reachable erased definitions (they may still differ in unreachable definitions, associations, or
+annotations). -/
 theorem deployedIdentity_injective {V : Vocabulary} (enc : VocabEncoder V) (hEnc : enc.Injective)
     (d₁ d₂ : Deployed V) (hEq : deployedIdentity enc d₁ = deployedIdentity enc d₂) :
     d₁.declaration = d₂.declaration ∧
-    ListRel Definition.SameErased
-      ((erase d₁.admitted.program).definitions.filter fun d => decide (d.key ∈ d₁.closure))
-      ((erase d₂.admitted.program).definitions.filter fun d => decide (d.key ∈ d₂.closure)) :=
+    ((erase d₁.admitted.program).definitions.filter fun d => decide (d.key ∈ d₁.closure)) =
+    ((erase d₂.admitted.program).definitions.filter fun d => decide (d.key ∈ d₂.closure)) :=
   schemeIdentity_injective enc hEnc d₁.admitted d₂.admitted d₁.declaration d₂.declaration hEq
 
 end Zkc.Core
