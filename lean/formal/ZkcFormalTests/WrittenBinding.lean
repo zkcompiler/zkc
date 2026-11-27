@@ -124,7 +124,7 @@ def checkReferences (space : Name) (label : String) (goal clause relation : Nat)
   let slot := localName s!"written'slot{goal}"
   let subject := localName "written'subject"
   let aggregate ← bodyOf subject
-  let clauses ← operand aggregate ``WrittenSubject.mk 1
+  let clauses ← field aggregate ``WrittenSubject `clauses
   named clauses (localName "written'clauses")
   checkLeaf (← bodyOf (localName "written'clauses")) clause decision
   let application := localName s!"written'application{clause}"
@@ -135,7 +135,7 @@ def checkReferences (space : Name) (label : String) (goal clause relation : Nat)
   named (← operand entry ``FunctionEntry.mk 2) (localName s!"header{relation}")
   named (← operand entry ``FunctionEntry.mk 1) fnMember
   named (← operand entry ``FunctionEntry.mk 0) (localName s!"found'fn{relation}")
-  checkLeaf (← operand aggregate ``WrittenSubject.mk 0) goal slot
+  checkLeaf (← field aggregate ``WrittenSubject `goals) goal slot
   named (← field (← bodyOf slot) ``GoalSlot `fields) fields
   let selected ← bodyOf row
   named (← operand selected ``WrittenGoal.mk 1) decision

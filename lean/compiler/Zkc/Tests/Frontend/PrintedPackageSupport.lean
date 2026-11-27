@@ -198,6 +198,28 @@ def expectPlacesIn (title output : String) (places : List String) : IO Unit := d
     unless output.contains place do
       throw (IO.userError s!"{title}: not refused at `{place}`\n{output}")
 
+/-- The lines of Lean's output that begin an error's diagnostic (`<file>.lean:<line>:<column>:
+error`). The text of one diagnostic can hold the word itself ("Full error:"), which a count of
+the text `error:` takes for a second error. -/
+def errorLines (output : String) : List String :=
+  (output.splitOn "\n").filter fun line =>
+    match line.splitOn ": error" with
+    | position :: _ :: _ =>
+      match position.splitOn ".lean:" with
+      | [_, place] => (place.splitOn ":").all fun part => !part.isEmpty && part.all Char.isDigit
+      | _ => false
+    | _ => false
+
+/-- Lean refuses the module with one error at each of `places`, and with no other error. -/
+def expectErrorsAt (title : String) (ok : Bool) (output : String) (places : List String) : IO Unit := do
+  if ok then throw (IO.userError s!"{title}: Lean accepted the module\n{output}")
+  let errors := errorLines output
+  unless errors.length == places.length do
+    throw (IO.userError s!"{title}: refused at {errors.length} places, not at {places.length}\n{output}")
+  for place in places do
+    unless errors.any (·.contains place) do
+      throw (IO.userError s!"{title}: not refused at `{place}`\n{output}")
+
 /-- Lean accepts the module, and each of its theorems rests on the allowed axioms at most. -/
 def expectAccepted (name : String) (path : System.FilePath) (theorems : List String)
     (allowed : List String := ["propext", "Quot.sound"]) : IO Unit := do

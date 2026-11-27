@@ -194,7 +194,7 @@ def text (layout : SubjectLayout owner) : Except String String := do
       s!"clause := ⟨{d}, by decide⟩, fields := {fieldsName i} }\n")
   lines := lines.push ("noncomputable def written'subject : " ++
     "Zkc.Subject.WrittenSubject written'root :=\n" ++
-    s!"  ⟨written'clauses, {tableTerm slotName layout.goals.size}⟩\n")
+    s!"  ⟨written'clauses, {tableTerm slotName layout.goals.size}, written'origins⟩\n")
   for i in [:layout.goals.size] do
     lines := lines.push (s!"theorem written'goalAt{i} : " ++
       s!"written'subject.goalAt ⟨{i}, by decide⟩ = {goalName i} := rfl\n")

@@ -44,15 +44,6 @@ structure GoalSlot (decisions : Nat) where
   clause : Fin decisions
   fields : GoalFields
 
-structure WrittenSubject {V : Vocabulary} {pkg : Package V} (root : WrittenRoot pkg) where
-  clauses : BoundedTable (Decision root)
-  goals : BoundedTable (GoalSlot clauses.size)
-
-def WrittenSubject.goalAt {V : Vocabulary} {pkg : Package V} {root : WrittenRoot pkg}
-    (subject : WrittenSubject root) (index : Fin subject.goals.size) : WrittenGoal root :=
-  let goal := subject.goals.get index
-  ⟨subject.clauses.get goal.clause, goal.fields⟩
-
 /-- Source names for readers, aligned before dropping any verifier-invisible inputs. -/
 structure RootOrigins {V : Vocabulary} {pkg : Package V} (root : WrittenRoot pkg) where
   /-- The defining file module distinguishes a nested module from an imported module of the same name. -/
@@ -60,5 +51,17 @@ structure RootOrigins {V : Vocabulary} {pkg : Package V} (root : WrittenRoot pkg
   schemePath : String
   inputNames : Array String
   aligned : inputNames.size = root.entry.header.ins.length
+
+/-- A written subject: its clauses, its goal rows, and the source names of its root, which a
+command over the subject is given with its rows. No published statement reaches the origins. -/
+structure WrittenSubject {V : Vocabulary} {pkg : Package V} (root : WrittenRoot pkg) where
+  clauses : BoundedTable (Decision root)
+  goals : BoundedTable (GoalSlot clauses.size)
+  origins : RootOrigins root
+
+def WrittenSubject.goalAt {V : Vocabulary} {pkg : Package V} {root : WrittenRoot pkg}
+    (subject : WrittenSubject root) (index : Fin subject.goals.size) : WrittenGoal root :=
+  let goal := subject.goals.get index
+  ⟨subject.clauses.get goal.clause, goal.fields⟩
 
 end Zkc.Subject

@@ -36,7 +36,7 @@ _charge-checks:
     trap 'rm -rf "$ZKC_SUBJECTS"' EXIT
     cd lean/formal
     for check in AuditCharge WrittenCharge OccurrenceDepth ProofArguments GoalClause GoalClaim WrittenModel GoalStatement \
-        WrittenDecisions WrittenPublish WrittenGoalAuthors WrittenBoundGuard CountCharge FreivaldsCharge GuessCharge EitherCharge TwiceCharge \
+        WrittenDecisions WrittenPublish WrittenViews WrittenGoalAuthors WrittenBoundGuard CountCharge FreivaldsCharge GuessCharge EitherCharge TwiceCharge \
         OutsideReading FixedTableSampling Judgment; do
       lake lean "checks/$check.lean"
     done

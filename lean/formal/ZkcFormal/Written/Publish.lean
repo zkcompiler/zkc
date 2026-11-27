@@ -48,7 +48,7 @@ private def natOf (e : Expr) : MetaM Nat := do
 
 /-- The field `field` of a value of the structure `struct`, as the value's constructor holds it.
 Only the value is reduced, to its constructor; the field's argument is returned unreduced. -/
-private def fieldOf (e : Expr) (struct field : Name) : MetaM Expr := do
+def fieldOf (e : Expr) (struct field : Name) : MetaM Expr := do
   let env ← getEnv
   let value ← whnf e
   let ctor := getStructureCtor env struct
@@ -58,7 +58,7 @@ private def fieldOf (e : Expr) (struct field : Name) : MetaM Expr := do
     | throwError "publish: {struct} has no field {field}"
   return value.getAppArgs[ctor.numParams + index]!
 
-private def constName (e : Expr) : MetaM Name := do
+def constName (e : Expr) : MetaM Name := do
   let some c := e.consumeMData.constName? | throwError "publish: expected a constant, got {e}"
   return c
 
