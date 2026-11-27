@@ -188,7 +188,7 @@ private def controls (work : System.FilePath) (m : Module) (src : String) : IO (
   let boundTable ← run "BoundFromTable"
     (← mutate "written'bound1 : Zkc.Subject.Bound := ⟨0, 1, by decide⟩"
       "written'bound1 : Zkc.Subject.Bound := (fun (_ : Zkc.Subject.CapTable) => ⟨0, 1, by decide⟩) written'caps1")
-    [(refAt "left_again", s!"the bound {m.space}.written'bound1 reaches {m.space}.written'caps1")]
+    [(refAt "left_again", s!"the bound {m.space}.written'bound1 is not written as a literal")]
   -- The row of `left_again` has the path of `left`, and then another property than its goal names.
   let otherPath ← run "OtherPath"
     (← mutate "\"left_again\"], property :=" "\"left\"], property :=")

@@ -109,18 +109,17 @@ private def checkApplicationReach (space application : Name) : MetaM Unit := do
     if rowWords.any (word.startsWith ·) then
       throwError "the short application {application} reaches {privateToUserName name}"
 
-/-- A goal's bound is a number of its own, written as a literal. Of its own module it reaches
-itself and the proofs that a denominator is positive, which stand under a bound's name and which
-bounds of one denominator share, and nothing else: no table of caps, no row, no helper. So no
-bound is computed in Lean from other data of the subject. -/
-private def checkBoundReach (space bound : Name) : MetaM Unit := do
-  let home := (← getEnv).getModuleIdxFor? bound
-  for name in (← reachedInModule home [bound] {}).toList do
-    if name == bound then continue
-    let user := privateToUserName name
-    let word := (user.replacePrefix space .anonymous).toString
-    unless user.isInternalDetail && word.startsWith "written'bound" do
-      throwError "the bound {bound} reaches {user}"
+/-- A goal's bound is written as a literal: the constructor of a bound at two numerals, with a
+proof that the second is positive. So no bound is computed in Lean from other data of the
+subject. The stored value is inspected as it stands, without reducing it. -/
+private def checkBoundLiteral (bound : Name) : MetaM Unit := do
+  let body := (← bodyOf bound).consumeMData
+  let numeral (e : Expr) : Bool := e.consumeMData.nat?.isSome || e.consumeMData.rawNatLit?.isSome
+  unless body.isAppOfArity ``Bound.mk 3 && numeral (body.getArg! 0) && numeral (body.getArg! 1) do
+    throwError "the bound {bound} is not written as a literal: {body}"
+  let positive ← mkAppM ``LT.lt #[mkNatLit 0, body.getArg! 1]
+  unless ← isDefEq (← inferType (body.getArg! 2)) positive do
+    throwError "the bound {bound} is not written as a literal: its third part is no proof that its denominator is positive"
 
 /-- Follow the actual aggregate and public declarations. The expected indices and label
 are chosen by the client from the original source, independently of the layout issuer. -/
@@ -156,7 +155,7 @@ def checkReferences (space : Name) (label : String) (goal clause relation : Nat)
   let publicName := fun (suffix_ : String) => localName (label ++ suffix_)
   named (← field (← bodyOf fields) ``GoalFields `caps) caps
   named (← field (← bodyOf fields) ``GoalFields `bound) bound
-  checkBoundReach space bound
+  checkBoundLiteral bound
   named (← bodyOf (publicName "Caps")) caps
   for i in [:arguments] do
     let getter := publicName s!"Argument{i}"

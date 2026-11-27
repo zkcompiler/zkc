@@ -180,4 +180,12 @@ elab "published% " s:ident path:ident which:ident : term => do
       return ← statement (← rowAt t index) which.getId.eraseMacroScopes.toString
   throwError "publish: no goal at the path {wanted} in {subject}"
 
+open Lean.Elab.Term.Quotation in
+/-- A notation may abbreviate a published statement: the subject is checked where the notation
+is declared, and the path and the theorem's name are data, not names to resolve. -/
+@[quot_precheck ZkcFormal.Written.Publish.«termPublished%___»]
+def precheckPublished : Precheck
+  | `(published% $s:ident $_:ident $_:ident) => precheck s
+  | _ => throwUnsupportedSyntax
+
 end ZkcFormal.Written.Publish

@@ -18,7 +18,8 @@ inputs of one type and a witness).
   spelling with the installed bound where the result stands, and a spelling with the bound's
   number where its constant stands.
 * The proof module is judged by `lake comparator` against the challenge and is accepted. It
-  also states the result through a macro of its own, which gives the same statement.
+  also states the result through a macro and through a notation of its own, each of which gives
+  the same statement.
 * The same proof module is refused against the challenge of the source that writes the ceiling
   `1 / 2`, at the bound's constant.
 -/
@@ -82,7 +83,9 @@ def proof (stated space : String) : String :=
   "  simp [run, Process.interpret]\n\n" ++
   "-- An author's abbreviation: a macro supplies the path and the theorem's name.\n" ++
   "macro \"mapped_result%\" : term => `(published% written'subject probes.mapped sound)\n" ++
-  "example : mapped_result% = published% written'subject probes.mapped sound := rfl\n\n" ++
+  "example : mapped_result% = published% written'subject probes.mapped sound := rfl\n" ++
+  "local notation \"MappedResult\" => (published% written'subject probes.mapped sound)\n" ++
+  "example : MappedResult = published% written'subject probes.mapped sound := rfl\n\n" ++
   "theorem probes.mapped.sound : published% written'subject probes.mapped sound :=\n" ++
   "  Soundness.result_of_installed model written'application0 draws mapped_covered installedBound\n\n" ++
   "theorem probes.mapped.met : published% written'subject probes.mapped met :=\n" ++
@@ -103,12 +106,11 @@ def reader (result bound : String) : String :=
 private def resultSpelling := "Soundness.Result model Published.written'application0 draws covers"
 private def boundSpelling := "Published.written'bound0.limit"
 
-/-- The reader refuses a spelling of `sound` by one diagnostic, at that theorem. -/
+/-- The reader refuses a spelling of `sound` at that theorem, and Lean reports no other error
+of the module. -/
 private def refusedReader (name : String) (lean : Bool × String) : IO Unit := do
-  let refusals := (lean.2.splitOn "the challenge states").length - 1
-  unless !lean.1 && refusals == 1 &&
-      lean.2.contains "Published.probes.mapped.sound: the challenge states" do
-    throw (IO.userError s!"{name}: the reader of the challenge did not refuse this spelling at `sound` alone\n{lean.2}")
+  if lean.1 then throw (IO.userError s!"{name}: the reader of the challenge accepted this spelling")
+  expectPlacesIn name lean.2 ["Published.probes.mapped.sound: the challenge states"]
 
 def run (work : System.FilePath) : IO Unit := do
   let project := projectOf work
