@@ -68,6 +68,10 @@ def consumerAt (root : AdmittedRoot) (requests : List (String × String)) (fees 
     let atIndex := s!"(written'subject.goalAt ⟨{index}, by decide⟩)"
     text := text ++ equation atIndex row ++
       equation s!"(written'subject.goals.get ⟨{index}, by decide⟩).clause.val" (toString d) ++
+      -- the row's path is the path of the goal's declaration, and its property is the goal's
+      equation s!"(written'subject.goals.get ⟨{index}, by decide⟩).path"
+        (reprStr ((Static.qualifiedName root.state.program id).splitOn "::")) ++
+      equation s!"(written'subject.goals.get ⟨{index}, by decide⟩).property" (reprStr goal.property) ++
       equation s!"ZkcFormalTests.WrittenBinding.operands {atIndex}"
         s!"({clause.place}, {relation}, {statement.size}, {reprStr statement.toList}, {reprStr (witness.map Array.toList)})" ++
       equation s!"{atIndex}.fields.specification" (reprStr goal.specification.toList) ++

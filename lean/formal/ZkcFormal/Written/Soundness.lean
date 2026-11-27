@@ -141,6 +141,13 @@ theorem admitted_mono {b larger : ℝ≥0∞} (le : b ≤ larger) (holds : Admit
   (installed_iff_admitted M app draws larger).mp <|
     installed_mono M app draws le ((installed_iff_admitted M app draws b).mpr holds)
 
+/-- **An author's step to the result**: coverage of the stored program and the bound at the
+installed members. -/
+theorem result_of_installed {covers : NamedProgram V → Key → Key → Bool} {b : ℝ≥0∞}
+    (covered : covers pkg.stored scheme.entry.header.key app.relation.header.key = true)
+    (installed : Installed M app draws b) : Result M app draws covers b :=
+  ⟨covered, (installed_iff_admitted M app draws b).mp installed⟩
+
 /-- Each choice of valid visible inputs can introduce the matching existential telescope. -/
 private theorem introInputs (r : Role) :
     ∀ (ports : List (LTy V)) (P : HList (RV M r) ports → Prop) (R : Prop),
@@ -153,7 +160,8 @@ private theorem introInputs (r : Role) :
     · simp only [inputs, h, ↓reduceDIte] at finish ⊢
       exact introInputs r rest _ _ finish
 
-/-- Valid verifier inputs and installed rejection meet the hypotheses with the given service. -/
+/-- **An author's step to the receipt**: with a served model, a valid input at which the short
+application is rejected gives the receipt. -/
 theorem witnessed_of (served : Served (lawSamplers M draws) (Permitted M)) :
     inputs M scheme.verifier false scheme.entry.header.ins fun xs ↦
       Rejected M app pkg.installed app.relation.member xs → Witnessed M app draws :=

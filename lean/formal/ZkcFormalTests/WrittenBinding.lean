@@ -40,6 +40,18 @@ private def operand (e : Expr) (head : Name) (fromEnd : Nat) : MetaM Expr := do
     throwError "expected argument {fromEnd} from the end of {head}, found {e}"
   return e.getAppArgs[e.getAppNumArgs - 1 - fromEnd]!
 
+/-- What a record's body holds for the field `field` of the structure `struct`, by the field's
+name, without reducing. -/
+private def field (e : Expr) (struct field : Name) : MetaM Expr := do
+  let env ← getEnv
+  let e := e.consumeMData.headBeta
+  let ctor := getStructureCtor env struct
+  let some index := (getStructureFields env struct).findIdx? (· == field)
+    | throwError "{struct} has no field {field}"
+  unless e.isAppOf ctor.name && ctor.numParams + index < e.getAppNumArgs do
+    throwError "expected a value of {struct} built by its constructor, found {e}"
+  return e.getAppArgs[ctor.numParams + index]!
+
 private def named (e : Expr) (expected : Name) : MetaM Unit := do
   unless e.consumeMData.isConstOf expected do
     throwError "expected the reference {expected}, found {e}"
@@ -124,13 +136,13 @@ def checkReferences (space : Name) (label : String) (goal clause relation : Nat)
   named (← operand entry ``FunctionEntry.mk 1) fnMember
   named (← operand entry ``FunctionEntry.mk 0) (localName s!"found'fn{relation}")
   checkLeaf (← operand aggregate ``WrittenSubject.mk 0) goal slot
-  named (← operand (← bodyOf slot) ``GoalSlot.mk 0) fields
+  named (← field (← bodyOf slot) ``GoalSlot `fields) fields
   let selected ← bodyOf row
   named (← operand selected ``WrittenGoal.mk 1) decision
   named (← operand selected ``WrittenGoal.mk 0) fields
   let publicName := fun (suffix_ : String) => localName (label ++ suffix_)
-  named (← operand (← bodyOf fields) ``GoalFields.mk 1) caps
-  named (← operand (← bodyOf fields) ``GoalFields.mk 0) bound
+  named (← field (← bodyOf fields) ``GoalFields `caps) caps
+  named (← field (← bodyOf fields) ``GoalFields `bound) bound
   named (← bodyOf (publicName "Caps")) caps
   for i in [:arguments] do
     let getter := publicName s!"Argument{i}"

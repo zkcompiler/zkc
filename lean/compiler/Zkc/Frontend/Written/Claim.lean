@@ -106,6 +106,8 @@ structure ClaimedGoal where
   /-- The values of the goal's proof arguments, in the order of the specification-only static
   parameters of the scheme's protocol. -/
   specification : Array Nat
+  /-- The property that the goal names. -/
+  property : Security.Property
   /-- The ceiling that the goal states, when it states one (GL4). -/
   ceiling : Option Rat
   /-- The table of caps of the root at the goal's proof arguments (SX8): every charge that the
@@ -204,8 +206,9 @@ private def readClaim (c : AdmittedRoot) (state : Compile.State) (goal : String)
     else if application.witness.isEmpty then pure none
     else some <$> application.witness.mapM (operandPlace body none)
   let (caps, sites) ← goalCaps c selected.specification
+  let some property := selected.property | throw "the claim is of no goal"
   return ({ goal, declaration, clause, relation, statement, witness, specification := selected.specification,
-            ceiling := selected.ceiling, caps, sites }, selected.scheme, state)
+            property, ceiling := selected.ceiling, caps, sites }, selected.scheme, state)
 
 /-- **The bound of a goal**: the ceiling that the goal writes, and where it writes none, the
 total of the charges of its contract as they add up along one run (SX8). It is not negative: a

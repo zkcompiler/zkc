@@ -56,6 +56,8 @@ structure Selection where
   goalPath : Option String := none
   specification : Array Nat := #[]
   ceiling : Option Rat := none
+  /-- The property that the goal names, where a goal was selected. -/
+  property : Option Security.Property := none
 
 def closedDeclaration (ref : Lowered.Reference) : ExportM DeclarationId := do
   if ref.hasStaticArguments then
@@ -277,7 +279,8 @@ def selectedGoal (state : Compile.State) (goal : Lowered.Goal) (path : String)
       if goal.ceiling.isSome then refuse goal.span "WK-GOAL" "the written fork property has no quantitative ceiling"
       pure none
     | .soundness => do
-      unless library == "zkc::security" && property == "soundness" && description.stages.contains requested do
+      unless library == "zkc::security" && description.property.published &&
+          description.stages.contains requested do
         refuse goal.property.span "GL3" "expected the written soundness property"
       if !fixed && scheme.lines.any (fun line => line matches .construction _ (.derived ..)) then
         refuse goal.span "GL3" "the written theorem requires a fixed statement"
@@ -289,7 +292,7 @@ def selectedGoal (state : Compile.State) (goal : Lowered.Goal) (path : String)
         if value < 0 then refuse expr.span "GL4" "a goal ceiling must be nonnegative"
         return value
   return (⟨scheme, label, Static.qualifiedName s.program scheme.declaration,
-    some goal, some path, specification, ceiling⟩, s)
+    some goal, some path, specification, ceiling, some description.property⟩, s)
 
 /-- Exact and file-relative spellings of input declarations of one kind. Two files can
 contribute the same qualified path through a nested module and a file module. -/
@@ -348,7 +351,7 @@ def select (s : Compile.State) : Request → ExportM (Selection × Compile.State
     let some scheme := s.results.schemes.find? (·.declaration == id)
       | throw s!"WK-ROOT: no closed scheme for {path}"
     let (_, s) ← evaluate s scheme.span (Typing.checkModuleReads (s.schemeReads.getD id #[]))
-    return (⟨scheme, label, path, none, none, #[], none⟩, s)
+    return (⟨scheme, label, path, none, none, #[], none, none⟩, s)
   | .goal name => selectNamedGoal s name .fork
 
 structure WrittenParties where

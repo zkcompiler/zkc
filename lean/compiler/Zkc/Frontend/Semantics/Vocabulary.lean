@@ -60,7 +60,7 @@ end Vocabulary
 
 /-- What an entry of the vocabulary that a goal names is (GL1). -/
 inductive EntryKind where
-  | property (description : Security.Property)
+  | property (description : Security.Description)
   | model
   deriving Inhabited, Repr
 
