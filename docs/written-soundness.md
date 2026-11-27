@@ -61,7 +61,7 @@ The names of the data module that a text uses. No declaration is named after a n
 | `subjectPackage` | the stored program, its association and the installation, together with proofs of elaboration and successful admission |
 | `installed`, `rootMember`, `verifierRole`, `proverRole` | the program that the module installs from the package, the root in it, the two roles |
 | `member'fn<k>` | the function of the relation with the key `k` at the goal's value, a member of `installed`; a view names it where it applies the relation |
-| `calleeProgram`, `member'callee<k>` | the program of the definitions before the root, and in it the function with the key `k` that the root or a protocol that it applies calls (its comment says the function's name in the source) |
+| `calleeProgram`, `member'callee<k>` | where a function stands before the root: the program of the definitions before the root, and in it the function with the key `k` that the root or a protocol that it applies calls (its comment says the function's name in the source) |
 | `written'caps<i>` | the table of caps of the goal of the row `i`, where it has one; a site's cap is read from it in the fee judgment's term |
 | `written'subject`, `written'application<i>`, `written'bound<i>` | the typed subject, the short application of a deciding clause and the bound of a goal |
 

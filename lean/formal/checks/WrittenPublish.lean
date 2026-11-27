@@ -133,7 +133,7 @@ def run (work : System.FilePath) : IO Unit := do
   discard <| SubjectProject.add project `Published.Proof (proof "Published.Stated" "Published")
   discard <| SubjectProject.add project `Low.Stated low.data .statements
   discard <| SubjectProject.add project `Low.Challenge low.challenge .challenge
-  -- the shape of what the issuer publishes, and fourteen changes of it that the controls refuse
+  -- the shape of what the issuer publishes, and nineteen changes of it that the controls refuse
   let control (command : String) (imported : String) :=
     s!"import {imported}\nimport ZkcFormalTests.PublicationControl\n\n{command}\n"
   let shape ← startLakeLean work "PublishedShape" (control
@@ -162,7 +162,7 @@ def run (work : System.FilePath) : IO Unit := do
     ("WithLibrary", "import ZkcFormal.Written.Bound\n" ++ honest.data,
       "data control: WithLibrary.Stated imports the formal library's ZkcFormal.Written.Bound"),
     ("WithTableInPlace", ← replaceOnce honest.data "number := .total written'caps0 written'bound0 }" "number := .total ⟨[]⟩ written'bound0 }",
-      "data control: the table of the row at [probes, mapped] is no declaration"),
+      "data control: the number of Published.written'fields0 is not a constructor over declarations"),
     -- a row whose bound is another declaration, which is no pair of numerals and reads the table
     ("WithOtherBound", ← replaceOnce (← replaceOnce honest.data "number := .total written'caps0 written'bound0 }"
         "number := .total written'caps0 otherBound }") "def written'fields0 :"
@@ -173,7 +173,24 @@ def run (work : System.FilePath) : IO Unit := do
         "def otherCaps : Zkc.Subject.CapTable := written'caps0\ndef written'fields0 :",
       "data control: the table Published.otherCaps reads Published.written'caps0"),
     ("WithComputedBound", ← replaceOnce honest.data (bound ++ "⟨0, 1, by decide⟩") (bound ++ "⟨0 + 0, 1, by decide⟩"),
-      "data control: the bound Published.written'bound0 is not two numerals")]
+      "data control: the bound Published.written'bound0 is not two numerals"),
+    -- a numeral whose instance computes another number from the table
+    ("WithInstanceNumeral", ← replaceOnce honest.data (bound ++ "⟨0, 1, by decide⟩")
+        (bound ++ "⟨@OfNat.ofNat Nat (nat_lit 0) ⟨written'caps0.uses.length⟩, 1, by decide⟩"),
+      "data control: the bound Published.written'bound0 is not two numerals"),
+    -- a theorem about the stored program that the subject reaches through the bound's proof
+    ("WithReachedTheorem", ← replaceOnce honest.data (bound ++ "⟨0, 1, by decide⟩")
+        ("theorem extra : stored = stored ∧ 0 < 1 := ⟨rfl, by decide⟩\n" ++ bound ++ "⟨0, 1, extra.2⟩"),
+      "data control: WithReachedTheorem.Stated states the theorem Published.extra"),
+    ("WithPropositions", ← replaceOnce honest.data ending ("def extraClaims : List Prop := [True]\n" ++ ending),
+      "data control: WithPropositions.Stated defines the proposition Published.extraClaims"),
+    ("WithProofDefinition", ← replaceOnce honest.data ending ("set_option linter.defProp false in\ndef extraFact : 0 < 1 := by decide\n" ++ ending),
+      "data control: WithProofDefinition.Stated holds a proof in the definition Published.extraFact"),
+    -- a number that a computation over the table chooses
+    ("WithChosenNumber", ← replaceOnce honest.data "number := .total written'caps0 written'bound0 }"
+        ("number := if written'caps0.uses.length = 0 then .total written'caps0 written'bound0 " ++
+          "else .total written'caps0 written'bound0 }"),
+      "data control: the number of Published.written'fields0 is not a constructor over declarations")]
   let mut shapes := []
   for (name, text, refusal) in mutants do
     discard <| SubjectProject.add project s!"{name}.Stated".toName text .statements
@@ -240,7 +257,7 @@ def run (work : System.FilePath) : IO Unit := do
     throw (IO.userError s!"the challenge at another bound was not refused at the bound\n{said}")
   IO.println ("The issuer's data module holds definitions that are no propositions, the package's " ++
     "theorems and a bound of numerals, and imports no module of the formal library; its challenge " ++
-    "imports what the publication command does; 14 of 14 changes of that shape are refused.")
+    "imports what the publication command does; 19 of 19 changes of that shape are refused.")
   IO.println ("The library states what a goal publishes from its row: the built challenge holds " ++
     "exactly the statements that the check spells, and the control by rows refuses 3 of 3 " ++
     "changes of what is stated or judged; the proof module that states them as " ++

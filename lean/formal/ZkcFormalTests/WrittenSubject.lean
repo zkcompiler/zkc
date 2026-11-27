@@ -473,9 +473,11 @@ def acceptedByJudgment (work : System.FilePath) (name : String) : IO Unit := do
   match ← judged work with
   | (.accepted, _) => pure ()
   | (.refused, said) =>
-    throw (IO.userError s!"{name}: Lean accepted the module, and the judgment refuses the check's modules\n{said}")
+    -- one judgment is of every pair of the check: what it says names the module that it refuses
+    throw (IO.userError (s!"the judgment of the check's modules refuses one of them (asked after Lean accepted {name}); " ++
+      s!"the module is named in what it says:\n{said}"))
   | (.failed, said) =>
-    throw (IO.userError s!"{name}: the check's modules were not judged\n{said}")
+    throw (IO.userError s!"the check's modules were not judged (asked after Lean accepted {name})\n{said}")
 
 /-- The two modules of `module`, added to be accepted: the statements by Lean, with their
 theorems on the allowed axioms, and the proof module by Lean and by the judgment. The result is

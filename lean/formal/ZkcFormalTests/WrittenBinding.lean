@@ -107,8 +107,9 @@ their names. -/
 private def checkApplicationReach (application : Name) : MetaM Unit := do
   let home := (← getEnv).getModuleIdxFor? application
   for name in (← reachedInModule home [application] {}).toList do
+    -- the type's head with definitions unfolded: an alias of a row's type is that type
     let type := (← getConstInfo name).type
-    let head := type.getForallBody.getAppFn
+    let head ← Meta.forallTelescopeReducing type fun _ body => return (← Meta.whnf body).getAppFn
     if rowTypes.any (head.isConstOf ·) then
       throwError "the short application {application} reaches {privateToUserName name}"
 

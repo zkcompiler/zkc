@@ -139,25 +139,37 @@ def rowAt (t : Tables) (index : Nat) : MetaM Row := do
   let application ← constName (← fieldOf decision ``Zkc.Subject.Decision `application)
   return { path, property, application, fields }
 
-/-- A row's number as its fields hold it: whether the source writes the bound, the bound's
-expression, and the table's where the row holds one. The number is reduced to its constructor
-and no further: the bound and the table are the constructor's arguments as they stand. -/
-structure Number where
-  written : Bool
-  bound : Expr
-  table : Option Expr
+/-- A row's number as its fields hold it, in the two cases of `Zkc.Subject.GoalNumber`: the
+bound's expression, and the table's where the row holds one. The number is reduced to its
+constructor and no further: the bound and the table are the constructor's arguments as they
+stand. -/
+inductive Number where
+  | total (table bound : Expr)
+  | ceiling (bound : Expr) (table : Option Expr)
+
+/-- The bound's expression. -/
+def Number.bound : Number → Expr
+  | .total _ bound | .ceiling bound _ => bound
+
+/-- The table's expression, where there is one. -/
+def Number.table : Number → Option Expr
+  | .total table _ => some table
+  | .ceiling _ table => table
+
+/-- Whether the source writes the bound. -/
+def Number.written : Number → Bool
+  | .total .. => false
+  | .ceiling .. => true
 
 /-- The number of a row. -/
 def Row.number (row : Row) : MetaM Number := do
   let number ← whnf (← fieldOf row.fields ``Zkc.Subject.GoalFields `number)
   if number.isAppOfArity ``Zkc.Subject.GoalNumber.total 2 then
-    return { written := false, bound := number.getArg! 1, table := some (number.getArg! 0) }
+    return .total (number.getArg! 0) (number.getArg! 1)
   if number.isAppOfArity ``Zkc.Subject.GoalNumber.ceiling 2 then
     let caps ← whnf (number.getArg! 1)
-    if caps.isAppOfArity ``Option.some 2 then
-      return { written := true, bound := number.getArg! 0, table := some caps.appArg! }
-    if caps.isAppOfArity ``Option.none 1 then
-      return { written := true, bound := number.getArg! 0, table := none }
+    if caps.isAppOfArity ``Option.some 2 then return .ceiling (number.getArg! 0) (some caps.appArg!)
+    if caps.isAppOfArity ``Option.none 1 then return .ceiling (number.getArg! 0) none
     throwError "publish: the row at the path {row.path}: expected a table of caps or none, got {caps}"
   throwError "publish: the row at the path {row.path}: expected a goal's number built by a constructor, got {number}"
 
@@ -209,10 +221,7 @@ table counts as the stored program does and that its budget is the bound's numbe
 (`Budget.sumsTo`). A challenge is declared over a subject each of whose rows passes; a row that
 writes its ceiling is not asked. -/
 def Row.checkTotal (row : Row) : MetaM Unit := do
-  let number ← row.number
-  if number.written then return
-  let some table := number.table
-    | throwError "publish: the row at the path {row.path} writes no ceiling and holds no table of caps"
+  let .total table _ ← row.number | return
   let (stored, rootKey) ← row.program
   let bound := Lean.mkConst (← row.bound)
   let holds ← mkAppM ``ZkcFormal.Written.Budget.sumsTo #[table, stored, rootKey, bound]
