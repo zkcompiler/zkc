@@ -93,12 +93,18 @@ private partial def reachedInModule (home : Option ModuleIdx) :
     reachedInModule home (used.toList.filter (env.getModuleIdxFor? · == home) ++ rest)
       (seen.insert name)
 
-/-- What a statement over a short application must not read through it: a decision (the place
-of a clause and its witness operands), a goal's row, fields and bound, the table of caps, the
-aggregate and the source's names. -/
-private def rowWords : List String :=
-  ["written'decision", "written'goal", "written'fields", "written'bound", "written'slot",
-    "written'caps", "written'clauses", "written'subject", "written'origins"]
+/-- What a short application may reach among the typed subject's own declarations (those named
+`written'…`): itself, the entry of its relation, and the root. Everything else of that family
+is refused, by what is allowed and not by a list of what is forbidden: a decision (the place of
+a clause and its witness operands), a goal's row, fields and bound, the table of caps, the
+aggregate, the source's names, and whatever the issuer adds to the family later. -/
+private def mayReach (name : String) : Bool :=
+  -- an auxiliary declaration of an allowed one (`written'root._proof_1`) is its own
+  let word := (name.splitOn ".").headD name
+  let numbered (stem : String) :=
+    let rest := word.toList.drop stem.length
+    word.startsWith stem && !rest.isEmpty && rest.all Char.isDigit
+  word == "written'root" || numbered "written'application" || numbered "written'fn"
 
 /-- A short application reaches none of the subject's rows. A statement over a short application
 names its constant; whatever that constant reaches is compared when a proof is judged. -/
@@ -106,7 +112,7 @@ private def checkApplicationReach (space application : Name) : MetaM Unit := do
   let home := (← getEnv).getModuleIdxFor? application
   for name in (← reachedInModule home [application] {}).toList do
     let word := ((privateToUserName name).replacePrefix space .anonymous).toString
-    if rowWords.any (word.startsWith ·) then
+    if word.startsWith "written'" && !mayReach word then
       throwError "the short application {application} reaches {privateToUserName name}"
 
 /-- Follow the actual aggregate and the names of the installation. The expected indices and

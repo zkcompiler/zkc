@@ -51,7 +51,7 @@ def steppedSource : String :=
   "protocol Steps roles(P, V)(claim: bool @(P, V)):\n" ++
   "    for i in 0..3:\n        r <- draw index<i + 2> from V to P\n        guard @V r != 0\n" ++
   "    guard @V claim\n" ++
-  "spec for Steps:\n    proves @V Holds(claim)\n    charge sites.r <= 1 / 2\n" ++
+  "spec for Steps:\n    proves @V Holds(claim)\n    charge sites.r <= 1 / 4\n" ++
   "scheme Checked = Steps:\n    prover P\n    construction interactive\n" ++
   "goal stepped = soundness(Checked, stage = written)\n"
 

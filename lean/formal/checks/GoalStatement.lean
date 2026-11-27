@@ -178,7 +178,7 @@ def loopedCalls : String := charged
 def steppedDraws : String := charged
   ("protocol Steps roles(P, V)(claim: bool @(P, V)):\n" ++
     "    for i in 0..3:\n        r <- draw index<i + 2> from V to P\n    guard @V claim\n" ++
-    "spec for Steps:\n    proves @V Holds(claim)\n    charge sites.r <= 1 / 2\n")
+    "spec for Steps:\n    proves @V Holds(claim)\n    charge sites.r <= 1 / 4\n")
   "Steps"
 
 /-- A stepped loop over `r` beside a draw whose site has the name that the first block of that
@@ -187,7 +187,7 @@ def clashingSites : String := charged
   ("protocol Clash roles(P, V)(claim: bool @(P, V)):\n" ++
     "    for i in 0..2:\n        r <- draw index<i + 2> from V to P\n" ++
     "    r_0 <- draw index<4> from V to P\n    guard @V claim\n" ++
-    "spec for Clash:\n    proves @V Holds(claim)\n    charge sites.r <= 1 / 2\n" ++
+    "spec for Clash:\n    proves @V Holds(claim)\n    charge sites.r <= 1 / 8\n" ++
     "    charge sites.r_0 <= 1 / 4\n")
   "Clash"
 
@@ -234,7 +234,7 @@ loop, through `B`, and through `A` again in a kept loop of five. -/
 def sharedCallee : String := charged
   ("protocol Once roles(P, V)(claim: bool @(P, V)):\n" ++
     "    z <- draw index<8> from V to P\n" ++
-    "spec for Once:\n    charge sites.z <= 1 / 8\n" ++
+    "spec for Once:\n    charge sites.z <= 1 / 16\n" ++
     "protocol A roles(P, V)(claim: bool @(P, V)):\n    for i in 0..2:\n        Once(claim)\n" ++
     "protocol B roles(P, V)(claim: bool @(P, V)):\n    Once(claim)\n" ++
     "protocol Caller roles(P, V)(claim: bool @(P, V)):\n    A(claim)\n    B(claim)\n" ++
@@ -251,15 +251,30 @@ def chargedCall : String := charged
     "spec for Caller:\n    proves @V Holds(claim)\n    charge sites.first <= 1 / 8\n")
   "Caller"
 
-/-- A root with a send `a`, a draw `w` and an application `first` of a protocol with the draw `z`,
-and one charge on the given site. -/
-def chargedAt (site : String) : String := charged
-  ("protocol Once roles(P, V)(claim: bool @(P, V)):\n" ++
-    "    z <- draw index<8> from V to P\n" ++
-    "protocol Caller roles(P, V)(claim: bool @(P, V), m: index<8> @P):\n" ++
-    "    a <- send m from P to V\n    w <- draw index<4> from V to P\n" ++
-    "    first <- Once(claim)\n    guard @V claim\n" ++
-    s!"spec for Caller:\n    proves @V Holds(claim)\n    charge sites.{site} <= 1 / 8\n")
+/-- A root with a send `a`, a draw `w`, a sample `q` of the prover and an application `first` of a
+protocol with the draw `z`, and one charge on the given site. With `trips`, the four events stand
+in a loop of that many iterations. -/
+def chargedAt (site : String) (trips : Option Nat := none) : String :=
+  let (loop, pad) := match trips with
+    | some n => (s!"    for i in 0..{n}:\n", "    ")
+    | none => ("", "")
+  charged
+    ("protocol Once roles(P, V)(claim: bool @(P, V)):\n" ++
+      "    z <- draw index<8> from V to P\n" ++
+      "protocol Caller roles(P, V)(claim: bool @(P, V), m: index<8> @P):\n" ++ loop ++
+      s!"{pad}    a <- send m from P to V\n{pad}    w <- draw index<4> from V to P\n" ++
+      s!"{pad}    q @P <- sample index<4>\n{pad}    first <- Once(claim)\n    guard @V claim\n" ++
+      s!"spec for Caller:\n    proves @V Holds(claim)\n    charge sites.{site} <= 1 / 8\n")
+    "Caller"
+
+/-- A root whose prover or verifier samples a coin that nobody else hears, in the root or in a
+protocol of one role that the root applies. -/
+def sampling (role : String) (applied : Bool) : String := charged
+  ((if applied then s!"protocol Flip roles({role})(claim: bool @{role}):\n    b @{role} <- sample index<2>\n" else "") ++
+    "protocol Caller roles(P, V)(claim: bool @(P, V)):\n" ++
+    (if applied then "    Flip(claim)\n" else s!"    b @{role} <- sample index<2>\n") ++
+    "    guard @V claim\n" ++
+    "spec for Caller:\n    proves @V Holds(claim)\n")
   "Caller"
 
 /-- A charge of the caller on a site of its callee. -/
@@ -519,7 +534,7 @@ def run (work : System.FilePath) : IO Unit := do
     (tableOf loopedCalls == some (⟨[(.flat ⟨1⟩ [⟨⟨0⟩, 1, 8, 1⟩] []),
       (.ordered ⟨2⟩ [.call ⟨⟨0⟩, 1, 0⟩, .call ⟨⟨1⟩, 3, 0⟩, .draw ⟨⟨3⟩, 1, 4, 1⟩])]⟩, 3 / 4))
   expect "the blocks of a stepped loop do not each have a draw"
-    (tableOf steppedDraws == some (⟨[(.flat ⟨1⟩ [⟨⟨0⟩, 1, 2, 1⟩, ⟨⟨2⟩, 1, 2, 1⟩, ⟨⟨4⟩, 1, 2, 1⟩] [])]⟩, 3 / 2))
+    (tableOf steppedDraws == some (⟨[(.flat ⟨1⟩ [⟨⟨0⟩, 1, 4, 1⟩, ⟨⟨2⟩, 1, 4, 1⟩, ⟨⟨4⟩, 1, 4, 1⟩] [])]⟩, 3 / 4))
   -- The names that a module gives the draws of the root, charged or not: the site's, with the place
   -- of the block in a stepped loop; the key where two draws would share a name or the site's
   -- name is no plain identifier.
@@ -557,8 +572,8 @@ def run (work : System.FilePath) : IO Unit := do
   -- A callee reached by three ways is one use, and its draw is counted thirteen times: twice
   -- through `A`, once through `B`, and five times twice through `A` in the loop.
   expect "a callee reached by three ways is not one use with the counts of the ways"
-    (tableOf sharedCallee == some (⟨[(.flat ⟨1⟩ [⟨⟨0⟩, 1, 8, 1⟩] []), (.flat ⟨2⟩ [] [⟨⟨0⟩, 2, 0⟩]),
-      (.flat ⟨3⟩ [] [⟨⟨0⟩, 1, 0⟩]), (.flat ⟨4⟩ [] [⟨⟨0⟩, 1, 1⟩, ⟨⟨1⟩, 1, 2⟩, ⟨⟨2⟩, 5, 1⟩])]⟩, 13 / 8))
+    (tableOf sharedCallee == some (⟨[(.flat ⟨1⟩ [⟨⟨0⟩, 1, 16, 1⟩] []), (.flat ⟨2⟩ [] [⟨⟨0⟩, 2, 0⟩]),
+      (.flat ⟨3⟩ [] [⟨⟨0⟩, 1, 0⟩]), (.flat ⟨4⟩ [] [⟨⟨0⟩, 1, 1⟩, ⟨⟨1⟩, 1, 2⟩, ⟨⟨2⟩, 5, 1⟩])]⟩, 13 / 16))
   -- A goal that writes no ceiling takes its bound from its table: what a table has no place for
   -- yet is refused with the limit, and no claim is read. Two charges on one draw are an error of
   -- the source.
@@ -619,25 +634,94 @@ def run (work : System.FilePath) : IO Unit := do
   -- A charge belongs to a draw, an application or an attempt: a site that is none of these, or
   -- that names no one event, is an error of the source, with a ceiling and without one. The same
   -- root with the charge on its draw has a table; on its application, or on the draw of the
-  -- protocol that it applies, it meets a limit.
-  for (site, reason) in [
-      ("a", "`sites.a` is a send; a charge belongs to a draw, an application or an attempt"),
-      ("w.z", "`sites.w.z`: `w` is no application, and has no sites"),
-      ("first.nosuch", "`sites.first.nosuch`: `nosuch` names no one event of `Once`"),
-      ("first.z.q", "`sites.first.z.q`: `z` is no application, and has no sites"),
-      ("nosuch", "`sites.nosuch`: `nosuch` names no one event of `Caller`")] do
-    for text in [chargedAt site, ceiling (chargedAt site)] do
-      match statementsOf text ["sound"] with
-      | .ok _ => throw (IO.userError s!"a charge on `sites.{site}` was read")
+  -- protocol that it applies, it meets a limit. What a site is is its declaration's: the verdict
+  -- is the same with the events in a loop that runs once and in one that does not run.
+  for trips in [none, some 1, some 0] do
+    for (site, reason) in [
+        ("a", "`sites.a` is a send; a charge belongs to a draw, an application or an attempt"),
+        ("q", "`sites.q` is a sample; a charge belongs to a draw, an application or an attempt"),
+        ("w.z", "`sites.w.z`: `w` is no application, and has no sites"),
+        ("first.nosuch", "`sites.first.nosuch`: `nosuch` names no one event of `Once`"),
+        ("first.z.q", "`sites.first.z.q`: `z` is no application, and has no sites"),
+        ("nosuch", "`sites.nosuch`: `nosuch` names no one event of `Caller`")] do
+      for text in [chargedAt site trips, ceiling (chargedAt site trips)] do
+        match statementsOf text ["sound"] with
+        | .ok _ => throw (IO.userError s!"a charge on `sites.{site}` was read (loop: {trips})")
+        | .error why =>
+          expect s!"a charge on `sites.{site}` (loop: {trips}) was refused for another reason: {why}"
+            (why.contains "WK-CHARGE" && why.contains reason && !why.contains "GL4")
+    for (site, table) in [("w", true), ("first", false), ("first.z", false)] do
+      match statementsOf (ceiling (chargedAt site trips)) ["sound"] with
       | .error why =>
-        expect s!"a charge on `sites.{site}` was refused for another reason: {why}"
-          (why.contains "WK-CHARGE" && why.contains reason && !why.contains "GL4")
-  for (site, table) in [("w", true), ("first", false), ("first.z", false)] do
-    match statementsOf (ceiling (chargedAt site)) ["sound"] with
-    | .error why => throw (IO.userError s!"a charge on `sites.{site}`, in a goal with a ceiling, was refused: {why}")
-    | .ok read =>
-      expect s!"a charge on `sites.{site}`: the goal has a table, or has none, against what its site is"
-        ((read.claims.goals.map (·.caps.isSome)) == [table])
+        throw (IO.userError s!"a charge on `sites.{site}` (loop: {trips}), in a goal with a ceiling, was refused: {why}")
+      | .ok read =>
+        expect s!"a charge on `sites.{site}` (loop: {trips}): the goal has a table, or has none, against what its site is"
+          ((read.claims.goals.map (·.caps.isSome)) == [table])
+  -- The same under a static condition that selects the events or leaves them out, and with a
+  -- callee that is applied at a static argument of its own in each iteration.
+  let underCondition (count : Nat) (event site : String) :=
+    ceiling <| charged
+      ("protocol Once roles(P, V)(claim: bool @(P, V)):\n    z <- draw index<8> from V to P\n" ++
+        "protocol Caller<n: nat> roles(P, V)(claim: bool @(P, V)):\n" ++
+        s!"    if n == 1:\n        {event}\n    guard @V claim\n" ++
+        s!"spec for Caller:\n    proves @V Holds(claim)\n    charge sites.{site} <= 1 / 8\n")
+      s!"Caller<{count}>"
+  let atArgument (count : Nat) (site : String) :=
+    ceiling <| charged
+      ("protocol Once<n: nat> roles(P, V)(claim: bool @(P, V)):\n    z <- draw index<n + 1> from V to P\n" ++
+        "protocol Caller roles(P, V)(claim: bool @(P, V)):\n" ++
+        s!"    for i in 0..{count}:\n        first <- Once<i>(claim)\n    guard @V claim\n" ++
+        s!"spec for Caller:\n    proves @V Holds(claim)\n    charge sites.{site} <= 1 / 8\n")
+      "Caller"
+  for count in [0, 1] do
+    for (title, text, reason) in [
+        ("a name that the callee has not, under a static condition",
+          underCondition count "first <- Once(claim)" "first.missing", some "`missing` names no one event of `Once`"),
+        ("a draw of the callee, under a static condition", underCondition count "first <- Once(claim)" "first.z", none),
+        ("a sample, under a static condition",
+          underCondition count "coin @P <- sample index<8>" "coin", some "`sites.coin` is a sample"),
+        ("a name that a callee at a static argument has not", atArgument count "first.missing",
+          some "`missing` names no one event of `Once`"),
+        ("a draw of a callee at a static argument", atArgument count "first.z", none)] do
+      match statementsOf text ["sound"], reason with
+      | .ok read, none =>
+        expect s!"{title} ({count}): the goal has a table" ((read.claims.goals.map (·.caps.isSome)) == [false])
+      | .error why, some reason =>
+        expect s!"{title} ({count}): refused for another reason: {why}" (why.contains "WK-CHARGE" && why.contains reason)
+      | .ok _, some _ => throw (IO.userError s!"{title} ({count}): the goal was read")
+      | .error why, none => throw (IO.userError s!"{title} ({count}): the goal was refused: {why}")
+  -- The statement of soundness runs the verifier against one service that answers its coins and
+  -- the prover's messages: a coin of the verifier that the prover does not hear is refused, in the
+  -- root and in a protocol that the root applies with the verifier in a role; a coin of the
+  -- prover alone is not in the verifier's process, and its goal is read.
+  for applied in [false, true] do
+    match statementsOf (sampling "V" applied) ["sound"] with
+    | .ok _ => throw (IO.userError s!"a goal on a verifier with a private coin was read (applied: {applied})")
+    | .error why =>
+      expect s!"a private coin of the verifier (applied: {applied}) was refused for another reason: {why}"
+        (why.contains "WK-VIEW" && why.contains "the verifier's coin `b` is heard by no role of the prover")
+    match statementsOf (sampling "P" applied) ["sound"] with
+    | .ok _ => pure ()
+    | .error why => throw (IO.userError s!"a goal on a prover with a private coin was refused (applied: {applied}): {why}")
+  -- A probability is at most one: a goal whose bound is one or more is refused, whether it writes
+  -- the bound as its ceiling or its charges add up to it; and a charge is at most one. The same
+  -- root at seven eighths, and under a ceiling of three quarters, is read.
+  let line := "goal sound = soundness(Checked)\n"
+  for (title, text, rule, reason) in [
+      ("a ceiling of one", twoDraws.replace line "goal sound = soundness(Checked) <= 1\n", "GL4", "writes the ceiling 1:"),
+      ("a ceiling of two", twoDraws.replace line "goal sound = soundness(Checked) <= 2\n", "GL4", "writes the ceiling 2:"),
+      ("charges that add up to one", twoDraws.replace "charge sites.x <= 3 / 8" "charge sites.x <= 1 / 2", "GL4",
+        "the charges of its contract add up to 1:"),
+      ("a charge above one", twoDraws.replace "charge sites.x <= 3 / 8" "charge sites.x <= 3", "WK-CHARGE",
+        "a charge is a probability, at most one; this one is 3")] do
+    unless text != twoDraws do throw (IO.userError s!"{title}: the source was not changed")
+    match statementsOf text ["sound"] with
+    | .ok _ => throw (IO.userError s!"{title}: the goal was read")
+    | .error why =>
+      expect s!"{title}: refused for another reason: {why}" (why.contains rule && why.contains reason)
+  for text in [twoDraws, twoDraws.replace line "goal sound = soundness(Checked) <= 3 / 4\n"] do
+    if let .error why := statementsOf text ["sound"] then
+      throw (IO.userError s!"a goal with a bound below one was refused: {why}")
   -- A draw without a charge under such a loop is in no table: it is allowed nothing.
   expect "a draw without a charge under a loop of a run-time count is in a table"
     (tableOf (runtimeDraws "") == some (⟨[(.flat ⟨1⟩ [] [])]⟩, 0))

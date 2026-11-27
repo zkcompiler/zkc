@@ -160,9 +160,13 @@ fees command gives its row no fee facts. Where the root reaches what a table has
 place for yet (`TableLimit` lists the four cases), `goalCaps` returns that limit and not a
 table: a goal that writes its ceiling is issued with no table in its row, and the publication
 reports the limit; a goal that writes none is refused with it. The walk of the charges goes on
-after a limit and resolves each charge's site first (`chargedSite`), so an error of the source
-in a charge refuses either: a site that names no one event, a send or a sample, a path through
-what is no application, two charges on one site, a negative charge. A row says whether the
+after a limit and resolves each charge's site first (`chargedSite`, from the kind that the
+declaration records for each event, so the verdict is the same in a loop that does not run), so
+an error of the source in a charge refuses either: a site that names no one event, a send or a
+sample, a path through what is no application, two charges on one site, a charge that is
+negative or above one. A goal whose bound is one or more is refused (GL4), and so is a goal on
+a verifier with a coin that the prover does not hear (`privateVerifierCoin?`): the statement of
+soundness lets one service answer the verifier's coins and the prover's messages. A row says whether the
 source writes its bound; for a row that does not, `publish_goals` decides by the kernel that
 the table's counts are the stored program's and that it adds up to the bound. The caps, the
 set of charged draws and that field are this reading of the source. The deciding role, the operands, the proof arguments,
@@ -172,8 +176,8 @@ whose clause is a `reduces` is not issued yet: the statement of a reduction is a
 which the reduced statement is true. Under SX7, a requirement that reads an input inaccessible to
 the deciding role is outside the soundness experiment. An available requirement currently
 prevents issuance until the claim and its satisfiability witness can represent the hypothesis.
-The checks of the four charge subjects (`lean/formal/checks/CountCharge.lean`,
-`FreivaldsCharge.lean`, `GuessCharge.lean`, `EitherCharge.lean`, on the library
+The checks of the five charge subjects (`lean/formal/checks/CountCharge.lean`,
+`FreivaldsCharge.lean`, `GuessCharge.lean`, `EitherCharge.lean`, `TwiceCharge.lean`, on the library
 `lean/formal/ZkcFormalTests/WrittenSubject.lean`) read what the frontend gives;
 [the page for authors](../../../../docs/written-soundness.md) says how a subject is written.
 [Source charge lookup](Written/Charge.lean) · [Goal selection](Written/Selection.lean)

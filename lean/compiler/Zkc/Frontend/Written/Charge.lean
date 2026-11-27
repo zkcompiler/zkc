@@ -25,6 +25,7 @@ def chargeAmount (s : Compile.State) (owner : Core.Key) (amount : Lowered.Expr)
   let env := Static.instanceEnv s.program decl instanceKey.arguments specification
   let (value, _) ← evaluate s amount.span (Static.evalRational env amount)
   if value.num < 0 then refuse amount.span "WK-CHARGE" "a charge is not negative"
+  if value > 1 then refuse amount.span "WK-CHARGE" s!"a charge is a probability, at most one; this one is {value}"
   return value
 
 /-- Resolve the authored clause in its closed instance, before looking up realized addresses. -/
@@ -85,44 +86,74 @@ def chargedSites (s : Compile.State) (owner : InstanceId) :
     | _ => none
   return (charged, s.program.nameOf instanceKey.declaration, place)
 
-/-- What a site of a contract names in an instance (SX8): a draw, an application with its
-callee where the body's typing gives it, or an attempt. -/
-inductive ChargedSite where
-  | draw
-  | application (callee : Option InstanceId)
-  | attempt
-
-/-- **The site of a charge**: the one event of the instance's declaration that `name` names. A
-charge belongs to a draw, an application or an attempt (SX8): a name that names no one event,
-and an event of another kind, are errors of the source at the charge. An event of a loop that
-does not run has no typed occurrence; it is read from the declaration, as a draw or as an
-application whose callee is not known. -/
-def chargedSite (s : Compile.State) (owner : InstanceId) (place : Syntax.Span) (path name : String) :
-    ExportM ChargedSite := do
-  let some instanceKey := s.table.allocatedKey? owner | throw "missing charge instance"
-  let some {content := .protocol head .., ..} := s.env.modules.lowered? instanceKey.declaration
+/-- **The site of a charge**: the kind of the one event of a declaration that `name` names. The
+kind is the declaration's (`SourceEvent.kind`), the same for every instance and for an event of a
+loop that does not run. A name that names no one event of the declaration is an error of the
+source at the charge. -/
+def siteKind (s : Compile.State) (declaration : DeclarationId) (place : Syntax.Span) (path name : String) :
+    ExportM SourceEventKind := do
+  let some {content := .protocol head .., ..} := s.env.modules.lowered? declaration
     | throw "expected a resolved protocol"
-  let declared := s.program.nameOf instanceKey.declaration
-  let #[(source, event)] := head.events.zipIdx.filter (fun (e, _) => e.name == some name)
-    | refuse place "WK-CHARGE" s!"`sites.{path}`: `{name}` names no one event of `{declared}`"
-  let other (kind : String) : ExportM ChargedSite :=
-    refuse place "WK-CHARGE"
-      s!"`sites.{path}` is {kind}; a charge belongs to a draw, an application or an attempt"
-  let typed : Option Typed.Event := (s.results.checked? owner).bind fun checked =>
-    checked.events.findSome? fun
-      | .event _ id what .. => if id == event then some what else none
-      | _ => none
-  match typed with
-  | some (.draw ..) => return .draw
-  | some (.apply _ callee ..) => return .application (some callee)
-  | some (.attempt ..) => return .attempt
-  | some (.send ..) => other "a send"
-  | some (.sample ..) => other "a sample"
-  | none =>
-    match source.audience with
-    | .transfer _ (some _) => return .draw
-    | .transfer _ none => other "a send"
-    | _ => return .application none
+  let #[source] := head.events.filter (·.name == some name)
+    | refuse place "WK-CHARGE"
+        s!"`sites.{path}`: `{name}` names no one event of `{s.program.nameOf declaration}`"
+  return source.kind
+
+/-- What a charge is on: a draw of the charging declaration, or what a table of caps has no place
+for yet. -/
+inductive ChargedSite where
+  | draw (name : String)
+  | limit (message : String)
+
+/-- **What a charge of a declaration is on** (SX8: a charge belongs to a draw, an application or
+an attempt). A path goes through applications, each determined by its text, to a draw, an
+application or an attempt of the last. Every other site is an error of the source at the
+charge, whatever loops stand around it:
+
+| the site | alone | before the end of a path |
+|---|---|---|
+| a draw | the draw | an error: no application |
+| an application | a limit | the path goes on in its callee |
+| an attempt | a limit | an error: no application |
+| a send, an oracle send, a query, an opening, a sample | an error | an error: no application |
+| no event, or several, of the name | an error | an error |
+
+An application whose callee the text does not determine (a protocol given through a parameter)
+has sites that are not read here: a path through it is refused in those words, and is no limit. -/
+def chargedSite (s : Compile.State) (declaration : DeclarationId) (place : Syntax.Span)
+    (names : Array String) : ExportM ChargedSite := do
+  let path := ".".intercalate names.toList
+  let mut at_ := declaration
+  for (name, i) in names.toList.zipIdx do
+    let kind ← siteKind s at_ place path name
+    let last := i + 1 == names.size
+    let other (what : String) : ExportM PUnit :=
+      if last then
+        refuse place "WK-CHARGE"
+          s!"`sites.{path}` is {what}; a charge belongs to a draw, an application or an attempt"
+      else refuse place "WK-CHARGE" s!"`sites.{path}`: `{name}` is no application, and has no sites"
+    match kind with
+    | .draw => unless last do other "a draw"
+    | .attempt => unless last do other "an attempt"
+    | .application callee =>
+      unless last do
+        let some callee := callee
+          | refuse place "WK-CHARGE" (s!"`sites.{path}`: the protocol that `{name}` applies is given " ++
+              "through a parameter, and its sites are not read from the text; a charge on a site " ++
+              "of it is not read")
+        at_ := callee
+    | .send => other "a send"
+    | .oracleSend => other "an oracle send"
+    | .query => other "a query"
+    | .opening => other "an opening"
+    | .sample => other "a sample"
+    if last then
+      if names.size > 1 then return .limit "a charge on a site of a callee is not in a table of caps yet"
+      match kind with
+      | .draw => return .draw name
+      | _ => return .limit (s!"`sites.{name}` is no draw: a charge on an application or an " ++
+          "attempt is not in a table of caps yet")
+  throw "a charge names no site"
 
 /-- Draws by the names of their sites: each name with the keys of the draws that realize it
 (one, or one for each block of a stepped loop). -/
@@ -220,28 +251,14 @@ partial def capsOfUse (c : AdmittedRoot) (subject : ProofSubject) : TableM Nat :
   let mut sites : SiteKeys := []
   -- A charge's site and amount are read before a limit is noted for it: a site that is no site of
   -- a charge, and an amount in error, are errors.
+  let some owner := c.state.table.allocatedKey? subject.protocol | throw "missing charge instance"
   for (names, span, amount) in charged do
-    let path := ".".intercalate names.toList
-    let #[site] := names
-      | do
-        -- a path goes through applications, to a draw, an application or an attempt of the last
-        let mut at_ : Option InstanceId := some subject.protocol
-        for (step, i) in names.toList.zipIdx do
-          let some instance_ := at_ | break
-          match ← chargedSite c.state instance_ span path step with
-          | .application callee => at_ := callee
-          | _ =>
-            unless i + 1 == names.size do
-              refuse span "WK-CHARGE" s!"`sites.{path}`: `{step}` is no application, and has no sites"
+    let site ← match ← chargedSite c.state owner.declaration span names with
+      | .draw site => pure site
+      | .limit message =>
         discard <| chargeAmount c.state ⟨subject.protocol⟩ amount subject.specification
-        atLimit span "a charge on a site of a callee is not in a table of caps yet"
-    match ← chargedSite c.state subject.protocol span path site with
-    | .draw => pure ()
-    | _ =>
-      discard <| chargeAmount c.state ⟨subject.protocol⟩ amount subject.specification
-      atLimit span (s!"`sites.{site}` is no draw: a charge on an application or an " ++
-        "attempt is not in a table of caps yet")
-      continue
+        atLimit span message
+        continue
     let charge ← drawCharge c.state c.evidence.admitted.program ⟨subject.protocol⟩ site
       subject.specification
     for (_, key) in charge.draws do

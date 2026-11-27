@@ -156,6 +156,18 @@ def twiceSource (charge : String) : String :=
   "scheme Checked = Twice:\n    prover P\n    construction interactive\n" ++
   "goal twice = soundness(Checked, stage = written)\n"
 
+/-- A root with `n` inputs that both roles hold and one that the prover holds: the statement `met`
+nests one existential for each input that the verifier holds. -/
+def wideSource (n : Nat) : String :=
+  "module wide\nuse zkc::security::{soundness}\n" ++
+  "relation Holds(x: bool; w: bool): x and w\n" ++
+  "protocol Check roles(P, V)(" ++
+    ", ".intercalate ((List.range n).map (s!"a{·}: bool @(P, V)")) ++ ", w: bool @P):\n" ++
+  "    guard @V a0\n" ++
+  "spec for Check:\n    proves @V shown: Holds(a0)\n" ++
+  "scheme Checked = Check:\n    prover P\n    construction interactive\n" ++
+  "goal g = soundness(Checked, clause = shown)\n"
+
 /-- The data module that the issuer publishes for a source's goal, in the name space `space`. The
 issuer's views module is the line that this check also writes over other subjects. -/
 def statementsOf (text goal space : String) : IO String := do
@@ -268,6 +280,11 @@ def run (work : System.FilePath) : IO Unit := do
   add "Paths.Views" (viewsModule "Typed.Subjects" "Paths.subject") .statements
   add "Guess.Views" (viewsModule "Guess.Stated" "Guess.written'subject") .statements
   add "Twice.Views" (viewsModule "Twice.Stated" "Twice.written'subject") .statements
+  -- a root with 160 inputs: the three views are declared as for a root with three
+  add "Wide.Stated" (← statementsOf (wideSource 160) "g" "Wide") .statements
+  add "Wide.Views" (viewsModule "Wide.Stated" "Wide.written'subject") .statements
+  add "WideViews" ("import Wide.Views\n#check @Wide.wide.g.sound.view\n#check @Wide.wide.g.met.view\n" ++
+    "#check @Wide.wide.g.installed.view\n#check @Wide.wide.g.sound_of_installed\n") .statements
   let universal ← expectedRows explicitSource "mapped" false
   let existential ← expectedRows explicitSource "mapped" true
   let named3 (space : String) := [
@@ -331,7 +348,7 @@ def run (work : System.FilePath) : IO Unit := do
     add s!"{name}Views" (viewsModule "Typed.Subjects" subject) .statements
   -- the two altered copies of the naming module
   let namer ← IO.FS.readFile "ZkcFormal/Written/Views.lean"
-  let shift ← replaceOnce namer "  let named ← name n e\n" "  let named := shiftNames (← name n e)\n"
+  let shift ← replaceOnce namer "  let named ← withInputsDepth n.origins (name n e)\n" "  let named := shiftNames (← withInputsDepth n.origins (name n e))\n"
   let shift ← replaceOnce shift "/-! ## Views -/\n" ("/-! ## Views -/\n\n" ++ shiftDefinitions)
   let held ← replaceOnce namer "  held.map fun k => (named[k]!, k)\n" "  held.zipIdx.map fun (k, i) => (named[i]!, k)\n"
   add "MutantShift" shift .statements
@@ -450,7 +467,7 @@ def run (work : System.FilePath) : IO Unit := do
     [`Named.probes.mapped.sound, `Named.probes.mapped.met] WrittenSubject.allowed
   -- what Lean and the judgment say
   let result (name : String) := SubjectProject.result project name.toName
-  for name in ["PrintViews", "Named.Views", "Guess.Views", "Twice.Views", "Exchanged.Views", "NamedReads", "GuessReads",
+  for name in ["PrintViews", "Named.Views", "Guess.Views", "Twice.Views", "Wide.Views", "WideViews", "Exchanged.Views", "NamedReads", "GuessReads",
       "TwiceReads", "Short.Views", "ShortReads", "Shapes.Views", "ShapesReads",
       "Fallback.Views", "FallbackReads", "Paths.Views", "Paths.Goals", "PathsNames", "Ambient.Goals", "AmbientGoals", "Shifted.Views", "Held.Views", "Before.Views", "BeforeReads",
       "AfterReads", "Lemmas", "Premises", "OtherBinders", "Listed"] do

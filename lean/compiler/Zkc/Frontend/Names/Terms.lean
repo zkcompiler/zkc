@@ -89,9 +89,9 @@ def localOrReference (span : Span) (reference : Lowered.Reference) (name : Optio
 
 /-- Numbers an event in the order of the text. -/
 def numberEvent (span : Span) (name : Option String) (parts : Array String)
-    (audience : EventAudience := .unresolved) : ResolveM EventId := do
+    (kind : SourceEventKind) (audience : EventAudience := .unresolved) : ResolveM EventId := do
   let state ← get
-  set { state with events := state.events.push { span, name, parts, audience } }
+  set { state with events := state.events.push { span, name, parts, audience, kind } }
   return state.events.size
 
 /-- The shape of a pattern, with its binders made in the order of the text. -/
@@ -564,7 +564,18 @@ mutual
         | .ok (.draw _ owner to) => .transfer to (some owner)
         | .ok (.sample _) | .ok .attempt => .privateCoins roles
         | _ => .unresolved
-      let number ← numberEvent span eventName (eventParts event) audience
+      let kind : SourceEventKind := match what with
+        | .ok (.send ..) => .send
+        | .ok (.oracleSend ..) => .oracleSend
+        | .ok (.query ..) => .query
+        | .ok (.openClaims ..) => .opening
+        | .ok (.draw ..) => .draw
+        | .ok (.sample _) => .sample
+        | .ok .attempt => .attempt
+        | .ok (.apply callee ..) => .application callee.declaration?
+        -- only an application is not resolved here
+        | .error _ => .application none
+      let number ← numberEvent span eventName (eventParts event) kind audience
       match what with
       | .error names =>
         match pattern with
@@ -583,12 +594,16 @@ mutual
           return #[Lowered.Stmt.event span number (some made) type roles what] ++
             (← unpackTree tree (.local span made.id) roles)
     | .eventStmt (.application span site application) => do
-      let number ← numberEvent span (siteName site none) #["value"]
-      match ← resolveApplication env application with
+      let what ← resolveApplication env application
+      let callee := match what with
+        | .ok (.apply callee ..) => callee.declaration?
+        | _ => none
+      let number ← numberEvent span (siteName site none) #["value"] (.application callee)
+      match what with
       | .ok what => return #[.event span number none none none what]
       | .error names => return #[.waiting span "an application of a protocol that is not resolved" names]
     | .«open» span site claims => do
-      let number ← numberEvent span (siteName site none) #["opening"]
+      let number ← numberEvent span (siteName site none) #["opening"] .opening
       let claims ← claims.mapM fun claim => do
         let handle ← resolveExpr env claim.handle
         match claim.opening with
