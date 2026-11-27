@@ -27,21 +27,26 @@ nothing refuses a challenge that does yet.
 
 A stored view is the library's term **named** and then **presented**:
 
-* *Naming* is a function of the subject's origins alone (`WrittenSubject.origins`, given with the
-  rows). It walks the proposition and, at each application of `Goal.Internal.inputs` whose ports
-  are the root's deployed inputs, binds each input that the role holds as `input_<name>` with
-  `valid_input_<name>` (or `port<ordinal>` with `valid_port<ordinal>`, by
-  `Zkc.Subject.inputBinderName`), and at each application of `Goal.Internal.witnesses` binds
-  `witness<i>`, followed by the validities of the witnesses where the continuation's head is
-  `validWitnesses`, and by the continuation as it stands otherwise. The premise after an input
-  telescope takes the name of its head constant where that constant is registered (`Rejected`
-  gives `rejected`) and is anonymous otherwise. To reach a telescope, a definition is unfolded only
-  if it is in the list (the library's, below, and those with the label `view_unfold`) and its value
-  leads to a telescope; a `let` is substituted; a negation stays as the library writes it. An input
-  telescope over other ports is reported. Nothing declared in a scope changes a stored view.
+* *Naming* reads the subject's origins (`WrittenSubject.origins`, given with the rows) and the two
+  lists below: the definitions that it unfolds and the heads whose premises it names. It walks the
+  proposition and, at each application of `Goal.Internal.inputs` whose ports are the root's deployed
+  inputs, binds each input that the role holds as `input_<name>` with `valid_input_<name>` (or
+  `port<ordinal>` with `valid_port<ordinal>`, by `Zkc.Subject.inputBinderName`), and at each
+  application of `Goal.Internal.witnesses` binds `witness<i>`, followed by the validities of the
+  witnesses where the continuation's head is `validWitnesses`, and by the continuation as it stands
+  otherwise. The premise after an input telescope takes the name of its head constant where that
+  constant is registered (`Rejected` gives `rejected`); one whose head is not registered is
+  anonymous where the rest does not refer to its proof, and keeps its name where the rest does. To
+  reach a telescope, a definition is unfolded only if it is in the list (the library's, below, and
+  those with the label `view_unfold`) and its value leads to a telescope; a `let` is substituted; a
+  negation stays as the library writes it. An input telescope over other ports is reported. A
+  declaration named like an input, a variable of that name, a local notation and a printing option
+  around the command leave a stored view as it is; a registration by one of the two labels before
+  the command is read by it.
 * *Presenting* reduces the projections of the short application, the root, the package and the
-  entries, applies the meanings of functions and roles to the reduced cells of their inputs, and
-  computes the types of the binders that naming named, so that an author rewrites on the view.
+  entries, and applies the meanings of functions and roles to the reduced cells of their inputs, so
+  that an author rewrites on the view. In a view the binder of an input or of a witness has its type
+  computed where naming makes the binder; no other binder has its type computed.
 -/
 
 public meta section
@@ -117,12 +122,16 @@ def heldNames (o : Origins) (r : Nat) : List (Name × Nat) :=
 
 /-! ## Naming -/
 
-/-- What naming reads: the origins, the list, the registered premises, and whether a telescope
-was named. -/
+/-- What naming reads: the origins, the list, the registered premises, the type that a bound value
+gets, and whether a telescope was named. -/
 structure Namer where
   origins : Origins
   listed : List Name
   premises : List Name
+  /-- The type that the binder of an input or of a witness gets, from the type that its telescope
+  gives it. Naming alone leaves the type; a view computes it (`viewOf`). It is applied where the
+  binder is made, and to no other binder. -/
+  carrier : Expr → MetaM Expr
   found : IO.Ref Bool
 
 /-- Whether the value of a listed definition leads to a telescope: it names `inputs` or
@@ -143,15 +152,10 @@ private def unfolded (n : Namer) (e : Expr) : MetaM (Option Expr) := do
   return some ((info.value.instantiateLevelParams info.levelParams us).beta e.getAppArgs)
 
 /-- The name of the premise of the proposition `t`: its head's, where the head is registered. -/
-private def premiseName (n : Namer) (t : Expr) : Name :=
+private def premiseName (n : Namer) (t : Expr) : Option Name :=
   match t.getAppFn.constName? with
-  | some c =>
-    if n.premises.contains c then
-      match c with
-      | .str _ s => Name.mkSimple s.decapitalize
-      | _ => .anonymous
-    else .anonymous
-  | none => .anonymous
+  | some c@(.str _ s) => if n.premises.contains c then some (Name.mkSimple s.decapitalize) else none
+  | _ => none
 
 private def validName (n : Name) : Name := Name.mkSimple (Zkc.Subject.validBinderName n.toString)
 
@@ -202,7 +206,7 @@ partial def held (n : Namer) (names : List (Name × Nat)) (cur kv k : Expr) : Me
   | (x, _) :: rest =>
     match s with
     | .forallE _ ty b bi =>
-      withLocalDecl x bi ty fun v => do
+      withLocalDecl x bi (← n.carrier ty) fun v => do
         let .forallE _ vty vb vbi := (b.instantiate1 v).headBeta
           | throwError "views: expected the validity of {x}"
         withLocalDecl (validName x) vbi vty fun hv => do
@@ -210,18 +214,21 @@ partial def held (n : Namer) (names : List (Name × Nat)) (cur kv k : Expr) : Me
     | _ =>
       let_expr Exists ty pair := s | throwError "views: expected the binder of {x} in{indentExpr s}"
       let .lam _ _ body pbi := pair | throwError "views: expected a binder in{indentExpr pair}"
+      let ty ← n.carrier ty
       let lam ← withLocalDecl x pbi ty fun v => do
         let_expr And valid more := (body.instantiate1 v).headBeta
           | throwError "views: expected the validity of {x}"
         mkLambdaFVars #[v] (mkApp2 (mkConst ``And) valid (← held n rest more.headBeta kv k))
       return mkApp2 s.appFn!.appFn! ty lam
 
-/-- The continuation of an input telescope: its first premise is named after its head. -/
+/-- The continuation of an input telescope: its first premise is named after its head where the
+head is registered. A premise whose head is not registered is anonymous where the rest does not
+refer to its proof, and keeps the name that it has where the rest does. -/
 partial def continuation (n : Namer) (body : Expr) : MetaM Expr := do
   match body with
-  | .forallE _ t b bi =>
-    if (← isProp t) && !b.hasLooseBVars then
-      let premise := premiseName n t
+  | .forallE x t b bi =>
+    if ← isProp t then
+      let premise := (premiseName n t).getD (if b.hasLooseBVars then x else .anonymous)
       let t ← name n t
       withLocalDecl premise bi t fun h => do mkForallFVars #[h] (← name n (b.instantiate1 h))
     else name n body
@@ -240,7 +247,7 @@ partial def witnessBinders (n : Namer) (count i : Nat) (cur kv k : Expr) : MetaM
   let s ← whnf cur
   if i < count then
     let .forallE _ ty b bi := s | throwError "views: expected witness {i} in{indentExpr s}"
-    withLocalDecl (Name.mkSimple (Zkc.Subject.witnessBinderName i)) bi ty fun v => do
+    withLocalDecl (Name.mkSimple (Zkc.Subject.witnessBinderName i)) bi (← n.carrier ty) fun v => do
       mkForallFVars #[v] (← witnessBinders n count (i + 1) (b.instantiate1 v).headBeta kv k)
   else
     unless s.getAppFn == kv do throwError "views: expected the end of the witnesses in{indentExpr s}"
@@ -304,48 +311,32 @@ def meanings (e : Expr) : MetaM Expr :=
       if let some m ← meaningAt s then return .done m
     return .continue)
 
-/-- Whether naming gave a binder this name (an input or a witness, not a validity). -/
-def valueBinder (x : Name) : Bool :=
-  match x with
-  | .str .anonymous s => s.startsWith "input_" || s.startsWith "port" || s.startsWith "witness"
-  | _ => false
-
-/-- The types of the binders that naming named, computed. -/
-partial def computedBinders (e : Expr) : MetaM Expr := do
-  match e with
-  | .forallE x t b bi =>
-    let t ← if valueBinder x then ZkcFormal.computedTypes t else computedBinders t
-    withLocalDecl x bi t fun v => do mkForallFVars #[v] (← computedBinders (b.instantiate1 v))
-  | .lam x t b bi =>
-    let t ← if valueBinder x then ZkcFormal.computedTypes t else computedBinders t
-    withLocalDecl x bi t fun v => do mkLambdaFVars #[v] (← computedBinders (b.instantiate1 v))
-  | .app f a => return mkApp (← computedBinders f) (← computedBinders a)
-  | .mdata d b => return .mdata d (← computedBinders b)
-  | _ => return e
-
-/-- A named term presented for rewriting. -/
+/-- A named term's meanings presented for rewriting. -/
 def present (e : Expr) : MetaM Expr := do
-  computedBinders (← subjectFields (← meanings e))
+  subjectFields (← meanings e)
 
 /-! ## Views -/
 
-/-- The term `e` named after the origins of the subject `S`, not presented. Naming changes binder
-names, unfolds definitions and substitutes `let`s, so the result is definitionally `e`; what holds a
-declared view to `e` is its theorem `view_iff`, which the kernel checks (`declareView`), and no check
-of the elaborator's here: at 64 deployed inputs held by the verifier, `isDefEq` of the named term
-with the term reaches Lean's maximum recursion depth where the kernel's check does not. -/
-def namedOf (subject : Name) (e : Expr) : MetaM Expr := do
+/-- The term `e` named after the origins of the subject `S`, not presented: the binders of inputs
+and witnesses get the type that `carrier` makes of theirs, which is their own type unless a caller
+says otherwise. Naming changes binder names, unfolds definitions and substitutes `let`s, so the
+result is definitionally `e`; what holds a declared view to `e` is its theorem `view_iff`, which the
+kernel checks (`declareView`), and no check of the elaborator's here: at 64 deployed inputs held by
+the verifier, `isDefEq` of the named term with the term reaches Lean's maximum recursion depth where
+the kernel's check does not. -/
+def namedOf (subject : Name) (e : Expr) (carrier : Expr → MetaM Expr := pure) : MetaM Expr := do
   let e ← instantiateMVars e
   let n : Namer := { origins := ← originsOf subject, listed := ← unfoldList,
-                     premises := ← premiseList, found := ← IO.mkRef false }
+                     premises := ← premiseList, carrier, found := ← IO.mkRef false }
   let named ← name n e
   unless ← n.found.get do
     throwError m!"views: no input or witness telescope is reached in{indentExpr e}\nthrough the definitions of the list; a definition outside the list is not unfolded (`@[view_unfold]` adds one)"
   return named
 
-/-- **The view of `e` over the subject `S`**: named, then presented. -/
+/-- **The view of `e` over the subject `S`**: named with the types of the bound inputs and
+witnesses computed, then presented. -/
 def viewOf (subject : Name) (e : Expr) : MetaM Expr := do
-  present (← namedOf subject e)
+  present (← namedOf subject e ZkcFormal.computedTypes)
 
 /-- Declare `<base>.view : Prop` with the value `value` and `<base>.view_iff : view ↔ e` by
 `Iff.rfl`. -/

@@ -62,7 +62,10 @@ def constName (e : Expr) : MetaM Name := do
   let some c := e.consumeMData.constName? | throwError "publish: expected a constant, got {e}"
   return c
 
+/-- The index `i` of a table of `n` rows. An index past the rows is refused here: the proof that the
+index is within the table is written without being checked. -/
 private def finAt (n i : Nat) : MetaM Expr := do
+  unless i < n do throwError "publish: no row {i} in a table of {n}"
   let lt ← mkAppM ``LT.lt #[mkNatLit i, mkNatLit n]
   mkAppM ``Fin.mk #[mkNatLit i, ← mkDecideProof lt]
 

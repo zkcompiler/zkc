@@ -13,12 +13,21 @@ shape in a declared view, by name and type, with the list that this check spells
 reading of the source; it does not use the naming.
 
 * The views of the three subjects are declared and each `view_iff` holds (the views module is
-  built). The reader accepts the source's names. It refuses the views of a subject whose origins
-  exchange two names, and the views made by two altered copies of the naming module: one gives
+  built). The reader accepts the source's names, also for the clause written short
+  (`Accepts(right)`), whose views bind the relation's two witnesses all the same. It refuses a row
+  past the subject's rows, the views of a subject whose origins exchange two names, and the views
+  made by two altered copies of the naming module: one gives
   each binder the name of the binder after it, so that the first input's name falls on the path's
   binder; one takes a held input's name at its position among the held inputs, which puts the name
   of `flag`, which the prover alone holds, into the verifier's view.
-* A declaration named like an input, before the views or after them, changes no view. A view
+* The premise after an input telescope is `rejected` in the installed bound's view and takes the
+  name of a registered head (`@[view_premise]`), also where the rest refers to its proof; a premise
+  that is not registered is anonymous, or keeps its name where the rest refers to its proof. A
+  binder that the naming did not make does not have its type computed, whatever its name: the type of a binder
+  `portfolio` before an input telescope is not computed, the types of the inputs after it are.
+* A declaration named like an input, before the views or after them, changes no view; neither
+  does a variable of that name, a local notation for a name of the interpretation or a printing
+  option around the command. A view
   whose term holds a proof that Lean moved into an auxiliary constant is read. A witness telescope
   whose continuation is not a validity premise is named.
 * A wrapper outside the library's name space, and a closed specialized constant inside it, are
@@ -50,6 +59,10 @@ scheme S = Check:
     construction interactive
 goal mapped = soundness(S, clause = explicit)
 "
+
+/-- The same clause written short, `Accepts(right)`: the relation's witnesses are no operands of
+the clause. -/
+def shortSource : String := explicitSource.replace "Accepts(right; flag, n)" "Accepts(right)"
 
 /-- A guessing protocol: `n` rounds, each a guess sent and a draw. -/
 def guessSource (rounds charge : String) : String :=
@@ -92,7 +105,8 @@ def statementsOf (text goal space : String) : IO String := do
 /-- **The second reading of the source**: the binders of a source's shape that a view of the
 goal gives, as rows of the reader. For each deployed input that the deciding role holds, in the
 order of the protocol's ports: its name by the rule of names, and its validity where the
-telescope is universal; then a witness for each witness operand of the clause. -/
+telescope is universal; then a witness for each witness parameter that the declaration of the
+clause's relation has, whether the clause writes its witness operands or not. -/
 def expectedRows (text goal : String) (existential : Bool) : IO String := do
   let c ← IO.ofExcept (goalRoot text goal)
   let head ← IO.ofExcept (SourceClause.rootHead c)
@@ -106,7 +120,7 @@ def expectedRows (text goal : String) (existential : Bool) : IO String := do
       let x := Zkc.Subject.inputBinderName port.binder.name k count
       rows := rows ++ s!"  | {x} := input {k}\n"
       unless existential do rows := rows ++ s!"  | {Zkc.Subject.validBinderName x} := valid {k}\n"
-  for i in [:seen.witness.length] do
+  for i in [:(← IO.ofExcept (SourceClause.witnessParameters c goal)).length] do
     rows := rows ++ s!"  | {Zkc.Subject.witnessBinderName i} := witness {i}\n"
   return rows
 
@@ -172,8 +186,28 @@ def authorProof (target : String) : String :=
   "  rw [prEvent_simulation_returns, halts]\n" ++
   "  simp [run, Process.interpret]\n\n"
 
+/-- A module that holds the binders of a view's leading universal telescope to a list of names,
+and the type of one of them to a constant. -/
+def spineReader : String :=
+  "open Lean in\ndef spine : Expr → List (Name × Expr)\n" ++
+  "  | .forallE x t b _ => (x, t) :: spine b\n  | .mdata _ e => spine e\n  | _ => []\n\n" ++
+  "open Lean in\ndef spineIs (view : Name) (names : List Name) (typed : List (Nat × Name) := []) : CoreM Unit := do\n" ++
+  "  let some (.defnInfo d) := (← getEnv).find? view | throwError \"no view {view}\"\n" ++
+  "  let binders := spine d.value\n" ++
+  "  unless binders.map (·.1) == names do\n" ++
+  "    throwError \"{view}: the leading binders are {binders.map (·.1)}, not {names}\"\n" ++
+  "  for (i, head) in typed do\n" ++
+  "    unless (binders[i]!).2.getAppFn.isConstOf head do\n" ++
+  "      throwError \"{view}: the binder {(binders[i]!).1} has the type{indentExpr (binders[i]!).2}\\nwhose head is not {head}\"\n" ++
+  "  logInfo m!\"{view}: {names}\"\n\n"
+
 def run (work : System.FilePath) : IO Unit := do
   let project := projectOf work
+  -- the check's own reading of refusals: one diagnostic does not answer two expected places
+  let sample := "Sample.lean:1:0: error: Unknown identifier `StageA.missingOperand`\nSample.lean:2:0: error: Unknown identifier `other`\n"
+  match ← (expectErrorsAt "the sample" false sample ["StageA", "missingOperand"]).toBaseIO with
+  | .ok () => throw (IO.userError "one diagnostic answered two expected places")
+  | .error _ => pure ()
   let add (name text : String) (kind : SubjectProject.Kind) : IO Unit :=
     discard <| SubjectProject.add project name.toName text kind
   -- the subjects
@@ -183,12 +217,14 @@ def run (work : System.FilePath) : IO Unit := do
   let guess ← statementsOf (guessSource "3" "1 / 8") "guessing" "Guess"
   let twice ← statementsOf (twiceSource "1 / 4") "twice" "Twice"
   add "Named.Stated" named .statements
+  add "Short.Stated" (← statementsOf shortSource "mapped" "Short") .statements
   add "Exchanged.Stated" exchanged .statements
   add "Guess.Stated" guess .statements
   add "Twice.Stated" twice .statements
   add "Named.Challenge" "import Named.Stated\nimport ZkcFormal.Written.Publish\n\npublish_goals Named.written'subject\n" .challenge
   -- the views and their readers
   add "Named.Views" (viewsModule "Named.Stated" "Named.written'subject") .statements
+  add "Short.Views" (viewsModule "Short.Stated" "Short.written'subject") .statements
   add "Exchanged.Views" (viewsModule "Exchanged.Stated" "Exchanged.written'subject") .statements
   add "Guess.Views" (viewsModule "Guess.Stated" "Guess.written'subject") .statements
   add "Twice.Views" (viewsModule "Twice.Stated" "Twice.written'subject") .statements
@@ -199,6 +235,18 @@ def run (work : System.FilePath) : IO Unit := do
     (s!"{space}.probes.mapped.met.view", s!"{space}.written'subject", existential),
     (s!"{space}.probes.mapped.installed.view", s!"{space}.written'subject", universal)]
   add "NamedReads" (reader ["Named.Views"] (named3 "Named")) .statements
+  -- the clause written short binds the relation's witnesses all the same
+  let shortUniversal ← expectedRows shortSource "mapped" false
+  let shortExistential ← expectedRows shortSource "mapped" true
+  unless shortUniversal == universal && shortExistential == existential do
+    throw (IO.userError "the second reading of the short clause differs from that of the explicit one")
+  add "ShortReads" (reader ["Short.Views"] [
+    ("Short.probes.mapped.sound.view", "Short.written'subject", shortUniversal),
+    ("Short.probes.mapped.met.view", "Short.written'subject", shortExistential),
+    ("Short.probes.mapped.installed.view", "Short.written'subject", shortUniversal)]) .statements
+  -- a row past the subject's rows is no row
+  add "PastTheRows" ("import Named.Views\nimport ZkcFormalTests.ViewReader\n\n" ++
+    s!"#view_reads Named.probes.mapped.sound.view of Named.written'subject at 1\n{universal}") .statements
   let guessUniversal ← expectedRows (guessSource "3" "1 / 8") "guessing" false
   let guessExistential ← expectedRows (guessSource "3" "1 / 8") "guessing" true
   add "GuessReads" (reader ["Guess.Views"] [
@@ -240,6 +288,12 @@ def run (work : System.FilePath) : IO Unit := do
       String.join (["sound", "met", "installed"].map fun t => s!"#print Named.probes.mapped.{t}.view\n")
   add "PrintNamed" (printAll "Named.Views") .statements
   add "PrintBefore" (printAll "Before.Views") .statements
+  -- the command inside a name space and a section, with a variable named like an input, local
+  -- notations for the interpretation's names and a printing option around it
+  add "Ambient.Views" (viewsModule "Named.Stated" "Named.written'subject"
+    (before := "namespace Customer\nsection\nvariable (input_claim : Nat)\nlocal notation \"model\" => Unit\n" ++
+      "local notation \"draws\" => False\nset_option pp.universes true in\n")) .statements
+  add "PrintAmbient" (printAll "Ambient.Views") .statements
   add "AfterReads" (reader ["Named.Views"] (named3 "Named")
     (before := "def input_claim : Nat := 0\ndef valid_input_right : Nat := 0\ndef Named.input_right : Nat := 0\n\n")) .statements
   -- a proof in an auxiliary constant; a witness telescope with another continuation
@@ -258,6 +312,27 @@ def run (work : System.FilePath) : IO Unit := do
     "    (Named.written'application0.relation.header.ins.drop Named.written'application0.arity) fun _ => True\n" ++
     s!"#view_reads Named.constant.view of Named.written'subject at 0\n{witnessRows}" ++
     "#print Named.constant.view\n") .statements
+  -- the premise after an input telescope, by its head; a binder that the naming did not make
+  let ports := "Goal.Internal.inputs model 1 false Named.written'root.entry.header.ins"
+  let inputs := "[`input_claim, `valid_input_claim, `input_right, `valid_input_right"
+  add "Premises" ("import Named.Views\nimport ZkcFormalTests.ViewEntry\n\n" ++ spineReader ++ opens ++
+    "def Customer.Ready : Prop := True\ndef Customer.Idle : Prop := True\n" ++
+    "opaque Customer.Later (h : Customer.Ready) : Prop\nopaque Customer.Other (h : Customer.Idle) : Prop\n" ++
+    "attribute [view_premise] Customer.Ready\n" ++
+    s!"declare_view Named.written'subject Named.ordinary : {ports} fun _ => Customer.Ready → True\n" ++
+    s!"declare_view Named.written'subject Named.dependent :\n  {ports} fun _ => ∀ original : Customer.Ready, Customer.Later original\n" ++
+    s!"declare_view Named.written'subject Named.unregistered : {ports} fun _ => Customer.Idle → True\n" ++
+    s!"declare_view Named.written'subject Named.unregisteredDependent :\n  {ports} fun _ => ∀ original : Customer.Idle, Customer.Other original\n" ++
+    s!"#eval spineIs `Named.probes.mapped.installed.view (`path :: {inputs}, `rejected])\n" ++
+    s!"#eval spineIs `Named.ordinary.view ({inputs}, `ready])\n" ++
+    s!"#eval spineIs `Named.dependent.view ({inputs}, `ready])\n" ++
+    s!"#eval spineIs `Named.unregistered.view ({inputs}, .anonymous])\n" ++
+    s!"#eval spineIs `Named.unregisteredDependent.view ({inputs}, `original])\n") .statements
+  add "OtherBinders" ("import Named.Stated\nimport ZkcFormalTests.ViewEntry\n\n" ++ spineReader ++ opens ++
+    s!"declare_view Named.written'subject Named.neutral :\n  ∀ item : model.Val .bool, {ports} fun _ => item = true\n" ++
+    s!"declare_view Named.written'subject Named.spelled :\n  ∀ portfolio : model.Val .bool, {ports} fun _ => portfolio = true\n" ++
+    s!"#eval spineIs `Named.neutral.view (`item :: {inputs}])\n    [(0, ``Zkc.Core.Model.Val), (1, ``Bool), (3, ``Bool)]\n" ++
+    s!"#eval spineIs `Named.spelled.view (`portfolio :: {inputs}])\n    [(0, ``Zkc.Core.Model.Val), (1, ``Bool), (3, ``Bool)]\n") .statements
   -- wrappers in the list and not; a telescope over other ports
   let lemmaHead := "import Named.Stated\nimport ZkcFormalTests.ViewEntry\nimport ZkcFormalTests.ViewReader\n\n" ++ opens
   add "Listed" (lemmaHead ++
@@ -296,7 +371,8 @@ def run (work : System.FilePath) : IO Unit := do
   -- what Lean and the judgment say
   let result (name : String) := SubjectProject.result project name.toName
   for name in ["PrintViews", "Named.Views", "Guess.Views", "Twice.Views", "Exchanged.Views", "NamedReads", "GuessReads",
-      "TwiceReads", "Shifted.Views", "Held.Views", "Before.Views", "BeforeReads", "AfterReads", "Lemmas", "Listed"] do
+      "TwiceReads", "Short.Views", "ShortReads", "Shifted.Views", "Held.Views", "Before.Views", "BeforeReads",
+      "AfterReads", "Lemmas", "Premises", "OtherBinders", "Listed"] do
     let (ok, output) ← result name
     unless ok do throw (IO.userError s!"{name}: Lean refused the module\n{output}")
     IO.println s!"{name}: accepted\n{output}"
@@ -310,13 +386,17 @@ def run (work : System.FilePath) : IO Unit := do
       | _ => line)
   unless (← printed "PrintNamed") == (← printed "PrintBefore") do
     throw (IO.userError "a declaration named like an input before the views changed a view's term")
-  IO.println "PrintNamed = PrintBefore: the three views' terms (pp.all) are the same with the declarations before the views"
+  unless (← printed "PrintNamed") == (← printed "PrintAmbient") do
+    throw (IO.userError "the scope around the command changed a view's term")
+  IO.println ("PrintNamed = PrintBefore = PrintAmbient: the three views' terms (pp.all) are the same with the " ++
+    "declarations before the views, and with a variable, local notations and an option around the command")
   refusedAt "a subject whose origins exchange two names" (← result "ExchangedReads")
     ["Exchanged.probes.mapped.sound.view: at the source's binder 0 the view binds `input_right` where the source gives `input_claim`"]
   refusedAt "the namer that shifts each name onto the binder before" (← result "ShiftedReads")
     ["Named.probes.mapped.installed.view: the binder `input_claim` has the type"]
   refusedAt "the namer that takes a held input's name at its position among the held" (← result "HeldReads")
     ["Named.probes.mapped.installed.view: at the source's binder 2 the view binds `input_flag` where the source gives `input_right`"]
+  refusedAt "a row past the subject's rows" (← result "PastTheRows") ["publish: no row 1 in a table of 1"]
   refusedAt "a wrapper outside the list" (← result "UnlistedWrapper") ["views: no input or witness telescope is reached"]
   refusedAt "a closed constant outside the list" (← result "UnlistedClosed") ["views: no input or witness telescope is reached"]
   refusedAt "a telescope over other ports" (← result "OtherPorts")
@@ -327,11 +407,12 @@ def run (work : System.FilePath) : IO Unit := do
   let (verdict, said) ← SubjectProject.judge project "Named"
   unless verdict == .accepted do
     throw (IO.userError s!"the proof through the declared views was not accepted\n{said}")
-  for name in ["ExchangedReads", "ShiftedReads", "HeldReads", "UnlistedWrapper", "UnlistedClosed", "OtherPorts", "NotPresented"] do
+  for name in ["PastTheRows", "ExchangedReads", "ShiftedReads", "HeldReads", "UnlistedWrapper", "UnlistedClosed", "OtherPorts", "NotPresented"] do
     IO.println s!"{name}: refused\n{(← result name).2}"
-  IO.println ("Views by the library's command: the three subjects' views are declared and read by name and " ++
-    "type; exchanged origins and two altered namers are refused; the proof through the views and the " ++
-    "declared step is accepted by lake comparator.")
+  IO.println ("Views by the library's command: the views of the three subjects and of the short clause are " ++
+    "declared and read by name and type; a row past the rows, exchanged origins and two altered namers are " ++
+    "refused; premises are named by their registered heads and other binders keep their types; the proof " ++
+    "through the views and the declared step is accepted by lake comparator.")
 
 end WrittenViews
 

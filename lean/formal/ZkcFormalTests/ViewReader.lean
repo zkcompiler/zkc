@@ -102,7 +102,8 @@ private partial def walk (e : Expr) : StateRefT Reading MetaM Unit := do
 /-- `#view_reads V of S at i | <name> := input <k> | …`: the binders of a source's shape in the
 value of the view `V` are exactly the rows, in their order, each with its type, read from the
 subject `S` (its root's deployed inputs, and the witnesses of the short application of its goal
-row `i`), at the standard interpretation's model. -/
+row `i`), at the standard interpretation's model. A row `i` past the subject's rows is refused
+(`Publish.rowAt`). -/
 elab "#view_reads " v:ident " of " s:ident " at " i:num rows:viewBinder* : command => liftTermElabM do
   let view ← realizeGlobalConstNoOverloadWithInfo v
   let subject ← realizeGlobalConstNoOverloadWithInfo s

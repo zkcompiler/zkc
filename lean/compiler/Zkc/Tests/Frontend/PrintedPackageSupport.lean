@@ -210,7 +210,13 @@ def errorLines (output : String) : List String :=
       | _ => false
     | _ => false
 
-/-- Lean refuses the module with one error at each of `places`, and with no other error. -/
+/-- Whether each of `places` is in an error line of its own among `errors`. -/
+def placedApart : List String → List String → Bool
+  | [], _ => true
+  | place :: rest, errors => errors.any fun error => error.contains place && placedApart rest (errors.erase error)
+
+/-- Lean refuses the module with as many errors as there are `places`, each place in an error line
+of its own. -/
 def expectErrorsAt (title : String) (ok : Bool) (output : String) (places : List String) : IO Unit := do
   if ok then throw (IO.userError s!"{title}: Lean accepted the module\n{output}")
   let errors := errorLines output
@@ -219,6 +225,8 @@ def expectErrorsAt (title : String) (ok : Bool) (output : String) (places : List
   for place in places do
     unless errors.any (·.contains place) do
       throw (IO.userError s!"{title}: not refused at `{place}`\n{output}")
+  unless placedApart places errors do
+    throw (IO.userError s!"{title}: one error answers two of the expected places\n{output}")
 
 /-- Lean accepts the module, and each of its theorems rests on the allowed axioms at most. -/
 def expectAccepted (name : String) (path : System.FilePath) (theorems : List String)
