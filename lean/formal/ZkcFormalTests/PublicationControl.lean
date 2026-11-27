@@ -17,6 +17,10 @@ Controls of the shape of what the issuer publishes, read from the built modules.
   the data module `M`, a module that `M` imports, or a module that the library's
   `ZkcFormal.Written.Publish` imports. A views module, a fees module and an author's tool are none
   of these.
+* `#challenge_theorems C of S published … beside …`: the theorems that the challenge `C` states are
+  those of the rows of `S`, each with the statement that the control spells from the row's short
+  application and bound, and the theorems that the check lists beside them; the names that a
+  judgment is given are the rows' theorems.
 
 Each lists what is allowed.
 -/
@@ -131,5 +135,63 @@ elab "#challenge_module " c:ident " over " m:ident : command => do
     unless imported == c.getId || allowed.contains imported do
       throwError "challenge control: {c.getId} imports {imported}, which neither the data module nor the publication command imports"
   logInfo m!"{c.getId}: a challenge over {m.getId}"
+
+/-- The theorems of a row as this control lists them: a soundness row publishes `sound` and `met`.
+The control has no expectation of a row of another property and refuses it. -/
+private def publishedBy (row : ZkcFormal.Written.Publish.Row) : MetaM (List String) := do
+  unless row.property == ``Zkc.Security.Property.soundness do
+    throwError "challenge control: no expectation for a row of the property {row.property}"
+  return ["sound", "met"]
+
+/-- The statement of a row's theorem as this control spells it: source text over the row's short
+application and bound, elaborated here. It is not the library's builder of a statement. -/
+private def spelled (row : ZkcFormal.Written.Publish.Row) (which : String) : TermElabM Expr := do
+  let application := mkCIdent row.application
+  let term ← match which with
+    | "sound" => do
+      let bound := mkCIdent (← row.bound)
+      `(ZkcFormal.Written.Soundness.Result ZkcFormal.Written.StandardInterpretation.model $application
+          ZkcFormal.Written.StandardInterpretation.draws ZkcFormal.Written.StandardInterpretation.covers
+          (Zkc.Subject.Bound.limit $bound))
+    | "met" =>
+      `(ZkcFormal.Written.Soundness.Witnessed ZkcFormal.Written.StandardInterpretation.model $application
+          ZkcFormal.Written.StandardInterpretation.draws)
+    | other => throwError "challenge control: no spelling of the theorem `{other}`"
+  let e ← Term.elabTerm term (some (.sort .zero))
+  Term.synthesizeSyntheticMVarsNoPostponing
+  instantiateMVars e
+
+/-- `#challenge_theorems C of S published "a", … beside "b", …`: the theorems of the challenge `C`
+are those of the rows of the subject `S`, each under the row's path with the statement that this
+control spells (compared whole, by `Expr.equal`), and the listed theorems `beside` them (a check's
+consumers), and no other; and the names `published`, which a judgment is given, are exactly the
+rows' theorems. -/
+elab "#challenge_theorems " c:ident " of " s:ident " published " published:str,* " beside " beside:str,* : command => do
+  let env ← getEnv
+  let some index := env.getModuleIdx? c.getId | throwError "challenge control: no module {c.getId}"
+  let subject ← liftCoreM <| realizeGlobalConstNoOverloadWithInfo s
+  let space := subject.getPrefix
+  let declared := (env.header.moduleData[index.toNat]!.constNames.toList.filter fun name =>
+    !name.isInternalDetail && (match env.find? name with | some (.thmInfo _) => true | _ => false)).map toString
+  let published := published.getElems.toList.map (·.getString)
+  let beside := beside.getElems.toList.map (·.getString)
+  let mut expected : List String := []
+  for row in ← liftTermElabM (ZkcFormal.Written.Publish.rows subject) do
+    for which in ← liftTermElabM (publishedBy row) do
+      let name := Name.str (row.path.foldl (fun parent component => Name.str parent component) space) which
+      unless env.getModuleIdxFor? name == some index do
+        throwError "challenge control: {c.getId} does not state {name}"
+      let some (.thmInfo info) := env.find? name
+        | throwError "challenge control: {name} of {c.getId} is no theorem"
+      let term ← liftTermElabM (spelled row which)
+      unless Expr.equal info.type term do
+        throwError m!"challenge control: {name}: the challenge states{indentExpr info.type}\nthe control spells{indentExpr term}"
+      expected := expected ++ [toString name]
+  let same (a b : List String) := a.length == b.length && a.all b.contains && b.all a.contains
+  unless same published expected do
+    throwError "challenge control: the judgment is given {published}; the rows of {subject} publish {expected}"
+  unless same declared (expected ++ beside) do
+    throwError "challenge control: {c.getId} states {declared}; the rows of {subject} publish {expected} and the check states {beside} beside them"
+  logInfo m!"{c.getId}: {expected.length} theorems of the rows of {subject}, each the statement that the control spells, and {beside.length} beside them"
 
 end ZkcFormalTests.PublicationControl
