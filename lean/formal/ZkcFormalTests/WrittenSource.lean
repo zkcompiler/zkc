@@ -2,7 +2,14 @@ import Zkc.Tests.Frontend.PrintedPackageSupport
 import Zkc.Tests.Frontend.SourceClause
 
 /-! Expected selections for an independent consumer of the issued statements. Read the
-original lowered ports and clause operands before observing any generated declaration. -/
+original lowered ports and clause operands before observing any generated declaration.
+
+What is this reader's own: the ports, the clause's operands and place, the rule of a goal's
+bound (the ceiling, else the table's total). What is not: the table of caps is the frontend's
+(`goalCaps`), the function that the issuer calls, so a charge read at another site with the
+same total passes this comparison. What each site is charged is held by expectations written
+by hand in `checks/GoalStatement.lean` (two draws with exchanged charges and one total, a
+callee at two proof arguments, the arms of a choice, a call in a loop). -/
 
 namespace ZkcFormalTests.WrittenSource
 open Zkc.Frontend Zkc.Frontend.Written

@@ -25,6 +25,19 @@ Controls of the shape of what the issuer publishes, read from the built modules.
   judgment is given are the rows' theorems.
 
 Each lists what is allowed.
+
+**What these controls are for, and what they do not establish.** A data module is printed by the
+issuer, which is trusted with the compiler; the controls hold the issuer's printing to a shape, so
+that a change of the issuer that makes it state a proposition, compute a row or import the formal
+library fails a check. They are no defence against a module written to deceive them, which is not
+the issuer's. Within a module that passes, these are not held to any shape, and a statement does
+not rest on them being so: a proposition wrapped in a data type (`PLift`, a subtype); the
+statement of a theorem that has one of the package's listed names; the key of a lookup; an
+auxiliary declaration that Lean makes (a nested proof, a matcher); the root's and a short
+application's own term; a constructor's parameters and implicit fields; the source's names. What
+holds a published statement to the source is the comparison of the subject with a second reading
+of the source by value, in the checks that run it, and the comparator's comparison of constants.
+A further rule is added here only for a way through one of the rules above.
 -/
 
 open Lean Elab Command
@@ -83,6 +96,12 @@ def typeHead (name : Name) : MetaM (Option Name) := do
   let type := (← getConstInfo name).type
   Meta.forallTelescopeReducing type fun _ body => return (← Meta.whnf body).getAppFn.constName?
 
+/-- The types of the parts of a subject that have a rule of their own in `subjectAsItStands` or
+in the rows' rules. -/
+def partTypes : List Name :=
+  [``Zkc.Subject.GoalSlot, ``Zkc.Subject.GoalFields, ``Zkc.Subject.Decision, ``Zkc.Subject.ShortApplication,
+    ``Zkc.Subject.CapTable, ``Zkc.Subject.Bound, ``Zkc.Subject.BoundedTable]
+
 /-- Whether a term is built of constructors, literals, numerals and declarations of the module
 (each standing alone, applied to nothing). A proof and a type are not looked into, nor a
 constructor's parameters and implicit fields: none of these chooses a value. A term with any other head (a conditional, a matcher, a recursor, a function
@@ -94,7 +113,13 @@ partial def constructorTerm (inModule : Name → Bool) (e : Expr) : MetaM Bool :
   if ← (try Meta.isProof e catch _ => pure false) then return true
   if ← (try Meta.isType e catch _ => pure false) then return true
   let .const head _ := e.getAppFn | return false
-  if inModule head then return e.getAppNumArgs == 0
+  if inModule head then
+    -- a declaration of the module stands alone, and is a part with a rule of its own (a row, its
+    -- fields, a table, a bound, a decision, a short application) or is itself such a term
+    unless e.getAppNumArgs == 0 do return false
+    if (← typeHead head).any partTypes.contains then return true
+    let some value := (← getConstInfo head).value? | return false
+    return ← constructorTerm inModule value
   let some (.ctorInfo constructor) := (← getEnv).find? head | return false
   -- the constructor's fields that are written: its parameters and its implicit fields are fixed
   -- by the type at which it stands
@@ -126,16 +151,31 @@ partial def valueReads (inModule : Name → Bool) (e : Expr) (found : NameSet :=
   | .proj _ _ body => valueReads inModule body found
   | _ => return found
 
+/-- The elements of a table's selector, where the selector has the issuer's shape: one
+declaration of the module, or a conditional on the index's value against a numeral whose two
+branches have that shape. A selector of another shape gives nothing. -/
+partial def selectorLeaves (inModule : Name → Bool) (index : Expr) (e : Expr) : Option (List Name) := do
+  let e := e.consumeMData
+  if let some name := e.constName? then
+    if inModule name then return [name] else none
+  guard (e.isAppOfArity ``ite 5)
+  let condition := (e.getArg! 1).consumeMData
+  guard (condition.isAppOfArity ``LT.lt 4)
+  let value := (condition.getArg! 2).consumeMData
+  guard (value.isAppOfArity ``Fin.val 2 && value.appArg!.consumeMData == index && numeral (condition.getArg! 3))
+  return (← selectorLeaves inModule index (e.getArg! 3)) ++ (← selectorLeaves inModule index (e.getArg! 4))
+
 /-- **The subject as it stands.** What may stand at each place, for the subject, a table, a row,
 its fields and a decision:
 
 * the subject is its constructor; its table of decisions and its table of rows are each a
   declaration of the module or a table in place;
-* a table is its constructor at a numeral, and its selector reads, of the module, only
-  declarations of the table's element (rows; decisions): it may compute over its index and over
-  nothing else;
+* a table is its constructor at a numeral, and its selector has the issuer's shape: one
+  element, or conditionals on the index's value against numerals over elements, each element
+  given at one index;
 * a row is its constructor: its path, its property and its clause's place are terms of
-  constructors, literals and numerals, and its fields are a declaration of the module;
+  constructors, literals and numerals (a declaration of the module that stands at such a place
+  is itself such a term), and its fields are a declaration of the module;
 * the fields are their constructor: the proof arguments are a term of constructors and numerals,
   and the number is a constructor over declarations of the module (a table and a bound; a bound
   with a table or none);
@@ -161,6 +201,17 @@ def subjectAsItStands (inModule : Name → Bool) (subject : Name) : MetaM Unit :
     for name in read do
       unless (← typeHead name) == some element do
         throwError "data control: {what} reads {name}, which is none of its elements"
+    -- the selector has the issuer's shape, and gives each element at one index
+    let some size := (table.getArg! 1).nat? | throwError "data control: {what} has no numeral for its size"
+    if size == 0 then return #[]
+    let leaves ← Meta.lambdaBoundedTelescope (table.getArg! 2).consumeMData 1 fun xs body => do
+      let #[index] := xs
+        | throwError "data control: the selector of {what} is no function of an index:{indentExpr (table.getArg! 2)}"
+      return selectorLeaves inModule index body.headBeta
+    let some leaves := leaves
+      | throwError "data control: the selector of {what} is not one element or conditionals on the index's value against numerals:{indentExpr (table.getArg! 2)}"
+    unless leaves.length == size && leaves.eraseDups.length == size do
+      throwError "data control: the selector of {what} does not give {size} elements, each at one index: {leaves}"
     return read
   let value ← valueOf subject
   unless value.isAppOfArity ``Zkc.Subject.WrittenSubject.mk 6 do
@@ -230,7 +281,7 @@ elab "#data_module " m:ident " of " s:ident : command => do
     unless inModule bound && d.value.isAppOfArity ``Zkc.Subject.Bound.mk 3 && numeral (d.value.getArg! 0) &&
         numeral (d.value.getArg! 1) do
       throwError "data control: the bound {bound} is not two numerals:{indentExpr d.value}"
-    if let some table := number.table then
+    if let some table ← liftTermElabM number.table then
       let some caps := table.constName?
         | throwError "data control: the table of the row at {row.path} is no declaration:{indentExpr table}"
       let some (.defnInfo t) := env.find? caps
@@ -238,11 +289,15 @@ elab "#data_module " m:ident " of " s:ident : command => do
       unless inModule caps do throwError "data control: the table {caps} is no declaration of {m.getId}"
       if let some read := t.value.getUsedConstants.find? inModule then
         throwError "data control: the table {caps} reads {read}"
+      unless ← liftTermElabM (constructorTerm (fun _ => false) t.value) do
+        throwError "data control: the table {caps} is not built of constructors and numerals:{indentExpr t.value}"
   -- The declarations: no proposition, no instance, no inductive type; a theorem is one that the
   -- subject reaches (a lookup of the root or of a relation) or one of the package's.
   let fromSubject := reached env index [subject] {}
   for name in env.header.moduleData[index.toNat]!.constNames do
-    if name.isInternalDetail then continue
+    -- an auxiliary declaration of Lean's (a nested proof, a matcher) is not looked at; a private
+    -- declaration is the module's own and is held to the rules
+    if name.isInternalDetail && (privateToUserName? name).isNone then continue
     let some info := env.find? name | continue
     match info with
     | .thmInfo _ =>

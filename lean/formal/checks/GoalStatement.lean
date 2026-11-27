@@ -153,6 +153,14 @@ def twoDraws : String := charged
     "spec for Two:\n    proves @V Holds(claim)\n    charge sites.x <= 3 / 8\n    charge sites.y <= 1 / 2\n")
   "Two"
 
+/-- The same root with the two charges exchanged: the total is the same, and each site has the
+other's cap. -/
+def twoDrawsExchanged : String := charged
+  ("protocol Two roles(P, V)(claim: bool @(P, V)):\n" ++
+    "    x <- draw index<8> from V to P\n    y <- draw index<2> from V to P\n    guard @V claim\n" ++
+    "spec for Two:\n    proves @V Holds(claim)\n    charge sites.x <= 1 / 2\n    charge sites.y <= 3 / 8\n")
+  "Two"
+
 /-- A callee whose charge is its proof argument over eight, applied twice. -/
 def twoCalls (first second : String) : String := charged
   ("protocol Once<spec e: nat> roles(P, V)(claim: bool @(P, V)):\n" ++
@@ -249,6 +257,16 @@ def sampling (role : String) (applied : Bool) : String := charged
     "    guard @V claim\n" ++
     "spec for Caller:\n    proves @V Holds(claim)\n")
   "Caller"
+
+/-- A chain of protocols, each applying the one below it twice. The lowest holds the given event:
+a coin that the prover hears, or one that the verifier samples. -/
+def chain (depth : Nat) (lowest : String) : String := charged
+  (s!"protocol Link0 roles(P, V)(claim: bool @(P, V)):\n{lowest}" ++
+    String.join ((List.range depth).map fun i =>
+      s!"protocol Link{i + 1} roles(P, V)(claim: bool @(P, V)):\n    Link{i}(claim)\n    Link{i}(claim)\n") ++
+    s!"protocol Top roles(P, V)(claim: bool @(P, V)):\n    Link{depth}(claim)\n    guard @V claim\n" ++
+    "spec for Top:\n    proves @V Holds(claim)\n")
+  "Top"
 
 /-- A charge of the caller on a site of its callee. -/
 def calleeSite : String := charged
@@ -501,6 +519,8 @@ def run (work : System.FilePath) : IO Unit := do
     return (← goal.caps, ← goal.total)
   expect "two charged draws of the root are not both in its table"
     (tableOf twoDraws == some (⟨[(.flat ⟨1⟩ [⟨⟨0⟩, 3, 8, 1⟩, ⟨⟨1⟩, 1, 2, 1⟩] [])]⟩, 7 / 8))
+  expect "two draws with exchanged charges and the same total do not have exchanged caps"
+    (tableOf twoDrawsExchanged == some (⟨[(.flat ⟨1⟩ [⟨⟨0⟩, 1, 2, 1⟩, ⟨⟨1⟩, 3, 8, 1⟩] [])]⟩, 7 / 8))
   expect "a callee at the proof arguments 3 and 2 is not two uses, each call with its own"
     (tableOf (twoCalls "3" "2") == some (⟨[(.flat ⟨1⟩ [⟨⟨0⟩, 3, 8, 1⟩] []), (.flat ⟨1⟩ [⟨⟨0⟩, 1, 4, 1⟩] []),
       (.flat ⟨2⟩ [] [⟨⟨0⟩, 1, 0⟩, ⟨⟨1⟩, 1, 1⟩])]⟩, 5 / 8))
@@ -661,6 +681,15 @@ def run (work : System.FilePath) : IO Unit := do
     match statementsOf (sampling "P" applied) ["sound"] with
     | .ok _ => pure ()
     | .error why => throw (IO.userError s!"a goal on a prover with a private coin was refused (applied: {applied}): {why}")
+  -- A protocol that many applications share is searched once in each context: a chain of 40
+  -- protocols, each applying the next twice, has 2^40 paths to its lowest and 42 contexts.
+  match statementsOf (chain 40 "    z <- draw index<8> from V to P\n") ["sound"] with
+  | .ok _ => pure ()
+  | .error why => throw (IO.userError s!"a chain of shared protocols with a public coin was refused: {why}")
+  match statementsOf (chain 40 "    b @V <- sample index<2>\n") ["sound"] with
+  | .ok _ => throw (IO.userError "a private coin of the verifier at the end of a chain of shared protocols was read")
+  | .error why =>
+    expect s!"a private coin at the end of a chain was refused for another reason: {why}" (why.contains "WK-VIEW")
   -- A probability is at most one: a goal whose bound is one or more is refused, whether it writes
   -- the bound as its ceiling or its charges add up to it; and a charge is at most one. The same
   -- root at seven eighths, and under a ceiling of three quarters, is read.

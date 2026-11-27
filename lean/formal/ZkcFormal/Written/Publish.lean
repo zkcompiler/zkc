@@ -140,26 +140,32 @@ def rowAt (t : Tables) (index : Nat) : MetaM Row := do
   return { path, property, application, fields }
 
 /-- A row's number as its fields hold it, in the two cases of `Zkc.Subject.GoalNumber`: the
-bound's expression, and the table's where the row holds one. The number is reduced to its
-constructor and no further: the bound and the table are the constructor's arguments as they
-stand. -/
+bound's expression, and the table's. The number is reduced to its constructor and no further:
+the bound and the table are the constructor's arguments as they stand. For a row that writes
+its ceiling the optional table is kept unopened: what a goal publishes is its bound, and only
+who asks for the table (the fee facts) reads whether there is one. -/
 inductive Number where
   | total (table bound : Expr)
-  | ceiling (bound : Expr) (table : Option Expr)
+  | ceiling (bound caps : Expr)
 
 /-- The bound's expression. -/
 def Number.bound : Number → Expr
   | .total _ bound | .ceiling bound _ => bound
 
-/-- The table's expression, where there is one. -/
-def Number.table : Number → Option Expr
-  | .total table _ => some table
-  | .ceiling _ table => table
-
 /-- Whether the source writes the bound. -/
 def Number.written : Number → Bool
   | .total .. => false
   | .ceiling .. => true
+
+/-- The table's expression, where there is one: the optional table of a row that writes its
+ceiling is opened here. -/
+def Number.table : Number → MetaM (Option Expr)
+  | .total table _ => return some table
+  | .ceiling _ caps => do
+    let opened ← whnf caps
+    if opened.isAppOfArity ``Option.some 2 then return some opened.appArg!
+    if opened.isAppOfArity ``Option.none 1 then return none
+    throwError "publish: expected a table of caps or none, got{indentExpr opened}"
 
 /-- The number of a row. -/
 def Row.number (row : Row) : MetaM Number := do
@@ -167,14 +173,11 @@ def Row.number (row : Row) : MetaM Number := do
   if number.isAppOfArity ``Zkc.Subject.GoalNumber.total 2 then
     return .total (number.getArg! 0) (number.getArg! 1)
   if number.isAppOfArity ``Zkc.Subject.GoalNumber.ceiling 2 then
-    let caps ← whnf (number.getArg! 1)
-    if caps.isAppOfArity ``Option.some 2 then return .ceiling (number.getArg! 0) (some caps.appArg!)
-    if caps.isAppOfArity ``Option.none 1 then return .ceiling (number.getArg! 0) none
-    throwError "publish: the row at the path {row.path}: expected a table of caps or none, got {caps}"
+    return .ceiling (number.getArg! 0) (number.getArg! 1)
   throwError "publish: the row at the path {row.path}: expected a goal's number built by a constructor, got {number}"
 
 /-- The table of caps of a row, where it holds one. -/
-def Row.table (row : Row) : MetaM (Option Expr) := return (← row.number).table
+def Row.table (row : Row) : MetaM (Option Expr) := do (← row.number).table
 
 /-- Whether the source writes the row's bound, as the goal's ceiling. -/
 def Row.ceiling (row : Row) : MetaM Bool := return (← row.number).written

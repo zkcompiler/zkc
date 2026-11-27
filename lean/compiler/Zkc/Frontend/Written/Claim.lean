@@ -174,25 +174,40 @@ it applies: the place of the event and its name. `verifiers` and `provers` are t
 instance that the scheme's verifier and prover play; an application gives the callee's roles
 through its role map. A `sample` of a verifier's role is such a coin, and so is a `draw` of one
 that no prover's role receives. -/
-partial def privateVerifierCoin? (s : Compile.State) (instance_ : InstanceId)
-    (verifiers provers : List Nat) : Option (Syntax.Span × String) := do
-  let checked ← s.results.checked? instance_
-  let key ← s.table.allocatedKey? instance_
+partial def privateVerifierCoinIn (s : Compile.State) (instance_ : InstanceId)
+    (verifiers provers : List Nat) :
+    StateM (List (InstanceId × List Nat × List Nat)) (Option (Syntax.Span × String)) := do
+  -- A context is an instance with the roles of it that the verifier and the prover play. A
+  -- protocol that several applications share is searched once in each context, not once along
+  -- every path to it: a context that was searched held no such coin, or the search has ended.
+  if (← get).contains (instance_, verifiers, provers) then return none
+  modify ((instance_, verifiers, provers) :: ·)
+  let some checked := s.results.checked? instance_ | return none
+  let some key := s.table.allocatedKey? instance_ | return none
   let named (id : EventId) : Syntax.Span × String :=
     match s.env.modules.lowered? key.declaration with
     | some {content := .protocol head .., ..} =>
       ((head.events[id]?.map (·.span)).getD default,
         ((head.events[id]?.bind (·.name)).getD s!"event {id}"))
     | _ => (default, s!"event {id}")
-  checked.events.findSome? fun
-    | .event _ id (.sample _ _ role) .. => if verifiers.contains role then some (named id) else none
+  for event in checked.events do
+    match event with
+    | .event _ id (.sample _ _ role) .. => if verifiers.contains role then return some (named id)
     | .event _ id (.draw _ _ sender receivers) .. =>
-      if verifiers.contains sender && !receivers.any provers.contains then some (named id) else none
+      if verifiers.contains sender && !receivers.any provers.contains then return some (named id)
     | .event _ _ (.apply _ callee _ _ roleMap ..) .. =>
       let played (roles : List Nat) := (roleMap.toList.zipIdx.filter fun (role, _) => roles.contains role).map (·.2)
-      if (played verifiers).isEmpty then none
-      else privateVerifierCoin? s callee (played verifiers) (played provers)
-    | _ => none
+      unless (played verifiers).isEmpty do
+        if let some found ← privateVerifierCoinIn s callee (played verifiers) (played provers) then
+          return some found
+    | _ => pure ()
+  return none
+
+/-- The first coin of the verifier that the prover does not hear, in the instance and in what it
+applies (`privateVerifierCoinIn`). -/
+def privateVerifierCoin? (s : Compile.State) (instance_ : InstanceId)
+    (verifiers provers : List Nat) : Option (Syntax.Span × String) :=
+  (privateVerifierCoinIn s instance_ verifiers provers).run' []
 
 /-- What a goal claims, with its relation instantiated in `state` and the state after it, and
 the scheme that the goal names. -/
