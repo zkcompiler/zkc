@@ -25,6 +25,12 @@ structure VocabEncoder (V : Vocabulary) where
   rowKey : V.RowKey → List Nat
   lawKey : V.LawKey → List Nat
 
+/-- A vocabulary encoder is injective when distinct type, row, and law keys map to distinct lists. -/
+def VocabEncoder.Injective {V : Vocabulary} (enc : VocabEncoder V) : Prop :=
+  (∀ k₁ k₂, enc.typeKey k₁ = enc.typeKey k₂ → k₁ = k₂) ∧
+  (∀ k₁ k₂, enc.rowKey k₁ = enc.rowKey k₂ → k₁ = k₂) ∧
+  (∀ k₁ k₂, enc.lawKey k₁ = enc.lawKey k₂ → k₁ = k₂)
+
 /-- Encode a natural as shortest-form unsigned LEB128 bytes. -/
 def encodeNat (n : Nat) : List Nat := formatNat.write n
 
@@ -51,6 +57,12 @@ def encodeString (s : String) : List Nat :=
 /-- Encode an ASCII/UTF-8 label string directly as its raw bytes (`< 256`). -/
 def encodeLabelBytes (s : String) : List Nat :=
   s.toUTF8.toList.map UInt8.toNat
+
+/-- Encode a site domain label including the full call path `s.through` and local key `s.key`,
+preventing label collisions between distinct sub-protocol call sites with the same local key. -/
+def encodeSiteLabel (prefix_ : String) (s : Site) : List Nat :=
+  let pathStr := "/".intercalate (s.through.map fun k => toString k.number)
+  encodeLabelBytes s!"{prefix_}:{pathStr}:{s.key.number}"
 
 /-- Encode a site (`through`, `key`) canonically. -/
 def encodeSite (s : Site) : List Nat :=
@@ -342,6 +354,10 @@ theorem encodeLabelBytes_bytes (s : String) : ∀ b, b ∈ encodeLabelBytes s �
   simp only [encodeLabelBytes, List.mem_map] at hb
   obtain ⟨u, _, rfl⟩ := hb
   exact u.toNat_lt
+
+theorem encodeSiteLabel_bytes (prefix_ : String) (s : Site) :
+    ∀ b, b ∈ encodeSiteLabel prefix_ s → b < 256 :=
+  encodeLabelBytes_bytes _
 
 theorem encodeSite_bytes (s : Site) : ∀ b, b ∈ encodeSite s → b < 256 :=
   mem_append_lt (encodeList_bytes encodeKey encodeKey_bytes s.through) (encodeKey_bytes s.key)
@@ -672,5 +688,552 @@ theorem schemeIdentity_bytes {V : Vocabulary} (enc : VocabEncoder V) (a : Admitt
 theorem deployedIdentity_bytes {V : Vocabulary} (enc : VocabEncoder V) (d : Deployed V) :
     ∀ b, b ∈ deployedIdentity enc d → b < 256 :=
   schemeIdentity_bytes enc d.admitted d.declaration
+
+/-! ## Prefix-freeness and injectivity of canonical identity encoding -/
+
+/-- A byte encoder is prefix-free (hence injective): no encoding is a prefix of another. -/
+def PrefixFree {A : Type} (f : A → List Nat) : Prop :=
+  ∀ a b r₁ r₂, f a ++ r₁ = f b ++ r₂ → a = b ∧ r₁ = r₂
+
+/-- Helper: peel one prefix-free component from an append equality. -/
+private theorem peel {A : Type} {f : A → List Nat} (hf : PrefixFree f) {a b : A} {r₁ r₂ : List Nat}
+    (h : f a ++ r₁ = f b ++ r₂) : a = b ∧ r₁ = r₂ :=
+  hf a b r₁ r₂ h
+
+theorem encodeNat_prefixFree : PrefixFree encodeNat := by
+  intro a b r₁ r₂ h
+  have h1 := formatNat_lawful.reads a r₁ trivial
+  have h2 := formatNat_lawful.reads b r₂ trivial
+  change formatNat.write a ++ r₁ = formatNat.write b ++ r₂ at h
+  rw [h] at h1
+  rw [h1] at h2
+  cases h2
+  exact ⟨rfl, rfl⟩
+
+theorem encodeBool_prefixFree : PrefixFree encodeBool := by
+  intro a b r₁ r₂ h
+  have h1 := formatBool_lawful.reads a r₁ trivial
+  have h2 := formatBool_lawful.reads b r₂ trivial
+  change formatBool.write a ++ r₁ = formatBool.write b ++ r₂ at h
+  rw [h] at h1
+  rw [h1] at h2
+  cases h2
+  exact ⟨rfl, rfl⟩
+
+theorem encodeKey_prefixFree : PrefixFree encodeKey := by
+  intro ⟨a⟩ ⟨b⟩ r₁ r₂ h
+  obtain ⟨hab, hr⟩ := encodeNat_prefixFree a b r₁ r₂ h
+  exact ⟨congrArg Key.mk hab, hr⟩
+
+private theorem writeMany_prefixFree {A : Type} {f : A → List Nat} (hf : PrefixFree f) :
+    ∀ (xs ys : List A) (r₁ r₂ : List Nat), xs.length = ys.length →
+      writeCanonicalMany f xs ++ r₁ = writeCanonicalMany f ys ++ r₂ → xs = ys ∧ r₁ = r₂
+  | [], [], _, _, _, h => ⟨rfl, h⟩
+  | _ :: _, [], _, _, hlen, _ => nomatch hlen
+  | [], _ :: _, _, _, hlen, _ => nomatch hlen
+  | x :: xs, y :: ys, r₁, r₂, hlen, h => by
+      simp only [writeCanonicalMany, List.append_assoc] at h
+      obtain ⟨hxy, hrest⟩ := hf x y _ _ h
+      obtain ⟨hxs, hr⟩ := writeMany_prefixFree hf xs ys r₁ r₂ (Nat.succ.inj hlen) hrest
+      exact ⟨by rw [hxy, hxs], hr⟩
+
+theorem encodeList_prefixFree {A : Type} {f : A → List Nat} (hf : PrefixFree f) :
+    PrefixFree (encodeList f) := by
+  intro xs ys r₁ r₂ h
+  simp only [encodeList, List.append_assoc] at h
+  obtain ⟨hlen, hrest⟩ := encodeNat_prefixFree xs.length ys.length _ _ h
+  exact writeMany_prefixFree hf xs ys r₁ r₂ hlen hrest
+
+theorem encodeOption_prefixFree {A : Type} {f : A → List Nat} (hf : PrefixFree f) :
+    PrefixFree (encodeOption f) := by
+  intro a b r₁ r₂ h
+  cases a <;> cases b <;> simp only [encodeOption, List.cons_append, List.nil_append] at h
+  · exact ⟨rfl, (List.cons.inj h).2⟩
+  · cases (List.cons.inj h).1
+  · cases (List.cons.inj h).1
+  · obtain ⟨hab, hr⟩ := hf _ _ r₁ r₂ (List.cons.inj h).2
+    exact ⟨congrArg some hab, hr⟩
+
+theorem encodeSite_prefixFree : PrefixFree encodeSite := by
+  intro ⟨t₁, k₁⟩ ⟨t₂, k₂⟩ r₁ r₂ h
+  simp only [encodeSite, List.append_assoc] at h
+  obtain ⟨ht, h1⟩ := encodeList_prefixFree encodeKey_prefixFree t₁ t₂ _ _ h
+  obtain ⟨hk, hr⟩ := encodeKey_prefixFree k₁ k₂ r₁ r₂ h1
+  exact ⟨by rw [ht, hk], hr⟩
+
+theorem encodeRoleKind_prefixFree : PrefixFree encodeRoleKind := by
+  intro a b r₁ r₂ h
+  cases a <;> cases b <;> simp only [encodeRoleKind, List.cons_append, List.nil_append] at h <;>
+    first | exact ⟨rfl, (List.cons.inj h).2⟩ | cases (List.cons.inj h).1
+
+theorem encodeModuleRef_prefixFree : PrefixFree encodeModuleRef := by
+  intro ⟨m₁⟩ ⟨m₂⟩ r₁ r₂ h
+  have hPair : PrefixFree (fun p : Key × Key => encodeKey p.1 ++ encodeKey p.2) := by
+    intro ⟨a₁, a₂⟩ ⟨b₁, b₂⟩ s₁ s₂ hp
+    simp only [List.append_assoc] at hp
+    obtain ⟨h1, hs⟩ := encodeKey_prefixFree a₁ b₁ _ _ hp
+    obtain ⟨h2, hr⟩ := encodeKey_prefixFree a₂ b₂ s₁ s₂ hs
+    exact ⟨by rw [h1, h2], hr⟩
+  obtain ⟨hm, hr⟩ := encodeList_prefixFree hPair m₁ m₂ r₁ r₂ h
+  exact ⟨congrArg ModuleRef.mk hm, hr⟩
+
+theorem encodeConstruction_prefixFree : PrefixFree encodeConstruction := by
+  intro a b r₁ r₂ h
+  cases a <;> cases b <;> simp only [encodeConstruction, List.cons_append, List.nil_append, List.append_assoc] at h <;>
+    try exact ⟨rfl, (List.cons.inj h).2⟩
+  all_goals try cases (List.cons.inj h).1
+  obtain ⟨hs, h1⟩ := encodeModuleRef_prefixFree _ _ _ _ (List.cons.inj h).2
+  obtain ⟨ht, hr⟩ := encodeOption_prefixFree (encodeList_prefixFree encodeNat_prefixFree) _ _ r₁ r₂ h1
+  exact ⟨by rw [hs, ht], hr⟩
+
+theorem encodeLayout_prefixFree : PrefixFree encodeLayout := by
+  intro ⟨m₁, c₁, rec₁⟩ ⟨m₂, c₂, rec₂⟩ r₁ r₂ h
+  simp only [encodeLayout, List.append_assoc] at h
+  obtain ⟨hm, h1⟩ := encodeModuleRef_prefixFree m₁ m₂ _ _ h
+  obtain ⟨hc, h2⟩ := encodeList_prefixFree encodeSite_prefixFree c₁ c₂ _ _ h1
+  have hRec : PrefixFree (fun p : Site × Key => encodeSite p.1 ++ encodeKey p.2) := by
+    intro ⟨s₁, k₁⟩ ⟨s₂, k₂⟩ t₁ t₂ hp
+    simp only [List.append_assoc] at hp
+    obtain ⟨hs, ht⟩ := encodeSite_prefixFree s₁ s₂ _ _ hp
+    obtain ⟨hk, hr⟩ := encodeKey_prefixFree k₁ k₂ t₁ t₂ ht
+    exact ⟨by rw [hs, hk], hr⟩
+  obtain ⟨hrc, hr⟩ := encodeList_prefixFree hRec rec₁ rec₂ r₁ r₂ h2
+  exact ⟨by rw [hm, hc, hrc], hr⟩
+
+theorem encodeGrind_prefixFree : PrefixFree encodeGrind := by
+  intro ⟨b₁, s₁⟩ ⟨b₂, s₂⟩ r₁ r₂ h
+  simp only [encodeGrind, List.append_assoc] at h
+  obtain ⟨hb, h1⟩ := encodeNat_prefixFree b₁ b₂ _ _ h
+  obtain ⟨hs, hr⟩ := encodeList_prefixFree encodeSite_prefixFree s₁ s₂ r₁ r₂ h1
+  exact ⟨by rw [hb, hs], hr⟩
+
+theorem encodeCommitment_prefixFree : PrefixFree encodeCommitment := by
+  intro ⟨k₁, s₁, p₁, v₁⟩ ⟨k₂, s₂, p₂, v₂⟩ r₁ r₂ h
+  simp only [encodeCommitment, List.append_assoc] at h
+  obtain ⟨hk, h1⟩ := encodeKey_prefixFree k₁ k₂ _ _ h
+  obtain ⟨hs, h2⟩ := encodeModuleRef_prefixFree s₁ s₂ _ _ h1
+  obtain ⟨hp, h3⟩ := encodeOption_prefixFree encodeSite_prefixFree p₁ p₂ _ _ h2
+  obtain ⟨hv, hr⟩ := encodeOption_prefixFree encodeSite_prefixFree v₁ v₂ r₁ r₂ h3
+  exact ⟨by rw [hk, hs, hp, hv], hr⟩
+
+theorem encodePin_prefixFree : PrefixFree encodePin := by
+  intro ⟨s₁, h₁, d₁⟩ ⟨s₂, h₂, d₂⟩ r₁ r₂ h
+  simp only [encodePin, List.append_assoc] at h
+  obtain ⟨hs, h1⟩ := encodeSite_prefixFree s₁ s₂ _ _ h
+  obtain ⟨hh, h2⟩ := encodeKey_prefixFree h₁ h₂ _ _ h1
+  obtain ⟨hd, hr⟩ := encodeList_prefixFree encodeNat_prefixFree d₁ d₂ r₁ r₂ h2
+  exact ⟨by rw [hs, hh, hd], hr⟩
+
+theorem encodeDeclaration_prefixFree : PrefixFree encodeDeclaration := by
+  intro ⟨k₁, e₁, kd₁, c₁, p₁, l₁, rt₁, sm₁, cx₁, g₁, cm₁, pn₁, ap₁⟩
+        ⟨k₂, e₂, kd₂, c₂, p₂, l₂, rt₂, sm₂, cx₂, g₂, cm₂, pn₂, ap₂⟩ r₁ r₂ h
+  simp only [encodeDeclaration, List.append_assoc] at h
+  obtain ⟨hk, h1⟩ := encodeKey_prefixFree k₁ k₂ _ _ h
+  obtain ⟨he, h2⟩ := encodeKey_prefixFree e₁ e₂ _ _ h1
+  obtain ⟨hkd, h3⟩ := encodeList_prefixFree encodeRoleKind_prefixFree kd₁ kd₂ _ _ h2
+  obtain ⟨hc, h4⟩ := encodeConstruction_prefixFree c₁ c₂ _ _ h3
+  obtain ⟨hp, h5⟩ := encodeOption_prefixFree encodeNat_prefixFree p₁ p₂ _ _ h4
+  obtain ⟨hl, h6⟩ := encodeOption_prefixFree encodeLayout_prefixFree l₁ l₂ _ _ h5
+  have hRt : PrefixFree (fun r : Nat × Site => encodeNat r.1 ++ encodeSite r.2) := by
+    intro ⟨a₁, b₁⟩ ⟨a₂, b₂⟩ t₁ t₂ hrt
+    simp only [List.append_assoc] at hrt
+    obtain ⟨ha, ht⟩ := encodeNat_prefixFree a₁ a₂ _ _ hrt
+    obtain ⟨hb, hr⟩ := encodeSite_prefixFree b₁ b₂ t₁ t₂ ht
+    exact ⟨by rw [ha, hb], hr⟩
+  obtain ⟨hrt, h7⟩ := encodeOption_prefixFree hRt rt₁ rt₂ _ _ h6
+  obtain ⟨hsm, h8⟩ := encodeOption_prefixFree encodeKey_prefixFree sm₁ sm₂ _ _ h7
+  obtain ⟨hcx, h9⟩ := encodeList_prefixFree encodeKey_prefixFree cx₁ cx₂ _ _ h8
+  obtain ⟨hg, h10⟩ := encodeList_prefixFree encodeGrind_prefixFree g₁ g₂ _ _ h9
+  obtain ⟨hcm, h11⟩ := encodeList_prefixFree encodeCommitment_prefixFree cm₁ cm₂ _ _ h10
+  obtain ⟨hpn, h12⟩ := encodeList_prefixFree encodePin_prefixFree pn₁ pn₂ _ _ h11
+  obtain ⟨hap, hr⟩ := encodeList_prefixFree encodeNat_prefixFree ap₁ ap₂ r₁ r₂ h12
+  exact ⟨by rw [hk, he, hkd, hc, hp, hl, hrt, hsm, hcx, hg, hcm, hpn, hap], hr⟩
+
+/-- Distinct `Declaration` values always have distinct canonical byte encodings. -/
+theorem encodeDeclaration_injective (d₁ d₂ : Declaration)
+    (h : encodeDeclaration d₁ = encodeDeclaration d₂) : d₁ = d₂ :=
+  (encodeDeclaration_prefixFree d₁ d₂ [] [] (by simpa using h)).1
+
+theorem encodeReason_prefixFree : PrefixFree encodeReason := by
+  intro a b r₁ r₂ h
+  cases a <;> cases b <;> simp only [encodeReason, List.cons_append, List.nil_append] at h <;>
+    first | exact ⟨rfl, (List.cons.inj h).2⟩ | cases (List.cons.inj h).1
+
+theorem encodeRepeat_prefixFree : PrefixFree encodeRepeat := by
+  intro a b r₁ r₂ h
+  cases a <;> cases b <;> simp only [encodeRepeat, List.cons_append] at h
+  · obtain ⟨hn, hr⟩ := encodeNat_prefixFree _ _ r₁ r₂ (List.cons.inj h).2; exact ⟨congrArg Repeat.fixed hn, hr⟩
+  · cases (List.cons.inj h).1
+  · cases (List.cons.inj h).1
+  · obtain ⟨hn, hr⟩ := encodeNat_prefixFree _ _ r₁ r₂ (List.cons.inj h).2; exact ⟨congrArg Repeat.count hn, hr⟩
+
+theorem encodeFlowKind_prefixFree : PrefixFree encodeFlowKind := by
+  intro a b r₁ r₂ h
+  cases a <;> cases b <;> simp only [encodeFlowKind, List.cons_append, List.nil_append] at h <;>
+    first | exact ⟨rfl, (List.cons.inj h).2⟩ | cases (List.cons.inj h).1
+
+theorem encodeOwnedName_prefixFree : PrefixFree encodeOwnedName := by
+  intro a b r₁ r₂ h
+  cases a <;> cases b <;> simp only [encodeOwnedName, List.cons_append, List.nil_append] at h <;>
+    first | exact ⟨rfl, (List.cons.inj h).2⟩ | cases (List.cons.inj h).1
+
+section Injectivity
+variable {V : Vocabulary} (enc : VocabEncoder V)
+
+mutual
+  theorem encodeTy_prefixFree (hEnc : enc.Injective) : ∀ (a b : V.Ty) (r₁ r₂ : List Nat),
+      encodeTy enc a ++ r₁ = encodeTy enc b ++ r₂ → a = b ∧ r₁ = r₂
+    | .bool, .bool, _, _, h => by
+        simp only [encodeTy, List.cons_append, List.nil_append] at h
+        exact ⟨rfl, (List.cons.inj h).2⟩
+    | .nat, .nat, _, _, h => by
+        simp only [encodeTy, List.cons_append, List.nil_append] at h
+        exact ⟨rfl, (List.cons.inj h).2⟩
+    | .fin n₁, .fin n₂, r₁, r₂, h => by
+        simp only [encodeTy, List.cons_append] at h
+        obtain ⟨hn, hr⟩ := encodeNat_prefixFree n₁ n₂ r₁ r₂ (List.cons.inj h).2
+        exact ⟨congrArg Ty.fin hn, hr⟩
+    | .seq i₁ s₁, .seq i₂ s₂, r₁, r₂, h => by
+        simp only [encodeTy, List.cons_append, List.append_assoc] at h
+        obtain ⟨hi, h2⟩ := encodeTy_prefixFree hEnc i₁ i₂ _ _ (List.cons.inj h).2
+        obtain ⟨hs, hr⟩ := encodeOption_prefixFree encodeNat_prefixFree s₁ s₂ r₁ r₂ h2
+        exact ⟨by rw [hi, hs], hr⟩
+    | .tuple ts₁, .tuple ts₂, r₁, r₂, h => by
+        simp only [encodeTy, List.cons_append] at h
+        obtain ⟨hts, hr⟩ := encodeTys_prefixFree hEnc ts₁ ts₂ r₁ r₂ (List.cons.inj h).2
+        exact ⟨congrArg Ty.tuple hts, hr⟩
+    | .record k₁ l₁ f₁, .record k₂ l₂ f₂, r₁, r₂, h => by
+        simp only [encodeTy, List.cons_append, List.append_assoc] at h
+        obtain ⟨hk, h2⟩ := encodeKey_prefixFree k₁ k₂ _ _ (List.cons.inj h).2
+        obtain ⟨hl, h3⟩ := encodeBool_prefixFree l₁ l₂ _ _ h2
+        obtain ⟨hf, hr⟩ := encodeTys_prefixFree hEnc f₁ f₂ r₁ r₂ h3
+        exact ⟨by rw [hk, hl, hf], hr⟩
+    | .variant k₁ a₁, .variant k₂ a₂, r₁, r₂, h => by
+        simp only [encodeTy, List.cons_append, List.append_assoc] at h
+        obtain ⟨hk, h2⟩ := encodeKey_prefixFree k₁ k₂ _ _ (List.cons.inj h).2
+        obtain ⟨ha, hr⟩ := encodeTys_prefixFree hEnc a₁ a₂ r₁ r₂ h2
+        exact ⟨by rw [hk, ha], hr⟩
+    | .nominal k₁, .nominal k₂, r₁, r₂, h => by
+        simp only [encodeTy, List.cons_append] at h
+        obtain ⟨hk, hr⟩ := encodeList_prefixFree encodeNat_prefixFree (enc.typeKey k₁) (enc.typeKey k₂)
+          r₁ r₂ (List.cons.inj h).2
+        exact ⟨congrArg Ty.nominal (hEnc.1 k₁ k₂ hk), hr⟩
+    | .bool, .nat, _, _, h | .bool, .fin _, _, _, h | .bool, .seq _ _, _, _, h
+    | .bool, .tuple _, _, _, h | .bool, .record _ _ _, _, _, h | .bool, .variant _ _, _, _, h
+    | .bool, .nominal _, _, _, h
+    | .nat, .bool, _, _, h | .nat, .fin _, _, _, h | .nat, .seq _ _, _, _, h
+    | .nat, .tuple _, _, _, h | .nat, .record _ _ _, _, _, h | .nat, .variant _ _, _, _, h
+    | .nat, .nominal _, _, _, h
+    | .fin _, .bool, _, _, h | .fin _, .nat, _, _, h | .fin _, .seq _ _, _, _, h
+    | .fin _, .tuple _, _, _, h | .fin _, .record _ _ _, _, _, h | .fin _, .variant _ _, _, _, h
+    | .fin _, .nominal _, _, _, h
+    | .seq _ _, .bool, _, _, h | .seq _ _, .nat, _, _, h | .seq _ _, .fin _, _, _, h
+    | .seq _ _, .tuple _, _, _, h | .seq _ _, .record _ _ _, _, _, h | .seq _ _, .variant _ _, _, _, h
+    | .seq _ _, .nominal _, _, _, h
+    | .tuple _, .bool, _, _, h | .tuple _, .nat, _, _, h | .tuple _, .fin _, _, _, h
+    | .tuple _, .seq _ _, _, _, h | .tuple _, .record _ _ _, _, _, h | .tuple _, .variant _ _, _, _, h
+    | .tuple _, .nominal _, _, _, h
+    | .record _ _ _, .bool, _, _, h | .record _ _ _, .nat, _, _, h | .record _ _ _, .fin _, _, _, h
+    | .record _ _ _, .seq _ _, _, _, h | .record _ _ _, .tuple _, _, _, h | .record _ _ _, .variant _ _, _, _, h
+    | .record _ _ _, .nominal _, _, _, h
+    | .variant _ _, .bool, _, _, h | .variant _ _, .nat, _, _, h | .variant _ _ , .fin _, _, _, h
+    | .variant _ _, .seq _ _, _, _, h | .variant _ _, .tuple _, _, _, h | .variant _ _, .record _ _ _, _, _, h
+    | .variant _ _, .nominal _, _, _, h
+    | .nominal _, .bool, _, _, h | .nominal _, .nat, _, _, h | .nominal _, .fin _, _, _, h
+    | .nominal _, .seq _ _, _, _, h | .nominal _, .tuple _, _, _, h | .nominal _, .record _ _ _, _, _, h
+    | .nominal _, .variant _ _, _, _, h => by
+        simp only [encodeTy, List.cons_append] at h
+        cases (List.cons.inj h).1
+
+  theorem encodeTys_prefixFree (hEnc : enc.Injective) : ∀ (a b : Tys V.TypeKey) (r₁ r₂ : List Nat),
+      encodeTys enc a ++ r₁ = encodeTys enc b ++ r₂ → a = b ∧ r₁ = r₂
+    | .nil, .nil, _, _, h => by
+        simp only [encodeTys, List.cons_append, List.nil_append] at h
+        exact ⟨rfl, (List.cons.inj h).2⟩
+    | .nil, .cons _ _, _, _, h => by
+        simp only [encodeTys, List.cons_append] at h; cases (List.cons.inj h).1
+    | .cons _ _, .nil, _, _, h => by
+        simp only [encodeTys, List.cons_append] at h; cases (List.cons.inj h).1
+    | .cons h₁ t₁, .cons h₂ t₂, r₁, r₂, h => by
+        simp only [encodeTys, List.cons_append, List.append_assoc] at h
+        obtain ⟨hh, h2⟩ := encodeTy_prefixFree hEnc h₁ h₂ _ _ (List.cons.inj h).2
+        obtain ⟨ht, hr⟩ := encodeTys_prefixFree hEnc t₁ t₂ r₁ r₂ h2
+        exact ⟨by rw [hh, ht], hr⟩
+end
+
+theorem encodeLTy_prefixFree (hEnc : enc.Injective) : PrefixFree (encodeLTy enc) := by
+  intro ⟨t₁, hs₁⟩ ⟨t₂, hs₂⟩ r₁ r₂ h
+  simp only [encodeLTy, List.append_assoc] at h
+  obtain ⟨ht, h1⟩ := encodeTy_prefixFree enc hEnc t₁ t₂ _ _ h
+  obtain ⟨hh, hr⟩ := encodeList_prefixFree encodeNat_prefixFree hs₁ hs₂ r₁ r₂ h1
+  exact ⟨by rw [ht, hh], hr⟩
+
+theorem encodeGivenKind_prefixFree (hEnc : enc.Injective) : PrefixFree (encodeGivenKind enc) := by
+  intro a b r₁ r₂ h
+  cases a <;> cases b <;> simp only [encodeGivenKind, List.cons_append] at h
+  · obtain ⟨hl, hr⟩ := encodeList_prefixFree encodeNat_prefixFree _ _ r₁ r₂ (List.cons.inj h).2
+    exact ⟨congrArg GivenKind.coin (hEnc.2.2 _ _ hl), hr⟩
+  · cases (List.cons.inj h).1
+  · cases (List.cons.inj h).1
+  · obtain ⟨hk, hr⟩ := encodeKey_prefixFree _ _ r₁ r₂ (List.cons.inj h).2
+    exact ⟨congrArg GivenKind.request hk, hr⟩
+
+theorem encodeEventClass_prefixFree (hEnc : enc.Injective) : PrefixFree (encodeEventClass enc) := by
+  intro a b r₁ r₂ h
+  cases a <;> cases b <;> simp only [encodeEventClass, List.cons_append, List.append_assoc] at h
+  · obtain ⟨hk, h1⟩ := encodeFlowKind_prefixFree _ _ _ _ (List.cons.inj h).2
+    obtain ⟨hg, h2⟩ := encodeNat_prefixFree _ _ _ _ h1
+    obtain ⟨hgs, hr⟩ := encodeList_prefixFree encodeNat_prefixFree _ _ r₁ r₂ h2
+    exact ⟨by rw [hk, hg, hgs], hr⟩
+  · cases (List.cons.inj h).1
+  · cases (List.cons.inj h).1
+  · obtain ⟨hk, h1⟩ := encodeGivenKind_prefixFree enc hEnc _ _ _ _ (List.cons.inj h).2
+    obtain ⟨ho, h2⟩ := encodeNat_prefixFree _ _ _ _ h1
+    obtain ⟨hhs, hr⟩ := encodeList_prefixFree encodeNat_prefixFree _ _ r₁ r₂ h2
+    exact ⟨by rw [hk, ho, hhs], hr⟩
+
+theorem encodeLocalRaw_prefixFree (hEnc : enc.Injective) : PrefixFree (encodeLocalRaw enc) := by
+  intro a b r₁ r₂ h
+  cases a <;> cases b <;> simp only [encodeLocalRaw, List.cons_append, List.append_assoc] at h <;>
+    try cases (List.cons.inj h).1
+  · obtain ⟨hk, hr⟩ := encodeList_prefixFree encodeNat_prefixFree _ _ r₁ r₂ (List.cons.inj h).2
+    exact ⟨congrArg LocalRaw.row (hEnc.2.1 _ _ hk), hr⟩
+  · obtain ⟨hn, h1⟩ := encodeOwnedName_prefixFree _ _ _ _ (List.cons.inj h).2
+    obtain ⟨ht, h2⟩ := encodeList_prefixFree (encodeTy_prefixFree enc hEnc) _ _ _ _ h1
+    obtain ⟨hnu, hr⟩ := encodeList_prefixFree encodeNat_prefixFree _ _ r₁ r₂ h2
+    exact ⟨by rw [hn, ht, hnu], hr⟩
+  · obtain ⟨ht, h1⟩ := encodeTy_prefixFree enc hEnc _ _ _ _ (List.cons.inj h).2
+    obtain ⟨hd, hr⟩ := encodeList_prefixFree encodeNat_prefixFree _ _ r₁ r₂ h1
+    exact ⟨by rw [ht, hd], hr⟩
+  · obtain ⟨hc, hr⟩ := encodeKey_prefixFree _ _ r₁ r₂ (List.cons.inj h).2
+    exact ⟨congrArg LocalRaw.call hc, hr⟩
+
+theorem encodeProtocolRaw_prefixFree (hEnc : enc.Injective) : PrefixFree (encodeProtocolRaw enc) := by
+  intro a b r₁ r₂ h
+  cases a <;> cases b <;> simp only [encodeProtocolRaw, List.cons_append, List.append_assoc] at h <;>
+    try cases (List.cons.inj h).1
+  · obtain ⟨hr1, h1⟩ := encodeList_prefixFree encodeNat_prefixFree _ _ _ _ (List.cons.inj h).2
+    obtain ⟨ho, hr⟩ := encodeLocalRaw_prefixFree enc hEnc _ _ r₁ r₂ h1
+    exact ⟨by rw [hr1, ho], hr⟩
+  · obtain ⟨hc, h1⟩ := encodeEventClass_prefixFree enc hEnc _ _ _ _ (List.cons.inj h).2
+    obtain ⟨ht, hr⟩ := encodeTy_prefixFree enc hEnc _ _ r₁ r₂ h1
+    exact ⟨by rw [hc, ht], hr⟩
+  · obtain ⟨hr1, hr⟩ := encodeList_prefixFree encodeNat_prefixFree _ _ r₁ r₂ (List.cons.inj h).2
+    exact ⟨congrArg ProtocolRaw.narrow hr1, hr⟩
+  · obtain ⟨hc, h1⟩ := encodeKey_prefixFree _ _ _ _ (List.cons.inj h).2
+    obtain ⟨hr1, hr⟩ := encodeList_prefixFree encodeNat_prefixFree _ _ r₁ r₂ h1
+    exact ⟨by rw [hc, hr1], hr⟩
+
+end Injectivity
+
+section RegionInjectivity
+variable {Op Who : Type} (encOp : Op → List Nat) (encWho : Who → List Nat)
+
+mutual
+  theorem encodeInstruction_prefixFree (hOp : PrefixFree encOp) (hWho : PrefixFree encWho) :
+      ∀ (a b : Instruction Op Who) (r₁ r₂ : List Nat),
+      encodeInstruction encOp encWho a ++ r₁ = encodeInstruction encOp encWho b ++ r₂ →
+      a = b ∧ r₁ = r₂
+    | .op k₁ rs₁ o₁ ops₁, .op k₂ rs₂ o₂ ops₂, r₁, r₂, h => by
+        simp only [encodeInstruction, List.cons_append, List.append_assoc] at h
+        obtain ⟨hk, h1⟩ := encodeKey_prefixFree k₁ k₂ _ _ (List.cons.inj h).2
+        obtain ⟨hrs, h2⟩ := encodeList_prefixFree encodeNat_prefixFree rs₁ rs₂ _ _ h1
+        obtain ⟨ho, h3⟩ := hOp o₁ o₂ _ _ h2
+        obtain ⟨hops, hr⟩ := encodeList_prefixFree encodeNat_prefixFree ops₁ ops₂ r₁ r₂ h3
+        exact ⟨by rw [hk, hrs, ho, hops], hr⟩
+    | .guard k₁ w₁ c₁ why₁, .guard k₂ w₂ c₂ why₂, r₁, r₂, h => by
+        simp only [encodeInstruction, List.cons_append, List.append_assoc] at h
+        obtain ⟨hk, h1⟩ := encodeKey_prefixFree k₁ k₂ _ _ (List.cons.inj h).2
+        obtain ⟨hw, h2⟩ := hWho w₁ w₂ _ _ h1
+        obtain ⟨hc, h3⟩ := encodeNat_prefixFree c₁ c₂ _ _ h2
+        obtain ⟨hwhy, hr⟩ := encodeReason_prefixFree why₁ why₂ r₁ r₂ h3
+        exact ⟨by rw [hk, hw, hc, hwhy], hr⟩
+    | .choose k₁ w₁ c₁ rs₁ t₁ f₁, .choose k₂ w₂ c₂ rs₂ t₂ f₂, r₁, r₂, h => by
+        simp only [encodeInstruction, List.cons_append, List.append_assoc] at h
+        obtain ⟨hk, h1⟩ := encodeKey_prefixFree k₁ k₂ _ _ (List.cons.inj h).2
+        obtain ⟨hw, h2⟩ := hWho w₁ w₂ _ _ h1
+        obtain ⟨hc, h3⟩ := encodeNat_prefixFree c₁ c₂ _ _ h2
+        obtain ⟨hrs, h4⟩ := encodeList_prefixFree encodeNat_prefixFree rs₁ rs₂ _ _ h3
+        obtain ⟨ht, h5⟩ := encodeRegion_prefixFree hOp hWho t₁ t₂ _ _ h4
+        obtain ⟨hf, hr⟩ := encodeRegion_prefixFree hOp hWho f₁ f₂ r₁ r₂ h5
+        exact ⟨by rw [hk, hw, hc, hrs, ht, hf], hr⟩
+    | .cases k₁ w₁ s₁ rs₁ a₁, .cases k₂ w₂ s₂ rs₂ a₂, r₁, r₂, h => by
+        simp only [encodeInstruction, List.cons_append, List.append_assoc] at h
+        obtain ⟨hk, h1⟩ := encodeKey_prefixFree k₁ k₂ _ _ (List.cons.inj h).2
+        obtain ⟨hw, h2⟩ := hWho w₁ w₂ _ _ h1
+        obtain ⟨hs, h3⟩ := encodeNat_prefixFree s₁ s₂ _ _ h2
+        obtain ⟨hrs, h4⟩ := encodeList_prefixFree encodeNat_prefixFree rs₁ rs₂ _ _ h3
+        obtain ⟨ha, hr⟩ := encodeRegions_prefixFree hOp hWho a₁ a₂ r₁ r₂ h4
+        exact ⟨by rw [hk, hw, hs, hrs, ha], hr⟩
+    | .loop k₁ w₁ t₁ c₁ rs₁ b₁, .loop k₂ w₂ t₂ c₂ rs₂ b₂, r₁, r₂, h => by
+        simp only [encodeInstruction, List.cons_append, List.append_assoc] at h
+        obtain ⟨hk, h1⟩ := encodeKey_prefixFree k₁ k₂ _ _ (List.cons.inj h).2
+        obtain ⟨hw, h2⟩ := hWho w₁ w₂ _ _ h1
+        obtain ⟨ht, h3⟩ := encodeRepeat_prefixFree t₁ t₂ _ _ h2
+        obtain ⟨hc, h4⟩ := encodeList_prefixFree encodeNat_prefixFree c₁ c₂ _ _ h3
+        obtain ⟨hrs, h5⟩ := encodeList_prefixFree encodeNat_prefixFree rs₁ rs₂ _ _ h4
+        obtain ⟨hb, hr⟩ := encodeRegion_prefixFree hOp hWho b₁ b₂ r₁ r₂ h5
+        exact ⟨by rw [hk, hw, ht, hc, hrs, hb], hr⟩
+    | .block k₁ n₁ rs₁ b₁, .block k₂ n₂ rs₂ b₂, r₁, r₂, h => by
+        simp only [encodeInstruction, List.cons_append, List.append_assoc] at h
+        obtain ⟨hk, h1⟩ := encodeKey_prefixFree k₁ k₂ _ _ (List.cons.inj h).2
+        obtain ⟨hn, h2⟩ := encodeNat_prefixFree n₁ n₂ _ _ h1
+        obtain ⟨hrs, h3⟩ := encodeList_prefixFree encodeNat_prefixFree rs₁ rs₂ _ _ h2
+        obtain ⟨hb, hr⟩ := encodeRegion_prefixFree hOp hWho b₁ b₂ r₁ r₂ h3
+        exact ⟨by rw [hk, hn, hrs, hb], hr⟩
+    | .attempt k₁ w₁ rs₁ b₁, .attempt k₂ w₂ rs₂ b₂, r₁, r₂, h => by
+        simp only [encodeInstruction, List.cons_append, List.append_assoc] at h
+        obtain ⟨hk, h1⟩ := encodeKey_prefixFree k₁ k₂ _ _ (List.cons.inj h).2
+        obtain ⟨hw, h2⟩ := hWho w₁ w₂ _ _ h1
+        obtain ⟨hrs, h3⟩ := encodeList_prefixFree encodeNat_prefixFree rs₁ rs₂ _ _ h2
+        obtain ⟨hb, hr⟩ := encodeRegion_prefixFree hOp hWho b₁ b₂ r₁ r₂ h3
+        exact ⟨by rw [hk, hw, hrs, hb], hr⟩
+    | .op .., .guard .., _, _, h | .op .., .choose .., _, _, h | .op .., .cases .., _, _, h
+    | .op .., .loop .., _, _, h | .op .., .block .., _, _, h | .op .., .attempt .., _, _, h
+    | .guard .., .op .., _, _, h | .guard .., .choose .., _, _, h | .guard .., .cases .., _, _, h
+    | .guard .., .loop .., _, _, h | .guard .., .block .., _, _, h | .guard .., .attempt .., _, _, h
+    | .choose .., .op .., _, _, h | .choose .., .guard .., _, _, h | .choose .., .cases .., _, _, h
+    | .choose .., .loop .., _, _, h | .choose .., .block .., _, _, h | .choose .., .attempt .., _, _, h
+    | .cases .., .op .., _, _, h | .cases .., .guard .., _, _, h | .cases .., .choose .., _, _, h
+    | .cases .., .loop .., _, _, h | .cases .., .block .., _, _, h | .cases .., .attempt .., _, _, h
+    | .loop .., .op .., _, _, h | .loop .., .guard .., _, _, h | .loop .., .choose .., _, _, h
+    | .loop .., .cases .., _, _, h | .loop .., .block .., _, _, h | .loop .., .attempt .., _, _, h
+    | .block .., .op .., _, _, h | .block .., .guard .., _, _, h | .block .., .choose .., _, _, h
+    | .block .., .cases .., _, _, h | .block .., .loop .., _, _, h | .block .., .attempt .., _, _, h
+    | .attempt .., .op .., _, _, h | .attempt .., .guard .., _, _, h | .attempt .., .choose .., _, _, h
+    | .attempt .., .cases .., _, _, h | .attempt .., .loop .., _, _, h | .attempt .., .block .., _, _, h => by
+        simp only [encodeInstruction, List.cons_append] at h
+        cases (List.cons.inj h).1
+
+  theorem encodeInstructions_prefixFree (hOp : PrefixFree encOp) (hWho : PrefixFree encWho) :
+      ∀ (a b : List (Instruction Op Who)) (r₁ r₂ : List Nat),
+      encodeInstructions encOp encWho a ++ r₁ = encodeInstructions encOp encWho b ++ r₂ →
+      a = b ∧ r₁ = r₂
+    | [], [], _, _, h => by
+        simp only [encodeInstructions, List.cons_append, List.nil_append] at h
+        exact ⟨rfl, (List.cons.inj h).2⟩
+    | [], _ :: _, _, _, h => by
+        simp only [encodeInstructions, List.cons_append] at h; cases (List.cons.inj h).1
+    | _ :: _, [], _, _, h => by
+        simp only [encodeInstructions, List.cons_append] at h; cases (List.cons.inj h).1
+    | i₁ :: rest₁, i₂ :: rest₂, r₁, r₂, h => by
+        simp only [encodeInstructions, List.cons_append, List.append_assoc] at h
+        obtain ⟨hi, h1⟩ := encodeInstruction_prefixFree hOp hWho i₁ i₂ _ _ (List.cons.inj h).2
+        obtain ⟨hrest, hr⟩ := encodeInstructions_prefixFree hOp hWho rest₁ rest₂ r₁ r₂ h1
+        exact ⟨by rw [hi, hrest], hr⟩
+
+  theorem encodeRegion_prefixFree (hOp : PrefixFree encOp) (hWho : PrefixFree encWho) :
+      ∀ (a b : Region Op Who) (r₁ r₂ : List Nat),
+      encodeRegion encOp encWho a ++ r₁ = encodeRegion encOp encWho b ++ r₂ →
+      a = b ∧ r₁ = r₂
+    | .mk i₁ b₁ e₁, .mk i₂ b₂ e₂, r₁, r₂, h => by
+        simp only [encodeRegion, List.append_assoc] at h
+        obtain ⟨hi, h1⟩ := encodeList_prefixFree encodeNat_prefixFree i₁ i₂ _ _ h
+        obtain ⟨hb, h2⟩ := encodeInstructions_prefixFree hOp hWho b₁ b₂ _ _ h1
+        obtain ⟨he, hr⟩ := encodeList_prefixFree encodeNat_prefixFree e₁ e₂ r₁ r₂ h2
+        exact ⟨by rw [hi, hb, he], hr⟩
+
+  theorem encodeRegions_prefixFree (hOp : PrefixFree encOp) (hWho : PrefixFree encWho) :
+      ∀ (a b : List (Region Op Who)) (r₁ r₂ : List Nat),
+      encodeRegions encOp encWho a ++ r₁ = encodeRegions encOp encWho b ++ r₂ →
+      a = b ∧ r₁ = r₂
+    | [], [], _, _, h => by
+        simp only [encodeRegions, List.cons_append, List.nil_append] at h
+        exact ⟨rfl, (List.cons.inj h).2⟩
+    | [], _ :: _, _, _, h => by
+        simp only [encodeRegions, List.cons_append] at h; cases (List.cons.inj h).1
+    | _ :: _, [], _, _, h => by
+        simp only [encodeRegions, List.cons_append] at h; cases (List.cons.inj h).1
+    | x₁ :: rest₁, x₂ :: rest₂, r₁, r₂, h => by
+        simp only [encodeRegions, List.cons_append, List.append_assoc] at h
+        obtain ⟨hx, h1⟩ := encodeRegion_prefixFree hOp hWho x₁ x₂ _ _ (List.cons.inj h).2
+        obtain ⟨hrest, hr⟩ := encodeRegions_prefixFree hOp hWho rest₁ rest₂ r₁ r₂ h1
+        exact ⟨by rw [hx, hrest], hr⟩
+end
+
+end RegionInjectivity
+
+/-- Pairwise relation over two equal-length lists (Core-local, zero external dependencies). -/
+inductive ListRel {A : Type} (R : A → A → Prop) : List A → List A → Prop where
+  | nil : ListRel R [] []
+  | cons {x y : A} {xs ys : List A} : R x y → ListRel R xs ys → ListRel R (x :: xs) (y :: ys)
+
+/-- Two erased definitions are semantically identical (ignoring non-semantic `HeaderSummary` and
+analysis notes on functions). -/
+def Definition.SameErased {V : Vocabulary} : Definition V → Definition V → Prop
+  | .fn k₁ i₁ o₁ s₁ ker₁ _ b₁ _, .fn k₂ i₂ o₂ s₂ ker₂ _ b₂ _ =>
+      k₁ = k₂ ∧ i₁ = i₂ ∧ o₁ = o₂ ∧ s₁ = s₂ ∧ ker₁ = ker₂ ∧ b₁ = b₂
+  | .protocol k₁ r₁ i₁ o₁ b₁, .protocol k₂ r₂ i₂ o₂ b₂ =>
+      k₁ = k₂ ∧ r₁ = r₂ ∧ i₁ = i₂ ∧ o₁ = o₂ ∧ b₁ = b₂
+  | _, _ => False
+
+theorem encodeDefinition_prefixFree {V : Vocabulary} (enc : VocabEncoder V) (hEnc : enc.Injective)
+    (d₁ d₂ : Definition V) (r₁ r₂ : List Nat)
+    (h : encodeDefinition enc d₁ ++ r₁ = encodeDefinition enc d₂ ++ r₂) :
+    d₁.SameErased d₂ ∧ r₁ = r₂ := by
+  cases d₁ <;> cases d₂ <;> simp only [encodeDefinition, List.cons_append, List.append_assoc] at h
+  · obtain ⟨hk, h1⟩ := encodeKey_prefixFree _ _ _ _ (List.cons.inj h).2
+    obtain ⟨hi, h2⟩ := encodeList_prefixFree (encodeTy_prefixFree enc hEnc) _ _ _ _ h1
+    obtain ⟨ho, h3⟩ := encodeList_prefixFree (encodeTy_prefixFree enc hEnc) _ _ _ _ h2
+    obtain ⟨hs, h4⟩ := encodeBool_prefixFree _ _ _ _ h3
+    obtain ⟨hker, h5⟩ := encodeOption_prefixFree encodeKey_prefixFree _ _ _ _ h4
+    have hUnit : PrefixFree (fun _ : Unit => ([] : List Nat)) := fun u₁ u₂ s₁ s₂ hs' => by
+      cases u₁; cases u₂; exact ⟨rfl, hs'⟩
+    obtain ⟨hb, hr⟩ := encodeRegion_prefixFree (encodeLocalRaw enc) (fun _ => [])
+      (encodeLocalRaw_prefixFree enc hEnc) hUnit _ _ r₁ r₂ h5
+    exact ⟨⟨hk, hi, ho, hs, hker, hb⟩, hr⟩
+  · cases (List.cons.inj h).1
+  · cases (List.cons.inj h).1
+  · obtain ⟨hk, h1⟩ := encodeKey_prefixFree _ _ _ _ (List.cons.inj h).2
+    obtain ⟨hrol, h2⟩ := encodeNat_prefixFree _ _ _ _ h1
+    obtain ⟨hi, h3⟩ := encodeList_prefixFree (encodeLTy_prefixFree enc hEnc) _ _ _ _ h2
+    obtain ⟨ho, h4⟩ := encodeList_prefixFree (encodeLTy_prefixFree enc hEnc) _ _ _ _ h3
+    obtain ⟨hb, hr⟩ := encodeRegion_prefixFree (encodeProtocolRaw enc) (encodeList encodeNat)
+      (encodeProtocolRaw_prefixFree enc hEnc) (encodeList_prefixFree encodeNat_prefixFree) _ _ r₁ r₂ h4
+    exact ⟨⟨hk, hrol, hi, ho, hb⟩, hr⟩
+
+private theorem encodeDefinitionList_sameErased {V : Vocabulary} (enc : VocabEncoder V)
+    (hEnc : enc.Injective) :
+    ∀ (xs ys : List (Definition V)) (r₁ r₂ : List Nat), xs.length = ys.length →
+      writeCanonicalMany (encodeDefinition enc) xs ++ r₁ =
+      writeCanonicalMany (encodeDefinition enc) ys ++ r₂ →
+      ListRel Definition.SameErased xs ys ∧ r₁ = r₂
+  | [], [], _, _, _, h => ⟨.nil, h⟩
+  | _ :: _, [], _, _, hlen, _ => nomatch hlen
+  | [], _ :: _, _, _, hlen, _ => nomatch hlen
+  | x :: xs, y :: ys, r₁, r₂, hlen, h => by
+      simp only [writeCanonicalMany, List.append_assoc] at h
+      obtain ⟨hxy, hrest⟩ := encodeDefinition_prefixFree enc hEnc x y _ _ h
+      obtain ⟨hxs, hr⟩ := encodeDefinitionList_sameErased enc hEnc xs ys r₁ r₂ (Nat.succ.inj hlen) hrest
+      exact ⟨.cons hxy hxs, hr⟩
+
+/-- Injectivity of `schemeIdentity` under an injective `VocabEncoder`: equal canonical identities
+imply identical declarations and semantically identical reachable erased definitions. -/
+theorem schemeIdentity_injective {V : Vocabulary} (enc : VocabEncoder V) (hEnc : enc.Injective)
+    (a₁ a₂ : Admitted V) (decl₁ decl₂ : Declaration)
+    (hEq : schemeIdentity enc a₁ decl₁ = schemeIdentity enc a₂ decl₂) :
+    decl₁ = decl₂ ∧
+    ListRel Definition.SameErased
+      ((erase a₁.program).definitions.filter fun d =>
+        decide (d.key ∈ (decl₁.entry :: decl₁.definitions).flatMap a₁.program.defs.closureOf))
+      ((erase a₂.program).definitions.filter fun d =>
+        decide (d.key ∈ (decl₂.entry :: decl₂.definitions).flatMap a₂.program.defs.closureOf)) := by
+  unfold schemeIdentity at hEq
+  dsimp only at hEq
+  obtain ⟨hDecl, hRest⟩ := encodeDeclaration_prefixFree decl₁ decl₂ _ _ hEq
+  simp only [encodeList] at hRest
+  obtain ⟨hLen, hMany⟩ := encodeNat_prefixFree _ _ _ _ hRest
+  have hDefs := (encodeDefinitionList_sameErased enc hEnc _ _ [] [] hLen
+    (by simpa using hMany)).1
+  exact ⟨hDecl, hDefs⟩
+
+/-- Injectivity of `deployedIdentity` under an injective `VocabEncoder`. -/
+theorem deployedIdentity_injective {V : Vocabulary} (enc : VocabEncoder V) (hEnc : enc.Injective)
+    (d₁ d₂ : Deployed V) (hEq : deployedIdentity enc d₁ = deployedIdentity enc d₂) :
+    d₁.declaration = d₂.declaration ∧
+    ListRel Definition.SameErased
+      ((erase d₁.admitted.program).definitions.filter fun d => decide (d.key ∈ d₁.closure))
+      ((erase d₂.admitted.program).definitions.filter fun d => decide (d.key ∈ d₂.closure)) :=
+  schemeIdentity_injective enc hEnc d₁.admitted d₂.admitted d₁.declaration d₂.declaration hEq
 
 end Zkc.Core

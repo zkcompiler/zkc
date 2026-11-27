@@ -455,53 +455,232 @@ def deriveClause {V : Vocabulary} {hs : Headers V} {stateTy τ : V.Ty}
         (.cons coinVar .nil) (base + 3) h3 fun _ _ w34 _ =>
     .ret (.cons (coinVar.reindex w34) (.cons (nextStVar.reindex w34) .nil))
 
-/-- Request payload type for an ideal RO query: `(transcriptState, drawLabel)`. -/
-abbrev idealQueryTys {V : Vocabulary} (stateTy : V.Ty) : Tys V.TypeKey :=
-  .cons stateTy (.cons bytesTy .nil)
+/-- Sequence of tagged metadata byte strings (`List (List Nat)`). -/
+abbrev metaLogTy {V : Vocabulary} : V.Ty := .seq bytesTy none
 
-abbrev idealQueryTy {V : Vocabulary} (stateTy : V.Ty) : V.Ty :=
-  .tuple (idealQueryTys stateTy)
+/-- Sequence of encoded unit sequences (`List (List (M.Val unitTy))`). -/
+abbrev dataLogTy {V : Vocabulary} (unitTy : V.Ty) : V.Ty := .seq (.seq unitTy none) none
+
+/-- Pure collision-free ideal transcript path type `(metaLog, dataLog)` for any non-linear `unitTy`,
+completely independent of any concrete hash/sponge `SuiteSlot.start` or `SuiteSlot.absorb`. -/
+abbrev idealPathTys {V : Vocabulary} (unitTy : V.Ty) : Tys V.TypeKey :=
+  .cons metaLogTy (.cons (dataLogTy unitTy) .nil)
+
+abbrev idealPathTy {V : Vocabulary} (unitTy : V.Ty) : V.Ty :=
+  .tuple (idealPathTys unitTy)
+
+/-- Request payload type for an ideal RO query: `(idealPath, drawLabel)`. -/
+abbrev idealQueryTys {V : Vocabulary} (unitTy : V.Ty) : Tys V.TypeKey :=
+  .cons (idealPathTy unitTy) (.cons bytesTy .nil)
+
+abbrev idealQueryTy {V : Vocabulary} (unitTy : V.Ty) : V.Ty :=
+  .tuple (idealQueryTys unitTy)
+
+/-- Pure local combinator appending `(tagLblVar, encVar)` onto `stVar : idealPathTy unitTy`. -/
+def appendIdealPathLocal {V : Vocabulary} {fns : List (FnHeader V)} {unitTy : V.Ty}
+    (hfree : Ty.isLinear V unitTy = false)
+    {Γ : Ctx V.Ty} {outs : List V.Ty} (fresh : Nat) (hfresh : FreshFrom Γ fresh)
+    (stVar : Var Γ (idealPathTy unitTy)) (tagLblVar : Var Γ bytesTy)
+    (encVar : Var Γ (.seq unitTy none))
+    (rest : (Γ' : Ctx V.Ty) → FreshFrom Γ' (fresh + 9) → Γ.Within Γ' →
+      Var Γ' (idealPathTy unitTy) → Term (localDialect V fns) Γ' outs) :
+    Term (localDialect V fns) Γ outs :=
+  have htfree : Tys.anyLinear V (idealPathTys unitTy) = false := by
+    simp [Tys.anyLinear, Ty.isLinear, hfree]
+  letOp1 ⟨fresh⟩ (.owned (.getTuple (idealPathTys unitTy) .head htfree))
+      (.cons stVar .nil) fresh hfresh fun _ h1 w01 metaVar =>
+  letOp1 ⟨fresh + 1⟩ (.owned (.getTuple (idealPathTys unitTy) (.tail .head) htfree))
+      (.cons (stVar.reindex w01) .nil) (fresh + 1) h1 fun _ h2 w12 dataVar =>
+  letOp1 ⟨fresh + 2⟩ (.owned (.makeSeq bytesTy 1))
+      (.cons (tagLblVar.reindex (w01.trans w12)) .nil) (fresh + 2) h2 fun _ h3 w23 mArr =>
+  letOp1 ⟨fresh + 3⟩ (.owned (.seqUnsized bytesTy 1))
+      (.cons mArr .nil) (fresh + 3) h3 fun _ h4 w34 mSingle =>
+  letOp1 ⟨fresh + 4⟩ (.owned (.seqConcat bytesTy none none))
+      (.cons (metaVar.reindex ((w12.trans w23).trans w34)) (.cons mSingle .nil))
+      (fresh + 4) h4 fun _ h5 w45 nextMeta =>
+  letOp1 ⟨fresh + 5⟩ (.owned (.makeSeq (.seq unitTy none) 1))
+      (.cons (encVar.reindex ((((w01.trans w12).trans w23).trans w34).trans w45)) .nil)
+      (fresh + 5) h5 fun _ h6 w56 dArr =>
+  letOp1 ⟨fresh + 6⟩ (.owned (.seqUnsized (.seq unitTy none) 1))
+      (.cons dArr .nil) (fresh + 6) h6 fun _ h7 w67 dSingle =>
+  letOp1 ⟨fresh + 7⟩ (.owned (.seqConcat (.seq unitTy none) none none))
+      (.cons (dataVar.reindex (((((w23.trans w34).trans w45).trans w56).trans w67)))
+        (.cons dSingle .nil))
+      (fresh + 7) h7 fun _ h8 w78 nextData =>
+  letOp1 ⟨fresh + 8⟩ (.owned (.makeTuple (idealPathTys unitTy)))
+      (.cons (nextMeta.reindex ((w56.trans w67).trans w78)) (.cons nextData .nil))
+      (fresh + 8) h8 fun Γ9 h9 w89 nextSt =>
+  let wAll : Γ.Within Γ9 := (((((((w01.trans w12).trans w23).trans w34).trans w45).trans w56).trans w67).trans w78).trans w89
+  rest Γ9 h9 wAll nextSt
+
+/-- Fold statement entries onto a pure ideal path `(metaLog, dataLog)` using tag byte `1`. -/
+def buildIdealPathChain {V : Vocabulary} {fns : List (FnHeader V)} {unitTy : V.Ty}
+    (hfree : Ty.isLinear V unitTy = false) :
+    {Γ : Ctx V.Ty} → (fresh : Nat) → FreshFrom Γ fresh →
+    Var Γ (idealPathTy unitTy) → (items : List (StmtAbsorbItem V fns unitTy Γ)) →
+    Term (localDialect V fns) Γ [idealPathTy unitTy]
+  | _, _, _, stVar, [] => .ret (.cons stVar .nil)
+  | _, fresh, hfresh, stVar, item :: rest =>
+      have hTagLbl : ∀ b, b ∈ (1 :: item.label) → b < 256 := fun b hb => by
+        rcases List.mem_cons.mp hb with rfl | hmem
+        · decide
+        · exact item.labelBytes b hmem
+      letOp1 ⟨fresh⟩ (.literal bytesTy ((1 :: item.label).length :: (1 :: item.label))
+          (bytesLiteral_reads (1 :: item.label) hTagLbl)) .nil fresh hfresh fun _ h1 w01 lblVar =>
+      letOp1 ⟨fresh + 1⟩ (callLocal item.encode) (.cons (item.input.reindex w01) .nil)
+          (fresh + 1) h1 fun _ h2 w12 encVar =>
+      appendIdealPathLocal hfree (fresh + 2) h2 (stVar.reindex (w01.trans w12))
+          (lblVar.reindex w12) encVar fun _ h11 w211 nextSt =>
+      let wAll := (w01.trans w12).trans w211
+      let rest' := rest.map fun it =>
+        ⟨it.ty, it.input.reindex wAll, it.label, it.labelBytes, it.encode⟩
+      buildIdealPathChain hfree (fresh + 11) h11 nextSt rest'
+termination_by _ _ _ _ items => items.length
+decreasing_by simp
+
+/-- Build pure ideal `construction.start`: initialize `(metaLog, dataLog)` to `([0 :: sessionBytes], [])`,
+then append `(1 :: stmtLabel i, encode(stmt_i))` for every statement input. Uses zero concrete
+hash/sponge functions (`SuiteSlot.start`, `SuiteSlot.absorb`). -/
+def idealStart {V : Vocabulary} {fns : List (FnHeader V)} {unitTy : V.Ty}
+    (hfree : Ty.isLinear V unitTy = false)
+    {r : Role} {ins : List (LTy V)}
+    (sessionBytes : List Nat) (hsess : ∀ b, b ∈ sessionBytes → b < 256)
+    (items : List (StmtAbsorbItem V fns unitTy (Ctx.positional (held r ins)))) :
+    Term (localDialect V fns) (Ctx.positional (held r ins)) [idealPathTy unitTy] :=
+  let base := (held r ins).length
+  have hTagSess : ∀ b, b ∈ (0 :: sessionBytes) → b < 256 := fun b hb => by
+    rcases List.mem_cons.mp hb with rfl | hmem
+    · decide
+    · exact hsess b hmem
+  letOp1 ⟨0⟩ (.literal bytesTy ((0 :: sessionBytes).length :: (0 :: sessionBytes))
+      (bytesLiteral_reads (0 :: sessionBytes) hTagSess)) .nil base (positional_freshFrom (held r ins))
+      fun _ h1 w01 sessVar =>
+  letOp1 ⟨1⟩ (.owned (.makeSeq bytesTy 1)) (.cons sessVar .nil) (base + 1) h1 fun _ h2 w12 mArr =>
+  letOp1 ⟨2⟩ (.owned (.seqUnsized bytesTy 1)) (.cons mArr .nil) (base + 2) h2 fun _ h3 w23 m0 =>
+  letOp1 ⟨3⟩ (.owned (.makeSeq (.seq unitTy none) 0)) .nil (base + 3) h3 fun _ h4 w34 dArr =>
+  letOp1 ⟨4⟩ (.owned (.seqUnsized (.seq unitTy none) 0)) (.cons dArr .nil) (base + 4) h4 fun _ h5 w45 d0 =>
+  letOp1 ⟨5⟩ (.owned (.makeTuple (idealPathTys unitTy)))
+      (.cons (m0.reindex (w34.trans w45)) (.cons d0 .nil)) (base + 5) h5 fun _ h6 w56 st0 =>
+  let wAll := ((((w01.trans w12).trans w23).trans w34).trans w45).trans w56
+  let items' := items.map fun it =>
+    ⟨it.ty, it.input.reindex wAll, it.label, it.labelBytes, it.encode⟩
+  buildIdealPathChain hfree (base + 6) h6 st0 items'
+
+/-- Pure role-dialect combinator appending `(tagLblVar, encVar)` onto `stVar : idealPathTy unitTy`. -/
+def appendIdealPathRole {V : Vocabulary} {hs : Headers V} {unitTy : V.Ty}
+    (hfree : Ty.isLinear V unitTy = false) (r : Role)
+    {Γ : Ctx (LTy V)} {outs : List (LTy V)} (fresh : Nat) (hfresh : FreshFrom Γ fresh)
+    (stVar : Var Γ ⟨idealPathTy unitTy, [r]⟩) (tagLblVar : Var Γ ⟨bytesTy, [r]⟩)
+    (encVar : Var Γ ⟨.seq unitTy none, [r]⟩)
+    (rest : (Γ' : Ctx (LTy V)) → FreshFrom Γ' (fresh + 9) → Γ.Within Γ' →
+      Var Γ' ⟨idealPathTy unitTy, [r]⟩ → Term (roleDialect V hs r) Γ' outs) :
+    Term (roleDialect V hs r) Γ outs :=
+  have htfree : Tys.anyLinear V (idealPathTys unitTy) = false := by
+    simp [Tys.anyLinear, Ty.isLinear, hfree]
+  letOp1 ⟨fresh⟩ (computeAlone r (.owned (.getTuple (idealPathTys unitTy) .head htfree)))
+      (.cons stVar .nil) fresh hfresh fun _ h1 w01 metaVar =>
+  letOp1 ⟨fresh + 1⟩ (computeAlone r (.owned (.getTuple (idealPathTys unitTy) (.tail .head) htfree)))
+      (.cons (stVar.reindex w01) .nil) (fresh + 1) h1 fun _ h2 w12 dataVar =>
+  letOp1 ⟨fresh + 2⟩ (computeAlone r (.owned (.makeSeq bytesTy 1)))
+      (.cons (tagLblVar.reindex (w01.trans w12)) .nil) (fresh + 2) h2 fun _ h3 w23 mArr =>
+  letOp1 ⟨fresh + 3⟩ (computeAlone r (.owned (.seqUnsized bytesTy 1)))
+      (.cons mArr .nil) (fresh + 3) h3 fun _ h4 w34 mSingle =>
+  letOp1 ⟨fresh + 4⟩ (computeAlone r (.owned (.seqConcat bytesTy none none)))
+      (.cons (metaVar.reindex ((w12.trans w23).trans w34)) (.cons mSingle .nil))
+      (fresh + 4) h4 fun _ h5 w45 nextMeta =>
+  letOp1 ⟨fresh + 5⟩ (computeAlone r (.owned (.makeSeq (.seq unitTy none) 1)))
+      (.cons (encVar.reindex ((((w01.trans w12).trans w23).trans w34).trans w45)) .nil)
+      (fresh + 5) h5 fun _ h6 w56 dArr =>
+  letOp1 ⟨fresh + 6⟩ (computeAlone r (.owned (.seqUnsized (.seq unitTy none) 1)))
+      (.cons dArr .nil) (fresh + 6) h6 fun _ h7 w67 dSingle =>
+  letOp1 ⟨fresh + 7⟩ (computeAlone r (.owned (.seqConcat (.seq unitTy none) none none)))
+      (.cons (dataVar.reindex (((((w23.trans w34).trans w45).trans w56).trans w67)))
+        (.cons dSingle .nil))
+      (fresh + 7) h7 fun _ h8 w78 nextData =>
+  letOp1 ⟨fresh + 8⟩ (computeAlone r (.owned (.makeTuple (idealPathTys unitTy))))
+      (.cons (nextMeta.reindex ((w56.trans w67).trans w78)) (.cons nextData .nil))
+      (fresh + 8) h8 fun Γ9 h9 w89 nextSt =>
+  let wAll : Γ.Within Γ9 := (((((((w01.trans w12).trans w23).trans w34).trans w45).trans w56).trans w67).trans w78).trans w89
+  rest Γ9 h9 wAll nextSt
+
+/-- Ideal RO verifier message clause: delegates `.get` to the layout layer below, encodes `msg`,
+and appends `(2 :: label, encode(msg))` onto the pure transcript path `(metaLog, dataLog)`. -/
+def idealAbsorbClause {V : Vocabulary} {hs : Headers V} {unitTy τ : V.Ty}
+    (hfree : Ty.isLinear V unitTy = false)
+    (verifier prover : Role) (site : Site) (kind : FlowKind)
+    (label : List Nat) (hlabel : ∀ b, b ∈ label → b < 256)
+    (encodeRef : TypedFnRef V hs.fns [τ] [.seq unitTy none]) :
+    Clause V hs verifier (idealPathTy unitTy) where
+  site := ⟨site, .get kind prover, [], [τ]⟩
+  code :=
+    let stTy := idealPathTy unitTy
+    let tys := alone verifier [stTy]
+    let stVar : Var (Ctx.positional tys) ⟨stTy, [verifier]⟩ := alonePosVar verifier [stTy] 0 rfl
+    have hKeep : verifier ∈ Holders.ofList [verifier] ↔ verifier ∈ ([verifier] : Holders) := by
+      simp [Holders.mem_ofList]
+    have hTagLbl : ∀ b, b ∈ (2 :: label) → b < 256 := fun b hb => by
+      rcases List.mem_cons.mp hb with rfl | hmem
+      · decide
+      · exact hlabel b hmem
+    letOp1 site.key (.get τ [] kind prover [verifier] (List.mem_singleton_self verifier)) .nil
+        1 (alone_positional_freshFrom verifier [stTy]) fun _ h1 w01 rawMsgVar =>
+    letOp1 ⟨0⟩ (.keep [verifier] hKeep) (.cons rawMsgVar .nil) 2 h1 fun _ h2 w12 msgVar =>
+    letOp1 ⟨1⟩ (computeAlone verifier (.literal bytesTy ((2 :: label).length :: (2 :: label))
+        (bytesLiteral_reads (2 :: label) hTagLbl))) .nil 3 h2 fun _ h3 w23 lblVar =>
+    letOp1 ⟨2⟩ (computeAlone verifier (callLocal encodeRef))
+        (.cons (msgVar.reindex w23) .nil) 4 h3 fun _ h4 w34 encVar =>
+    appendIdealPathRole hfree verifier 5 h4
+        (stVar.reindex (((w01.trans w12).trans w23).trans w34))
+        (lblVar.reindex w34) encVar fun _ _ w413 nextStVar =>
+    .ret (.cons (msgVar.reindex ((w23.trans w34).trans w413)) (.cons nextStVar .nil))
 
 /-- Ideal RO construction clause at a verifier draw: requests the coin from `serviceKey` on
-`(state, label)` at fresh key `reqKey`, tells the coin below at `toldKey`, absorbs the coin into
-the transcript state (so consecutive draws query distinct paths), and returns `(coin, nextState)`. -/
-def idealDeriveClause {V : Vocabulary} {hs : Headers V} {stateTy unitTy τ : V.Ty}
+`(idealPath, label)` at fresh key `reqKey`, tells the coin below at `toldKey`, appends
+`(3 :: label, encode(coin))` onto the pure transcript path (so consecutive draws query distinct
+collision-free paths without calling any concrete hash/sponge), and returns `(coin, nextPath)`. -/
+def idealDeriveClause {V : Vocabulary} {hs : Headers V} {unitTy τ : V.Ty}
+    (hfree : Ty.isLinear V unitTy = false)
     (verifier prover : Role) (site : Site) (part : Part V) (drawIns : List V.Ty)
     (serviceKey reqKey toldKey : Key)
     (label : List Nat) (hlabel : ∀ b, b ∈ label → b < 256)
-    (encodeRef : TypedFnRef V hs.fns [τ] [.seq unitTy none])
-    (absorbRef : TypedFnRef V hs.fns [stateTy, bytesTy, .seq unitTy none] [stateTy]) :
-    Clause V hs verifier stateTy where
+    (encodeRef : TypedFnRef V hs.fns [τ] [.seq unitTy none]) :
+    Clause V hs verifier (idealPathTy unitTy) where
   site := ⟨site, part, drawIns, [τ]⟩
   code :=
-    let tys := alone verifier (drawIns ++ [stateTy])
-    let base := (drawIns ++ [stateTy]).length
-    have hStAt : tys[drawIns.length]? = some ⟨stateTy, [verifier]⟩ := by
+    let stTy := idealPathTy unitTy
+    let tys := alone verifier (drawIns ++ [stTy])
+    let base := (drawIns ++ [stTy]).length
+    have hStAt : tys[drawIns.length]? = some ⟨stTy, [verifier]⟩ := by
       simp [tys, alone]
-    let stVar : Var (Ctx.positional tys) ⟨stateTy, [verifier]⟩ := posVar tys drawIns.length hStAt
+    let stVar : Var (Ctx.positional tys) ⟨stTy, [verifier]⟩ := posVar tys drawIns.length hStAt
     have hKeep : verifier ∈ Holders.ofList [verifier] ↔ verifier ∈ ([verifier] : Holders) := by
       simp [Holders.mem_ofList]
+    have hTagLbl : ∀ b, b ∈ (3 :: label) → b < 256 := fun b hb => by
+      rcases List.mem_cons.mp hb with rfl | hmem
+      · decide
+      · exact hlabel b hmem
     letOp1 ⟨0⟩ (computeAlone verifier (.literal bytesTy (label.length :: label)
-        (bytesLiteral_reads label hlabel))) .nil base (alone_positional_freshFrom verifier (drawIns ++ [stateTy]))
+        (bytesLiteral_reads label hlabel))) .nil base (alone_positional_freshFrom verifier (drawIns ++ [stTy]))
         fun _ h1 w01 lblVar =>
-    letOp1 ⟨1⟩ (computeAlone verifier (.owned (.makeTuple (idealQueryTys stateTy))))
+    letOp1 ⟨1⟩ (computeAlone verifier (.owned (.makeTuple (idealQueryTys unitTy))))
         (.cons (stVar.reindex w01) (.cons lblVar .nil)) (base + 1) h1
         fun _ h2 w12 queryVar =>
-    letOp1 reqKey (.own (.request serviceKey) [] [⟨idealQueryTy stateTy, [verifier]⟩] τ rfl
+    letOp1 reqKey (.own (.request serviceKey) [] [⟨idealQueryTy unitTy, [verifier]⟩] τ rfl
         (fun a ha => by simp at ha; subst ha; exact List.mem_singleton_self verifier))
         (.cons queryVar .nil) (base + 2) h2 fun _ h3 w23 rawCoinVar =>
     letOp1 ⟨2⟩ (.keep [verifier] hKeep) (.cons rawCoinVar .nil) (base + 3) h3
         fun _ h4 w34 coinVar =>
     letOp1 toldKey (.give .message [prover] (List.mem_singleton_self verifier))
         (.cons coinVar .nil) (base + 4) h4 fun _ h5 w45 _ =>
-    letOp1 ⟨3⟩ (computeAlone verifier (callLocal encodeRef))
-        (.cons (coinVar.reindex w45) .nil) (base + 5) h5 fun _ h6 w56 encVar =>
-    letOp1 ⟨4⟩ (computeAlone verifier (callLocal absorbRef))
-        (.cons (stVar.reindex (((((w01.trans w12).trans w23).trans w34).trans w45).trans w56))
-          (.cons (lblVar.reindex ((((w12.trans w23).trans w34).trans w45).trans w56))
-            (.cons encVar .nil)))
-        (base + 6) h6 fun _ _ w67 nextStVar =>
-    .ret (.cons (coinVar.reindex ((w45.trans w56).trans w67)) (.cons nextStVar .nil))
+    letOp1 ⟨3⟩ (computeAlone verifier (.literal bytesTy ((3 :: label).length :: (3 :: label))
+        (bytesLiteral_reads (3 :: label) hTagLbl))) .nil (base + 5) h5
+        fun _ h6 w56 tagLblVar =>
+    letOp1 ⟨4⟩ (computeAlone verifier (callLocal encodeRef))
+        (.cons (coinVar.reindex (w45.trans w56)) .nil) (base + 6) h6 fun _ h7 w67 encVar =>
+    appendIdealPathRole hfree verifier (base + 7) h7
+        (stVar.reindex ((((((w01.trans w12).trans w23).trans w34).trans w45).trans w56).trans w67))
+        (tagLblVar.reindex w67) encVar fun _ _ w716 nextStVar =>
+    .ret (.cons (coinVar.reindex (((w45.trans w56).trans w67).trans w716)) (.cons nextStVar .nil))
 
 /-- Prover layout clause: serialize a message/draw with `writeRef` and append to proof buffer. -/
 def layoutPWriteClause {V : Vocabulary} {hs : Headers V} {unitTy τ : V.Ty}

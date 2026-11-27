@@ -120,6 +120,22 @@ def findSuiteDerive (a : Admitted V) (suite : ModuleRef) (stateTy : V.Ty)
   findSlotMember suite SuiteSlot.derive fun defKey =>
     findTypedFnRef a defKey (stateTy :: bytesTy :: drawIns) [τ, stateTy]
 
+/-- Determine the suite's absorbed unit type from its `SuiteSlot.encode` entries (defaulting to
+`byteTy`), requiring a non-linear unit type. Used by pure-path `deployIdeal` without touching any
+concrete `SuiteSlot.start` or `SuiteSlot.absorb` function. -/
+def findSuiteUnit (a : Admitted V) (suite : ModuleRef) :
+    Option ((unitTy : V.Ty) × PLift (Ty.isLinear V unitTy = false)) :=
+  let inferred : Option V.Ty :=
+    findSlotMember suite SuiteSlot.encode fun defKey =>
+      match a.program.find defKey with
+      | some (.fn (hdr := hdr) _) =>
+          match hdr.outs with
+          | [.seq unitTy none] => some unitTy
+          | _ => none
+      | _ => none
+  let u := inferred.getD byteTy
+  if hfree : Ty.isLinear V u = false then some ⟨u, ⟨hfree⟩⟩ else none
+
 /-- Determine the layout's unit type from its `LayoutSlot.write` / `LayoutSlot.read` entries,
 defaulting to `byteTy` when the module has no typed entries. Requires a non-linear unit type. -/
 def findLayoutUnit (a : Admitted V) (layout : ModuleRef) :
@@ -219,31 +235,258 @@ theorem idealReqKey_fresh (events : List (ShapeEvent V)) (idx : Nat) :
 /-- Deterministic ASCII domain label for a statement input at index `i`. -/
 def stmtLabel (i : Nat) : List Nat := encodeLabelBytes s!"stmt:{i}"
 
-/-- Deterministic ASCII domain label for a message at site `s`. -/
-def msgLabel (s : Site) : List Nat := encodeLabelBytes s!"msg:{s.key.number}"
+/-- Deterministic domain label for a message at site `s`, including `s.through` and `s.key`. -/
+def msgLabel (s : Site) : List Nat := encodeSiteLabel "msg" s
 
-/-- Deterministic ASCII domain label for a draw at site `s`. -/
-def drawLabel (s : Site) : List Nat := encodeLabelBytes s!"draw:{s.key.number}"
+/-- Deterministic domain label for a draw at site `s`, including `s.through` and `s.key`. -/
+def drawLabel (s : Site) : List Nat := encodeSiteLabel "draw" s
 
 theorem stmtLabel_bytes (i : Nat) : ∀ b, b ∈ stmtLabel i → b < 256 :=
   encodeLabelBytes_bytes _
 
 theorem msgLabel_bytes (s : Site) : ∀ b, b ∈ msgLabel s → b < 256 :=
-  encodeLabelBytes_bytes _
+  encodeSiteLabel_bytes "msg" s
 
 theorem drawLabel_bytes (s : Site) : ∀ b, b ∈ drawLabel s → b < 256 :=
-  encodeLabelBytes_bytes _
+  encodeSiteLabel_bytes "draw" s
 
-/-! ## Refusal helper -/
+/-! ## Trailing-message absorption analysis (Chiesa-Orru Construction 4.3) -/
+
+mutual
+  /-- Whether `s` contains any verifier-owned coin draw heard by `prover` under role renaming
+  `rename`. -/
+  def Shape.hasHeardDraw (prover verifier : Role) (rename : Role → Role) : Shape V → Bool
+    | .nil => false
+    | .event _ cls _ rest =>
+        (match cls.rename rename with
+         | .given (.coin _) owner hearers => decide (owner = verifier ∧ prover ∈ hearers)
+         | _ => false) || Shape.hasHeardDraw prover verifier rename rest
+    | .choice _ _ arms rest =>
+        Shapes.hasHeardDraw prover verifier rename arms ||
+          Shape.hasHeardDraw prover verifier rename rest
+    | .loop _ _ body rest =>
+        Shape.hasHeardDraw prover verifier rename body ||
+          Shape.hasHeardDraw prover verifier rename rest
+    | .apply _ _ roles inner rest =>
+        Shape.hasHeardDraw prover verifier (fun j => rename (roles.getD j j)) inner ||
+          Shape.hasHeardDraw prover verifier rename rest
+    | .block _ _ body rest =>
+        Shape.hasHeardDraw prover verifier rename body ||
+          Shape.hasHeardDraw prover verifier rename rest
+    | .guard _ _ _ rest => Shape.hasHeardDraw prover verifier rename rest
+    | .attempt _ _ body rest =>
+        Shape.hasHeardDraw prover verifier rename body ||
+          Shape.hasHeardDraw prover verifier rename rest
+
+  def Shapes.hasHeardDraw (prover verifier : Role) (rename : Role → Role) : Shapes V → Bool
+    | .nil => false
+    | .cons arm rest =>
+        Shape.hasHeardDraw prover verifier rename arm ||
+          Shapes.hasHeardDraw prover verifier rename rest
+end
+
+mutual
+  /-- Raw structural pass pairing every `ShapeEvent` of `s` with a boolean indicating whether a
+  verifier draw heard by `prover` can occur after it (conservatively `true` inside any loop
+  containing a draw). -/
+  def Shape.eventsWithAbsorbRaw (prover verifier : Role) (through : List Key) (rename : Role → Role)
+      (drawAfter : Bool) : Shape V → List (ShapeEvent V × Bool)
+    | .nil => []
+    | .event key cls τ rest =>
+        let need := drawAfter || Shape.hasHeardDraw prover verifier rename rest
+        (⟨⟨through, key⟩, cls.rename rename, τ⟩, need) ::
+          Shape.eventsWithAbsorbRaw prover verifier through rename drawAfter rest
+    | .choice _ _ arms rest =>
+        let afterArm := drawAfter || Shape.hasHeardDraw prover verifier rename rest
+        Shapes.eventsWithAbsorbRaw prover verifier through rename afterArm arms ++
+          Shape.eventsWithAbsorbRaw prover verifier through rename drawAfter rest
+    | .loop _ _ body rest =>
+        let afterBody := drawAfter || Shape.hasHeardDraw prover verifier rename rest ||
+          Shape.hasHeardDraw prover verifier rename body
+        Shape.eventsWithAbsorbRaw prover verifier through rename afterBody body ++
+          Shape.eventsWithAbsorbRaw prover verifier through rename drawAfter rest
+    | .apply key _ roles inner rest =>
+        let afterInner := drawAfter || Shape.hasHeardDraw prover verifier rename rest
+        Shape.eventsWithAbsorbRaw prover verifier (through ++ [key])
+            (fun j => rename (roles.getD j j)) afterInner inner ++
+          Shape.eventsWithAbsorbRaw prover verifier through rename drawAfter rest
+    | .block _ _ body rest =>
+        let afterBody := drawAfter || Shape.hasHeardDraw prover verifier rename rest
+        Shape.eventsWithAbsorbRaw prover verifier through rename afterBody body ++
+          Shape.eventsWithAbsorbRaw prover verifier through rename drawAfter rest
+    | .guard _ _ _ rest =>
+        Shape.eventsWithAbsorbRaw prover verifier through rename drawAfter rest
+    | .attempt _ _ body rest =>
+        let afterBody := drawAfter || Shape.hasHeardDraw prover verifier rename rest
+        Shape.eventsWithAbsorbRaw prover verifier through rename afterBody body ++
+          Shape.eventsWithAbsorbRaw prover verifier through rename drawAfter rest
+
+  def Shapes.eventsWithAbsorbRaw (prover verifier : Role) (through : List Key) (rename : Role → Role)
+      (drawAfter : Bool) : Shapes V → List (ShapeEvent V × Bool)
+    | .nil => []
+    | .cons arm rest =>
+        Shape.eventsWithAbsorbRaw prover verifier through rename drawAfter arm ++
+          Shapes.eventsWithAbsorbRaw prover verifier through rename drawAfter rest
+end
+
+/-- Monotonic closure of absorption flags over `(site, kind, ty)`: if any prover→verifier flow at
+`(site, kind, ty)` precedes a heard draw (e.g. across blocks of a stepped loop that reuse a key),
+every occurrence of `(site, kind, ty)` is absorbed uniformly on both prover and verifier. -/
+def closeAbsorbSites (prover verifier : Role) (es : List (ShapeEvent V × Bool)) :
+    List (ShapeEvent V × Bool) :=
+  let absorbed : List (Site × FlowKind × V.Ty) := es.filterMap fun p =>
+    if p.2 then
+      match p.1.cls with
+      | .flow kind giver getters =>
+          if giver = prover ∧ verifier ∈ getters then some (p.1.site, kind, p.1.τ) else none
+      | _ => none
+    else none
+  es.map fun p =>
+    match p.1.cls with
+    | .flow kind giver getters =>
+        if giver = prover ∧ verifier ∈ getters then
+          (p.1, decide ((p.1.site, kind, p.1.τ) ∈ absorbed))
+        else p
+    | _ => p
+
+/-- Enumerate every `ShapeEvent` of `s` paired with a site-consistent boolean indicating whether
+a verifier draw heard by `prover` can occur after it. Trailing prover messages with
+`needAbsorb = false` are not hashed into the transcript (Chiesa-Orru Construction 4.3). -/
+def Shape.eventsWithAbsorb (prover verifier : Role) (through : List Key) (rename : Role → Role)
+    (drawAfter : Bool) (s : Shape V) : List (ShapeEvent V × Bool) :=
+  closeAbsorbSites prover verifier (Shape.eventsWithAbsorbRaw prover verifier through rename drawAfter s)
+
+mutual
+  theorem eventsWithAbsorbRaw_fst (prover verifier : Role) (through : List Key) (rename : Role → Role)
+      (drawAfter : Bool) : ∀ (s : Shape V),
+      (Shape.eventsWithAbsorbRaw prover verifier through rename drawAfter s).map Prod.fst =
+        Shape.events through rename s
+    | .nil => rfl
+    | .event _ _ _ rest =>
+        congrArg _ (eventsWithAbsorbRaw_fst prover verifier through rename drawAfter rest)
+    | .choice _ _ arms rest => by
+        simp only [Shape.eventsWithAbsorbRaw, Shape.events, List.map_append]
+        rw [shapesEventsWithAbsorbRaw_fst, eventsWithAbsorbRaw_fst]
+    | .loop _ _ body rest => by
+        simp only [Shape.eventsWithAbsorbRaw, Shape.events, List.map_append]
+        rw [eventsWithAbsorbRaw_fst, eventsWithAbsorbRaw_fst]
+    | .apply _ _ _ inner rest => by
+        simp only [Shape.eventsWithAbsorbRaw, Shape.events, List.map_append]
+        rw [eventsWithAbsorbRaw_fst, eventsWithAbsorbRaw_fst]
+    | .block _ _ body rest => by
+        simp only [Shape.eventsWithAbsorbRaw, Shape.events, List.map_append]
+        rw [eventsWithAbsorbRaw_fst, eventsWithAbsorbRaw_fst]
+    | .guard _ _ _ rest =>
+        eventsWithAbsorbRaw_fst prover verifier through rename drawAfter rest
+    | .attempt _ _ body rest => by
+        simp only [Shape.eventsWithAbsorbRaw, Shape.events, List.map_append]
+        rw [eventsWithAbsorbRaw_fst, eventsWithAbsorbRaw_fst]
+
+  theorem shapesEventsWithAbsorbRaw_fst (prover verifier : Role) (through : List Key)
+      (rename : Role → Role) (drawAfter : Bool) : ∀ (ss : Shapes V),
+      (Shapes.eventsWithAbsorbRaw prover verifier through rename drawAfter ss).map Prod.fst =
+        Shapes.events through rename ss
+    | .nil => rfl
+    | .cons arm rest => by
+        simp only [Shapes.eventsWithAbsorbRaw, Shapes.events, List.map_append]
+        rw [eventsWithAbsorbRaw_fst, shapesEventsWithAbsorbRaw_fst]
+end
+
+theorem closeAbsorbSites_fst (prover verifier : Role) (es : List (ShapeEvent V × Bool)) :
+    (closeAbsorbSites prover verifier es).map Prod.fst = es.map Prod.fst := by
+  unfold closeAbsorbSites
+  rw [List.map_map]
+  apply List.map_congr_left
+  intro p _
+  dsimp only [Function.comp_def]
+  cases h : p.1.cls with
+  | flow kind giver getters =>
+      dsimp only
+      split <;> rfl
+  | given _ _ _ => rfl
+
+/-- Projecting the first component of `eventsWithAbsorb` yields `Shape.events` identically. -/
+theorem eventsWithAbsorb_fst (prover verifier : Role) (through : List Key) (rename : Role → Role)
+    (drawAfter : Bool) (s : Shape V) :
+    (Shape.eventsWithAbsorb prover verifier through rename drawAfter s).map Prod.fst =
+      Shape.events through rename s :=
+  (closeAbsorbSites_fst prover verifier _).trans
+    (eventsWithAbsorbRaw_fst prover verifier through rename drawAfter s)
+
+/-- Any two prover→verifier flow events in `eventsWithAbsorb` at the same `(site, kind, ty)` carry
+the exact same absorption flag, guaranteeing lockstep prover/verifier absorption even across
+stepped-loop blocks that reuse keys. -/
+theorem eventsWithAbsorb_flow_consistent (prover verifier : Role) (through : List Key)
+    (rename : Role → Role) (drawAfter : Bool) (s : Shape V)
+    {e₁ e₂ : ShapeEvent V} {b₁ b₂ : Bool}
+    (h₁ : (e₁, b₁) ∈ s.eventsWithAbsorb prover verifier through rename drawAfter)
+    (h₂ : (e₂, b₂) ∈ s.eventsWithAbsorb prover verifier through rename drawAfter)
+    {kind : FlowKind} {gs₁ gs₂ : List Role}
+    (hSite : e₁.site = e₂.site) (hTy : e₁.τ = e₂.τ)
+    (hCls₁ : e₁.cls = .flow kind prover gs₁) (hV₁ : verifier ∈ gs₁)
+    (hCls₂ : e₂.cls = .flow kind prover gs₂) (hV₂ : verifier ∈ gs₂) :
+    b₁ = b₂ := by
+  unfold Shape.eventsWithAbsorb closeAbsorbSites at h₁ h₂
+  obtain ⟨p₁, _, hp₁⟩ := List.mem_map.mp h₁
+  obtain ⟨p₂, _, hp₂⟩ := List.mem_map.mp h₂
+  have hb₁ : b₁ = decide ((e₁.site, kind, e₁.τ) ∈
+      (Shape.eventsWithAbsorbRaw prover verifier through rename drawAfter s).filterMap fun p =>
+        if p.2 then match p.1.cls with
+          | .flow k g gs => if g = prover ∧ verifier ∈ gs then some (p.1.site, k, p.1.τ) else none
+          | _ => none
+        else none) := by
+    have hfst₁ : p₁.1 = e₁ := by
+      cases h : p₁.1.cls with
+      | flow k g gs =>
+          rw [h] at hp₁; dsimp only at hp₁
+          split at hp₁ <;> exact congrArg Prod.fst hp₁
+      | given _ _ _ => rw [h] at hp₁; exact congrArg Prod.fst hp₁
+    rw [hfst₁, hCls₁] at hp₁; dsimp only at hp₁
+    rw [ite_eq_left ⟨rfl, hV₁⟩] at hp₁
+    exact (congrArg Prod.snd hp₁).symm
+  have hb₂ : b₂ = decide ((e₂.site, kind, e₂.τ) ∈
+      (Shape.eventsWithAbsorbRaw prover verifier through rename drawAfter s).filterMap fun p =>
+        if p.2 then match p.1.cls with
+          | .flow k g gs => if g = prover ∧ verifier ∈ gs then some (p.1.site, k, p.1.τ) else none
+          | _ => none
+        else none) := by
+    have hfst₂ : p₂.1 = e₂ := by
+      cases h : p₂.1.cls with
+      | flow k g gs =>
+          rw [h] at hp₂; dsimp only at hp₂
+          split at hp₂ <;> exact congrArg Prod.fst hp₂
+      | given _ _ _ => rw [h] at hp₂; exact congrArg Prod.fst hp₂
+    rw [hfst₂, hCls₂] at hp₂; dsimp only at hp₂
+    rw [ite_eq_left ⟨rfl, hV₂⟩] at hp₂
+    exact (congrArg Prod.snd hp₂).symm
+  rw [hb₁, hb₂, hSite, hTy]
+
+/-! ## Fail-closed declaration, scope, and layout validation -/
 
 def deployErr (declKey : Key) (rule : Rule) : List (ProgramRefusal V) :=
   [refuseWhole declKey rule .nothing]
 
-/-- Check whether `declaration.retry` and `abortsOutside` satisfy `Deployed.Scoped`. -/
+/-- Decidable list duplicate-freedom check. -/
+def listNodupBool {A : Type} [DecidableEq A] : List A → Bool
+  | [] => true
+  | x :: xs => !decide (x ∈ xs) && listNodupBool xs
+
+/-- Fail-closed validation of `declaration`: rejects unsupported declaration fields (`context`,
+`grinds`, `commits`, `pins`) and mismatched role-kind counts instead of silently ignoring them. -/
+def checkDeclarationSupported (hdr : ProtocolHeader V) (declaration : Declaration) : Bool :=
+  decide (declaration.kinds.length = hdr.roles) &&
+  declaration.context.isEmpty &&
+  declaration.grinds.isEmpty &&
+  declaration.commits.isEmpty &&
+  declaration.pins.isEmpty
+
+/-- Check whether `declaration.retry` and `abortsOutside` satisfy both `Deployed.Scoped` and
+`Deployed.WellNestedRetry`. -/
 def checkScope (hdr : ProtocolHeader V) (declaration : Declaration) : Bool :=
   (match declaration.retry with
    | none => true
-   | some (_, site) => decide (site ∈ hdr.shape.attemptSites [])) &&
+   | some (_, site) =>
+       decide (site ∈ hdr.shape.attemptSites []) && hdr.shape.noNestedAttempt site []) &&
   (hdr.shape.abortsOutside [] false).isEmpty
 
 theorem checkScope_sound (hdr : ProtocolHeader V) (declaration : Declaration)
@@ -254,7 +497,46 @@ theorem checkScope_sound (hdr : ProtocolHeader V) (declaration : Declaration)
   refine ⟨?_, h.2⟩
   intro bound site hretry
   rw [hretry] at h
-  exact of_decide_eq_true h.1
+  simp only [Bool.and_eq_true] at h
+  exact of_decide_eq_true h.1.1
+
+theorem checkScope_wellNested (hdr : ProtocolHeader V) (declaration : Declaration)
+    (h : checkScope hdr declaration = true) :
+    match declaration.retry with
+    | none => True
+    | some (_, site) => Shape.noNestedAttempt site [] hdr.shape = true := by
+  simp only [checkScope, Bool.and_eq_true] at h
+  cases hretry : declaration.retry with
+  | none => trivial
+  | some p =>
+      rw [hretry] at h
+      simp only [Bool.and_eq_true] at h
+      exact h.1.2
+
+/-- Strict fail-closed validation of `layout.carry` and `layout.recover`:
+1. Every carried site must be a distinct verifier→prover heard-coin site of `events`.
+2. Every recovered site must be a distinct prover→verifier flow site of `events`.
+3. When `layout.recover ≠ []`, the protocol shape must be straight-line (no `.choice`/`.loop`)
+   and have distinct event sites so compact pre-parsing matches prover wire order unconditionally. -/
+def checkLayoutSites (entry : ProtocolHeader V) (events : List (ShapeEvent V))
+    (prover verifier : Role) (layout : Layout) : Bool :=
+  let heardSites := events.filterMap fun e =>
+    match e.cls with
+    | .given (.coin _) owner hearers =>
+        if owner = verifier ∧ prover ∈ hearers then some e.site else none
+    | _ => none
+  let flowSites := events.filterMap fun e =>
+    match e.cls with
+    | .flow _ giver getters =>
+        if giver = prover ∧ verifier ∈ getters then some e.site else none
+    | _ => none
+  let carryOk := layout.carry.all (fun s => decide (s ∈ heardSites)) && listNodupBool layout.carry
+  let recSites := layout.recover.map Prod.fst
+  let recoverOk := recSites.all (fun s => decide (s ∈ flowSites)) && listNodupBool recSites
+  let compactShapeOk :=
+    if layout.recover.isEmpty then true
+    else entry.shape.isStraightLine && listNodupBool (events.map (·.site))
+  carryOk && recoverOk && compactShapeOk
 
 /-! ## Building statement absorption items -/
 
@@ -273,36 +555,41 @@ def buildStmtAbsorbItems (a : Admitted V) (suite : ModuleRef) (unitTy : V.Ty)
 
 /-! ## Building construction, samples, and layout clauses -/
 
-/-- Classify and build the `construction` and `samples` clauses for both online roles. -/
+/-- Classify and build the `construction` and `samples` clauses for both online roles.
+Trailing prover messages with `needAbs = false` (no draw reachable afterwards) are passed directly
+through to the layout layer without wasted hashing (Chiesa-Orru Construction 4.3). -/
 def buildConstructionClauses (a : Admitted V) (suite : ModuleRef) (stateTy unitTy : V.Ty)
     (absorbRef : TypedFnRef V a.program.headers.fns [stateTy, bytesTy, .seq unitTy none] [stateTy])
     (prover verifier : Role) (samplesKey : Option Key) (declKey : Key)
-    (events : List (ShapeEvent V)) :
+    (events : List (ShapeEvent V)) (eventsAbs : List (ShapeEvent V × Bool)) :
     Except (List (ProgramRefusal V))
       (List (Clause V a.program.headers prover stateTy) ×
        List (Clause V a.program.headers verifier stateTy) ×
        List (Clause V a.program.headers prover .nat)) :=
-  go 0 events
+  go 0 eventsAbs
 where
-  go (idx : Nat) : List (ShapeEvent V) →
+  go (idx : Nat) : List (ShapeEvent V × Bool) →
       Except (List (ProgramRefusal V))
         (List (Clause V a.program.headers prover stateTy) ×
          List (Clause V a.program.headers verifier stateTy) ×
          List (Clause V a.program.headers prover .nat))
     | [] => .ok ([], [], [])
-    | e :: rest => do
+    | (e, needAbs) :: rest => do
         let (pRest, vRest, sRest) ← go (idx + 1) rest
         match e.cls with
         | .flow kind giver getters =>
             if giver = prover ∧ verifier ∈ getters then
-              match findSuiteEncode a suite unitTy e.τ with
-              | none => .error (deployErr declKey .callee)
-              | some encRef =>
-                  let cP := proverAbsorbClause prover e.site kind getters
-                    (msgLabel e.site) (msgLabel_bytes e.site) encRef absorbRef
-                  let cV := verifierAbsorbClause verifier prover e.site kind
-                    (msgLabel e.site) (msgLabel_bytes e.site) encRef absorbRef
-                  .ok (cP :: pRest, cV :: vRest, sRest)
+              if needAbs then
+                match findSuiteEncode a suite unitTy e.τ with
+                | none => .error (deployErr declKey .callee)
+                | some encRef =>
+                    let cP := proverAbsorbClause prover e.site kind getters
+                      (msgLabel e.site) (msgLabel_bytes e.site) encRef absorbRef
+                    let cV := verifierAbsorbClause verifier prover e.site kind
+                      (msgLabel e.site) (msgLabel_bytes e.site) encRef absorbRef
+                    .ok (cP :: pRest, cV :: vRest, sRest)
+              else
+                .ok (pRest, vRest, sRest)
             else if giver ≠ prover ∧ giver ≠ verifier ∧ prover ∉ getters ∧ verifier ∉ getters then
               .ok (pRest, vRest, sRest)
             else
@@ -351,30 +638,34 @@ where
             else
               .error (deployErr declKey .protocol)
 
-/-- Build ideal-RO verifier construction clauses: same statement/message absorption, with every
-verifier draw answered by `.own (.request serviceKey)` at fresh `idealReqKey` and absorbed into
-the transcript path state. -/
-def buildIdealVerifierClauses (a : Admitted V) (suite : ModuleRef) (stateTy unitTy : V.Ty)
-    (absorbRef : TypedFnRef V a.program.headers.fns [stateTy, bytesTy, .seq unitTy none] [stateTy])
+/-- Build pure collision-free ideal-RO verifier construction clauses over `idealPathTy unitTy`:
+appends encoded messages onto `(metaLog, dataLog)` (when `needAbs = true`) and answers every
+verifier draw via `.own (.request serviceKey)` on `(idealPath, drawLabel)` without touching any
+concrete `SuiteSlot.start` or `SuiteSlot.absorb`. -/
+def buildIdealVerifierClauses (a : Admitted V) (suite : ModuleRef) (unitTy : V.Ty)
+    (hfree : Ty.isLinear V unitTy = false)
     (serviceKey : Key) (prover verifier : Role) (declKey : Key)
-    (events : List (ShapeEvent V)) :
-    Except (List (ProgramRefusal V)) (List (Clause V a.program.headers verifier stateTy)) :=
-  go 0 events
+    (events : List (ShapeEvent V)) (eventsAbs : List (ShapeEvent V × Bool)) :
+    Except (List (ProgramRefusal V)) (List (Clause V a.program.headers verifier (idealPathTy unitTy))) :=
+  go 0 eventsAbs
 where
-  go (idx : Nat) : List (ShapeEvent V) →
-      Except (List (ProgramRefusal V)) (List (Clause V a.program.headers verifier stateTy))
+  go (idx : Nat) : List (ShapeEvent V × Bool) →
+      Except (List (ProgramRefusal V)) (List (Clause V a.program.headers verifier (idealPathTy unitTy)))
     | [] => .ok []
-    | e :: rest => do
+    | (e, needAbs) :: rest => do
         let vRest ← go (idx + 1) rest
         match e.cls with
         | .flow kind giver getters =>
             if giver = prover ∧ verifier ∈ getters then
-              match findSuiteEncode a suite unitTy e.τ with
-              | none => .error (deployErr declKey .callee)
-              | some encRef =>
-                  let cV := verifierAbsorbClause verifier prover e.site kind
-                    (msgLabel e.site) (msgLabel_bytes e.site) encRef absorbRef
-                  .ok (cV :: vRest)
+              if needAbs then
+                match findSuiteEncode a suite unitTy e.τ with
+                | none => .error (deployErr declKey .callee)
+                | some encRef =>
+                    let cV := idealAbsorbClause hfree verifier prover e.site kind
+                      (msgLabel e.site) (msgLabel_bytes e.site) encRef
+                    .ok (cV :: vRest)
+              else
+                .ok vRest
             else if giver ≠ prover ∧ giver ≠ verifier ∧ prover ∉ getters ∧ verifier ∉ getters then
               .ok vRest
             else
@@ -392,9 +683,9 @@ where
                         | some encRef =>
                             let rk := idealReqKey events idx
                             let tk := drawToldKey events idx
-                            let cV := idealDeriveClause verifier prover e.site
+                            let cV := idealDeriveClause hfree verifier prover e.site
                               (.own (.coin law) hearers) [] serviceKey rk tk
-                              (drawLabel e.site) (drawLabel_bytes e.site) encRef absorbRef
+                              (drawLabel e.site) (drawLabel_bytes e.site) encRef
                             .ok (cV :: vRest)
                     | _ :: _ => .error (deployErr declKey .operands)
                   else
@@ -661,40 +952,43 @@ def resolveSessionBytes (enc : VocabEncoder V) (a : Admitted V) (declaration : D
       .ok ⟨schemeIdentity enc a declaration, schemeIdentity_bytes enc a declaration⟩
 
 /-- Build the proof layout layers for prover and verifier (streaming when `recover = []`,
-compact when `recover ≠ []`). -/
+compact when `recover ≠ []`), strictly validating `carry`, `recover`, and straight-line shape. -/
 def buildLayoutLayers (a : Admitted V) (entry : ProtocolHeader V) (layout : Layout)
     (prover verifier : Role) (declKey : Key) (events : List (ShapeEvent V)) :
     Except (List (ProgramRefusal V))
       (Layer V a.program.headers prover entry.ins ×
        Layer V a.program.headers verifier entry.ins) := do
-  let some ⟨unitTy, ⟨hfree⟩⟩ := findLayoutUnit a layout.module
-    | .error (deployErr declKey .linear)
-  if layout.recover.isEmpty then
-    let (pClauses, vClauses) ←
-      buildStreamingLayoutClauses a layout unitTy hfree prover verifier declKey events
-    let layP : Layer V a.program.headers prover entry.ins := {
-      line := .layout
-      state := .seq unitTy none
-      takes := []
-      gives := [.seq unitTy none]
-      clauses := pClauses
-      again := restoreAgain (.seq unitTy none)
-      start := layoutPStart unitTy
-      finish := identityFinish (.seq unitTy none)
-    }
-    let layV : Layer V a.program.headers verifier entry.ins := {
-      line := .layout
-      state := streamStateTy unitTy
-      takes := [.seq unitTy none]
-      gives := []
-      clauses := vClauses
-      again := restoreAgain (streamStateTy unitTy)
-      start := layoutVStart unitTy
-      finish := layoutVFinish unitTy hfree (finishGuardKey events)
-    }
-    .ok (layP, layV)
+  if !checkLayoutSites entry events prover verifier layout then
+    .error (deployErr declKey .protocol)
   else
-    buildCompactLayoutLayers a entry layout unitTy hfree prover verifier declKey events
+    let some ⟨unitTy, ⟨hfree⟩⟩ := findLayoutUnit a layout.module
+      | .error (deployErr declKey .linear)
+    if layout.recover.isEmpty then
+      let (pClauses, vClauses) ←
+        buildStreamingLayoutClauses a layout unitTy hfree prover verifier declKey events
+      let layP : Layer V a.program.headers prover entry.ins := {
+        line := .layout
+        state := .seq unitTy none
+        takes := []
+        gives := [.seq unitTy none]
+        clauses := pClauses
+        again := restoreAgain (.seq unitTy none)
+        start := layoutPStart unitTy
+        finish := identityFinish (.seq unitTy none)
+      }
+      let layV : Layer V a.program.headers verifier entry.ins := {
+        line := .layout
+        state := streamStateTy unitTy
+        takes := [.seq unitTy none]
+        gives := []
+        clauses := vClauses
+        again := restoreAgain (streamStateTy unitTy)
+        start := layoutVStart unitTy
+        finish := layoutVFinish unitTy hfree (finishGuardKey events)
+      }
+      .ok (layP, layV)
+    else
+      buildCompactLayoutLayers a entry layout unitTy hfree prover verifier declKey events
 
 /-- Validate authored-scheme event discipline and build optional `samples` clauses for prover. -/
 def checkAuthoredEvents (a : Admitted V) (prover verifier : Role) (samplesKey : Option Key)
@@ -731,8 +1025,8 @@ def checkAuthoredEvents (a : Admitted V) (prover verifier : Role) (samplesKey : 
           else
             .error (deployErr declKey .protocol)
 
-/-- Official core deployment (`Functions.deploy`): validates `declaration` against `a : Admitted V`
-and generates the checked `Core.Layer` IR stack for every role inside `Deployed V`. -/
+/-- Official core deployment (`Functions.deploy`): validates `declaration` fail-closed against
+`a : Admitted V` and generates the checked `Core.Layer` IR stack for every role inside `Deployed V`. -/
 def deploy (enc : VocabEncoder V) (a : Admitted V) (declaration : Declaration) :
     Except (List (ProgramRefusal V)) (Deployed V) := do
   match hFound : a.program.findProtocol declaration.entry with
@@ -742,7 +1036,9 @@ def deploy (enc : VocabEncoder V) (a : Admitted V) (declaration : Declaration) :
       have hIsSome : (a.program.findProtocol declaration.entry).isSome := by rw [hFound]; rfl
       have hEntryEq : ((a.program.findProtocol declaration.entry).get hIsSome).1 = entry := by
         simp [hFound, entry]
-      if !checkScope entry declaration then
+      if !checkDeclarationSupported entry declaration then
+        .error (deployErr declaration.key .protocol)
+      else if !checkScope entry declaration then
         .error (deployErr declaration.key .attempt)
       else
         match declaration.construction with
@@ -811,6 +1107,7 @@ def deploy (enc : VocabEncoder V) (a : Admitted V) (declaration : Declaration) :
                           | none => .error (deployErr declaration.key .callee)
                           | some ⟨suiteUnitTy, absorbRef⟩ => do
                               let events := entry.shape.events [] id
+                              let eventsAbs := entry.shape.eventsWithAbsorb prover verifier [] id false
                               let ⟨sessBytes, hSessBytes⟩ ←
                                 resolveSessionBytes enc a declaration sessionTag
                               let stmtP ← buildStmtAbsorbItems a suite suiteUnitTy
@@ -819,7 +1116,7 @@ def deploy (enc : VocabEncoder V) (a : Admitted V) (declaration : Declaration) :
                                 verifier prover verifier (.inr rfl) entry.ins declaration.key
                               let (cPClauses, cVClauses, sClauses) ←
                                 buildConstructionClauses a suite stateTy suiteUnitTy absorbRef
-                                  prover verifier declaration.samples declaration.key events
+                                  prover verifier declaration.samples declaration.key events eventsAbs
                               let (layP, layV) ←
                                 buildLayoutLayers a entry layout prover verifier
                                   declaration.key events
@@ -874,10 +1171,10 @@ def deploy (enc : VocabEncoder V) (a : Admitted V) (declaration : Declaration) :
                                   else []
                               }
 
-/-- Ideal random-oracle deployment (`SCHEMES-AND-FIAT-SHAMIR.md` §3.2 & §9.2):
-replaces the verifier's concrete `derive` calls with `.own (.request serviceKey)` on the
-accumulated transcript state (session identity + statement + messages + prior draws), keeping the
-exact same absorption schedule and proof layout layer as `deploy`. -/
+/-- Pure collision-free ideal random-oracle deployment (`SCHEMES-AND-FIAT-SHAMIR.md` §3.2, §5, §9.2):
+maintains an injective `(metaLog, dataLog)` path over `idealPathTy suiteUnitTy` without calling any
+concrete hash/sponge (`SuiteSlot.start`/`SuiteSlot.absorb`), answering every verifier draw via
+`.own (.request serviceKey)` on `(idealPath, drawLabel)`. -/
 def deployIdeal (enc : VocabEncoder V) (serviceKey : Key) (a : Admitted V)
     (declaration : Declaration) : Except (List (ProgramRefusal V)) (Deployed V) := do
   match hFound : a.program.findProtocol declaration.entry with
@@ -887,7 +1184,9 @@ def deployIdeal (enc : VocabEncoder V) (serviceKey : Key) (a : Admitted V)
       have hIsSome : (a.program.findProtocol declaration.entry).isSome := by rw [hFound]; rfl
       have hEntryEq : ((a.program.findProtocol declaration.entry).get hIsSome).1 = entry := by
         simp [hFound, entry]
-      if !checkScope entry declaration then
+      if !checkDeclarationSupported entry declaration then
+        .error (deployErr declaration.key .protocol)
+      else if !checkScope entry declaration then
         .error (deployErr declaration.key .attempt)
       else
         match declaration.construction with
@@ -901,43 +1200,40 @@ def deployIdeal (enc : VocabEncoder V) (serviceKey : Key) (a : Admitted V)
                   match declaration.layout with
                   | none => .error (deployErr declaration.key .callee)
                   | some layout =>
-                      match findSuiteStart a suite with
-                      | none => .error (deployErr declaration.key .callee)
-                      | some ⟨stateTy, startRef⟩ =>
-                          match findSuiteAbsorb a suite stateTy with
-                          | none => .error (deployErr declaration.key .callee)
-                          | some ⟨suiteUnitTy, absorbRef⟩ => do
-                              let events := entry.shape.events [] id
-                              let ⟨sessBytes, hSessBytes⟩ ←
-                                resolveSessionBytes enc a declaration sessionTag
-                              let stmtV ← buildStmtAbsorbItems a suite suiteUnitTy
-                                verifier prover verifier (.inr rfl) entry.ins declaration.key
-                              let idealVClauses ←
-                                buildIdealVerifierClauses a suite stateTy suiteUnitTy absorbRef
-                                  serviceKey prover verifier declaration.key events
-                              let (_, layV) ←
-                                buildLayoutLayers a entry layout prover verifier
-                                  declaration.key events
-                              let idealConV : Layer V a.program.headers verifier entry.ins := {
-                                line := .construction
-                                state := stateTy
-                                takes := []
-                                gives := []
-                                clauses := idealVClauses
-                                again := restoreAgain stateTy
-                                start := constructionStart sessBytes hSessBytes startRef
-                                  absorbRef stmtV
-                                finish := emptyFinish stateTy
-                              }
-                              .ok {
-                                admitted := a
-                                declaration := declaration
-                                found := hIsSome
-                                stack := fun r =>
-                                  if hV : r = verifier then
-                                    hV ▸ hEntryEq ▸ [idealConV, layV]
-                                  else []
-                              }
+                      match findSuiteUnit a suite with
+                      | none => .error (deployErr declaration.key .linear)
+                      | some ⟨suiteUnitTy, ⟨hSuiteFree⟩⟩ => do
+                          let events := entry.shape.events [] id
+                          let eventsAbs := entry.shape.eventsWithAbsorb prover verifier [] id false
+                          let ⟨sessBytes, hSessBytes⟩ ←
+                            resolveSessionBytes enc a declaration sessionTag
+                          let stmtV ← buildStmtAbsorbItems a suite suiteUnitTy
+                            verifier prover verifier (.inr rfl) entry.ins declaration.key
+                          let idealVClauses ←
+                            buildIdealVerifierClauses a suite suiteUnitTy hSuiteFree
+                              serviceKey prover verifier declaration.key events eventsAbs
+                          let (_, layV) ←
+                            buildLayoutLayers a entry layout prover verifier
+                              declaration.key events
+                          let idealConV : Layer V a.program.headers verifier entry.ins := {
+                            line := .construction
+                            state := idealPathTy suiteUnitTy
+                            takes := []
+                            gives := []
+                            clauses := idealVClauses
+                            again := restoreAgain (idealPathTy suiteUnitTy)
+                            start := idealStart hSuiteFree sessBytes hSessBytes stmtV
+                            finish := emptyFinish (idealPathTy suiteUnitTy)
+                          }
+                          .ok {
+                            admitted := a
+                            declaration := declaration
+                            found := hIsSome
+                            stack := fun r =>
+                              if hV : r = verifier then
+                                hV ▸ hEntryEq ▸ [idealConV, layV]
+                              else []
+                          }
         | _ => .error (deployErr declaration.key .protocol)
 
 end

@@ -93,6 +93,10 @@ public import Zkc.Core.Scheme.LayerBuild
 public import Zkc.Core.Scheme.LayerLemmas
 public import Zkc.Core.Scheme.RoleLemmas
 public import Zkc.Core.Scheme.Deploy
+public import Zkc.Core.Scheme.DeployElim
+public import Zkc.Core.Scheme.Safety
+public import Zkc.Core.Scheme.Completeness
+public import Zkc.Core.Scheme.IdealLink
 public import Zkc.Core.Scheme.Roles
 public import Zkc.Core.Scheme.Theorems
 public import Zkc.Core.Run.Run

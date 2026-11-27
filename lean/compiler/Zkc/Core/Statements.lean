@@ -240,12 +240,9 @@ def deployMatches : Prop :=
       Stack.Takes (d.stack prover) = [] ∧ Stack.Gives (d.stack prover) = Stack.Takes (d.stack verifier)
 
 /-- Validity: a deployed role of an admitted program never stops `undefined`: its run, on
-valid inputs, valid values taken and every permitted reply. It is said of a program of which no
-function's summary has a requirement (`Headers.Unconditional`), whose functions are safe on every
-valid input. -/
+valid inputs, valid values taken and every permitted reply. -/
 def deployedSafe : Prop :=
   ∀ named assoc (a : Admitted V), c.admit named assoc = .ok a →
-    a.program.headers.Unconditional →
     ∀ declaration (d : Deployed V), c.deploy a declaration = .ok d →
       ∀ (M : Model V) (r : Role) (ins : HList (RV M r) d.entry.ins)
         (taken : HList M.Val (Stack.Takes (d.stack r))),
@@ -262,7 +259,6 @@ what the laws allow and what this one gives at every occurrence that is not a co
 hears. -/
 def complete : Prop :=
   ∀ named assoc (a : Admitted V), c.admit named assoc = .ok a →
-    a.program.headers.Unconditional →
     ∀ declaration (d : Deployed V), c.deploy a declaration = .ok d →
       declaration.interactive = false →
       declaration.retry = none →
@@ -300,7 +296,6 @@ def complete : Prop :=
 its own private coins, service requests, and local attempt marks. -/
 def deployCoverage : Prop :=
   ∀ named assoc (a : Admitted V), c.admit named assoc = .ok a →
-    a.program.headers.Unconditional →
     ∀ declaration (d : Deployed V), c.deploy a declaration = .ok d →
       declaration.interactive = false → d.Covered
 

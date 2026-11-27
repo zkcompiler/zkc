@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Core.Scheme.Deployed
+public import Zkc.Core.Scheme.DeployElim
 public import Zkc.Core.Meaning.Program
 public import Zkc.Core.Program.Sites
 
@@ -466,41 +467,6 @@ def ClosedRole.denote {fns : List (FnHeader V)} {r : Role}
     (unheldValues M r out.1, out.2)
 
 end
-
-/-! ## Well-nested retry predicate -/
-
-mutual
-  /-- Whether `target` never occurs inside the body of an `.attempt` at `target`.
-  Holds for every standard scheme (including attempts inside loops, choices, and sub-protocols). -/
-  def Shape.noNestedAttempt {V : Vocabulary} (target : Site) (through : List Key) : Shape V → Bool
-    | .nil => true
-    | .event _ _ _ rest => Shape.noNestedAttempt target through rest
-    | .choice _ _ arms rest =>
-        Shapes.noNestedAttempt target through arms && Shape.noNestedAttempt target through rest
-    | .loop _ _ body rest =>
-        Shape.noNestedAttempt target through body && Shape.noNestedAttempt target through rest
-    | .apply key _ _ inner rest =>
-        Shape.noNestedAttempt target (through ++ [key]) inner && Shape.noNestedAttempt target through rest
-    | .block _ _ body rest =>
-        Shape.noNestedAttempt target through body && Shape.noNestedAttempt target through rest
-    | .guard _ _ _ rest => Shape.noNestedAttempt target through rest
-    | .attempt key _ body rest =>
-        (if ⟨through, key⟩ = target then !decide (target ∈ body.attemptSites through) else true) &&
-        Shape.noNestedAttempt target through body &&
-        Shape.noNestedAttempt target through rest
-
-  def Shapes.noNestedAttempt {V : Vocabulary} (target : Site) (through : List Key) : Shapes V → Bool
-    | .nil => true
-    | .cons arm rest =>
-        Shape.noNestedAttempt target through arm && Shapes.noNestedAttempt target through rest
-end
-
-/-- A deployment's declared retry site (if any) does not nest inside itself.
-Trivially `True` whenever `d.retry = none`. -/
-def Deployed.WellNestedRetry {V : Vocabulary} (d : Deployed V) : Prop :=
-  match d.retry with
-  | none => True
-  | some (_, site) => Shape.noNestedAttempt site [] d.entry.shape = true
 
 /-! ## Held-type and context-erasure combinators -/
 
@@ -3747,7 +3713,7 @@ theorem specialize_sound (d : Deployed V) (r : Role)
         | mk b0 s0 =>
             simp only [retryCfg, hR, Option.map_some, Option.some.injEq, Prod.mk.injEq] at hc
             obtain ⟨_, rfl, _⟩ := hc
-            simpa [Deployed.WellNestedRetry, hR] using hRetry
+            exact hRetry b0 s0 hR
   have hBody := specializeProtocolInDefs_sound M (Defs.fnTable M d.admitted.program.defs)
     hStack (specializeStack d.admitted.program.defs (d.stack r)) hSpec
     d.admitted.program.defs id (fun _ _ => rfl) retryCfg hRC d.callee [] id r [] ins st0
@@ -3772,7 +3738,26 @@ theorem specialize_sound_noRetry (d : Deployed V) (r : Role) (hNoRetry : d.retry
     (ins : HList (RV M r) d.entry.ins) (taken : HList M.Val (Stack.Takes (d.stack r))) :
     (specialize d r).denote M (Defs.fnTable M d.admitted.program.defs) ins taken =
       d.run M r ins taken :=
-  specialize_sound M d r (by simp [Deployed.WellNestedRetry, hNoRetry]) ins taken
+  specialize_sound M d r (fun _ _ h => by rw [hNoRetry] at h; cases h) ins taken
+
+/-- **Unconditional handler specialization soundness for every deployed scheme.**
+Because `deploy` rejects nested self-retry in `checkScope`, every deployed scheme satisfies
+`Deployed.WellNestedRetry` automatically. -/
+theorem specialize_deploy_sound (enc : VocabEncoder V) (a : Admitted V) (declaration : Declaration)
+    (d : Deployed V) (hDep : deploy enc a declaration = .ok d) (r : Role)
+    (ins : HList (RV M r) d.entry.ins) (taken : HList M.Val (Stack.Takes (d.stack r))) :
+    (specialize d r).denote M (Defs.fnTable M d.admitted.program.defs) ins taken =
+      d.run M r ins taken :=
+  specialize_sound M d r (deploy_wellNestedRetry enc a declaration d hDep) ins taken
+
+/-- **Unconditional handler specialization soundness for every ideal-RO deployed scheme.** -/
+theorem specialize_deployIdeal_sound (enc : VocabEncoder V) (serviceKey : Key) (a : Admitted V)
+    (declaration : Declaration) (d : Deployed V)
+    (hDep : deployIdeal enc serviceKey a declaration = .ok d) (r : Role)
+    (ins : HList (RV M r) d.entry.ins) (taken : HList M.Val (Stack.Takes (d.stack r))) :
+    (specialize d r).denote M (Defs.fnTable M d.admitted.program.defs) ins taken =
+      d.run M r ins taken :=
+  specialize_sound M d r (deployIdeal_wellNestedRetry enc serviceKey a declaration d hDep) ins taken
 
 end Soundness
 

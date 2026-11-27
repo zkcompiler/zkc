@@ -133,6 +133,44 @@ mutual
 end
 
 mutual
+  /-- Whether `target` never occurs inside the body of an `.attempt` at `target`.
+  Holds for every standard scheme (including attempts inside loops, choices, and sub-protocols). -/
+  def Shape.noNestedAttempt {V : Vocabulary} (target : Site) (through : List Key) : Shape V → Bool
+    | .nil => true
+    | .event _ _ _ rest => Shape.noNestedAttempt target through rest
+    | .choice _ _ arms rest =>
+        Shapes.noNestedAttempt target through arms && Shape.noNestedAttempt target through rest
+    | .loop _ _ body rest =>
+        Shape.noNestedAttempt target through body && Shape.noNestedAttempt target through rest
+    | .apply key _ _ inner rest =>
+        Shape.noNestedAttempt target (through ++ [key]) inner && Shape.noNestedAttempt target through rest
+    | .block _ _ body rest =>
+        Shape.noNestedAttempt target through body && Shape.noNestedAttempt target through rest
+    | .guard _ _ _ rest => Shape.noNestedAttempt target through rest
+    | .attempt key _ body rest =>
+        (if ⟨through, key⟩ = target then !decide (target ∈ body.attemptSites through) else true) &&
+        Shape.noNestedAttempt target through body &&
+        Shape.noNestedAttempt target through rest
+
+  def Shapes.noNestedAttempt {V : Vocabulary} (target : Site) (through : List Key) : Shapes V → Bool
+    | .nil => true
+    | .cons arm rest =>
+        Shape.noNestedAttempt target through arm && Shapes.noNestedAttempt target through rest
+end
+
+/-- Whether a protocol shape is straight-line (contains no `.choice` or `.loop`), so every wire
+site in `events` executes at most once in fixed order and can be pre-parsed by a compact layout. -/
+def Shape.isStraightLine {V : Vocabulary} : Shape V → Bool
+  | .nil => true
+  | .event _ _ _ rest => rest.isStraightLine
+  | .choice _ _ _ _ => false
+  | .loop _ _ _ _ => false
+  | .apply _ _ _ inner rest => inner.isStraightLine && rest.isStraightLine
+  | .block _ _ body rest => body.isStraightLine && rest.isStraightLine
+  | .guard _ _ _ rest => rest.isStraightLine
+  | .attempt _ _ body rest => body.isStraightLine && rest.isStraightLine
+
+mutual
   /-- The keys of the events that a term performs itself, by its operations. -/
   def Term.eventKeys {D : Dialect} (isEvent : ∀ {ins res : List D.Ty}, D.Op ins res → Bool) :
       {Γ : Ctx D.Ty} → {outs : List D.Ty} → Term D Γ outs → List Key
@@ -204,14 +242,20 @@ def Deployed.Covered (d : Deployed V) : Prop :=
         ins.All (RV.Valid M r) → taken.All M.Valid →
         Process.ClosedEffects (d.run M r ins taken)
 
-/-- The Fiat-Shamir suite of a deployment satisfies the coin-support law in model `M`: every
-derived coin emitted by a `SuiteSlot.derive` function on valid inputs lies in the support of the
-drawn coin's law (`Allows M (.coin law)`). Determinism, validity preservation, and non-halting
-already follow from admission (`canStop = false`, `requires = []`). -/
+/-- A deployment's declared retry site (if any) does not nest inside itself.
+Vacuously satisfied whenever `d.retry = none`. -/
+def Deployed.WellNestedRetry (d : Deployed V) : Prop :=
+  ∀ bound site, d.retry = some (bound, site) → Shape.noNestedAttempt site [] d.entry.shape = true
+
+/-- The Fiat-Shamir suite of a deployment satisfies its semantic laws in model `M`:
+1. Every derived coin emitted by a `SuiteSlot.derive` function on valid inputs lies in the support
+   of the drawn coin's law (`Allows M (.coin law)`).
+2. Every `SuiteSlot.encode` function is injective on valid values (collision-free message framing).
+Determinism, validity preservation, and non-halting already follow from admission. -/
 def Deployed.SuiteLawful (M : Model V) (d : Deployed V) : Prop :=
   match d.declaration.construction with
   | .derived suite _ =>
-      ∀ defKey, (SuiteSlot.derive, defKey) ∈ suite.members →
+      (∀ defKey, (SuiteSlot.derive, defKey) ∈ suite.members →
         ∀ (hdr : FnHeader V) (f : Member d.admitted.program.headers.fns hdr),
           d.admitted.program.find defKey = some (.fn f) →
           ∀ (stateTy : V.Ty) (drawIns : List V.Ty) (e : ShapeEvent V)
@@ -229,14 +273,30 @@ def Deployed.SuiteLawful (M : Model V) (d : Deployed V) : Prop :=
               Defs.fnTable M d.admitted.program.defs hdr f
                 (cast (congrArg (HList M.Val) hins.symm) (.cons st (.cons label payload))) =
                 .done (cast (congrArg (HList M.Val) houts.symm) (.cons coin (.cons st' .nil))) →
-              Allows M (.coin law) drawIns payload e.τ coin
+              Allows M (.coin law) drawIns payload e.τ coin) ∧
+      (∀ eKey, (SuiteSlot.encode, eKey) ∈ suite.members →
+        ∀ (hdr : FnHeader V) (f : Member d.admitted.program.headers.fns hdr),
+          d.admitted.program.find eKey = some (.fn f) →
+          ∀ (unitTy τ : V.Ty) (hIn : hdr.ins = [τ]) (hOut : hdr.outs = [.seq unitTy none])
+            (v₁ v₂ : M.Val τ) (u : List (M.Val unitTy)),
+            M.Valid τ v₁ → M.Valid τ v₂ →
+            Defs.fnTable M d.admitted.program.defs hdr f
+              (cast (congrArg (HList M.Val) hIn.symm) (.cons v₁ .nil)) =
+              .done (cast (congrArg (HList M.Val) hOut.symm) (.cons u .nil)) →
+            Defs.fnTable M d.admitted.program.defs hdr f
+              (cast (congrArg (HList M.Val) hIn.symm) (.cons v₂ .nil)) =
+              .done (cast (congrArg (HList M.Val) hOut.symm) (.cons u .nil)) →
+            v₁ = v₂)
   | _ => True
 
-/-- The proof layout of a deployment satisfies its canonical codec round-trip and equality laws
-in model `M`:
-1. Every `(LayoutSlot.write, LayoutSlot.read)` pair for `(unitTy, τ)` round-trips on any valid
-   value `v` embedded between valid unit sequences `pre` and `post`.
-2. Every `LayoutSlot.equal` function is reflexive on valid values. -/
+/-- The proof layout of a deployment satisfies its canonical codec laws (round-trip, non-malleable
+canonical decoding, and exact equality) in model `M`:
+1. `reads`: every `(LayoutSlot.write, LayoutSlot.read)` pair round-trips on any valid value `v`
+   embedded between valid unit sequences `pre` and `post`.
+2. `written`: every successful `LayoutSlot.read (buf, off) = .done (v, nextOff)` on valid `buf`
+   with `off ≤ buf.length` returns a valid value `v` and cursor `off ≤ nextOff ≤ buf.length` whose
+   consumed slice equals `LayoutSlot.write v` (canonicality / non-malleability).
+3. `equal_iff`: every `LayoutSlot.equal` decides equality on valid values (`true ↔ v₁ = v₂`). -/
 def Deployed.LayoutLawful (M : Model V) (d : Deployed V) : Prop :=
   match d.declaration.layout with
   | none => True
@@ -264,15 +324,40 @@ def Deployed.LayoutLawful (M : Model V) (d : Deployed V) : Prop :=
                 (.cons (pre ++ chunk ++ post) (.cons pre.length .nil))) =
               .done (cast (congrArg (HList M.Val) hrOut.symm)
                 (.cons v (.cons (pre.length + chunk.length) .nil)))) ∧
+      (∀ wKey rKey,
+        (LayoutSlot.write, wKey) ∈ layout.module.members →
+        (LayoutSlot.read, rKey) ∈ layout.module.members →
+        ∀ (wHdr rHdr : FnHeader V)
+          (fW : Member d.admitted.program.headers.fns wHdr)
+          (fR : Member d.admitted.program.headers.fns rHdr),
+          d.admitted.program.find wKey = some (.fn fW) →
+          d.admitted.program.find rKey = some (.fn fR) →
+          ∀ (unitTy τ : V.Ty)
+            (hwIn : wHdr.ins = [τ]) (hwOut : wHdr.outs = [.seq unitTy none])
+            (hrIn : rHdr.ins = [.seq unitTy none, .nat]) (hrOut : rHdr.outs = [τ, .nat])
+            (buf : List (M.Val unitTy)) (off : Nat) (v : M.Val τ) (nextOff : Nat),
+            (∀ u, u ∈ buf → M.Valid unitTy u) →
+            off ≤ buf.length →
+            Defs.fnTable M d.admitted.program.defs rHdr fR
+              (cast (congrArg (HList M.Val) hrIn.symm) (.cons buf (.cons off .nil))) =
+              .done (cast (congrArg (HList M.Val) hrOut.symm) (.cons v (.cons nextOff .nil))) →
+            M.Valid τ v ∧ off ≤ nextOff ∧ nextOff ≤ buf.length ∧
+            ∃ chunk,
+              Defs.fnTable M d.admitted.program.defs wHdr fW
+                (cast (congrArg (HList M.Val) hwIn.symm) (.cons v .nil)) =
+                .done (cast (congrArg (HList M.Val) hwOut.symm) (.cons chunk .nil)) ∧
+              buf = buf.take off ++ chunk ++ buf.drop nextOff) ∧
       (∀ eqKey,
         (LayoutSlot.equal, eqKey) ∈ layout.module.members →
         ∀ (eqHdr : FnHeader V) (fEq : Member d.admitted.program.headers.fns eqHdr),
           d.admitted.program.find eqKey = some (.fn fEq) →
-          ∀ (τ : V.Ty) (hIn : eqHdr.ins = [τ, τ]) (hOut : eqHdr.outs = [.bool]) (v : M.Val τ),
-            M.Valid τ v →
+          ∀ (τ : V.Ty) (hIn : eqHdr.ins = [τ, τ]) (hOut : eqHdr.outs = [.bool])
+            (v₁ v₂ : M.Val τ) (b : Bool),
+            M.Valid τ v₁ → M.Valid τ v₂ →
             Defs.fnTable M d.admitted.program.defs eqHdr fEq
-              (cast (congrArg (HList M.Val) hIn.symm) (.cons v (.cons v .nil))) =
-              .done (cast (congrArg (HList M.Val) hOut.symm) (.cons true .nil)))
+              (cast (congrArg (HList M.Val) hIn.symm) (.cons v₁ (.cons v₂ .nil))) =
+              .done (cast (congrArg (HList M.Val) hOut.symm) (.cons b .nil)) →
+            (b = true ↔ v₁ = v₂))
 
 /-- Answer every `.own (.request service)` effect of a role process using `oracle`, leaving all
 other effects untouched. Used to evaluate a deployed ideal verifier against an abstract random

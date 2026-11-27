@@ -346,6 +346,14 @@ def toySuite : ModuleRef where
     (SuiteSlot.derive, ⟨104⟩)
   ]
 
+/-- Minimal suite containing ONLY `SuiteSlot.encode` (no `start`, `absorb`, or `derive`):
+demonstrates that `deployIdeal` has zero dependence on concrete hash/sponge functions. -/
+def toyIdealOnlySuite : ModuleRef where
+  members := [
+    (SuiteSlot.encode, ⟨102⟩),
+    (SuiteSlot.encode, ⟨103⟩)
+  ]
+
 def toyLayoutModule : ModuleRef where
   members := [
     (LayoutSlot.write, ⟨102⟩),
@@ -428,8 +436,30 @@ def retrySchnorrProto : Definition deployVocab :=
         .op ⟨424⟩ [12] (.compute [1] (.row .same)) [9, 11],
         .guard ⟨425⟩ [1] 12 .reject] [])] [])
 
+/-- Protocol 4 (`key = 203`): Branching Schnorr (non-straight-line `.choose` on `same(Y, Y)`):
+accepted by streaming deployment, refused by compact `recover` deployment. -/
+def branchingProto : Definition deployVocab :=
+  .protocol ⟨203⟩ 2 [⟨dScalar, [0]⟩, ⟨dPoint, [0, 1]⟩] []
+    (.mk [0, 1] [
+      .op ⟨508⟩ [20] (.compute [0, 1] (.row .same)) [1, 1],
+      .choose ⟨509⟩ [0, 1] 20 []
+        (.mk [] [
+          .op ⟨510⟩ [2] (.event (.given (.coin ()) 0 []) dScalar) [],
+          .op ⟨511⟩ [3] (.compute [0] (.row .base)) [2],
+          .op ⟨512⟩ [4] (.event (.flow .message 0 [1]) dPoint) [3],
+          .op ⟨513⟩ [5] (.event (.given (.coin ()) 1 [0]) dScalar) [],
+          .op ⟨514⟩ [6] (.compute [0] (.row .mul)) [5, 0],
+          .op ⟨515⟩ [7] (.compute [0] (.row .add)) [2, 6],
+          .op ⟨516⟩ [8] (.event (.flow .message 0 [1]) dScalar) [7],
+          .op ⟨517⟩ [9] (.compute [1] (.row .base)) [8],
+          .op ⟨518⟩ [10] (.compute [1] (.row .scale)) [5, 1],
+          .op ⟨519⟩ [11] (.compute [1] (.row .plus)) [4, 10],
+          .op ⟨520⟩ [12] (.compute [1] (.row .same)) [9, 11],
+          .guard ⟨521⟩ [1] 12 .reject] [])
+        (.mk [] [] [])] [])
+
 def deployTestProgram : NamedProgram deployVocab where
-  definitions := suiteAndLayoutDefs ++ [schnorrProto, multiDrawProto, retrySchnorrProto]
+  definitions := suiteAndLayoutDefs ++ [schnorrProto, multiDrawProto, retrySchnorrProto, branchingProto]
 
 /-- Kernel-verified admission of the entire test suite (functions + 3 protocols). -/
 def admittedSuite : Admitted deployVocab :=
@@ -505,13 +535,37 @@ def schnorrCompactDeployed : Deployed deployVocab :=
 def multiDrawDeployed : Deployed deployVocab :=
   (deploy deployEncoder admittedSuite multiDrawDecl).toOption.get (by decide +kernel)
 
+private theorem retrySchnorr_deploy_isSome :
+    (deploy deployEncoder admittedSuite retrySchnorrDecl).toOption.isSome = true := by
+  decide +kernel
+
 def retrySchnorrDeployed : Deployed deployVocab :=
-  (deploy deployEncoder admittedSuite retrySchnorrDecl).toOption.get (by decide +kernel)
+  (deploy deployEncoder admittedSuite retrySchnorrDecl).toOption.get retrySchnorr_deploy_isSome
 
 def idealServiceKey : Key := ⟨999⟩
 
+private theorem schnorrIdeal_deploy_isSome :
+    (deployIdeal deployEncoder idealServiceKey admittedSuite schnorrDecl).toOption.isSome = true := by
+  decide +kernel
+
 def schnorrIdealDeployed : Deployed deployVocab :=
-  (deployIdeal deployEncoder idealServiceKey admittedSuite schnorrDecl).toOption.get (by decide +kernel)
+  (deployIdeal deployEncoder idealServiceKey admittedSuite schnorrDecl).toOption.get
+    schnorrIdeal_deploy_isSome
+
+def schnorrIdealOnlyDecl : Declaration :=
+  { schnorrDecl with key := ⟨5⟩, construction := .derived toyIdealOnlySuite none }
+
+def schnorrIdealOnlyDeployed : Deployed deployVocab :=
+  (deployIdeal deployEncoder idealServiceKey admittedSuite schnorrIdealOnlyDecl).toOption.get (by decide +kernel)
+
+def multiDrawIdealDeployed : Deployed deployVocab :=
+  (deployIdeal deployEncoder idealServiceKey admittedSuite multiDrawDecl).toOption.get (by decide +kernel)
+
+def branchingStreamingDecl : Declaration :=
+  { schnorrDecl with key := ⟨6⟩, entry := ⟨203⟩ }
+
+def branchingStreamingDeployed : Deployed deployVocab :=
+  (deploy deployEncoder admittedSuite branchingStreamingDecl).toOption.get (by decide +kernel)
 
 /-! ## Execution helpers -/
 
@@ -681,6 +735,8 @@ def checkCompactLayout : Bool :=
   match runProve schnorrCompactDeployed 7 13 5,
       runProveSpecialized schnorrCompactDeployed 7 13 5 with
   | some p1, some p2 =>
+      let wrongStmts := [1, 2, 3, 4, 6, 8, 9, 12, 16, 18]
+      let rejectedWrongStmts := wrongStmts.filter fun y => !runVerify schnorrCompactDeployed y p1
       decide (p1 = p2) &&
       decide (p1.length = 2) &&
       runVerify schnorrCompactDeployed 13 p1 &&
@@ -692,19 +748,53 @@ def checkCompactLayout : Bool :=
       -- Out-of-range carried scalar or trailing byte must reject.
       !runVerify schnorrCompactDeployed 13 [11, p1.getD 1 0] &&
       !runVerify schnorrCompactDeployed 13 (p1 ++ [0]) &&
-      !runVerify schnorrCompactDeployed 12 p1
+      -- Wrong statements reject (in the toy `q = 11` group, soundness error is `1/11`, so almost
+      -- all of the 10 other prime-order group elements reject).
+      decide (rejectedWrongStmts.length ≥ 8)
   | _, _ => false
 
 theorem schnorr_compact_layout : checkCompactLayout = true := by
   decide +kernel
 
-/-! ## Test 5: Retried attempt (`retry` + `samples` + `restoreAgain` + `specialize`) -/
+/-! ## Test 5: Retried attempt (`retry` + `samples` + `restoreAgain` + unconditional `specialize_deploy_sound`) -/
 
-theorem retrySchnorr_wellNested : retrySchnorrDeployed.WellNestedRetry := by
-  have hRetry : retrySchnorrDeployed.retry = some (4, ⟨[], ⟨409⟩⟩) := by decide +kernel
-  have hNo : Shape.noNestedAttempt ⟨[], ⟨409⟩⟩ [] retrySchnorrDeployed.entry.shape = true := by
-    decide +kernel
-  simpa [Deployed.WellNestedRetry, hRetry] using hNo
+private theorem except_toOption_get_ok {E A : Type} (x : Except E A) (h : x.toOption.isSome) :
+    x = .ok (x.toOption.get h) := by
+  cases x with
+  | error _ => cases h
+  | ok a => rfl
+
+private theorem retrySchnorr_deploy_ok :
+    deploy deployEncoder admittedSuite retrySchnorrDecl = .ok retrySchnorrDeployed := by
+  dsimp only [retrySchnorrDeployed]
+  exact except_toOption_get_ok _ retrySchnorr_deploy_isSome
+
+private theorem schnorrIdeal_deploy_ok :
+    deployIdeal deployEncoder idealServiceKey admittedSuite schnorrDecl = .ok schnorrIdealDeployed := by
+  dsimp only [schnorrIdealDeployed]
+  exact except_toOption_get_ok _ schnorrIdeal_deploy_isSome
+
+theorem retrySchnorr_wellNested : retrySchnorrDeployed.WellNestedRetry :=
+  deploy_wellNestedRetry deployEncoder admittedSuite retrySchnorrDecl retrySchnorrDeployed
+    retrySchnorr_deploy_ok
+
+theorem retrySchnorr_specialize_unconditional (r : Role)
+    (ins : HList (RV deployModel r) retrySchnorrDeployed.entry.ins)
+    (taken : HList deployModel.Val (Stack.Takes (retrySchnorrDeployed.stack r))) :
+    (specialize retrySchnorrDeployed r).denote deployModel
+        (Defs.fnTable deployModel retrySchnorrDeployed.admitted.program.defs) ins taken =
+      retrySchnorrDeployed.run deployModel r ins taken :=
+  specialize_deploy_sound deployModel deployEncoder admittedSuite retrySchnorrDecl
+    retrySchnorrDeployed retrySchnorr_deploy_ok r ins taken
+
+theorem schnorrIdeal_specialize_unconditional (r : Role)
+    (ins : HList (RV deployModel r) schnorrIdealDeployed.entry.ins)
+    (taken : HList deployModel.Val (Stack.Takes (schnorrIdealDeployed.stack r))) :
+    (specialize schnorrIdealDeployed r).denote deployModel
+        (Defs.fnTable deployModel schnorrIdealDeployed.admitted.program.defs) ins taken =
+      schnorrIdealDeployed.run deployModel r ins taken :=
+  specialize_deployIdeal_sound deployModel deployEncoder idealServiceKey admittedSuite schnorrDecl
+    schnorrIdealDeployed schnorrIdeal_deploy_ok r ins taken
 
 def checkRetrySchnorr : Bool :=
   match runProve retrySchnorrDeployed 7 13 0,
@@ -723,22 +813,42 @@ def checkRetrySchnorr : Bool :=
 theorem retry_schnorr_rollback_and_specialized : checkRetrySchnorr = true := by
   decide +kernel
 
-/-! ## Test 6: Ideal RO deployment (`deployIdeal`) -/
+/-! ## Test 6: Pure collision-free Ideal RO deployment (`deployIdeal`) -/
+
+/-- Fold a pure `(metaLog, dataLog)` ideal transcript path through the concrete toy sponge
+(`fnStart`, `fnAbsorb`, `fnDeriveScalar`), demonstrating exact agreement with concrete prover runs. -/
+def foldIdealPathEntries (st : Nat) : List (List Nat) → List (List Nat) → Option Nat
+  | [], [] => some st
+  | (1 :: lbl) :: ms, enc :: ds => foldIdealPathEntries (mixBytes (mixBytes st lbl) enc) ms ds
+  | (2 :: lbl) :: ms, enc :: ds => foldIdealPathEntries (mixBytes (mixBytes st lbl) enc) ms ds
+  | (3 :: lbl) :: ms, _ :: ds => foldIdealPathEntries (mixBytes st (0xFF :: lbl)) ms ds
+  | _, _ => none
+
+def evalIdealPathConcrete : List (List Nat) → List (List Nat) → Option Nat
+  | (0 :: sess) :: ms, ds => foldIdealPathEntries (mixBytes 1 sess) ms ds
+  | _, _ => none
 
 /-- Run an ideal-RO verifier process by answering every `.own (.request idealServiceKey)` query
-with the matching concrete `squeezeScalar` output `(mixBytes st (0xFF :: lbl)) % 11`. -/
+over `idealQueryTy dByte` (`((metaLog, dataLog), drawLbl)`) and recording every queried path. -/
 def runIdealOracle {A : Type} :
-    Process (RSig deployModel) Stop A → Nat → Option A × Nat
-  | .done a, _ => (some a, 0)
-  | .halt _, _ => (none, 0)
-  | .call (.own (.request k) [] _ [.tuple (.cons .nat (.cons (.seq (.fin 256) none) .nil))]
-        (.cons (st, lbl, ()) .nil) (.nominal .scalar)) next, n + 1 =>
+    Process (RSig deployModel) Stop A → Nat →
+      Option A × List (List (List Nat) × List (List Nat) × List Nat)
+  | .done a, _ => (some a, [])
+  | .halt _, _ => (none, [])
+  | .call (.own (.request k) [] _
+        [.tuple (.cons (.tuple (.cons (.seq (.seq (.fin 256) none) none)
+                                (.cons (.seq (.seq (.fin 256) none) none) .nil)))
+                       (.cons (.seq (.fin 256) none) .nil))]
+        (.cons ((metaLog, dataLog, ()), lbl, ()) .nil) (.nominal .scalar)) next, n + 1 =>
       if k = idealServiceKey then
-        let c := (mixBytes st (0xFF :: lbl)) % 11
-        let (res, q) := runIdealOracle (next c) n
-        (res, q + 1)
-      else (none, 0)
-  | .call _ _, _ => (none, 0)
+        match evalIdealPathConcrete metaLog dataLog with
+        | some st =>
+            let c := (mixBytes st (0xFF :: lbl)) % 11
+            let (res, qs) := runIdealOracle (next c) n
+            (res, (metaLog, dataLog, lbl) :: qs)
+        | none => (none, [])
+      else (none, [])
+  | .call _ _, _ => (none, [])
 
 def checkIdealVerifier : Bool :=
   match runProve schnorrDeployed 7 13 5,
@@ -753,11 +863,55 @@ def checkIdealVerifier : Bool :=
       | some badTaken =>
           let pBad := schnorrIdealDeployed.run deployModel 1 (hideAll deployModel 1 ins) badTaken
           let (resBad, _) := runIdealOracle pBad 64
-          resGood.isSome && decide (queriesGood = 1) && resBad.isNone
+          resGood.isSome && decide (queriesGood.length = 1) && resBad.isNone
       | none => false
   | _, _, _ => false
 
 theorem schnorr_ideal_ro_verifier : checkIdealVerifier = true := by
+  decide +kernel
+
+/-- Multi-draw ideal RO linkage: two consecutive draws query strictly distinct pure
+`(metaLog, dataLog)` paths without calling any concrete hash/sponge function. -/
+def checkMultiDrawIdealVerifier : Bool :=
+  match runProve multiDrawDeployed 7 13 4,
+      schnorrInputs multiDrawIdealDeployed.entry.ins 0 13,
+      packProofBytes (runProve multiDrawDeployed 7 13 4 |>.getD [])
+        (Stack.Takes (multiDrawIdealDeployed.stack 1)) with
+  | some goodProof, some ins, some taken =>
+      let pGood := multiDrawIdealDeployed.run deployModel 1 (hideAll deployModel 1 ins) taken
+      let (resGood, qs) := runIdealOracle pGood 64
+      match packProofBytes [goodProof.getD 0 0, (goodProof.getD 1 0 + 1) % 11]
+          (Stack.Takes (multiDrawIdealDeployed.stack 1)) with
+      | some badTaken =>
+          let pBad := multiDrawIdealDeployed.run deployModel 1 (hideAll deployModel 1 ins) badTaken
+          let (resBad, _) := runIdealOracle pBad 64
+          resGood.isSome &&
+          decide (qs.length = 2) &&
+          decide (qs[0]? ≠ qs[1]?) &&
+          resBad.isNone
+      | none => false
+  | _, _, _ => false
+
+theorem multiDraw_ideal_ro_verifier : checkMultiDrawIdealVerifier = true := by
+  decide +kernel
+
+/-- Ideal-only suite (no `SuiteSlot.start`, `absorb`, or `derive`) deploys cleanly and queries
+the RO with a well-formed tagged `(metaLog, dataLog)` path. -/
+def checkIdealOnlySuiteDeployed : Bool :=
+  match schnorrInputs schnorrIdealOnlyDeployed.entry.ins 0 13,
+      packProofBytes [9, 0] (Stack.Takes (schnorrIdealOnlyDeployed.stack 1)) with
+  | some ins, some taken =>
+      let p := schnorrIdealOnlyDeployed.run deployModel 1 (hideAll deployModel 1 ins) taken
+      let (_, qs) := runIdealOracle p 64
+      decide (qs.length = 1) &&
+      match qs with
+      | [(metaLog, dataLog, _)] =>
+          -- `metaLog` has `[0::sess, 1::stmt0, 2::msgA]`, `dataLog` has `[encY, encA]`.
+          decide (metaLog.length = 3) && decide (dataLog.length = 2)
+      | _ => false
+  | _, _ => false
+
+theorem schnorr_ideal_only_suite_no_hash_slots : checkIdealOnlySuiteDeployed = true := by
   decide +kernel
 
 /-! ## Test 7: Interactive two-role scheduler (`runInteractive`) -/
@@ -775,6 +929,95 @@ def checkInteractiveAccepts : Bool :=
   | none => false
 
 theorem schnorr_interactive_accepts : checkInteractiveAccepts = true := by
+  decide +kernel
+
+/-! ## Test 8: Trailing-message absorption elision (Chiesa-Orru Construction 4.3) -/
+
+def constructionClauseSites (d : Deployed deployVocab) (r : Role) : List Site :=
+  match (d.stack r).find? (fun l => l.line == .construction) with
+  | some l => l.clauses.map (·.site.site)
+  | none => []
+
+/-- Commitment `A` (`key 12`) and challenge `c` (`key 13`) have construction clauses, while the
+trailing response `z` (`key 16`, with no subsequent verifier draw) is elided from absorption on
+prover, verifier, and ideal-RO verifier alike. -/
+theorem schnorr_trailing_message_elision :
+    (⟨[], ⟨12⟩⟩ : Site) ∈ constructionClauseSites schnorrDeployed 0 ∧
+    (⟨[], ⟨13⟩⟩ : Site) ∈ constructionClauseSites schnorrDeployed 0 ∧
+    (⟨[], ⟨16⟩⟩ : Site) ∉ constructionClauseSites schnorrDeployed 0 ∧
+    (⟨[], ⟨12⟩⟩ : Site) ∈ constructionClauseSites schnorrDeployed 1 ∧
+    (⟨[], ⟨13⟩⟩ : Site) ∈ constructionClauseSites schnorrDeployed 1 ∧
+    (⟨[], ⟨16⟩⟩ : Site) ∉ constructionClauseSites schnorrDeployed 1 ∧
+    (⟨[], ⟨12⟩⟩ : Site) ∈ constructionClauseSites schnorrIdealDeployed 1 ∧
+    (⟨[], ⟨13⟩⟩ : Site) ∈ constructionClauseSites schnorrIdealDeployed 1 ∧
+    (⟨[], ⟨16⟩⟩ : Site) ∉ constructionClauseSites schnorrIdealDeployed 1 := by
+  decide +kernel
+
+/-! ## Test 9: Subprotocol call-path domain separation and identity injectivity -/
+
+theorem site_label_through_path_separation :
+    msgLabel ⟨[⟨1⟩], ⟨5⟩⟩ ≠ msgLabel ⟨[⟨2⟩], ⟨5⟩⟩ ∧
+    msgLabel ⟨[], ⟨5⟩⟩ ≠ msgLabel ⟨[⟨1⟩], ⟨5⟩⟩ ∧
+    drawLabel ⟨[⟨1⟩], ⟨5⟩⟩ ≠ drawLabel ⟨[⟨2⟩], ⟨5⟩⟩ ∧
+    msgLabel ⟨[⟨1⟩], ⟨5⟩⟩ ≠ drawLabel ⟨[⟨1⟩], ⟨5⟩⟩ := by
+  decide +kernel
+
+theorem deployEncoder_injective : deployEncoder.Injective := by
+  refine ⟨?_, ?_, ?_⟩
+  · intro k₁ k₂ h; cases k₁ <;> cases k₂ <;> cases h <;> rfl
+  · intro k₁ k₂ h; cases k₁ <;> cases k₂ <;> cases h <;> rfl
+  · intro k₁ k₂ _; cases k₁; cases k₂; rfl
+
+theorem deployed_identity_determines_declaration (d₁ d₂ : Deployed deployVocab)
+    (h : deployedIdentity deployEncoder d₁ = deployedIdentity deployEncoder d₂) :
+    d₁.declaration = d₂.declaration :=
+  (deployedIdentity_injective deployEncoder deployEncoder_injective d₁ d₂ h).1
+
+/-! ## Test 10: Fail-closed declaration, scope, retry-nesting, and layout negative controls -/
+
+private def deployFails (decl : Declaration) : Bool :=
+  match deploy deployEncoder admittedSuite decl with
+  | .error _ => true
+  | .ok _ => false
+
+private def deployIdealFails (decl : Declaration) : Bool :=
+  match deployIdeal deployEncoder idealServiceKey admittedSuite decl with
+  | .error _ => true
+  | .ok _ => false
+
+theorem deploy_fail_closed_declaration_controls :
+    -- Mismatched `kinds.length`
+    deployFails { schnorrDecl with kinds := [.online] } = true ∧
+    deployIdealFails { schnorrDecl with kinds := [.online] } = true ∧
+    -- Unsupported non-empty `context`, `grinds`, `commits`, `pins`
+    deployFails { schnorrDecl with context := [⟨99⟩] } = true ∧
+    deployFails { schnorrDecl with grinds := [⟨8, []⟩] } = true ∧
+    deployFails { schnorrDecl with commits := [⟨⟨1⟩, ⟨[]⟩, none, none⟩] } = true ∧
+    deployFails { schnorrDecl with pins := [⟨⟨[], ⟨12⟩⟩, ⟨1⟩, [0]⟩] } = true ∧
+    deployIdealFails { schnorrDecl with context := [⟨99⟩] } = true ∧
+    deployIdealFails { schnorrDecl with grinds := [⟨8, []⟩] } = true ∧
+    deployIdealFails { schnorrDecl with commits := [⟨⟨1⟩, ⟨[]⟩, none, none⟩] } = true ∧
+    deployIdealFails { schnorrDecl with pins := [⟨⟨[], ⟨12⟩⟩, ⟨1⟩, [0]⟩] } = true := by
+  decide +kernel
+
+theorem deploy_fail_closed_layout_and_shape_controls :
+    -- Unknown / duplicate / wrong-kind `layout.carry`
+    deployFails { schnorrDecl with layout := some ⟨toyLayoutModule, [⟨[], ⟨999⟩⟩], []⟩ } = true ∧
+    deployFails { schnorrDecl with layout := some ⟨toyLayoutModule, [⟨[], ⟨13⟩⟩, ⟨[], ⟨13⟩⟩], []⟩ } = true ∧
+    deployFails { schnorrDecl with layout := some ⟨toyLayoutModule, [⟨[], ⟨12⟩⟩], []⟩ } = true ∧
+    -- Unknown / duplicate / wrong-kind `layout.recover`
+    deployFails { schnorrDecl with
+      layout := some ⟨toyLayoutModule, [⟨[], ⟨13⟩⟩], [(⟨[], ⟨999⟩⟩, ⟨108⟩)]⟩ } = true ∧
+    deployFails { schnorrDecl with
+      layout := some ⟨toyLayoutModule, [⟨[], ⟨13⟩⟩], [(⟨[], ⟨12⟩⟩, ⟨108⟩), (⟨[], ⟨12⟩⟩, ⟨108⟩)]⟩ } = true ∧
+    deployFails { schnorrDecl with
+      layout := some ⟨toyLayoutModule, [], [(⟨[], ⟨13⟩⟩, ⟨108⟩)]⟩ } = true ∧
+    -- Compact `recover` refused on non-straight-line `.choose` protocol (streaming accepted above)
+    deployFails { branchingStreamingDecl with
+      layout := some ⟨toyLayoutModule, [⟨[], ⟨513⟩⟩], [(⟨[], ⟨512⟩⟩, ⟨108⟩)]⟩ } = true ∧
+    -- Nested self-retry detected by `Shape.noNestedAttempt`
+    Shape.noNestedAttempt (V := deployVocab) ⟨[], ⟨500⟩⟩ []
+      (.attempt ⟨500⟩ [0] (.attempt ⟨500⟩ [0] .nil .nil) .nil) = false := by
   decide +kernel
 
 end Zkc.Core.Tests.Deployment

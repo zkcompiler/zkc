@@ -1,0 +1,3538 @@
+module
+
+public import Zkc.Core.Scheme.DeployElim
+
+@[expose] public section
+
+/-!
+Validity safety (`deploy_safe`, `deployIdeal_safe`) and effect coverage (`deploy_coverage`,
+`deployIdeal_verifier_covered`) for deployed schemes.
+-/
+
+namespace Zkc.Core
+
+open LayerBuild
+
+/-! ## Shared clause-matching and occurrence helpers -/
+
+section MatchHelpers
+
+variable {V : Vocabulary} (M : Model V)
+
+/-- Whether a clause `c` matches effect `op`. -/
+def ClauseMatches {hs : Headers V} {r : Role} {state : V.Ty}
+    (c : Clause V hs r state) (op : ROp M) : Prop :=
+  c.site.site = (ROp.occurrence M op).site ∧ some c.site.part = ROp.part M op ∧
+    c.site.takes = ROp.takes M op ∧ c.site.gives = ROp.gives M op
+
+theorem site_from_match {occ : Occurrence} {s : Site} (h : s = occ.site) :
+    (⟨occ.path, s.key⟩ : Occurrence).site = s := by
+  have h1 : s.through = Frame.applications occ.path := congrArg Site.through h
+  cases s with
+  | mk through key =>
+      dsimp only [Occurrence.site] at h1 ⊢
+      rw [← h1]
+
+theorem site_told_from_match {occ : Occurrence} {s : Site} {k : Key} (h : s = occ.site) :
+    (⟨occ.path, k⟩ : Occurrence).site = ⟨s.through, k⟩ := by
+  have h1 : s.through = Frame.applications occ.path := congrArg Site.through h
+  dsimp only [Occurrence.site]
+  rw [← h1]
+
+end MatchHelpers
+
+/-! ## Section 1: Validity safety (`deploy_safe`, `deployIdeal_safe`) -/
+
+section ValiditySafety
+
+variable {V : Vocabulary} (M : Model V)
+
+/-- A single clause preserves value validity, emits valid outgoing payloads, and never halts
+`.undefined` against any `ValidReply M`. -/
+private def ClauseValidSafe {hs : Headers V} (fnTable : FnTable M hs.fns)
+    (rTable : RTable M hs.protocols) {r : Role} {state : V.Ty}
+    (c : Clause V hs r state) : Prop :=
+  ∀ (path : List Frame) (args : HList M.Val c.site.takes) (s : M.Val state),
+    args.All M.Valid → M.Valid state s →
+    (c.code.denote (roleSem M r fnTable rTable) path
+      (Env.positional (aloneIn M r (args.append (.cons s .nil))))).SafeWith M
+      (ValidReply M) (ROp.ValidPayload M)
+      (fun out => (aloneOut M r out).All M.Valid)
+      (· ≠ .undefined)
+
+private theorem rop_payload_valid (op : ROp M) (h : ROp.ValidPayload M op) :
+    (ROp.payload M op).All M.Valid := by
+  cases op with
+  | give _ _ _ _ _ => exact ⟨h, trivial⟩
+  | get => trivial
+  | own => exact h
+  | hear => trivial
+  | «begin» => trivial
+  | settle => trivial
+
+private theorem rop_reply_valid (op : ROp M) (vals : HList M.Val (ROp.gives M op))
+    (h : vals.All M.Valid) :
+    ValidReply M op (ROp.reply M op vals) := by
+  cases op with
+  | give => trivial
+  | get => cases vals with | cons v vn => cases vn; exact h.1
+  | own => cases vals with | cons v vn => cases vn; exact h.1
+  | hear => cases vals with | cons v vn => cases vn; exact h.1
+  | «begin» => trivial
+  | settle => trivial
+
+private theorem clause_answer_validSafe {hs : Headers V} (fnTable : FnTable M hs.fns)
+    (rTable : RTable M hs.protocols) {r : Role} {state : V.Ty} :
+    ∀ (cs : List (Clause V hs r state)),
+      (∀ c ∈ cs, ClauseValidSafe M fnTable rTable c) →
+      ∀ (op : ROp M) (s : M.Val state),
+        ROp.ValidPayload M op → M.Valid state s →
+        (Clause.answer M fnTable rTable cs op s).SafeWith M (ValidReply M) (ROp.ValidPayload M)
+          (fun out => ValidReply M op out.1 ∧ M.Valid state out.2)
+          (fun stop => stop.1 ≠ .undefined ∧ M.Valid state stop.2)
+  | [], _, op, s, hop, hs => ⟨hop, fun _ hr => ⟨hr, hs⟩⟩
+  | c :: cs, hcs, op, s, hop, hs => by
+      unfold Clause.answer
+      split
+      · rename_i hMatch
+        rw [Process.safeWith_map, Process.safeWith_mapHalt]
+        have hArgsV : (cast (congrArg (HList M.Val) hMatch.2.2.1.symm) (ROp.payload M op)).All M.Valid :=
+          hlist_all_cast hMatch.2.2.1.symm (rop_payload_valid M op hop)
+        have hCode := hcs c List.mem_cons_self (ROp.occurrence M op).path _ s hArgsV hs
+        refine Process.safeWith_mono M (fun _ _ h => h) (fun _ h => h)
+          (fun out hout => ?_) (fun why hwhy => ⟨hwhy, hs⟩) hCode
+        have ⟨hv1, hv2⟩ := hlist_split_all c.site.gives (aloneOut M r out) hout
+        dsimp only
+        refine ⟨rop_reply_valid M op _ (hlist_all_cast hMatch.2.2.2 hv1), ?_⟩
+        cases h2 : (HList.split c.site.gives (aloneOut M r out)).2 with
+        | cons sv sn =>
+            cases sn
+            rw [h2] at hv2
+            exact hv2.1
+      · exact clause_answer_validSafe fnTable rTable cs
+          (fun c' hc' => hcs c' (List.mem_cons_of_mem _ hc')) op s hop hs
+
+private theorem layoutDropClause_validSafe {hs : Headers V} (fnTable : FnTable M hs.fns)
+    (rTable : RTable M hs.protocols) {stateTy τ : V.Ty}
+    (r : Role) (site : Site) (kind : FlowKind) (getters : List Role) :
+    ClauseValidSafe M fnTable rTable
+      (layoutDropClause (hs := hs) (stateTy := stateTy) (τ := τ) r site kind getters) := by
+  intro path args s _ hs
+  cases args with
+  | cons x xn =>
+      cases xn
+      show ((layoutDropClause r site kind getters).code.denote (roleSem M r fnTable rTable) path
+        (Env.positional (aloneIn M r (.cons x (.cons s .nil))))).SafeWith M
+          (ValidReply M) (ROp.ValidPayload M) (fun out => (aloneOut M r out).All M.Valid) (· ≠ .undefined)
+      rw [layoutDropClause_denote]
+      change (aloneOut M r (aloneIn M r (.cons s .nil))).All M.Valid
+      rw [aloneOut_aloneIn]
+      exact ⟨hs, trivial⟩
+
+private theorem layoutPWriteClause_validSafe (a : Admitted V) {unitTy τ : V.Ty}
+    (prover : Role) (site : Site) (kind : FlowKind) (getters : List Role)
+    (writeRef : TypedFnRef V a.program.headers.fns [τ] [.seq unitTy none]) :
+    ClauseValidSafe M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs)
+      (layoutPWriteClause prover site kind getters writeRef) := by
+  intro path args buf hargs hbuf
+  cases args with
+  | cons msg mn =>
+      cases mn
+      show ((layoutPWriteClause prover site kind getters writeRef).code.denote
+        (roleSem M prover (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs)) path
+        (Env.positional (aloneIn M prover (.cons msg (.cons buf .nil))))).SafeWith M
+          (ValidReply M) (ROp.ValidPayload M) (fun out => (aloneOut M prover out).All M.Valid) (· ≠ .undefined)
+      rw [layoutPWriteClause_denote]
+      obtain ⟨chunk, hch, hchV⟩ := writeRef.eval_done M a (.cons msg .nil) hargs
+      rw [hch]
+      change (aloneOut M prover (aloneIn M prover (.cons (buf ++ chunk.single) .nil))).All M.Valid
+      rw [aloneOut_aloneIn]
+      have hchS : M.Valid (.seq unitTy none) chunk.single := by
+        cases chunk with | cons c cn => cases cn; exact hchV.1
+      exact ⟨valid_seq_append M hbuf hchS, trivial⟩
+
+private theorem layoutVReadClause_validSafe (a : Admitted V) {unitTy τ : V.Ty}
+    (hfree : Ty.isLinear V unitTy = false)
+    (verifier prover : Role) (site : Site) (kind : FlowKind)
+    (readRef : SafeFnRef V a.program.headers.fns [.seq unitTy none, .nat] [τ, .nat]) :
+    ClauseValidSafe M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs)
+      (layoutVReadClause hfree verifier prover site kind readRef) := by
+  intro path args st _ hst
+  cases args
+  rcases st with ⟨buf, off, ⟨⟩⟩
+  show ((layoutVReadClause hfree verifier prover site kind readRef).code.denote
+    (roleSem M verifier (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs)) path
+    (Env.positional (aloneIn M verifier (.cons (buf, (off, ())) .nil)))).SafeWith M
+      (ValidReply M) (ROp.ValidPayload M) (fun out => (aloneOut M verifier out).All M.Valid) (· ≠ .undefined)
+  rw [layoutVReadClause_denote, Process.safeWith_map]
+  have hSafe := readRef.eval_safe M a (.cons buf (.cons off .nil)) ⟨hst.1, hst.2.1, trivial⟩
+  refine Process.safeWith_mono M (fun _ _ h => h) (fun _ h => h)
+    (fun res hres => ?_) (fun _ h => h) (Process.safeWith_liftLocal M id _ hSafe)
+  cases res with
+  | cons v r1 =>
+      cases r1 with
+      | cons nextOff r2 =>
+          cases r2
+          change (aloneOut M verifier (aloneIn M verifier
+            (.cons v (.cons (a := streamStateTy unitTy) (buf, (nextOff, ())) .nil)))).All M.Valid
+          rw [aloneOut_aloneIn]
+          exact ⟨hres.1, ⟨hst.1, hres.2.1, trivial⟩, trivial⟩
+
+private theorem layoutVCarryClause_validSafe (a : Admitted V) {unitTy τ : V.Ty}
+    (hfree : Ty.isLinear V unitTy = false)
+    (verifier prover : Role) (toldSite : Site) (guardKey : Key)
+    (readRef : SafeFnRef V a.program.headers.fns [.seq unitTy none, .nat] [τ, .nat])
+    (eqRef : TypedFnRef V a.program.headers.fns [τ, τ] [.bool]) :
+    ClauseValidSafe M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs)
+      (layoutVCarryClause hfree verifier prover toldSite guardKey readRef eqRef) := by
+  intro path args st hargs hst
+  cases args with
+  | cons derived dn =>
+      cases dn
+      rcases st with ⟨buf, off, ⟨⟩⟩
+      show ((layoutVCarryClause hfree verifier prover toldSite guardKey readRef eqRef).code.denote
+        (roleSem M verifier (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs)) path
+        (Env.positional (aloneIn M verifier (.cons derived (.cons (buf, (off, ())) .nil))))).SafeWith M
+          (ValidReply M) (ROp.ValidPayload M) (fun out => (aloneOut M verifier out).All M.Valid) (· ≠ .undefined)
+      rw [layoutVCarryClause_denote]
+      dsimp only [roleSem, layoutVCarryClause, Clause.site, List.nil_append]
+      rw [Process.safeWith_bind]
+      have hSafe := readRef.eval_safe M a (.cons buf (.cons off .nil)) ⟨hst.1, hst.2.1, trivial⟩
+      refine Process.safeWith_mono M (fun _ _ h => h) (fun _ h => h)
+        (fun res hres => ?_) (fun _ h => h) (Process.safeWith_liftLocal M id _ hSafe)
+      cases res with
+      | cons carried r1 =>
+          cases r1 with
+          | cons nextOff r2 =>
+              cases r2
+              obtain ⟨eqRes, heq, _⟩ := eqRef.eval_done M a (.cons derived (.cons carried .nil))
+                ⟨hargs.1, hres.1, trivial⟩
+              change ((liftLocal id (eqRef.eval M (Defs.fnTable M a.program.defs)
+                (.cons derived (.cons carried .nil)))).bind fun eqRes =>
+                  bif eqRes.single then
+                    .done (aloneIn M verifier (.cons (a := streamStateTy unitTy) (buf, (nextOff, ())) .nil))
+                  else
+                    .halt (.declared .reject ⟨path, guardKey⟩)).SafeWith M
+                (ValidReply M) (ROp.ValidPayload M) (fun out => (aloneOut M verifier out).All M.Valid) (· ≠ .undefined)
+              rw [heq]
+              dsimp only [liftLocal_done, Process.bind]
+              cases eqRes.single with
+              | false =>
+                  intro h; cases h
+              | true =>
+                  change (aloneOut M verifier (aloneIn M verifier
+                    (.cons (a := streamStateTy unitTy) (buf, (nextOff, ())) .nil))).All M.Valid
+                  rw [aloneOut_aloneIn]
+                  exact ⟨⟨hst.1, hres.2.1, trivial⟩, trivial⟩
+
+private theorem proverAbsorbClause_validSafe (a : Admitted V) {stateTy unitTy τ : V.Ty}
+    (prover : Role) (site : Site) (kind : FlowKind) (getters : List Role)
+    (label : List Nat) (hlabel : ∀ b, b ∈ label → b < 256)
+    (encodeRef : TypedFnRef V a.program.headers.fns [τ] [.seq unitTy none])
+    (absorbRef : TypedFnRef V a.program.headers.fns [stateTy, bytesTy, .seq unitTy none] [stateTy]) :
+    ClauseValidSafe M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs)
+      (proverAbsorbClause prover site kind getters label hlabel encodeRef absorbRef) := by
+  intro path args st hargs hst
+  cases args with
+  | cons msg mn =>
+      cases mn
+      show ((proverAbsorbClause prover site kind getters label hlabel encodeRef absorbRef).code.denote
+        (roleSem M prover (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs)) path
+        (Env.positional (aloneIn M prover (.cons msg (.cons st .nil))))).SafeWith M
+          (ValidReply M) (ROp.ValidPayload M) (fun out => (aloneOut M prover out).All M.Valid) (· ≠ .undefined)
+      rw [proverAbsorbClause_denote]
+      obtain ⟨enc, henc, hencV⟩ := encodeRef.eval_done M a (.cons msg .nil) hargs
+      have hlblV : M.Valid bytesTy label := ⟨hlabel, (fun _ h => nomatch h)⟩
+      have hencS : M.Valid (.seq unitTy none) enc.single := by
+        cases enc with | cons e en => cases en; exact hencV.1
+      obtain ⟨nextSt, hnext, hnextV⟩ := absorbRef.eval_done M a
+        (.cons st (.cons label (.cons enc.single .nil))) ⟨hst, hlblV, hencS, trivial⟩
+      rw [henc]
+      dsimp only [liftLocal_done, Process.bind]
+      rw [hnext]
+      dsimp only [liftLocal_done, Process.bind, Process.SafeWith]
+      refine ⟨hargs.1, fun _ _ => ?_⟩
+      change (aloneOut M prover (aloneIn M prover nextSt)).All M.Valid
+      rw [aloneOut_aloneIn]
+      exact hnextV
+
+private theorem verifierAbsorbClause_validSafe (a : Admitted V) {stateTy unitTy τ : V.Ty}
+    (verifier prover : Role) (site : Site) (kind : FlowKind)
+    (label : List Nat) (hlabel : ∀ b, b ∈ label → b < 256)
+    (encodeRef : TypedFnRef V a.program.headers.fns [τ] [.seq unitTy none])
+    (absorbRef : TypedFnRef V a.program.headers.fns [stateTy, bytesTy, .seq unitTy none] [stateTy]) :
+    ClauseValidSafe M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs)
+      (verifierAbsorbClause verifier prover site kind label hlabel encodeRef absorbRef) := by
+  intro path args st _ hst
+  cases args
+  show ((verifierAbsorbClause verifier prover site kind label hlabel encodeRef absorbRef).code.denote
+    (roleSem M verifier (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs)) path
+    (Env.positional (aloneIn M verifier (.cons st .nil)))).SafeWith M
+      (ValidReply M) (ROp.ValidPayload M) (fun out => (aloneOut M verifier out).All M.Valid) (· ≠ .undefined)
+  rw [verifierAbsorbClause_denote]
+  refine ⟨trivial, fun msg hmsg => ?_⟩
+  dsimp only
+  obtain ⟨enc, henc, hencV⟩ := encodeRef.eval_done M a (.cons msg .nil) ⟨hmsg, trivial⟩
+  have hlblV : M.Valid bytesTy label := ⟨hlabel, (fun _ h => nomatch h)⟩
+  have hencS : M.Valid (.seq unitTy none) enc.single := by
+    cases enc with | cons e en => cases en; exact hencV.1
+  obtain ⟨nextSt, hnext, hnextV⟩ := absorbRef.eval_done M a
+    (.cons st (.cons label (.cons enc.single .nil))) ⟨hst, hlblV, hencS, trivial⟩
+  rw [henc]
+  dsimp only [liftLocal_done, Process.bind]
+  rw [hnext]
+  dsimp only [liftLocal_done, Process.map]
+  change (aloneOut M verifier (aloneIn M verifier (.cons msg nextSt))).All M.Valid
+  rw [aloneOut_aloneIn]
+  exact ⟨hmsg, hnextV⟩
+
+private theorem deriveClause_nil_validSafe (a : Admitted V) {stateTy τ : V.Ty}
+    (r peer : Role) (site : Site) (part : Part V)
+    (toldKey : Key) (label : List Nat) (hlabel : ∀ b, b ∈ label → b < 256)
+    (deriveRef : TypedFnRef V a.program.headers.fns [stateTy, bytesTy] [τ, stateTy]) :
+    ClauseValidSafe M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs)
+      (deriveClause r peer site part [] toldKey label hlabel deriveRef) := by
+  intro path args st _ hst
+  cases args
+  show ((deriveClause r peer site part [] toldKey label hlabel deriveRef).code.denote
+    (roleSem M r (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs)) path
+    (Env.positional (aloneIn M r (.cons st .nil)))).SafeWith M
+      (ValidReply M) (ROp.ValidPayload M) (fun out => (aloneOut M r out).All M.Valid) (· ≠ .undefined)
+  rw [deriveClause_denote_nil]
+  have hlblV : M.Valid bytesTy label := ⟨hlabel, (fun _ h => nomatch h)⟩
+  obtain ⟨res, hres, hresV⟩ := deriveRef.eval_done M a (.cons st (.cons label .nil))
+    ⟨hst, hlblV, trivial⟩
+  rw [hres]
+  dsimp only [liftLocal_done, Process.bind]
+  cases res with
+  | cons coin r1 =>
+      cases r1 with
+      | cons nextSt r2 =>
+          cases r2
+          refine ⟨hresV.1, fun _ _ => ?_⟩
+          change (aloneOut M r (aloneIn M r (.cons coin (.cons nextSt .nil)))).All M.Valid
+          rw [aloneOut_aloneIn]
+          exact hresV
+
+private theorem idealAbsorbClause_validSafe (a : Admitted V) {unitTy τ : V.Ty}
+    (hfree : Ty.isLinear V unitTy = false)
+    (verifier prover : Role) (site : Site) (kind : FlowKind)
+    (label : List Nat) (hlabel : ∀ b, b ∈ label → b < 256)
+    (encodeRef : TypedFnRef V a.program.headers.fns [τ] [.seq unitTy none]) :
+    ClauseValidSafe M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs)
+      (idealAbsorbClause hfree verifier prover site kind label hlabel encodeRef) := by
+  intro path args st _ hst
+  cases args
+  show ((idealAbsorbClause hfree verifier prover site kind label hlabel encodeRef).code.denote
+    (roleSem M verifier (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs)) path
+    (Env.positional (aloneIn M verifier (.cons st .nil)))).SafeWith M
+      (ValidReply M) (ROp.ValidPayload M) (fun out => (aloneOut M verifier out).All M.Valid) (· ≠ .undefined)
+  rw [idealAbsorbClause_denote]
+  refine ⟨trivial, fun msg hmsg => ?_⟩
+  dsimp only
+  obtain ⟨enc, henc, hencV⟩ := encodeRef.eval_done M a (.cons msg .nil) ⟨hmsg, trivial⟩
+  have hTagLbl : ∀ b, b ∈ (2 :: label) → b < 256 := fun b hb => by
+    rcases List.mem_cons.mp hb with rfl | hm
+    · exact Nat.succ_lt_succ (Nat.succ_lt_succ (Nat.zero_lt_succ 253))
+    · exact hlabel b hm
+  have hencS : M.Valid (.seq unitTy none) enc.single := by
+    cases enc with | cons e en => cases en; exact hencV.1
+  rw [henc]
+  dsimp only [liftLocal_done, Process.map]
+  change (aloneOut M verifier (aloneIn M verifier (.cons msg (.cons (idealPathPush M st (2 :: label) enc.single) .nil)))).All M.Valid
+  rw [aloneOut_aloneIn]
+  exact ⟨hmsg, idealPathPush_valid M st (2 :: label) enc.single hst hTagLbl hencS, trivial⟩
+
+private theorem idealDeriveClause_nil_validSafe (a : Admitted V) {unitTy τ : V.Ty}
+    (hfree : Ty.isLinear V unitTy = false)
+    (verifier prover : Role) (site : Site) (part : Part V)
+    (serviceKey reqKey toldKey : Key)
+    (label : List Nat) (hlabel : ∀ b, b ∈ label → b < 256)
+    (encodeRef : TypedFnRef V a.program.headers.fns [τ] [.seq unitTy none]) :
+    ClauseValidSafe M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs)
+      (idealDeriveClause hfree verifier prover site part [] serviceKey reqKey toldKey
+        label hlabel encodeRef) := by
+  intro path args st _ hst
+  cases args
+  show ((idealDeriveClause hfree verifier prover site part [] serviceKey reqKey toldKey
+      label hlabel encodeRef).code.denote
+    (roleSem M verifier (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs)) path
+    (Env.positional (aloneIn M verifier (.cons st .nil)))).SafeWith M
+      (ValidReply M) (ROp.ValidPayload M) (fun out => (aloneOut M verifier out).All M.Valid) (· ≠ .undefined)
+  rw [idealDeriveClause_denote_nil]
+  have hlblV : M.Valid bytesTy label := ⟨hlabel, (fun _ h => nomatch h)⟩
+  refine ⟨⟨⟨hst, hlblV, trivial⟩, trivial⟩, fun coin hcoin => ?_⟩
+  refine ⟨hcoin, fun _ _ => ?_⟩
+  obtain ⟨enc, henc, hencV⟩ := encodeRef.eval_done M a (.cons coin .nil) ⟨hcoin, trivial⟩
+  have hTagLbl : ∀ b, b ∈ (3 :: label) → b < 256 := fun b hb => by
+    rcases List.mem_cons.mp hb with rfl | hm
+    · exact Nat.succ_lt_succ (Nat.succ_lt_succ (Nat.succ_lt_succ (Nat.zero_lt_succ 252)))
+    · exact hlabel b hm
+  have hencS : M.Valid (.seq unitTy none) enc.single := by
+    cases enc with | cons e en => cases en; exact hencV.1
+  dsimp only
+  rw [henc]
+  dsimp only [liftLocal_done, Process.map]
+  change (aloneOut M verifier (aloneIn M verifier (.cons coin (.cons (idealPathPush M st (3 :: label) enc.single) .nil)))).All M.Valid
+  rw [aloneOut_aloneIn]
+  exact ⟨hcoin, idealPathPush_valid M st (3 :: label) enc.single hst hTagLbl hencS, trivial⟩
+
+private theorem proverSampleClause_validSafe (a : Admitted V) {τ : V.Ty}
+    (prover : Role) (site : Site) (law : V.LawKey)
+    (sampleRef : TypedFnRef V a.program.headers.fns [.nat, .nat] [τ]) :
+    ClauseValidSafe M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs)
+      (proverSampleClause prover site law sampleRef) := by
+  intro path args att _ _
+  cases args
+  show ((proverSampleClause prover site law sampleRef).code.denote
+    (roleSem M prover (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs)) path
+    (Env.positional (aloneIn M prover (.cons att .nil)))).SafeWith M
+      (ValidReply M) (ROp.ValidPayload M) (fun out => (aloneOut M prover out).All M.Valid) (· ≠ .undefined)
+  rw [proverSampleClause_denote]
+  obtain ⟨coin, hcoin, hcoinV⟩ := sampleRef.eval_done M a (.cons att (.cons site.key.number .nil))
+    ⟨trivial, trivial, trivial⟩
+  rw [hcoin]
+  change (aloneOut M prover (aloneIn M prover (.cons coin.single (.cons att .nil)))).All M.Valid
+  rw [aloneOut_aloneIn]
+  have hcS : M.Valid τ coin.single := by
+    cases coin with | cons c cn => cases cn; exact hcoinV.1
+  exact ⟨hcS, trivial, trivial⟩
+
+private theorem compactReadSlotClause_validSafe {hs : Headers V} (fnTable : FnTable M hs.fns)
+    (rTable : RTable M hs.protocols) {stateTys : Tys V.TypeKey} {τ : V.Ty}
+    (htfree : Tys.anyLinear V stateTys = false)
+    (verifier prover : Role) (site : Site) (kind : FlowKind)
+    (pos : Member stateTys.toList τ) :
+    ClauseValidSafe M fnTable rTable
+      (compactReadSlotClause (hs := hs) htfree verifier prover site kind pos) := by
+  intro path args st _ hst
+  cases args
+  show ((compactReadSlotClause htfree verifier prover site kind pos).code.denote
+    (roleSem M verifier fnTable rTable) path
+    (Env.positional (aloneIn M verifier (.cons (a := Ty.tuple stateTys) st .nil)))).SafeWith M
+      (ValidReply M) (ROp.ValidPayload M) (fun out => (aloneOut M verifier out).All M.Valid) (· ≠ .undefined)
+  rw [compactReadSlotClause_denote]
+  change (aloneOut M verifier (aloneIn M verifier (.cons (Tys.getAt M stateTys pos st) (.cons (a := Ty.tuple stateTys) st .nil)))).All M.Valid
+  rw [aloneOut_aloneIn]
+  exact ⟨tys_getAt_valid M stateTys pos st hst, hst, trivial⟩
+
+private theorem compactCompareClause_validSafe (a : Admitted V) {stateTys : Tys V.TypeKey}
+    {τ : V.Ty} (htfree : Tys.anyLinear V stateTys = false)
+    (verifier prover : Role) (toldSite : Site) (guardKey : Key)
+    (pos : Member stateTys.toList τ) (eqRef : TypedFnRef V a.program.headers.fns [τ, τ] [.bool]) :
+    ClauseValidSafe M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs)
+      (compactCompareClause htfree verifier prover toldSite guardKey pos eqRef) := by
+  intro path args st hargs hst
+  cases args with
+  | cons derived dn =>
+      cases dn
+      show ((compactCompareClause htfree verifier prover toldSite guardKey pos eqRef).code.denote
+        (roleSem M verifier (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs)) path
+        (Env.positional (aloneIn M verifier (.cons derived (.cons (a := Ty.tuple stateTys) st .nil))))).SafeWith M
+          (ValidReply M) (ROp.ValidPayload M) (fun out => (aloneOut M verifier out).All M.Valid) (· ≠ .undefined)
+      rw [compactCompareClause_denote]
+      obtain ⟨eqRes, heq, _⟩ := eqRef.eval_done M a
+        (.cons derived (.cons (Tys.getAt M stateTys pos st) .nil))
+        ⟨hargs.1, tys_getAt_valid M stateTys pos st hst, trivial⟩
+      rw [heq]
+      dsimp only [liftLocal_done, Process.bind]
+      cases eqRes.single with
+      | false => intro h; cases h
+      | true =>
+          change (aloneOut M verifier (aloneIn M verifier (.cons (a := Ty.tuple stateTys) st .nil))).All M.Valid
+          rw [aloneOut_aloneIn]
+          exact ⟨hst, trivial⟩
+
+private theorem compactRecoverClause_validSafe (a : Admitted V) {stateTys : Tys V.TypeKey}
+    {τ : V.Ty} (verifier prover : Role) (site : Site) (kind : FlowKind)
+    (recoverRef : SafeFnRef V a.program.headers.fns stateTys.toList [τ]) :
+    ClauseValidSafe M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs)
+      (compactRecoverClause verifier prover site kind recoverRef) := by
+  intro path args st _ hst
+  cases args
+  show ((compactRecoverClause verifier prover site kind recoverRef).code.denote
+    (roleSem M verifier (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs)) path
+    (Env.positional (aloneIn M verifier (.cons (a := Ty.tuple stateTys) st .nil)))).SafeWith M
+      (ValidReply M) (ROp.ValidPayload M) (fun out => (aloneOut M verifier out).All M.Valid) (· ≠ .undefined)
+  rw [compactRecoverClause_denote]
+  dsimp only [roleSem, compactRecoverClause, Clause.site, List.cons_append, List.nil_append]
+  rw [Process.safeWith_map]
+  have hSafe := recoverRef.eval_safe M a (Tys.toHList M stateTys st)
+    (tys_toHList_valid M stateTys st hst)
+  refine Process.safeWith_mono M (fun _ _ h => h) (fun _ h => h)
+    (fun res hres => ?_) (fun _ h => h) (Process.safeWith_liftLocal M id _ hSafe)
+  change (aloneOut M verifier (aloneIn M verifier (.cons res.single (.cons (a := Ty.tuple stateTys) st .nil)))).All M.Valid
+  rw [aloneOut_aloneIn]
+  have hrS : M.Valid τ res.single := by
+    cases res with | cons v vn => cases vn; exact hres.1
+  exact ⟨hrS, hst, trivial⟩
+
+private theorem buildConstructionClauses_go_validSafe {a : Admitted V} {suite : ModuleRef}
+    {stateTy unitTy : V.Ty}
+    {absorbRef : TypedFnRef V a.program.headers.fns [stateTy, bytesTy, .seq unitTy none] [stateTy]}
+    {prover verifier : Role} {samplesKey : Option Key} {declKey : Key}
+    {events : List (ShapeEvent V)} :
+    ∀ (idx : Nat) (es : List (ShapeEvent V × Bool))
+      {cP : List (Clause V a.program.headers prover stateTy)}
+      {cV : List (Clause V a.program.headers verifier stateTy)}
+      {cS : List (Clause V a.program.headers prover .nat)},
+      buildConstructionClauses.go a suite stateTy unitTy absorbRef prover verifier samplesKey
+        declKey events idx es = .ok (cP, cV, cS) →
+      (∀ c ∈ cP, ClauseValidSafe M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs) c) ∧
+      (∀ c ∈ cV, ClauseValidSafe M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs) c) ∧
+      (∀ c ∈ cS, ClauseValidSafe M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs) c)
+  | _, [], _, _, _, h => by
+      cases h; exact ⟨(fun _ hc => nomatch hc), (fun _ hc => nomatch hc), (fun _ hc => nomatch hc)⟩
+  | idx, (e, needAbs) :: rest, cP, cV, cS, h => by
+      unfold buildConstructionClauses.go at h
+      cases hRec : buildConstructionClauses.go a suite stateTy unitTy absorbRef prover verifier
+          samplesKey declKey events (idx + 1) rest with
+      | error _ => rw [hRec] at h; cases h
+      | ok triple =>
+          rw [hRec] at h; dsimp only [bind, Except.bind] at h
+          obtain ⟨ihP, ihV, ihS⟩ := buildConstructionClauses_go_validSafe (idx + 1) rest hRec
+          cases hCls : e.cls with
+          | flow kind giver getters =>
+              rw [hCls] at h; dsimp only at h
+              split at h
+              · cases needAbs with
+                | false =>
+                    simp only [Bool.false_eq_true, ↓reduceIte] at h
+                    cases h; exact ⟨ihP, ihV, ihS⟩
+                | true =>
+                    simp only [↓reduceIte] at h
+                    cases hEnc : findSuiteEncode a suite unitTy e.τ with
+                    | none => rw [hEnc] at h; cases h
+                    | some encRef =>
+                        rw [hEnc] at h; cases h
+                        refine ⟨fun c hc => ?_, fun c hc => ?_, ihS⟩
+                        · rcases List.mem_cons.mp hc with rfl | hm
+                          · apply proverAbsorbClause_validSafe M a
+                          · exact ihP c hm
+                        · rcases List.mem_cons.mp hc with rfl | hm
+                          · apply verifierAbsorbClause_validSafe M a
+                          · exact ihV c hm
+              · split at h
+                · cases h; exact ⟨ihP, ihV, ihS⟩
+                · cases h
+          | given gkind owner hearers =>
+              rw [hCls] at h
+              cases gkind with
+              | coin law =>
+                  dsimp only at h
+                  split at h
+                  · cases hLaw : V.law law with
+                    | none => rw [hLaw] at h; cases h
+                    | some sig =>
+                        rw [hLaw] at h; dsimp only at h
+                        split at h
+                        · cases hDer : findSuiteDerive a suite stateTy sig.ins e.τ with
+                          | none => rw [hDer] at h; cases h
+                          | some derRef =>
+                              rw [hDer] at h; dsimp only at h
+                              split at h
+                              · rename_i hIns
+                                cases h
+                                refine ⟨fun c hc => ?_, fun c hc => ?_, ihS⟩
+                                · rcases List.mem_cons.mp hc with rfl | hm
+                                  · apply deriveClause_nil_validSafe M a
+                                  · exact ihP c hm
+                                · rcases List.mem_cons.mp hc with rfl | hm
+                                  · rcases sig with ⟨sIns, sOut⟩
+                                    dsimp only at hIns
+                                    subst hIns
+                                    apply deriveClause_nil_validSafe M a
+                                  · exact ihV c hm
+                              · cases h
+                        · cases h
+                  · split at h
+                    · split at h
+                      · cases samplesKey with
+                        | none => cases h; exact ⟨ihP, ihV, ihS⟩
+                        | some sKey =>
+                            dsimp only at h
+                            cases hS : findTypedFnRef a sKey [.nat, .nat] [e.τ] with
+                            | none => rw [hS] at h; cases h
+                            | some sRef =>
+                                rw [hS] at h; cases h
+                                refine ⟨ihP, ihV, fun c hc => ?_⟩
+                                rcases List.mem_cons.mp hc with rfl | hm
+                                · apply proverSampleClause_validSafe M a
+                                · exact ihS c hm
+                      · cases h; exact ⟨ihP, ihV, ihS⟩
+                    · cases h
+              | request _ =>
+                  dsimp only at h
+                  split at h
+                  · cases h; exact ⟨ihP, ihV, ihS⟩
+                  · cases h
+
+private theorem buildIdealVerifierClauses_go_validSafe {a : Admitted V} {suite : ModuleRef}
+    {unitTy : V.Ty} {hfree : Ty.isLinear V unitTy = false}
+    {serviceKey : Key} {prover verifier : Role} {declKey : Key}
+    {events : List (ShapeEvent V)} :
+    ∀ (idx : Nat) (es : List (ShapeEvent V × Bool))
+      {cV : List (Clause V a.program.headers verifier (idealPathTy unitTy))},
+      buildIdealVerifierClauses.go a suite unitTy hfree serviceKey prover verifier
+        declKey events idx es = .ok cV →
+      ∀ c ∈ cV, ClauseValidSafe M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs) c
+  | _, [], _, h => by cases h; exact fun _ hc => nomatch hc
+  | idx, (e, needAbs) :: rest, cV, h => by
+      unfold buildIdealVerifierClauses.go at h
+      cases hRec : buildIdealVerifierClauses.go a suite unitTy hfree serviceKey prover
+          verifier declKey events (idx + 1) rest with
+      | error _ => rw [hRec] at h; cases h
+      | ok vRest =>
+          rw [hRec] at h; dsimp only [bind, Except.bind] at h
+          have ihV := buildIdealVerifierClauses_go_validSafe (idx + 1) rest hRec
+          cases hCls : e.cls with
+          | flow kind giver getters =>
+              rw [hCls] at h; dsimp only at h
+              split at h
+              · cases needAbs with
+                | false =>
+                    simp only [Bool.false_eq_true, ↓reduceIte] at h
+                    cases h; exact ihV
+                | true =>
+                    simp only [↓reduceIte] at h
+                    cases hEnc : findSuiteEncode a suite unitTy e.τ with
+                    | none => rw [hEnc] at h; cases h
+                    | some encRef =>
+                        rw [hEnc] at h; cases h
+                        intro c hc
+                        rcases List.mem_cons.mp hc with rfl | hm
+                        · apply idealAbsorbClause_validSafe M a
+                        · exact ihV c hm
+              · split at h
+                · cases h; exact ihV
+                · cases h
+          | given gkind owner hearers =>
+              rw [hCls] at h
+              cases gkind with
+              | coin law =>
+                  dsimp only at h
+                  split at h
+                  · cases hLaw : V.law law with
+                    | none => rw [hLaw] at h; cases h
+                    | some sig =>
+                        rw [hLaw] at h; dsimp only at h
+                        split at h
+                        · cases hIns : sig.ins with
+                          | nil =>
+                              rw [hIns] at h; dsimp only at h
+                              cases hEnc : findSuiteEncode a suite unitTy e.τ with
+                              | none => rw [hEnc] at h; cases h
+                              | some encRef =>
+                                  rw [hEnc] at h; cases h
+                                  intro c hc
+                                  rcases List.mem_cons.mp hc with rfl | hm
+                                  · apply idealDeriveClause_nil_validSafe M a
+                                  · exact ihV c hm
+                          | cons _ _ => rw [hIns] at h; cases h
+                        · cases h
+                  · split at h
+                    · cases h; exact ihV
+                    · cases h
+              | request _ =>
+                  dsimp only at h
+                  split at h
+                  · cases h; exact ihV
+                  · cases h
+
+private theorem checkAuthoredEvents_validSafe {a : Admitted V} {prover verifier : Role}
+    {samplesKey : Option Key} {declKey : Key} :
+    ∀ (es : List (ShapeEvent V)) {cS : List (Clause V a.program.headers prover .nat)},
+      checkAuthoredEvents a prover verifier samplesKey declKey es = .ok cS →
+      ∀ c ∈ cS, ClauseValidSafe M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs) c
+  | [], _, h => by cases h; exact fun _ hc => nomatch hc
+  | e :: rest, cS, h => by
+      unfold checkAuthoredEvents at h
+      cases hRec : checkAuthoredEvents a prover verifier samplesKey declKey rest with
+      | error _ => rw [hRec] at h; cases h
+      | ok sRest =>
+          rw [hRec] at h; dsimp only [bind, Except.bind] at h
+          have ihS := checkAuthoredEvents_validSafe rest hRec
+          cases hCls : e.cls with
+          | flow _ _ _ =>
+              rw [hCls] at h; dsimp only at h
+              split at h
+              · cases h; exact ihS
+              · cases h
+          | given gkind owner hearers =>
+              rw [hCls] at h
+              cases gkind with
+              | coin law =>
+                  dsimp only at h
+                  split at h
+                  · split at h
+                    · cases samplesKey with
+                      | none => cases h; exact ihS
+                      | some sKey =>
+                          dsimp only at h
+                          cases hS : findTypedFnRef a sKey [.nat, .nat] [e.τ] with
+                          | none => rw [hS] at h; cases h
+                          | some sRef =>
+                              rw [hS] at h; cases h
+                              intro c hc
+                              rcases List.mem_cons.mp hc with rfl | hm
+                              · apply proverSampleClause_validSafe M a
+                              · exact ihS c hm
+                    · cases h; exact ihS
+                  · cases h
+              | request _ =>
+                  dsimp only at h
+                  split at h
+                  · cases h; exact ihS
+                  · cases h
+
+private theorem buildStreamingLayoutClauses_go_validSafe {a : Admitted V} {layout : Layout}
+    {unitTy : V.Ty} {hfree : Ty.isLinear V unitTy = false}
+    {prover verifier : Role} {declKey : Key} {events : List (ShapeEvent V)} :
+    ∀ (idx : Nat) (es : List (ShapeEvent V))
+      {pCs : List (Clause V a.program.headers prover (.seq unitTy none))}
+      {vCs : List (Clause V a.program.headers verifier (streamStateTy unitTy))},
+      buildStreamingLayoutClauses.go a layout unitTy hfree prover verifier declKey events idx es =
+        .ok (pCs, vCs) →
+      (∀ c ∈ pCs, ClauseValidSafe M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs) c) ∧
+      (∀ c ∈ vCs, ClauseValidSafe M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs) c)
+  | _, [], _, _, h => by cases h; exact ⟨(fun _ hc => nomatch hc), (fun _ hc => nomatch hc)⟩
+  | idx, e :: rest, pCs, vCs, h => by
+      unfold buildStreamingLayoutClauses.go at h
+      cases hRec : buildStreamingLayoutClauses.go a layout unitTy hfree prover verifier declKey
+          events (idx + 1) rest with
+      | error _ => rw [hRec] at h; cases h
+      | ok pair =>
+          rw [hRec] at h; dsimp only [bind, Except.bind] at h
+          obtain ⟨ihP, ihV⟩ := buildStreamingLayoutClauses_go_validSafe (idx + 1) rest hRec
+          cases hCls : e.cls with
+          | flow kind giver getters =>
+              rw [hCls] at h; dsimp only at h
+              split at h
+              · cases hW : findLayoutWrite a layout.module unitTy e.τ <;>
+                cases hR : findLayoutRead a layout.module unitTy e.τ <;>
+                  simp only [hW, hR] at h
+                · cases h
+                · cases h
+                · cases h
+                · cases h
+                  refine ⟨fun c hc => ?_, fun c hc => ?_⟩
+                  · rcases List.mem_cons.mp hc with rfl | hm
+                    · apply layoutPWriteClause_validSafe M a
+                    · exact ihP c hm
+                  · rcases List.mem_cons.mp hc with rfl | hm
+                    · apply layoutVReadClause_validSafe M a
+                    · exact ihV c hm
+              · cases h; exact ⟨ihP, ihV⟩
+          | given gkind owner hearers =>
+              rw [hCls] at h
+              cases gkind with
+              | coin _ =>
+                  dsimp only at h
+                  split at h
+                  · split at h
+                    · cases hW : findLayoutWrite a layout.module unitTy e.τ <;>
+                      cases hR : findLayoutRead a layout.module unitTy e.τ <;>
+                      cases hE : findLayoutEqual a layout.module e.τ <;>
+                        simp only [hW, hR, hE] at h
+                      · cases h
+                      · cases h
+                      · cases h
+                      · cases h
+                      · cases h
+                      · cases h
+                      · cases h
+                      · cases h
+                        refine ⟨fun c hc => ?_, fun c hc => ?_⟩
+                        · rcases List.mem_cons.mp hc with rfl | hm
+                          · apply layoutPWriteClause_validSafe M a
+                          · exact ihP c hm
+                        · rcases List.mem_cons.mp hc with rfl | hm
+                          · apply layoutVCarryClause_validSafe M a
+                          · exact ihV c hm
+                    · cases h
+                      refine ⟨fun c hc => ?_, fun c hc => ?_⟩
+                      · rcases List.mem_cons.mp hc with rfl | hm
+                        · apply layoutDropClause_validSafe M
+                        · exact ihP c hm
+                      · rcases List.mem_cons.mp hc with rfl | hm
+                        · apply layoutDropClause_validSafe M
+                        · exact ihV c hm
+                  · cases h; exact ⟨ihP, ihV⟩
+              | request _ => cases h; exact ⟨ihP, ihV⟩
+
+private theorem collectCompactWire_validSafe {a : Admitted V} {layout : Layout} {unitTy : V.Ty}
+    {prover verifier : Role} {declKey : Key} {events : List (ShapeEvent V)} :
+    ∀ (idx : Nat) (es : List (ShapeEvent V))
+      {ws : List (WireSpec V a.program.headers.fns unitTy)}
+      {pCs : List (Clause V a.program.headers prover (.seq unitTy none))},
+      collectCompactWire a layout unitTy prover verifier declKey events idx es = .ok (ws, pCs) →
+      ∀ c ∈ pCs, ClauseValidSafe M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs) c
+  | _, [], _, _, h => by cases h; exact fun _ hc => nomatch hc
+  | idx, e :: rest, ws, pCs, h => by
+      unfold collectCompactWire at h
+      cases hRec : collectCompactWire a layout unitTy prover verifier declKey events (idx + 1) rest with
+      | error _ => rw [hRec] at h; cases h
+      | ok pair =>
+          rw [hRec] at h; dsimp only [bind, Except.bind] at h
+          have ihP := collectCompactWire_validSafe (idx + 1) rest hRec
+          cases hCls : e.cls with
+          | flow kind giver getters =>
+              rw [hCls] at h; dsimp only at h
+              split at h
+              · cases hLk : layout.recover.lookup e.site with
+                | some _ =>
+                    rw [hLk] at h; cases h
+                    intro c hc
+                    rcases List.mem_cons.mp hc with rfl | hm
+                    · apply layoutDropClause_validSafe M
+                    · exact ihP c hm
+                | none =>
+                    rw [hLk] at h; dsimp only at h
+                    cases hW : findLayoutWrite a layout.module unitTy e.τ <;>
+                    cases hR : findLayoutRead a layout.module unitTy e.τ <;>
+                      simp only [hW, hR] at h
+                    · cases h
+                    · cases h
+                    · cases h
+                    · cases h
+                      intro c hc
+                      rcases List.mem_cons.mp hc with rfl | hm
+                      · apply layoutPWriteClause_validSafe M a
+                      · exact ihP c hm
+              · cases h; exact ihP
+          | given gkind owner hearers =>
+              rw [hCls] at h
+              cases gkind with
+              | coin _ =>
+                  dsimp only at h
+                  split at h
+                  · split at h
+                    · cases hW : findLayoutWrite a layout.module unitTy e.τ <;>
+                      cases hR : findLayoutRead a layout.module unitTy e.τ <;>
+                        simp only [hW, hR] at h
+                      · cases h
+                      · cases h
+                      · cases h
+                      · cases h
+                        intro c hc
+                        rcases List.mem_cons.mp hc with rfl | hm
+                        · apply layoutPWriteClause_validSafe M a
+                        · exact ihP c hm
+                    · cases h
+                      intro c hc
+                      rcases List.mem_cons.mp hc with rfl | hm
+                      · apply layoutDropClause_validSafe M
+                      · exact ihP c hm
+                  · cases h; exact ihP
+              | request _ => cases h; exact ihP
+
+private theorem buildCompactVClauses_validSafe {a : Admitted V} {layout : Layout} {unitTy : V.Ty}
+    {prover verifier : Role} {declKey : Key} {events : List (ShapeEvent V)}
+    {stmtTys : List V.Ty} {wireSpecs : List (WireSpec V a.program.headers.fns unitTy)}
+    {htfree : Tys.anyLinear V (tysOfList (stmtTys ++ wireSpecs.map (·.ty))) = false} :
+    ∀ (idx : Nat) (es : List (ShapeEvent V))
+      {vCs : List (Clause V a.program.headers verifier
+        (.tuple (tysOfList (stmtTys ++ wireSpecs.map (·.ty)))))},
+      buildCompactVClauses a layout unitTy prover verifier declKey events stmtTys wireSpecs
+        htfree idx es = .ok vCs →
+      ∀ c ∈ vCs, ClauseValidSafe M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs) c
+  | _, [], _, h => by cases h; exact fun _ hc => nomatch hc
+  | idx, e :: rest, vCs, h => by
+      unfold buildCompactVClauses at h
+      cases hRec : buildCompactVClauses a layout unitTy prover verifier declKey events stmtTys
+          wireSpecs htfree (idx + 1) rest with
+      | error _ => rw [hRec] at h; cases h
+      | ok vRest =>
+          rw [hRec] at h; dsimp only [bind, Except.bind] at h
+          have ihV := buildCompactVClauses_validSafe (idx + 1) rest hRec
+          cases hCls : e.cls with
+          | flow kind giver getters =>
+              rw [hCls] at h; dsimp only at h
+              split at h
+              · cases hLk : layout.recover.lookup e.site with
+                | some recKey =>
+                    rw [hLk] at h; dsimp only at h
+                    cases hRecFn : findSafeFnRef a recKey
+                        (tysOfList (stmtTys ++ wireSpecs.map (·.ty))).toList [e.τ] with
+                    | none => rw [hRecFn] at h; cases h
+                    | some recRef =>
+                        rw [hRecFn] at h; cases h
+                        intro c hc
+                        rcases List.mem_cons.mp hc with rfl | hm
+                        · apply compactRecoverClause_validSafe M a
+                        · exact ihV c hm
+                | none =>
+                    rw [hLk] at h; dsimp only at h
+                    cases hWM : findWireMember e.site e.τ wireSpecs with
+                    | none => rw [hWM] at h; cases h
+                    | some mWire =>
+                        rw [hWM] at h; cases h
+                        intro c hc
+                        rcases List.mem_cons.mp hc with rfl | hm
+                        · apply compactReadSlotClause_validSafe M
+                        · exact ihV c hm
+              · cases h; exact ihV
+          | given gkind owner hearers =>
+              rw [hCls] at h
+              cases gkind with
+              | coin _ =>
+                  dsimp only at h
+                  split at h
+                  · split at h
+                    · cases hWM : findWireMember ⟨e.site.through, drawToldKey events idx⟩ e.τ wireSpecs <;>
+                      cases hEq : findLayoutEqual a layout.module e.τ <;>
+                        simp only [hWM, hEq] at h
+                      · cases h
+                      · cases h
+                      · cases h
+                      · cases h
+                        intro c hc
+                        rcases List.mem_cons.mp hc with rfl | hm
+                        · apply compactCompareClause_validSafe M a
+                        · exact ihV c hm
+                    · cases h
+                      intro c hc
+                      rcases List.mem_cons.mp hc with rfl | hm
+                      · apply layoutDropClause_validSafe M
+                      · exact ihV c hm
+                  · cases h; exact ihV
+              | request _ => cases h; exact ihV
+
+/-- A layer is validity-safe: its handler, `start`, and `finish` all preserve `M.Valid` and
+never stop `.undefined`. -/
+private structure LayerValidSafe (a : Admitted V) {r : Role} {ins : List (LTy V)}
+    (l : Layer V a.program.headers r ins) : Prop where
+  handlerOk : (Layer.handler M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs) l).SafeWith
+    M (ValidReply M) (M.Valid l.state) (ROp.ValidPayload M) (ROp.ValidPayload M)
+  startOk : ∀ (inputs : HList (RV M r) ins) (t : HList M.Val l.takes),
+    inputs.All (RV.Valid M r) → t.All M.Valid →
+    (l.start.denote (localSem M a.program.headers.fns (Defs.fnTable M a.program.defs)) []
+      (Env.positional (t.append (heldValues M r inputs)))).Every
+        (fun _ _ => True) (fun outs => outs.All M.Valid) (· ≠ .undefined)
+  finishOk : ∀ (s : M.Val l.state), M.Valid l.state s →
+    (l.finish.denote (localSem M a.program.headers.fns (Defs.fnTable M a.program.defs)) []
+      (Env.positional (.cons s .nil))).Every
+        (fun _ _ => True) (fun outs => outs.All M.Valid) (· ≠ .undefined)
+
+private theorem compactStart_cast_safe {fns : List (FnHeader V)} (fnTable : FnTable M fns)
+    {Γ : Ctx V.Ty} {ts₁ ts₂ : List V.Ty} (hTys : ts₁ = ts₂)
+    (t : Term (localDialect V fns) Γ [.tuple (tysOfList ts₁)]) (env : Env M.Val Γ)
+    (hSafe : (t.denote (localSem M fns fnTable) [] env).Every
+      (fun _ _ => True) (fun outs => outs.All M.Valid) (· ≠ .undefined)) :
+    ((cast (congrArg (fun ts => Term (localDialect V fns) Γ [.tuple (tysOfList ts)]) hTys) t).denote
+      (localSem M fns fnTable) [] env).Every
+      (fun _ _ => True) (fun outs => outs.All M.Valid) (· ≠ .undefined) := by
+  subst hTys; exact hSafe
+
+private theorem buildLayoutLayers_validSafe {a : Admitted V} {entry : ProtocolHeader V}
+    {layout : Layout} {prover verifier : Role} {declKey : Key} {events : List (ShapeEvent V)}
+    {layP : Layer V a.program.headers prover entry.ins}
+    {layV : Layer V a.program.headers verifier entry.ins}
+    (h : buildLayoutLayers a entry layout prover verifier declKey events = .ok (layP, layV)) :
+    LayerValidSafe M a layP ∧ LayerValidSafe M a layV := by
+  cases buildLayoutLayers_ok_elim h with
+  | streaming w hLayP hLayV =>
+      subst hLayP; subst hLayV
+      obtain ⟨hP, hV⟩ := buildStreamingLayoutClauses_go_validSafe M 0 events w.hStr
+      refine ⟨⟨⟨clause_answer_validSafe M _ _ _ hP,
+                fun _ e _ he _ => by dsimp only [Layer.handler]; rw [restoreAgain_denote]; exact he⟩, ?_, ?_⟩,
+              ⟨⟨clause_answer_validSafe M _ _ _ hV,
+                fun _ e _ he _ => by dsimp only [Layer.handler]; rw [restoreAgain_denote]; exact he⟩, ?_, ?_⟩⟩
+      · intro inputs t _ _
+        cases t; dsimp only [HList.append]; rw [layoutPStart_denote]
+        exact ⟨⟨(fun _ hu => nomatch hu), (fun _ hu => nomatch hu)⟩, trivial⟩
+      · intro s hs; rw [identityFinish_denote]; exact ⟨hs, trivial⟩
+      · intro inputs t _ ht
+        cases t with
+        | cons proof pn =>
+            cases pn
+            change ((layoutVStart w.unitTy).denote
+              (localSem M a.program.headers.fns (Defs.fnTable M a.program.defs)) []
+              (Env.positional (.cons proof (heldValues M verifier inputs)))).Every
+                (fun _ _ => True) (fun outs => outs.All M.Valid) (· ≠ .undefined)
+            rw [layoutVStart_denote]
+            exact ⟨⟨ht.1, trivial, trivial⟩, trivial⟩
+      · intro s _
+        rcases s with ⟨buf, off, ⟨⟩⟩
+        rw [layoutVFinish_denote]
+        cases Nat.beq off buf.length with
+        | true => trivial
+        | false => intro h; cases h
+  | compact w hComp =>
+      unfold buildCompactLayoutLayers at hComp
+      cases hCW : collectCompactWire a layout w.unitTy prover verifier declKey events 0 events with
+      | error _ => rw [hCW] at hComp; cases hComp
+      | ok cw =>
+          rw [hCW] at hComp; dsimp only [bind, Except.bind] at hComp
+          split at hComp
+          · cases hVC : buildCompactVClauses a layout w.unitTy prover verifier declKey events _ cw.1
+                _ 0 events with
+            | error _ => rw [hVC] at hComp; cases hComp
+            | ok vcs =>
+                rw [hVC] at hComp; cases hComp
+                have hP := collectCompactWire_validSafe M 0 events hCW
+                have hV := buildCompactVClauses_validSafe M 0 events hVC
+                refine ⟨⟨⟨clause_answer_validSafe M _ _ _ hP,
+                          fun _ e _ he _ => by dsimp only [Layer.handler]; rw [restoreAgain_denote]; exact he⟩, ?_, ?_⟩,
+                        ⟨⟨clause_answer_validSafe M _ _ _ hV,
+                          fun _ e _ he _ => by dsimp only [Layer.handler]; rw [restoreAgain_denote]; exact he⟩, ?_, ?_⟩⟩
+                · intro inputs t _ _
+                  cases t; dsimp only [HList.append]; rw [layoutPStart_denote]
+                  exact ⟨⟨(fun _ hu => nomatch hu), (fun _ hu => nomatch hu)⟩, trivial⟩
+                · intro s hs; rw [identityFinish_denote]; exact ⟨hs, trivial⟩
+                · intro inputs t hin ht
+                  cases t with
+                  | cons proof pn =>
+                      cases pn
+                      refine compactStart_cast_safe M (Defs.fnTable M a.program.defs) (by simp) _ _ ?_
+                      exact compactLayoutVStart_safe M a w.unitTy w.hfree _ _ _ proof ht.1
+                        (heldValues M verifier inputs) (heldValues_valid M verifier inputs hin)
+                · intro s _; rw [emptyFinish_denote]; trivial
+          · cases hComp
+
+private theorem runStack_validSafe {named : NamedProgram V} {assoc : Association} {a : Admitted V}
+    (hAdmit : admit named assoc = .ok a) {hdr : ProtocolHeader V}
+    (callee : Member a.program.headers.protocols hdr) (retry : Option (Nat × Site))
+    (r : Role) (layers : List (Layer V a.program.headers r hdr.ins))
+    (hLayers : ∀ l ∈ layers, LayerValidSafe M a l)
+    (ins : HList (RV M r) hdr.ins) (taken : HList M.Val (Stack.Takes layers))
+    (hIns : ins.All (RV.Valid M r)) (hTaken : taken.All M.Valid) :
+    (runStack a M callee retry r layers ins taken).StopsWhen (Permitted M) (· ≠ .undefined) := by
+  unfold runStack
+  have hRole := roleMeaning_safeWith_valid M hAdmit callee r [] ins hIns
+  have hStackH := stack_handler_validSafe_all M (Defs.fnTable M a.program.defs)
+    (Defs.rTable M a.program.defs) (ValidReply M) (ROp.ValidPayload M) layers
+    (fun l hl => (hLayers l hl).handlerOk)
+  have hStart := stack_start_validSafe M (Defs.fnTable M a.program.defs) (ValidReply M)
+    (ROp.ValidPayload M) layers ins taken hIns hTaken
+    (fun l hl t ht => (hLayers l hl).startOk ins t hIns ht)
+  have hRun : (Process.bind (Stack.start M (Defs.fnTable M a.program.defs) layers ins taken) fun first =>
+      Process.bind (((Stack.handler M (Defs.fnTable M a.program.defs)
+        (Defs.rTable M a.program.defs) layers).run (retryOf M retry)
+        (roleMeaning M a.program callee r [] ins) first).mapHalt Prod.fst) fun out =>
+        (Stack.finish M (Defs.fnTable M a.program.defs) layers out.2).map
+          fun gives => (out.1, gives)).SafeWith M (ValidReply M) (ROp.ValidPayload M)
+        (fun _ => True) (· ≠ .undefined) := by
+    rw [Process.safeWith_bind]
+    refine Process.safeWith_mono M (fun _ _ h => h) (fun _ h => h)
+      (fun first hfirst => ?_) (fun _ h => h) hStart
+    rw [Process.safeWith_bind, Process.safeWith_mapHalt]
+    have hRunH := Handler.SafeWith.run M hStackH retry
+      (fun _ _ _ _ _ _ _ hr => hr) (fun _ _ _ _ _ _ ho => ho)
+      (fun _ _ => trivial) (fun _ => trivial) hRole hfirst
+    refine Process.safeWith_mono M (fun _ _ h => h) (fun _ h => h)
+      (fun out hout => ?_) (fun stop hstop => hstop.1) hRunH
+    rw [Process.safeWith_map]
+    exact Process.safeWith_mono M (fun _ _ h => h) (fun _ h => h)
+      (fun _ _ => trivial) (fun _ h => h)
+      (stack_finish_validSafe M (Defs.fnTable M a.program.defs) (ValidReply M)
+        (ROp.ValidPayload M) layers out.2 hout.2
+        (fun l hl => (hLayers l hl).finishOk))
+  exact Process.safeWith_every M
+    (Process.safeWith_mono M (permitted_implies_validReply M) (fun _ h => h)
+      (fun _ _ => trivial) (fun _ h => h) hRun)
+
+private theorem layer_validSafe_construction {a : Admitted V} {stateTy unitTy : V.Ty}
+    {r : Role} {ins : List (LTy V)}
+    (sessBytes : List Nat) (hSess : ∀ b, b ∈ sessBytes → b < 256)
+    (startRef : TypedFnRef V a.program.headers.fns [bytesTy] [stateTy])
+    (absorbRef : TypedFnRef V a.program.headers.fns [stateTy, bytesTy, .seq unitTy none] [stateTy])
+    (stmtItems : List (StmtAbsorbItem V a.program.headers.fns unitTy (Ctx.positional (held r ins))))
+    (clauses : List (Clause V a.program.headers r stateTy))
+    (hClauses : ∀ c ∈ clauses, ClauseValidSafe M (Defs.fnTable M a.program.defs)
+      (Defs.rTable M a.program.defs) c) :
+    LayerValidSafe M a
+      ({ line := .construction, state := stateTy, takes := [], gives := [],
+         clauses := clauses, again := restoreAgain stateTy,
+         start := constructionStart sessBytes hSess startRef absorbRef stmtItems,
+         finish := emptyFinish stateTy } : Layer V a.program.headers r ins) := by
+  refine ⟨⟨clause_answer_validSafe M _ _ _ hClauses,
+            fun _ e _ he _ => by dsimp only [Layer.handler]; rw [restoreAgain_denote]; exact he⟩, ?_, ?_⟩
+  · intro inputs t hin _
+    cases t
+    dsimp only [HList.append]
+    obtain ⟨stEnd, hDone, hStV⟩ := constructionStart_done M a sessBytes hSess startRef absorbRef
+      stmtItems (heldValues M r inputs) (heldValues_valid M r inputs hin)
+    rw [hDone]
+    exact ⟨hStV, trivial⟩
+  · intro s _
+    rw [emptyFinish_denote]
+    trivial
+
+private theorem layer_validSafe_idealConstruction {a : Admitted V} {unitTy : V.Ty}
+    (hfree : Ty.isLinear V unitTy = false)
+    {r : Role} {ins : List (LTy V)}
+    (sessBytes : List Nat) (hSess : ∀ b, b ∈ sessBytes → b < 256)
+    (stmtItems : List (StmtAbsorbItem V a.program.headers.fns unitTy (Ctx.positional (held r ins))))
+    (clauses : List (Clause V a.program.headers r (idealPathTy unitTy)))
+    (hClauses : ∀ c ∈ clauses, ClauseValidSafe M (Defs.fnTable M a.program.defs)
+      (Defs.rTable M a.program.defs) c) :
+    LayerValidSafe M a
+      ({ line := .construction, state := idealPathTy unitTy, takes := [], gives := [],
+         clauses := clauses, again := restoreAgain (idealPathTy unitTy),
+         start := idealStart hfree sessBytes hSess stmtItems,
+         finish := emptyFinish (idealPathTy unitTy) } : Layer V a.program.headers r ins) := by
+  refine ⟨⟨clause_answer_validSafe M _ _ _ hClauses,
+            fun _ e _ he _ => by dsimp only [Layer.handler]; rw [restoreAgain_denote]; exact he⟩, ?_, ?_⟩
+  · intro inputs t hin _
+    cases t
+    dsimp only [HList.append]
+    obtain ⟨stEnd, hDone, hStV⟩ := idealStart_done M a hfree sessBytes hSess
+      stmtItems (heldValues M r inputs) (heldValues_valid M r inputs hin)
+    rw [hDone]
+    exact ⟨hStV, trivial⟩
+  · intro s _
+    rw [emptyFinish_denote]
+    trivial
+
+private theorem layer_validSafe_samples {a : Admitted V} {r : Role} {ins : List (LTy V)}
+    (clauses : List (Clause V a.program.headers r .nat))
+    (hClauses : ∀ c ∈ clauses, ClauseValidSafe M (Defs.fnTable M a.program.defs)
+      (Defs.rTable M a.program.defs) c) :
+    LayerValidSafe M a
+      ({ line := .samples, state := .nat, takes := [], gives := [],
+         clauses := clauses, again := attemptNumAgain,
+         start := samplesStart, finish := emptyFinish .nat } : Layer V a.program.headers r ins) := by
+  refine ⟨⟨clause_answer_validSafe M _ _ _ hClauses,
+            fun _ _ _ _ _ => by dsimp only [Layer.handler]; rw [attemptNumAgain_denote]; trivial⟩, ?_, ?_⟩
+  · intro inputs t _ _
+    cases t
+    dsimp only [HList.append]
+    rw [samplesStart_denote]
+    exact ⟨trivial, trivial⟩
+  · intro s _
+    rw [emptyFinish_denote]
+    trivial
+
+private theorem layer_validSafe_cast {a : Admitted V} {hdr₁ hdr₂ : ProtocolHeader V}
+    (hHdr : hdr₁ = hdr₂) {r₁ r₂ : Role} (hr : r₁ = r₂)
+    (layers : List (Layer V a.program.headers r₂ hdr₂.ins))
+    (h : ∀ l ∈ layers, LayerValidSafe M a l) :
+    ∀ l ∈ (hr ▸ hHdr ▸ layers), LayerValidSafe M a l :=
+  cast_layer_stack_elim hHdr hr layers (fun _ _ ls => ∀ l ∈ ls, LayerValidSafe M a l) h
+
+/-- Every deployed role of an admitted program never stops `.undefined` on valid inputs, valid
+taken values, and permitted replies (even without requiring `Unconditional`). -/
+theorem deploy_safe (enc : VocabEncoder V) {named : NamedProgram V} {assoc : Association}
+    {a : Admitted V} (hAdmit : admit named assoc = .ok a)
+    {declaration : Declaration} {d : Deployed V}
+    (hDep : deploy enc a declaration = .ok d)
+    (r : Role) (ins : HList (RV M r) d.entry.ins)
+    (taken : HList M.Val (Stack.Takes (d.stack r)))
+    (hIns : ins.All (RV.Valid M r)) (hTaken : taken.All M.Valid) :
+    (d.run M r ins taken).StopsWhen (Permitted M) (· ≠ .undefined) := by
+  rw [deployed_run_eq_runStack]
+  cases deploy_ok_elim enc a declaration d hDep with
+  | interactive w hEq =>
+      subst hEq
+      exact runStack_validSafe M hAdmit _ _ r [] (fun _ hl => nomatch hl) ins taken hIns hTaken
+  | authored w hEq =>
+      subst hEq
+      apply runStack_validSafe M hAdmit _ _ r _ _ ins taken hIns hTaken
+      have hS := checkAuthoredEvents_validSafe M _ w.hAuth
+      obtain ⟨hLP, hLV⟩ := buildLayoutLayers_validSafe M w.hLay
+      dsimp only [Deployed.entry]
+      by_cases hP : r = w.prover
+      · rw [dite_eq_left hP]
+        apply layer_validSafe_cast M (by simp [w.hFound]) hP
+        cases declaration.samples with
+        | none =>
+            intro l hl; simp only [List.mem_singleton] at hl; subst hl; exact hLP
+        | some _ =>
+            intro l hl
+            simp only [List.mem_cons, List.not_mem_nil, or_false] at hl
+            rcases hl with rfl | rfl
+            · exact layer_validSafe_samples M w.sClauses hS
+            · exact hLP
+      · rw [dite_eq_right hP]
+        by_cases hV : r = w.verifier
+        · rw [dite_eq_left hV]
+          apply layer_validSafe_cast M (by simp [w.hFound]) hV
+          intro l hl; simp only [List.mem_singleton] at hl; subst hl; exact hLV
+        · rw [dite_eq_right hV]; intro _ hl; cases hl
+  | derived w hEq =>
+      subst hEq
+      apply runStack_validSafe M hAdmit _ _ r _ _ ins taken hIns hTaken
+      obtain ⟨hCP, hCV, hCS⟩ := buildConstructionClauses_go_validSafe M 0 _ w.hCC
+      obtain ⟨hLP, hLV⟩ := buildLayoutLayers_validSafe M w.hLay
+      dsimp only [Deployed.entry]
+      by_cases hP : r = w.prover
+      · rw [dite_eq_left hP]
+        apply layer_validSafe_cast M (by simp [w.hFound]) hP
+        cases declaration.samples with
+        | none =>
+            intro l hl
+            simp only [List.mem_cons, List.not_mem_nil, or_false] at hl
+            rcases hl with rfl | rfl
+            · exact layer_validSafe_construction M _ _ _ _ _ _ hCP
+            · exact hLP
+        | some _ =>
+            intro l hl
+            simp only [List.mem_cons, List.not_mem_nil, or_false] at hl
+            rcases hl with rfl | rfl | rfl
+            · exact layer_validSafe_samples M _ hCS
+            · exact layer_validSafe_construction M _ _ _ _ _ _ hCP
+            · exact hLP
+      · rw [dite_eq_right hP]
+        by_cases hV : r = w.verifier
+        · rw [dite_eq_left hV]
+          apply layer_validSafe_cast M (by simp [w.hFound]) hV
+          intro l hl
+          simp only [List.mem_cons, List.not_mem_nil, or_false] at hl
+          rcases hl with rfl | rfl
+          · exact layer_validSafe_construction M _ _ _ _ _ _ hCV
+          · exact hLV
+        · rw [dite_eq_right hV]; intro _ hl; cases hl
+
+/-- Every role of an ideal-RO deployment never stops `.undefined` on valid inputs, valid taken
+values, and permitted replies. -/
+theorem deployIdeal_safe (enc : VocabEncoder V) (serviceKey : Key)
+    {named : NamedProgram V} {assoc : Association} {a : Admitted V}
+    (hAdmit : admit named assoc = .ok a)
+    {declaration : Declaration} {d : Deployed V}
+    (hDep : deployIdeal enc serviceKey a declaration = .ok d)
+    (r : Role) (ins : HList (RV M r) d.entry.ins)
+    (taken : HList M.Val (Stack.Takes (d.stack r)))
+    (hIns : ins.All (RV.Valid M r)) (hTaken : taken.All M.Valid) :
+    (d.run M r ins taken).StopsWhen (Permitted M) (· ≠ .undefined) := by
+  rw [deployed_run_eq_runStack]
+  let ⟨w, hEq⟩ := deployIdeal_ok_elim enc serviceKey a declaration d hDep
+  subst hEq
+  apply runStack_validSafe M hAdmit _ _ r _ _ ins taken hIns hTaken
+  have hCV := buildIdealVerifierClauses_go_validSafe M 0 _ w.hIV
+  obtain ⟨_, hLV⟩ := buildLayoutLayers_validSafe M w.hLay
+  dsimp only [Deployed.entry]
+  by_cases hV : r = w.verifier
+  · rw [dite_eq_left hV]
+    apply layer_validSafe_cast M (by simp [w.hFound]) hV
+    intro l hl
+    simp only [List.mem_cons, List.not_mem_nil, or_false] at hl
+    rcases hl with rfl | rfl
+    · exact layer_validSafe_idealConstruction M w.hSuiteFree _ _ _ _ hCV
+    · exact hLV
+  · rw [dite_eq_right hV]; intro _ hl; cases hl
+
+end ValiditySafety
+
+/-! ## Section 2: Effect coverage (`deploy_coverage`, `deployIdeal_verifier_covered`) -/
+
+section Coverage
+
+variable {V : Vocabulary} (M : Model V)
+
+/-- Every clause `c` produces only `opOk₂` effects whenever it runs on a matching `op`. -/
+private def ClauseEmits {hs : Headers V} (fnTable : FnTable M hs.fns)
+    (rTable : RTable M hs.protocols) {r : Role} {state : V.Ty}
+    (opOk₂ : ROp M → Prop) (c : Clause V hs r state) : Prop :=
+  ∀ (op : ROp M) (hMatch : ClauseMatches M c op) (s : M.Val state),
+    (c.code.denote (roleSem M r fnTable rTable) (ROp.occurrence M op).path
+      (Env.positional (aloneIn M r (HList.append
+        (cast (congrArg (HList M.Val) hMatch.2.2.1.symm) (ROp.payload M op))
+        (.cons s .nil))))).SafeWith M (fun _ _ => True) opOk₂ (fun _ => True) (fun _ => True)
+
+private theorem clause_answer_covers {hs : Headers V} (fnTable : FnTable M hs.fns)
+    (rTable : RTable M hs.protocols) {r : Role} {state : V.Ty}
+    {opOk₂ : ROp M → Prop} :
+    ∀ (cs : List (Clause V hs r state)),
+      (∀ c ∈ cs, ClauseEmits M fnTable rTable opOk₂ c) →
+      ∀ (op : ROp M) (s : M.Val state),
+        (opOk₂ op ∨ ∃ c ∈ cs, ClauseMatches M c op) →
+        (Clause.answer M fnTable rTable cs op s).SafeWith M (fun _ _ => True) opOk₂
+          (fun _ => True) (fun _ => True)
+  | [], _, op, _, hCov => by
+      rcases hCov with h2 | ⟨_, hc, _⟩
+      · exact ⟨h2, fun _ _ => trivial⟩
+      · cases hc
+  | c :: cs, hEm, op, s, hCov => by
+      unfold Clause.answer
+      split
+      · rename_i hMatch
+        rw [Process.safeWith_map, Process.safeWith_mapHalt]
+        exact hEm c List.mem_cons_self op hMatch s
+      · rename_i hNoMatch
+        apply clause_answer_covers fnTable rTable cs (fun c' hc' => hEm c' (List.mem_cons_of_mem _ hc')) op s
+        rcases hCov with h2 | ⟨c', hc', hm'⟩
+        · exact .inl h2
+        · rcases List.mem_cons.mp hc' with rfl | hmem
+          · exact absurd hm' hNoMatch
+          · exact .inr ⟨c', hmem, hm'⟩
+
+/-- Lightweight handler coverage invariant: every `opOk₁` effect is transformed into `opOk₂`
+effects. -/
+private def Handler.Covers {σ : Type} (h : Handler (RSig M) (RSig M) Stop σ)
+    (opOk₁ opOk₂ : ROp M → Prop) : Prop :=
+  ∀ op s, opOk₁ op →
+    (h.clause op s).SafeWith M (fun _ _ => True) opOk₂ (fun _ => True) (fun _ => True)
+
+private theorem handler_answer_covers {τ X E : Type} {h : Handler (RSig M) (RSig M) Stop τ}
+    {opOk₁ opOk₂ : ROp M → Prop} (hCov : Handler.Covers M h opOk₁ opOk₂) :
+    ∀ {p : Process (RSig M) (Stop × E) X} (upper : E) (t : τ),
+      p.SafeWith M (fun _ _ => True) opOk₁ (fun _ => True) (fun _ => True) →
+      (h.answer p upper t).SafeWith M (fun _ _ => True) opOk₂ (fun _ => True) (fun _ => True)
+  | .done _, _, _, _ => trivial
+  | .halt _, _, _, _ => trivial
+  | .call op k, upper, t, ⟨ho, hk⟩ => by
+      simp only [Handler.answer]
+      rw [Process.safeWith_bind, Process.safeWith_mapHalt]
+      exact Process.safeWith_mono M (fun _ _ h => h) (fun _ h => h)
+        (fun out _ => handler_answer_covers hCov upper out.2 (hk out.1 trivial))
+        (fun _ _ => trivial) (hCov op t ho)
+
+private theorem handler_covers_over {σ τ : Type}
+    {inner : Handler (RSig M) (RSig M) Stop σ} {outer : Handler (RSig M) (RSig M) Stop τ}
+    {opOk₁ opOk₂ opOk₃ : ROp M → Prop}
+    (hIn : Handler.Covers M inner opOk₁ opOk₂) (hOut : Handler.Covers M outer opOk₂ opOk₃) :
+    Handler.Covers M (inner.over outer) opOk₁ opOk₃ := by
+  intro op st ho
+  simp only [Handler.over]
+  rw [Process.safeWith_bind, Process.safeWith_mapHalt]
+  exact Process.safeWith_mono M (fun _ _ h => h) (fun _ h => h)
+    (fun _ _ => trivial) (fun _ _ => trivial)
+    (handler_answer_covers M hOut st.1 st.2 (hIn op st.1 ho))
+
+private theorem attempts_covers {σ A : Type} {opOk : ROp M → Prop}
+    (retriable : Stop → Bool) (exhausted : Stop)
+    (again : Nat → σ → σ → Except Stop σ)
+    (body : Nat → σ → Process (RSig M) ((Bool × Stop) × σ) (A × σ))
+    (hbody : ∀ i s, (body i s).SafeWith M (fun _ _ => True) opOk (fun _ => True) (fun _ => True))
+    (entry : σ) :
+    ∀ (n i : Nat) (s : σ),
+      (attempts retriable exhausted again body entry n i s).SafeWith M (fun _ _ => True) opOk
+        (fun _ => True) (fun _ => True)
+  | 0, _, _ => trivial
+  | n + 1, i, s => by
+      simp only [attempts]
+      rw [Process.safeWith_recover]
+      refine Process.safeWith_mono M (fun _ _ h => h) (fun _ h => h)
+        (fun _ _ => trivial) (fun stop _ => ?_) (hbody i s)
+      split
+      · cases n with
+        | zero => trivial
+        | succ m =>
+            cases again (i + 1) entry stop.2 with
+            | error _ => trivial
+            | ok next => exact attempts_covers retriable exhausted again body hbody entry (m + 1) (i + 1) next
+      · trivial
+
+private theorem handler_covers_run_and_inside {σ A : Type}
+    {h : Handler (RSig M) (RSig M) Stop σ} {opOk₁ opOk₂ : ROp M → Prop}
+    (hCov : Handler.Covers M h opOk₁ opOk₂) (retry : Option (Nat × Site))
+    (hopMark : ∀ frame law at_ ins payload τ,
+      opOk₂ (.own (.coin law) [] at_ ins payload τ) →
+      opOk₂ (.own (.coin law) [] ⟨frame :: at_.path, at_.key⟩ ins payload τ)) :
+    ∀ (p : Process (RSig M) Stop A),
+      p.SafeWith M (fun _ _ => True) opOk₁ (fun _ => True) (fun _ => True) →
+      (∀ s, (h.run (retryOf M retry) p s).SafeWith M (fun _ _ => True) opOk₂
+        (fun _ => True) (fun _ => True)) ∧
+      (∀ i s, (h.inside (retryOf M retry) i p s).SafeWith M (fun _ _ => True) opOk₂
+        (fun _ => True) (fun _ => True))
+  | .done _, _ => ⟨fun _ => trivial, fun _ _ => trivial⟩
+  | .halt _, _ => ⟨fun _ => trivial, fun _ _ => trivial⟩
+  | .call op k, ⟨ho, hk⟩ => by
+      have ih := fun reply => handler_covers_run_and_inside hCov retry hopMark (k reply) (hk reply trivial)
+      constructor
+      · intro s
+        simp only [Handler.run]
+        cases (retryOf M retry).begins op with
+        | none =>
+            rw [Process.safeWith_bind]
+            exact Process.safeWith_mono M (fun _ _ h => h) (fun _ h => h)
+              (fun out _ => (ih out.1).1 out.2) (fun _ _ => trivial) (hCov op s ho)
+        | some pair =>
+            exact attempts_covers M _ pair.1 h.again
+              (fun i s' => h.inside (retryOf M retry) i (k (pair.2 i)) s')
+              (fun i s' => (ih (pair.2 i)).2 i s') s _ 0 s
+      · intro i s
+        simp only [Handler.inside]
+        cases (retryOf M retry).ends op with
+        | some reply =>
+            rw [Process.safeWith_mapHalt]
+            exact (ih reply).1 s
+        | none =>
+            rw [Process.safeWith_bind, Process.safeWith_mapHalt]
+            have hcl : ((retryOf M retry).mark i (h.clause op s)).SafeWith M (fun _ _ => True) opOk₂
+                (fun _ => True) (fun _ => True) := by
+              cases retry with
+              | none => exact hCov op s ho
+              | some rpair =>
+                  exact Process.safeWith_markOwn M (.attempt rpair.2.key i)
+                    (fun _ _ _ _ _ _ _ => trivial) (hopMark _) (hCov op s ho)
+            exact Process.safeWith_mono M (fun _ _ h => h) (fun _ h => h)
+              (fun out _ => (ih out.1).2 i out.2) (fun _ _ => trivial) hcl
+
+private theorem stack_handler_covers_nil {hs : Headers V}
+    (fnTable : FnTable M hs.fns) (rTable : RTable M hs.protocols)
+    {r : Role} {ins : List (LTy V)} (opOk : ROp M → Prop) :
+    Handler.Covers M (Stack.handler M fnTable rTable ([] : List (Layer V hs r ins))) opOk opOk :=
+  fun _ _ ho => ⟨ho, fun _ _ => trivial⟩
+
+private theorem stack_handler_covers_cons {hs : Headers V}
+    (fnTable : FnTable M hs.fns) (rTable : RTable M hs.protocols)
+    {r : Role} {ins : List (LTy V)}
+    {l : Layer V hs r ins} {rest : List (Layer V hs r ins)}
+    {opOk₁ opOk₂ opOk₃ : ROp M → Prop}
+    (hl : Handler.Covers M (Layer.handler M fnTable rTable l) opOk₁ opOk₂)
+    (hrest : Handler.Covers M (Stack.handler M fnTable rTable rest) opOk₂ opOk₃) :
+    Handler.Covers M (Stack.handler M fnTable rTable (l :: rest)) opOk₁ opOk₃ := by
+  have hboth := handler_covers_over M hl hrest
+  intro op st ho
+  cases st with
+  | cons mine below =>
+      change (((((Layer.handler M fnTable rTable l).over
+        (Stack.handler M fnTable rTable rest)).clause op (mine, below)).mapHalt
+          fun stop => (stop.1, HList.cons stop.2.1 stop.2.2)).map
+          fun out => (out.1, HList.cons out.2.1 out.2.2)).SafeWith M
+          (fun _ _ => True) opOk₃ (fun _ => True) (fun _ => True)
+      rw [Process.safeWith_map, Process.safeWith_mapHalt]
+      exact hboth op (mine, below) ho
+
+private theorem liftLocal_safeWith_any {H A : Type} {opOk : ROp M → Prop}
+    (f : Stop → H) (p : Local A) :
+    (liftLocal (S := RSig M) f p).SafeWith M (fun _ _ => True) opOk (fun _ => True) (fun _ => True) := by
+  cases p with
+  | done _ => trivial
+  | halt _ => trivial
+  | call op _ => nomatch op
+
+private theorem runStack_closedEffects (a : Admitted V) {hdr : ProtocolHeader V}
+    (callee : Member a.program.headers.protocols hdr) (retry : Option (Nat × Site))
+    (r : Role) (layers : List (Layer V a.program.headers r hdr.ins))
+    (hCov : Handler.Covers M
+      (Stack.handler M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs) layers)
+      (ROp.MatchesShape M r (hdr.shape.events [] id)) (ROp.IsClosed M))
+    (ins : HList (RV M r) hdr.ins) (taken : HList M.Val (Stack.Takes layers)) :
+    Process.ClosedEffects (runStack a M callee retry r layers ins taken) := by
+  apply Process.closedEffects_of_safeWith M (P := fun _ => True) (R := fun _ => True)
+  unfold runStack
+  rw [Process.safeWith_bind]
+  refine Process.safeWith_mono M (fun _ _ h => h) (fun _ h => h)
+    (fun first _ => ?_) (fun _ _ => trivial)
+    (stack_start_noEffects M (Defs.fnTable M a.program.defs) (ROp.IsClosed M) layers ins taken)
+  rw [Process.safeWith_bind, Process.safeWith_mapHalt]
+  have hRole := roleMeaning_matchesShape M a.program callee r [] ins
+  have hRun := (handler_covers_run_and_inside M hCov retry
+    (fun _ _ _ _ _ _ _ => trivial) _ hRole).1 first
+  refine Process.safeWith_mono M (fun _ _ h => h) (fun _ h => h)
+    (fun out _ => ?_) (fun _ _ => trivial) hRun
+  rw [Process.safeWith_map]
+  exact stack_finish_noEffects M (Defs.fnTable M a.program.defs) (ROp.IsClosed M) layers out.2
+
+/-- Effects permitted to reach prover's layout layer. -/
+private def LayoutInputP (prover verifier : Role) (events : List (ShapeEvent V)) (op : ROp M) : Prop :=
+  ROp.IsClosed M op ∨
+  (∃ e ∈ events, match op with
+    | .give kind getters at_ τ _ =>
+        e.site = at_.site ∧ e.τ = τ ∧ e.cls = .flow kind prover getters ∧ verifier ∈ getters
+    | _ => False) ∨
+  (∃ (idx : Nat) (e : ShapeEvent V), events[idx]? = some e ∧
+    match op with
+    | .give .message getters at_ τ _ =>
+        getters = [verifier] ∧ at_.site = ⟨e.site.through, drawToldKey events idx⟩ ∧
+        e.τ = τ ∧ ∃ law hearers, e.cls = .given (.coin law) verifier hearers ∧ prover ∈ hearers
+    | _ => False)
+
+/-- Effects permitted to reach verifier's layout layer. -/
+private def LayoutInputV (prover verifier : Role) (events : List (ShapeEvent V)) (op : ROp M) : Prop :=
+  ROp.IsClosed M op ∨
+  (∃ e ∈ events, match op with
+    | .get kind giver at_ τ =>
+        giver = prover ∧ e.site = at_.site ∧ e.τ = τ ∧
+        ∃ getters, verifier ∈ getters ∧ e.cls = .flow kind prover getters
+    | _ => False) ∨
+  (∃ (idx : Nat) (e : ShapeEvent V), events[idx]? = some e ∧
+    match op with
+    | .give .message getters at_ τ _ =>
+        getters = [prover] ∧ at_.site = ⟨e.site.through, drawToldKey events idx⟩ ∧
+        e.τ = τ ∧ ∃ law hearers, e.cls = .given (.coin law) verifier hearers ∧ prover ∈ hearers
+    | _ => False)
+
+private theorem layoutClause_emits_any_drop {hs : Headers V} (fnTable : FnTable M hs.fns)
+    (rTable : RTable M hs.protocols) {stateTy τ : V.Ty} {opOk : ROp M → Prop}
+    (r : Role) (site : Site) (kind : FlowKind) (getters : List Role) :
+    ClauseEmits M fnTable rTable opOk
+      (layoutDropClause (hs := hs) (stateTy := stateTy) (τ := τ) r site kind getters) := by
+  intro op hMatch s
+  generalize hArgs : cast (congrArg (HList M.Val) hMatch.2.2.1.symm) (ROp.payload M op) = args
+  cases args with
+  | cons x xn =>
+      cases xn
+      show ((layoutDropClause (hs := hs) (stateTy := stateTy) (τ := τ) r site kind getters).code.denote
+        (roleSem M r fnTable rTable) (ROp.occurrence M op).path
+        (Env.positional (aloneIn M r (.cons x (.cons s .nil))))).SafeWith
+          M (fun _ _ => True) opOk (fun _ => True) (fun _ => True)
+      rw [layoutDropClause_denote]; trivial
+
+private theorem layoutClause_emits_any_pWrite {hs : Headers V} (fnTable : FnTable M hs.fns)
+    (rTable : RTable M hs.protocols) {unitTy τ : V.Ty} {opOk : ROp M → Prop}
+    (prover : Role) (site : Site) (kind : FlowKind) (getters : List Role)
+    (wRef : TypedFnRef V hs.fns [τ] [.seq unitTy none]) :
+    ClauseEmits M fnTable rTable opOk (layoutPWriteClause prover site kind getters wRef) := by
+  intro op hMatch buf
+  generalize hArgs : cast (congrArg (HList M.Val) hMatch.2.2.1.symm) (ROp.payload M op) = args
+  cases args with
+  | cons msg mn =>
+      cases mn
+      show ((layoutPWriteClause prover site kind getters wRef).code.denote
+        (roleSem M prover fnTable rTable) (ROp.occurrence M op).path
+        (Env.positional (aloneIn M prover (.cons msg (.cons buf .nil))))).SafeWith
+          M (fun _ _ => True) opOk (fun _ => True) (fun _ => True)
+      rw [layoutPWriteClause_denote]
+      dsimp only [roleSem, layoutPWriteClause, Clause.site, List.cons_append, List.nil_append]
+      rw [Process.safeWith_map]
+      exact liftLocal_safeWith_any M id _
+
+private theorem layoutClause_emits_any_vRead {hs : Headers V} (fnTable : FnTable M hs.fns)
+    (rTable : RTable M hs.protocols) {unitTy τ : V.Ty} {opOk : ROp M → Prop}
+    (hfree : Ty.isLinear V unitTy = false) (verifier prover : Role) (site : Site) (kind : FlowKind)
+    (rRef : SafeFnRef V hs.fns [.seq unitTy none, .nat] [τ, .nat]) :
+    ClauseEmits M fnTable rTable opOk (layoutVReadClause hfree verifier prover site kind rRef) := by
+  intro op hMatch st
+  generalize hArgs : cast (congrArg (HList M.Val) hMatch.2.2.1.symm) (ROp.payload M op) = args
+  cases args
+  rcases st with ⟨buf, off, ⟨⟩⟩
+  show ((layoutVReadClause hfree verifier prover site kind rRef).code.denote
+    (roleSem M verifier fnTable rTable) (ROp.occurrence M op).path
+    (Env.positional (aloneIn M verifier (.cons (a := streamStateTy unitTy) (buf, (off, ())) .nil)))).SafeWith
+      M (fun _ _ => True) opOk (fun _ => True) (fun _ => True)
+  rw [layoutVReadClause_denote]
+  dsimp only [roleSem, layoutVReadClause, Clause.site, List.cons_append, List.nil_append]
+  rw [Process.safeWith_map]
+  exact liftLocal_safeWith_any M id _
+
+private theorem layoutClause_emits_any_vCarry {hs : Headers V} (fnTable : FnTable M hs.fns)
+    (rTable : RTable M hs.protocols) {unitTy τ : V.Ty} {opOk : ROp M → Prop}
+    (hfree : Ty.isLinear V unitTy = false) (verifier prover : Role) (toldSite : Site)
+    (guardKey : Key) (rRef : SafeFnRef V hs.fns [.seq unitTy none, .nat] [τ, .nat])
+    (eqRef : TypedFnRef V hs.fns [τ, τ] [.bool]) :
+    ClauseEmits M fnTable rTable opOk
+      (layoutVCarryClause hfree verifier prover toldSite guardKey rRef eqRef) := by
+  intro op hMatch st
+  generalize hArgs : cast (congrArg (HList M.Val) hMatch.2.2.1.symm) (ROp.payload M op) = args
+  cases args with
+  | cons der dn =>
+      cases dn
+      rcases st with ⟨buf, off, ⟨⟩⟩
+      show ((layoutVCarryClause hfree verifier prover toldSite guardKey rRef eqRef).code.denote
+        (roleSem M verifier fnTable rTable) (ROp.occurrence M op).path
+        (Env.positional (aloneIn M verifier (.cons der (.cons (a := streamStateTy unitTy) (buf, (off, ())) .nil))))).SafeWith
+          M (fun _ _ => True) opOk (fun _ => True) (fun _ => True)
+      rw [layoutVCarryClause_denote]
+      dsimp only [roleSem, layoutVCarryClause, Clause.site, List.cons_append, List.nil_append]
+      rw [Process.safeWith_bind]
+      refine Process.safeWith_mono M (fun _ _ h => h) (fun _ h => h) (fun res _ => ?_) (fun _ _ => trivial)
+        (liftLocal_safeWith_any M id _)
+      cases res with
+      | cons c r1 =>
+          cases r1 with
+          | cons n r2 =>
+              cases r2
+              change ((liftLocal id (eqRef.eval M fnTable (.cons der (.cons c .nil)))).bind
+                fun eqRes => bif eqRes.single then .done (aloneIn M verifier (.cons (a := streamStateTy unitTy) (buf, (n, ())) .nil))
+                  else .halt (.declared .reject ⟨(ROp.occurrence M op).path, guardKey⟩)).SafeWith
+                    M (fun _ _ => True) opOk (fun _ => True) (fun _ => True)
+              rw [Process.safeWith_bind]
+              refine Process.safeWith_mono M (fun _ _ h => h) (fun _ h => h) (fun eqRes _ => ?_)
+                (fun _ _ => trivial) (liftLocal_safeWith_any M id _)
+              cases eqRes.single <;> trivial
+
+private theorem proverSampleClause_emits_any {hs : Headers V} (fnTable : FnTable M hs.fns)
+    (rTable : RTable M hs.protocols) {τ : V.Ty} {opOk : ROp M → Prop}
+    (prover : Role) (site : Site) (law : V.LawKey)
+    (sRef : TypedFnRef V hs.fns [.nat, .nat] [τ]) :
+    ClauseEmits M fnTable rTable opOk (proverSampleClause prover site law sRef) := by
+  intro op hMatch att
+  generalize hArgs : cast (congrArg (HList M.Val) hMatch.2.2.1.symm) (ROp.payload M op) = args
+  cases args
+  show ((proverSampleClause prover site law sRef).code.denote
+    (roleSem M prover fnTable rTable) (ROp.occurrence M op).path
+    (Env.positional (aloneIn M prover (.cons att .nil)))).SafeWith
+      M (fun _ _ => True) opOk (fun _ => True) (fun _ => True)
+  rw [proverSampleClause_denote]
+  dsimp only [roleSem, proverSampleClause, Clause.site, List.cons_append, List.nil_append]
+  rw [Process.safeWith_map]
+  exact liftLocal_safeWith_any M id _
+
+private theorem compactReadSlotClause_emits_any {hs : Headers V} (fnTable : FnTable M hs.fns)
+    (rTable : RTable M hs.protocols) {stateTys : Tys V.TypeKey} {τ : V.Ty} {opOk : ROp M → Prop}
+    (htfree : Tys.anyLinear V stateTys = false) (verifier prover : Role) (site : Site)
+    (kind : FlowKind) (pos : Member stateTys.toList τ) :
+    ClauseEmits M fnTable rTable opOk
+      (compactReadSlotClause (hs := hs) htfree verifier prover site kind pos) := by
+  intro op hMatch st
+  generalize hArgs : cast (congrArg (HList M.Val) hMatch.2.2.1.symm) (ROp.payload M op) = args
+  cases args
+  show ((compactReadSlotClause (hs := hs) htfree verifier prover site kind pos).code.denote
+    (roleSem M verifier fnTable rTable) (ROp.occurrence M op).path
+    (Env.positional (aloneIn M verifier (.cons (a := Ty.tuple stateTys) st .nil)))).SafeWith
+      M (fun _ _ => True) opOk (fun _ => True) (fun _ => True)
+  rw [compactReadSlotClause_denote]; trivial
+
+private theorem compactCompareClause_emits_any {hs : Headers V} (fnTable : FnTable M hs.fns)
+    (rTable : RTable M hs.protocols) {stateTys : Tys V.TypeKey} {τ : V.Ty} {opOk : ROp M → Prop}
+    (htfree : Tys.anyLinear V stateTys = false) (verifier prover : Role) (toldSite : Site)
+    (guardKey : Key) (pos : Member stateTys.toList τ) (eqRef : TypedFnRef V hs.fns [τ, τ] [.bool]) :
+    ClauseEmits M fnTable rTable opOk
+      (compactCompareClause htfree verifier prover toldSite guardKey pos eqRef) := by
+  intro op hMatch st
+  generalize hArgs : cast (congrArg (HList M.Val) hMatch.2.2.1.symm) (ROp.payload M op) = args
+  cases args with
+  | cons der dn =>
+      cases dn
+      show ((compactCompareClause htfree verifier prover toldSite guardKey pos eqRef).code.denote
+        (roleSem M verifier fnTable rTable) (ROp.occurrence M op).path
+        (Env.positional (aloneIn M verifier (.cons der (.cons (a := Ty.tuple stateTys) st .nil))))).SafeWith
+          M (fun _ _ => True) opOk (fun _ => True) (fun _ => True)
+      rw [compactCompareClause_denote]
+      dsimp only [roleSem, compactCompareClause, Clause.site, List.cons_append, List.nil_append]
+      rw [Process.safeWith_bind]
+      refine Process.safeWith_mono M (fun _ _ h => h) (fun _ h => h) (fun eqRes _ => ?_)
+        (fun _ _ => trivial) (liftLocal_safeWith_any M id _)
+      cases eqRes.single <;> trivial
+
+private theorem compactRecoverClause_emits_any {hs : Headers V} (fnTable : FnTable M hs.fns)
+    (rTable : RTable M hs.protocols) {stateTys : Tys V.TypeKey} {τ : V.Ty} {opOk : ROp M → Prop}
+    (verifier prover : Role) (site : Site) (kind : FlowKind)
+    (recRef : SafeFnRef V hs.fns stateTys.toList [τ]) :
+    ClauseEmits M fnTable rTable opOk
+      (compactRecoverClause verifier prover site kind recRef) := by
+  intro op hMatch st
+  generalize hArgs : cast (congrArg (HList M.Val) hMatch.2.2.1.symm) (ROp.payload M op) = args
+  cases args
+  show ((compactRecoverClause verifier prover site kind recRef).code.denote
+    (roleSem M verifier fnTable rTable) (ROp.occurrence M op).path
+    (Env.positional (aloneIn M verifier (.cons (a := Ty.tuple stateTys) st .nil)))).SafeWith
+      M (fun _ _ => True) opOk (fun _ => True) (fun _ => True)
+  rw [compactRecoverClause_denote]
+  dsimp only [roleSem, compactRecoverClause, Clause.site, List.cons_append, List.nil_append]
+  rw [Process.safeWith_map]
+  exact liftLocal_safeWith_any M id _
+
+private theorem buildConstructionClauses_go_covers {a : Admitted V} {suite : ModuleRef}
+    {stateTy unitTy : V.Ty}
+    {absorbRef : TypedFnRef V a.program.headers.fns [stateTy, bytesTy, .seq unitTy none] [stateTy]}
+    {prover verifier : Role} (hNe : prover ≠ verifier) {samplesKey : Option Key} {declKey : Key}
+    {events : List (ShapeEvent V)} :
+    ∀ (idx : Nat) (es : List (ShapeEvent V × Bool)),
+      (∀ k p, es[k]? = some p → events[idx + k]? = some p.1) →
+      ∀ {cP : List (Clause V a.program.headers prover stateTy)}
+        {cV : List (Clause V a.program.headers verifier stateTy)}
+        {cS : List (Clause V a.program.headers prover .nat)},
+      buildConstructionClauses.go a suite stateTy unitTy absorbRef prover verifier samplesKey
+        declKey events idx es = .ok (cP, cV, cS) →
+      (∀ c ∈ cP, ClauseEmits M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs)
+        (LayoutInputP M prover verifier events) c) ∧
+      (∀ c ∈ cV, ClauseEmits M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs)
+        (LayoutInputV M prover verifier events) c) ∧
+      (∀ c ∈ cS, ClauseEmits M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs)
+        (ROp.MatchesShape M prover events) c) ∧
+      (∀ op, ROp.MatchesShape M prover (es.map Prod.fst) op →
+        LayoutInputP M prover verifier events op ∨ ∃ c ∈ cP, ClauseMatches M c op) ∧
+      (∀ op, ROp.MatchesShape M verifier (es.map Prod.fst) op →
+        LayoutInputV M prover verifier events op ∨ ∃ c ∈ cV, ClauseMatches M c op)
+  | _, [], _, _, _, _, h => by
+      cases h
+      refine ⟨(fun _ hc => nomatch hc), (fun _ hc => nomatch hc), (fun _ hc => nomatch hc), ?_, ?_⟩
+      · intro op ho
+        cases op with
+        | «begin» | settle => exact .inl (.inl trivial)
+        | give | get | own | hear => obtain ⟨_, hc, _⟩ := ho; cases hc
+      · intro op ho
+        cases op with
+        | «begin» | settle => exact .inl (.inl trivial)
+        | give | get | own | hear => obtain ⟨_, hc, _⟩ := ho; cases hc
+  | idx, (e, needAbs) :: rest, hSuf, cP, cV, cS, h => by
+      unfold buildConstructionClauses.go at h
+      have hSufRest : ∀ k p, rest[k]? = some p → events[(idx + 1) + k]? = some p.1 := by
+        intro k p hk
+        have := hSuf (k + 1) p hk
+        simpa [Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using this
+      have hIdx : events[idx]? = some e := by
+        simpa using hSuf 0 (e, needAbs) rfl
+      have hMem : e ∈ events := List.mem_of_getElem? hIdx
+      cases hRec : buildConstructionClauses.go a suite stateTy unitTy absorbRef prover verifier
+          samplesKey declKey events (idx + 1) rest with
+      | error _ => rw [hRec] at h; cases h
+      | ok triple =>
+          rw [hRec] at h; dsimp only [bind, Except.bind] at h
+          obtain ⟨ihEmP, ihEmV, ihEmS, ihCovP, ihCovV⟩ :=
+            buildConstructionClauses_go_covers hNe (idx + 1) rest hSufRest hRec
+          have liftRestP : ∀ op, (∃ e' ∈ rest.map Prod.fst, ROp.MatchesShapeEvent M prover e' op) →
+              LayoutInputP M prover verifier events op ∨ ∃ c ∈ triple.1, ClauseMatches M c op := by
+            intro op ho
+            apply ihCovP op
+            cases op with
+            | «begin» | settle => trivial
+            | give | get | own | hear => exact ho
+          have liftRestV : ∀ op, (∃ e' ∈ rest.map Prod.fst, ROp.MatchesShapeEvent M verifier e' op) →
+              LayoutInputV M prover verifier events op ∨ ∃ c ∈ triple.2.1, ClauseMatches M c op := by
+            intro op ho
+            apply ihCovV op
+            cases op with
+            | «begin» | settle => trivial
+            | give | get | own | hear => exact ho
+          cases hCls : e.cls with
+          | flow kind giver getters =>
+              rw [hCls] at h; dsimp only at h
+              split at h
+              · rename_i hPVFlow
+                cases needAbs with
+                | false =>
+                    simp only [Bool.false_eq_true, ↓reduceIte] at h
+                    cases h
+                    refine ⟨ihEmP, ihEmV, ihEmS, ?_, ?_⟩
+                    · intro op ho
+                      cases op with
+                      | «begin» | settle => exact .inl (.inl trivial)
+                      | give k' gs' at_ τ' x' =>
+                          obtain ⟨e', he', hSite, hTy, hECls⟩ := ho
+                          rcases List.mem_cons.mp he' with rfl | hmem
+                          · rw [hCls] at hECls; cases hECls
+                            exact .inl (.inr (.inl ⟨e', hMem, hSite, hTy, hPVFlow.1 ▸ hCls, hPVFlow.2⟩))
+                          · exact liftRestP (.give k' gs' at_ τ' x') ⟨e', hmem, hSite, hTy, hECls⟩
+                      | get k' g' at_ τ' =>
+                          obtain ⟨e', he', hNeG, hSite, hTy, gs', hrIn, hECls⟩ := ho
+                          rcases List.mem_cons.mp he' with rfl | hmem
+                          · rw [hCls] at hECls; cases hECls; exact absurd hPVFlow.1 hNeG
+                          · exact liftRestP (.get k' g' at_ τ') ⟨e', hmem, hNeG, hSite, hTy, gs', hrIn, hECls⟩
+                      | own gk hs' at_ ins' pl' τ' =>
+                          obtain ⟨e', he', hSite, hTy, hECls, hTyped⟩ := ho
+                          rcases List.mem_cons.mp he' with rfl | hmem
+                          · rw [hCls] at hECls; cases hECls
+                          · exact liftRestP (.own gk hs' at_ ins' pl' τ') ⟨e', hmem, hSite, hTy, hECls, hTyped⟩
+                      | hear gk ow' at_ τ' =>
+                          obtain ⟨e', he', hNeO, hSite, hTy, hs', hrIn, hECls⟩ := ho
+                          rcases List.mem_cons.mp he' with rfl | hmem
+                          · rw [hCls] at hECls; cases hECls
+                          · exact liftRestP (.hear gk ow' at_ τ') ⟨e', hmem, hNeO, hSite, hTy, hs', hrIn, hECls⟩
+                    · intro op ho
+                      cases op with
+                      | «begin» | settle => exact .inl (.inl trivial)
+                      | give k' gs' at_ τ' x' =>
+                          obtain ⟨e', he', hSite, hTy, hECls⟩ := ho
+                          rcases List.mem_cons.mp he' with rfl | hmem
+                          · rw [hCls] at hECls; cases hECls; exact absurd hPVFlow.1.symm hNe
+                          · exact liftRestV (.give k' gs' at_ τ' x') ⟨e', hmem, hSite, hTy, hECls⟩
+                      | get k' g' at_ τ' =>
+                          obtain ⟨e', he', hNeG, hSite, hTy, gs', hrIn, hECls⟩ := ho
+                          rcases List.mem_cons.mp he' with rfl | hmem
+                          · rw [hCls] at hECls; cases hECls
+                            exact .inl (.inr (.inl ⟨e', hMem, hPVFlow.1, hSite, hTy, getters, hPVFlow.2, hPVFlow.1 ▸ hCls⟩))
+                          · exact liftRestV (.get k' g' at_ τ') ⟨e', hmem, hNeG, hSite, hTy, gs', hrIn, hECls⟩
+                      | own gk hs' at_ ins' pl' τ' =>
+                          obtain ⟨e', he', hSite, hTy, hECls, hTyped⟩ := ho
+                          rcases List.mem_cons.mp he' with rfl | hmem
+                          · rw [hCls] at hECls; cases hECls
+                          · exact liftRestV (.own gk hs' at_ ins' pl' τ') ⟨e', hmem, hSite, hTy, hECls, hTyped⟩
+                      | hear gk ow' at_ τ' =>
+                          obtain ⟨e', he', hNeO, hSite, hTy, hs', hrIn, hECls⟩ := ho
+                          rcases List.mem_cons.mp he' with rfl | hmem
+                          · rw [hCls] at hECls; cases hECls
+                          · exact liftRestV (.hear gk ow' at_ τ') ⟨e', hmem, hNeO, hSite, hTy, hs', hrIn, hECls⟩
+                | true =>
+                    simp only [↓reduceIte] at h
+                    cases hEnc : findSuiteEncode a suite unitTy e.τ with
+                    | none => rw [hEnc] at h; cases h
+                    | some encRef =>
+                        rw [hEnc] at h; cases h
+                        refine ⟨?_, ?_, ihEmS, ?_, ?_⟩
+                        · intro c hc
+                          rcases List.mem_cons.mp hc with rfl | hm
+                          · intro op hMatch st
+                            generalize hArgs : cast (congrArg (HList M.Val) hMatch.2.2.1.symm) (ROp.payload M op) = args
+                            cases args with
+                            | cons msg mn =>
+                                cases mn
+                                show ((proverAbsorbClause prover e.site kind getters (msgLabel e.site)
+                                  (msgLabel_bytes e.site) encRef absorbRef).code.denote
+                                  (roleSem M prover (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs))
+                                  (ROp.occurrence M op).path
+                                  (Env.positional (aloneIn M prover (.cons msg (.cons st .nil))))).SafeWith
+                                    M (fun _ _ => True) (LayoutInputP M prover verifier events) (fun _ => True) (fun _ => True)
+                                rw [proverAbsorbClause_denote]
+                                dsimp only [roleSem, proverAbsorbClause, Clause.site, List.cons_append, List.nil_append]
+                                rw [Process.safeWith_bind]
+                                refine Process.safeWith_mono M (fun _ _ h => h) (fun _ h => h) (fun _ _ => ?_)
+                                  (fun _ _ => trivial) (liftLocal_safeWith_any M id _)
+                                rw [Process.safeWith_bind]
+                                refine Process.safeWith_mono M (fun _ _ h => h) (fun _ h => h) (fun _ _ => ?_)
+                                  (fun _ _ => trivial) (liftLocal_safeWith_any M id _)
+                                refine ⟨.inr (.inl ⟨e, hMem, ?_⟩), fun _ _ => trivial⟩
+                                exact ⟨(site_from_match hMatch.1).symm, rfl, hPVFlow.1 ▸ hCls, hPVFlow.2⟩
+                          · exact ihEmP c hm
+                        · intro c hc
+                          rcases List.mem_cons.mp hc with rfl | hm
+                          · intro op hMatch st
+                            generalize hArgs : cast (congrArg (HList M.Val) hMatch.2.2.1.symm) (ROp.payload M op) = args
+                            cases args
+                            show ((verifierAbsorbClause verifier prover e.site kind (msgLabel e.site)
+                              (msgLabel_bytes e.site) encRef absorbRef).code.denote
+                              (roleSem M verifier (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs))
+                              (ROp.occurrence M op).path
+                              (Env.positional (aloneIn M verifier (.cons st .nil)))).SafeWith
+                                M (fun _ _ => True) (LayoutInputV M prover verifier events) (fun _ => True) (fun _ => True)
+                            rw [verifierAbsorbClause_denote]
+                            refine ⟨.inr (.inl ⟨e, hMem, ?_⟩), fun _ _ => ?_⟩
+                            · exact ⟨rfl, (site_from_match hMatch.1).symm, rfl, getters, hPVFlow.2, hPVFlow.1 ▸ hCls⟩
+                            · rw [Process.safeWith_bind]
+                              refine Process.safeWith_mono M (fun _ _ h => h) (fun _ h => h) (fun _ _ => ?_)
+                                (fun _ _ => trivial) (liftLocal_safeWith_any M id _)
+                              rw [Process.safeWith_map]
+                              exact liftLocal_safeWith_any M id _
+                          · exact ihEmV c hm
+                        · intro op ho
+                          cases op with
+                          | «begin» | settle => exact .inl (.inl trivial)
+                          | give k' gs' at_ τ' x' =>
+                              obtain ⟨e', he', hSite, hTy, hECls⟩ := ho
+                              rcases List.mem_cons.mp he' with rfl | hmem
+                              · rw [hCls] at hECls; cases hECls
+                                exact .inr ⟨_, List.mem_cons_self, hSite, rfl, by cases hTy; rfl, rfl⟩
+                              · rcases liftRestP (.give k' gs' at_ τ' x') ⟨e', hmem, hSite, hTy, hECls⟩ with hL | ⟨c, hc, hm⟩
+                                · exact .inl hL
+                                · exact .inr ⟨c, List.mem_cons_of_mem _ hc, hm⟩
+                          | get k' g' at_ τ' =>
+                              obtain ⟨e', he', hNeG, hSite, hTy, gs', hrIn, hECls⟩ := ho
+                              rcases List.mem_cons.mp he' with rfl | hmem
+                              · rw [hCls] at hECls; cases hECls; exact absurd hPVFlow.1 hNeG
+                              · rcases liftRestP (.get k' g' at_ τ') ⟨e', hmem, hNeG, hSite, hTy, gs', hrIn, hECls⟩ with hL | ⟨c, hc, hm⟩
+                                · exact .inl hL
+                                · exact .inr ⟨c, List.mem_cons_of_mem _ hc, hm⟩
+                          | own gk hs' at_ ins' pl' τ' =>
+                              obtain ⟨e', he', hSite, hTy, hECls, hTyped⟩ := ho
+                              rcases List.mem_cons.mp he' with rfl | hmem
+                              · rw [hCls] at hECls; cases hECls
+                              · rcases liftRestP (.own gk hs' at_ ins' pl' τ') ⟨e', hmem, hSite, hTy, hECls, hTyped⟩ with hL | ⟨c, hc, hm⟩
+                                · exact .inl hL
+                                · exact .inr ⟨c, List.mem_cons_of_mem _ hc, hm⟩
+                          | hear gk ow' at_ τ' =>
+                              obtain ⟨e', he', hNeO, hSite, hTy, hs', hrIn, hECls⟩ := ho
+                              rcases List.mem_cons.mp he' with rfl | hmem
+                              · rw [hCls] at hECls; cases hECls
+                              · rcases liftRestP (.hear gk ow' at_ τ') ⟨e', hmem, hNeO, hSite, hTy, hs', hrIn, hECls⟩ with hL | ⟨c, hc, hm⟩
+                                · exact .inl hL
+                                · exact .inr ⟨c, List.mem_cons_of_mem _ hc, hm⟩
+                        · intro op ho
+                          cases op with
+                          | «begin» | settle => exact .inl (.inl trivial)
+                          | give k' gs' at_ τ' x' =>
+                              obtain ⟨e', he', hSite, hTy, hECls⟩ := ho
+                              rcases List.mem_cons.mp he' with rfl | hmem
+                              · rw [hCls] at hECls; cases hECls; exact absurd hPVFlow.1.symm hNe
+                              · rcases liftRestV (.give k' gs' at_ τ' x') ⟨e', hmem, hSite, hTy, hECls⟩ with hL | ⟨c, hc, hm⟩
+                                · exact .inl hL
+                                · exact .inr ⟨c, List.mem_cons_of_mem _ hc, hm⟩
+                          | get k' g' at_ τ' =>
+                              obtain ⟨e', he', hNeG, hSite, hTy, gs', hrIn, hECls⟩ := ho
+                              rcases List.mem_cons.mp he' with rfl | hmem
+                              · rw [hCls] at hECls; cases hECls
+                                exact .inr ⟨_, List.mem_cons_self, hSite, by dsimp only [verifierAbsorbClause, ROp.part]; rw [hPVFlow.1],
+                                  rfl, by cases hTy; rfl⟩
+                              · rcases liftRestV (.get k' g' at_ τ') ⟨e', hmem, hNeG, hSite, hTy, gs', hrIn, hECls⟩ with hL | ⟨c, hc, hm⟩
+                                · exact .inl hL
+                                · exact .inr ⟨c, List.mem_cons_of_mem _ hc, hm⟩
+                          | own gk hs' at_ ins' pl' τ' =>
+                              obtain ⟨e', he', hSite, hTy, hECls, hTyped⟩ := ho
+                              rcases List.mem_cons.mp he' with rfl | hmem
+                              · rw [hCls] at hECls; cases hECls
+                              · rcases liftRestV (.own gk hs' at_ ins' pl' τ') ⟨e', hmem, hSite, hTy, hECls, hTyped⟩ with hL | ⟨c, hc, hm⟩
+                                · exact .inl hL
+                                · exact .inr ⟨c, List.mem_cons_of_mem _ hc, hm⟩
+                          | hear gk ow' at_ τ' =>
+                              obtain ⟨e', he', hNeO, hSite, hTy, hs', hrIn, hECls⟩ := ho
+                              rcases List.mem_cons.mp he' with rfl | hmem
+                              · rw [hCls] at hECls; cases hECls
+                              · rcases liftRestV (.hear gk ow' at_ τ') ⟨e', hmem, hNeO, hSite, hTy, hs', hrIn, hECls⟩ with hL | ⟨c, hc, hm⟩
+                                · exact .inl hL
+                                · exact .inr ⟨c, List.mem_cons_of_mem _ hc, hm⟩
+              · split at h
+                · rename_i hOut
+                  cases h
+                  refine ⟨ihEmP, ihEmV, ihEmS, ?_, ?_⟩
+                  · intro op ho
+                    cases op with
+                    | «begin» | settle => exact .inl (.inl trivial)
+                    | give k' gs' at_ τ' x' =>
+                        obtain ⟨e', he', hSite, hTy, hECls⟩ := ho
+                        rcases List.mem_cons.mp he' with rfl | hmem
+                        · rw [hCls] at hECls; cases hECls; exact absurd rfl hOut.1
+                        · exact liftRestP (.give k' gs' at_ τ' x') ⟨e', hmem, hSite, hTy, hECls⟩
+                    | get k' g' at_ τ' =>
+                        obtain ⟨e', he', hNeG, hSite, hTy, gs', hrIn, hECls⟩ := ho
+                        rcases List.mem_cons.mp he' with rfl | hmem
+                        · rw [hCls] at hECls; cases hECls; exact absurd hrIn hOut.2.2.1
+                        · exact liftRestP (.get k' g' at_ τ') ⟨e', hmem, hNeG, hSite, hTy, gs', hrIn, hECls⟩
+                    | own gk hs' at_ ins' pl' τ' =>
+                        obtain ⟨e', he', hSite, hTy, hECls, hTyped⟩ := ho
+                        rcases List.mem_cons.mp he' with rfl | hmem
+                        · rw [hCls] at hECls; cases hECls
+                        · exact liftRestP (.own gk hs' at_ ins' pl' τ') ⟨e', hmem, hSite, hTy, hECls, hTyped⟩
+                    | hear gk ow' at_ τ' =>
+                        obtain ⟨e', he', hNeO, hSite, hTy, hs', hrIn, hECls⟩ := ho
+                        rcases List.mem_cons.mp he' with rfl | hmem
+                        · rw [hCls] at hECls; cases hECls
+                        · exact liftRestP (.hear gk ow' at_ τ') ⟨e', hmem, hNeO, hSite, hTy, hs', hrIn, hECls⟩
+                  · intro op ho
+                    cases op with
+                    | «begin» | settle => exact .inl (.inl trivial)
+                    | give k' gs' at_ τ' x' =>
+                        obtain ⟨e', he', hSite, hTy, hECls⟩ := ho
+                        rcases List.mem_cons.mp he' with rfl | hmem
+                        · rw [hCls] at hECls; cases hECls; exact absurd rfl hOut.2.1
+                        · exact liftRestV (.give k' gs' at_ τ' x') ⟨e', hmem, hSite, hTy, hECls⟩
+                    | get k' g' at_ τ' =>
+                        obtain ⟨e', he', hNeG, hSite, hTy, gs', hrIn, hECls⟩ := ho
+                        rcases List.mem_cons.mp he' with rfl | hmem
+                        · rw [hCls] at hECls; cases hECls; exact absurd hrIn hOut.2.2.2
+                        · exact liftRestV (.get k' g' at_ τ') ⟨e', hmem, hNeG, hSite, hTy, gs', hrIn, hECls⟩
+                    | own gk hs' at_ ins' pl' τ' =>
+                        obtain ⟨e', he', hSite, hTy, hECls, hTyped⟩ := ho
+                        rcases List.mem_cons.mp he' with rfl | hmem
+                        · rw [hCls] at hECls; cases hECls
+                        · exact liftRestV (.own gk hs' at_ ins' pl' τ') ⟨e', hmem, hSite, hTy, hECls, hTyped⟩
+                    | hear gk ow' at_ τ' =>
+                        obtain ⟨e', he', hNeO, hSite, hTy, hs', hrIn, hECls⟩ := ho
+                        rcases List.mem_cons.mp he' with rfl | hmem
+                        · rw [hCls] at hECls; cases hECls
+                        · exact liftRestV (.hear gk ow' at_ τ') ⟨e', hmem, hNeO, hSite, hTy, hs', hrIn, hECls⟩
+                · cases h
+          | given gkind owner hearers =>
+              rw [hCls] at h
+              cases gkind with
+              | coin law =>
+                  dsimp only at h
+                  split at h
+                  · rename_i hCoin
+                    cases hLaw : V.law law with
+                    | none => rw [hLaw] at h; cases h
+                    | some sig =>
+                        rw [hLaw] at h; dsimp only at h
+                        split at h
+                        · rename_i hOutEq
+                          cases hDer : findSuiteDerive a suite stateTy sig.ins e.τ with
+                          | none => rw [hDer] at h; cases h
+                          | some derRef =>
+                              rw [hDer] at h; dsimp only at h
+                              split at h
+                              · rename_i hIns
+                                cases h
+                                rcases sig with ⟨sIns, sOut⟩
+                                dsimp only at hIns
+                                subst hIns
+                                refine ⟨?_, ?_, ihEmS, ?_, ?_⟩
+                                · intro c hc
+                                  rcases List.mem_cons.mp hc with rfl | hm
+                                  · intro op hMatch st
+                                    generalize hArgs : cast (congrArg (HList M.Val) hMatch.2.2.1.symm)
+                                      (ROp.payload M op) = args
+                                    cases args
+                                    show ((deriveClause prover verifier e.site (.hear (.coin law) verifier) []
+                                      (drawToldKey events idx) (drawLabel e.site) (drawLabel_bytes e.site) derRef).code.denote
+                                      (roleSem M prover (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs))
+                                      (ROp.occurrence M op).path
+                                      (Env.positional (aloneIn M prover (.cons st .nil)))).SafeWith
+                                        M (fun _ _ => True) (LayoutInputP M prover verifier events) (fun _ => True) (fun _ => True)
+                                    rw [deriveClause_denote_nil]
+                                    dsimp only [roleSem, deriveClause, Clause.site, List.cons_append, List.nil_append]
+                                    rw [Process.safeWith_bind]
+                                    refine Process.safeWith_mono M (fun _ _ h => h) (fun _ h => h)
+                                      (fun res _ => ?_) (fun _ _ => trivial) (liftLocal_safeWith_any M id _)
+                                    cases res with
+                                    | cons coin r1 =>
+                                        cases r1 with
+                                        | cons nst r2 =>
+                                            cases r2
+                                            refine ⟨.inr (.inr ⟨idx, e, hIdx, rfl,
+                                              site_told_from_match hMatch.1, rfl, law, hearers,
+                                              hCoin.1 ▸ hCls, hCoin.2⟩), fun _ _ => trivial⟩
+                                  · exact ihEmP c hm
+                                · intro c hc
+                                  rcases List.mem_cons.mp hc with rfl | hm
+                                  · intro op hMatch st
+                                    generalize hArgs : cast (congrArg (HList M.Val) hMatch.2.2.1.symm)
+                                      (ROp.payload M op) = args
+                                    cases args
+                                    show ((deriveClause verifier prover e.site (.own (.coin law) hearers) []
+                                      (drawToldKey events idx) (drawLabel e.site) (drawLabel_bytes e.site) derRef).code.denote
+                                      (roleSem M verifier (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs))
+                                      (ROp.occurrence M op).path
+                                      (Env.positional (aloneIn M verifier (.cons st .nil)))).SafeWith
+                                        M (fun _ _ => True) (LayoutInputV M prover verifier events) (fun _ => True) (fun _ => True)
+                                    rw [deriveClause_denote_nil]
+                                    dsimp only [roleSem, deriveClause, Clause.site, List.cons_append, List.nil_append]
+                                    rw [Process.safeWith_bind]
+                                    refine Process.safeWith_mono M (fun _ _ h => h) (fun _ h => h)
+                                      (fun res _ => ?_) (fun _ _ => trivial) (liftLocal_safeWith_any M id _)
+                                    cases res with
+                                    | cons coin r1 =>
+                                        cases r1 with
+                                        | cons nst r2 =>
+                                            cases r2
+                                            refine ⟨.inr (.inr ⟨idx, e, hIdx, rfl,
+                                              site_told_from_match hMatch.1, rfl, law, hearers,
+                                              hCoin.1 ▸ hCls, hCoin.2⟩), fun _ _ => trivial⟩
+                                  · exact ihEmV c hm
+                                · intro op ho
+                                  cases op with
+                                  | «begin» | settle => exact .inl (.inl trivial)
+                                  | give k' gs' at_ τ' x' =>
+                                      obtain ⟨e', he', hSite, hTy, hECls⟩ := ho
+                                      rcases List.mem_cons.mp he' with rfl | hmem
+                                      · rw [hCls] at hECls; cases hECls
+                                      · rcases liftRestP (.give k' gs' at_ τ' x') ⟨e', hmem, hSite, hTy, hECls⟩ with hL | ⟨c, hc, hm⟩
+                                        · exact .inl hL
+                                        · exact .inr ⟨c, List.mem_cons_of_mem _ hc, hm⟩
+                                  | get k' g' at_ τ' =>
+                                      obtain ⟨e', he', hNeG, hSite, hTy, gs', hrIn, hECls⟩ := ho
+                                      rcases List.mem_cons.mp he' with rfl | hmem
+                                      · rw [hCls] at hECls; cases hECls
+                                      · rcases liftRestP (.get k' g' at_ τ') ⟨e', hmem, hNeG, hSite, hTy, gs', hrIn, hECls⟩ with hL | ⟨c, hc, hm⟩
+                                        · exact .inl hL
+                                        · exact .inr ⟨c, List.mem_cons_of_mem _ hc, hm⟩
+                                  | own gk hs' at_ ins' pl' τ' =>
+                                      obtain ⟨e', he', hSite, hTy, hECls, hTyped⟩ := ho
+                                      rcases List.mem_cons.mp he' with rfl | hmem
+                                      · rw [hCls] at hECls; cases hECls; exact absurd hCoin.1 hNe
+                                      · rcases liftRestP (.own gk hs' at_ ins' pl' τ') ⟨e', hmem, hSite, hTy, hECls, hTyped⟩ with hL | ⟨c, hc, hm⟩
+                                        · exact .inl hL
+                                        · exact .inr ⟨c, List.mem_cons_of_mem _ hc, hm⟩
+                                  | hear gk ow' at_ τ' =>
+                                      obtain ⟨e', he', hNeO, hSite, hTy, hs', hrIn, hECls⟩ := ho
+                                      rcases List.mem_cons.mp he' with rfl | hmem
+                                      · rw [hCls] at hECls; cases hECls
+                                        exact .inr ⟨_, List.mem_cons_self, hSite,
+                                          by dsimp only [deriveClause, ROp.part]; rw [hCoin.1], rfl, by cases hTy; rfl⟩
+                                      · rcases liftRestP (.hear gk ow' at_ τ') ⟨e', hmem, hNeO, hSite, hTy, hs', hrIn, hECls⟩ with hL | ⟨c, hc, hm⟩
+                                        · exact .inl hL
+                                        · exact .inr ⟨c, List.mem_cons_of_mem _ hc, hm⟩
+                                · intro op ho
+                                  cases op with
+                                  | «begin» | settle => exact .inl (.inl trivial)
+                                  | give k' gs' at_ τ' x' =>
+                                      obtain ⟨e', he', hSite, hTy, hECls⟩ := ho
+                                      rcases List.mem_cons.mp he' with rfl | hmem
+                                      · rw [hCls] at hECls; cases hECls
+                                      · rcases liftRestV (.give k' gs' at_ τ' x') ⟨e', hmem, hSite, hTy, hECls⟩ with hL | ⟨c, hc, hm⟩
+                                        · exact .inl hL
+                                        · exact .inr ⟨c, List.mem_cons_of_mem _ hc, hm⟩
+                                  | get k' g' at_ τ' =>
+                                      obtain ⟨e', he', hNeG, hSite, hTy, gs', hrIn, hECls⟩ := ho
+                                      rcases List.mem_cons.mp he' with rfl | hmem
+                                      · rw [hCls] at hECls; cases hECls
+                                      · rcases liftRestV (.get k' g' at_ τ') ⟨e', hmem, hNeG, hSite, hTy, gs', hrIn, hECls⟩ with hL | ⟨c, hc, hm⟩
+                                        · exact .inl hL
+                                        · exact .inr ⟨c, List.mem_cons_of_mem _ hc, hm⟩
+                                  | own gk hs' at_ ins' pl' τ' =>
+                                      obtain ⟨e', he', hSite, hTy, hECls, hTyped⟩ := ho
+                                      rcases List.mem_cons.mp he' with rfl | hmem
+                                      · rw [hCls] at hECls; cases hECls
+                                        have hInsEq : ins' = [] := by
+                                          obtain ⟨s, hsLaw, hsIns, _⟩ := hTyped
+                                          rw [hLaw] at hsLaw; cases hsLaw
+                                          rw [← hsIns]
+                                        exact .inr ⟨_, List.mem_cons_self, hSite, rfl,
+                                          by cases hInsEq; rfl, by cases hTy; rfl⟩
+                                      · rcases liftRestV (.own gk hs' at_ ins' pl' τ') ⟨e', hmem, hSite, hTy, hECls, hTyped⟩ with hL | ⟨c, hc, hm⟩
+                                        · exact .inl hL
+                                        · exact .inr ⟨c, List.mem_cons_of_mem _ hc, hm⟩
+                                  | hear gk ow' at_ τ' =>
+                                      obtain ⟨e', he', hNeO, hSite, hTy, hs', hrIn, hECls⟩ := ho
+                                      rcases List.mem_cons.mp he' with rfl | hmem
+                                      · rw [hCls] at hECls; cases hECls; exact absurd hCoin.1 hNeO
+                                      · rcases liftRestV (.hear gk ow' at_ τ') ⟨e', hmem, hNeO, hSite, hTy, hs', hrIn, hECls⟩ with hL | ⟨c, hc, hm⟩
+                                        · exact .inl hL
+                                        · exact .inr ⟨c, List.mem_cons_of_mem _ hc, hm⟩
+                              · cases h
+                        · cases h
+                  · split at h
+                    · rename_i hNil
+                      have hStepP : ∀ op, ROp.MatchesShape M prover (e :: rest.map Prod.fst) op →
+                          LayoutInputP M prover verifier events op ∨ ∃ c ∈ triple.1, ClauseMatches M c op := by
+                        intro op ho
+                        cases op with
+                        | «begin» | settle => exact .inl (.inl trivial)
+                        | give k' gs' at_ τ' x' =>
+                            obtain ⟨e', he', hSite, hTy, hECls⟩ := ho
+                            rcases List.mem_cons.mp he' with rfl | hmem
+                            · rw [hCls] at hECls; cases hECls
+                            · exact liftRestP (.give k' gs' at_ τ' x') ⟨e', hmem, hSite, hTy, hECls⟩
+                        | get k' g' at_ τ' =>
+                            obtain ⟨e', he', hNeG, hSite, hTy, gs', hrIn, hECls⟩ := ho
+                            rcases List.mem_cons.mp he' with rfl | hmem
+                            · rw [hCls] at hECls; cases hECls
+                            · exact liftRestP (.get k' g' at_ τ') ⟨e', hmem, hNeG, hSite, hTy, gs', hrIn, hECls⟩
+                        | own gk hs' at_ ins' pl' τ' =>
+                            obtain ⟨e', he', hSite, hTy, hECls, hTyped⟩ := ho
+                            rcases List.mem_cons.mp he' with rfl | hmem
+                            · rw [hCls] at hECls; cases hECls; subst hNil; exact .inl (.inl trivial)
+                            · exact liftRestP (.own gk hs' at_ ins' pl' τ') ⟨e', hmem, hSite, hTy, hECls, hTyped⟩
+                        | hear gk ow' at_ τ' =>
+                            obtain ⟨e', he', hNeO, hSite, hTy, hs', hrIn, hECls⟩ := ho
+                            rcases List.mem_cons.mp he' with rfl | hmem
+                            · rw [hCls] at hECls; cases hECls; subst hNil; cases hrIn
+                            · exact liftRestP (.hear gk ow' at_ τ') ⟨e', hmem, hNeO, hSite, hTy, hs', hrIn, hECls⟩
+                      have hStepV : ∀ op, ROp.MatchesShape M verifier (e :: rest.map Prod.fst) op →
+                          LayoutInputV M prover verifier events op ∨ ∃ c ∈ triple.2.1, ClauseMatches M c op := by
+                        intro op ho
+                        cases op with
+                        | «begin» | settle => exact .inl (.inl trivial)
+                        | give k' gs' at_ τ' x' =>
+                            obtain ⟨e', he', hSite, hTy, hECls⟩ := ho
+                            rcases List.mem_cons.mp he' with rfl | hmem
+                            · rw [hCls] at hECls; cases hECls
+                            · exact liftRestV (.give k' gs' at_ τ' x') ⟨e', hmem, hSite, hTy, hECls⟩
+                        | get k' g' at_ τ' =>
+                            obtain ⟨e', he', hNeG, hSite, hTy, gs', hrIn, hECls⟩ := ho
+                            rcases List.mem_cons.mp he' with rfl | hmem
+                            · rw [hCls] at hECls; cases hECls
+                            · exact liftRestV (.get k' g' at_ τ') ⟨e', hmem, hNeG, hSite, hTy, gs', hrIn, hECls⟩
+                        | own gk hs' at_ ins' pl' τ' =>
+                            obtain ⟨e', he', hSite, hTy, hECls, hTyped⟩ := ho
+                            rcases List.mem_cons.mp he' with rfl | hmem
+                            · rw [hCls] at hECls; cases hECls; subst hNil; exact .inl (.inl trivial)
+                            · exact liftRestV (.own gk hs' at_ ins' pl' τ') ⟨e', hmem, hSite, hTy, hECls, hTyped⟩
+                        | hear gk ow' at_ τ' =>
+                            obtain ⟨e', he', hNeO, hSite, hTy, hs', hrIn, hECls⟩ := ho
+                            rcases List.mem_cons.mp he' with rfl | hmem
+                            · rw [hCls] at hECls; cases hECls; subst hNil; cases hrIn
+                            · exact liftRestV (.hear gk ow' at_ τ') ⟨e', hmem, hNeO, hSite, hTy, hs', hrIn, hECls⟩
+                      split at h
+                      · cases samplesKey with
+                        | none => cases h; exact ⟨ihEmP, ihEmV, ihEmS, hStepP, hStepV⟩
+                        | some sKey =>
+                            dsimp only at h
+                            cases hS : findTypedFnRef a sKey [.nat, .nat] [e.τ] with
+                            | none => rw [hS] at h; cases h
+                            | some sRef =>
+                                rw [hS] at h; cases h
+                                refine ⟨ihEmP, ihEmV, fun c hc => ?_, hStepP, hStepV⟩
+                                rcases List.mem_cons.mp hc with rfl | hm
+                                · apply proverSampleClause_emits_any M
+                                · exact ihEmS c hm
+                      · cases h; exact ⟨ihEmP, ihEmV, ihEmS, hStepP, hStepV⟩
+                    · cases h
+              | request _ =>
+                  dsimp only at h
+                  split at h
+                  · rename_i hReq
+                    cases h
+                    refine ⟨ihEmP, ihEmV, ihEmS, ?_, ?_⟩
+                    · intro op ho
+                      cases op with
+                      | «begin» | settle => exact .inl (.inl trivial)
+                      | give k' gs' at_ τ' x' =>
+                          obtain ⟨e', he', hSite, hTy, hECls⟩ := ho
+                          rcases List.mem_cons.mp he' with rfl | hmem
+                          · rw [hCls] at hECls; cases hECls
+                          · exact liftRestP (.give k' gs' at_ τ' x') ⟨e', hmem, hSite, hTy, hECls⟩
+                      | get k' g' at_ τ' =>
+                          obtain ⟨e', he', hNeG, hSite, hTy, gs', hrIn, hECls⟩ := ho
+                          rcases List.mem_cons.mp he' with rfl | hmem
+                          · rw [hCls] at hECls; cases hECls
+                          · exact liftRestP (.get k' g' at_ τ') ⟨e', hmem, hNeG, hSite, hTy, gs', hrIn, hECls⟩
+                      | own gk hs' at_ ins' pl' τ' =>
+                          obtain ⟨e', he', hSite, hTy, hECls, hTyped⟩ := ho
+                          rcases List.mem_cons.mp he' with rfl | hmem
+                          · rw [hCls] at hECls; cases hECls; exact .inl (.inl trivial)
+                          · exact liftRestP (.own gk hs' at_ ins' pl' τ') ⟨e', hmem, hSite, hTy, hECls, hTyped⟩
+                      | hear gk ow' at_ τ' =>
+                          obtain ⟨e', he', hNeO, hSite, hTy, hs', hrIn, hECls⟩ := ho
+                          rcases List.mem_cons.mp he' with rfl | hmem
+                          · rw [hCls] at hECls; cases hECls
+                            rcases hReq.1 with hEqO | hNotIn
+                            · exact absurd hEqO hNeO
+                            · exact absurd hrIn hNotIn
+                          · exact liftRestP (.hear gk ow' at_ τ') ⟨e', hmem, hNeO, hSite, hTy, hs', hrIn, hECls⟩
+                    · intro op ho
+                      cases op with
+                      | «begin» | settle => exact .inl (.inl trivial)
+                      | give k' gs' at_ τ' x' =>
+                          obtain ⟨e', he', hSite, hTy, hECls⟩ := ho
+                          rcases List.mem_cons.mp he' with rfl | hmem
+                          · rw [hCls] at hECls; cases hECls
+                          · exact liftRestV (.give k' gs' at_ τ' x') ⟨e', hmem, hSite, hTy, hECls⟩
+                      | get k' g' at_ τ' =>
+                          obtain ⟨e', he', hNeG, hSite, hTy, gs', hrIn, hECls⟩ := ho
+                          rcases List.mem_cons.mp he' with rfl | hmem
+                          · rw [hCls] at hECls; cases hECls
+                          · exact liftRestV (.get k' g' at_ τ') ⟨e', hmem, hNeG, hSite, hTy, gs', hrIn, hECls⟩
+                      | own gk hs' at_ ins' pl' τ' =>
+                          obtain ⟨e', he', hSite, hTy, hECls, hTyped⟩ := ho
+                          rcases List.mem_cons.mp he' with rfl | hmem
+                          · rw [hCls] at hECls; cases hECls; exact .inl (.inl trivial)
+                          · exact liftRestV (.own gk hs' at_ ins' pl' τ') ⟨e', hmem, hSite, hTy, hECls, hTyped⟩
+                      | hear gk ow' at_ τ' =>
+                          obtain ⟨e', he', hNeO, hSite, hTy, hs', hrIn, hECls⟩ := ho
+                          rcases List.mem_cons.mp he' with rfl | hmem
+                          · rw [hCls] at hECls; cases hECls
+                            rcases hReq.2 with hEqO | hNotIn
+                            · exact absurd hEqO hNeO
+                            · exact absurd hrIn hNotIn
+                          · exact liftRestV (.hear gk ow' at_ τ') ⟨e', hmem, hNeO, hSite, hTy, hs', hrIn, hECls⟩
+                  · cases h
+
+private theorem buildIdealVerifierClauses_go_covers {a : Admitted V} {suite : ModuleRef}
+    {unitTy : V.Ty} {hfree : Ty.isLinear V unitTy = false}
+    {serviceKey : Key} {prover verifier : Role} (hNe : prover ≠ verifier) {declKey : Key}
+    {events : List (ShapeEvent V)} :
+    ∀ (idx : Nat) (es : List (ShapeEvent V × Bool)),
+      (∀ k p, es[k]? = some p → events[idx + k]? = some p.1) →
+      ∀ {cV : List (Clause V a.program.headers verifier (idealPathTy unitTy))},
+      buildIdealVerifierClauses.go a suite unitTy hfree serviceKey prover verifier
+        declKey events idx es = .ok cV →
+      (∀ c ∈ cV, ClauseEmits M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs)
+        (LayoutInputV M prover verifier events) c) ∧
+      (∀ op, ROp.MatchesShape M verifier (es.map Prod.fst) op →
+        LayoutInputV M prover verifier events op ∨ ∃ c ∈ cV, ClauseMatches M c op)
+  | _, [], _, _, h => by
+      cases h
+      refine ⟨(fun _ hc => nomatch hc), fun op ho => ?_⟩
+      cases op with
+      | «begin» | settle => exact .inl (.inl trivial)
+      | give | get | own | hear => obtain ⟨_, hc, _⟩ := ho; cases hc
+  | idx, (e, needAbs) :: rest, hSuf, cV, h => by
+      unfold buildIdealVerifierClauses.go at h
+      have hSufRest : ∀ k p, rest[k]? = some p → events[(idx + 1) + k]? = some p.1 := by
+        intro k p hk
+        have := hSuf (k + 1) p hk
+        simpa [Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using this
+      have hIdx : events[idx]? = some e := by simpa using hSuf 0 (e, needAbs) rfl
+      have hMem : e ∈ events := List.mem_of_getElem? hIdx
+      cases hRec : buildIdealVerifierClauses.go a suite unitTy hfree serviceKey prover
+          verifier declKey events (idx + 1) rest with
+      | error _ => rw [hRec] at h; cases h
+      | ok vRest =>
+          rw [hRec] at h; dsimp only [bind, Except.bind] at h
+          obtain ⟨ihEmV, ihCovV⟩ := buildIdealVerifierClauses_go_covers hNe (idx + 1) rest hSufRest hRec
+          have liftRestV : ∀ op, (∃ e' ∈ rest.map Prod.fst, ROp.MatchesShapeEvent M verifier e' op) →
+              LayoutInputV M prover verifier events op ∨ ∃ c ∈ vRest, ClauseMatches M c op := by
+            intro op ho
+            apply ihCovV op
+            cases op with
+            | «begin» | settle => trivial
+            | give | get | own | hear => exact ho
+          cases hCls : e.cls with
+          | flow kind giver getters =>
+              rw [hCls] at h; dsimp only at h
+              split at h
+              · rename_i hPVFlow
+                cases needAbs with
+                | false =>
+                    simp only [Bool.false_eq_true, ↓reduceIte] at h
+                    cases h
+                    refine ⟨ihEmV, fun op ho => ?_⟩
+                    cases op with
+                    | «begin» | settle => exact .inl (.inl trivial)
+                    | give k' gs' at_ τ' x' =>
+                        obtain ⟨e', he', hSite, hTy, hECls⟩ := ho
+                        rcases List.mem_cons.mp he' with rfl | hmem
+                        · rw [hCls] at hECls; cases hECls; exact absurd hPVFlow.1.symm hNe
+                        · exact liftRestV (.give k' gs' at_ τ' x') ⟨e', hmem, hSite, hTy, hECls⟩
+                    | get k' g' at_ τ' =>
+                        obtain ⟨e', he', hNeG, hSite, hTy, gs', hrIn, hECls⟩ := ho
+                        rcases List.mem_cons.mp he' with rfl | hmem
+                        · rw [hCls] at hECls; cases hECls
+                          exact .inl (.inr (.inl ⟨e', hMem, hPVFlow.1, hSite, hTy, getters, hPVFlow.2, hPVFlow.1 ▸ hCls⟩))
+                        · exact liftRestV (.get k' g' at_ τ') ⟨e', hmem, hNeG, hSite, hTy, gs', hrIn, hECls⟩
+                    | own gk hs' at_ ins' pl' τ' =>
+                        obtain ⟨e', he', hSite, hTy, hECls, hTyped⟩ := ho
+                        rcases List.mem_cons.mp he' with rfl | hmem
+                        · rw [hCls] at hECls; cases hECls
+                        · exact liftRestV (.own gk hs' at_ ins' pl' τ') ⟨e', hmem, hSite, hTy, hECls, hTyped⟩
+                    | hear gk ow' at_ τ' =>
+                        obtain ⟨e', he', hNeO, hSite, hTy, hs', hrIn, hECls⟩ := ho
+                        rcases List.mem_cons.mp he' with rfl | hmem
+                        · rw [hCls] at hECls; cases hECls
+                        · exact liftRestV (.hear gk ow' at_ τ') ⟨e', hmem, hNeO, hSite, hTy, hs', hrIn, hECls⟩
+                | true =>
+                    simp only [↓reduceIte] at h
+                    cases hEnc : findSuiteEncode a suite unitTy e.τ with
+                    | none => rw [hEnc] at h; cases h
+                    | some encRef =>
+                        rw [hEnc] at h; cases h
+                        refine ⟨?_, ?_⟩
+                        · intro c hc
+                          rcases List.mem_cons.mp hc with rfl | hm
+                          · intro op hMatch st
+                            generalize hArgs : cast (congrArg (HList M.Val) hMatch.2.2.1.symm)
+                              (ROp.payload M op) = args
+                            cases args
+                            show ((idealAbsorbClause hfree verifier prover e.site kind (msgLabel e.site)
+                              (msgLabel_bytes e.site) encRef).code.denote
+                              (roleSem M verifier (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs))
+                              (ROp.occurrence M op).path
+                              (Env.positional (aloneIn M verifier (.cons st .nil)))).SafeWith
+                                M (fun _ _ => True) (LayoutInputV M prover verifier events) (fun _ => True) (fun _ => True)
+                            rw [idealAbsorbClause_denote]
+                            refine ⟨.inr (.inl ⟨e, hMem, rfl, (site_from_match hMatch.1).symm, rfl,
+                              getters, hPVFlow.2, hPVFlow.1 ▸ hCls⟩), fun _ _ => ?_⟩
+                            rw [Process.safeWith_map]
+                            exact liftLocal_safeWith_any M id _
+                          · exact ihEmV c hm
+                        · intro op ho
+                          cases op with
+                          | «begin» | settle => exact .inl (.inl trivial)
+                          | give k' gs' at_ τ' x' =>
+                              obtain ⟨e', he', hSite, hTy, hECls⟩ := ho
+                              rcases List.mem_cons.mp he' with rfl | hmem
+                              · rw [hCls] at hECls; cases hECls; exact absurd hPVFlow.1.symm hNe
+                              · rcases liftRestV (.give k' gs' at_ τ' x') ⟨e', hmem, hSite, hTy, hECls⟩ with hL | ⟨c, hc, hm⟩
+                                · exact .inl hL
+                                · exact .inr ⟨c, List.mem_cons_of_mem _ hc, hm⟩
+                          | get k' g' at_ τ' =>
+                              obtain ⟨e', he', hNeG, hSite, hTy, gs', hrIn, hECls⟩ := ho
+                              rcases List.mem_cons.mp he' with rfl | hmem
+                              · rw [hCls] at hECls; cases hECls
+                                exact .inr ⟨_, List.mem_cons_self, hSite, by dsimp only [idealAbsorbClause, ROp.part]; rw [hPVFlow.1],
+                                  rfl, by cases hTy; rfl⟩
+                              · rcases liftRestV (.get k' g' at_ τ') ⟨e', hmem, hNeG, hSite, hTy, gs', hrIn, hECls⟩ with hL | ⟨c, hc, hm⟩
+                                · exact .inl hL
+                                · exact .inr ⟨c, List.mem_cons_of_mem _ hc, hm⟩
+                          | own gk hs' at_ ins' pl' τ' =>
+                              obtain ⟨e', he', hSite, hTy, hECls, hTyped⟩ := ho
+                              rcases List.mem_cons.mp he' with rfl | hmem
+                              · rw [hCls] at hECls; cases hECls
+                              · rcases liftRestV (.own gk hs' at_ ins' pl' τ') ⟨e', hmem, hSite, hTy, hECls, hTyped⟩ with hL | ⟨c, hc, hm⟩
+                                · exact .inl hL
+                                · exact .inr ⟨c, List.mem_cons_of_mem _ hc, hm⟩
+                          | hear gk ow' at_ τ' =>
+                              obtain ⟨e', he', hNeO, hSite, hTy, hs', hrIn, hECls⟩ := ho
+                              rcases List.mem_cons.mp he' with rfl | hmem
+                              · rw [hCls] at hECls; cases hECls
+                              · rcases liftRestV (.hear gk ow' at_ τ') ⟨e', hmem, hNeO, hSite, hTy, hs', hrIn, hECls⟩ with hL | ⟨c, hc, hm⟩
+                                · exact .inl hL
+                                · exact .inr ⟨c, List.mem_cons_of_mem _ hc, hm⟩
+              · split at h
+                · rename_i hOut
+                  cases h
+                  refine ⟨ihEmV, fun op ho => ?_⟩
+                  cases op with
+                  | «begin» | settle => exact .inl (.inl trivial)
+                  | give k' gs' at_ τ' x' =>
+                      obtain ⟨e', he', hSite, hTy, hECls⟩ := ho
+                      rcases List.mem_cons.mp he' with rfl | hmem
+                      · rw [hCls] at hECls; cases hECls; exact absurd rfl hOut.2.1
+                      · exact liftRestV (.give k' gs' at_ τ' x') ⟨e', hmem, hSite, hTy, hECls⟩
+                  | get k' g' at_ τ' =>
+                      obtain ⟨e', he', hNeG, hSite, hTy, gs', hrIn, hECls⟩ := ho
+                      rcases List.mem_cons.mp he' with rfl | hmem
+                      · rw [hCls] at hECls; cases hECls; exact absurd hrIn hOut.2.2.2
+                      · exact liftRestV (.get k' g' at_ τ') ⟨e', hmem, hNeG, hSite, hTy, gs', hrIn, hECls⟩
+                  | own gk hs' at_ ins' pl' τ' =>
+                      obtain ⟨e', he', hSite, hTy, hECls, hTyped⟩ := ho
+                      rcases List.mem_cons.mp he' with rfl | hmem
+                      · rw [hCls] at hECls; cases hECls
+                      · exact liftRestV (.own gk hs' at_ ins' pl' τ') ⟨e', hmem, hSite, hTy, hECls, hTyped⟩
+                  | hear gk ow' at_ τ' =>
+                      obtain ⟨e', he', hNeO, hSite, hTy, hs', hrIn, hECls⟩ := ho
+                      rcases List.mem_cons.mp he' with rfl | hmem
+                      · rw [hCls] at hECls; cases hECls
+                      · exact liftRestV (.hear gk ow' at_ τ') ⟨e', hmem, hNeO, hSite, hTy, hs', hrIn, hECls⟩
+                · cases h
+          | given gkind owner hearers =>
+              rw [hCls] at h
+              cases gkind with
+              | coin law =>
+                  dsimp only at h
+                  split at h
+                  · rename_i hCoin
+                    cases hLaw : V.law law with
+                    | none => rw [hLaw] at h; cases h
+                    | some sig =>
+                        rw [hLaw] at h; dsimp only at h
+                        split at h
+                        · cases hIns : sig.ins with
+                          | cons _ _ => rw [hIns] at h; cases h
+                          | nil =>
+                              rw [hIns] at h; dsimp only at h
+                              cases hEnc : findSuiteEncode a suite unitTy e.τ with
+                              | none => rw [hEnc] at h; cases h
+                              | some encRef =>
+                                  rw [hEnc] at h; cases h
+                                  refine ⟨?_, ?_⟩
+                                  · intro c hc
+                                    rcases List.mem_cons.mp hc with rfl | hm
+                                    · intro op hMatch st
+                                      generalize hArgs : cast (congrArg (HList M.Val) hMatch.2.2.1.symm)
+                                        (ROp.payload M op) = args
+                                      cases args
+                                      show ((idealDeriveClause hfree verifier prover e.site (.own (.coin law) hearers) []
+                                        serviceKey (idealReqKey events idx) (drawToldKey events idx)
+                                        (drawLabel e.site) (drawLabel_bytes e.site) encRef).code.denote
+                                        (roleSem M verifier (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs))
+                                        (ROp.occurrence M op).path
+                                        (Env.positional (aloneIn M verifier (.cons st .nil)))).SafeWith
+                                          M (fun _ _ => True) (LayoutInputV M prover verifier events) (fun _ => True) (fun _ => True)
+                                      rw [idealDeriveClause_denote_nil]
+                                      refine ⟨.inl trivial, fun _ _ => ?_⟩
+                                      refine ⟨.inr (.inr ⟨idx, e, hIdx, rfl,
+                                        site_told_from_match hMatch.1, rfl, law, hearers,
+                                        hCoin.1 ▸ hCls, hCoin.2⟩), fun _ _ => ?_⟩
+                                      rw [Process.safeWith_map]
+                                      exact liftLocal_safeWith_any M id _
+                                    · exact ihEmV c hm
+                                  · intro op ho
+                                    cases op with
+                                    | «begin» | settle => exact .inl (.inl trivial)
+                                    | give k' gs' at_ τ' x' =>
+                                        obtain ⟨e', he', hSite, hTy, hECls⟩ := ho
+                                        rcases List.mem_cons.mp he' with rfl | hmem
+                                        · rw [hCls] at hECls; cases hECls
+                                        · rcases liftRestV (.give k' gs' at_ τ' x') ⟨e', hmem, hSite, hTy, hECls⟩ with hL | ⟨c, hc, hm⟩
+                                          · exact .inl hL
+                                          · exact .inr ⟨c, List.mem_cons_of_mem _ hc, hm⟩
+                                    | get k' g' at_ τ' =>
+                                        obtain ⟨e', he', hNeG, hSite, hTy, gs', hrIn, hECls⟩ := ho
+                                        rcases List.mem_cons.mp he' with rfl | hmem
+                                        · rw [hCls] at hECls; cases hECls
+                                        · rcases liftRestV (.get k' g' at_ τ') ⟨e', hmem, hNeG, hSite, hTy, gs', hrIn, hECls⟩ with hL | ⟨c, hc, hm⟩
+                                          · exact .inl hL
+                                          · exact .inr ⟨c, List.mem_cons_of_mem _ hc, hm⟩
+                                    | own gk hs' at_ ins' pl' τ' =>
+                                        obtain ⟨e', he', hSite, hTy, hECls, hTyped⟩ := ho
+                                        rcases List.mem_cons.mp he' with rfl | hmem
+                                        · rw [hCls] at hECls; cases hECls
+                                          have hInsEq : ins' = [] := by
+                                            obtain ⟨s, hsLaw, hsIns, _⟩ := hTyped
+                                            rw [hLaw] at hsLaw; cases hsLaw
+                                            rw [← hsIns, hIns]
+                                          exact .inr ⟨_, List.mem_cons_self, hSite, rfl,
+                                            by cases hInsEq; rfl, by cases hTy; rfl⟩
+                                        · rcases liftRestV (.own gk hs' at_ ins' pl' τ') ⟨e', hmem, hSite, hTy, hECls, hTyped⟩ with hL | ⟨c, hc, hm⟩
+                                          · exact .inl hL
+                                          · exact .inr ⟨c, List.mem_cons_of_mem _ hc, hm⟩
+                                    | hear gk ow' at_ τ' =>
+                                        obtain ⟨e', he', hNeO, hSite, hTy, hs', hrIn, hECls⟩ := ho
+                                        rcases List.mem_cons.mp he' with rfl | hmem
+                                        · rw [hCls] at hECls; cases hECls; exact absurd hCoin.1 hNeO
+                                        · rcases liftRestV (.hear gk ow' at_ τ') ⟨e', hmem, hNeO, hSite, hTy, hs', hrIn, hECls⟩ with hL | ⟨c, hc, hm⟩
+                                          · exact .inl hL
+                                          · exact .inr ⟨c, List.mem_cons_of_mem _ hc, hm⟩
+                        · cases h
+                  · split at h
+                    · rename_i hNil
+                      cases h
+                      refine ⟨ihEmV, fun op ho => ?_⟩
+                      cases op with
+                      | «begin» | settle => exact .inl (.inl trivial)
+                      | give k' gs' at_ τ' x' =>
+                          obtain ⟨e', he', hSite, hTy, hECls⟩ := ho
+                          rcases List.mem_cons.mp he' with rfl | hmem
+                          · rw [hCls] at hECls; cases hECls
+                          · exact liftRestV (.give k' gs' at_ τ' x') ⟨e', hmem, hSite, hTy, hECls⟩
+                      | get k' g' at_ τ' =>
+                          obtain ⟨e', he', hNeG, hSite, hTy, gs', hrIn, hECls⟩ := ho
+                          rcases List.mem_cons.mp he' with rfl | hmem
+                          · rw [hCls] at hECls; cases hECls
+                          · exact liftRestV (.get k' g' at_ τ') ⟨e', hmem, hNeG, hSite, hTy, gs', hrIn, hECls⟩
+                      | own gk hs' at_ ins' pl' τ' =>
+                          obtain ⟨e', he', hSite, hTy, hECls, hTyped⟩ := ho
+                          rcases List.mem_cons.mp he' with rfl | hmem
+                          · rw [hCls] at hECls; cases hECls; subst hNil; exact .inl (.inl trivial)
+                          · exact liftRestV (.own gk hs' at_ ins' pl' τ') ⟨e', hmem, hSite, hTy, hECls, hTyped⟩
+                      | hear gk ow' at_ τ' =>
+                          obtain ⟨e', he', hNeO, hSite, hTy, hs', hrIn, hECls⟩ := ho
+                          rcases List.mem_cons.mp he' with rfl | hmem
+                          · rw [hCls] at hECls; cases hECls; subst hNil; cases hrIn
+                          · exact liftRestV (.hear gk ow' at_ τ') ⟨e', hmem, hNeO, hSite, hTy, hs', hrIn, hECls⟩
+                    · cases h
+              | request _ =>
+                  dsimp only at h
+                  split at h
+                  · rename_i hReq
+                    cases h
+                    refine ⟨ihEmV, fun op ho => ?_⟩
+                    cases op with
+                    | «begin» | settle => exact .inl (.inl trivial)
+                    | give k' gs' at_ τ' x' =>
+                        obtain ⟨e', he', hSite, hTy, hECls⟩ := ho
+                        rcases List.mem_cons.mp he' with rfl | hmem
+                        · rw [hCls] at hECls; cases hECls
+                        · exact liftRestV (.give k' gs' at_ τ' x') ⟨e', hmem, hSite, hTy, hECls⟩
+                    | get k' g' at_ τ' =>
+                        obtain ⟨e', he', hNeG, hSite, hTy, gs', hrIn, hECls⟩ := ho
+                        rcases List.mem_cons.mp he' with rfl | hmem
+                        · rw [hCls] at hECls; cases hECls
+                        · exact liftRestV (.get k' g' at_ τ') ⟨e', hmem, hNeG, hSite, hTy, gs', hrIn, hECls⟩
+                    | own gk hs' at_ ins' pl' τ' =>
+                        obtain ⟨e', he', hSite, hTy, hECls, hTyped⟩ := ho
+                        rcases List.mem_cons.mp he' with rfl | hmem
+                        · rw [hCls] at hECls; cases hECls; exact .inl (.inl trivial)
+                        · exact liftRestV (.own gk hs' at_ ins' pl' τ') ⟨e', hmem, hSite, hTy, hECls, hTyped⟩
+                    | hear gk ow' at_ τ' =>
+                        obtain ⟨e', he', hNeO, hSite, hTy, hs', hrIn, hECls⟩ := ho
+                        rcases List.mem_cons.mp he' with rfl | hmem
+                        · rw [hCls] at hECls; cases hECls
+                          rcases hReq.2 with hEqO | hNotIn
+                          · exact absurd hEqO hNeO
+                          · exact absurd hrIn hNotIn
+                        · exact liftRestV (.hear gk ow' at_ τ') ⟨e', hmem, hNeO, hSite, hTy, hs', hrIn, hECls⟩
+                  · cases h
+
+private theorem checkAuthoredEvents_covers {a : Admitted V} {prover verifier : Role}
+    (hNe : prover ≠ verifier) {samplesKey : Option Key} {declKey : Key}
+    {events : List (ShapeEvent V)} :
+    ∀ (es : List (ShapeEvent V)), (∀ e ∈ es, e ∈ events) →
+      {cS : List (Clause V a.program.headers prover .nat)} →
+      checkAuthoredEvents a prover verifier samplesKey declKey es = .ok cS →
+      (∀ c ∈ cS, ClauseEmits M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs)
+        (ROp.MatchesShape M prover events) c) ∧
+      (∀ op, ROp.MatchesShape M prover es op → LayoutInputP M prover verifier events op) ∧
+      (∀ op, ROp.MatchesShape M verifier es op → LayoutInputV M prover verifier events op)
+  | [], _, _, h => by
+      cases h
+      refine ⟨(fun _ hc => nomatch hc), ?_, ?_⟩
+      · intro op ho
+        cases op with
+        | «begin» | settle => exact .inl trivial
+        | give | get | own | hear => obtain ⟨_, hc, _⟩ := ho; cases hc
+      · intro op ho
+        cases op with
+        | «begin» | settle => exact .inl trivial
+        | give | get | own | hear => obtain ⟨_, hc, _⟩ := ho; cases hc
+  | e :: rest, hSub, cS, h => by
+      unfold checkAuthoredEvents at h
+      have hSubRest : ∀ e' ∈ rest, e' ∈ events := fun e' he' => hSub e' (List.mem_cons_of_mem _ he')
+      have hMem : e ∈ events := hSub e List.mem_cons_self
+      cases hRec : checkAuthoredEvents a prover verifier samplesKey declKey rest with
+      | error _ => rw [hRec] at h; cases h
+      | ok sRest =>
+          rw [hRec] at h; dsimp only [bind, Except.bind] at h
+          obtain ⟨ihS, ihP, ihV⟩ := checkAuthoredEvents_covers hNe rest hSubRest hRec
+          have liftP : ∀ op, (∃ e' ∈ rest, ROp.MatchesShapeEvent M prover e' op) →
+              LayoutInputP M prover verifier events op := fun op ho => by
+            apply ihP op
+            cases op with
+            | «begin» | settle => trivial
+            | give | get | own | hear => exact ho
+          have liftV : ∀ op, (∃ e' ∈ rest, ROp.MatchesShapeEvent M verifier e' op) →
+              LayoutInputV M prover verifier events op := fun op ho => by
+            apply ihV op
+            cases op with
+            | «begin» | settle => trivial
+            | give | get | own | hear => exact ho
+          cases hCls : e.cls with
+          | flow kind giver getters =>
+              rw [hCls] at h; dsimp only at h
+              split at h
+              · rename_i hFl
+                cases h
+                refine ⟨ihS, ?_, ?_⟩
+                · intro op ho
+                  cases op with
+                  | «begin» | settle => exact .inl trivial
+                  | give k' gs' at_ τ' x' =>
+                      obtain ⟨e', he', hSite, hTy, hECls⟩ := ho
+                      rcases List.mem_cons.mp he' with rfl | hmem
+                      · rw [hCls] at hECls; cases hECls
+                        rcases hFl with ⟨_, hVin⟩ | ⟨hNotP, _, _, _⟩
+                        · exact .inr (.inl ⟨e', hMem, hSite, hTy, hCls, hVin⟩)
+                        · exact absurd rfl hNotP
+                      · exact liftP (.give k' gs' at_ τ' x') ⟨e', hmem, hSite, hTy, hECls⟩
+                  | get k' g' at_ τ' =>
+                      obtain ⟨e', he', hNeG, hSite, hTy, gs', hrIn, hECls⟩ := ho
+                      rcases List.mem_cons.mp he' with rfl | hmem
+                      · rw [hCls] at hECls; cases hECls
+                        rcases hFl with ⟨hEqP, _⟩ | ⟨_, _, hNotIn, _⟩
+                        · exact absurd hEqP hNeG
+                        · exact absurd hrIn hNotIn
+                      · exact liftP (.get k' g' at_ τ') ⟨e', hmem, hNeG, hSite, hTy, gs', hrIn, hECls⟩
+                  | own gk hs' at_ ins' pl' τ' =>
+                      obtain ⟨e', he', hSite, hTy, hECls, hTyped⟩ := ho
+                      rcases List.mem_cons.mp he' with rfl | hmem
+                      · rw [hCls] at hECls; cases hECls
+                      · exact liftP (.own gk hs' at_ ins' pl' τ') ⟨e', hmem, hSite, hTy, hECls, hTyped⟩
+                  | hear gk ow' at_ τ' =>
+                      obtain ⟨e', he', hNeO, hSite, hTy, hs', hrIn, hECls⟩ := ho
+                      rcases List.mem_cons.mp he' with rfl | hmem
+                      · rw [hCls] at hECls; cases hECls
+                      · exact liftP (.hear gk ow' at_ τ') ⟨e', hmem, hNeO, hSite, hTy, hs', hrIn, hECls⟩
+                · intro op ho
+                  cases op with
+                  | «begin» | settle => exact .inl trivial
+                  | give k' gs' at_ τ' x' =>
+                      obtain ⟨e', he', hSite, hTy, hECls⟩ := ho
+                      rcases List.mem_cons.mp he' with rfl | hmem
+                      · rw [hCls] at hECls; cases hECls
+                        rcases hFl with ⟨hEqP, _⟩ | ⟨_, hNotV, _, _⟩
+                        · exact absurd hEqP.symm hNe
+                        · exact absurd rfl hNotV
+                      · exact liftV (.give k' gs' at_ τ' x') ⟨e', hmem, hSite, hTy, hECls⟩
+                  | get k' g' at_ τ' =>
+                      obtain ⟨e', he', hNeG, hSite, hTy, gs', hrIn, hECls⟩ := ho
+                      rcases List.mem_cons.mp he' with rfl | hmem
+                      · rw [hCls] at hECls; cases hECls
+                        rcases hFl with ⟨hEqP, hVin⟩ | ⟨_, _, _, hNotIn⟩
+                        · exact .inr (.inl ⟨e', hMem, hEqP, hSite, hTy, getters, hVin, hEqP ▸ hCls⟩)
+                        · exact absurd hrIn hNotIn
+                      · exact liftV (.get k' g' at_ τ') ⟨e', hmem, hNeG, hSite, hTy, gs', hrIn, hECls⟩
+                  | own gk hs' at_ ins' pl' τ' =>
+                      obtain ⟨e', he', hSite, hTy, hECls, hTyped⟩ := ho
+                      rcases List.mem_cons.mp he' with rfl | hmem
+                      · rw [hCls] at hECls; cases hECls
+                      · exact liftV (.own gk hs' at_ ins' pl' τ') ⟨e', hmem, hSite, hTy, hECls, hTyped⟩
+                  | hear gk ow' at_ τ' =>
+                      obtain ⟨e', he', hNeO, hSite, hTy, hs', hrIn, hECls⟩ := ho
+                      rcases List.mem_cons.mp he' with rfl | hmem
+                      · rw [hCls] at hECls; cases hECls
+                      · exact liftV (.hear gk ow' at_ τ') ⟨e', hmem, hNeO, hSite, hTy, hs', hrIn, hECls⟩
+              · cases h
+          | given gkind owner hearers =>
+              rw [hCls] at h
+              cases gkind with
+              | coin law =>
+                  dsimp only at h
+                  split at h
+                  · rename_i hNil
+                    have hStepP : ∀ op, ROp.MatchesShape M prover (e :: rest) op →
+                        LayoutInputP M prover verifier events op := by
+                      intro op ho
+                      cases op with
+                      | «begin» | settle => exact .inl trivial
+                      | give k' gs' at_ τ' x' =>
+                          obtain ⟨e', he', hSite, hTy, hECls⟩ := ho
+                          rcases List.mem_cons.mp he' with rfl | hmem
+                          · rw [hCls] at hECls; cases hECls
+                          · exact liftP (.give k' gs' at_ τ' x') ⟨e', hmem, hSite, hTy, hECls⟩
+                      | get k' g' at_ τ' =>
+                          obtain ⟨e', he', hNeG, hSite, hTy, gs', hrIn, hECls⟩ := ho
+                          rcases List.mem_cons.mp he' with rfl | hmem
+                          · rw [hCls] at hECls; cases hECls
+                          · exact liftP (.get k' g' at_ τ') ⟨e', hmem, hNeG, hSite, hTy, gs', hrIn, hECls⟩
+                      | own gk hs' at_ ins' pl' τ' =>
+                          obtain ⟨e', he', hSite, hTy, hECls, hTyped⟩ := ho
+                          rcases List.mem_cons.mp he' with rfl | hmem
+                          · rw [hCls] at hECls; cases hECls; subst hNil; exact .inl trivial
+                          · exact liftP (.own gk hs' at_ ins' pl' τ') ⟨e', hmem, hSite, hTy, hECls, hTyped⟩
+                      | hear gk ow' at_ τ' =>
+                          obtain ⟨e', he', hNeO, hSite, hTy, hs', hrIn, hECls⟩ := ho
+                          rcases List.mem_cons.mp he' with rfl | hmem
+                          · rw [hCls] at hECls; cases hECls; subst hNil; cases hrIn
+                          · exact liftP (.hear gk ow' at_ τ') ⟨e', hmem, hNeO, hSite, hTy, hs', hrIn, hECls⟩
+                    have hStepV : ∀ op, ROp.MatchesShape M verifier (e :: rest) op →
+                        LayoutInputV M prover verifier events op := by
+                      intro op ho
+                      cases op with
+                      | «begin» | settle => exact .inl trivial
+                      | give k' gs' at_ τ' x' =>
+                          obtain ⟨e', he', hSite, hTy, hECls⟩ := ho
+                          rcases List.mem_cons.mp he' with rfl | hmem
+                          · rw [hCls] at hECls; cases hECls
+                          · exact liftV (.give k' gs' at_ τ' x') ⟨e', hmem, hSite, hTy, hECls⟩
+                      | get k' g' at_ τ' =>
+                          obtain ⟨e', he', hNeG, hSite, hTy, gs', hrIn, hECls⟩ := ho
+                          rcases List.mem_cons.mp he' with rfl | hmem
+                          · rw [hCls] at hECls; cases hECls
+                          · exact liftV (.get k' g' at_ τ') ⟨e', hmem, hNeG, hSite, hTy, gs', hrIn, hECls⟩
+                      | own gk hs' at_ ins' pl' τ' =>
+                          obtain ⟨e', he', hSite, hTy, hECls, hTyped⟩ := ho
+                          rcases List.mem_cons.mp he' with rfl | hmem
+                          · rw [hCls] at hECls; cases hECls; subst hNil; exact .inl trivial
+                          · exact liftV (.own gk hs' at_ ins' pl' τ') ⟨e', hmem, hSite, hTy, hECls, hTyped⟩
+                      | hear gk ow' at_ τ' =>
+                          obtain ⟨e', he', hNeO, hSite, hTy, hs', hrIn, hECls⟩ := ho
+                          rcases List.mem_cons.mp he' with rfl | hmem
+                          · rw [hCls] at hECls; cases hECls; subst hNil; cases hrIn
+                          · exact liftV (.hear gk ow' at_ τ') ⟨e', hmem, hNeO, hSite, hTy, hs', hrIn, hECls⟩
+                    split at h
+                    · cases samplesKey with
+                      | none => cases h; exact ⟨ihS, hStepP, hStepV⟩
+                      | some sKey =>
+                          dsimp only at h
+                          cases hS : findTypedFnRef a sKey [.nat, .nat] [e.τ] with
+                          | none => rw [hS] at h; cases h
+                          | some sRef =>
+                              rw [hS] at h; cases h
+                              refine ⟨fun c hc => ?_, hStepP, hStepV⟩
+                              rcases List.mem_cons.mp hc with rfl | hm
+                              · apply proverSampleClause_emits_any M
+                              · exact ihS c hm
+                    · cases h; exact ⟨ihS, hStepP, hStepV⟩
+                  · cases h
+              | request _ =>
+                  dsimp only at h
+                  split at h
+                  · rename_i hReq
+                    cases h
+                    refine ⟨ihS, ?_, ?_⟩
+                    · intro op ho
+                      cases op with
+                      | «begin» | settle => exact .inl trivial
+                      | give k' gs' at_ τ' x' =>
+                          obtain ⟨e', he', hSite, hTy, hECls⟩ := ho
+                          rcases List.mem_cons.mp he' with rfl | hmem
+                          · rw [hCls] at hECls; cases hECls
+                          · exact liftP (.give k' gs' at_ τ' x') ⟨e', hmem, hSite, hTy, hECls⟩
+                      | get k' g' at_ τ' =>
+                          obtain ⟨e', he', hNeG, hSite, hTy, gs', hrIn, hECls⟩ := ho
+                          rcases List.mem_cons.mp he' with rfl | hmem
+                          · rw [hCls] at hECls; cases hECls
+                          · exact liftP (.get k' g' at_ τ') ⟨e', hmem, hNeG, hSite, hTy, gs', hrIn, hECls⟩
+                      | own gk hs' at_ ins' pl' τ' =>
+                          obtain ⟨e', he', hSite, hTy, hECls, hTyped⟩ := ho
+                          rcases List.mem_cons.mp he' with rfl | hmem
+                          · rw [hCls] at hECls; cases hECls; exact .inl trivial
+                          · exact liftP (.own gk hs' at_ ins' pl' τ') ⟨e', hmem, hSite, hTy, hECls, hTyped⟩
+                      | hear gk ow' at_ τ' =>
+                          obtain ⟨e', he', hNeO, hSite, hTy, hs', hrIn, hECls⟩ := ho
+                          rcases List.mem_cons.mp he' with rfl | hmem
+                          · rw [hCls] at hECls; cases hECls
+                            rcases hReq.1 with hEqO | hNotIn
+                            · exact absurd hEqO hNeO
+                            · exact absurd hrIn hNotIn
+                          · exact liftP (.hear gk ow' at_ τ') ⟨e', hmem, hNeO, hSite, hTy, hs', hrIn, hECls⟩
+                    · intro op ho
+                      cases op with
+                      | «begin» | settle => exact .inl trivial
+                      | give k' gs' at_ τ' x' =>
+                          obtain ⟨e', he', hSite, hTy, hECls⟩ := ho
+                          rcases List.mem_cons.mp he' with rfl | hmem
+                          · rw [hCls] at hECls; cases hECls
+                          · exact liftV (.give k' gs' at_ τ' x') ⟨e', hmem, hSite, hTy, hECls⟩
+                      | get k' g' at_ τ' =>
+                          obtain ⟨e', he', hNeG, hSite, hTy, gs', hrIn, hECls⟩ := ho
+                          rcases List.mem_cons.mp he' with rfl | hmem
+                          · rw [hCls] at hECls; cases hECls
+                          · exact liftV (.get k' g' at_ τ') ⟨e', hmem, hNeG, hSite, hTy, gs', hrIn, hECls⟩
+                      | own gk hs' at_ ins' pl' τ' =>
+                          obtain ⟨e', he', hSite, hTy, hECls, hTyped⟩ := ho
+                          rcases List.mem_cons.mp he' with rfl | hmem
+                          · rw [hCls] at hECls; cases hECls; exact .inl trivial
+                          · exact liftV (.own gk hs' at_ ins' pl' τ') ⟨e', hmem, hSite, hTy, hECls, hTyped⟩
+                      | hear gk ow' at_ τ' =>
+                          obtain ⟨e', he', hNeO, hSite, hTy, hs', hrIn, hECls⟩ := ho
+                          rcases List.mem_cons.mp he' with rfl | hmem
+                          · rw [hCls] at hECls; cases hECls
+                            rcases hReq.2 with hEqO | hNotIn
+                            · exact absurd hEqO hNeO
+                            · exact absurd hrIn hNotIn
+                          · exact liftV (.hear gk ow' at_ τ') ⟨e', hmem, hNeO, hSite, hTy, hs', hrIn, hECls⟩
+                  · cases h
+
+private theorem buildStreamingLayoutClauses_go_covers {a : Admitted V} {layout : Layout}
+    {unitTy : V.Ty} {hfree : Ty.isLinear V unitTy = false}
+    {prover verifier : Role} {declKey : Key} {events : List (ShapeEvent V)} :
+    ∀ (idx : Nat) (es : List (ShapeEvent V))
+      {pCs : List (Clause V a.program.headers prover (.seq unitTy none))}
+      {vCs : List (Clause V a.program.headers verifier (streamStateTy unitTy))},
+      buildStreamingLayoutClauses.go a layout unitTy hfree prover verifier declKey events idx es =
+        .ok (pCs, vCs) →
+      (∀ c ∈ pCs, ClauseEmits M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs)
+        (ROp.IsClosed M) c) ∧
+      (∀ c ∈ vCs, ClauseEmits M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs)
+        (ROp.IsClosed M) c) ∧
+      (∀ e ∈ es, ∀ kind getters (at_ : Occurrence) τ x,
+        e.site = at_.site → e.τ = τ → e.cls = .flow kind prover getters → verifier ∈ getters →
+        ∃ c ∈ pCs, ClauseMatches M c (.give kind getters at_ τ x)) ∧
+      (∀ e ∈ es, ∀ kind getters (at_ : Occurrence) τ,
+        e.site = at_.site → e.τ = τ → e.cls = .flow kind prover getters → verifier ∈ getters →
+        ∃ c ∈ vCs, ClauseMatches M c (.get kind prover at_ τ)) ∧
+      (∀ (k : Nat) (e : ShapeEvent V), es[k]? = some e →
+        ∀ law hearers (at_ : Occurrence) τ x,
+        e.cls = .given (.coin law) verifier hearers → prover ∈ hearers → e.τ = τ →
+        at_.site = ⟨e.site.through, drawToldKey events (idx + k)⟩ →
+        (∃ c ∈ pCs, ClauseMatches M c (.give .message [verifier] at_ τ x)) ∧
+        (∃ c ∈ vCs, ClauseMatches M c (.give .message [prover] at_ τ x)))
+  | _, [], _, _, h => by
+      cases h
+      exact ⟨(fun _ hc => nomatch hc), (fun _ hc => nomatch hc),
+        (fun _ hc => nomatch hc), (fun _ hc => nomatch hc), (fun _ _ hk => by simp at hk)⟩
+  | idx, e :: rest, pCs, vCs, h => by
+      unfold buildStreamingLayoutClauses.go at h
+      cases hRec : buildStreamingLayoutClauses.go a layout unitTy hfree prover verifier declKey
+          events (idx + 1) rest with
+      | error _ => rw [hRec] at h; cases h
+      | ok pair =>
+          rw [hRec] at h; dsimp only [bind, Except.bind] at h
+          obtain ⟨ihEmP, ihEmV, ihFP, ihFV, ihTold⟩ :=
+            buildStreamingLayoutClauses_go_covers (idx + 1) rest hRec
+          have ihToldShift : ∀ k e', rest[k]? = some e' →
+              ∀ law hearers (at_ : Occurrence) τ x,
+              e'.cls = .given (.coin law) verifier hearers → prover ∈ hearers → e'.τ = τ →
+              at_.site = ⟨e'.site.through, drawToldKey events (idx + (k + 1))⟩ →
+              (∃ c ∈ pair.1, ClauseMatches M c (.give .message [verifier] at_ τ x)) ∧
+              (∃ c ∈ pair.2, ClauseMatches M c (.give .message [prover] at_ τ x)) := by
+            intro k e' hk law hearers at_ τ x hC hIn hT hS
+            exact ihTold k e' hk law hearers at_ τ x hC hIn hT
+              (by simpa [Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hS)
+          cases hCls : e.cls with
+          | flow kind giver getters =>
+              rw [hCls] at h; dsimp only at h
+              split at h
+              · cases hW : findLayoutWrite a layout.module unitTy e.τ <;>
+                cases hR : findLayoutRead a layout.module unitTy e.τ <;>
+                  simp only [hW, hR] at h
+                · cases h
+                · cases h
+                · cases h
+                · cases h
+                  refine ⟨?_, ?_, ?_, ?_, ?_⟩
+                  · intro c hc
+                    rcases List.mem_cons.mp hc with rfl | hm
+                    · apply layoutClause_emits_any_pWrite M
+                    · exact ihEmP c hm
+                  · intro c hc
+                    rcases List.mem_cons.mp hc with rfl | hm
+                    · apply layoutClause_emits_any_vRead M
+                    · exact ihEmV c hm
+                  · intro e' he' k' gs' at_ τ' x' hSite hTy hECls hVin
+                    rcases List.mem_cons.mp he' with rfl | hm
+                    · rw [hCls] at hECls; cases hECls
+                      exact ⟨_, List.mem_cons_self, hSite, rfl, by cases hTy; rfl, rfl⟩
+                    · obtain ⟨c, hc, hcm⟩ := ihFP e' hm k' gs' at_ τ' x' hSite hTy hECls hVin
+                      exact ⟨c, List.mem_cons_of_mem _ hc, hcm⟩
+                  · intro e' he' k' gs' at_ τ' hSite hTy hECls hVin
+                    rcases List.mem_cons.mp he' with rfl | hm
+                    · rw [hCls] at hECls; cases hECls
+                      exact ⟨_, List.mem_cons_self, hSite, rfl, rfl, by cases hTy; rfl⟩
+                    · obtain ⟨c, hc, hcm⟩ := ihFV e' hm k' gs' at_ τ' hSite hTy hECls hVin
+                      exact ⟨c, List.mem_cons_of_mem _ hc, hcm⟩
+                  · intro k e' hk law hearers at_ τ' x' hECls hIn hTy hS
+                    cases k with
+                    | zero => simp at hk; subst hk; rw [hCls] at hECls; cases hECls
+                    | succ k' =>
+                        obtain ⟨⟨cP, hcP, hmP⟩, ⟨cV, hcV, hmV⟩⟩ :=
+                          ihToldShift k' e' hk law hearers at_ τ' x' hECls hIn hTy hS
+                        exact ⟨⟨cP, List.mem_cons_of_mem _ hcP, hmP⟩,
+                               ⟨cV, List.mem_cons_of_mem _ hcV, hmV⟩⟩
+              · rename_i hNotPV
+                cases h
+                refine ⟨ihEmP, ihEmV, ?_, ?_, ?_⟩
+                · intro e' he' k' gs' at_ τ' x' hSite hTy hECls hVin
+                  rcases List.mem_cons.mp he' with rfl | hm
+                  · rw [hCls] at hECls; cases hECls; exact absurd ⟨rfl, hVin⟩ hNotPV
+                  · exact ihFP e' hm k' gs' at_ τ' x' hSite hTy hECls hVin
+                · intro e' he' k' gs' at_ τ' hSite hTy hECls hVin
+                  rcases List.mem_cons.mp he' with rfl | hm
+                  · rw [hCls] at hECls; cases hECls; exact absurd ⟨rfl, hVin⟩ hNotPV
+                  · exact ihFV e' hm k' gs' at_ τ' hSite hTy hECls hVin
+                · intro k e' hk law hearers at_ τ' x' hECls hIn hTy hS
+                  cases k with
+                  | zero => simp at hk; subst hk; rw [hCls] at hECls; cases hECls
+                  | succ k' => exact ihToldShift k' e' hk law hearers at_ τ' x' hECls hIn hTy hS
+          | given gkind owner hearers =>
+              rw [hCls] at h
+              cases gkind with
+              | coin law =>
+                  dsimp only at h
+                  split at h
+                  · split at h
+                    · cases hW : findLayoutWrite a layout.module unitTy e.τ <;>
+                      cases hR : findLayoutRead a layout.module unitTy e.τ <;>
+                      cases hE : findLayoutEqual a layout.module e.τ <;>
+                        simp only [hW, hR, hE] at h
+                      · cases h
+                      · cases h
+                      · cases h
+                      · cases h
+                      · cases h
+                      · cases h
+                      · cases h
+                      · cases h
+                        refine ⟨?_, ?_, ?_, ?_, ?_⟩
+                        · intro c hc
+                          rcases List.mem_cons.mp hc with rfl | hm
+                          · apply layoutClause_emits_any_pWrite M
+                          · exact ihEmP c hm
+                        · intro c hc
+                          rcases List.mem_cons.mp hc with rfl | hm
+                          · apply layoutClause_emits_any_vCarry M
+                          · exact ihEmV c hm
+                        · intro e' he' k' gs' at_ τ' x' hSite hTy hECls hVin
+                          rcases List.mem_cons.mp he' with rfl | hm
+                          · rw [hCls] at hECls; cases hECls
+                          · obtain ⟨c, hc, hcm⟩ := ihFP e' hm k' gs' at_ τ' x' hSite hTy hECls hVin
+                            exact ⟨c, List.mem_cons_of_mem _ hc, hcm⟩
+                        · intro e' he' k' gs' at_ τ' hSite hTy hECls hVin
+                          rcases List.mem_cons.mp he' with rfl | hm
+                          · rw [hCls] at hECls; cases hECls
+                          · obtain ⟨c, hc, hcm⟩ := ihFV e' hm k' gs' at_ τ' hSite hTy hECls hVin
+                            exact ⟨c, List.mem_cons_of_mem _ hc, hcm⟩
+                        · intro k e' hk law' hs' at_ τ' x' hECls hIn hTy hS
+                          cases k with
+                          | zero =>
+                              simp at hk; subst hk
+                              exact ⟨⟨_, List.mem_cons_self, by rw [Nat.add_zero] at hS; exact hS.symm, rfl,
+                                      by cases hTy; rfl, rfl⟩,
+                                     ⟨_, List.mem_cons_self, by rw [Nat.add_zero] at hS; exact hS.symm, rfl,
+                                      by cases hTy; rfl, rfl⟩⟩
+                          | succ k' =>
+                              obtain ⟨⟨cP, hcP, hmP⟩, ⟨cV, hcV, hmV⟩⟩ :=
+                                ihToldShift k' e' hk law' hs' at_ τ' x' hECls hIn hTy hS
+                              exact ⟨⟨cP, List.mem_cons_of_mem _ hcP, hmP⟩,
+                                     ⟨cV, List.mem_cons_of_mem _ hcV, hmV⟩⟩
+                    · cases h
+                      refine ⟨?_, ?_, ?_, ?_, ?_⟩
+                      · intro c hc
+                        rcases List.mem_cons.mp hc with rfl | hm
+                        · apply layoutClause_emits_any_drop M
+                        · exact ihEmP c hm
+                      · intro c hc
+                        rcases List.mem_cons.mp hc with rfl | hm
+                        · apply layoutClause_emits_any_drop M
+                        · exact ihEmV c hm
+                      · intro e' he' k' gs' at_ τ' x' hSite hTy hECls hVin
+                        rcases List.mem_cons.mp he' with rfl | hm
+                        · rw [hCls] at hECls; cases hECls
+                        · obtain ⟨c, hc, hcm⟩ := ihFP e' hm k' gs' at_ τ' x' hSite hTy hECls hVin
+                          exact ⟨c, List.mem_cons_of_mem _ hc, hcm⟩
+                      · intro e' he' k' gs' at_ τ' hSite hTy hECls hVin
+                        rcases List.mem_cons.mp he' with rfl | hm
+                        · rw [hCls] at hECls; cases hECls
+                        · obtain ⟨c, hc, hcm⟩ := ihFV e' hm k' gs' at_ τ' hSite hTy hECls hVin
+                          exact ⟨c, List.mem_cons_of_mem _ hc, hcm⟩
+                      · intro k e' hk law' hs' at_ τ' x' hECls hIn hTy hS
+                        cases k with
+                        | zero =>
+                            simp at hk; subst hk
+                            exact ⟨⟨_, List.mem_cons_self, by rw [Nat.add_zero] at hS; exact hS.symm, rfl,
+                                    by cases hTy; rfl, rfl⟩,
+                                   ⟨_, List.mem_cons_self, by rw [Nat.add_zero] at hS; exact hS.symm, rfl,
+                                    by cases hTy; rfl, rfl⟩⟩
+                        | succ k' =>
+                            obtain ⟨⟨cP, hcP, hmP⟩, ⟨cV, hcV, hmV⟩⟩ :=
+                              ihToldShift k' e' hk law' hs' at_ τ' x' hECls hIn hTy hS
+                            exact ⟨⟨cP, List.mem_cons_of_mem _ hcP, hmP⟩,
+                                   ⟨cV, List.mem_cons_of_mem _ hcV, hmV⟩⟩
+                  · rename_i hNotCoin
+                    cases h
+                    refine ⟨ihEmP, ihEmV, ?_, ?_, ?_⟩
+                    · intro e' he' k' gs' at_ τ' x' hSite hTy hECls hVin
+                      rcases List.mem_cons.mp he' with rfl | hm
+                      · rw [hCls] at hECls; cases hECls
+                      · exact ihFP e' hm k' gs' at_ τ' x' hSite hTy hECls hVin
+                    · intro e' he' k' gs' at_ τ' hSite hTy hECls hVin
+                      rcases List.mem_cons.mp he' with rfl | hm
+                      · rw [hCls] at hECls; cases hECls
+                      · exact ihFV e' hm k' gs' at_ τ' hSite hTy hECls hVin
+                    · intro k e' hk law' hs' at_ τ' x' hECls hIn hTy hS
+                      cases k with
+                      | zero =>
+                          simp at hk; subst hk; rw [hCls] at hECls; cases hECls
+                          exact absurd ⟨rfl, hIn⟩ hNotCoin
+                      | succ k' => exact ihToldShift k' e' hk law' hs' at_ τ' x' hECls hIn hTy hS
+              | request _ =>
+                  cases h
+                  refine ⟨ihEmP, ihEmV, ?_, ?_, ?_⟩
+                  · intro e' he' k' gs' at_ τ' x' hSite hTy hECls hVin
+                    rcases List.mem_cons.mp he' with rfl | hm
+                    · rw [hCls] at hECls; cases hECls
+                    · exact ihFP e' hm k' gs' at_ τ' x' hSite hTy hECls hVin
+                  · intro e' he' k' gs' at_ τ' hSite hTy hECls hVin
+                    rcases List.mem_cons.mp he' with rfl | hm
+                    · rw [hCls] at hECls; cases hECls
+                    · exact ihFV e' hm k' gs' at_ τ' hSite hTy hECls hVin
+                  · intro k e' hk law' hs' at_ τ' x' hECls hIn hTy hS
+                    cases k with
+                    | zero => simp at hk; subst hk; rw [hCls] at hECls; cases hECls
+                    | succ k' => exact ihToldShift k' e' hk law' hs' at_ τ' x' hECls hIn hTy hS
+
+private theorem collectCompactWire_covers {a : Admitted V} {layout : Layout} {unitTy : V.Ty}
+    {prover verifier : Role} {declKey : Key} {events : List (ShapeEvent V)} :
+    ∀ (idx : Nat) (es : List (ShapeEvent V))
+      {ws : List (WireSpec V a.program.headers.fns unitTy)}
+      {pCs : List (Clause V a.program.headers prover (.seq unitTy none))},
+      collectCompactWire a layout unitTy prover verifier declKey events idx es = .ok (ws, pCs) →
+      (∀ c ∈ pCs, ClauseEmits M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs)
+        (ROp.IsClosed M) c) ∧
+      (∀ e ∈ es, ∀ kind getters (at_ : Occurrence) τ x,
+        e.site = at_.site → e.τ = τ → e.cls = .flow kind prover getters → verifier ∈ getters →
+        ∃ c ∈ pCs, ClauseMatches M c (.give kind getters at_ τ x)) ∧
+      (∀ (k : Nat) (e : ShapeEvent V), es[k]? = some e →
+        ∀ law hearers (at_ : Occurrence) τ x,
+        e.cls = .given (.coin law) verifier hearers → prover ∈ hearers → e.τ = τ →
+        at_.site = ⟨e.site.through, drawToldKey events (idx + k)⟩ →
+        ∃ c ∈ pCs, ClauseMatches M c (.give .message [verifier] at_ τ x))
+  | _, [], _, _, h => by
+      cases h
+      exact ⟨(fun _ hc => nomatch hc), (fun _ hc => nomatch hc), (fun _ _ hk => by simp at hk)⟩
+  | idx, e :: rest, ws, pCs, h => by
+      unfold collectCompactWire at h
+      cases hRec : collectCompactWire a layout unitTy prover verifier declKey events (idx + 1) rest with
+      | error _ => rw [hRec] at h; cases h
+      | ok pair =>
+          rw [hRec] at h; dsimp only [bind, Except.bind] at h
+          obtain ⟨ihEmP, ihFP, ihTold⟩ := collectCompactWire_covers (idx + 1) rest hRec
+          have ihToldShift : ∀ k e', rest[k]? = some e' →
+              ∀ law hearers (at_ : Occurrence) τ x,
+              e'.cls = .given (.coin law) verifier hearers → prover ∈ hearers → e'.τ = τ →
+              at_.site = ⟨e'.site.through, drawToldKey events (idx + (k + 1))⟩ →
+              ∃ c ∈ pair.2, ClauseMatches M c (.give .message [verifier] at_ τ x) := by
+            intro k e' hk law hearers at_ τ x hC hIn hT hS
+            exact ihTold k e' hk law hearers at_ τ x hC hIn hT
+              (by simpa [Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hS)
+          cases hCls : e.cls with
+          | flow kind giver getters =>
+              rw [hCls] at h; dsimp only at h
+              split at h
+              · cases hLk : layout.recover.lookup e.site with
+                | some _ =>
+                    rw [hLk] at h; cases h
+                    refine ⟨?_, ?_, ?_⟩
+                    · intro c hc
+                      rcases List.mem_cons.mp hc with rfl | hm
+                      · apply layoutClause_emits_any_drop M
+                      · exact ihEmP c hm
+                    · intro e' he' k' gs' at_ τ' x' hSite hTy hECls hVin
+                      rcases List.mem_cons.mp he' with rfl | hm
+                      · rw [hCls] at hECls; cases hECls
+                        exact ⟨_, List.mem_cons_self, hSite, rfl, by cases hTy; rfl, rfl⟩
+                      · obtain ⟨c, hc, hcm⟩ := ihFP e' hm k' gs' at_ τ' x' hSite hTy hECls hVin
+                        exact ⟨c, List.mem_cons_of_mem _ hc, hcm⟩
+                    · intro k e' hk law' hs' at_ τ' x' hECls hIn hTy hS
+                      cases k with
+                      | zero => simp at hk; subst hk; rw [hCls] at hECls; cases hECls
+                      | succ k' =>
+                          obtain ⟨c, hc, hcm⟩ := ihToldShift k' e' hk law' hs' at_ τ' x' hECls hIn hTy hS
+                          exact ⟨c, List.mem_cons_of_mem _ hc, hcm⟩
+                | none =>
+                    rw [hLk] at h; dsimp only at h
+                    cases hW : findLayoutWrite a layout.module unitTy e.τ <;>
+                    cases hR : findLayoutRead a layout.module unitTy e.τ <;>
+                      simp only [hW, hR] at h
+                    · cases h
+                    · cases h
+                    · cases h
+                    · cases h
+                      refine ⟨?_, ?_, ?_⟩
+                      · intro c hc
+                        rcases List.mem_cons.mp hc with rfl | hm
+                        · apply layoutClause_emits_any_pWrite M
+                        · exact ihEmP c hm
+                      · intro e' he' k' gs' at_ τ' x' hSite hTy hECls hVin
+                        rcases List.mem_cons.mp he' with rfl | hm
+                        · rw [hCls] at hECls; cases hECls
+                          exact ⟨_, List.mem_cons_self, hSite, rfl, by cases hTy; rfl, rfl⟩
+                        · obtain ⟨c, hc, hcm⟩ := ihFP e' hm k' gs' at_ τ' x' hSite hTy hECls hVin
+                          exact ⟨c, List.mem_cons_of_mem _ hc, hcm⟩
+                      · intro k e' hk law' hs' at_ τ' x' hECls hIn hTy hS
+                        cases k with
+                        | zero => simp at hk; subst hk; rw [hCls] at hECls; cases hECls
+                        | succ k' =>
+                            obtain ⟨c, hc, hcm⟩ := ihToldShift k' e' hk law' hs' at_ τ' x' hECls hIn hTy hS
+                            exact ⟨c, List.mem_cons_of_mem _ hc, hcm⟩
+              · rename_i hNotPV
+                cases h
+                refine ⟨ihEmP, ?_, ?_⟩
+                · intro e' he' k' gs' at_ τ' x' hSite hTy hECls hVin
+                  rcases List.mem_cons.mp he' with rfl | hm
+                  · rw [hCls] at hECls; cases hECls; exact absurd ⟨rfl, hVin⟩ hNotPV
+                  · exact ihFP e' hm k' gs' at_ τ' x' hSite hTy hECls hVin
+                · intro k e' hk law' hs' at_ τ' x' hECls hIn hTy hS
+                  cases k with
+                  | zero => simp at hk; subst hk; rw [hCls] at hECls; cases hECls
+                  | succ k' => exact ihToldShift k' e' hk law' hs' at_ τ' x' hECls hIn hTy hS
+          | given gkind owner hearers =>
+              rw [hCls] at h
+              cases gkind with
+              | coin law =>
+                  dsimp only at h
+                  split at h
+                  · split at h
+                    · cases hW : findLayoutWrite a layout.module unitTy e.τ <;>
+                      cases hR : findLayoutRead a layout.module unitTy e.τ <;>
+                        simp only [hW, hR] at h
+                      · cases h
+                      · cases h
+                      · cases h
+                      · cases h
+                        refine ⟨?_, ?_, ?_⟩
+                        · intro c hc
+                          rcases List.mem_cons.mp hc with rfl | hm
+                          · apply layoutClause_emits_any_pWrite M
+                          · exact ihEmP c hm
+                        · intro e' he' k' gs' at_ τ' x' hSite hTy hECls hVin
+                          rcases List.mem_cons.mp he' with rfl | hm
+                          · rw [hCls] at hECls; cases hECls
+                          · obtain ⟨c, hc, hcm⟩ := ihFP e' hm k' gs' at_ τ' x' hSite hTy hECls hVin
+                            exact ⟨c, List.mem_cons_of_mem _ hc, hcm⟩
+                        · intro k e' hk law' hs' at_ τ' x' hECls hIn hTy hS
+                          cases k with
+                          | zero =>
+                              simp at hk; subst hk
+                              exact ⟨_, List.mem_cons_self, by rw [Nat.add_zero] at hS; exact hS.symm, rfl,
+                                by cases hTy; rfl, rfl⟩
+                          | succ k' =>
+                              obtain ⟨c, hc, hcm⟩ := ihToldShift k' e' hk law' hs' at_ τ' x' hECls hIn hTy hS
+                              exact ⟨c, List.mem_cons_of_mem _ hc, hcm⟩
+                    · cases h
+                      refine ⟨?_, ?_, ?_⟩
+                      · intro c hc
+                        rcases List.mem_cons.mp hc with rfl | hm
+                        · apply layoutClause_emits_any_drop M
+                        · exact ihEmP c hm
+                      · intro e' he' k' gs' at_ τ' x' hSite hTy hECls hVin
+                        rcases List.mem_cons.mp he' with rfl | hm
+                        · rw [hCls] at hECls; cases hECls
+                        · obtain ⟨c, hc, hcm⟩ := ihFP e' hm k' gs' at_ τ' x' hSite hTy hECls hVin
+                          exact ⟨c, List.mem_cons_of_mem _ hc, hcm⟩
+                      · intro k e' hk law' hs' at_ τ' x' hECls hIn hTy hS
+                        cases k with
+                        | zero =>
+                            simp at hk; subst hk
+                            exact ⟨_, List.mem_cons_self, by rw [Nat.add_zero] at hS; exact hS.symm, rfl,
+                              by cases hTy; rfl, rfl⟩
+                        | succ k' =>
+                            obtain ⟨c, hc, hcm⟩ := ihToldShift k' e' hk law' hs' at_ τ' x' hECls hIn hTy hS
+                            exact ⟨c, List.mem_cons_of_mem _ hc, hcm⟩
+                  · rename_i hNotCoin
+                    cases h
+                    refine ⟨ihEmP, ?_, ?_⟩
+                    · intro e' he' k' gs' at_ τ' x' hSite hTy hECls hVin
+                      rcases List.mem_cons.mp he' with rfl | hm
+                      · rw [hCls] at hECls; cases hECls
+                      · exact ihFP e' hm k' gs' at_ τ' x' hSite hTy hECls hVin
+                    · intro k e' hk law' hs' at_ τ' x' hECls hIn hTy hS
+                      cases k with
+                      | zero =>
+                          simp at hk; subst hk; rw [hCls] at hECls; cases hECls
+                          exact absurd ⟨rfl, hIn⟩ hNotCoin
+                      | succ k' => exact ihToldShift k' e' hk law' hs' at_ τ' x' hECls hIn hTy hS
+              | request _ =>
+                  cases h
+                  refine ⟨ihEmP, ?_, ?_⟩
+                  · intro e' he' k' gs' at_ τ' x' hSite hTy hECls hVin
+                    rcases List.mem_cons.mp he' with rfl | hm
+                    · rw [hCls] at hECls; cases hECls
+                    · exact ihFP e' hm k' gs' at_ τ' x' hSite hTy hECls hVin
+                  · intro k e' hk law' hs' at_ τ' x' hECls hIn hTy hS
+                    cases k with
+                    | zero => simp at hk; subst hk; rw [hCls] at hECls; cases hECls
+                    | succ k' => exact ihToldShift k' e' hk law' hs' at_ τ' x' hECls hIn hTy hS
+
+private theorem buildCompactVClauses_covers {a : Admitted V} {layout : Layout} {unitTy : V.Ty}
+    {prover verifier : Role} {declKey : Key} {events : List (ShapeEvent V)}
+    {stmtTys : List V.Ty} {wireSpecs : List (WireSpec V a.program.headers.fns unitTy)}
+    {htfree : Tys.anyLinear V (tysOfList (stmtTys ++ wireSpecs.map (·.ty))) = false} :
+    ∀ (idx : Nat) (es : List (ShapeEvent V))
+      {vCs : List (Clause V a.program.headers verifier
+        (.tuple (tysOfList (stmtTys ++ wireSpecs.map (·.ty)))))},
+      buildCompactVClauses a layout unitTy prover verifier declKey events stmtTys wireSpecs
+        htfree idx es = .ok vCs →
+      (∀ c ∈ vCs, ClauseEmits M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs)
+        (ROp.IsClosed M) c) ∧
+      (∀ e ∈ es, ∀ kind getters (at_ : Occurrence) τ,
+        e.site = at_.site → e.τ = τ → e.cls = .flow kind prover getters → verifier ∈ getters →
+        ∃ c ∈ vCs, ClauseMatches M c (.get kind prover at_ τ)) ∧
+      (∀ (k : Nat) (e : ShapeEvent V), es[k]? = some e →
+        ∀ law hearers (at_ : Occurrence) τ x,
+        e.cls = .given (.coin law) verifier hearers → prover ∈ hearers → e.τ = τ →
+        at_.site = ⟨e.site.through, drawToldKey events (idx + k)⟩ →
+        ∃ c ∈ vCs, ClauseMatches M c (.give .message [prover] at_ τ x))
+  | _, [], _, h => by
+      cases h
+      exact ⟨(fun _ hc => nomatch hc), (fun _ hc => nomatch hc), (fun _ _ hk => by simp at hk)⟩
+  | idx, e :: rest, vCs, h => by
+      unfold buildCompactVClauses at h
+      cases hRec : buildCompactVClauses a layout unitTy prover verifier declKey events stmtTys
+          wireSpecs htfree (idx + 1) rest with
+      | error _ => rw [hRec] at h; cases h
+      | ok vRest =>
+          rw [hRec] at h; dsimp only [bind, Except.bind] at h
+          obtain ⟨ihEmV, ihFV, ihTold⟩ := buildCompactVClauses_covers (idx + 1) rest hRec
+          have ihToldShift : ∀ k e', rest[k]? = some e' →
+              ∀ law hearers (at_ : Occurrence) τ x,
+              e'.cls = .given (.coin law) verifier hearers → prover ∈ hearers → e'.τ = τ →
+              at_.site = ⟨e'.site.through, drawToldKey events (idx + (k + 1))⟩ →
+              ∃ c ∈ vRest, ClauseMatches M c (.give .message [prover] at_ τ x) := by
+            intro k e' hk law hearers at_ τ x hC hIn hT hS
+            exact ihTold k e' hk law hearers at_ τ x hC hIn hT
+              (by simpa [Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hS)
+          cases hCls : e.cls with
+          | flow kind giver getters =>
+              rw [hCls] at h; dsimp only at h
+              split at h
+              · cases hLk : layout.recover.lookup e.site with
+                | some recKey =>
+                    rw [hLk] at h; dsimp only at h
+                    cases hRecFn : findSafeFnRef a recKey
+                        (tysOfList (stmtTys ++ wireSpecs.map (·.ty))).toList [e.τ] with
+                    | none => rw [hRecFn] at h; cases h
+                    | some recRef =>
+                        rw [hRecFn] at h; cases h
+                        refine ⟨?_, ?_, ?_⟩
+                        · intro c hc
+                          rcases List.mem_cons.mp hc with rfl | hm
+                          · apply compactRecoverClause_emits_any M
+                          · exact ihEmV c hm
+                        · intro e' he' k' gs' at_ τ' hSite hTy hECls hVin
+                          rcases List.mem_cons.mp he' with rfl | hm
+                          · rw [hCls] at hECls; cases hECls
+                            exact ⟨_, List.mem_cons_self, hSite, rfl, rfl, by cases hTy; rfl⟩
+                          · obtain ⟨c, hc, hcm⟩ := ihFV e' hm k' gs' at_ τ' hSite hTy hECls hVin
+                            exact ⟨c, List.mem_cons_of_mem _ hc, hcm⟩
+                        · intro k e' hk law' hs' at_ τ' x' hECls hIn hTy hS
+                          cases k with
+                          | zero => simp at hk; subst hk; rw [hCls] at hECls; cases hECls
+                          | succ k' =>
+                              obtain ⟨c, hc, hcm⟩ := ihToldShift k' e' hk law' hs' at_ τ' x' hECls hIn hTy hS
+                              exact ⟨c, List.mem_cons_of_mem _ hc, hcm⟩
+                | none =>
+                    rw [hLk] at h; dsimp only at h
+                    cases hWM : findWireMember e.site e.τ wireSpecs with
+                    | none => rw [hWM] at h; cases h
+                    | some mWire =>
+                        rw [hWM] at h; cases h
+                        refine ⟨?_, ?_, ?_⟩
+                        · intro c hc
+                          rcases List.mem_cons.mp hc with rfl | hm
+                          · apply compactReadSlotClause_emits_any M
+                          · exact ihEmV c hm
+                        · intro e' he' k' gs' at_ τ' hSite hTy hECls hVin
+                          rcases List.mem_cons.mp he' with rfl | hm
+                          · rw [hCls] at hECls; cases hECls
+                            exact ⟨_, List.mem_cons_self, hSite, rfl, rfl, by cases hTy; rfl⟩
+                          · obtain ⟨c, hc, hcm⟩ := ihFV e' hm k' gs' at_ τ' hSite hTy hECls hVin
+                            exact ⟨c, List.mem_cons_of_mem _ hc, hcm⟩
+                        · intro k e' hk law' hs' at_ τ' x' hECls hIn hTy hS
+                          cases k with
+                          | zero => simp at hk; subst hk; rw [hCls] at hECls; cases hECls
+                          | succ k' =>
+                              obtain ⟨c, hc, hcm⟩ := ihToldShift k' e' hk law' hs' at_ τ' x' hECls hIn hTy hS
+                              exact ⟨c, List.mem_cons_of_mem _ hc, hcm⟩
+              · rename_i hNotPV
+                cases h
+                refine ⟨ihEmV, ?_, ?_⟩
+                · intro e' he' k' gs' at_ τ' hSite hTy hECls hVin
+                  rcases List.mem_cons.mp he' with rfl | hm
+                  · rw [hCls] at hECls; cases hECls; exact absurd ⟨rfl, hVin⟩ hNotPV
+                  · exact ihFV e' hm k' gs' at_ τ' hSite hTy hECls hVin
+                · intro k e' hk law' hs' at_ τ' x' hECls hIn hTy hS
+                  cases k with
+                  | zero => simp at hk; subst hk; rw [hCls] at hECls; cases hECls
+                  | succ k' => exact ihToldShift k' e' hk law' hs' at_ τ' x' hECls hIn hTy hS
+          | given gkind owner hearers =>
+              rw [hCls] at h
+              cases gkind with
+              | coin law =>
+                  dsimp only at h
+                  split at h
+                  · split at h
+                    · cases hWM : findWireMember ⟨e.site.through, drawToldKey events idx⟩ e.τ wireSpecs <;>
+                      cases hEq : findLayoutEqual a layout.module e.τ <;>
+                        simp only [hWM, hEq] at h
+                      · cases h
+                      · cases h
+                      · cases h
+                      · cases h
+                        refine ⟨?_, ?_, ?_⟩
+                        · intro c hc
+                          rcases List.mem_cons.mp hc with rfl | hm
+                          · apply compactCompareClause_emits_any M
+                          · exact ihEmV c hm
+                        · intro e' he' k' gs' at_ τ' hSite hTy hECls hVin
+                          rcases List.mem_cons.mp he' with rfl | hm
+                          · rw [hCls] at hECls; cases hECls
+                          · obtain ⟨c, hc, hcm⟩ := ihFV e' hm k' gs' at_ τ' hSite hTy hECls hVin
+                            exact ⟨c, List.mem_cons_of_mem _ hc, hcm⟩
+                        · intro k e' hk law' hs' at_ τ' x' hECls hIn hTy hS
+                          cases k with
+                          | zero =>
+                              simp at hk; subst hk
+                              exact ⟨_, List.mem_cons_self, by rw [Nat.add_zero] at hS; exact hS.symm, rfl,
+                                by cases hTy; rfl, rfl⟩
+                          | succ k' =>
+                              obtain ⟨c, hc, hcm⟩ := ihToldShift k' e' hk law' hs' at_ τ' x' hECls hIn hTy hS
+                              exact ⟨c, List.mem_cons_of_mem _ hc, hcm⟩
+                    · cases h
+                      refine ⟨?_, ?_, ?_⟩
+                      · intro c hc
+                        rcases List.mem_cons.mp hc with rfl | hm
+                        · apply layoutClause_emits_any_drop M
+                        · exact ihEmV c hm
+                      · intro e' he' k' gs' at_ τ' hSite hTy hECls hVin
+                        rcases List.mem_cons.mp he' with rfl | hm
+                        · rw [hCls] at hECls; cases hECls
+                        · obtain ⟨c, hc, hcm⟩ := ihFV e' hm k' gs' at_ τ' hSite hTy hECls hVin
+                          exact ⟨c, List.mem_cons_of_mem _ hc, hcm⟩
+                      · intro k e' hk law' hs' at_ τ' x' hECls hIn hTy hS
+                        cases k with
+                        | zero =>
+                            simp at hk; subst hk
+                            exact ⟨_, List.mem_cons_self, by rw [Nat.add_zero] at hS; exact hS.symm, rfl,
+                              by cases hTy; rfl, rfl⟩
+                        | succ k' =>
+                            obtain ⟨c, hc, hcm⟩ := ihToldShift k' e' hk law' hs' at_ τ' x' hECls hIn hTy hS
+                            exact ⟨c, List.mem_cons_of_mem _ hc, hcm⟩
+                  · rename_i hNotCoin
+                    cases h
+                    refine ⟨ihEmV, ?_, ?_⟩
+                    · intro e' he' k' gs' at_ τ' hSite hTy hECls hVin
+                      rcases List.mem_cons.mp he' with rfl | hm
+                      · rw [hCls] at hECls; cases hECls
+                      · exact ihFV e' hm k' gs' at_ τ' hSite hTy hECls hVin
+                    · intro k e' hk law' hs' at_ τ' x' hECls hIn hTy hS
+                      cases k with
+                      | zero =>
+                          simp at hk; subst hk; rw [hCls] at hECls; cases hECls
+                          exact absurd ⟨rfl, hIn⟩ hNotCoin
+                      | succ k' => exact ihToldShift k' e' hk law' hs' at_ τ' x' hECls hIn hTy hS
+              | request _ =>
+                  cases h
+                  refine ⟨ihEmV, ?_, ?_⟩
+                  · intro e' he' k' gs' at_ τ' hSite hTy hECls hVin
+                    rcases List.mem_cons.mp he' with rfl | hm
+                    · rw [hCls] at hECls; cases hECls
+                    · exact ihFV e' hm k' gs' at_ τ' hSite hTy hECls hVin
+                  · intro k e' hk law' hs' at_ τ' x' hECls hIn hTy hS
+                    cases k with
+                    | zero => simp at hk; subst hk; rw [hCls] at hECls; cases hECls
+                    | succ k' => exact ihToldShift k' e' hk law' hs' at_ τ' x' hECls hIn hTy hS
+
+private theorem buildLayoutLayers_covers {a : Admitted V} {entry : ProtocolHeader V}
+    {layout : Layout} {prover verifier : Role} {declKey : Key} {events : List (ShapeEvent V)}
+    {layP : Layer V a.program.headers prover entry.ins}
+    {layV : Layer V a.program.headers verifier entry.ins}
+    (h : buildLayoutLayers a entry layout prover verifier declKey events = .ok (layP, layV)) :
+    Handler.Covers M
+      (Layer.handler M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs) layP)
+      (LayoutInputP M prover verifier events) (ROp.IsClosed M) ∧
+    Handler.Covers M
+      (Layer.handler M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs) layV)
+      (LayoutInputV M prover verifier events) (ROp.IsClosed M) := by
+  cases buildLayoutLayers_ok_elim h with
+  | streaming w hLayP hLayV =>
+      subst hLayP; subst hLayV
+      obtain ⟨hEmP, hEmV, hFP, hFV, hTold⟩ := buildStreamingLayoutClauses_go_covers M 0 events w.hStr
+      constructor
+      · intro op s ho
+        apply clause_answer_covers M _ _ _ hEmP op s
+        rcases ho with hCl | ⟨e, he, hFl⟩ | ⟨idx, e, hIdx, hTd⟩
+        · exact .inl hCl
+        · cases op with
+          | give k gs at_ τ x =>
+              exact .inr (hFP e he k gs at_ τ x hFl.1 hFl.2.1 hFl.2.2.1 hFl.2.2.2)
+          | get | own | hear | «begin» | settle => exact False.elim hFl
+        · cases op with
+          | give k gs at_ τ x =>
+              cases k with
+              | message =>
+                  obtain ⟨hGs, hSite, hTy, law, hearers, hCls, hIn⟩ := hTd
+                  subst hGs
+                  exact .inr (hTold idx e hIdx law hearers at_ τ x hCls hIn hTy (by simpa using hSite)).1
+              | rows | opening => exact False.elim hTd
+          | get | own | hear | «begin» | settle => exact False.elim hTd
+      · intro op s ho
+        apply clause_answer_covers M _ _ _ hEmV op s
+        rcases ho with hCl | ⟨e, he, hFl⟩ | ⟨idx, e, hIdx, hTd⟩
+        · exact .inl hCl
+        · cases op with
+          | get k g at_ τ =>
+              obtain ⟨hG, hSite, hTy, gs, hVin, hCls⟩ := hFl
+              subst hG
+              exact .inr (hFV e he k gs at_ τ hSite hTy hCls hVin)
+          | give | own | hear | «begin» | settle => exact False.elim hFl
+        · cases op with
+          | give k gs at_ τ x =>
+              cases k with
+              | message =>
+                  obtain ⟨hGs, hSite, hTy, law, hearers, hCls, hIn⟩ := hTd
+                  subst hGs
+                  exact .inr (hTold idx e hIdx law hearers at_ τ x hCls hIn hTy (by simpa using hSite)).2
+              | rows | opening => exact False.elim hTd
+          | get | own | hear | «begin» | settle => exact False.elim hTd
+  | compact w hComp =>
+      unfold buildCompactLayoutLayers at hComp
+      cases hCW : collectCompactWire a layout w.unitTy prover verifier declKey events 0 events with
+      | error _ => rw [hCW] at hComp; cases hComp
+      | ok cw =>
+          rw [hCW] at hComp; dsimp only [bind, Except.bind] at hComp
+          split at hComp
+          · cases hVC : buildCompactVClauses a layout w.unitTy prover verifier declKey events _ cw.1
+                _ 0 events with
+            | error _ => rw [hVC] at hComp; cases hComp
+            | ok vcs =>
+                rw [hVC] at hComp; cases hComp
+                obtain ⟨hEmP, hFP, hToldP⟩ := collectCompactWire_covers M 0 events hCW
+                obtain ⟨hEmV, hFV, hToldV⟩ := buildCompactVClauses_covers M 0 events hVC
+                constructor
+                · intro op s ho
+                  apply clause_answer_covers M _ _ _ hEmP op s
+                  rcases ho with hCl | ⟨e, he, hFl⟩ | ⟨idx, e, hIdx, hTd⟩
+                  · exact .inl hCl
+                  · cases op with
+                    | give k gs at_ τ x =>
+                        exact .inr (hFP e he k gs at_ τ x hFl.1 hFl.2.1 hFl.2.2.1 hFl.2.2.2)
+                    | get | own | hear | «begin» | settle => exact False.elim hFl
+                  · cases op with
+                    | give k gs at_ τ x =>
+                        cases k with
+                        | message =>
+                            obtain ⟨hGs, hSite, hTy, law, hearers, hCls, hIn⟩ := hTd
+                            subst hGs
+                            exact .inr (hToldP idx e hIdx law hearers at_ τ x hCls hIn hTy (by simpa using hSite))
+                        | rows | opening => exact False.elim hTd
+                    | get | own | hear | «begin» | settle => exact False.elim hTd
+                · intro op s ho
+                  apply clause_answer_covers M _ _ _ hEmV op s
+                  rcases ho with hCl | ⟨e, he, hFl⟩ | ⟨idx, e, hIdx, hTd⟩
+                  · exact .inl hCl
+                  · cases op with
+                    | get k g at_ τ =>
+                        obtain ⟨hG, hSite, hTy, gs, hVin, hCls⟩ := hFl
+                        subst hG
+                        exact .inr (hFV e he k gs at_ τ hSite hTy hCls hVin)
+                    | give | own | hear | «begin» | settle => exact False.elim hFl
+                  · cases op with
+                    | give k gs at_ τ x =>
+                        cases k with
+                        | message =>
+                            obtain ⟨hGs, hSite, hTy, law, hearers, hCls, hIn⟩ := hTd
+                            subst hGs
+                            exact .inr (hToldV idx e hIdx law hearers at_ τ x hCls hIn hTy (by simpa using hSite))
+                        | rows | opening => exact False.elim hTd
+                    | get | own | hear | «begin» | settle => exact False.elim hTd
+          · cases hComp
+
+private theorem stack_covers_cast {a : Admitted V} {hdr₁ hdr₂ : ProtocolHeader V}
+    (hHdr : hdr₁ = hdr₂) {r₁ r₂ : Role} (hr : r₁ = r₂)
+    (layers : List (Layer V a.program.headers r₂ hdr₂.ins))
+    (h : Handler.Covers M
+      (Stack.handler M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs) layers)
+      (ROp.MatchesShape M r₂ (hdr₂.shape.events [] id)) (ROp.IsClosed M)) :
+    Handler.Covers M
+      (Stack.handler M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs) (hr ▸ hHdr ▸ layers))
+      (ROp.MatchesShape M r₁ (hdr₁.shape.events [] id)) (ROp.IsClosed M) :=
+  cast_layer_stack_elim hHdr hr layers
+    (fun hdr r ls => Handler.Covers M
+      (Stack.handler M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs) ls)
+      (ROp.MatchesShape M r (hdr.shape.events [] id)) (ROp.IsClosed M)) h
+
+/-- Every non-interactive deployment covers all non-closed effects on both prover and verifier. -/
+theorem deploy_coverage (enc : VocabEncoder V) {a : Admitted V} {declaration : Declaration}
+    {d : Deployed V} (hDep : deploy enc a declaration = .ok d)
+    (hNonInt : declaration.interactive = false) : d.Covered := by
+  intro M prover verifier hRoles r hRole ins taken _ _
+  rw [deployed_run_eq_runStack]
+  apply runStack_closedEffects M d.admitted d.callee d.retry r (d.stack r) _ ins taken
+  cases deploy_ok_elim enc a declaration d hDep with
+  | interactive w _ => simp [Declaration.interactive, w.hCon] at hNonInt
+  | authored w hEq =>
+      subst hEq
+      have hRolesEq : proverAndVerifier w.foundPair.1 declaration = some (prover, verifier) := by
+        simpa [Deployed.roles, Deployed.entry, w.hFound] using hRoles
+      rw [w.hPV] at hRolesEq; cases hRolesEq
+      obtain ⟨hEmS, hAuthP, hAuthV⟩ := checkAuthoredEvents_covers M w.hNe _ (fun _ h => h) w.hAuth
+      obtain ⟨hLayP, hLayV⟩ := buildLayoutLayers_covers M w.hLay
+      have hLayP' : Handler.Covers M (Layer.handler M (Defs.fnTable M a.program.defs)
+          (Defs.rTable M a.program.defs) w.layP)
+          (ROp.MatchesShape M w.prover (w.foundPair.1.shape.events [] id)) (ROp.IsClosed M) :=
+        fun op s ho => hLayP op s (hAuthP op ho)
+      have hLayV' : Handler.Covers M (Layer.handler M (Defs.fnTable M a.program.defs)
+          (Defs.rTable M a.program.defs) w.layV)
+          (ROp.MatchesShape M w.verifier (w.foundPair.1.shape.events [] id)) (ROp.IsClosed M) :=
+        fun op s ho => hLayV op s (hAuthV op ho)
+      rcases hRole with rfl | rfl
+      · dsimp only; rw [dite_eq_left rfl]
+        apply stack_covers_cast M (by simp [w.hFound]) rfl
+        cases declaration.samples with
+        | none =>
+            exact stack_handler_covers_cons M _ _ hLayP' (stack_handler_covers_nil M _ _ _)
+        | some _ =>
+            have hSamp : Handler.Covers M
+                (Layer.handler M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs)
+                  ({ line := .samples, state := .nat, takes := [], gives := [],
+                     clauses := w.sClauses, again := attemptNumAgain,
+                     start := samplesStart, finish := emptyFinish .nat } :
+                    Layer V a.program.headers w.prover w.foundPair.1.ins))
+                (ROp.MatchesShape M w.prover (w.foundPair.1.shape.events [] id))
+                (ROp.MatchesShape M w.prover (w.foundPair.1.shape.events [] id)) :=
+              fun op s ho => clause_answer_covers M _ _ _ hEmS op s (.inl ho)
+            exact stack_handler_covers_cons M _ _ hSamp
+              (stack_handler_covers_cons M _ _ hLayP' (stack_handler_covers_nil M _ _ _))
+      · dsimp only; rw [dite_eq_right (Ne.symm w.hNe), dite_eq_left rfl]
+        apply stack_covers_cast M (by simp [w.hFound]) rfl
+        exact stack_handler_covers_cons M _ _ hLayV' (stack_handler_covers_nil M _ _ _)
+  | derived w hEq =>
+      subst hEq
+      have hRolesEq : proverAndVerifier w.foundPair.1 declaration = some (prover, verifier) := by
+        simpa [Deployed.roles, Deployed.entry, w.hFound] using hRoles
+      rw [w.hPV] at hRolesEq; cases hRolesEq
+      have hFst := eventsWithAbsorb_fst w.prover w.verifier [] id false w.foundPair.1.shape
+      obtain ⟨hEmP, hEmV, hEmS, hCovP, hCovV⟩ := buildConstructionClauses_go_covers M w.hNe 0 _
+        (fun k p hk => by rw [Nat.zero_add, ← hFst, List.getElem?_map, hk]; rfl) w.hCC
+      rw [hFst] at hCovP hCovV
+      obtain ⟨hLayP, hLayV⟩ := buildLayoutLayers_covers M w.hLay
+      rcases hRole with rfl | rfl
+      · dsimp only; rw [dite_eq_left rfl]
+        apply stack_covers_cast M (by simp [w.hFound]) rfl
+        have hConP : Handler.Covers M
+            (Layer.handler M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs)
+              ({ line := .construction, state := w.stateTy, takes := [], gives := [],
+                 clauses := w.cPClauses, again := restoreAgain w.stateTy,
+                 start := constructionStart w.sessBytes w.hSessBytes w.startRef w.absorbRef w.stmtP,
+                 finish := emptyFinish w.stateTy } :
+                Layer V a.program.headers w.prover w.foundPair.1.ins))
+            (ROp.MatchesShape M w.prover (w.foundPair.1.shape.events [] id))
+            (LayoutInputP M w.prover w.verifier (w.foundPair.1.shape.events [] id)) :=
+          fun op s ho => clause_answer_covers M _ _ _ hEmP op s (hCovP op ho)
+        cases declaration.samples with
+        | none =>
+            exact stack_handler_covers_cons M _ _ hConP
+              (stack_handler_covers_cons M _ _ hLayP (stack_handler_covers_nil M _ _ _))
+        | some _ =>
+            have hSamp : Handler.Covers M
+                (Layer.handler M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs)
+                  ({ line := .samples, state := .nat, takes := [], gives := [],
+                     clauses := w.sClauses, again := attemptNumAgain,
+                     start := samplesStart, finish := emptyFinish .nat } :
+                    Layer V a.program.headers w.prover w.foundPair.1.ins))
+                (ROp.MatchesShape M w.prover (w.foundPair.1.shape.events [] id))
+                (ROp.MatchesShape M w.prover (w.foundPair.1.shape.events [] id)) :=
+              fun op s ho => clause_answer_covers M _ _ _ hEmS op s (.inl ho)
+            exact stack_handler_covers_cons M _ _ hSamp
+              (stack_handler_covers_cons M _ _ hConP
+                (stack_handler_covers_cons M _ _ hLayP (stack_handler_covers_nil M _ _ _)))
+      · dsimp only; rw [dite_eq_right (Ne.symm w.hNe), dite_eq_left rfl]
+        apply stack_covers_cast M (by simp [w.hFound]) rfl
+        have hConV : Handler.Covers M
+            (Layer.handler M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs)
+              ({ line := .construction, state := w.stateTy, takes := [], gives := [],
+                 clauses := w.cVClauses, again := restoreAgain w.stateTy,
+                 start := constructionStart w.sessBytes w.hSessBytes w.startRef w.absorbRef w.stmtV,
+                 finish := emptyFinish w.stateTy } :
+                Layer V a.program.headers w.verifier w.foundPair.1.ins))
+            (ROp.MatchesShape M w.verifier (w.foundPair.1.shape.events [] id))
+            (LayoutInputV M w.prover w.verifier (w.foundPair.1.shape.events [] id)) :=
+          fun op s ho => clause_answer_covers M _ _ _ hEmV op s (hCovV op ho)
+        exact stack_handler_covers_cons M _ _ hConV
+          (stack_handler_covers_cons M _ _ hLayV (stack_handler_covers_nil M _ _ _))
+
+/-- An ideal-RO deployment's verifier asks the world only closed effects (its own private coins,
+service requests — including `serviceKey` — and local attempt marks). -/
+theorem deployIdeal_verifier_covered (enc : VocabEncoder V) (serviceKey : Key)
+    {a : Admitted V} {declaration : Declaration} {d : Deployed V}
+    (hDep : deployIdeal enc serviceKey a declaration = .ok d)
+    (M : Model V) (prover verifier : Role) (hRoles : d.roles = some (prover, verifier))
+    (ins : HList (RV M verifier) d.entry.ins)
+    (taken : HList M.Val (Stack.Takes (d.stack verifier))) :
+    Process.ClosedEffects (d.run M verifier ins taken) := by
+  rw [deployed_run_eq_runStack]
+  apply runStack_closedEffects M d.admitted d.callee d.retry verifier (d.stack verifier) _ ins taken
+  let ⟨w, hEq⟩ := deployIdeal_ok_elim enc serviceKey a declaration d hDep
+  subst hEq
+  have hRolesEq : proverAndVerifier w.foundPair.1 declaration = some (prover, verifier) := by
+    simpa [Deployed.roles, Deployed.entry, w.hFound] using hRoles
+  rw [w.hPV] at hRolesEq; cases hRolesEq
+  have hFst := eventsWithAbsorb_fst w.prover w.verifier [] id false w.foundPair.1.shape
+  obtain ⟨hEmV, hCovV⟩ := buildIdealVerifierClauses_go_covers M w.hNe 0 _
+    (fun k p hk => by rw [Nat.zero_add, ← hFst, List.getElem?_map, hk]; rfl) w.hIV
+  rw [hFst] at hCovV
+  obtain ⟨_, hLayV⟩ := buildLayoutLayers_covers M w.hLay
+  dsimp only; rw [dite_eq_left rfl]
+  apply stack_covers_cast M (by simp [w.hFound]) rfl
+  have hConV : Handler.Covers M
+      (Layer.handler M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs)
+        ({ line := .construction, state := idealPathTy w.suiteUnitTy, takes := [], gives := [],
+           clauses := w.idealVClauses, again := restoreAgain (idealPathTy w.suiteUnitTy),
+           start := idealStart w.hSuiteFree w.sessBytes w.hSessBytes w.stmtV,
+           finish := emptyFinish (idealPathTy w.suiteUnitTy) } :
+          Layer V a.program.headers w.verifier w.foundPair.1.ins))
+      (ROp.MatchesShape M w.verifier (w.foundPair.1.shape.events [] id))
+      (LayoutInputV M w.prover w.verifier (w.foundPair.1.shape.events [] id)) :=
+    fun op s ho => clause_answer_covers M _ _ _ hEmV op s (hCovV op ho)
+  exact stack_handler_covers_cons M _ _ hConV
+    (stack_handler_covers_cons M _ _ hLayV (stack_handler_covers_nil M _ _ _))
+
+end Coverage
+
+end Zkc.Core
