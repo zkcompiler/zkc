@@ -17,29 +17,13 @@ Every value of a valid type is encoded into canonical bytes (`< 256`):
 - unsized sequence `seq item none`: its length in LEB128, followed by its elements;
 - `tuple` and `record`: components/fields concatenated in order;
 - `variant`: alternative index as `fin count`, followed by its payload;
-- `nominal`: delegated to the model's `ValidCodecs`.
+- `nominal`: delegated to the model's `Codecs`.
 
 The main theorem `canonicalFormat_lawful` establishes both prefix round-trip and canonical
-injectivity on valid values (`Format.ValidLawful`), using only `propext` and `Quot.sound`.
+injectivity on valid values (`Format.Lawful`), using only `propext` and `Quot.sound`.
 -/
 
 namespace Zkc.Core
-
-/-! ## Lawful formats on valid values -/
-
-/-- A format is lawful on values satisfying `valid` when:
-1. every element emitted by `write` on a valid value is a byte (`< 256`);
-2. reading `write a ++ rest` recovers `(a, rest)` for every valid `a`;
-3. every successful `read` yields a valid value whose written bytes are an exact prefix. -/
-structure Format.ValidLawful {A : Type} (valid : A → Prop) (f : Format A) : Prop where
-  bytes : ∀ a, valid a → ∀ b, b ∈ f.write a → b < 256
-  reads : ∀ a rest, valid a → f.read (f.write a ++ rest) = some (a, rest)
-  written : ∀ bytes a rest, f.read bytes = some (a, rest) → valid a ∧ bytes = f.write a ++ rest
-
-/-- Lawful canonical codecs for the nominal carriers of a model, scoped to valid carrier values. -/
-structure ValidCodecs {V : Vocabulary} (M : Model V) where
-  format : ∀ key, Format (M.Carrier key)
-  lawful : ∀ key, (format key).ValidLawful (M.valid key)
 
 /-! ## Fixed-width little-endian natural numbers -/
 
@@ -146,7 +130,7 @@ def formatFin (bound : Nat) : Format Nat where
     | some (v, rest) => if v < bound then some (v, rest) else none
     | none => none
 
-theorem formatFin_lawful (bound : Nat) : (formatFin bound).ValidLawful (· < bound) where
+theorem formatFin_lawful (bound : Nat) : (formatFin bound).Lawful (· < bound) where
   bytes a _ b hb := writeFixed_bytes (byteWidth bound) a b hb
   reads a rest ha := by
     simp only [formatFin, readFixed_writeFixed (byteWidth bound) a rest (lt_pow_byteWidth bound ha),
@@ -175,7 +159,7 @@ def formatBool : Format Bool where
     | 1 :: rest => some (true, rest)
     | _ => none
 
-theorem formatBool_lawful : formatBool.ValidLawful (fun _ => True) where
+theorem formatBool_lawful : formatBool.Lawful (fun _ => True) where
   bytes a _ b hb := by
     cases a <;> simp only [formatBool, List.mem_singleton] at hb <;> subst hb <;> decide
   reads a rest _ := by cases a <;> rfl
@@ -292,7 +276,7 @@ def formatNat : Format Nat where
   write := writeNat
   read := readNatAux true
 
-theorem formatNat_lawful : formatNat.ValidLawful (fun _ => True) where
+theorem formatNat_lawful : formatNat.Lawful (fun _ => True) where
   bytes a _ b hb := writeNat_bytes a b hb
   reads a rest _ := readNatAux_writeNat a true rest (.inl rfl)
   written bs a rest h := ⟨trivial, (readNatAux_written bs true a rest h).2⟩
@@ -317,7 +301,7 @@ def readCanonicalMany {A : Type} (read : List Nat → Option (A × List Nat)) :
       | none => none
 
 theorem writeCanonicalMany_bytes {A : Type} {valid : A → Prop} {f : Format A}
-    (hf : f.ValidLawful valid) : ∀ (xs : List A), (∀ x, x ∈ xs → valid x) →
+    (hf : f.Lawful valid) : ∀ (xs : List A), (∀ x, x ∈ xs → valid x) →
     ∀ b, b ∈ writeCanonicalMany f.write xs → b < 256
   | [], _, _, h => nomatch h
   | x :: xs, hv, b, hb => by
@@ -327,7 +311,7 @@ theorem writeCanonicalMany_bytes {A : Type} {valid : A → Prop} {f : Format A}
       · exact writeCanonicalMany_bytes hf xs (fun y hy => hv y (List.mem_cons_of_mem _ hy)) b hb
 
 theorem readCanonicalMany_writeCanonicalMany {A : Type} {valid : A → Prop} {f : Format A}
-    (hf : f.ValidLawful valid) : ∀ (xs : List A) (rest : List Nat),
+    (hf : f.Lawful valid) : ∀ (xs : List A) (rest : List Nat),
     (∀ x, x ∈ xs → valid x) →
     readCanonicalMany f.read xs.length (writeCanonicalMany f.write xs ++ rest) = some (xs, rest)
   | [], rest, _ => rfl
@@ -338,7 +322,7 @@ theorem readCanonicalMany_writeCanonicalMany {A : Type} {valid : A → Prop} {f 
       rw [readCanonicalMany_writeCanonicalMany hf xs rest (fun y hy => hv y (List.mem_cons_of_mem _ hy))]
 
 theorem readCanonicalMany_written {A : Type} {valid : A → Prop} {f : Format A}
-    (hf : f.ValidLawful valid) : ∀ (count : Nat) (bs : List Nat) (xs : List A) (rest : List Nat),
+    (hf : f.Lawful valid) : ∀ (count : Nat) (bs : List Nat) (xs : List A) (rest : List Nat),
     readCanonicalMany f.read count bs = some (xs, rest) →
     (∀ x, x ∈ xs → valid x) ∧ xs.length = count ∧ bs = writeCanonicalMany f.write xs ++ rest
   | 0, bs, xs, rest, h => by
@@ -374,8 +358,8 @@ def formatSeqSized {A : Type} (f : Format A) (count : Nat) : Format (List A) whe
   read := readCanonicalMany f.read count
 
 theorem formatSeqSized_lawful {A : Type} {valid : A → Prop} {f : Format A}
-    (hf : f.ValidLawful valid) (count : Nat) :
-    (formatSeqSized f count).ValidLawful
+    (hf : f.Lawful valid) (count : Nat) :
+    (formatSeqSized f count).Lawful
       (fun xs => (∀ x, x ∈ xs → valid x) ∧ xs.length = count) where
   bytes xs hv b hb := writeCanonicalMany_bytes hf xs hv.1 b hb
   reads xs rest hv := by
@@ -395,8 +379,8 @@ def formatSeqUnsized {A : Type} (f : Format A) : Format (List A) where
     | none => none
 
 theorem formatSeqUnsized_lawful {A : Type} {valid : A → Prop} {f : Format A}
-    (hf : f.ValidLawful valid) :
-    (formatSeqUnsized f).ValidLawful (fun xs => ∀ x, x ∈ xs → valid x) where
+    (hf : f.Lawful valid) :
+    (formatSeqUnsized f).Lawful (fun xs => ∀ x, x ∈ xs → valid x) where
   bytes xs hv b hb := by
     simp only [formatSeqUnsized, List.mem_append] at hb
     rcases hb with hb | hb
@@ -423,7 +407,7 @@ def formatUnit : Format Unit where
   write _ := []
   read bs := some ((), bs)
 
-theorem formatUnit_lawful : formatUnit.ValidLawful (fun _ => True) where
+theorem formatUnit_lawful : formatUnit.Lawful (fun _ => True) where
   bytes _ _ _ h := nomatch h
   reads a rest _ := by cases a; rfl
   written bs a rest h := by
@@ -443,8 +427,8 @@ def formatPair {A B : Type} (fa : Format A) (fb : Format B) : Format (A × B) wh
     | none => none
 
 theorem formatPair_lawful {A B : Type} {va : A → Prop} {vb : B → Prop}
-    {fa : Format A} {fb : Format B} (ha : fa.ValidLawful va) (hb : fb.ValidLawful vb) :
-    (formatPair fa fb).ValidLawful (fun p => va p.1 ∧ vb p.2) where
+    {fa : Format A} {fb : Format B} (ha : fa.Lawful va) (hb : fb.Lawful vb) :
+    (formatPair fa fb).Lawful (fun p => va p.1 ∧ vb p.2) where
   bytes p hp byte hbyte := by
     simp only [formatPair, List.mem_append] at hbyte
     rcases hbyte with hbyte | hbyte
@@ -482,7 +466,7 @@ def Tys.length {K : Type} : Tys K → Nat
   | .cons _ rest => 1 + rest.length
 
 section
-variable {V : Vocabulary} (M : Model V) (codecs : ValidCodecs M)
+variable {V : Vocabulary} (M : Model V) (codecs : Codecs M)
 
 mutual
   /-- The canonical format of any core type. -/
@@ -533,7 +517,7 @@ end
 
 mutual
   theorem canonicalFormat_lawful : (τ : V.Ty) →
-      (canonicalFormat M codecs τ).ValidLawful (M.Valid τ)
+      (canonicalFormat M codecs τ).Lawful (M.Valid τ)
     | .bool => formatBool_lawful
     | .nat => formatNat_lawful
     | .fin bound => formatFin_lawful bound
@@ -581,7 +565,7 @@ mutual
     | .nominal key => codecs.lawful key
 
   theorem canonicalFormatTys_lawful : (τs : Tys V.TypeKey) →
-      (canonicalFormatTys M codecs τs).ValidLawful (Tys.Valid M.toCarriers τs)
+      (canonicalFormatTys M codecs τs).Lawful (Tys.Valid M.toCarriers τs)
     | .nil => formatUnit_lawful
     | .cons head rest =>
         formatPair_lawful (canonicalFormat_lawful head) (canonicalFormatTys_lawful rest)
@@ -670,7 +654,7 @@ def formatHList (tys : List V.Ty) : Format (HList M.Val tys) where
   read := readHList M codecs tys
 
 theorem formatHList_lawful : (tys : List V.Ty) →
-    (formatHList M codecs tys).ValidLawful (HList.All M.Valid)
+    (formatHList M codecs tys).Lawful (HList.All M.Valid)
   | [] =>
       { bytes := fun .nil _ _ h => nomatch h
         reads := fun .nil _ _ => rfl

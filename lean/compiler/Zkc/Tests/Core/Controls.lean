@@ -454,14 +454,15 @@ theorem signing_accepted :
 /-! ## Codecs -/
 
 /-- A carrier of functions has no lawful format, so not every model has codecs. -/
-theorem no_lawful_function_format (f : Format (List Nat → Bool)) : ¬ f.Lawful := by
+theorem no_lawful_function_format (f : Format (List Nat → Bool)) :
+    ¬ f.Lawful (fun _ => True) := by
   intro h
   let diagonal : List Nat → Bool := fun bytes =>
     match f.read bytes with
     | some (g, _) => !(g bytes)
     | Option.none => false
   have rd : f.read (f.write diagonal) = some (diagonal, []) := by
-    simpa using h.reads diagonal []
+    simpa using h.reads diagonal [] trivial
   have contra : diagonal (f.write diagonal) = !(diagonal (f.write diagonal)) := by
     change (match f.read (f.write diagonal) with
       | some (g, _) => !(g (f.write diagonal))

@@ -58,8 +58,8 @@ commitments, those that recover values, and the one that derives the samples. -/
 def Declaration.definitions (declaration : Declaration) : List Key :=
   (match declaration.construction with
     | .interactive => []
-    | .derived suite => suite.definitions
-    | .catalogue _ _ => []) ++
+    | .derived suite _ => suite.definitions
+    | .authored => []) ++
   (match declaration.layout with
     | none => []
     | some layout => layout.module.definitions ++ layout.recover.map (·.2)) ++
@@ -177,6 +177,121 @@ def Deployed.Fresh (d : Deployed V) : Prop :=
   ∀ r, ∀ l, l ∈ d.stack r → ∀ c, c ∈ l.clauses →
     ∀ key, key ∈ Term.eventKeys (fun o => RoleOp.isEvent o) c.code → key ≠ c.site.site.key →
       key ∉ (d.entry.shape.events [] id).map (·.site.key)
+
+/-! ## Coverage and semantic laws of deployed suite and layout modules -/
+
+/-- A role process asks the world only its own private coins (`hearers = []`), requests to
+services, and local attempt marks: no peer flows (`.give`, `.get`), no heard events (`.hear`),
+and no public coins (`.own (.coin _) (_ :: _)`). -/
+def Process.ClosedEffects {M : Model V} {H A : Type} : Process (RSig M) H A → Prop
+  | .done _ => True
+  | .halt _ => True
+  | .call op k =>
+      (match op with
+       | .own (.coin _) [] _ _ _ _ => True
+       | .own (.request _) _ _ _ _ _ => True
+       | .begin _ => True
+       | .settle _ => True
+       | _ => False) ∧
+      ∀ reply, Process.ClosedEffects (k reply)
+
+/-- Every online role of a non-interactive deployment under its stack asks the world only its own
+private coins, service requests, and local attempt marks. -/
+def Deployed.Covered (d : Deployed V) : Prop :=
+  ∀ (M : Model V) (prover verifier : Role), d.roles = some (prover, verifier) →
+    ∀ r, (r = prover ∨ r = verifier) →
+      ∀ (ins : HList (RV M r) d.entry.ins) (taken : HList M.Val (Stack.Takes (d.stack r))),
+        ins.All (RV.Valid M r) → taken.All M.Valid →
+        Process.ClosedEffects (d.run M r ins taken)
+
+/-- The Fiat-Shamir suite of a deployment satisfies the coin-support law in model `M`: every
+derived coin emitted by a `SuiteSlot.derive` function on valid inputs lies in the support of the
+drawn coin's law (`Allows M (.coin law)`). Determinism, validity preservation, and non-halting
+already follow from admission (`canStop = false`, `requires = []`). -/
+def Deployed.SuiteLawful (M : Model V) (d : Deployed V) : Prop :=
+  match d.declaration.construction with
+  | .derived suite _ =>
+      ∀ defKey, (SuiteSlot.derive, defKey) ∈ suite.members →
+        ∀ (hdr : FnHeader V) (f : Member d.admitted.program.headers.fns hdr),
+          d.admitted.program.find defKey = some (.fn f) →
+          ∀ (stateTy : V.Ty) (drawIns : List V.Ty) (e : ShapeEvent V)
+            (law : V.LawKey) (owner : Role) (h0 : Role) (hs : List Role),
+            e ∈ d.entry.shape.events [] id →
+            e.cls = .given (.coin law) owner (h0 :: hs) →
+            V.law law = some ⟨drawIns, e.τ⟩ →
+            ∀ (hins : hdr.ins = stateTy :: .seq (.fin 256) none :: drawIns)
+              (houts : hdr.outs = [e.τ, stateTy])
+              (st : M.Val stateTy) (label : List (M.Val (.fin 256)))
+              (payload : HList M.Val drawIns) (coin : M.Val e.τ) (st' : M.Val stateTy),
+              M.Valid stateTy st →
+              (∀ b, b ∈ label → b < 256) →
+              payload.All M.Valid →
+              Defs.fnTable M d.admitted.program.defs hdr f
+                (cast (congrArg (HList M.Val) hins.symm) (.cons st (.cons label payload))) =
+                .done (cast (congrArg (HList M.Val) houts.symm) (.cons coin (.cons st' .nil))) →
+              Allows M (.coin law) drawIns payload e.τ coin
+  | _ => True
+
+/-- The proof layout of a deployment satisfies its canonical codec round-trip and equality laws
+in model `M`:
+1. Every `(LayoutSlot.write, LayoutSlot.read)` pair for `(unitTy, τ)` round-trips on any valid
+   value `v` embedded between valid unit sequences `pre` and `post`.
+2. Every `LayoutSlot.equal` function is reflexive on valid values. -/
+def Deployed.LayoutLawful (M : Model V) (d : Deployed V) : Prop :=
+  match d.declaration.layout with
+  | none => True
+  | some layout =>
+      (∀ wKey rKey,
+        (LayoutSlot.write, wKey) ∈ layout.module.members →
+        (LayoutSlot.read, rKey) ∈ layout.module.members →
+        ∀ (wHdr rHdr : FnHeader V)
+          (fW : Member d.admitted.program.headers.fns wHdr)
+          (fR : Member d.admitted.program.headers.fns rHdr),
+          d.admitted.program.find wKey = some (.fn fW) →
+          d.admitted.program.find rKey = some (.fn fR) →
+          ∀ (unitTy τ : V.Ty)
+            (hwIn : wHdr.ins = [τ]) (hwOut : wHdr.outs = [.seq unitTy none])
+            (hrIn : rHdr.ins = [.seq unitTy none, .nat]) (hrOut : rHdr.outs = [τ, .nat])
+            (v : M.Val τ) (chunk pre post : List (M.Val unitTy)),
+            M.Valid τ v →
+            (∀ u, u ∈ pre → M.Valid unitTy u) →
+            (∀ u, u ∈ post → M.Valid unitTy u) →
+            Defs.fnTable M d.admitted.program.defs wHdr fW
+              (cast (congrArg (HList M.Val) hwIn.symm) (.cons v .nil)) =
+              .done (cast (congrArg (HList M.Val) hwOut.symm) (.cons chunk .nil)) →
+            Defs.fnTable M d.admitted.program.defs rHdr fR
+              (cast (congrArg (HList M.Val) hrIn.symm)
+                (.cons (pre ++ chunk ++ post) (.cons pre.length .nil))) =
+              .done (cast (congrArg (HList M.Val) hrOut.symm)
+                (.cons v (.cons (pre.length + chunk.length) .nil)))) ∧
+      (∀ eqKey,
+        (LayoutSlot.equal, eqKey) ∈ layout.module.members →
+        ∀ (eqHdr : FnHeader V) (fEq : Member d.admitted.program.headers.fns eqHdr),
+          d.admitted.program.find eqKey = some (.fn fEq) →
+          ∀ (τ : V.Ty) (hIn : eqHdr.ins = [τ, τ]) (hOut : eqHdr.outs = [.bool]) (v : M.Val τ),
+            M.Valid τ v →
+            Defs.fnTable M d.admitted.program.defs eqHdr fEq
+              (cast (congrArg (HList M.Val) hIn.symm) (.cons v (.cons v .nil))) =
+              .done (cast (congrArg (HList M.Val) hOut.symm) (.cons true .nil)))
+
+/-- Answer every `.own (.request service)` effect of a role process using `oracle`, leaving all
+other effects untouched. Used to evaluate a deployed ideal verifier against an abstract random
+oracle. -/
+def Process.answerService {M : Model V} {H A : Type} (service : Key)
+    (oracle : (ins : List V.Ty) → HList M.Val ins → (τ : V.Ty) → Option (M.Val τ)) :
+    Process (RSig M) H A → Process (RSig M) H A
+  | .done a => .done a
+  | .halt h => .halt h
+  | .call (.own (.request svc) hearers at_ ins payload τ) k =>
+      if svc = service then
+        match oracle ins payload τ with
+        | some v => Process.answerService service oracle (k v)
+        | none => .call (.own (.request svc) hearers at_ ins payload τ)
+            fun v => Process.answerService service oracle (k v)
+      else
+        .call (.own (.request svc) hearers at_ ins payload τ)
+          fun v => Process.answerService service oracle (k v)
+  | .call op k => .call op fun reply => Process.answerService service oracle (k reply)
 
 end
 

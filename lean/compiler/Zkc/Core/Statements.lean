@@ -252,25 +252,33 @@ def deployedSafe : Prop :=
         ins.All (RV.Valid M r) → taken.All M.Valid →
         (d.run M r ins taken).StopsWhen (Permitted M) (· ≠ .undefined)
 
-/-- Progress: the compiler's completeness. On valid inputs, if every run of the entry's
-protocol against
-a world that gives what its laws allow returns, then against every such world that answers
-the protocol: the prover's run alone returns, with what its handlers give; the verifier's run
-alone on that returns; and some run of the protocol returns with both roles' results their
-parts of its results, against a world that gives what the laws allow and what this one gives
-at every occurrence that is not a coin that some role hears. -/
+/-- Progress: the compiler's completeness. On valid inputs in a model where the deployment's
+suite and layout satisfy their semantic laws (`SuiteLawful`, `LayoutLawful`, no omitted-message
+recovery), if every run of the entry's protocol against a world that gives what its laws allow
+returns, then against every such world that answers the protocol: the prover's run alone returns,
+with what its handlers give; the verifier's run alone on that returns; and some run of the
+protocol returns with both roles' results their parts of its results, against a world that gives
+what the laws allow and what this one gives at every occurrence that is not a coin that some role
+hears. -/
 def complete : Prop :=
   ∀ named assoc (a : Admitted V), c.admit named assoc = .ok a →
+    a.program.headers.Unconditional →
     ∀ declaration (d : Deployed V), c.deploy a declaration = .ok d →
+      declaration.interactive = false →
+      declaration.retry = none →
+      declaration.samples = none →
+      (∀ l, declaration.layout = some l → l.recover = []) →
       ∀ (prover verifier : Role), d.roles = some (prover, verifier) →
       ∀ (first : Stack.Takes (d.stack prover) = [])
         (matched : Stack.Gives (d.stack prover) = Stack.Takes (d.stack verifier))
         (M : Model V) (ins : HList (LVal M) d.entry.ins),
         ins.All (fun a v => M.Valid a.ty v) →
+        d.SuiteLawful M →
+        d.LayoutLawful M →
         (∀ source, Lawful M source (protocolMeaning M d.admitted.program d.callee [] ins) → ∀ e,
           GExec M source (protocolMeaning M d.admitted.program d.callee [] ins) e →
           ∃ out, e = .returned out) →
-        ∀ source, Lawful M source (protocolMeaning M d.admitted.program d.callee [] ins) →
+        ∀ source, LawfulPrivate M source (protocolMeaning M d.admitted.program d.callee [] ins) →
           Fed M source (protocolMeaning M d.admitted.program d.callee [] ins) →
           ∃ outP gives recordP outV givesV recordV,
             Alone M source prover
@@ -287,6 +295,14 @@ def complete : Prop :=
               GExec M source' (protocolMeaning M d.admitted.program d.callee [] ins)
                 (.returned out) ∧
               outP = hideAll M prover out.1 ∧ outV = hideAll M verifier out.1
+
+/-- Coverage: under a non-interactive deployment's stack, every online role asks the world only
+its own private coins, service requests, and local attempt marks. -/
+def deployCoverage : Prop :=
+  ∀ named assoc (a : Admitted V), c.admit named assoc = .ok a →
+    a.program.headers.Unconditional →
+    ∀ declaration (d : Deployed V), c.deploy a declaration = .ok d →
+      declaration.interactive = false → d.Covered
 
 /-- Execution and state: the retry of a deployed scheme has a scope: the attempt that it
 retries is an attempt of the entry's shape, and every guard with `abort` is inside an
@@ -329,10 +345,10 @@ def executorRuns : Prop :=
 
 /-! ## Formats -/
 
-/-- A view: the canonical format of every type has the two laws, for a model whose nominal
-carriers have lawful codecs: what is written reads back as it was. -/
+/-- A view: the canonical format of every type has the laws on valid values, for a model whose
+nominal carriers have lawful codecs: what is written reads back as it was. -/
 def formats : Prop :=
-  ∀ (M : Model V) (codecs : Codecs M) (τ : V.Ty), (c.format M codecs τ).Lawful
+  ∀ (M : Model V) (codecs : Codecs M) (τ : V.Ty), (c.format M codecs τ).Lawful (M.Valid τ)
 
 end Statements
 

@@ -1,0 +1,764 @@
+module
+
+public import Zkc.Core.World.Stack
+public import Zkc.Core.Scheme.Identity
+
+@[expose] public section
+
+/-!
+Typed `Core.Layer` IR term builders and their denotation and event-key lemmas.
+
+Every generated layer (`samples`, `construction`, `idealConstruction`, `layout`) is constructed
+here as checked Core IR (`Term (localDialect ...)` and `Term (roleDialect ...)`):
+- only total `OwnedOp`s (`makeSeq`, `seqUnsized`, `seqConcat`, `seqLength`, `natEqual`,
+  `boolEqual`, `finToNat`, `makeTuple`, `getTuple`, `takeTuple`), `.guard ... .reject`, and calls
+  to admitted unconditional functions in `a.program` are emitted, so no generated layer can ever
+  stop `.undefined`;
+- byte sequences (`sessionId`, site labels) are embedded as single `LocalOp.literal` instructions
+  at type `.seq (.fin 256) none`.
+-/
+
+namespace Zkc.Core
+
+namespace LayerBuild
+
+/-! ## Byte-sequence literals in every vocabulary -/
+
+/-- A byte type (`fin 256`), available in every vocabulary. -/
+abbrev byteTy {V : Vocabulary} : V.Ty := .fin 256
+
+/-- An unsized sequence of bytes (`[byte]`), available in every vocabulary. -/
+abbrev bytesTy {V : Vocabulary} : V.Ty := .seq (.fin 256) none
+
+private theorem scanMany_byte {V : Vocabulary} :
+    ∀ (bs : List Nat), (∀ b, b ∈ bs → b < 256) →
+      scanMany (Ty.scan V byteTy) bs.length bs = some []
+  | [], _ => rfl
+  | b :: bs, h => by
+      have hb : b < 256 := h b List.mem_cons_self
+      have hbs : ∀ x, x ∈ bs → x < 256 := fun x hx => h x (List.mem_cons_of_mem _ hx)
+      simp only [List.length_cons, scanMany, Ty.scan, byteTy, hb, ↓reduceIte, Option.bind_some]
+      exact scanMany_byte bs hbs
+
+/-- Any list of bytes (`< 256`), length-prefixed, reads as a literal of `bytesTy`. -/
+theorem bytesLiteral_reads {V : Vocabulary} (bs : List Nat) (h : ∀ b, b ∈ bs → b < 256) :
+    V.Reads bytesTy (bs.length :: bs) :=
+  scanMany_byte bs h
+
+private theorem readMany_byte {V : Vocabulary} (M : Model V) :
+    ∀ (bs : List Nat), (∀ b, b ∈ bs → b < 256) →
+      readMany (Ty.read M byteTy) bs.length bs = some (bs, [])
+  | [], _ => rfl
+  | b :: bs, h => by
+      have hb : b < 256 := h b List.mem_cons_self
+      have hbs : ∀ x, x ∈ bs → x < 256 := fun x hx => h x (List.mem_cons_of_mem _ hx)
+      simp only [List.length_cons, readMany, Ty.read, byteTy, hb, ↓reduceIte, Option.bind_some,
+        readMany_byte M bs hbs, Option.map_some]
+
+/-- Evaluating a byte-sequence literal recovers the exact byte list `bs`. -/
+theorem bytesLiteral_val {V : Vocabulary} (M : Model V) (bs : List Nat)
+    (h : ∀ b, b ∈ bs → b < 256) :
+    Ty.readLiteral M bytesTy (bs.length :: bs) (bytesLiteral_reads bs h) = bs := by
+  have hr := Ty.read_readLiteral M bytesTy (bs.length :: bs) (bytesLiteral_reads bs h)
+  have heq : Ty.read M bytesTy (bs.length :: bs) = some (bs, []) := readMany_byte M bs h
+  rw [heq] at hr
+  exact (Prod.mk.inj (Option.some.inj hr)).1.symm
+
+/-! ## Positional context, fresh-name, and term-building combinators -/
+
+/-- A context has no binding at or above `n`. -/
+def FreshFrom {T : Type} (Γ : Ctx T) (n : Nat) : Prop :=
+  ∀ k, n ≤ k → Γ.find? k = none
+
+theorem positional_freshFrom {T : Type} (types : List T) :
+    FreshFrom (Ctx.positional types) types.length := by
+  intro k hk
+  rw [Ctx.find?_positional]
+  exact List.getElem?_eq_none hk
+
+theorem FreshFrom.insert {T : Type} {Γ : Ctx T} {n : Nat} (h : FreshFrom Γ n) (τ : T) :
+    FreshFrom (Γ.insert n τ) (n + 1) := by
+  intro k hk
+  rw [Ctx.find?_insert]
+  have hne : k ≠ n := by omega
+  rw [ite_eq_right hne]
+  exact h k (by omega)
+
+theorem FreshFrom.within {T : Type} {Γ : Ctx T} {n : Nat} (h : FreshFrom Γ n) (τ : T) :
+    Γ.Within (Γ.insert n τ) :=
+  Ctx.Within.fresh (h n (Nat.le_refl n)) τ
+
+/-- The variable just bound at name `n` in `Γ.insert n τ`. -/
+def freshVar {T : Type} (Γ : Ctx T) (n : Nat) (τ : T) : Var (Γ.insert n τ) τ :=
+  ⟨n, by rw [Ctx.find?_insert, ite_eq_left rfl]⟩
+
+/-- Look up positional variable `i` from a proof that `types[i]? = some τ`. -/
+def posVar {T : Type} (types : List T) (i : Nat) {τ : T} (h : types[i]? = some τ) :
+    Var (Ctx.positional types) τ :=
+  ⟨i, by rw [Ctx.find?_positional]; exact h⟩
+
+/-- Look up positional variable `i` in `Ctx.positional (alone r types)`, keeping the equality proof
+explicitly typed at `(alone r types)[i]? = some ⟨τ, [r]⟩` so downstream rewrites stay well-typed
+under `implicit` transparency. -/
+def alonePosVar {V : Vocabulary} (r : Role) (types : List V.Ty) (i : Nat) {τ : V.Ty}
+    (h : types[i]? = some τ) : Var (Ctx.positional (alone r types)) ⟨τ, [r]⟩ :=
+  posVar (alone r types) i (by simp [alone, h])
+
+/-- `FreshFrom` for `Ctx.positional (alone r types)` stated at `types.length` rather than
+`(alone r types).length`, keeping clause terms well-typed under `implicit` transparency. -/
+theorem alone_positional_freshFrom {V : Vocabulary} (r : Role) (types : List V.Ty) :
+    FreshFrom (Ctx.positional (alone r types)) types.length := by
+  simpa [alone] using positional_freshFrom (alone r types)
+
+theorem env_get_insert_self {T : Type} {V : T → Type} {Γ : Ctx T}
+    (env : Env V Γ) (n : Nat) {τ : T} (v : V τ) :
+    (env.insert n v).get (freshVar Γ n τ) = v :=
+  eq_of_heq (Env.insert_at_bound env n v rfl (freshVar Γ n τ).typed)
+
+theorem env_get_insert_reindex {T : Type} {V : T → Type} {Γ : Ctx T}
+    (env : Env V Γ) {n : Nat} (h : FreshFrom Γ n) {τ σ : T} (v : V τ) (x : Var Γ σ) :
+    (env.insert n v).get (x.reindex (h.within τ)) = env.get x := by
+  have hne : x.name ≠ n := by
+    intro heq
+    have hnone : Γ.find? x.name = none := h x.name (Nat.le_of_eq heq.symm)
+    have hx := x.typed
+    rw [hnone] at hx
+    cases hx
+  show env.insert n v x.name σ (h.within τ x.name σ x.typed) = env x.name σ x.typed
+  rw [Env.insert_at_other env n v hne]
+
+/-- Emit a single-result `.op` binding fresh name `n` and pass the extended context, freshness
+proof, weakening proof, and bound variable to the continuation. -/
+def letOp1 {D : Dialect} {Γ : Ctx D.Ty} {ins outs : List D.Ty} {τ : D.Ty}
+    (key : Key) (o : D.Op ins [τ]) (operands : HList (Var Γ) ins) (n : Name)
+    (hfresh : FreshFrom Γ n)
+    (rest : (Γ' : Ctx D.Ty) → FreshFrom Γ' (n + 1) → Γ.Within Γ' → Var Γ' τ → Term D Γ' outs) :
+    Term D Γ outs :=
+  .op key o operands (.cons n .nil)
+    (rest (Γ.insert n τ) (hfresh.insert τ) (hfresh.within τ) (freshVar Γ n τ))
+
+/-- Emit a two-result `.op` binding fresh names `n` and `n + 1`. -/
+def letOp2 {D : Dialect} {Γ : Ctx D.Ty} {ins outs : List D.Ty} {τ₁ τ₂ : D.Ty}
+    (key : Key) (o : D.Op ins [τ₁, τ₂]) (operands : HList (Var Γ) ins) (n : Name)
+    (hfresh : FreshFrom Γ n)
+    (rest : (Γ' : Ctx D.Ty) → FreshFrom Γ' (n + 2) → Γ.Within Γ' →
+      Var Γ' τ₁ → Var Γ' τ₂ → Term D Γ' outs) :
+    Term D Γ outs :=
+  let Γ1 := Γ.insert n τ₁
+  let h1 := hfresh.insert τ₁
+  let w01 := hfresh.within τ₁
+  let w12 := h1.within τ₂
+  .op key o operands (.cons n (.cons (n + 1) .nil))
+    (rest (Γ1.insert (n + 1) τ₂) (h1.insert τ₂) (w01.trans w12)
+      ((freshVar Γ n τ₁).reindex w12) (freshVar Γ1 (n + 1) τ₂))
+
+/-! ## Statement input positions inside `held r ins` -/
+
+/-- A statement input of `hdr.ins` (held by both `prover` and `verifier`), together with its
+position in `held r ins` and its index among statement inputs. -/
+structure StmtPos (V : Vocabulary) (r : Role) (ins : List (LTy V)) where
+  stmtIndex : Nat
+  heldIndex : Nat
+  ty : V.Ty
+  atHeld : (held r ins)[heldIndex]? = some ty
+
+/-- Positions of all statement inputs inside `held r ins`, with proofs of their types. -/
+def statementPositions {V : Vocabulary} (r prover verifier : Role) (hr : r = prover ∨ r = verifier)
+    (ins : List (LTy V)) : List (StmtPos V r ins) :=
+  go 0 ins
+where
+  go (sIdx : Nat) : (xs : List (LTy V)) → List (StmtPos V r xs)
+    | [] => []
+    | a :: rest =>
+        if hBoth : prover ∈ a.holders ∧ verifier ∈ a.holders then
+          have hrIn : r ∈ a.holders := by rcases hr with rfl | rfl; exact hBoth.1; exact hBoth.2
+          let here : StmtPos V r (a :: rest) :=
+            ⟨sIdx, 0, a.ty, by simp [held, hrIn]⟩
+          let later := (go (sIdx + 1) rest).map fun p =>
+            ⟨p.stmtIndex, p.heldIndex + 1, p.ty, by simp [held, hrIn, p.atHeld]⟩
+          here :: later
+        else if hrIn : r ∈ a.holders then
+          (go sIdx rest).map fun p =>
+            ⟨p.stmtIndex, p.heldIndex + 1, p.ty, by simp [held, hrIn, p.atHeld]⟩
+        else
+          (go sIdx rest).map fun p =>
+            ⟨p.stmtIndex, p.heldIndex, p.ty, by simp [held, hrIn, p.atHeld]⟩
+
+/-! ## Typed function references for Suite and Layout -/
+
+/-- Reference to a total unconditional function in `fns` with exact input and output types. -/
+structure TypedFnRef (V : Vocabulary) (fns : List (FnHeader V)) (ins outs : List V.Ty) where
+  hdr : FnHeader V
+  member : Member fns hdr
+  insEq : hdr.ins = ins
+  outsEq : hdr.outs = outs
+  uncond : hdr.summary.requires = []
+  canStopFalse : hdr.canStop = false
+
+/-- Reference to a potentially-rejecting unconditional function in `fns`
+(e.g. `LayoutSlot.read`, `recover`). -/
+structure SafeFnRef (V : Vocabulary) (fns : List (FnHeader V)) (ins outs : List V.Ty) where
+  hdr : FnHeader V
+  member : Member fns hdr
+  insEq : hdr.ins = ins
+  outsEq : hdr.outs = outs
+  uncond : hdr.summary.requires = []
+
+/-- Emit a call to a `TypedFnRef` in `localDialect`. -/
+def callLocal {V : Vocabulary} {fns : List (FnHeader V)} {ins outs : List V.Ty}
+    (ref : TypedFnRef V fns ins outs) : LocalOp V fns ins outs :=
+  cast (by rw [ref.insEq, ref.outsEq]) (LocalOp.call ref.member)
+
+/-- Emit a call to a `SafeFnRef` in `localDialect`. -/
+def callLocalSafe {V : Vocabulary} {fns : List (FnHeader V)} {ins outs : List V.Ty}
+    (ref : SafeFnRef V fns ins outs) : LocalOp V fns ins outs :=
+  cast (by rw [ref.insEq, ref.outsEq]) (LocalOp.call ref.member)
+
+theorem alone_map_ty {V : Vocabulary} (r : Role) (tys : List V.Ty) :
+    (alone r tys).map (·.ty) = tys := by
+  simp [alone, Function.comp_def]
+
+theorem alone_mem_holders {V : Vocabulary} (r : Role) (tys : List V.Ty) :
+    ∀ a, a ∈ alone r tys → r ∈ a.holders := by
+  intro a ha
+  simp only [alone, List.mem_map] at ha
+  obtain ⟨_, _, rfl⟩ := ha
+  exact List.mem_singleton_self r
+
+/-- Lift any `LocalOp` to a `RoleOp` at role `r` on `alone r ins`. -/
+def computeAlone {V : Vocabulary} {hs : Headers V} (r : Role) {ins outs : List V.Ty}
+    (o : LocalOp V hs.fns ins outs) : RoleOp V hs r (alone r ins) (alone r outs) :=
+  .compute [r] o (alone r ins) (alone_map_ty r ins) (List.mem_singleton_self r)
+    (alone_mem_holders r ins)
+
+/-! ## `start`, `again`, `finish` term builders (`localDialect`) -/
+
+/-- Standard `again` term that restores the layer state to its value at attempt entry (`var 1`). -/
+def restoreAgain {V : Vocabulary} {fns : List (FnHeader V)} (state : V.Ty) :
+    Term (localDialect V fns) (Ctx.positional [.nat, state, state]) [state] :=
+  .ret (.cons (posVar ([.nat, state, state] : List V.Ty) 1 rfl) .nil)
+
+/-- `again` term for `samples derived by`: sets state to the new attempt number (`var 0`). -/
+def attemptNumAgain {V : Vocabulary} {fns : List (FnHeader V)} :
+    Term (localDialect V fns) (Ctx.positional [.nat, .nat, .nat]) [.nat] :=
+  .ret (.cons (posVar ([.nat, .nat, .nat] : List V.Ty) 0 rfl) .nil)
+
+/-- `finish` term returning nothing. -/
+def emptyFinish {V : Vocabulary} {fns : List (FnHeader V)} (state : V.Ty) :
+    Term (localDialect V fns) (Ctx.positional [state]) [] :=
+  .ret .nil
+
+/-- `finish` term returning the layer's final state (`var 0`). -/
+def identityFinish {V : Vocabulary} {fns : List (FnHeader V)} (state : V.Ty) :
+    Term (localDialect V fns) (Ctx.positional [state]) [state] :=
+  .ret (.cons (posVar [state] 0 rfl) .nil)
+
+/-- A statement input together with its encoder function and domain label bytes. -/
+structure StmtAbsorbItem (V : Vocabulary) (fns : List (FnHeader V)) (unitTy : V.Ty)
+    (Γ : Ctx V.Ty) where
+  ty : V.Ty
+  input : Var Γ ty
+  label : List Nat
+  labelBytes : ∀ b, b ∈ label → b < 256
+  encode : TypedFnRef V fns [ty] [.seq unitTy none]
+
+/-- Fold statement absorptions in `localDialect`, starting from `stVar` in context `Γ` with all
+names `< fresh`. -/
+def buildAbsorbChain {V : Vocabulary} {fns : List (FnHeader V)} {stateTy unitTy : V.Ty}
+    (absorbRef : TypedFnRef V fns [stateTy, bytesTy, .seq unitTy none] [stateTy]) :
+    {Γ : Ctx V.Ty} → (fresh : Nat) → FreshFrom Γ fresh →
+    Var Γ stateTy → (items : List (StmtAbsorbItem V fns unitTy Γ)) →
+    Term (localDialect V fns) Γ [stateTy]
+  | _, _, _, stVar, [] => .ret (.cons stVar .nil)
+  | _, fresh, hfresh, stVar, item :: rest =>
+      letOp1 ⟨fresh⟩ (.literal bytesTy (item.label.length :: item.label)
+          (bytesLiteral_reads item.label item.labelBytes)) .nil fresh hfresh fun _ h1 w01 lblVar =>
+      letOp1 ⟨fresh + 1⟩ (callLocal item.encode) (.cons (item.input.reindex w01) .nil)
+          (fresh + 1) h1 fun _ h2 w12 encVar =>
+      letOp1 ⟨fresh + 2⟩ (callLocal absorbRef)
+          (.cons (stVar.reindex (w01.trans w12)) (.cons (lblVar.reindex w12) (.cons encVar .nil)))
+          (fresh + 2) h2 fun _ h3 w23 nextStVar =>
+      let w03 := (w01.trans w12).trans w23
+      let rest' := rest.map fun it =>
+        ⟨it.ty, it.input.reindex w03, it.label, it.labelBytes, it.encode⟩
+      buildAbsorbChain absorbRef (fresh + 3) h3 nextStVar rest'
+termination_by _ _ _ _ items => items.length
+decreasing_by simp
+
+/-- Build `construction.start`: initialize transcript with `sessionBytes` via `startRef`, then
+absorb every statement input in order via `absorbRef`. -/
+def constructionStart {V : Vocabulary} {fns : List (FnHeader V)} {stateTy unitTy : V.Ty}
+    {r : Role} {ins : List (LTy V)}
+    (sessionBytes : List Nat) (hsess : ∀ b, b ∈ sessionBytes → b < 256)
+    (startRef : TypedFnRef V fns [bytesTy] [stateTy])
+    (absorbRef : TypedFnRef V fns [stateTy, bytesTy, .seq unitTy none] [stateTy])
+    (items : List (StmtAbsorbItem V fns unitTy (Ctx.positional (held r ins)))) :
+    Term (localDialect V fns) (Ctx.positional (held r ins)) [stateTy] :=
+  let base := (held r ins).length
+  letOp1 ⟨0⟩ (.literal bytesTy (sessionBytes.length :: sessionBytes)
+      (bytesLiteral_reads sessionBytes hsess)) .nil base (positional_freshFrom (held r ins))
+      fun _ h1 w01 sessVar =>
+  letOp1 ⟨1⟩ (callLocal startRef) (.cons sessVar .nil) (base + 1) h1 fun _ h2 w12 st0Var =>
+  let w02 := w01.trans w12
+  let items' := items.map fun it =>
+    ⟨it.ty, it.input.reindex w02, it.label, it.labelBytes, it.encode⟩
+  buildAbsorbChain absorbRef (base + 2) h2 st0Var items'
+
+/-- Build `layoutP.start`: empty proof buffer `[] : [unitTy]`. -/
+def layoutPStart {V : Vocabulary} {fns : List (FnHeader V)} {r : Role} {ins : List (LTy V)}
+    (unitTy : V.Ty) :
+    Term (localDialect V fns) (Ctx.positional (held r ins)) [.seq unitTy none] :=
+  let base := (held r ins).length
+  letOp1 ⟨0⟩ (.owned (.makeSeq unitTy 0)) .nil base (positional_freshFrom (held r ins))
+      fun _ h1 _ v0 =>
+  letOp1 ⟨1⟩ (.owned (.seqUnsized unitTy 0)) (.cons v0 .nil) (base + 1) h1 fun _ _ _ v1 =>
+  .ret (.cons v1 .nil)
+
+/-- Streaming verifier layout state type: `(proof : [unitTy], offset : nat)`. -/
+abbrev streamStateTys {V : Vocabulary} (unitTy : V.Ty) : Tys V.TypeKey :=
+  .cons (.seq unitTy none) (.cons .nat .nil)
+
+abbrev streamStateTy {V : Vocabulary} (unitTy : V.Ty) : V.Ty :=
+  .tuple (streamStateTys unitTy)
+
+/-- Build `layoutV.start`: initialize streaming cursor `(proof, 0)`. -/
+def layoutVStart {V : Vocabulary} {fns : List (FnHeader V)} {r : Role} {ins : List (LTy V)}
+    (unitTy : V.Ty) :
+    Term (localDialect V fns) (Ctx.positional (.seq unitTy none :: held r ins))
+      [streamStateTy unitTy] :=
+  let tys := .seq unitTy none :: held r ins
+  let base := tys.length
+  let proofVar : Var (Ctx.positional tys) (.seq unitTy none) := posVar tys 0 rfl
+  letOp1 ⟨0⟩ (.literal .nat [0] rfl) .nil base (positional_freshFrom tys) fun _ h1 w01 zeroVar =>
+  letOp1 ⟨1⟩ (.owned (.makeTuple (streamStateTys unitTy)))
+      (.cons (proofVar.reindex w01) (.cons zeroVar .nil)) (base + 1) h1 fun _ _ _ stVar =>
+  .ret (.cons stVar .nil)
+
+/-- Build `layoutV.finish`: reject any proof with trailing unread bytes (`offset != length(buf)`). -/
+def layoutVFinish {V : Vocabulary} {fns : List (FnHeader V)} (unitTy : V.Ty)
+    (hfree : Ty.isLinear V unitTy = false) (guardKey : Key) :
+    Term (localDialect V fns) (Ctx.positional [streamStateTy unitTy]) [] :=
+  have htfree : Tys.anyLinear V (streamStateTys unitTy) = false := by
+    simp [Tys.anyLinear, Ty.isLinear, hfree]
+  let stTy := streamStateTy unitTy
+  let stVar : Var (Ctx.positional [stTy]) stTy := posVar [stTy] 0 rfl
+  letOp1 ⟨0⟩ (.owned (.getTuple (streamStateTys unitTy) .head htfree))
+      (.cons stVar .nil) 1 (positional_freshFrom [stTy]) fun _ h1 w01 bufVar =>
+  letOp1 ⟨1⟩ (.owned (.getTuple (streamStateTys unitTy) (.tail .head) htfree))
+      (.cons (stVar.reindex w01) .nil) 2 h1 fun _ h2 w12 offVar =>
+  letOp1 ⟨2⟩ (.owned (.seqLength unitTy none hfree))
+      (.cons (bufVar.reindex w12) .nil) 3 h2 fun _ h3 w23 lenVar =>
+  letOp1 ⟨3⟩ (.owned .natEqual)
+      (.cons (offVar.reindex w23) (.cons lenVar .nil)) 4 h3 fun _ _ _ eqVar =>
+  .guard guardKey () eqVar rfl .reject <|
+  .ret .nil
+
+/-- Initial state `0 : nat` for `samples derived by` layer. -/
+def samplesStart {V : Vocabulary} {fns : List (FnHeader V)} {r : Role} {ins : List (LTy V)} :
+    Term (localDialect V fns) (Ctx.positional (held r ins)) [.nat] :=
+  let base := (held r ins).length
+  letOp1 ⟨0⟩ (.literal .nat [0] rfl) .nil base (positional_freshFrom (held r ins)) fun _ _ _ v0 =>
+  .ret (.cons v0 .nil)
+
+/-! ## Role `Clause` builders (`roleDialect`) -/
+
+/-- Prover construction clause for a prover→verifier message: absorb the message into the
+transcript state, then re-emit the `.give` event for the layout layer below. -/
+def proverAbsorbClause {V : Vocabulary} {hs : Headers V} {stateTy unitTy τ : V.Ty}
+    (prover : Role) (site : Site) (kind : FlowKind) (getters : List Role)
+    (label : List Nat) (hlabel : ∀ b, b ∈ label → b < 256)
+    (encodeRef : TypedFnRef V hs.fns [τ] [.seq unitTy none])
+    (absorbRef : TypedFnRef V hs.fns [stateTy, bytesTy, .seq unitTy none] [stateTy]) :
+    Clause V hs prover stateTy where
+  site := ⟨site, .give kind getters, [τ], []⟩
+  code :=
+    let tys := alone prover [τ, stateTy]
+    let msgVar : Var (Ctx.positional tys) ⟨τ, [prover]⟩ := alonePosVar prover [τ, stateTy] 0 rfl
+    let stVar : Var (Ctx.positional tys) ⟨stateTy, [prover]⟩ := alonePosVar prover [τ, stateTy] 1 rfl
+    letOp1 ⟨0⟩ (computeAlone prover (.literal bytesTy (label.length :: label)
+        (bytesLiteral_reads label hlabel))) .nil 2 (alone_positional_freshFrom prover [τ, stateTy]) fun _ h1 w01 lblVar =>
+    letOp1 ⟨1⟩ (computeAlone prover (callLocal encodeRef))
+        (.cons (msgVar.reindex w01) .nil) 3 h1 fun _ h2 w12 encVar =>
+    letOp1 ⟨2⟩ (computeAlone prover (callLocal absorbRef))
+        (.cons (stVar.reindex (w01.trans w12)) (.cons (lblVar.reindex w12) (.cons encVar .nil)))
+        4 h2 fun _ h3 w23 nextStVar =>
+    letOp1 site.key (.give kind getters (List.mem_singleton_self prover))
+        (.cons (msgVar.reindex ((w01.trans w12).trans w23)) .nil) 5 h3 fun _ _ w34 _ =>
+    .ret (.cons (nextStVar.reindex w34) .nil)
+
+/-- Verifier construction clause for a prover→verifier message: obtain the message from the layout
+layer below via `.get`, absorb it into the transcript state, and return `(msg, nextState)`. -/
+def verifierAbsorbClause {V : Vocabulary} {hs : Headers V} {stateTy unitTy τ : V.Ty}
+    (verifier prover : Role) (site : Site) (kind : FlowKind)
+    (label : List Nat) (hlabel : ∀ b, b ∈ label → b < 256)
+    (encodeRef : TypedFnRef V hs.fns [τ] [.seq unitTy none])
+    (absorbRef : TypedFnRef V hs.fns [stateTy, bytesTy, .seq unitTy none] [stateTy]) :
+    Clause V hs verifier stateTy where
+  site := ⟨site, .get kind prover, [], [τ]⟩
+  code :=
+    let tys := alone verifier [stateTy]
+    let stVar : Var (Ctx.positional tys) ⟨stateTy, [verifier]⟩ := alonePosVar verifier [stateTy] 0 rfl
+    have hVIn : verifier ∈ Holders.ofList ([verifier] ++ [prover]) ↔
+        verifier ∈ ([verifier] : Holders) := by
+      simp [Holders.mem_ofList]
+    letOp1 site.key (.get τ [prover] kind prover [verifier] (List.mem_singleton_self verifier))
+        .nil 1 (alone_positional_freshFrom verifier [stateTy]) fun _ h1 w01 rawVar =>
+    letOp1 ⟨0⟩ (.keep [verifier] hVIn) (.cons rawVar .nil) 2 h1 fun _ h2 w12 msgVar =>
+    letOp1 ⟨1⟩ (computeAlone verifier (.literal bytesTy (label.length :: label)
+        (bytesLiteral_reads label hlabel))) .nil 3 h2 fun _ h3 w23 lblVar =>
+    letOp1 ⟨2⟩ (computeAlone verifier (callLocal encodeRef))
+        (.cons (msgVar.reindex w23) .nil) 4 h3 fun _ h4 w34 encVar =>
+    letOp1 ⟨3⟩ (computeAlone verifier (callLocal absorbRef))
+        (.cons (stVar.reindex (((w01.trans w12).trans w23).trans w34))
+          (.cons (lblVar.reindex w34) (.cons encVar .nil)))
+        5 h4 fun _ _ w45 nextStVar =>
+    .ret (.cons (msgVar.reindex ((w23.trans w34).trans w45)) (.cons nextStVar .nil))
+
+/-- Helper to extract positional variables for `takes` (indices `0 .. takes.length - 1`) in
+`Ctx.positional (alone r (takes ++ [stateTy]))`. -/
+def takeVars {V : Vocabulary} (r : Role) (stateTy : V.Ty) :
+    (prefix_ takes : List V.Ty) →
+    HList (Var (Ctx.positional (alone r (prefix_ ++ takes ++ [stateTy])))) (alone r takes)
+  | _, [] => .nil
+  | pref, t :: ts =>
+      have hAt : (alone r (pref ++ (t :: ts) ++ [stateTy]))[pref.length]? = some ⟨t, [r]⟩ := by
+        simp [alone]
+      have hAssoc : pref ++ (t :: ts) ++ [stateTy] = (pref ++ [t]) ++ ts ++ [stateTy] := by
+        simp [List.append_assoc]
+      .cons (posVar _ pref.length hAt)
+        (hAssoc ▸ takeVars r stateTy (pref ++ [t]) ts)
+
+/-- Build a construction draw clause for either prover (`.hear`) or verifier (`.own`):
+calls `deriveRef (state, label, drawArgs...)` → `(coin, nextState)`, tells `coin` to the layout
+layer below at fresh key `toldKey`, and returns `(coin, nextState)`. -/
+def deriveClause {V : Vocabulary} {hs : Headers V} {stateTy τ : V.Ty}
+    (r peer : Role) (site : Site) (part : Part V) (drawIns : List V.Ty)
+    (toldKey : Key) (label : List Nat) (hlabel : ∀ b, b ∈ label → b < 256)
+    (deriveRef : TypedFnRef V hs.fns (stateTy :: bytesTy :: drawIns) [τ, stateTy]) :
+    Clause V hs r stateTy where
+  site := ⟨site, part, drawIns, [τ]⟩
+  code :=
+    let tys := alone r (drawIns ++ [stateTy])
+    let base := (drawIns ++ [stateTy]).length
+    have hStAt : tys[drawIns.length]? = some ⟨stateTy, [r]⟩ := by
+      simp [tys, alone]
+    let stVar : Var (Ctx.positional tys) ⟨stateTy, [r]⟩ := posVar tys drawIns.length hStAt
+    let argVars : HList (Var (Ctx.positional tys)) (alone r drawIns) := by
+      simpa [tys] using takeVars r stateTy [] drawIns
+    letOp1 ⟨0⟩ (computeAlone r (.literal bytesTy (label.length :: label)
+        (bytesLiteral_reads label hlabel))) .nil base (alone_positional_freshFrom r (drawIns ++ [stateTy]))
+        fun _ h1 w01 lblVar =>
+    letOp2 ⟨1⟩ (computeAlone r (callLocal deriveRef))
+        (.cons (stVar.reindex w01) (.cons lblVar (argVars.reindex w01))) (base + 1) h1
+        fun _ h3 _ coinVar nextStVar =>
+    letOp1 toldKey (.give .message [peer] (List.mem_singleton_self r))
+        (.cons coinVar .nil) (base + 3) h3 fun _ _ w34 _ =>
+    .ret (.cons (coinVar.reindex w34) (.cons (nextStVar.reindex w34) .nil))
+
+/-- Request payload type for an ideal RO query: `(transcriptState, drawLabel)`. -/
+abbrev idealQueryTys {V : Vocabulary} (stateTy : V.Ty) : Tys V.TypeKey :=
+  .cons stateTy (.cons bytesTy .nil)
+
+abbrev idealQueryTy {V : Vocabulary} (stateTy : V.Ty) : V.Ty :=
+  .tuple (idealQueryTys stateTy)
+
+/-- Ideal RO construction clause at a verifier draw: requests the coin from `serviceKey` on
+`(state, label)` at fresh key `reqKey`, tells the coin below at `toldKey`, absorbs the coin into
+the transcript state (so consecutive draws query distinct paths), and returns `(coin, nextState)`. -/
+def idealDeriveClause {V : Vocabulary} {hs : Headers V} {stateTy unitTy τ : V.Ty}
+    (verifier prover : Role) (site : Site) (part : Part V) (drawIns : List V.Ty)
+    (serviceKey reqKey toldKey : Key)
+    (label : List Nat) (hlabel : ∀ b, b ∈ label → b < 256)
+    (encodeRef : TypedFnRef V hs.fns [τ] [.seq unitTy none])
+    (absorbRef : TypedFnRef V hs.fns [stateTy, bytesTy, .seq unitTy none] [stateTy]) :
+    Clause V hs verifier stateTy where
+  site := ⟨site, part, drawIns, [τ]⟩
+  code :=
+    let tys := alone verifier (drawIns ++ [stateTy])
+    let base := (drawIns ++ [stateTy]).length
+    have hStAt : tys[drawIns.length]? = some ⟨stateTy, [verifier]⟩ := by
+      simp [tys, alone]
+    let stVar : Var (Ctx.positional tys) ⟨stateTy, [verifier]⟩ := posVar tys drawIns.length hStAt
+    have hKeep : verifier ∈ Holders.ofList [verifier] ↔ verifier ∈ ([verifier] : Holders) := by
+      simp [Holders.mem_ofList]
+    letOp1 ⟨0⟩ (computeAlone verifier (.literal bytesTy (label.length :: label)
+        (bytesLiteral_reads label hlabel))) .nil base (alone_positional_freshFrom verifier (drawIns ++ [stateTy]))
+        fun _ h1 w01 lblVar =>
+    letOp1 ⟨1⟩ (computeAlone verifier (.owned (.makeTuple (idealQueryTys stateTy))))
+        (.cons (stVar.reindex w01) (.cons lblVar .nil)) (base + 1) h1
+        fun _ h2 w12 queryVar =>
+    letOp1 reqKey (.own (.request serviceKey) [] [⟨idealQueryTy stateTy, [verifier]⟩] τ rfl
+        (fun a ha => by simp at ha; subst ha; exact List.mem_singleton_self verifier))
+        (.cons queryVar .nil) (base + 2) h2 fun _ h3 w23 rawCoinVar =>
+    letOp1 ⟨2⟩ (.keep [verifier] hKeep) (.cons rawCoinVar .nil) (base + 3) h3
+        fun _ h4 w34 coinVar =>
+    letOp1 toldKey (.give .message [prover] (List.mem_singleton_self verifier))
+        (.cons coinVar .nil) (base + 4) h4 fun _ h5 w45 _ =>
+    letOp1 ⟨3⟩ (computeAlone verifier (callLocal encodeRef))
+        (.cons (coinVar.reindex w45) .nil) (base + 5) h5 fun _ h6 w56 encVar =>
+    letOp1 ⟨4⟩ (computeAlone verifier (callLocal absorbRef))
+        (.cons (stVar.reindex (((((w01.trans w12).trans w23).trans w34).trans w45).trans w56))
+          (.cons (lblVar.reindex ((((w12.trans w23).trans w34).trans w45).trans w56))
+            (.cons encVar .nil)))
+        (base + 6) h6 fun _ _ w67 nextStVar =>
+    .ret (.cons (coinVar.reindex ((w45.trans w56).trans w67)) (.cons nextStVar .nil))
+
+/-- Prover layout clause: serialize a message/draw with `writeRef` and append to proof buffer. -/
+def layoutPWriteClause {V : Vocabulary} {hs : Headers V} {unitTy τ : V.Ty}
+    (prover : Role) (site : Site) (kind : FlowKind) (getters : List Role)
+    (writeRef : TypedFnRef V hs.fns [τ] [.seq unitTy none]) :
+    Clause V hs prover (.seq unitTy none) where
+  site := ⟨site, .give kind getters, [τ], []⟩
+  code :=
+    let bufTy : V.Ty := .seq unitTy none
+    let tys := alone prover [τ, bufTy]
+    let msgVar : Var (Ctx.positional tys) ⟨τ, [prover]⟩ := alonePosVar prover [τ, bufTy] 0 rfl
+    let bufVar : Var (Ctx.positional tys) ⟨bufTy, [prover]⟩ := alonePosVar prover [τ, bufTy] 1 rfl
+    letOp1 ⟨0⟩ (computeAlone prover (callLocal writeRef))
+        (.cons msgVar .nil) 2 (alone_positional_freshFrom prover [τ, bufTy]) fun _ h1 w01 chunkVar =>
+    letOp1 ⟨1⟩ (computeAlone prover (.owned (.seqConcat unitTy none none)))
+        (.cons (bufVar.reindex w01) (.cons chunkVar .nil)) 3 h1 fun _ _ _ nextBufVar =>
+    .ret (.cons nextBufVar .nil)
+
+/-- Layout drop clause (prover or verifier): consume a `.give` event without modifying state. -/
+def layoutDropClause {V : Vocabulary} {hs : Headers V} {stateTy τ : V.Ty}
+    (r : Role) (site : Site) (kind : FlowKind) (getters : List Role) :
+    Clause V hs r stateTy where
+  site := ⟨site, .give kind getters, [τ], []⟩
+  code :=
+    .ret (.cons (alonePosVar r [τ, stateTy] 1 rfl) .nil)
+
+/-- Verifier streaming layout clause: read a message of type `τ` at `(buf, offset)` via `readRef`
+and advance cursor to `(buf, nextOffset)`. -/
+def layoutVReadClause {V : Vocabulary} {hs : Headers V} {unitTy τ : V.Ty}
+    (hfree : Ty.isLinear V unitTy = false)
+    (verifier prover : Role) (site : Site) (kind : FlowKind)
+    (readRef : SafeFnRef V hs.fns [.seq unitTy none, .nat] [τ, .nat]) :
+    Clause V hs verifier (streamStateTy unitTy) where
+  site := ⟨site, .get kind prover, [], [τ]⟩
+  code :=
+    have htfree : Tys.anyLinear V (streamStateTys unitTy) = false := by
+      simp [Tys.anyLinear, Ty.isLinear, hfree]
+    let stTy : V.Ty := streamStateTy unitTy
+    let tys := alone verifier [stTy]
+    let stVar : Var (Ctx.positional tys) ⟨stTy, [verifier]⟩ := alonePosVar verifier [stTy] 0 rfl
+    letOp1 ⟨0⟩ (computeAlone verifier (.owned (.getTuple (streamStateTys unitTy) .head htfree)))
+        (.cons stVar .nil) 1 (alone_positional_freshFrom verifier [stTy]) fun _ h1 w01 bufVar =>
+    letOp1 ⟨1⟩ (computeAlone verifier (.owned (.getTuple (streamStateTys unitTy) (.tail .head) htfree)))
+        (.cons (stVar.reindex w01) .nil) 2 h1 fun _ h2 w12 offVar =>
+    letOp2 ⟨2⟩ (computeAlone verifier (callLocalSafe readRef))
+        (.cons (bufVar.reindex w12) (.cons offVar .nil)) 3 h2 fun _ h4 w24 valVar nextOffVar =>
+    letOp1 ⟨3⟩ (computeAlone verifier (.owned (.makeTuple (streamStateTys unitTy))))
+        (.cons (bufVar.reindex (w12.trans w24)) (.cons nextOffVar .nil)) 5 h4
+        fun _ _ w45 nextStVar =>
+    .ret (.cons (valVar.reindex w45) (.cons nextStVar .nil))
+
+/-- Verifier streaming layout clause for a carried draw (`carry` without `recover`): read the
+carried draw from `(buf, offset)` via `readRef`, check equality with the derived draw `var 0`
+using `eqRef`, reject if unequal, and advance cursor to `(buf, nextOffset)`. -/
+def layoutVCarryClause {V : Vocabulary} {hs : Headers V} {unitTy τ : V.Ty}
+    (hfree : Ty.isLinear V unitTy = false)
+    (verifier prover : Role) (toldSite : Site) (guardKey : Key)
+    (readRef : SafeFnRef V hs.fns [.seq unitTy none, .nat] [τ, .nat])
+    (eqRef : TypedFnRef V hs.fns [τ, τ] [.bool]) :
+    Clause V hs verifier (streamStateTy unitTy) where
+  site := ⟨toldSite, .give .message [prover], [τ], []⟩
+  code :=
+    have htfree : Tys.anyLinear V (streamStateTys unitTy) = false := by
+      simp [Tys.anyLinear, Ty.isLinear, hfree]
+    let stTy : V.Ty := streamStateTy unitTy
+    let tys := alone verifier [τ, stTy]
+    let derivedVar : Var (Ctx.positional tys) ⟨τ, [verifier]⟩ := alonePosVar verifier [τ, stTy] 0 rfl
+    let stVar : Var (Ctx.positional tys) ⟨stTy, [verifier]⟩ := alonePosVar verifier [τ, stTy] 1 rfl
+    letOp1 ⟨0⟩ (computeAlone verifier (.owned (.getTuple (streamStateTys unitTy) .head htfree)))
+        (.cons stVar .nil) 2 (alone_positional_freshFrom verifier [τ, stTy]) fun _ h1 w01 bufVar =>
+    letOp1 ⟨1⟩ (computeAlone verifier (.owned (.getTuple (streamStateTys unitTy) (.tail .head) htfree)))
+        (.cons (stVar.reindex w01) .nil) 3 h1 fun _ h2 w12 offVar =>
+    letOp2 ⟨2⟩ (computeAlone verifier (callLocalSafe readRef))
+        (.cons (bufVar.reindex w12) (.cons offVar .nil)) 4 h2 fun _ h4 w24 carriedVar nextOffVar =>
+    letOp1 ⟨3⟩ (computeAlone verifier (callLocal eqRef))
+        (.cons (derivedVar.reindex ((w01.trans w12).trans w24)) (.cons carriedVar .nil)) 6 h4
+        fun _ h5 w45 eqVar =>
+    .guard guardKey [verifier] eqVar ⟨rfl, List.mem_singleton_self verifier,
+        List.mem_singleton_self verifier⟩ .reject <|
+    letOp1 ⟨4⟩ (computeAlone verifier (.owned (.makeTuple (streamStateTys unitTy))))
+        (.cons (bufVar.reindex ((w12.trans w24).trans w45)) (.cons (nextOffVar.reindex w45) .nil))
+        7 h5 fun _ _ _ nextStVar =>
+    .ret (.cons nextStVar .nil)
+
+/-- Prover `samples derived by` clause: derives a private coin from `(attemptNum, siteKey)` via
+`sampleRef`, leaving `attemptNum` unchanged (`again` updates it on retry). -/
+def proverSampleClause {V : Vocabulary} {hs : Headers V} {τ : V.Ty}
+    (prover : Role) (site : Site) (law : V.LawKey)
+    (sampleRef : TypedFnRef V hs.fns [.nat, .nat] [τ]) :
+    Clause V hs prover .nat where
+  site := ⟨site, .own (.coin law) [], [], [τ]⟩
+  code :=
+    let tys := alone prover [.nat]
+    let attVar : Var (Ctx.positional tys) ⟨.nat, [prover]⟩ := alonePosVar prover [.nat] 0 rfl
+    letOp1 ⟨0⟩ (computeAlone prover (.literal .nat [site.key.number] rfl))
+        .nil 1 (alone_positional_freshFrom prover [.nat]) fun _ h1 w01 keyVar =>
+    letOp1 ⟨1⟩ (computeAlone prover (callLocal sampleRef))
+        (.cons (attVar.reindex w01) (.cons keyVar .nil)) 2 h1 fun _ _ w12 coinVar =>
+    .ret (.cons coinVar (.cons (attVar.reindex (w01.trans w12)) .nil))
+
+/-! ## Compact layout (`carry` + `recover`) builders -/
+
+/-- Convert a `List V.Ty` to `Tys V.TypeKey`. -/
+def tysOfList {V : Vocabulary} : List V.Ty → Tys V.TypeKey
+  | [] => .nil
+  | t :: ts => .cons t (tysOfList ts)
+
+theorem tysOfList_toList {V : Vocabulary} : ∀ (ts : List V.Ty), (tysOfList ts).toList = ts
+  | [] => rfl
+  | _ :: ts => congrArg _ (tysOfList_toList ts)
+
+/-- Build `compactLayoutV.start`: sequentially parse every wire item from `(proof, 0)`, reject any
+trailing bytes, and pack all parsed wire items (plus verifier statement inputs) into the tuple
+state. -/
+def buildCompactParse {V : Vocabulary} {fns : List (FnHeader V)} (unitTy : V.Ty)
+    (hfree : Ty.isLinear V unitTy = false) (guardKey : Key)
+    (wireTys : List V.Ty) :
+    {Γ : Ctx V.Ty} → (fresh : Nat) → FreshFrom Γ fresh →
+    Var Γ (.seq unitTy none) → Var Γ .nat →
+    (parsedAcc : List V.Ty) → HList (Var Γ) parsedAcc →
+    (readers : List ((τ : V.Ty) × SafeFnRef V fns [.seq unitTy none, .nat] [τ, .nat])) →
+    (hMatch : parsedAcc ++ readers.map Sigma.fst = wireTys) →
+    Term (localDialect V fns) Γ [.tuple (tysOfList wireTys)]
+  | _, fresh, hfresh, bufVar, offVar, parsedAcc, accVars, [], hMatch =>
+      let hEq : parsedAcc = wireTys := by simpa using hMatch
+      letOp1 ⟨fresh⟩ (.owned (.seqLength unitTy none hfree)) (.cons bufVar .nil) fresh hfresh
+          fun _ h1 w01 lenVar =>
+      letOp1 ⟨fresh + 1⟩ (.owned .natEqual) (.cons (offVar.reindex w01) (.cons lenVar .nil))
+          (fresh + 1) h1 fun Γ2 h2 w12 eqVar =>
+      .guard guardKey () eqVar rfl .reject <|
+      letOp1 ⟨fresh + 2⟩ (.owned (.makeTuple (tysOfList wireTys)))
+          (cast (congrArg (HList (Var Γ2)) (by rw [tysOfList_toList, hEq]))
+            (accVars.reindex (w01.trans w12)))
+          (fresh + 2) h2 fun _ _ _ tupleVar =>
+      .ret (.cons tupleVar .nil)
+  | _, fresh, hfresh, bufVar, offVar, parsedAcc, accVars, ⟨τ, readRef⟩ :: rest, hMatch =>
+      letOp2 ⟨fresh⟩ (callLocalSafe readRef) (.cons bufVar (.cons offVar .nil)) fresh hfresh
+          fun _ h2 w02 valVar nextOffVar =>
+      let nextAcc := HList.append (accVars.reindex w02) (.cons valVar .nil)
+      have hMatch' : (parsedAcc ++ [τ]) ++ rest.map Sigma.fst = wireTys := by
+        simpa [List.append_assoc] using hMatch
+      buildCompactParse unitTy hfree guardKey wireTys (fresh + 2) h2
+        (bufVar.reindex w02) nextOffVar (parsedAcc ++ [τ]) nextAcc rest hMatch'
+
+/-- Build `compactLayoutV.start`: prepend statement inputs (held by verifier) and all parsed wire
+items into one tuple state. -/
+def compactLayoutVStart {V : Vocabulary} {fns : List (FnHeader V)} {r : Role} {ins : List (LTy V)}
+    (unitTy : V.Ty) (hfree : Ty.isLinear V unitTy = false) (guardKey : Key)
+    (stmtItems : List ((τ : V.Ty) × Var (Ctx.positional (.seq unitTy none :: held r ins)) τ))
+    (readers : List ((τ : V.Ty) × SafeFnRef V fns [.seq unitTy none, .nat] [τ, .nat])) :
+    Term (localDialect V fns) (Ctx.positional (.seq unitTy none :: held r ins))
+      [.tuple (tysOfList (stmtItems.map Sigma.fst ++ readers.map Sigma.fst))] :=
+  let tys := .seq unitTy none :: held r ins
+  let base := tys.length
+  let proofVar : Var (Ctx.positional tys) (.seq unitTy none) := posVar tys 0 rfl
+  letOp1 ⟨0⟩ (.literal .nat [0] rfl) .nil base (positional_freshFrom tys) fun Γ1 h1 w01 zeroVar =>
+  let rec packStmts : (xs : List ((τ : V.Ty) × Var (Ctx.positional tys) τ)) →
+      HList (Var Γ1) (xs.map Sigma.fst)
+    | [] => .nil
+    | ⟨_, v⟩ :: rest => .cons (v.reindex w01) (packStmts rest)
+  buildCompactParse unitTy hfree guardKey (stmtItems.map Sigma.fst ++ readers.map Sigma.fst)
+    (base + 1) h1 (proofVar.reindex w01) zeroVar (stmtItems.map Sigma.fst) (packStmts stmtItems)
+    readers rfl
+
+/-- Compact verifier layout clause for a retained message: read slot `pos` from tuple state. -/
+def compactReadSlotClause {V : Vocabulary} {hs : Headers V} {stateTys : Tys V.TypeKey} {τ : V.Ty}
+    (htfree : Tys.anyLinear V stateTys = false)
+    (verifier prover : Role) (site : Site) (kind : FlowKind)
+    (pos : Member stateTys.toList τ) :
+    Clause V hs verifier (.tuple stateTys) where
+  site := ⟨site, .get kind prover, [], [τ]⟩
+  code :=
+    let stTy : V.Ty := .tuple stateTys
+    let tys := alone verifier [stTy]
+    let stVar : Var (Ctx.positional tys) ⟨stTy, [verifier]⟩ := alonePosVar verifier [stTy] 0 rfl
+    letOp1 ⟨0⟩ (computeAlone verifier (.owned (.getTuple stateTys pos htfree)))
+        (.cons stVar .nil) 1 (alone_positional_freshFrom verifier [stTy]) fun _ _ w01 valVar =>
+    .ret (.cons valVar (.cons (stVar.reindex w01) .nil))
+
+/-- Compact verifier layout clause for a carried draw: compare derived `var 0` against tuple slot
+`pos` via `eqRef` and reject if unequal. -/
+def compactCompareClause {V : Vocabulary} {hs : Headers V} {stateTys : Tys V.TypeKey} {τ : V.Ty}
+    (htfree : Tys.anyLinear V stateTys = false)
+    (verifier prover : Role) (toldSite : Site) (guardKey : Key)
+    (pos : Member stateTys.toList τ)
+    (eqRef : TypedFnRef V hs.fns [τ, τ] [.bool]) :
+    Clause V hs verifier (.tuple stateTys) where
+  site := ⟨toldSite, .give .message [prover], [τ], []⟩
+  code :=
+    let stTy : V.Ty := .tuple stateTys
+    let tys := alone verifier [τ, stTy]
+    let derivedVar : Var (Ctx.positional tys) ⟨τ, [verifier]⟩ := alonePosVar verifier [τ, stTy] 0 rfl
+    let stVar : Var (Ctx.positional tys) ⟨stTy, [verifier]⟩ := alonePosVar verifier [τ, stTy] 1 rfl
+    letOp1 ⟨0⟩ (computeAlone verifier (.owned (.getTuple stateTys pos htfree)))
+        (.cons stVar .nil) 2 (alone_positional_freshFrom verifier [τ, stTy]) fun _ h1 w01 carriedVar =>
+    letOp1 ⟨1⟩ (computeAlone verifier (callLocal eqRef))
+        (.cons (derivedVar.reindex w01) (.cons carriedVar .nil)) 3 h1 fun _ _ w12 eqVar =>
+    .guard guardKey [verifier] eqVar ⟨rfl, List.mem_singleton_self verifier,
+        List.mem_singleton_self verifier⟩ .reject <|
+    .ret (.cons (stVar.reindex (w01.trans w12)) .nil)
+
+/-- Compact verifier layout clause for a recovered message: unpack the tuple state fields
+`(stmt..., wire...)` with `takeTuple`, invoke `recoverRef`, and return `(recovered, state)`. -/
+def compactRecoverClause {V : Vocabulary} {hs : Headers V} {stateTys : Tys V.TypeKey} {τ : V.Ty}
+    (verifier prover : Role) (site : Site) (kind : FlowKind)
+    (recoverRef : SafeFnRef V hs.fns stateTys.toList [τ]) :
+    Clause V hs verifier (.tuple stateTys) where
+  site := ⟨site, .get kind prover, [], [τ]⟩
+  code :=
+    let stTy : V.Ty := .tuple stateTys
+    let tys := alone verifier [stTy]
+    let Γ0 := Ctx.positional tys
+    let h0 : FreshFrom Γ0 1 := alone_positional_freshFrom verifier [stTy]
+    let stVar : Var Γ0 ⟨stTy, [verifier]⟩ := alonePosVar verifier [stTy] 0 rfl
+    let fields := alone verifier stateTys.toList
+    let fieldNames : Names fields := Names.counting 1 fields
+    let Γ1 := Γ0.extend fieldNames
+    let rec buildFieldVars (start : Nat) :
+        {Γ : Ctx (LTy V)} → (rem : List (LTy V)) →
+        (hΓ : ∀ k a, rem[k]? = some a → Γ.find? (start + k) = some a) →
+        HList (Var Γ) rem
+      | _, [], _ => .nil
+      | _, a :: as, hΓ =>
+          .cons ⟨start, hΓ 0 a rfl⟩
+            (buildFieldVars (start + 1) as fun k b hb => by
+              have := hΓ (k + 1) b hb
+              rwa [show start + (k + 1) = start + 1 + k by omega] at this)
+    have hFieldsIn : ∀ k a, fields[k]? = some a → Γ1.find? (1 + k) = some a := by
+      intro k a ha
+      have hlt : k < fields.length := by
+        cases Nat.lt_or_ge k fields.length with
+        | inl h => exact h
+        | inr h => rw [List.getElem?_eq_none h] at ha; cases ha
+      rw [show Γ1 = Γ0.extend (Names.counting 1 fields) from rfl, Ctx.find?_extend_counting]
+      have hbounds : 1 ≤ 1 + k ∧ 1 + k < 1 + fields.length :=
+        ⟨Nat.le_add_right 1 k, Nat.add_lt_add_left hlt 1⟩
+      rw [ite_eq_left hbounds, Nat.add_sub_cancel_left]
+      exact ha
+    have hStIn1 : Γ1.find? 0 = some ⟨stTy, [verifier]⟩ := by
+      rw [show Γ1 = Γ0.extend (Names.counting 1 fields) from rfl, Ctx.find?_extend_counting]
+      have hout : ¬ (1 ≤ 0 ∧ 0 < 1 + fields.length) := by omega
+      rw [ite_eq_right hout]
+      exact stVar.typed
+    have hFresh1 : FreshFrom Γ1 (1 + fields.length) := by
+      intro k hk
+      rw [show Γ1 = Γ0.extend (Names.counting 1 fields) from rfl, Ctx.find?_extend_counting]
+      have hout : ¬ (1 ≤ k ∧ k < 1 + fields.length) := by omega
+      rw [ite_eq_right hout]
+      exact h0 k (by omega)
+    let fVars : HList (Var Γ1) fields := buildFieldVars 1 fields hFieldsIn
+    let stVar1 : Var Γ1 ⟨stTy, [verifier]⟩ := ⟨0, hStIn1⟩
+    .op ⟨0⟩ (computeAlone verifier (.owned (.takeTuple stateTys)))
+        (.cons stVar .nil) fieldNames <|
+    letOp1 ⟨1⟩ (computeAlone verifier (callLocalSafe recoverRef))
+        fVars (1 + fields.length) hFresh1 fun _ _ w12 recVar =>
+    .ret (.cons recVar (.cons (stVar1.reindex w12) .nil))
+
+end LayerBuild
+
+end Zkc.Core

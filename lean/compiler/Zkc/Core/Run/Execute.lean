@@ -1,7 +1,6 @@
 module
 
 public import Zkc.Core.Run.Run
-public import Zkc.Core.Scheme.Deploy
 public import Zkc.Core.Statements
 
 @[expose] public section
@@ -15,10 +14,7 @@ This module provides:
    `Source M`, with exact soundness (`runProcess_sound`) and completeness (`runProcess_complete`)
    relative to `Alone` and `AlonePrefix`.
 2. `execute`: an `Executor V` for `Deployed V` proving `Statements.executorRuns` in full.
-3. `executePlanProver`, `executePlanVerifier`, `provePlan`, `verifyPlan`, and
-   `proveAndVerifyPlan`: end-to-end execution of a validated `DeploymentPlan`, together with
-   `deploy_execute_complete`.
-4. `runInteractive`: a deterministic fuel-bounded scheduler for executing two projected online
+3. `runInteractive`: a deterministic fuel-bounded scheduler for executing two projected online
    roles against a shared `Pending` network and `Source`.
 -/
 
@@ -194,98 +190,10 @@ theorem execute_runs {V : Vocabulary} (c : Functions V) (h : c.execute = execute
       rw [hres] at hs
       cases out <;> exact hs
 
-/-! ## Reference execution for a `DeploymentPlan` -/
-
-section PlanExecution
-variable {V : Vocabulary} (M : Model V)
-
-/-- Execute the deployed prover of `plan` for at most `limit` steps. -/
-def executePlanProver (plan : DeploymentPlan V) (codecs : ValidCodecs M)
-    (tm : TranscriptModel V M) (ins : HList (RV M plan.prover) plan.entry.ins)
-    (source : Source M) (limit : Nat) :
-    Outcome (HList (RV M plan.prover) plan.entry.outs) (List Nat) × List (Happened M) :=
-  runProcess M source plan.prover (plan.proverProcess M codecs tm ins) limit
-
-/-- Execute the deployed verifier of `plan` on `proof` for at most `limit` steps. -/
-def executePlanVerifier (plan : DeploymentPlan V) (codecs : ValidCodecs M)
-    (tm : TranscriptModel V M) (ins : HList (RV M plan.verifier) plan.entry.ins)
-    (proof : List Nat) (source : Source M) (limit : Nat) :
-    Outcome (HList (RV M plan.verifier) plan.entry.outs) Unit × List (Happened M) :=
-  runProcess M source plan.verifier
-    ((plan.verifierProcess M codecs tm ins proof).map fun outs => (outs, ())) limit
-
-/-- Run the deployed prover of `plan`, returning the canonical proof bytes on acceptance. -/
-def provePlan (plan : DeploymentPlan V) (codecs : ValidCodecs M) (tm : TranscriptModel V M)
-    (ins : HList (RV M plan.prover) plan.entry.ins) (source : Source M) (limit : Nat) :
-    Option (List Nat) :=
-  match (executePlanProver M plan codecs tm ins source limit).1 with
-  | .ended (.returned (_, proof)) => some proof
-  | _ => none
-
-/-- Run the deployed verifier of `plan` on `proof`, returning its outputs on acceptance. -/
-def verifyPlan (plan : DeploymentPlan V) (codecs : ValidCodecs M) (tm : TranscriptModel V M)
-    (ins : HList (RV M plan.verifier) plan.entry.ins) (proof : List Nat)
-    (source : Source M) (limit : Nat) :
-    Option (HList (RV M plan.verifier) plan.entry.outs) :=
-  match (executePlanVerifier M plan codecs tm ins proof source limit).1 with
-  | .ended (.returned (outs, ())) => some outs
-  | _ => none
-
-/-- Run the deployed prover and then the deployed verifier on the emitted proof bytes. -/
-def proveAndVerifyPlan (plan : DeploymentPlan V) (codecs : ValidCodecs M)
-    (tm : TranscriptModel V M) (proverIns : HList (RV M plan.prover) plan.entry.ins)
-    (verifierIns : HList (RV M plan.verifier) plan.entry.ins)
-    (source : Source M) (limit : Nat) :
-    Option (HList (RV M plan.verifier) plan.entry.outs) :=
-  (provePlan M plan codecs tm proverIns source limit).bind fun proof =>
-    verifyPlan M plan codecs tm verifierIns proof source limit
-
-/-- End-to-end executable completeness: under the hypotheses of `deploy_complete`, there
-exist finite fuel budgets under which `provePlan` emits canonical proof bytes (`< 256`) and
-`verifyPlan` accepts them, returning the verifier's projected outputs. -/
-theorem deploy_execute_complete (plan : DeploymentPlan V) (hretry : plan.declaration.retry = none)
-    (codecs : ValidCodecs M) (tm : TranscriptModel V M) (htm : tm.Lawful)
-    (ins : HList (LVal M) plan.entry.ins) (source : Source M)
-    (hcomp : ProtoCompatible M plan.prover plan.verifier
-      (protocolMeaning M plan.admitted.program plan.callee [] ins))
-    (hnohalt : ProtoNoHalt M
-      (protocolMeaning M plan.admitted.program plan.callee [] ins))
-    (hlaw : LawfulPrivate M source
-      (protocolMeaning M plan.admitted.program plan.callee [] ins))
-    (hfed : Fed M source
-      (protocolMeaning M plan.admitted.program plan.callee [] ins)) :
-    ∃ (out : HList (LVal M) plan.entry.outs × plan.entry.record.Val M) (proof : List Nat)
-      (limitP limitV : Nat),
-      (∀ b, b ∈ proof → b < 256) ∧
-      provePlan M plan codecs tm (hideAll M plan.prover ins) source limitP = some proof ∧
-      verifyPlan M plan codecs tm (hideAll M plan.verifier ins) proof source limitV =
-        some (hideAll M plan.verifier out.1) := by
-  obtain ⟨out, proof, recP, recV, hbytes, haloneP, haloneV⟩ :=
-    deploy_complete M plan hretry codecs tm htm ins source hcomp hnohalt hlaw hfed
-  obtain ⟨limitP, hrunP⟩ := runProcess_complete M haloneP
-  have haloneV' :
-      Alone M source plan.verifier
-        ((plan.verifierProcess M codecs tm (hideAll M plan.verifier ins) proof).map
-          fun outs => (outs, ()))
-        recV (.returned (hideAll M plan.verifier out.1, ())) := by
-    generalize hp : plan.verifierProcess M codecs tm (hideAll M plan.verifier ins) proof = p at haloneV ⊢
-    clear hp
-    generalize he : Ending.returned (hideAll M plan.verifier out.1) = end_ at haloneV
-    induction haloneV with
-    | done => cases he; exact .done
-    | halt => cases he
-    | waits => cases he
-    | give _ ih => exact .give (ih he)
-    | own hsrc _ ih => exact .own hsrc (ih he)
-    | hear hsrc _ ih => exact .hear hsrc (ih he)
-    | begin _ ih => exact .begin (ih he)
-    | settle _ ih => exact .settle (ih he)
-  obtain ⟨limitV, hrunV⟩ := runProcess_complete M haloneV'
-  refine ⟨out, proof, limitP, limitV, hbytes, ?_, ?_⟩
-  · simp only [provePlan, executePlanProver, hrunP]
-  · simp only [verifyPlan, executePlanVerifier, hrunV]
-
 /-! ## Fuel-bounded two-role interactive scheduler -/
+
+section InteractiveScheduler
+variable {V : Vocabulary} (M : Model V)
 
 /-- Attempt one network step for a single role `r` against `(pending, source)`. -/
 def stepOneRole {A : Type} (source : Source M) (r : Role)
@@ -346,6 +254,6 @@ def runInteractive {A B : Type} (source : Source M) (r1 r2 : Role)
     Outcome A Unit × Outcome B Unit × List (Happened M) :=
   runInteractiveAux M source r1 r2 p1 p2 (Pending.empty M) limit
 
-end PlanExecution
+end InteractiveScheduler
 
 end Zkc.Core

@@ -29,22 +29,37 @@ structure ModuleRef where
   members : List (Key × Key)
 deriving DecidableEq, Repr
 
-/-- Named Fiat-Shamir deployment suites from the built-in catalogue. -/
-inductive CatalogueSuite where
-  /-- Merlin 3.0 transcript over BLS12-381 scalar and curve encodings. -/
-  | merlin3Bls12381
-  /-- CFRG-style SHAKE128 sponge transcript. -/
-  | cfrgShake128
-  /-- Poseidon2 algebraic sponge transcript over KoalaBear. -/
-  | poseidon2KoalaBear
-deriving DecidableEq, Repr
+/- Standard member slot keys for a Fiat-Shamir `Suite` module reference.
+Each slot identifies a role in the `Suite` interface; overloaded slots (`encode`, `derive`) are
+disambiguated by their admitted function header signatures. -/
+namespace SuiteSlot
+  /-- `[.seq (.fin 256) none] → [stateTy]` -/
+  def start : Key := ⟨0⟩
+  /-- `[stateTy, .seq (.fin 256) none, .seq unitTy none] → [stateTy]` -/
+  def absorb : Key := ⟨1⟩
+  /-- `[τ] → [.seq unitTy none]` (one per absorbed statement or message type `τ`) -/
+  def encode : Key := ⟨2⟩
+  /-- `[stateTy, .seq (.fin 256) none] ++ drawIns → [τ, stateTy]` (one per drawn type `τ`) -/
+  def derive : Key := ⟨3⟩
+end SuiteSlot
 
-/-- How a scheme is made from its protocol: run as it is, between online roles, derived
-with a module suite, or derived with a named catalogue suite. -/
+/- Standard member slot keys for a proof `Layout` module reference.
+Overloaded slots (`write`, `read`, `equal`) are disambiguated by their admitted header types. -/
+namespace LayoutSlot
+  /-- `[τ] → [.seq unitTy none]` (one per serialized type `τ`) -/
+  def write : Key := ⟨0⟩
+  /-- `[.seq unitTy none, .nat] → [τ, .nat]` (one per deserialized type `τ`; may reject) -/
+  def read : Key := ⟨1⟩
+  /-- `[τ, τ] → [.bool]` (equality predicate for carried draw comparison) -/
+  def equal : Key := ⟨2⟩
+end LayoutSlot
+
+/-- How a scheme is made from its protocol: run as it is between online roles, derived
+with a Fiat-Shamir suite module (and an optional published session tag), or authored in source. -/
 inductive Construction where
   | interactive
-  | derived (suite : ModuleRef)
-  | catalogue (suite : CatalogueSuite) (sessionTag : Option String := none)
+  | derived (suite : ModuleRef) (sessionTag : Option (List Nat) := none)
+  | authored
 deriving DecidableEq, Repr
 
 /-- The layout of a proof: its module, the sites whose values the proof carries, and the
@@ -94,6 +109,8 @@ structure Declaration where
   grinds : List Grind
   commits : List Commitment
   pins : List Pin
+  /-- Optional application context bytes bound into the deployment identity. -/
+  application : List Nat := []
 deriving DecidableEq, Repr
 
 end Zkc.Core
