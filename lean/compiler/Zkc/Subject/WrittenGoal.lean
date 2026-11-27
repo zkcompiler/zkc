@@ -61,10 +61,4 @@ structure RootOrigins {V : Vocabulary} {pkg : Package V} (root : WrittenRoot pkg
   inputNames : Array String
   aligned : inputNames.size = root.entry.header.ins.length
 
-/-- The source names of a written root, read by the tools that name the binders of a library
-term (`ZkcFormal.Written.SourceNames`). An instance is a fact of the subject; no published
-statement reaches it. -/
-class SourceNames {V : Vocabulary} {pkg : Package V} (root : WrittenRoot pkg) where
-  origins : RootOrigins root
-
 end Zkc.Subject
