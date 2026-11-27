@@ -199,7 +199,7 @@ def writtenPrimitiveSuite : TestM Unit := do
       let #[source] := block.files | throw "expected one source file"
       let root ← goalRoot source block.note
       let claims ← goalClaims root [block.note]
-      return ⟨claims, claims.functionsBeforeRoot⟩
+      return ⟨claims⟩
     match result with
     | .error why => failure s!"{block.id}: could not obtain the package: {why}"
     | .ok statements =>

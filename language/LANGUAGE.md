@@ -3090,7 +3090,9 @@ charges does not reach it. A probability is at most one, so a bound of one or mo
 every verifier and says nothing of this one: a goal whose bound is one or more is refused,
 whether the goal writes it as its ceiling or its charges add up to it.
 **Messages:** "the goal `<g>` writes the ceiling `<1>`: a bound of one or more holds of every
-verifier; a goal claims a bound below one"; "a ceiling needs a budget: write `random_oracle(queries = …)`"; "a ceiling on
+verifier; a goal claims a bound below one"; "the goal `<g>` writes no ceiling, and the charges of
+its contract add up to `<1>`: a bound of one or more holds of every verifier; a goal claims a
+bound below one"; "a ceiling needs a budget: write `random_oracle(queries = …)`"; "a ceiling on
 `<soundness>` of a `derived` scheme at the stage `<serialized>` needs a query budget: write
 `model = random_oracle(queries = …)`, or state the goal at `stage = written`"; "a ceiling at
 `committed` needs the budget of the model of `<Tree<Keccak256>>`: write

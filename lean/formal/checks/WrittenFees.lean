@@ -57,7 +57,7 @@ def publicationOf (text : String) (goals : List String) (space : String) : IO Pu
   let some first := goals.head? | throw (IO.userError "no goal")
   let root ← IO.ofExcept (admitSoundnessGoal assembly first)
   let claims ← IO.ofExcept (goalClaims root goals)
-  let issued ← IO.ofExcept ((⟨claims, claims.functionsBeforeRoot⟩ : Statements).publication space)
+  let issued ← IO.ofExcept ((⟨claims⟩ : Statements).publication space)
   unless issued.refusals.isEmpty do throw (IO.userError s!"{issued.refusals}")
   return issued
 
@@ -169,37 +169,34 @@ def typedRows : String :=
   "noncomputable def row (name : String) (fields : Zkc.Subject.GoalFields) :\n" ++
   "    Zkc.Subject.GoalSlot written'clauses.size :=\n" ++
   "  { path := [name], property := Zkc.Security.Property.soundness, clause := ⟨0, by decide⟩, fields }\n" ++
-  "noncomputable def unreducedRow := row \"unreduced\" { specification := [], caps := some written'caps0, bound := twoEighths, ceiling := true }\n" ++
+  "noncomputable def unreducedRow := row \"unreduced\" { specification := [], number := .ceiling twoEighths (some written'caps0) }\n" ++
   "noncomputable def inPlaceRow := row \"inPlace\"\n" ++
-  "  { specification := [], caps := some (table 1), bound := written'bound0, ceiling := true }\n" ++
-  "noncomputable def arguedRow := row \"argued\" { specification := [7], caps := some written'caps0, bound := written'bound0, ceiling := true }\n" ++
-  "noncomputable def aboveRow := row \"above\" { specification := [], caps := some written'caps0, bound := oneEighth, ceiling := true }\n" ++
-  "noncomputable def miscountedRow := row \"miscounted\" { specification := [], caps := some countZero, bound := written'bound0, ceiling := true }\n" ++
-  "noncomputable def overcountedRow := row \"overcounted\" { specification := [], caps := some countTwo, bound := written'bound0, ceiling := true }\n" ++
+  "  { specification := [], number := .ceiling written'bound0 (some (table 1)) }\n" ++
+  "noncomputable def arguedRow := row \"argued\" { specification := [7], number := .ceiling written'bound0 (some written'caps0) }\n" ++
+  "noncomputable def aboveRow := row \"above\" { specification := [], number := .ceiling oneEighth (some written'caps0) }\n" ++
+  "noncomputable def miscountedRow := row \"miscounted\" { specification := [], number := .ceiling written'bound0 (some countZero) }\n" ++
+  "noncomputable def overcountedRow := row \"overcounted\" { specification := [], number := .ceiling written'bound0 (some countTwo) }\n" ++
   "-- a row with a ceiling and no table\n" ++
-  "noncomputable def tablelessRow := row \"tableless\" { specification := [], caps := none, bound := written'bound0, ceiling := true }\n" ++
+  "noncomputable def tablelessRow := row \"tableless\" { specification := [], number := .ceiling written'bound0 none }\n" ++
   "noncomputable def lastRow := row \"last\" written'fields0\n" ++
   "noncomputable def subject : Zkc.Subject.WrittenSubject written'root :=\n" ++
   "  ⟨written'clauses, ⟨8, fun i => if i.val == 0 then unreducedRow else if i.val == 1 then inPlaceRow\n" ++
   "    else if i.val == 2 then arguedRow else if i.val == 3 then aboveRow else if i.val == 4 then miscountedRow\n" ++
   "    else if i.val == 5 then overcountedRow else if i.val == 6 then tablelessRow else lastRow⟩, written'origins⟩\n\n" ++
-  "-- rows that write no ceiling: a miscounted table; a bound that is not the table's total; no table\n" ++
+  "-- rows that write no ceiling: a miscounted table; a bound that is not the table's total\n" ++
   "noncomputable def untied : Zkc.Subject.WrittenSubject written'root :=\n" ++
   "  ⟨written'clauses, ⟨1, fun _ => row \"untied\"\n" ++
-  "    { specification := [], caps := some countZero, bound := written'bound0, ceiling := false }⟩, written'origins⟩\n" ++
+  "    { specification := [], number := .total countZero written'bound0 }⟩, written'origins⟩\n" ++
   "noncomputable def offTotal : Zkc.Subject.WrittenSubject written'root :=\n" ++
   "  ⟨written'clauses, ⟨1, fun _ => row \"offTotal\"\n" ++
-  "    { specification := [], caps := some written'caps0, bound := oneEighth, ceiling := false }⟩, written'origins⟩\n" ++
-  "noncomputable def sourceless : Zkc.Subject.WrittenSubject written'root :=\n" ++
-  "  ⟨written'clauses, ⟨1, fun _ => row \"sourceless\"\n" ++
-  "    { specification := [], caps := none, bound := written'bound0, ceiling := false }⟩, written'origins⟩\n" ++
+  "    { specification := [], number := .total written'caps0 oneEighth }⟩, written'origins⟩\n" ++
   "-- a row of a property that publishes nothing; a bound that is no constant\n" ++
   "noncomputable def completeRow : Zkc.Subject.GoalSlot written'clauses.size :=\n" ++
   "  { row \"complete\" written'fields0 with property := Zkc.Security.Property.completeness }\n" ++
   "noncomputable def complete : Zkc.Subject.WrittenSubject written'root :=\n" ++
   "  ⟨written'clauses, ⟨1, fun _ => completeRow⟩, written'origins⟩\n" ++
   "noncomputable def boundInPlaceRow :=\n" ++
-  "  row \"boundInPlace\" { specification := [], caps := some written'caps0, bound := ⟨1, 4, by decide⟩, ceiling := true }\n" ++
+  "  row \"boundInPlace\" { specification := [], number := .ceiling ⟨1, 4, by decide⟩ (some written'caps0) }\n" ++
   "noncomputable def boundInPlace : Zkc.Subject.WrittenSubject written'root :=\n" ++
   "  ⟨written'clauses, ⟨1, fun _ => boundInPlaceRow⟩, written'origins⟩\n" ++
   "-- one path twice, the first row without facts\n" ++
@@ -208,7 +205,7 @@ def typedRows : String :=
   "    row \"same\" written'fields0⟩, written'origins⟩\n" ++
   "-- a table whose count the kernel cannot evaluate\n" ++
   "opaque unknown : Nat\n" ++
-  "noncomputable def unknownRow := row \"unknown\" { specification := [], caps := some (table unknown), bound := written'bound0, ceiling := true }\n" ++
+  "noncomputable def unknownRow := row \"unknown\" { specification := [], number := .ceiling written'bound0 (some (table unknown)) }\n" ++
   "noncomputable def uncounted : Zkc.Subject.WrittenSubject written'root :=\n" ++
   "  ⟨written'clauses, ⟨1, fun _ => unknownRow⟩, written'origins⟩\n\n" ++
   "end Rows\n"
@@ -274,9 +271,8 @@ def run (work : System.FilePath) : IO Unit := do
   -- table is; a row that writes none is held to its table and to the stored program
   let goals (subject : String) := command "publish_goals" ["Rows.Typed", "ZkcFormal.Written.Publish"] subject
   add "Rows.Challenge" (goals "Rows.subject") .challenge
-  for name in ["untied", "offTotal", "sourceless"] do
+  for name in ["untied", "offTotal"] do
     add s!"{name}Goals" (goals s!"Rows.{name}") .challenge
-  add "sourcelessFees" (command "publish_fees" ["Rows.Typed", "ZkcFormal.Written.FeeFacts"] "Rows.sourceless") .statements
   -- the caller's scope around the command, and the terms printed in full with it and without it
   add "Scoped.Fees" (command "publish_fees" ["AtBound.Stated", "ZkcFormal.Written.FeeFacts"] "AtBound.written'subject"
     (before := scope)) .statements
@@ -342,15 +338,13 @@ def run (work : System.FilePath) : IO Unit := do
     ["publish: the path [same] is the path of two rows of Rows.twin"]
   expectErrorsAt "a count that the kernel does not evaluate" (← result "UncountedFees").1 (← result "UncountedFees").2
     ["publish_fees: the kernel did not evaluate whether the table counts as the stored program"]
-  -- a row that writes no ceiling: the challenge is refused where its table miscounts, where its
-  -- bound is not the table's total, and where it holds no table (as the fee facts are)
+  -- a row that writes no ceiling: the challenge is refused where its table miscounts and where
+  -- its bound is not the table's total (a row without a ceiling and without a table cannot be
+  -- written: its number is a table and a bound)
   for name in ["untied", "offTotal"] do
     expectErrorsAt s!"a row without a ceiling whose bound is not its table's ({name})"
       (← result s!"{name}Goals").1 (← result s!"{name}Goals").2
       [s!"publish_goals: the row at the path [{name}] writes no ceiling, and its bound is not the total of a table that counts as the stored program does"]
-  for module in ["sourcelessGoals", "sourcelessFees"] do
-    expectErrorsAt "a row without a ceiling and without a table" (← result module).1 (← result module).2
-      ["publish: the row at the path [sourceless] writes no ceiling and holds no table of caps"]
   -- the scope of the caller changes neither the facts nor their terms
   facts "ScopedFacts" s!"AtBound.{path}" all
   let printed (name : String) : IO String := do

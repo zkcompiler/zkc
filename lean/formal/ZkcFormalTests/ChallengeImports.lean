@@ -13,8 +13,9 @@ change is made, in view.
 
 Beyond what the statement of soundness stands on (`SoundnessImports`), the command reads the
 subject's rows (`Zkc.Subject.WrittenGoal`, with the table of caps and the bound that a row
-holds: the command decides the bound of a goal without a ceiling against its table) and states
-at the standard interpretation (its model, draws and coverage).
+holds: the command decides the bound of a goal without a ceiling against its table, by the
+budget's arithmetic in `ZkcFormal.Written.Budget`, which is no part of the fee judgment) and
+states at the standard interpretation (its model, draws and coverage).
 -/
 
 open Lean Elab Command
@@ -37,6 +38,7 @@ def challengeStandsOn : List Name := [
   `ZkcFormal.Written.ArithmeticDraws,
   `ZkcFormal.Written.ArithmeticModel,
   `ZkcFormal.Written.Bound,
+  `ZkcFormal.Written.Budget,
   `ZkcFormal.Written.Execution,
   `ZkcFormal.Written.Extraction,
   `ZkcFormal.Written.FunctionMeaning,

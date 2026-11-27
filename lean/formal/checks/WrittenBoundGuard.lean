@@ -23,13 +23,13 @@ private def check (work : System.FilePath) (file source name : String)
     throw <| IO.userError s!"{name}: expected IsSet(claim) at deployed input 1"
   -- the issuer's data module; the questions of this check are stated after it, and the pair that
   -- the comparator judges is this check's own
-  let data ← IO.ofExcept ((Statements.mk claims claims.functionsBeforeRoot).publication name)
+  let data ← IO.ofExcept ((Statements.mk claims).publication name)
   unless data.refusals.isEmpty do throw <| IO.userError s!"{name}: {data.refusals}"
   let m : Module :=
     { space := data.space, statementsName := data.dataName, statements := data.data, stated := data.stated,
       proof := "", proved := [], textLine := 0, textLines := 0 }
   let coordinates ← IO.ofExcept
-    (ZkcFormalTests.WrittenSource.consumerAt root [("loose", "loose")])
+    (ZkcFormalTests.WrittenSource.consumerAt root ["loose"])
   let reader := s!"#eval Zkc.Tests.Frontend.PrintedPackageSupport.expectGoalClaims {literal source} " ++
     "[\"loose\"] ⟨[], [], [], [], []⟩ stored association\n" ++
     "example : subjectPackage.stored = stored := rfl\n" ++
@@ -60,6 +60,35 @@ private def check (work : System.FilePath) (file source name : String)
     acceptedByLean s!"{name} source reader" (← observed)
     discard submitted
 
+/-- The guarded source at a ceiling of zero, through the issuer: the goal is issued at zero, below
+the total of its table, so the fees module gives its row no fee facts; the text proves a fee
+judgment within zero under the issued table by itself, reaches the installed bound on its view
+and closes the published `sound` by the declared step; `lake comparator` judges the pair
+against the issuer's challenge. -/
+private def atZero (work : System.FilePath) (file source : String) : IO (IO Unit) := do
+  let zero ← replaceOnce source "stage = written) <= 1 / 4" "stage = written) <= 0"
+  let assembly ← Driver.assembleFiles ⟨file, Syntax.parseString file zero⟩ ["../../libraries"]
+  let root ← IO.ofExcept (admitSoundnessGoal assembly "loose")
+  let claims ← IO.ofExcept (goalClaims root ["loose"])
+  let issued ← IO.ofExcept ((Statements.mk claims).publication "AtZero")
+  unless issued.refusals.isEmpty && issued.limits.isEmpty do
+    throw <| IO.userError s!"AtZero: {issued.refusals} {issued.limits}"
+  unless issued.published == [`AtZero.guard_bound.loose.sound, `AtZero.guard_bound.loose.met] &&
+      issued.data.contains "def written'bound0 : Zkc.Subject.Bound := ⟨0, 1, by decide⟩" do
+    throw <| IO.userError s!"AtZero: the goal is not issued at zero: {issued.published}"
+  let text ← IO.FS.readFile "checks/BoundGuard.lean.in"
+  let module := Module.ofPublication issued text
+    ["withinZero", "belowTable", "guard_bound.loose.sound", "guard_bound.loose.met"]
+  let compared ← startSourceComparison work "AtZeroSource" module zero ["loose"]
+  let submitted ← startModule work "AtZero" module
+  let fees := leanOn work issued.feesName
+  return do
+    acceptedByLean "AtZero source reader" (← compared)
+    discard submitted
+    let (ok, output) ← fees
+    unless ok && output.contains "is above the bound 0/1; no fee facts" do
+      throw <| IO.userError s!"AtZero: the fees module does not say that the row has no fee facts\n{output}"
+
 def run (work : System.FilePath) : IO Unit := do
   let file := "fixtures/written-bound-guard.zkc"
   let source ← IO.FS.readFile file
@@ -69,13 +98,11 @@ def run (work : System.FilePath) : IO Unit := do
   let witnessed := s!"Soundness.Witnessed {args}"
   let always ← check work file total "BoundTotal" [
     ("allBounds", s!"∀ b, {result} b"), ("noWitness", "¬ " ++ witnessed)]
-  -- The guarded source as it is: on the rejected input its verifier draws and stops, so it is
-  -- judged within a budget of zero under its own table, whose budget is one over four. The
-  -- judgment's budget is its own number, not the table's.
-  let guarded ← check work file source "BoundGuard" [
-    ("withinZero", s!"Fees.JudgedWithin {args} looseCaps 0"),
-    ("belowTable", "(0 : NNRat) < looseCaps.budget"),
-    ("atZero", s!"{result} 0")] (formalImport := "ZkcFormal.Written.Fees")
+  -- The guarded source at a ceiling of zero, issued and judged: on the rejected input its verifier
+  -- draws and stops, so it is judged within a budget of zero under its own table, whose budget
+  -- is one over four. The judgment's budget is its own number, not the table's. (The same source
+  -- at its ceiling of one quarter is judged through the fee facts in `checks/WrittenFees.lean`.)
+  let guarded ← atZero work file source
   let reader ← IO.FS.readFile "checks/WrittenBoundEndpoints.lean.in"
   let observed ← startLakeLean work "BoundEndpoints" reader (text := false)
   acceptedByLean "written bound endpoints" (← observed)

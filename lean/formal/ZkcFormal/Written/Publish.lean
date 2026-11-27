@@ -3,6 +3,7 @@ module
 public import Zkc.Subject.WrittenGoal
 public import ZkcFormal.Written.Soundness
 public import ZkcFormal.Written.Bound
+public import ZkcFormal.Written.Budget
 public import ZkcFormal.Written.StandardInterpretation
 public meta import Lean
 
@@ -32,10 +33,11 @@ read by reducing the record that holds a field to its constructor and taking the
 argument as it stands, so the constant that a field names is the constant of the statement. A
 statement reads its own row alone, and the bound only where the statement has one.
 
-A row says whether the source writes its bound (`ceiling`). Where it does not, the bound is the
-total of the row's table of caps, and the command decides by the kernel, before it declares
-anything, that the table counts as the stored program does and adds up to the bound; it refuses
-a subject with a row for which that is false. A row that writes its ceiling may hold no table.
+A row's number says whether the source writes its bound (`Zkc.Subject.GoalNumber`). Where it does
+not, the bound is the total of the row's table of caps, and the command decides by the kernel,
+before it declares anything, that the table counts as the stored program does and adds up to the
+bound (`ZkcFormal.Written.Budget.sumsTo`); it refuses a subject with a row for which that is
+false. A row that writes its ceiling may hold no table.
 
 `published% S <path> <theorem>` is the same statement as a term, for an author or a consumer;
 the path is written as one identifier whose components are the path's (`«…»` around a component
@@ -137,19 +139,33 @@ def rowAt (t : Tables) (index : Nat) : MetaM Row := do
   let application ← constName (← fieldOf decision ``Zkc.Subject.Decision `application)
   return { path, property, application, fields }
 
-/-- The table of caps of a row, where its fields hold one: the argument of `some`, as it stands. -/
-def Row.table (row : Row) : MetaM (Option Expr) := do
-  let caps ← whnf (← fieldOf row.fields ``Zkc.Subject.GoalFields `caps)
-  if caps.isAppOfArity ``Option.some 2 then return some caps.appArg!
-  if caps.isAppOfArity ``Option.none 1 then return none
-  throwError "publish: expected a table of caps or none, got {caps}"
+/-- A row's number as its fields hold it: whether the source writes the bound, the bound's
+expression, and the table's where the row holds one. The number is reduced to its constructor
+and no further: the bound and the table are the constructor's arguments as they stand. -/
+structure Number where
+  written : Bool
+  bound : Expr
+  table : Option Expr
+
+/-- The number of a row. -/
+def Row.number (row : Row) : MetaM Number := do
+  let number ← whnf (← fieldOf row.fields ``Zkc.Subject.GoalFields `number)
+  if number.isAppOfArity ``Zkc.Subject.GoalNumber.total 2 then
+    return { written := false, bound := number.getArg! 1, table := some (number.getArg! 0) }
+  if number.isAppOfArity ``Zkc.Subject.GoalNumber.ceiling 2 then
+    let caps ← whnf (number.getArg! 1)
+    if caps.isAppOfArity ``Option.some 2 then
+      return { written := true, bound := number.getArg! 0, table := some caps.appArg! }
+    if caps.isAppOfArity ``Option.none 1 then
+      return { written := true, bound := number.getArg! 0, table := none }
+    throwError "publish: the row at the path {row.path}: expected a table of caps or none, got {caps}"
+  throwError "publish: the row at the path {row.path}: expected a goal's number built by a constructor, got {number}"
+
+/-- The table of caps of a row, where it holds one. -/
+def Row.table (row : Row) : MetaM (Option Expr) := return (← row.number).table
 
 /-- Whether the source writes the row's bound, as the goal's ceiling. -/
-def Row.ceiling (row : Row) : MetaM Bool := do
-  let written ← whnf (← fieldOf row.fields ``Zkc.Subject.GoalFields `ceiling)
-  if written.isConstOf ``Bool.true then return true
-  if written.isConstOf ``Bool.false then return false
-  throwError "publish: expected whether the row writes its ceiling, got {written}"
+def Row.ceiling (row : Row) : MetaM Bool := return (← row.number).written
 
 /-- The stored program of the subject's package and the key of its root, read from the type of
 the row's short application. -/
@@ -162,8 +178,7 @@ def Row.program (row : Row) : MetaM (Expr × Expr) := do
 
 /-- **The goal rows of a subject, read once for a command.** No path is the path of two rows: a
 command declares by path, so two rows of one path would give one name two rows' meanings, also
-where a command declares nothing for one of them. A row that writes no ceiling holds a table: its
-bound is the table's total. -/
+where a command declares nothing for one of them. -/
 def rows (subject : Name) : MetaM (Array Row) := do
   let t ← tables subject
   let mut read : Array Row := #[]
@@ -171,8 +186,6 @@ def rows (subject : Name) : MetaM (Array Row) := do
     let row ← rowAt t index
     if read.any (·.path == row.path) then
       throwError "publish: the path {row.path} is the path of two rows of {subject}"
-    unless (← row.ceiling) || (← row.table).isSome do
-      throwError "publish: the row at the path {row.path} writes no ceiling and holds no table of caps: its bound is the total of no table"
     read := read.push row
   return read
 
@@ -183,19 +196,20 @@ def Row.isSoundness (row : Row) : Bool := row.property == ``Zkc.Security.Propert
 
 /-- The constant of a row's bound. -/
 def Row.bound (row : Row) : MetaM Name := do
-  constName (← fieldOf row.fields ``Zkc.Subject.GoalFields `bound)
+  constName (← row.number).bound
 
 /-- **The bound of a row that writes no ceiling is its table's.** The kernel decides that the
-table counts as the stored program does and that its total is the bound's number
-(`CapTable.sumsTo`). A challenge is declared over a subject each of whose rows passes; a row that
+table counts as the stored program does and that its budget is the bound's number
+(`Budget.sumsTo`). A challenge is declared over a subject each of whose rows passes; a row that
 writes its ceiling is not asked. -/
 def Row.checkTotal (row : Row) : MetaM Unit := do
-  if ← row.ceiling then return
-  let some table ← row.table
+  let number ← row.number
+  if number.written then return
+  let some table := number.table
     | throwError "publish: the row at the path {row.path} writes no ceiling and holds no table of caps"
   let (stored, rootKey) ← row.program
   let bound := Lean.mkConst (← row.bound)
-  let holds ← mkAppM ``Zkc.Subject.CapTable.sumsTo #[table, stored, rootKey, bound]
+  let holds ← mkAppM ``ZkcFormal.Written.Budget.sumsTo #[table, stored, rootKey, bound]
   unless ← decided "publish_goals" "whether the bound is the table's total" holds do
     throwError "publish_goals: the row at the path {row.path} writes no ceiling, and its bound is not the total of a table that counts as the stored program does"
 

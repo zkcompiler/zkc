@@ -19,11 +19,10 @@ private def witnessPlaces {V : Vocabulary} {ports : List (LTy V)} :
   | _, .nil => []
   | _, .cons slot rest => slot.member.index :: witnessPlaces rest
 
-/-- Observable source coordinates, including the distinction between short syntax and an
-explicitly supplied witness vector. Caps are compared as complete tables in the client. -/
+/-- Observable source coordinates of a decision, including the distinction between short syntax
+and an explicitly supplied witness vector. Caps are compared as complete tables in the client. -/
 def operands {V : Vocabulary} {pkg : Package V} {root : WrittenRoot pkg}
-    (g : WrittenGoal root) : Nat × Nat × Nat × List Nat × Option (List Nat) :=
-  let d := g.decision
+    (d : Decision root) : Nat × Nat × Nat × List Nat × Option (List Nat) :=
   (d.place, d.application.relation.header.key.number, d.application.arity.val,
     statementPlaces d.application.statement, d.witness.map witnessPlaces)
 
@@ -93,34 +92,34 @@ private partial def reachedInModule (home : Option ModuleIdx) :
     reachedInModule home (used.toList.filter (env.getModuleIdxFor? · == home) ++ rest)
       (seen.insert name)
 
-/-- What a short application may reach among the typed subject's own declarations (those named
-`written'…`): itself, the entry of its relation, and the root. Everything else of that family
-is refused, by what is allowed and not by a list of what is forbidden: a decision (the place of
-a clause and its witness operands), a goal's row, fields and bound, the table of caps, the
-aggregate, the source's names, and whatever the issuer adds to the family later. -/
-private def mayReach (name : String) : Bool :=
-  -- an auxiliary declaration of an allowed one (`written'root._proof_1`) is its own
-  let word := (name.splitOn ".").headD name
-  let numbered (stem : String) :=
-    let rest := word.toList.drop stem.length
-    word.startsWith stem && !rest.isEmpty && rest.all Char.isDigit
-  word == "written'root" || numbered "written'application" || numbered "written'fn"
+/-- The types of what a subject holds beside its short applications: a goal's bound, table,
+number, fields and row, a decision (the place of a clause and its witness operands), a table of
+rows or of decisions, the subject and the source's names. -/
+private def rowTypes : List Name :=
+  [``Zkc.Subject.Bound, ``Zkc.Subject.CapTable, ``Zkc.Subject.GoalNumber, ``Zkc.Subject.GoalFields,
+    ``Zkc.Subject.GoalSlot, ``Zkc.Subject.Decision, ``Zkc.Subject.BoundedTable,
+    ``Zkc.Subject.WrittenSubject, ``Zkc.Subject.RootOrigins]
 
-/-- A short application reaches none of the subject's rows. A statement over a short application
-names its constant; whatever that constant reaches is compared when a proof is judged. -/
-private def checkApplicationReach (space application : Name) : MetaM Unit := do
+/-- A short application reaches none of the subject's rows: no declaration of its module whose
+type is a row's. A statement over a short application names its constant; whatever that constant
+reaches is compared when a proof is judged. The declarations are told by their types, not by
+their names. -/
+private def checkApplicationReach (application : Name) : MetaM Unit := do
   let home := (← getEnv).getModuleIdxFor? application
   for name in (← reachedInModule home [application] {}).toList do
-    let word := ((privateToUserName name).replacePrefix space .anonymous).toString
-    if word.startsWith "written'" && !mayReach word then
+    let type := (← getConstInfo name).type
+    let head := type.getForallBody.getAppFn
+    if rowTypes.any (head.isConstOf ·) then
       throwError "the short application {application} reaches {privateToUserName name}"
 
-/-- Follow the actual aggregate and the names of the installation. The expected indices and
-label are chosen by the client from the original source, independently of the layout issuer. -/
-def checkReferences (space : Name) (label : String) (goal clause relation : Nat) (arguments := 0) :
-    CommandElabM Unit := liftTermElabM do
+/-- Follow the actual aggregate and the names of the installation: the subject's tables hold the
+named decision and row at the given places, the decision names its short application, the short
+application its relation's entry, the entry the relation's header, member and lookup by its key,
+and the row its fields, whose number names the row's bound and, where it has one, its table. The
+places and the key are chosen by the client from the original source, independently of the
+layout issuer. -/
+def checkReferences (space : Name) (goal clause relation : Nat) : CommandElabM Unit := liftTermElabM do
   let localName := Name.str space
-  let row := localName s!"written'goal{goal}"
   let fields := localName s!"written'fields{goal}"
   let caps := localName s!"written'caps{goal}"
   let bound := localName s!"written'bound{goal}"
@@ -135,7 +134,7 @@ def checkReferences (space : Name) (label : String) (goal clause relation : Nat)
   checkLeaf (← bodyOf (localName "written'clauses")) clause decision
   let application := localName s!"written'application{clause}"
   named (← operand (← bodyOf decision) ``Decision.mk 2) application
-  checkApplicationReach space application
+  checkApplicationReach application
   named (← operand (← bodyOf application) ``ShortApplication.mk 3) fnEntry
   let entry ← bodyOf fnEntry
   named (← operand entry ``FunctionEntry.mk 2) (localName s!"header{relation}")
@@ -143,33 +142,21 @@ def checkReferences (space : Name) (label : String) (goal clause relation : Nat)
   named (← operand entry ``FunctionEntry.mk 0) (localName s!"found'fn{relation}")
   checkLeaf (← field aggregate ``WrittenSubject `goals) goal slot
   named (← field (← bodyOf slot) ``GoalSlot `fields) fields
-  let selected ← bodyOf row
-  named (← operand selected ``WrittenGoal.mk 1) decision
-  named (← operand selected ``WrittenGoal.mk 0) fields
-  let publicName := fun (suffix_ : String) => localName (label ++ suffix_)
-  -- a row's table is `some` of its named table, with the goal's public name for it, or `none`
-  let table ← field (← bodyOf fields) ``GoalFields `caps
-  if table.isAppOfArity ``Option.some 2 then
-    named table.appArg! caps
-    named (← bodyOf (publicName "Caps")) caps
-  else unless table.isAppOfArity ``Option.none 1 do
-    throwError "{fields} must hold `some` of a table of caps or `none`, not{indentExpr table}"
-  named (← field (← bodyOf fields) ``GoalFields `bound) bound
-  for i in [:arguments] do
-    let getter := publicName s!"Argument{i}"
-    let body ← bodyOf getter
-    let specification ← operand body ``getElem 2
-    named (← operand specification ``GoalFields.specification 0) fields
-    unless (← getNatValue? (← whnf (← operand body ``getElem 1))) == some i do
-      throwError "{getter} must select argument {i}"
-  let lookup := localName s!"written'goalAt{goal}"
-  let some (_, lhs, rhs) := (← getConstInfo lookup).type.eq? | throwError "{lookup} must state an equality"
-  named (← operand lhs ``WrittenSubject.goalAt 1) subject
-  let index ← operand lhs ``WrittenSubject.goalAt 0
-  unless (← getNatValue? (← whnf (← mkProjection index `val))) == some goal do
-    throwError "{lookup} must select slot {goal}"
-  named rhs row
-  let memberLabel := if label == "root" || label == "verifier" then "relation'" ++ label else label
-  named (← bodyOf (localName (memberLabel ++ "Member"))) fnMember
+  -- the row's clause is the place of its decision among the subject's
+  let selects ← field (← bodyOf slot) ``GoalSlot `clause
+  unless (← getNatValue? (← whnf (← mkProjection selects `val))) == some clause do
+    throwError "{slot} must select the decision {clause}"
+  -- a row's number names its bound and, where it has one, its table
+  let number ← field (← bodyOf fields) ``GoalFields `number
+  if number.isAppOfArity ``GoalNumber.total 2 then
+    named (number.getArg! 0) caps
+    named (number.getArg! 1) bound
+  else if number.isAppOfArity ``GoalNumber.ceiling 2 then
+    named (number.getArg! 0) bound
+    let table := number.getArg! 1
+    if table.isAppOfArity ``Option.some 2 then named table.appArg! caps
+    else unless table.isAppOfArity ``Option.none 1 do
+      throwError "{fields} must hold `some` of a table of caps or `none`, not{indentExpr table}"
+  else throwError "{fields} must hold a number built by a constructor, not{indentExpr number}"
 
 end ZkcFormalTests.WrittenBinding

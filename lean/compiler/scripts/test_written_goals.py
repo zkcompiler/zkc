@@ -111,7 +111,7 @@ goal bare = soundness(Checked)
     assert "charged::capped: issued" in rows[0] and "no table of caps" in rows[0] and "`sites.first` is no draw" in rows[0], rows[0]
     assert "charged::bare: refused" in rows[1] and "GL4" in rows[1] and "`sites.first` is no draw" in rows[1], rows[1]
     stated = next(text for name, text in tableless.items() if name.endswith("/Stated.lean")).decode()
-    assert "caps := none, bound := written'bound0, ceiling := true }" in stated, stated[-600:]
+    assert "number := .ceiling written'bound0 none }" in stated, stated[-600:]
     rows, alone = run([other], ["capped"], work / "tableless-alone", 0)
     assert alone == tableless and "no table of caps" in rows[0]
 

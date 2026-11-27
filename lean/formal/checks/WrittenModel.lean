@@ -8,7 +8,7 @@ private def statementsFor (input : SourceInput) (goals : List String) : IO State
   let assembly ← Driver.assembleFiles input ["../../libraries", "../../examples", "../../examples/support"]
   let root ← IO.ofExcept (admitSoundnessGoal assembly first)
   let claims ← IO.ofExcept (goalClaims root goals)
-  return ⟨claims, claims.functionsBeforeRoot⟩
+  return ⟨claims⟩
 
 /-- A package that links a project primitive has no model of it: its goals are not issued, with or
 without a ceiling. -/
@@ -43,7 +43,7 @@ def checkSharedCoverage : IO Unit := do
 
 /-- Check both sides of issuance with exactly their declared imports: the data module and the
 challenge of each publication are read by Lean. The shared package has goals named `root` and
-`verifier`, whose labels are names of the installation; a second source calls helpers whose
+`verifier`, as declarations of the installation are named; a second source calls helpers whose
 names are like generated ones; a third names a goal and a port like a view's binders. A
 published theorem is named by the path of its goal. -/
 private def checkPublicationNames (work : System.FilePath) : IO Unit := do

@@ -91,8 +91,13 @@ def read (text : String) (reading : Reading) : IO Subject := do
   unless (head.roster[claims.verifier]?, head.roster[claims.prover]?) ==
       (some reading.verifier, some reading.prover) do
     throw (IO.userError "the verifier and the prover of the scheme are not the roles asserted")
-  let statements : Statements := ⟨claims, claims.functionsBeforeRoot⟩
+  let statements : Statements := ⟨claims⟩
   return ⟨text, statements⟩
+
+/-- The total of a goal's table of caps, as the frontend computes it, where the goal has a table:
+what a check compares with the charges of its source. -/
+def _root_.Zkc.Frontend.Written.ClaimedGoal.total (goal : ClaimedGoal) : Option Rat :=
+  goal.caps.map (·.ratio)
 
 /-- The axioms beyond which no theorem of a subject may rest. -/
 def allowed : List String := ["propext", "Classical.choice", "Quot.sound"]
@@ -284,10 +289,8 @@ def startLakeLean (work : System.FilePath) (name source : String) (text := true)
 /-- Compare the named values in the issued statements with the frontend run on the original
 source and selectors. The same values must be the fields of the package used for admission. -/
 def startSourceComparison (work : System.FilePath) (name : String) (module : Module)
-    (source : String) (goals : List String) (labels := goals.map Statements.labelOfSpelling) :
-    IO Pending := do
-  unless goals.length == labels.length do throw (IO.userError "a public label is required for each selector")
-  let observation ← IO.ofExcept (WrittenSource.consumer source (goals.zip labels))
+    (source : String) (goals : List String) : IO Pending := do
+  let observation ← IO.ofExcept (WrittenSource.consumer source goals)
   startLakeLean work name
     (s!"import {module.statementsName}\nimport Zkc.Tests.Frontend.PrintedPackageSupport\n" ++
       "import ZkcFormalTests.WrittenBinding\n\n" ++

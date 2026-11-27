@@ -142,9 +142,10 @@ require a model, so a package linking any project primitive gets a diagnostic at
 
 `Written.Statements` (`Written/Statement.lean`) issues the goals of a scheme through the formal
 library (`Statements.publication`). It writes a data module, which holds the claims' package,
-the facts (the key, header and place of the root and of each goal's relation, the header and
-place of each function before the root that a text names, the verifier and the prover of the
-claims' scheme, each goal's proof arguments and table of caps) and the typed subject: a short
+the facts (the key, header and place of the root, the place of each relation and of each
+function before the root by its key, the verifier and the prover of the claims' scheme, each
+goal's table of caps, bound and fields; no declaration is named after a name of the source) and
+the typed subject: a short
 application and a decision for each deciding clause, and a row for each goal with the path of
 its declaration, its property, its bound and its table of caps (`Written/Subject.lean`). The
 data module states no proposition and imports no module of the formal library. The challenge,

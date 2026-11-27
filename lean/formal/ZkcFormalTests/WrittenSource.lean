@@ -15,12 +15,11 @@ private def position (ports : Array Lowered.Port) (e : Lowered.Expr) : Except St
 
 private def equation (lhs rhs : String) := s!"example : {lhs} = {rhs} := rfl\n"
 
-/-- Each request gives the selector to resolve and the public spelling the client expects.
-Two distinct spellings may belong to one source declaration. The ordinary charge subjects
-have simple public names. Fixtures for escaped labels specify the expected spelling literally. -/
-def consumerAt (root : AdmittedRoot) (requests : List (String × String)) : Except String String := do
-  let some (first, _) := requests.head? | throw "expected a goal"
-  let compiled ← goalClaims root (requests.map Prod.fst)
+/-- Each request is a selector to resolve. Two selectors may belong to one source declaration,
+which is one row. -/
+def consumerAt (root : AdmittedRoot) (requests : List String) : Except String String := do
+  let some first := requests.head? | throw "expected a goal"
+  let compiled ← goalClaims root requests
   let head ← SourceClause.rootHead root
   let ports := head.ports.filter (!·.specification)
   let (selected, _) ← root.goalSource.selectNamed first .soundness
@@ -35,11 +34,10 @@ def consumerAt (root : AdmittedRoot) (requests : List (String × String)) : Exce
     equation "written'origins.inputNames" (reprStr (ports.map (·.binder.name)))
   let mut declarations : Array DeclarationId := #[]
   let mut decisions : Array (Nat × InstanceId) := #[]
-  let mut labels : List String := []
-  for (selector, label) in requests do
+  for selector in requests do
     let (id, _) ← selectDeclaration root.state .goal selector "source comparison"
-    if labels.contains label then continue
-    labels := label :: labels
+    -- two selectors of one declaration are one row
+    if declarations.contains id then continue
     let (goal, _) ← root.goalSource.selectId id .soundness
     let clause ← goalClause root selector
     let some app := clause.application | throw "expected a deciding relation"
@@ -60,7 +58,7 @@ def consumerAt (root : AdmittedRoot) (requests : List (String × String)) : Exce
     let key := (clause.place, relation)
     let d := (decisions.findIdx? (· == key)).getD decisions.size
     if d == decisions.size then decisions := decisions.push key
-    let (table, _) ← goalCaps root goal.specification
+    let table ← goalCaps root goal.specification
     let caps := table.toOption
     -- the reader's own reading of the rule: the ceiling that the goal writes, else the total of
     -- its table, which a goal without a ceiling has
@@ -68,32 +66,29 @@ def consumerAt (root : AdmittedRoot) (requests : List (String × String)) : Exce
       | some ceiling, _ => pure ceiling
       | none, some table => pure table.ratio
       | none, none => throw "a goal without a ceiling has no table of caps"
-    let row := s!"written'goal{index}"
-    let atIndex := s!"(written'subject.goalAt ⟨{index}, by decide⟩)"
-    text := text ++ equation atIndex row ++
+    let atIndex := s!"(written'subject.goals.get ⟨{index}, by decide⟩)"
+    text := text ++
       equation s!"(written'subject.goals.get ⟨{index}, by decide⟩).clause.val" (toString d) ++
       -- the row's path is the path of the goal's declaration, and its property is the goal's
       equation s!"(written'subject.goals.get ⟨{index}, by decide⟩).path"
         (reprStr ((Static.qualifiedName root.state.program id).splitOn "::")) ++
       equation s!"(written'subject.goals.get ⟨{index}, by decide⟩).property" (reprStr goal.property) ++
-      equation s!"ZkcFormalTests.WrittenBinding.operands {atIndex}"
+      equation s!"ZkcFormalTests.WrittenBinding.operands (written'subject.clauses.get {atIndex}.clause)"
         s!"({clause.place}, {relation}, {statement.size}, {reprStr statement.toList}, {reprStr (witness.map Array.toList)})" ++
       equation s!"{atIndex}.fields.specification" (reprStr goal.specification.toList) ++
-      equation s!"{atIndex}.fields.caps" (match caps with
+      equation s!"{atIndex}.fields.number.caps" (match caps with
         | some table => s!"some ({Zkc.Subject.Print.capsTerm table})"
         | none => "none") ++
-      equation s!"{atIndex}.fields.ceiling" (toString goal.ceiling.isSome) ++
-      equation s!"({atIndex}.fields.bound.numerator, {atIndex}.fields.bound.denominator)"
+      equation s!"{atIndex}.fields.number.written" (toString goal.ceiling.isSome) ++
+      equation s!"({atIndex}.fields.number.bound.numerator, {atIndex}.fields.number.bound.denominator)"
         s!"({bound.num.toNat}, {bound.den})" ++
-      s!"run_cmd ZkcFormalTests.WrittenBinding.checkReferences (← Lean.getCurrNamespace) {reprStr label} {index} {d} {relation} {goal.specification.size}\n"
-    for (argument, i) in goal.specification.toList.zipIdx do
-      text := text ++ equation s!"{label}Argument{i}" (toString argument)
+      s!"run_cmd ZkcFormalTests.WrittenBinding.checkReferences (← Lean.getCurrNamespace) {index} {d} {relation}\n"
   return text ++ equation "written'subject.clauses.size" (toString decisions.size) ++
     equation "written'subject.goals.size" (toString declarations.size)
 
 /-- Assemble the original single-file source before observing the issued module. -/
-def consumer (source : String) (requests : List (String × String)) : Except String String := do
-  let some (first, _) := requests.head? | throw "expected a goal"
+def consumer (source : String) (requests : List String) : Except String String := do
+  let some first := requests.head? | throw "expected a goal"
   consumerAt (← goalRoot source first) requests
 
 end ZkcFormalTests.WrittenSource

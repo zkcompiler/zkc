@@ -64,14 +64,12 @@ def run : IO Unit := do
       [.choice (.item (.draw ⟨⟨1⟩, 1, 8, 1⟩) .nil) (.item (.draw ⟨⟨12⟩, 1, 4, 1⟩) .nil) .nil] && (goal.caps.map fun table => table.uses.map fun use => use.draws.map fun draw =>
       (draw.numerator, draw.denominator, draw.count)) == some [[(1, 8, 1), (1, 4, 1)]] do
     throw (IO.userError s!"the table of caps is not the two draws at 1/8 and 1/4: {repr goal.caps}")
-  unless goal.siteLabels.map (·.2.1) == ["x", "y"] do
-    throw (IO.userError s!"the draws are not named `x` and `y`: {goal.siteLabels.map (·.2.1)}")
   -- The stepped loop: three blocks, each with its draw.
   let stepped ← read steppedSource
     { goals := ["stepped"], ports := #["claim"],
       clause := ⟨"proves", none, "V", "Holds", ["claim"], []⟩, operands := #[0] }
-  unless (stepped.goals.map fun goal => goal.siteLabels.map (·.2.1)) == [["r_0", "r_1", "r_2"]] do
-    throw (IO.userError "the stepped loop has not a draw in each of three blocks")
+  unless (stepped.goals.map fun goal => goal.caps.map fun table => table.uses.map (·.draws.length)) == [some [3]] do
+    throw (IO.userError "the stepped loop has not a charged draw in each of three blocks")
   let low ← read (source "1 / 16" "1 / 16") reading
   unless (low.goals.map (·.total)) == [some (1 / 16)] do
     throw (IO.userError "the low charges do not give a total of one sixteenth")
