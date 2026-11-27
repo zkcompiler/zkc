@@ -18,7 +18,7 @@ inputs of one type and a witness).
   spelling with the installed bound where the result stands, and a spelling with the bound's
   number where its constant stands.
 * The control of a challenge by the subject's rows (`#challenge_theorems`, which the harness runs
-  on every pair made from a publication) accepts the issuer's challenge with the two names that
+  on every pair that it starts, `startModule`) accepts the issuer's challenge with the two names that
   are judged, and refuses a judgment that is given one name less, a challenge with one theorem
   more, and a challenge whose `sound` is at a number and not at the row's bound.
 * A row that writes its ceiling and holds an optional table that cannot be opened is published:
