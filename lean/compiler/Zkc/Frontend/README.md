@@ -89,7 +89,7 @@ Run the command from `lean/compiler`. Give one `--goal` for each required goal a
 lake exe zkc-check written-goals --library ../../libraries --goal good --goal bad --output issued ../formal/fixtures/hash-relation.zkc
 ```
 
-The command prints one result per selector in request order and exits with status 1 if any goal was refused. Short and qualified names that select the same declaration share one issuance. Each issued goal has a separate namespace and a pair of files, `Stated.lean` for the admitted package, its members and propositions, and `Challenge.lean` for the comparator. For this example the directory contains the pair for `mixed::good`, and the diagnostic identifies the hash reached by `mixed::bad`. The output directory must be new. Long canonical paths use nested module components. Each distinct goal publishes its two files together. If writing one pair fails, its selectors report the export error, later goals are still processed, and the command exits with status 1. Issuance fixes a target. Checking a submitted proof against it is a further step.
+The command prints one result per selector in request order and exits with status 1 if any goal was refused. Short and qualified names that select the same declaration share one issuance. Each issued goal has a separate namespace and four files: `Stated.lean`, the data module (the admitted package, its members and the typed subject), `Challenge.lean` for the comparator, and `Views.lean` and `Fees.lean` for proofs. For this example the directory contains the files for `mixed::good`, and the diagnostic identifies the hash reached by `mixed::bad`. The output directory must be new. Long canonical paths use nested module components. Each distinct goal publishes its files together. If writing one set fails, its selectors report the export error, later goals are still processed, and the command exits with status 1. Issuance fixes a target. Checking a submitted proof against it is a further step.
 
 `Written.issueSoundnessGoals` exposes the same ordered results in memory. It resolves names in one assembly, keeps name-resolution failures owned by a goal with that goal, and shares the deployed admission between goals selecting the same scheme. Each goal then instantiates its own relation and emits the package reachable from that relation and the protocol. A parse error, an invalid shared namespace or a failure of shared source compilation is reported on each request. The issued result retains the actual package, root, relation member and proof arguments. The CLI reports the canonical source path and the keys within that package. If two declarations have the same canonical path, selection reports the ambiguity for every spelling. A contract hypothesis (`requires`) can be omitted under SX7 when it reads a port inaccessible to the honest verifier. Other requirements currently receive an SX7 diagnostic because the formal claim and its satisfiability witness do not yet represent them. `Written.allGoalsIssued` computes the aggregate result.
 
@@ -138,44 +138,33 @@ no deployed definition links, the claims' package is over a larger vocabulary th
 and the two are not compared. Such a package can be admitted. Written soundness statements
 require a model, so a package linking any project primitive gets a diagnostic at issuance.
 
-## The statements of goals
+## The publication of goals
 
-`Written.Statements` (`Written/Statement.lean`) writes the module of the goals of a scheme
-(`Statements.module`: its imports, the order of its parts and the names of the theorems whose
-axioms it asks for are decided there, and a check gives the text of the proofs).
-Around the proofs stands, with the claims' package: the facts (the key, header and place of the root and of
-each goal's relation, the header and place of each function before the root that the text names, the verifier and the prover
-of the claims' scheme, each goal's proof arguments and charge), that the standard interpretation covers each goal’s reach, the transfers of a statement from the installed program to
-every admitted one, and for each goal four propositions that are defined before any proof: the
-claim about the installed program, the goal for every admitted program, the result (the model
-covers the package, and the goal), and that the hypotheses of the claim are met together. The
-claim applies the experiment of the formal library (`ReturnsWithin`,
-`lean/formal/ZkcFormal/ReturnExperiment.lean`) to the process of the deciding role on its
-inputs, the samplers of the model and the bound; the generator does not write which services
-the bound is against or which event it is of.
-For a text that establishes its claims by the judgment with fees it also writes, before the
-text, the judgment of each goal (`<goal>Judged`, with named binders), the theorem that the claim
-follows from it and the theorem that the hypotheses of the claim are met at inputs at which no valid
-witness makes the relation return true, and the key of each named draw of the root under the name of its site
-(`site_<name>`), with its cap where the contract charges it; the text proves the judgment, and the claim is concluded after it.
-After the text of the proofs it writes the theorems of the last three from the claim and a
-witness, and the comparison of a goal's total with its ceiling. A statement uses the standard interpretation. It is
-bounded by the total of the goal's table of caps (`<goal>Caps.total`), which `goalClaims` reads
-with the claim (`goalCaps`): the uses that the root reaches at the goal's proof arguments, each
-with the caps that the contract of its definition gives its charged draws and with its calls.
-The module states that the counts of the table are the stored program's and what its budget is
-(`Statements.counts`); a goal whose ceiling is below the total is refused (GL4). The deciding
-role, the operands, the proof arguments, the ceiling and the table are read from the claims and
-from nothing that a caller gives. A
-statement names the inputs of the root as the source names its ports (`input_flag`), so that a
-reader sees which inputs the relation is applied to and which the deciding role is run on. A goal
-whose clause is a `reduces` gets no statement yet: the statement of a reduction is about a
-return on which the reduced statement is true. Under SX7, a requirement that reads an input inaccessible to the deciding role is outside
-the soundness experiment. An available requirement currently prevents issuance until the claim
-and its satisfiability witness can represent the hypothesis. The checks of the four subjects
-(`lean/formal/checks/CountCharge.lean`, `FreivaldsCharge.lean`, `GuessCharge.lean`,
-`EitherCharge.lean`, on the library `lean/formal/ZkcFormalTests/WrittenSubject.lean`) are its users;
+`Written.Statements` (`Written/Statement.lean`) issues the goals of a scheme through the formal
+library (`Statements.publication`). It writes a data module, which holds the claims' package,
+the facts (the key, header and place of the root and of each goal's relation, the header and
+place of each function before the root that a text names, the verifier and the prover of the
+claims' scheme, each goal's proof arguments and table of caps) and the typed subject: a short
+application and a decision for each deciding clause, and a row for each goal with the path of
+its declaration, its property, its bound and its table of caps (`Written/Subject.lean`). The
+data module states no proposition and imports no module of the formal library. The challenge,
+the views module and the fees module are their imports and one command of the formal library
+over the subject (`publish_goals`, `publish_views`, `publish_fees`): what a goal publishes, its
+named views and the facts of its table are the library's definitions applied to the goal's row.
+
+A goal is issued at its bound: the ceiling that the goal writes, else the total of its table of
+caps, which `goalClaims` reads with the claim (`goalCaps`): the uses that the root reaches at
+the goal's proof arguments, each with the caps that the contract of its definition gives its
+charged draws and with its calls. A goal whose ceiling is below that total is issued, and the
+fees command gives its row no fee facts. The deciding role, the operands, the proof arguments,
+the bound and the table are read from the claims and from nothing that a caller gives. A goal
+whose reach the standard interpretation does not cover is not issued and is reported. A goal
+whose clause is a `reduces` is not issued yet: the statement of a reduction is about a return on
+which the reduced statement is true. Under SX7, a requirement that reads an input inaccessible to
+the deciding role is outside the soundness experiment. An available requirement currently
+prevents issuance until the claim and its satisfiability witness can represent the hypothesis.
+The checks of the four charge subjects (`lean/formal/checks/CountCharge.lean`,
+`FreivaldsCharge.lean`, `GuessCharge.lean`, `EitherCharge.lean`, on the library
+`lean/formal/ZkcFormalTests/WrittenSubject.lean`) read what the frontend gives;
 [the page for authors](../../../../docs/written-soundness.md) says how a subject is written.
-`lean/formal/checks/GoalClaim.lean` has Lean elaborate the statement of a goal whose relation
-has a witness.
 [Source charge lookup](Written/Charge.lean) · [Goal selection](Written/Selection.lean)

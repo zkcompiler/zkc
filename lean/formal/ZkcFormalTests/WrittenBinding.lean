@@ -109,9 +109,9 @@ private def checkApplicationReach (space application : Name) : MetaM Unit := do
     if rowWords.any (word.startsWith ·) then
       throwError "the short application {application} reaches {privateToUserName name}"
 
-/-- Follow the actual aggregate and public declarations. The expected indices and label
-are chosen by the client from the original source, independently of the layout issuer. -/
-def checkReferences (space : Name) (label : String) (goal clause relation : Nat) (fees : Bool) (arguments := 0) :
+/-- Follow the actual aggregate and the names of the installation. The expected indices and
+label are chosen by the client from the original source, independently of the layout issuer. -/
+def checkReferences (space : Name) (label : String) (goal clause relation : Nat) (arguments := 0) :
     CommandElabM Unit := liftTermElabM do
   let localName := Name.str space
   let row := localName s!"written'goal{goal}"
@@ -158,80 +158,7 @@ def checkReferences (space : Name) (label : String) (goal clause relation : Nat)
   unless (← getNatValue? (← whnf (← mkProjection index `val))) == some goal do
     throwError "{lookup} must select slot {goal}"
   named rhs row
-  let semantic := fun (name : String) => Name.str `ZkcFormal.Written.Goal name
-  let inspect (suffix_ : String) (visit : Expr → MetaM Unit) := do
-    lambdaTelescope (← bodyOf (publicName suffix_)) fun _ body => visit body
   let memberLabel := if label == "root" || label == "verifier" then "relation'" ++ label else label
-  let publicCap := publicName "Caps"
-  let publicMember := localName (memberLabel ++ "Member")
-  let publicHeader := localName (memberLabel ++ "Header")
-  let publicKey := localName (memberLabel ++ "Key")
-  let sampler := `ZkcFormal.Written.StandardInterpretation.samplers
-  let coverage := `ZkcFormal.Written.StandardInterpretation.covers
-  named (← bodyOf publicMember) fnMember
-  let views (body : Expr) := do
-    return (← operand body (semantic "checkedSurface") 2, ← operand body (semantic "checkedSurface") 1)
-  let processView (suffix_ : String) := do
-    let free := suffix_ == "ClaimOf"
-    lambdaTelescope (← bodyOf (publicName suffix_)) fun params body => do
-      let (canonical, presentation) ← views body
-      named (← operand canonical (semantic suffix_) (if free then 4 else 1)) row
-      let fn ← site presentation `Zkc.Core.fnMeaning 6
-      named (fn.getArg! 3) (if free then publicHeader else localName s!"header{relation}")
-      if free then
-        unless fn.getArg! 2 == params[0]! && fn.getArg! 4 == params[2]! do
-          throwError "expected the claim's program and relation parameters"
-      else
-        named (fn.getArg! 2) (localName "installed")
-        named (fn.getArg! 4) publicMember
-      if suffix_ == "Witnessed" then
-        named ((← site presentation `ZkcFormal.ProbabilisticProcess.Served 3).getArg! 1) sampler
-      else
-        let role ← site presentation `Zkc.Core.roleMeaning 8
-        named (role.getArg! 5) (localName "verifierRole")
-        if free then
-          named (role.getArg! 3) (localName "rootHeader")
-          unless role.getArg! 2 == params[0]! && role.getArg! 4 == params[1]! do
-            throwError "expected the claim's program and root parameters"
-          named ((← site presentation `ZkcFormal.ProbabilisticProcess.ReturnsWithin 8).getArg! 4) sampler
-          named (← site presentation `Zkc.Subject.CapTable.total 1).appArg! publicCap
-        else
-          named (role.getArg! 2) (localName "installed")
-          let .const header _ := (← bodyOf (localName "rootHeader")).consumeMData
-            | throwError "expected the root's source header"
-          named (role.getArg! 3) header
-          named (role.getArg! 4) (localName "rootMember")
-          named ((← site presentation `ZkcFormal.ProbabilisticProcess.paysWithin 3).getArg! 1) sampler
-          named ((← site presentation `Zkc.Subject.CapTable.allowance 4).getArg! 2) publicCap
-          named (← site presentation `Zkc.Subject.CapTable.budget 1).appArg! publicCap
-  processView "ClaimOf"
-  processView "Witnessed"
-  inspect "Claim" fun e => do
-    named e.getAppFn (publicName "ClaimOf")
-    named (← operand e (publicName "ClaimOf") 0) publicMember
-    named (← operand e (publicName "ClaimOf") 1) (localName "rootMember")
-    named (← operand e (publicName "ClaimOf") 2) (localName "installed")
-  inspect "Goal" fun e => do
-    let (canonical, presentation) ← views e
-    namedApplication canonical (semantic "admittedAt")
-      [localName "V", localName "subjectPackage", localName "written'root", row, publicName "ClaimOf"]
-    namedApplication presentation (semantic "admission") [localName "V", localName "stored",
-      localName "association", localName "rootHeader", localName "rootKey", publicHeader, publicKey, publicName "ClaimOf"]
-  inspect "Result" fun e => do
-    let (canonical, presentation) ← views e
-    namedApplication canonical (semantic "resultOf")
-      [localName "V", localName "subjectPackage", localName "written'root", row, coverage, publicName "Goal"]
-    namedApplication presentation (semantic "countedResult")
-      [localName "V", localName "stored", localName "rootKey", publicKey, publicCap, coverage, publicName "Goal"]
-  if fees then
-    processView "Judged"
-    for (suffix_, proof) in [("_claim_of_judged", "claim_of_judged"), ("_witnessed_of", "witnessed_of")] do
-      inspect suffix_ fun e => do named (← operand e (semantic proof) 2) row
-    let bridge := publicName "_claim_of_judged"
-    let .forallE _ source target _ := (← getConstInfo bridge).type | throwError "expected a fee bridge at {bridge}"
-    named source (publicName "Judged")
-    named target (publicName "Claim")
-    forallTelescope (← getConstInfo (publicName "_witnessed_of")).type fun _ receipt =>
-      named receipt (publicName "Witnessed")
+  named (← bodyOf (localName (memberLabel ++ "Member"))) fnMember
 
 end ZkcFormalTests.WrittenBinding

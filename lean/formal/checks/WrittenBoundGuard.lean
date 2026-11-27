@@ -6,7 +6,7 @@ open ZkcFormalTests.WrittenSubject
 
 namespace WrittenBoundGuard
 
-private def startReader (work : System.FilePath) (m : Written.Module) (reader : String) :
+private def startReader (work : System.FilePath) (m : Module) (reader : String) :
     IO Pending :=
   startLakeLean work (toString m.statementsName ++ "Source")
     (s!"import {m.statementsName}\nimport ZkcFormalTests.WrittenBinding\n" ++
@@ -21,9 +21,15 @@ private def check (work : System.FilePath) (file source name : String)
   let claims ← IO.ofExcept (goalClaims root ["loose"])
   unless claims.inputs == #["hidden", "claim"] && claims.goals.map (·.statement) == [#[1]] do
     throw <| IO.userError s!"{name}: expected IsSet(claim) at deployed input 1"
-  let m ← IO.ofExcept ((Statements.mk claims claims.functionsBeforeRoot).module name {})
-  unless m.refusals.isEmpty do throw <| IO.userError s!"{name}: {m.refusals}"
-  let coordinates ← IO.ofExcept (ZkcFormalTests.WrittenSource.consumerAt root [("loose", "loose")] true)
+  -- the issuer's data module; the questions of this check are stated after it, and the pair that
+  -- the comparator judges is this check's own
+  let data ← IO.ofExcept ((Statements.mk claims claims.functionsBeforeRoot).publication name)
+  unless data.refusals.isEmpty do throw <| IO.userError s!"{name}: {data.refusals}"
+  let m : Module :=
+    { space := data.space, statementsName := data.dataName, statements := data.data, stated := data.stated,
+      proof := "", proved := [], textLine := 0, textLines := 0 }
+  let coordinates ← IO.ofExcept
+    (ZkcFormalTests.WrittenSource.consumerAt root [("loose", "loose")])
   let reader := s!"#eval Zkc.Tests.Frontend.PrintedPackageSupport.expectGoalClaims {literal source} " ++
     "[\"loose\"] ⟨[], [], [], [], []⟩ stored association\n" ++
     "example : subjectPackage.stored = stored := rfl\n" ++
@@ -38,7 +44,8 @@ private def check (work : System.FilePath) (file source name : String)
   let text ← IO.FS.readFile s!"checks/{m.space}.lean.in"
   let opening := s!"import {m.statementsName}\n" ++ scope
   let issued := { m with
-    statements := s!"import {formalImport}\n" ++ m.statements ++ scope ++ declarations ++ closing
+    statements := String.join ((statementOpenImports ++ [formalImport]).map (s!"import {·}\n")) ++
+      m.statements ++ scope ++ declarations ++ closing
     proof := opening ++ text ++ closing
     published := names.map fun (label, question) =>
       (.str m.space.toName label, .str m.space.toName (question ++ "Statement"))

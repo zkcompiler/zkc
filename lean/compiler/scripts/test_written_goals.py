@@ -53,7 +53,8 @@ def check(work):
     src = work / "sibling.zkc"
     src.write_text(SOURCE)
     one, target = run([src], ["first"], work / "one", 0)
-    assert len(target) == 2 and any(name.endswith("/Challenge.lean") for name in target)
+    assert len(target) == 4 and any(name.endswith("/Challenge.lean") for name in target)
+    assert sorted(name.rsplit("/", 1)[1] for name in target) == ["Challenge.lean", "Fees.lean", "Stated.lean", "Views.lean"]
     assert "sibling::first: issued" in one[0]
     for i, (text, diagnostic) in enumerate([
         (SOURCE, "project.custom"),
@@ -73,7 +74,7 @@ def check(work):
 
     src.write_text(SOURCE.replace("Other(x: bool): custom(x)", "Other(x: bool): x"))
     _, good = run([src], ["second", "first", "sibling::first"], work / "both", 0)
-    assert len(good) == 4 and target.items() <= good.items()
+    assert len(good) == 8 and target.items() <= good.items()
     # A declaration before the root changes its numeric key. The canonical goal still
     # selects the same source and the newly emitted package carries the new key.
     prior = "protocol Prior roles(P,V)(x: bool @(P,V)):\n    guard @V x\n"
@@ -94,7 +95,7 @@ def check(work):
     extras = "".join(f"goal {name} = soundness(Checked, clause = primary)\n" for name in selectors)
     src.write_text(original + extras)
     rows, issued = run([src], selectors, work / "names", 0)
-    assert len(issued) == 2 * len(selectors)
+    assert len(issued) == 4 * len(selectors)
     for row in rows:
         module = row.split(": issued ")[1].split()[0]
         folder = module.removesuffix(".Challenge").replace(".", "/")
@@ -111,7 +112,7 @@ def check(work):
     _, full = run([src], ["first", "second", "last"], work / "unlimited", 0)
     survivors = {key: data for key, data in full.items() if "__second/" not in key}
     limit = max(map(len, full.values())) - 1
-    assert max(map(len, survivors.values())) <= limit and len(survivors) == 4
+    assert max(map(len, survivors.values())) <= limit and len(survivors) == 8
     rows, partial = run([src], ["first", "second", "sibling::second", "last"],
                         work / "limited", 1, file_limit=limit)
     assert partial == survivors and not (work / "limited" / ".pending").exists()
@@ -123,7 +124,7 @@ def check(work):
     other = work / "other.zkc"
     other.write_text(src.read_text().replace("module sibling", "module other"))
     rows, files = run([src, other], ["first", "sibling::first", "other::first"], work / "ambiguous", 1)
-    assert "ambiguous" in rows[0] and len(files) == 4
+    assert "ambiguous" in rows[0] and len(files) == 8
     assert rows[1].split(": issued ")[1] != rows[2].split(": issued ")[1]
 
     # The same path can be formed by a nested module and by a file module.
@@ -145,7 +146,7 @@ def check(work):
     # the witness of satisfiability. The current issuer refuses to omit it.
     src.write_text(original.replace("spec for Check:", "spec for Check:\n    requires false"))
     rows, files = run([src, other], ["sibling::first", "other::first"], work / "hypothesis", 1)
-    assert "SX7" in rows[0] and "requires" in rows[0] and "issued" in rows[1] and len(files) == 2
+    assert "SX7" in rows[0] and "requires" in rows[0] and "issued" in rows[1] and len(files) == 4
     private_port = original.replace("x: bool @(P,V)):", "x: bool @(P,V), hidden: bool @P, "
                                     "localFlag: bool @V private, spec note: bool):")
     src.write_text(private_port)
@@ -182,7 +183,7 @@ scheme Unusable = Broken:
 goal broken = soundness(Unusable)
 """)
     rows, files = run([src], ["broken", "first"], work / "admission", 1)
-    assert "refused" in rows[0] and "issued" in rows[1] and len(files) == 2, rows
+    assert "refused" in rows[0] and "issued" in rows[1] and len(files) == 4, rows
     src.write_text(SOURCE.replace("guard @V x", "guard @V custom(x)"))
     rows, files = run([src], ["first", "second"], work / "shared", 1)
     assert not files and all("project.custom" in row for row in rows)
@@ -221,7 +222,7 @@ def via<H: B>(x: bool) -> bool: H::pick(x)
     _, original = run([src], ["tested"], work / "diamond", 0)
     src.write_text(shared.replace("A + B + Common", "Common + B + A"))
     _, reversed_header = run([src], ["tested"], work / "diamond-reversed", 0)
-    assert len(original) == 2 and original == reversed_header
+    assert len(original) == 4 and original == reversed_header
 
     # A selected instance can fail while an independent goal still issues.
     generic = """interface I<n: nat>:
@@ -243,7 +244,7 @@ goal good = soundness(CleanScheme)
     src.write_text(shared)
     _, good = run([src], ["good"], work / "owner-good", 0)
     rows, kept = run([src], ["tested", "good"], work / "owner-local", 1)
-    assert "SP8" in rows[0] and ": issued " in rows[1] and len(good) == 2 and kept == good
+    assert "SP8" in rows[0] and ": issued " in rows[1] and len(good) == 4 and kept == good
 
     # A parameterless module is a shared compilation root even when only good is requested.
     src.write_text(shared.replace("module M<n: nat>: I<n>", "module M: I<1>")
@@ -358,7 +359,7 @@ def dependency<T>(x: bool) -> bool: x
             if expected:
                 assert expected in rows[0] and not files, (label, rows)
             else:
-                assert "issued" in rows[0] and len(files) == 2, (label, rows)
+                assert "issued" in rows[0] and len(files) == 4, (label, rows)
 
     # Checking whether a law applies consumes the source of the condition on either outcome.
     law = """    pub nat Height = 0
@@ -375,7 +376,7 @@ module N<n: nat>: Parent:
             src.write_text(text + law.replace("VALUE", str(value)) + selected.replace("EXPRESSION", "N<1>::check(x)"))
             rows, files = run([src], ["tested"], work / f"predicate-{value}-{valid}", int(not valid))
             if valid:
-                assert "issued" in rows[0] and len(files) == 2, rows
+                assert "issued" in rows[0] and len(files) == 4, rows
             else:
                 assert "SP8" in rows[0] and not files, rows
 
@@ -400,7 +401,7 @@ goal tested = soundness(Box::Checked)
 """)
     closed = src.read_text()
     rows, artifacts = run([src], ["tested"], work / "scheme-closed", 0)
-    assert len(artifacts) == 2 and "issued" in rows[0]
+    assert len(artifacts) == 4 and "issued" in rows[0]
     for label, text, rule in [
         ("missing", closed.replace("    def required(x): x\n", ""), "SP8"),
         ("open", closed.replace("module Box:", "module Box<n: nat>:"), "SP6"),

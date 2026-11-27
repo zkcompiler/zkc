@@ -10,7 +10,7 @@ import ZkcFormalTests.WrittenSubject
 The statement of a written soundness goal is about the goal of the source.
 
 A statement names a deciding role, applies the relation of the goal's clause to operands and
-bounds an event. Each of the three is read from the goal by `goalClaims`, and the generator
+bounds an event. Each of the three is read from the goal by `goalClaims`, and the issuer
 (`Written.Statements`) takes none of them from its caller. The check reads sources with the
 frontend and asserts what a change of the source does to the statement, with the two directions
 side by side: a change that leaves the goal as it is leaves the statement as it is, and a change
@@ -18,10 +18,10 @@ of the goal changes the statement or is refused.
 
 - **The operands.** The ports of the source and the inputs of the deployed header are two
   lists, since a `spec` port is erased. With a `spec` port that nothing uses in front of the
-  operand, or behind it, the operand is the same input of the header and the claim is the same
-  text; with another port of the same type as operand, the operand is another input and the
-  claim another text. A claim names its inputs as the source names its ports: the relation is
-  applied to `input_flag`, and the deciding role is run on `input_flag` and `input_other`.
+  operand, or behind it, the operand is the same input of the header; with another port of the
+  same type as operand, the operand is another input. The deployed inputs keep the names of the
+  source's ports (`flag`, `other`), and the views below name the verifier's inputs after them
+  (`input_flag`, `input_other`).
 - **Which values a statement may be about** (GL3 with SC4). An operand that the verifier holds
   alone is refused under GL3, though the deciding role can read it; one that the prover holds
   alone is refused under SX6, as before; one that is a `spec` port is refused as not issued yet.
@@ -29,10 +29,11 @@ of the goal changes the statement or is refused.
 - **The deciding role.** Two schemes of one protocol with the provers `P` and `V` have the
   verifiers `V` and `P`. A goal of each, read alone, has its own verifier. The goals of two
   schemes are refused as one package, in either order, also where the two schemes have one
-  verifier; two goals of one scheme are one package, and the claim of each is the text that it
-  has when the goal is read alone.
-- **The event.** A goal that reads a `reduces` clause has its claims read, and gets no
-  statement: its statement is about a return on which the reduced statement is true.
+  verifier; two goals of one scheme are one package, and the claim of each is the claim that
+  it has when the goal is read alone.
+- **The event.** A goal that reads a `reduces` clause has its claims read, and the issuer
+  publishes nothing for it: its statement is about a return on which the reduced statement is
+  true.
 - **The budget.** The table of caps of a goal is read with the goal: every charge that the root
   reaches, by use (SX8). Two charged draws of the root are both in it; a callee at two proof
   arguments is two uses, each call names its own, and exchanging the arguments exchanges the
@@ -43,36 +44,49 @@ of the goal changes the statement or is refused.
   that alters the operands or the table of caps of a claimed goal, or the verifier of a
   package: the two records are made by the reader alone.
 
-Then Lean is run on four more modules. All have a consumer that a reader of the source could write
-without the generator: a theorem that names none of the generated propositions, has the
-verifier as its place in the roster, and says, of every admitted program, that this role of the
-protocol with the inputs `flag = false` and `other = true` returns with probability at most zero when the relation is false of `false`,
-under the service that draws by the laws. It writes the probability of the simulation out, and
-does not use the library's name for the experiment (`ReturnsWithin`): its proof is the
-published theorem of the goal at those inputs and that service, so it also checks that the
-experiment of the statement is the one that a reader would write.
+Then Lean is run on the issuer's publication of a goal (`Statements.publication`: the data
+module, the challenge `publish_goals`, the views `publish_views` and the fee facts
+`publish_fees`) with an author's text. The goal `t::sound` publishes `t.sound.sound` and
+`t.sound.met`; the text proves the installed bound on its view `t.sound.installed.view`, with the
+verifier's inputs introduced by the view's names (`input_flag`, `input_other`), closes `sound` by
+the declared step `t.sound.sound_of_installed` and the receipt on `t.sound.met.view`, and states
+both by `published%`. Each proof module has a consumer that a reader of the source could write
+without the issuer: a theorem that names no published proposition, has the verifier as its
+place in the roster, and says, of every admitted program, that this role of the protocol with
+the inputs `flag = false`
+and `other = true` returns with probability at most zero when the relation is false of `false`,
+under the service that draws by the laws. Zero is the limit of the goal's bound: the goal writes
+no ceiling, so its bound is the total of its table, and the one charge is zero (on a draw after
+the guard, in a loop that does not run). The consumer writes the probability of the simulation
+out and does not use the library's name for the experiment (`ReturnsWithin`): its proof takes
+the admitted bound (`Soundness.AdmittedBound`, an `admission` over the stored program) from the
+published `t.sound.sound` at those inputs and that service, so it also checks that the
+experiment of the statement is the one that a reader would write. Each pair that is accepted is
+judged by `lake comparator`, with the consumer's statement in the challenge.
 
 - In the first module the source has a `spec` port in front of `flag` and its clause is
-  `proves @V IsSet(flag)`. The published theorem and the consumer are proved.
-- The issued statements agree with that source. Switching only the verifier's guard to
-  `other` gives statements whose stored program the comparison with the original source refuses.
+  `proves @V IsSet(flag)`. The published theorems and the consumer are proved, and the same text
+  is proved and judged on the source with another protocol in front of `Flags`, whose keys are
+  renumbered.
+- The issued data module agrees with that source. Switching only the verifier's guard to
+  `other` gives a data module whose stored program the comparison with the original source
+  refuses.
 - In the control the clause is `proves @V IsSet(other)`, with a verifier that guards `other`.
-  The published theorem is proved, and it is about the other input: the consumer is refused,
-  where it gives the published theorem its premise.
-- Two controls are of the text of the proofs, on the first source. Their text proves its claim
-  itself (the other method than the judgment with fees). In one, the text takes its claim as a
-  hypothesis of the module's scope: every theorem after the text takes that hypothesis, Lean
-  proves each and accepts the module, and the judgment (`lake comparator`) refuses it: the
-  statement of a published theorem is not the challenge's. In
-  the other, the text defines a name of the claim again (the experiment, as a proposition that
-  always holds) and proves the claim written anew: the goal is not concluded from it, and Lean
-  refuses the module there.
+  The published theorems are proved, and they are about the other input: the consumer is
+  refused, where it gives the admitted bound its premise.
+- Two controls are of the text, on the first source. In one, the text proves the installed bound
+  under another name and takes it as an instance variable of the module's scope
+  (`[Fact t.sound.installed.view]`): every theorem after the variable takes it, Lean proves each
+  and accepts the module, and the judgment (`lake comparator`) refuses it: the statement of
+  `t.sound.sound` is not the challenge's. In the other, the text defines a name of the installed
+  bound again (the experiment, as a proposition that always holds) and proves the bound written
+  anew: the step to `t.sound.sound` does not take it, and Lean refuses the module there.
 -/
 
 open Zkc.Core Zkc.Frontend Zkc.Frontend.Written
 open Zkc.Subject (CapTable)
 open Zkc.Tests.Frontend Zkc.Tests.Frontend.PrintedPackageSupport
-open ZkcFormalTests.WrittenSubject (startModule startRefused refusedOutside startLakeLean
+open ZkcFormalTests.WrittenSubject (Module Consumer startModule startRefused refusedOutside startLakeLean
   addStated startSourceComparison finishLean expectUnproved expectPlaces)
 
 namespace GoalStatementCheck
@@ -290,43 +304,48 @@ def decided (ports guarded clause : String) : String :=
   "scheme Checked = Flags:\n    prover P\n    construction interactive\n" ++
   "goal sound = soundness(Checked)\n\ngoal sibling = soundness(Checked, clause = absent)\n"
 
-/-- The text of the proofs of a module about `decided`: the verifier rejects where the guarded
-flag is false, which is where the relation is false of it; the hypotheses are met over the
-finite model; and the consumer.
-
-The consumer names no generated proposition and no generated role: the verifier is the second
-role of the roster, written as its place. It states, for every admitted program with the
-protocol and the relation found by their keys: where the relation returns false of `false`, that
-role on the inputs `false` and `true` returns with probability at most zero under the service of
-the laws. Its proof is the published theorem `sound_sound` at those inputs. -/
-def proofText (guarded : String) : String :=
-  let (first, second) := if guarded == "flag" then ("false", "other") else ("flag", "false")
-  "noncomputable section\n" ++
-  "open ZkcFormal.Written.StandardModel\n" ++
-  "\n" ++
-  "theorem sound_installed : soundClaim := by\n" ++
-  "  intro path flag _ other _ premise σ service conforms state\n" ++
-  s!"  have declined : {guarded} = false := by\n" ++
+/-- The installed bound of a module about `decided`, proved on its view: the verifier rejects
+where the guarded flag is false, which is where the relation is false of it. The inputs are
+introduced by the view's names. -/
+def boundText (guarded : String) : String :=
+  let (first, second) := if guarded == "flag" then ("false", "input_other") else ("input_flag", "false")
+  "theorem installedBound : t.sound.installed.view := by\n" ++
+  "  intro path input_flag valid_input_flag input_other valid_input_other rejected\n" ++
+  s!"  have declined : input_{guarded} = false := by\n" ++
   "    have computed : functionResult (t := .bool)\n" ++
-  s!"        (fnMeaning StandardInterpretation.model installed soundMember (.cons {guarded} .nil)) = some {guarded} := by\n" ++
+  s!"        (fnMeaning model installed soundMember (.cons input_{guarded} .nil)) = some input_{guarded} := by\n" ++
   "      kernel_rfl\n" ++
-  "    rw [computed] at premise\n    exact Bool.eq_false_iff.mpr fun accepted => premise (congrArg some accepted)\n" ++
+  "    exact Bool.eq_false_iff.mpr fun accepted => rejected (computed.trans (congrArg some accepted))\n" ++
   "  subst declined\n" ++
-  "  have rejected : roleMeaning StandardInterpretation.model installed rootMember verifierRole path\n" ++
+  "  apply returnsWithin_of_returns\n" ++
+  "  intro σ service _ _ state\n" ++
+  "  have halts : roleMeaning model installed rootMember verifierRole path\n" ++
   s!"      (.cons {first} (.cons {second} .nil)) = .halt (.declared .reject ⟨path, ⟨0⟩⟩) := by\n" ++
   "    kernel_rfl\n" ++
-  "  have never : Pr{let out ← (simulateQ (handlerOf service) (embed\n" ++
-  "      (roleMeaning StandardInterpretation.model installed rootMember verifierRole path\n" ++
-  s!"        (.cons {first} (.cons {second} .nil))))).run.run state}[\n" ++
-  "      ∃ results, out.1 = some (.inl results)] ≤ soundCaps.total := by\n" ++
-  "    rw [prEvent_simulation_returns, rejected]\n    simp [run, Process.interpret]\n" ++
-  "  simpa using never\n\n" ++
-  "theorem sound_witnessed : soundWitnessed :=\n" ++
-  "  ⟨false, trivial, false, trivial,\n" ++
-  "    StandardInterpretation.served, fun accepted =>\n" ++
-  "      Bool.false_ne_true (Option.some.inj ((by kernel_rfl : _ = some false).symm.trans accepted))⟩\n\n" ++
-  "end\n"
+  "  rw [prEvent_simulation_returns, halts]\n" ++
+  "  simp [run, Process.interpret]\n"
 
+/-- The published theorems, stated by `published%`: `sound` by the declared step from the
+installed bound, and the receipt on its view, at the inputs `false` and `false` (the relation is
+false of `false`, and the standard interpretation has a service of its laws). The goal's name is
+the last component of its path, so the name of `sound` repeats it; the issuer's opening turns off
+the linter that reports that, and the check's project reads a warning as an error. -/
+def closingText : String :=
+  "\ntheorem t.sound.sound : published% written'subject t.sound sound :=\n" ++
+  "  t.sound.sound_of_installed installedBound\n\n" ++
+  "theorem t.sound.met : published% written'subject t.sound met :=\n" ++
+  "  t.sound.met.view_iff.mp ⟨false, trivial, false, trivial, served, fun accepted =>\n" ++
+  "    Bool.false_ne_true (Option.some.inj ((by kernel_rfl : _ = some false).symm.trans accepted))⟩\n"
+
+/-- The theorems of an author's text, in its order. -/
+def textTheorems : List String := ["installedBound", "t.sound.sound", "t.sound.met"]
+
+/-- The consumer names no published proposition and no generated role: the verifier is the second
+role of the roster, written as its place. It states, for every admitted program with the protocol
+and the relation found by their keys: where the relation returns false of `false`, that role on
+the inputs `false` and `true` returns with probability at most zero under the service of the
+laws. Zero is the limit of the goal's bound. Its proof is the admitted bound of the published
+`t.sound.sound` (read on its view) at those inputs and that service. -/
 def consumer : Consumer where
   name := "consumer"
   before :=
@@ -347,9 +366,10 @@ def consumer : Consumer where
     "            ∃ results, out.1 = some (.inl results)] ≤ 0)"
   proof :=
     "by\n" ++
-    "  have free : soundCaps.total = 0 := by\n" ++
-    "    rw [CapTable.total, sound_budget]\n    simp [toProbability]\n" ++
-    "  obtain ⟨root, found, relation, foundRelation, claim⟩ := sound_sound admitted\n" ++
+    "  have free : written'bound0.limit = 0 := by\n" ++
+    "    simp [Zkc.Subject.Bound.limit, written'bound0]\n" ++
+    "  obtain ⟨root, found, relation, foundRelation, claim⟩ :=\n" ++
+    "    (t.sound.sound.view_iff.mpr t.sound.sound).2 admitted\n" ++
     "  refine ⟨root, found, relation, foundRelation, fun rejected => ?_⟩\n" ++
     "  have notAccepted := fun accepted => Bool.false_ne_true (Option.some.inj (rejected.symm.trans accepted))\n" ++
     "  rw [← free]\n" ++
@@ -365,52 +385,55 @@ def issuedStatements (source : String) : IO Statements := do
   unless !bad.outcome.isOk do throw (IO.userError "issued the absent clause")
   return (← IO.ofExcept good.outcome).statements
 
-/-- The proof module of a source, as the generator assembles it for a direct proof:
-the package of its claims, what the generator writes around the proofs, the proofs and the
-consumer. -/
-def proofModule (name text guarded : String)
-    (alter : Statements → String → Except String String := fun _ proof => pure proof) :
-    IO Module := do
-  let s ← issuedStatements text
-  IO.ofExcept (s.module name
-    { text := ← IO.ofExcept (alter s (proofText guarded))
-      theorems := ["sound_installed", "sound_witnessed"]
-      method := .direct }
-    (after := [consumer]))
+/-- What the issuer publishes for the goal `t::sound` of a source, in the name space `space`, with
+a data module of its own where `data` names one. -/
+def publicationOf (source space : String) (data : Option Lean.Name := none) : IO Publication := do
+  let issued ← IO.ofExcept ((← issuedStatements source).publication space (data := data))
+  unless issued.refusals.isEmpty do throw (IO.userError s!"{space}: {issued.refusals}")
+  unless issued.published == [s!"{space}.t.sound.sound".toName, s!"{space}.t.sound.met".toName] do
+    throw (IO.userError s!"{space}: the issuer's published theorems are {issued.published}")
+  return issued
 
-/-- The proof of the claim under another name, so that a control can state `sound_installed`
-itself. -/
+/-- The pair of a source's publication with an author's text and the consumer, in the name space
+`name`. -/
+def proofModule (name text guarded : String)
+    (alter : String → Except String String := pure) : IO Module := do
+  let issued ← publicationOf text name
+  let written ← IO.ofExcept (alter (boundText guarded))
+  return Module.ofPublication issued (written ++ closingText) textTheorems [consumer]
+
+/-- The proof of the installed bound under another name, so that a control can state
+`installedBound` itself. -/
 def established (proof : String) : Except String String := do
-  let renamed := proof.replace "theorem sound_installed : soundClaim := by"
-    "theorem sound_established : soundClaim := by"
-  if renamed == proof then throw "the text does not prove the claim under its name"
+  let renamed := proof.replace "theorem installedBound : t.sound.installed.view := by"
+    "theorem installedEstablished : t.sound.installed.view := by"
+  if renamed == proof then throw "the text does not prove the installed bound under its name"
   return renamed
 
-/-- A text that proves nothing of its claim: after its last `end` it declares the claim as an
-instance variable of the module's scope, with the two linters that would report that switched
-off, and takes the claim from the variable. Every theorem that the generator writes after the
-text then has the variable as a hypothesis: Lean accepts each and reports no axiom for it, and
-none is a theorem of its proposition. -/
-def assuming (_ : Statements) (proof : String) : Except String String := do
+/-- A text that proves nothing of the installed bound by its name: after its proof under another
+name it declares the bound's view as an instance variable of the module's scope, with the two
+linters that would report that switched off, and takes the bound from the variable. Every theorem
+after it (the published ones and the consumer) then has the variable as a hypothesis: Lean
+accepts each and reports no axiom for it, and none is a theorem of its proposition. -/
+def assuming (proof : String) : Except String String := do
   return (← established proof) ++
     "\nset_option linter.unusedSectionVars false\nset_option linter.concreteInstances false\n" ++
-    "variable [assumed : Fact soundClaim]\n" ++
-    "theorem sound_installed : soundClaim := assumed.out\n"
+    "variable [assumed : Fact t.sound.installed.view]\n" ++
+    "theorem installedBound : t.sound.installed.view := assumed.out\n"
 
-/-- A text that defines again, in its own scope, a name of the library that the claim uses (the
-experiment of a bound on returns, as a proposition that holds of everything) and proves the
-claim written anew under it. The claim written anew is not the claim that was stated before the
-text. -/
-def shadowing (_ : Statements) (proof : String) : Except String String := do
-  let anew := "∀ (path : List Frame) (flag : Bool), StandardInterpretation.model.Valid .bool flag →\n" ++
-    "    ∀ other : Bool, StandardInterpretation.model.Valid .bool other →\n" ++
-    "    functionResult (t := .bool) (fnMeaning StandardInterpretation.model installed soundMember (.cons flag .nil)) ≠ some true →\n" ++
-    "    ReturnsWithin (roleMeaning StandardInterpretation.model installed rootMember verifierRole path (.cons flag (.cons other .nil)))\n" ++
-    "      StandardInterpretation.samplers (Permitted StandardInterpretation.model) (fun _ => True) soundCaps.total"
+/-- A text that defines again, in its own scope, a name of the library that the installed bound
+uses (the experiment of a bound on returns, as a proposition that holds of everything) and proves
+the bound written anew under it. The bound written anew is not the view of the installed bound. -/
+def shadowing (proof : String) : Except String String := do
+  let anew := "∀ (path : List Frame) (input_flag : Bool), model.Valid .bool input_flag →\n" ++
+    "    ∀ input_other : Bool, model.Valid .bool input_other →\n" ++
+    "    functionResult (t := .bool) (fnMeaning model installed soundMember (.cons input_flag .nil)) ≠ some true →\n" ++
+    "    ReturnsWithin (roleMeaning model installed rootMember verifierRole path (.cons input_flag (.cons input_other .nil)))\n" ++
+    "      (lawSamplers model StandardInterpretation.draws) (Permitted model) (fun _ => True) written'bound0.limit"
   return (← established proof) ++ "\n" ++
     "def ReturnsWithin {S : Sig} {H A : Type} (_ : Process S H A) (_ : Samplers S)\n" ++
     "    (_ : ∀ op, S.Reply op → Prop) (_ : A → Prop) (_ : ℝ≥0∞) : Prop := True\n\n" ++
-    s!"theorem sound_installed :\n  {anew} := by\n" ++
+    s!"theorem installedBound :\n  {anew} := by\n" ++
     "  intros\n  trivial\n"
 
 def run (work : System.FilePath) : IO Unit := do
@@ -550,11 +573,9 @@ def run (work : System.FilePath) : IO Unit := do
   let reduced ← IO.ofExcept (statementsOf reduction ["sound"])
   let [reducedGoal] := reduced.claims.goals | throw (IO.userError "the reduction has not one goal")
   expect "the clause of the reduction is not read as a reduction" (reducedGoal.clause.kind == .reduces)
-  for written in [(reduced.claimsModule "Reduction").map (fun _ => ()),
-      (reduced.module "Reduction" {}).map (fun _ => ())] do
-    match written with
-    | .ok _ => throw (IO.userError "a statement was written for a `reduces` clause")
-    | .error why => expect s!"the reduction was refused for another reason: {why}" (why.contains "reduces")
+  match reduced.publication "Reduction" with
+  | .ok _ => throw (IO.userError "a statement was published for a `reduces` clause")
+  | .error why => expect s!"the reduction was refused for another reason: {why}" (why.contains "reduces")
 
   -- The records of a goal are made by the reader alone: Lean refuses to alter them.
   let closed ← startLakeLean work "Closed"
@@ -570,14 +591,14 @@ def run (work : System.FilePath) : IO Unit := do
   let module ← proofModule "Operands" fronted "flag"
   let theorems := module.proved
   let proof ← startModule work "Operands" module
-  -- Both comparisons read the original source. The second module has the same namespace
+  -- Both comparisons read the original source. The second data module has the same namespace
   -- and goal, but its verifier guards the other input.
   let compare (name : String) (issued : Module) :=
-    startSourceComparison work name issued fronted ["t::sound"] ["sound"] (fees := false)
+    startSourceComparison work name issued fronted ["t::sound"] ["sound"]
   let matched ← compare "OperandsSource" module
-  let changed ← issuedStatements (← replaceOnce fronted "guard @V flag" "guard @V other")
-  let verifier ← IO.ofExcept (changed.module module.space {}
-    (statements := some `ChangedVerifier.Stated))
+  let changed ← publicationOf (← replaceOnce fronted "guard @V flag" "guard @V other") module.space
+    (data := some `ChangedVerifier.Stated)
+  let verifier := Module.ofPublication changed
   discard <| addStated work verifier
   let mismatched ← compare "ChangedVerifierSource" verifier
   let shifted := fronted.replace "protocol Flags" ("protocol Prior roles(P,V)(x: bool @(P,V)):\n" ++
@@ -586,12 +607,12 @@ def run (work : System.FilePath) : IO Unit := do
   let control ← startRefused work "OperandsControl"
     (← proofModule "OperandsControl" aboutOther "other")
   let assumed ← proofModule "AssumedControl" fronted "flag" assuming
-  -- The claim taken as a hypothesis of the module's scope: every theorem that the generator
-  -- writes after the text takes the variable, so Lean proves each and accepts the module;
-  -- none is of its proposition, and the judgment refuses the module.
-  -- the comparator stops at the first published theorem whose statement is another
-  let assumedProof ← refusedOutside work "a claim taken as a hypothesis" "AssumedControl" assumed
-    ["Challenge and solution theorem statement do not match: 'AssumedControl.sound_installed'"]
+  -- The installed bound taken as a hypothesis of the module's scope: every theorem after the
+  -- variable takes it, so Lean proves each and accepts the module; none is of its proposition,
+  -- and the judgment refuses the module. The comparator stops at the first published theorem
+  -- whose statement is another.
+  let assumedProof ← refusedOutside work "an installed bound taken as a hypothesis" "AssumedControl" assumed
+    ["Challenge and solution theorem statement do not match: 'AssumedControl.t.sound.sound'"]
   let shadowedProof ← startRefused work "ShadowControl"
     (← proofModule "ShadowControl" fronted "flag" shadowing)
   let (ok, output) ← finishLean closed
@@ -607,24 +628,26 @@ def run (work : System.FilePath) : IO Unit := do
   let (ok, output) ← mismatched
   refusedOutput "changed verifier against the original source" ok output
     ["the printed program differs from the stored program"] (only := true)
-  -- The published theorem of the control is about the second input. It is proved; the consumer,
-  -- which reads the first, is not, and is refused where it gives the theorem its premise.
+  -- The published theorems of the control are about the second input. They are proved; the
+  -- consumer, which reads the first, is not, and is refused where it gives the admitted bound its
+  -- premise.
   expectUnproved "a clause about the other input" "OperandsControl" theorems control ["consumer"]
   let (_, refusal) ← finishLean control
   expect s!"the consumer of the control was refused for another reason\n{refusal}"
     (refusal.contains "The argument\n  notAccepted\nhas type" &&
       refusal.contains "(HList.cons true HList.nil)) ≠ some true\nin the application")
   assumedProof
-  -- A name of the claim defined again by the text: the claim written anew is not the claim that
-  -- was stated before the text, and the goal is not concluded from it: Lean refuses the module
-  -- there, at one place. (The theorem that the text gave the name of the claim's is not of the
-  -- claim either; a module that Lean refuses is not judged.)
-  expectUnproved "a name of the claim defined again" "ShadowControl" theorems shadowedProof
-    ["sound_sound", "sound_result", "consumer"]
-  expectPlaces "a name of the claim defined again" shadowedProof ["Type mismatch"]
+  -- A name of the installed bound defined again by the text: the bound written anew is not the
+  -- view of the installed bound, and the step to the published `t.sound.sound` does not take it:
+  -- Lean refuses the module there, at one place, and the consumer, which uses `t.sound.sound`, is
+  -- left unproved. (The theorem that the text gave the bound's name is not of the bound either; a
+  -- module that Lean refuses is not judged.)
+  expectUnproved "a name of the installed bound defined again" "ShadowControl" theorems shadowedProof
+    ["t.sound.sound", "consumer"]
+  expectPlaces "a name of the installed bound defined again" shadowedProof ["Application type mismatch"]
   IO.println ("The statement of a goal reads its operands in the deployed header, its deciding role " ++
     "in the goal's scheme and its event in the clause: a spec port that nothing uses leaves the " ++
-    "claim as it is, another operand changes it, and a consumer written apart uses the published " ++
+    "operand as it is, another operand changes it, and a consumer written apart uses the published " ++
     "theorem at the inputs of the source; 5 of 5 controls refused.")
 
 end GoalStatementCheck

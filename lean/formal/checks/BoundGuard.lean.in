@@ -18,10 +18,9 @@ theorem withinZero : withinZeroStatement := by
 
 theorem belowTable : belowTableStatement := by
   show (0 : NNRat) < looseCaps.budget
-  rw [loose_budget]
-  norm_num
+  decide +kernel
 
 theorem atZero : atZeroStatement :=
-  Soundness.result_of_installed model written'application0 draws loose_covered
+  Soundness.result_of_installed model written'application0 draws (by decide +kernel)
     (Fees.installed_of_judged model written'application0 draws looseCaps withinZero
       (by simp [ZkcFormal.ProbabilisticProcess.toProbability]))

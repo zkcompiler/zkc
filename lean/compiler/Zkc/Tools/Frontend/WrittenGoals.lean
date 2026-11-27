@@ -5,14 +5,16 @@ namespace Zkc.Tools.Frontend
 
 open Zkc.Frontend Zkc.Frontend.Written
 
-/-- Write the trusted side of a goal. Both files use the same module names as the
-in-memory publication. The output directory belongs to this invocation. -/
-private def writeGoal (directory : System.FilePath) (publication : Written.Module) : IO Unit := do
+/-- Write what the issuer publishes for a goal: the trusted side (`Stated.lean`, the data module,
+and `Challenge.lean`) and the two modules for proofs and readers (`Views.lean`, `Fees.lean`). The
+files use the same module names as the in-memory publication. The output directory belongs to
+this invocation. -/
+private def writeGoal (directory : System.FilePath) (publication : Written.Publication) : IO Unit := do
   let pending := directory / ".pending"
   IO.FS.createDir pending
   try
-    for (file, source) in [("Stated.lean", publication.statements),
-        ("Challenge.lean", publication.challenge)] do
+    for (file, source) in [("Stated.lean", publication.data), ("Challenge.lean", publication.challenge),
+        ("Views.lean", publication.views), ("Fees.lean", publication.fees)] do
       let handle ← IO.FS.Handle.mk (pending / file) .write
       handle.putStr source
       -- A buffered final write can fail after putStr returns.

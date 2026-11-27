@@ -53,7 +53,7 @@ def refuses (title : String) (action : IO Unit) : IO Unit := do
   let refused ← (do action; pure false) <|> pure true
   unless refused do throw (IO.userError s!"{title}: not refused")
 
-def run (work : System.FilePath) : IO Unit := do
+def run : IO Unit := do
   let inOrder := reading ["a", "b", "c"] #[0, 1, 2]
   let written ← read (source "Product(a, b, c)") inOrder
   let stated := written.statements
@@ -94,25 +94,13 @@ def run (work : System.FilePath) : IO Unit := do
         [(goal.statement, goal.caps)] do
       throw (IO.userError s!"the product {title}: the goal claims something else")
 
-  -- The actual coverage theorem is about the goal's own two keys.
-  let badCoverage ← startLakeLean work "CoverageControl"
-    ((← IO.ofExcept (written.statements.coverageModule "CoverageControl")).text.replace
-      "covers stored rootKey soundKey = true" "covers stored ⟨999⟩ soundKey = true")
-
   -- The reading of Lean's output: a report of axioms that stands twice is not read.
   let report := "'Freivalds.sound_covered' depends on axioms: [propext]\n"
   acceptedOutput "Freivalds" true report ["sound_covered"] allowed
   refuses "a report of axioms printed again"
     (acceptedOutput "Freivalds" true
       (report ++ "'Freivalds.sound_covered' does not depend on any axioms\n") ["sound_covered"] allowed)
-  -- The lookup at the altered root key has no definition.
-  let (ok, output) ← finishLean badCoverage
-  if ok then throw (IO.userError "Lean accepted coverage at an absent root")
-  unless output.contains "StandardInterpretation.covers stored" && output.contains "is false" do
-    throw (IO.userError s!"the coverage control was refused for another reason\n{output}")
 
 end FreivaldsCharge
 
-#eval show IO Unit from
-  IO.FS.withTempDir fun work =>
-    FreivaldsCharge.run work
+#eval show IO Unit from FreivaldsCharge.run

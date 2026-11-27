@@ -8,70 +8,32 @@ public import Zkc.Frontend.Written.Package
 @[expose] public section
 
 /-!
-The statements of written soundness goals, as the text of a module.
+What the issuer writes for written soundness goals, as the text of modules.
 
-A module about what goals claim holds the printed package of the claims (`goalClaims`). This
-file writes what stands around a proof in such a module, from what the frontend read and from
-the library, at the standard interpretation of the vocabulary:
+The goals of one scheme are published through the formal library (`Statements.publication`):
 
-- `facts`: the key, header and place of the root and of each goal's relation, the header and
-  place of each function before the root that the text names, the verifier and the prover of
-  the scheme, and each goal's proof arguments and table of caps, as terms;
-- `counts`: for each goal, that the counts of its table are those of the stored program and
-  that its budget is the number that the frontend computed, both decided by the kernel;
-- `coverage`: for each goal, that its reachable definitions are covered;
-- `sites`: the key of each named draw of the root under the name of its site in the source
-  (`site_<name>`), and for each goal the cap that its table gives the draw
-  (`<goal>_cap_<name>`), decided by the kernel;
-- `transfers`: that what holds of the root and of a relation in the installed program holds of
-  them in every program that admission gives, each found by its key;
-- `claimTexts`: for each goal, the propositions that are stated before any proof. The claim
-  about a program (`<goal>ClaimOf`, and `<goal>Claim` about the installed one): on valid inputs
-  of the deciding role, where the relation of the goal's clause returns true at its operands
-  for no valid witness (at the operands themselves, when it has no witness parameters), the
-  deciding role
-  returns within the total of the goal's table of caps, in the experiment that the formal library
-  defines (`ReturnsWithin`, `ZkcFormal/ReturnExperiment.lean`): against every service that is
-  no more likely to answer a coin within a set of replies than the sampler of the coin's law
-  is to draw one there (it may also not answer) and that answers only what is permitted. The formal library reads the process, samplers and bound from the resolved goal. The goal for every admitted program (`<goal>Goal`), the result with the coverage
-  and the counts of the table (`<goal>Result`), and that the hypotheses of the claim are met together (`<goal>Witnessed`);
-- `judgments`, for a text that establishes its claims by the judgment with fees
-  (`Method.fees`): for each goal the proposition `<goal>Judged` that the text has to prove
-  and the theorem `<goal>_claim_of_judged` that the claim follows from it, and the
-  theorem `<goal>_witnessed_of` that the hypotheses of the claim are met at any valid inputs
-  at which no valid witness makes the relation return true;
-- `conclusions`, for such a text and after it: `<goal>_installed : <goal>Claim` from the
-  theorem `<goal>_judged : <goal>Judged` of the text. A text of another method
-  (`Method.direct`) proves `<goal>_installed` itself;
-- `closings`: for each goal, the theorems `<goal>_sound : <goal>Goal`,
-  `<goal>_result : <goal>Result` and `<goal>_met : <goal>Witnessed`, from the theorems
-  `<goal>_installed : <goal>Claim` and `<goal>_witnessed : <goal>Witnessed`;
-- `ceilings`: for each goal that states a ceiling, the theorem `<goal>_ceiling` that the total
-  of its table of caps is within it, stated and proved before the text. A goal whose ceiling is
-  below that total is refused here (GL4), before any module is written;
-- `publicationPairs`: the theorems that a proof module publishes, each with the proposition
-  that it has to be of.
+- *the data module* holds the printed package of the claims (`goalClaims`) and its installation;
+  `facts`: the key, header and place of the root and of each goal's relation, the header and
+  place of each function before the root that a text names, the verifier and the prover of the
+  scheme, and each goal's proof arguments and table of caps, as terms; `lookups`: the root and
+  each relation found in the installed program by their keys; and the typed subject
+  (`SubjectLayout.text`): a short application and a decision for each clause, a row for each
+  goal with the path of its declaration, its property, its bound (the ceiling that the goal
+  writes, else the total of its charges) and its table of caps, and the source names of the root.
+  It states no proposition about the protocol and imports no module of the formal library;
+- *the challenge*, *the views module* and *the fees module* are their imports and one command
+  of the formal library over the subject.
 
-These are two modules (`Statements.module`). The module of the statements is the package,
-`opens`, `facts`, `transfers`, `claimTexts`, `coverage`, `counts`, `sites`,
-`judgments` and `ceilings`: everything that is stated before a proof, compiled with no text of
-an author. The proof module imports it and holds the proofs written for the protocol,
-`conclusions`, `closings` and what a check adds. A caller gives the text of the proofs with
-what that text imports and the names of its theorems, and what it adds after the closing
-theorems. Every statement that is published is a proposition of the module of the statements: a
-text is not read where it is elaborated, and a name that the text declares cannot be one of
-it. The subject selects the formal library’s experiment and its parameters before the author text is read.
+What a goal publishes, its named views and the facts of its table are the library's definitions
+applied to the goal's row; the issuer writes none of them as text.
 
-What a statement says of its goal is read from the claims (`goalClaims`) and from nothing that
-a caller gives beside them: the deciding role is the verifier of the claims' scheme, the
-operands are the inputs of the deployed header at the places that the claims give, and the
-proof arguments, the ceiling and the table of caps are the goal's. A caller gives the labels of
-the functions that the text names. A goal whose clause is a `reduces` gets no
-statement: the statement of a reduction is about a return on which the reduced statement is
-true, and a bound on every return is another claim.
-
-The standard interpretation supplies the model and its service. The kernel checks coverage
-for the reach of each goal in the stored program. The bound is the total of its table of caps.
+What the data say of a goal is read from the claims and from nothing that a caller gives beside
+them: the deciding role is the verifier of the claims' scheme, the operands are the inputs of
+the deployed header at the places that the claims give, and the proof arguments, the bound and
+the table of caps are the goal's. A caller gives the labels of the functions that a text names.
+A goal whose clause is a `reduces` is not issued: the statement of a reduction is about a return
+on which the reduced statement is true. A goal whose reach the standard interpretation does not
+cover is not issued and is reported.
 -/
 
 namespace Zkc.Frontend.Written
@@ -88,25 +50,6 @@ structure Statements where
   its name (`apply` gives `applyMember`): what the root may call. -/
   functions : List (String × Nat) := []
 
-/-- How the text of a module establishes the claim of a goal. -/
-inductive Method where
-  /-- By the judgment with fees: the text proves `<goal>_judged : <goal>Judged`, and the claim
-  is concluded from it by a theorem that is generated. -/
-  | fees
-  /-- The text proves `<goal>_installed : <goal>Claim` itself. -/
-  | direct
-  deriving DecidableEq
-
-/-- The proofs that an author writes for a protocol: their text, the modules that they use
-beside those of the generator and of the model, and the names of their theorems, whose axioms
-the module asks Lean to report. -/
-structure ProofText where
-  text : String := ""
-  imports : List String := []
-  theorems : List String := []
-  /-- How the text establishes the claim of each goal. -/
-  method : Method := .fees
-
 /-- The names that a text, and a consumer after it, may use. -/
 def opens : String :=
   "open ZkcFormal ZkcFormal.ProbabilisticProcess ZkcFormal.Written OracleComp ProbComp\n" ++
@@ -121,98 +64,6 @@ def statementOpenImports : List String :=
 def statementOpens : String := opens ++
   "open ZkcFormal.Written.StandardInterpretation (F G D model samplers served large)\n" ++
   "open scoped ZkcFormal.Written.ScalarField\n"
-
-/-- A theorem that a check writes after the closing theorems of a proof module: a consumer of
-the published theorems, as a reader of the source could write it. It is given in parts, so
-that its statement can stand in the challenge with no proof (`Module.challenge`): the lines
-before it (a section and its variables), its signature from `theorem` up to the `:=`, its
-proof, and the lines after it. The statement is elaborated on both sides and compared as
-terms, so it should make no auxiliary declaration (a `match`, a nested proof): a text with a
-declaration of the same shape would have Lean reuse its own, and the pair would be refused. -/
-structure Consumer where
-  name : String
-  before : String := ""
-  signature : String
-  proof : String
-  after : String := ""
-  imports : List String := []
-
-/-- A consumer as it stands in the proof module. -/
-def Consumer.text (c : Consumer) : String :=
-  c.before ++ c.signature ++ " := " ++ c.proof ++ "\n" ++ c.after
-
-/-- A consumer as it stands in the challenge: its statement, with no proof. -/
-def Consumer.stated (c : Consumer) : String :=
-  c.before ++ c.signature ++ " := by sorry\n" ++ c.after
-
-/-- **The two modules of the goals of one scheme**, as Lean reads them: the module of the
-statements, which holds everything that the generator states before a proof and no word of an
-author, and the proof module, which imports it and holds the author's text with what is proved
-after it. -/
-structure Module where
-  /-- The name space of the declarations of both modules. -/
-  space : String
-  /-- The name of the module of the statements, under which the proof module imports it. -/
-  statementsName : Lean.Name
-  /-- The module of the statements. It ends with a request for the axioms of each of its
-  theorems. -/
-  statements : String
-  /-- The theorems of the module of the statements, in its order. -/
-  stated : List String
-  /-- The proof module: the import of the statements and of what the text asks for, the name
-  space with the names that a text may use, the text, and what is proved after it. It asks for
-  no axioms: a module that is accepted is judged by its published theorems, and a control appends
-  `requests`. -/
-  proof : String
-  /-- The theorems of the proof module, in its order. -/
-  proved : List String
-  /-- The line of the proof module at which the author's text starts, the first line being 1,
-  and the number of lines of the text. -/
-  textLine : Nat
-  textLines : Nat
-  /-- The published theorems of the proof module, each with its proposition, under their full
-  names. A check writes them as Lean prints a name and reads them again (`String.toName`
-  reads the quotation of a component that is no identifier). -/
-  published : List (Lean.Name × Lean.Name) := []
-  /-- The consumers that a check wrote after the closing theorems, which are judged with the
-  published theorems. -/
-  consumers : List Consumer := []
-  /-- Diagnostics for goals omitted because their reach has no standard interpretation. -/
-  refusals : List String := []
-
-/-- The challenge of a pair, as `lake comparator` takes one: a module that imports the module
-of the statements and states each published theorem over its proposition, and each consumer
-as the check wrote its statement, with no proof. It is the trusted side with the statements;
-the proof module is the solution. A consumer is stated in the name space and under the names
-that the proof module opens, so that its statement is read as it is there. -/
-def Module.challenge (m : Module) : String :=
-  let scope := if m.consumers.isEmpty then [] else statementOpenImports
-  s!"import {m.statementsName}\n" ++
-    String.join ((scope ++ m.consumers.flatMap (·.imports)).eraseDups.map (s!"import {·}\n")) ++
-    String.join (m.published.map fun (theorem_, proposition) =>
-      s!"theorem {theorem_} : {proposition} := by sorry\n") ++
-    (if m.consumers.isEmpty then "" else
-      s!"\nopen Zkc.Core\nnamespace {m.space}\n" ++ statementOpens ++ String.join (m.consumers.map (·.stated)) ++
-        s!"end {m.space}\n")
-
-/-- The theorems of a pair that the judgment is of: the published ones and the consumers,
-under their full names (a name is its components, as in `publicationPairs`). -/
-def Module.judged (m : Module) : List Lean.Name :=
-  m.published.map (·.1) ++ m.consumers.map fun c => .str m.space.toName c.name
-
-/-- Requests for the axioms of the theorems of the proof module, by their full names: what a
-control appends to the proof module, to read from Lean's reports which theorems are left
-unproved. -/
-def Module.requests (m : Module) : String :=
-  String.join (m.proved.map fun theorem_ => s!"#print axioms {m.space}.{theorem_}\n")
-
-/-- A module of one source, with the theorems whose axioms it asks for, in the order in which
-the module states them. -/
-structure PlainModule where
-  text : String
-  theorems : List String
-  /-- Diagnostics for goals omitted because their reach has no standard interpretation. -/
-  refusals : List String := []
 
 namespace Statements
 
@@ -363,104 +214,8 @@ def factsOf (s : Statements) (layout : SubjectLayout s.claims) : String :=
 def facts (s : Statements) (goals := s.claims.goals.attach) : String :=
   s.factsOf (.ofGoals s.claims goals)
 
-/-- Specialize the package transport to the installed root and relations. Each distinct
-lookup has one kernel proof, including when several source labels name the same relation. -/
-def transfers (s : Statements) (goals := s.claims.goals) : String := Id.run do
-  let admitted := "{a : Admitted V} (admitted : admit stored association = .ok a)"
-  let root := "rootKey rootMember found'root"
-  let mut text :=
-    "theorem found'root : installed.findProtocol rootKey = some ⟨rootHeader, rootMember⟩ := by kernel_rfl\n"
-  for (goal, first) in perRelation goals (·.relationLabel) do
-    let name := goal.relationLabel
-    let found := s!"found'fn{goal.relation}"
-    if name == first then
-      text := text ++ s!"theorem {found} : installed.find {name}Key = some (.fn {name}Member) := by kernel_rfl\n"
-    text := text ++ s!"abbrev at_{name} {admitted} :=\n" ++
-      s!"  subjectPackage.atProtocolAndFunction admitted {root} {name}Key {name}Member {found}\n\n"
-  return text
-
 /-- The total of a goal's table of caps, as the frontend computes it. -/
 def _root_.Zkc.Frontend.Written.ClaimedGoal.total (goal : ClaimedGoal) : Rat := goal.caps.ratio
-
-/-- The ceilings of the goals (GL4): a goal that states a ceiling is issued a statement only when
-the total of its table of caps is within it. A source whose charges add up to more than its goal
-promises gets no statement, and is told the two numbers. -/
-def checkCeilings (s : Statements) (goals := s.claims.goals) : Except String Unit := do
-  for goal in goals do
-    let some ceiling := goal.ceiling | continue
-    unless goal.total ≤ ceiling do
-      throw (s!"GL4: the goal `{goal.goal}` states the ceiling {ceiling}, and the total of its " ++
-        s!"charges is {goal.total}")
-
-/-- For each goal, what the module states of its table before any proof: the counts of the table
-are those of the stored program (`<goal>_counted`), and its budget is the number that the
-frontend computed (`<goal>_budget`), both decided by the kernel. The second ties the total of a
-statement to the number that GL4 compares with a ceiling and that a reader can write down. -/
-def counts (s : Statements) (goals := s.claims.goals) : String :=
-  String.join (goals.map fun goal =>
-    let name := goal.label
-    let total := goal.total
-    s!"/-- The table of caps of `{name}` adds up as the stored program does: its counts and its arms are the program's. -/\n" ++
-    s!"theorem {name}_counted : {name}Caps.counted stored rootKey = true := by decide +kernel\n\n" ++
-    s!"/-- The budget of the table of caps of `{name}`: the number that the frontend computed. -/\n" ++
-    s!"theorem {name}_budget : {name}Caps.budget = (({total.num.toNat} : ℕ) : ℚ≥0) / ({total.den} : ℕ) := by\n" ++
-    "  decide +kernel\n\n")
-
-/-- The names of the theorems that `counts` writes. -/
-def countNames (s : Statements) (goals := s.claims.goals) : List String :=
-  goals.flatMap fun goal => [s!"{goal.label}_counted", s!"{goal.label}_budget"]
-
-/-- For each goal with a ceiling, the theorem `<goal>_ceiling`: the total of the goal's table is
-within the ceiling, the comparison decided by the kernel. -/
-def ceilings (s : Statements) (goals := s.claims.goals) : Except String String := do
-  s.checkCeilings goals
-  let mut text := ""
-  for goal in goals do
-    let some ceiling := goal.ceiling | continue
-    let name := goal.label
-    text := text ++
-      s!"/-- The total of the charges of `{name}` is within the ceiling that the goal states. -/\n" ++
-      s!"theorem {name}_ceiling : {name}Caps.total ≤ (({ceiling.num.toNat} : ℕ) : ℝ≥0∞) / ({ceiling.den} : ℕ) :=\n" ++
-      s!"  {name}Caps.total_le_div {ceiling.num.toNat} {ceiling.den} (by decide) (by decide +kernel)\n\n"
-  return text
-
-/-- Each goal has a coverage theorem. Goals with the same entries reuse the first proof. -/
-def coverage (goals : List ClaimedGoal) : String := Id.run do
-  let mut text := ""
-  for (g, firstGoal) in perRelation goals (·.label) do
-    let proof := if g.label == firstGoal then "by decide +kernel" else s!"{firstGoal}_covered"
-    text := text ++ s!"theorem {g.label}_covered : StandardInterpretation.covers stored rootKey {g.relationLabel}Key = true := {proof}\n\n"
-  return text
-
-/-- The declarations against which a deployed input spelling is disambiguated for this label. -/
-def originFor (g : ClaimedGoal) : String :=
-  s!"written'origins ({g.label}Caps, {g.relationLabel}Member, {g.label}Witnessed)"
-
-/-- Apply a library definition to one resolved goal in the standard interpretation. -/
-def denotation (property row : String) : String :=
-  s!"ZkcFormal.Written.Goal.{property} StandardInterpretation.model {row} StandardInterpretation.draws"
-
-/-- The five public propositions. Their mathematical definitions and the checked presentation
-of the concrete verifier inputs and relation witnesses belong to the formal library. -/
-def claimTexts {owner : GoalClaims} (layout : SubjectLayout owner) : String := Id.run do
-  let mut text := ""
-  for (goal, row) in layout.namedGoals do
-    let name := goal.label
-    let relation := goal.relationLabel
-    let origin := originFor goal
-    text := text ++ s!"noncomputable def {name}ClaimOf (p : Typed V)\n" ++
-      s!"    (root : Member p.headers.protocols rootHeader) (relation : Member p.headers.fns {relation}Header) : Prop :=\n" ++
-      s!"  goal_surface% claim {origin} StandardInterpretation.samplers in ({denotation "ClaimOf" row} p root relation)\n\n" ++
-      s!"def {name}Claim : Prop := {name}ClaimOf installed rootMember {relation}Member\n\n" ++
-      s!"def {name}Goal : Prop := ZkcFormal.Written.Goal.checkedSurface\n" ++
-      s!"  (ZkcFormal.Written.Goal.admittedAt {row} {name}ClaimOf)\n" ++
-      s!"  (ZkcFormal.Written.Goal.admission stored association rootHeader rootKey {relation}Header {relation}Key {name}ClaimOf) rfl\n\n" ++
-      s!"def {name}Result : Prop := ZkcFormal.Written.Goal.checkedSurface\n" ++
-      s!"  (ZkcFormal.Written.Goal.resultOf {row} StandardInterpretation.covers {name}Goal)\n" ++
-      s!"  (ZkcFormal.Written.Goal.countedResult stored rootKey {relation}Key {name}Caps StandardInterpretation.covers {name}Goal) rfl\n\n" ++
-      s!"def {name}Witnessed : Prop :=\n  goal_receipt% {origin} in ({denotation "Witnessed" row})\n" ++
-      s!"    using ({denotation "witnessed_of" row} StandardInterpretation.served)\n\n"
-  return text
 
 /-- The name of a draw of the root in a module: the name of its site in the source, with
 its place among the draws that realize the site where a stepped loop gives several. -/
@@ -496,257 +251,122 @@ def _root_.Zkc.Frontend.Written.ClaimedGoal.siteLabels (goal : ClaimedGoal) :
   let numbered := disambiguate draws fun label key => s!"{label}_key{key}"
   disambiguate numbered fun _ key => s!"draw'{key}"
 
-/-- The draws of a goal's root that its table of caps gives a cap, each with its name
-in a module and that cap. -/
-def _root_.Zkc.Frontend.Written.ClaimedGoal.siteCaps (goal : ClaimedGoal) :
-    List (String × DrawCap) :=
-  let capped := (goal.caps.uses.getLast?.map (·.draws)).getD []
-  goal.siteLabels.filterMap fun (_, label, key) =>
-    (capped.find? (·.key == key)).map fun cap => (label, cap)
-
-/-- The name, in a module, of a draw below applications of the root: `site_`, then the keys of
-the applications in their order, then the key of the draw. A number follows `site_`, where the
-name of a draw of the root has the name of a site of the source or `key`, so the two never
-meet. -/
-def appliedSite (site : Core.Site) : String :=
-  "site_" ++ "_".intercalate ((site.through ++ [site.key]).map fun key => toString key.number)
-
-/-- The draws of the root under the names of their sites: the key of each
-(`site_<name>`, and `site_<name>_<index>` for each block of a stepped loop), once for the
-package, and for each goal the cap that its table gives the draw (`<goal>_cap_<name>`), decided
-by the kernel. Each cap theorem carries the label `walk_cap`. -/
-def sites (s : Statements) (goals := s.claims.goals) : String :=
-  let named := (goals.flatMap (·.siteLabels)).eraseDups
-  String.join (named.map fun (site, label, key) =>
-    s!"/-- A draw of the root: `sites.{site}` of the source. -/\n" ++
-    s!"abbrev site_{label} : Key := ⟨{key.number}⟩\n\n") ++
-  String.join (goals.map fun goal =>
-    String.join (goal.siteCaps.map fun (label, cap) =>
-      s!"/-- The cap that the table of `{goal.label}` gives the draw `{label}`. -/\n" ++
-      s!"@[walk_cap]\ntheorem {goal.label}_cap_{label} :\n" ++
-      s!"    {goal.label}Caps.capFrom {goal.label}Caps.root [] site_{label} = " ++
-      s!"{cap.numerator} / {cap.denominator} := by\n  decide +kernel\n\n")) ++
-  -- the draws below applications: a draw is charged in the contract of the protocol that has
-  -- it, and the table gives the root its cap through the applications that reach it
-  let applied := (goals.flatMap fun goal =>
-    (goal.caps.sites.filter (!·.1.through.isEmpty)).map (·.1)).eraseDups
-  String.join (applied.map fun site =>
-    s!"/-- A draw below the applications {site.through.map (·.number)} of the root: the draw with\n" ++
-    s!"key {site.key.number} of the protocol that the last of them applies. -/\n" ++
-    s!"abbrev {appliedSite site} : Key := ⟨{site.key.number}⟩\n\n") ++
-  String.join (goals.map fun goal =>
-    String.join ((goal.caps.sites.filter (!·.1.through.isEmpty)).map
-      fun (site, numerator, denominator, _) =>
-        let through := ", ".intercalate (site.through.map fun key => s!"⟨{key.number}⟩")
-        s!"/-- The cap that the table of `{goal.label}` gives the draw `{appliedSite site}`. -/\n" ++
-        s!"@[walk_cap]\ntheorem {goal.label}_cap_{appliedSite site} :\n" ++
-        s!"    {goal.label}Caps.capFrom {goal.label}Caps.root [{through}] {appliedSite site} = " ++
-        s!"{numerator} / {denominator} := by\n  decide +kernel\n\n"))
-
-/-- The names of the theorems that `sites` writes. -/
-def siteNames (s : Statements) (goals := s.claims.goals) : List String :=
-  goals.flatMap fun goal =>
-    (goal.siteCaps.map fun (label, _) => s!"{goal.label}_cap_{label}") ++
-    ((goal.caps.sites.filter (!·.1.through.isEmpty)).map fun (site, _) =>
-      s!"{goal.label}_cap_{appliedSite site}")
-
-/-- The fees judgment and both library proofs at the same resolved goal. -/
-def judgments {owner : GoalClaims} (layout : SubjectLayout owner) : String := Id.run do
-  let mut text := ""
-  for (goal, row) in layout.namedGoals do
-    let name := goal.label
-    let origin := originFor goal
-    let witness := s!"{denotation "witnessed_of" row} StandardInterpretation.served"
-    text := text ++ s!"def {name}Judged : Prop :=\n" ++
-      s!"  goal_surface% judged {origin} StandardInterpretation.samplers in ({denotation "Judged" row})\n\n" ++
-      s!"theorem {name}_claim_of_judged (judged : {name}Judged) : {name}Claim :=\n" ++
-      s!"  {denotation "claim_of_judged" row} judged\n\n" ++
-      s!"theorem {name}_witnessed_of :\n" ++
-      s!"    goal_helper% {origin} in ({witness}) returning {name}Witnessed :=\n  {witness}\n\n"
-  return text
-
-/-- The names of the theorems that `judgments` writes. -/
-def judgmentNames (s : Statements) (goals := s.claims.goals) : List String :=
-  goals.flatMap fun goal =>
-    [s!"{goal.label}_claim_of_judged", s!"{goal.label}_witnessed_of"]
-
-/-- For each goal whose claim the text established by the judgment with fees, the claim about
-the installed program, from the theorem `<goal>_judged` of the text. -/
-def conclusions (s : Statements) (goals := s.claims.goals) : String :=
-  String.join (goals.map fun goal =>
-    s!"/-- The claim of `{goal.label}`, from the judgment that the text established. -/\n" ++
-    s!"theorem {goal.label}_installed : {goal.label}Claim :=\n" ++
-    s!"  {goal.label}_claim_of_judged {goal.label}_judged\n\n")
-
-/-- The names of the theorems that `conclusions` writes. -/
-def conclusionNames (s : Statements) (goals := s.claims.goals) : List String :=
-  goals.map fun goal => s!"{goal.label}_installed"
-
-/-- For each goal, after the text of the proofs: the theorems `<goal>_sound : <goal>Goal`,
-`<goal>_result : <goal>Result` and `<goal>_met : <goal>Witnessed`, from the theorems
-`<goal>_installed : <goal>Claim` (the text's, or the one that `conclusions` writes from the
-text's judgment) and `<goal>_witnessed : <goal>Witnessed` of the text. The statements were
-fixed before the text; only their proofs are written here. -/
-def closings (s : Statements) (goals := s.claims.goals) : String :=
-  String.join (goals.map fun goal =>
-    let name := goal.label
-    s!"/-- The goal `{name}`, for every admitted program. -/\n" ++
-    s!"theorem {name}_sound : {name}Goal :=\n" ++
-    s!"  fun admitted => at_{goal.relationLabel} admitted {name}ClaimOf ({name}_installed : {name}Claim)\n\n" ++
-    s!"/-- The result of the goal `{name}`. -/\n" ++
-    s!"theorem {name}_result : {name}Result := ⟨{name}_covered, {name}_counted, {name}_sound⟩\n\n" ++
-    s!"/-- The hypotheses of the claim of `{name}` are met. -/\n" ++
-    s!"theorem {name}_met : {name}Witnessed := {name}_witnessed\n\n")
-
-/-- The names of the theorems that `closings` writes. -/
-def closingNames (s : Statements) (goals := s.claims.goals) : List String :=
-  goals.flatMap fun goal =>
-    [s!"{goal.label}_sound", s!"{goal.label}_result", s!"{goal.label}_met"]
-
-/-- The names of the theorems that `ceilings` writes. -/
-def ceilingNames (s : Statements) (goals := s.claims.goals) : List String :=
-  goals.filterMap fun goal => goal.ceiling.map fun _ => s!"{goal.label}_ceiling"
-
-/-- The modules that a module of statements imports: those of the printed package, those of
-the library that the generated statements name, and the model's. -/
-def imports : List String :=
-  subjectPackageImports ++
-    ["Zkc.Subject.WrittenGoal", "ZkcFormal.Written.GoalPresentation",
-      "ZkcFormal.OracleProcess", "ZkcFormal.ReturnExperiment", "ZkcFormal.Written.LawSamplers",
-      "ZkcFormal.Written.SiteCaps", "ZkcFormal.Written.FunctionMeaning",
-      "ZkcFormal.Written.ClaimIntro"] ++ statementOpenImports
-
 /-- The lines that open a module: its imports, and the namespace of the core. -/
 def header (modules : List String) : String :=
   String.join (modules.map (s!"import {·}\n")) ++ "\nopen Zkc.Core\n"
-
-/-- The published theorems of the goals, each with the proposition that it is of, under their
-full names in the name space `name`: for a goal, `<goal>_installed : <goal>Claim`,
-`<goal>_sound : <goal>Goal`, `<goal>_result : <goal>Result`, `<goal>_met : <goal>Witnessed`.
-The challenge of a pair states this list (`Module.challenge`), and the judgment is of these
-names. The theorems themselves are written by `conclusions` and `closings`, which spell the
-same endings: if the two came apart, the judgment would find no theorem under a listed name. -/
-def publicationPairs (s : Statements) (name : String) (goals := s.claims.goals) : List (Lean.Name × Lean.Name) :=
-  (uniqueGoalSpellings goals).flatMap fun goal =>
-    [("_installed", "Claim"), ("_sound", "Goal"), ("_result", "Result"), ("_met", "Witnessed")].map
-      fun (theorem_, proposition) =>
-        (.str name.toName s!"{goal.label}{theorem_}",
-          .str name.toName s!"{goal.label}{proposition}")
 
 /-- The requests for the axioms of theorems, and the end of the module's name space. -/
 def footer (name : String) (theorems : List String) : String :=
   String.join (theorems.map (s!"#print axioms {·}\n")) ++ s!"end {name}\n"
 
-/-- **The modules of the goals of one scheme.**
+/-- The lookups of the installed root and relations that the typed subject is closed over: one
+kernel proof for each distinct lookup. -/
+def lookups (goals : List ClaimedGoal) : String := Id.run do
+  let mut text :=
+    "theorem found'root : installed.findProtocol rootKey = some ⟨rootHeader, rootMember⟩ := by kernel_rfl\n"
+  for (goal, first) in perRelation goals (·.relationLabel) do
+    let name := goal.relationLabel
+    if name == first then
+      text := text ++ s!"theorem found'fn{goal.relation} : installed.find {name}Key = some (.fn {name}Member) := by kernel_rfl\n"
+  return text ++ "\n"
 
-*The module of the statements* (`<name>.Stated`): the package of the claims and what is
-generated before any proof (the facts, the transfers, the propositions of each goal, the
-coverage, the counts, the names of the draws and, for a text of the
-method of fees, the judgment of each goal with what follows from it, and the comparisons with
-the ceilings), with a request for the axioms of each of its theorems. No word and no choice of
-an author is in it, and it imports nothing that a text asks for.
+/-- The modules that a data module imports: those of the printed package and the typed subject's.
+No module of the formal library is among them. -/
+def dataImports : List String := subjectPackageImports ++ ["Zkc.Subject.WrittenGoal"]
 
-*The proof module* imports it, with what the text and the check ask for, and holds, in the name
-space of the statements: the author's text; the claim of each goal from the text's judgment,
-for the method of fees; the closing theorems; and what a check writes after them (`after`: a
-consumer of the published theorems).
+end Statements
 
-This function fixes the order of the parts, the imports and the names of the generated
-theorems. It checks coverage before issuing each goal.
+/-- **The modules of the goals of one scheme, published through the formal library.**
 
-**What a check rests on.** A text is arbitrary Lean: it can turn off the kernel's check of its
-declarations, write into the kernel's environment, and declare a variable that becomes a
-hypothesis of the theorems after it, and Lean then accepts the proof module and reports no
-axiom. So Lean's acceptance of the proof module is not what a check of a subject rests on. The
-two modules are the trusted and the untrusted side of a judgment that the toolchain makes
-(`lake comparator`, Lean's own way to judge a proof that may be malicious): the module of the
-statements and the challenge (`Module.challenge`: each published theorem stated over its
-proposition, with no proof) are written by the generator and hold no word of an author; the
-proof module is the solution. A check builds and exports the trusted side before any text is
-read, builds the solution confined, and gives the two exports to the comparator
-(`ZkcFormalTests.SubjectProject`), which loads no object: each published theorem of the
-solution has the statement of the challenge, with every definition that the statement uses, the
-kernel accepts the solution, and the published theorems rest on the allowed axioms.
+*The data module* (`<name>.Stated`) holds the package of the claims and its installation, the
+names of the installation, the lookups, and the typed subject with a row for each goal. It holds
+no proposition about the protocol and imports no module of the formal library.
 
-What is trusted is then Lean's logic and a kernel, the comparator and the exporter, the
-sandbox in which a text is read, the imports as built, and this generator and the frontend, for
-the statements saying what the source claims. A statement that a check itself writes after the
-text (a `Consumer`, with its numerals and notations) stands in the challenge as well, read
-there in the name space and under the names that the generator opens, and is judged with the
-published theorems; in the proof module it is read in the scope that the text leaves, and a
-text that changes what it says there is refused by its statement.
+*The challenge*, *the views module* and *the fees module* are their imports and one line each:
+`publish_goals`, `publish_views`, `publish_fees` over the subject. What a goal publishes is the
+formal library's definition applied to the goal's row, named by the path of the goal's
+declaration: `<name>.<path>.sound` and `<name>.<path>.met`.
 
-`statements` names the module of the statements where it is not `<name>.Stated`: a control
-whose statements differ from its subject's keeps the subject's name space and has a module of
-statements of its own. -/
-def module (s : Statements) (name : String) (proof : ProofText)
-    (after : List Consumer := [])
-    (statements : Option Lean.Name := none) :
-    Except String Module := do
-  let (retained, refusals) ← s.coveredOccurrences
-  let layout := SubjectLayout.ofGoals s.claims retained
-  let goals := layout.publicGoals
+*A proof module* is `opening`, an author's text and the end of the name space; the text states
+each published theorem by `published%`. Nothing is generated after it.
+
+The data module and the challenge are the trusted side of a judgment by `lake comparator` and
+hold no word of an author; the views and the fees module are for proofs and readers, and the
+challenge does not import them. -/
+structure Publication where
+  /-- The name space of the declarations of every module. -/
+  space : String
+  /-- The name of the data module. -/
+  dataName : Lean.Name
+  data : String
+  /-- The theorems of the data module whose axioms it asks for. -/
+  stated : List String
+  challenge : String
+  views : String
+  fees : String
+  /-- The start of a proof module: the imports of the data, views and fees modules and of the
+  term for a published statement, the name space, and the names that a text may use. A published
+  theorem is named by its goal's path, so the goal `sound` publishes `sound.sound`: the opening
+  turns off the linter that reports a repeated component of a name. -/
+  opening : String
+  /-- The published theorems under their full names: `sound` and `met` of each row. -/
+  published : List Lean.Name
+  /-- Diagnostics for goals omitted because their reach has no standard interpretation. -/
+  refusals : List String := []
+
+namespace Publication
+
+/-- The names of the challenge, the views module and the fees module. -/
+def challengeName (p : Publication) : Lean.Name := .str p.space.toName "Challenge"
+def viewsName (p : Publication) : Lean.Name := .str p.space.toName "Views"
+def feesName (p : Publication) : Lean.Name := .str p.space.toName "Fees"
+
+/-- A proof module of an author's text. -/
+def proof (p : Publication) (text : String) : String :=
+  p.opening ++ text ++ s!"\nend {p.space}\n"
+
+/-- The line of a proof module at which the author's text starts, the first line being 1. -/
+def textLine (p : Publication) : Nat := (p.opening.splitOn "\n").length
+
+end Publication
+
+namespace Statements
+
+/-- The data module of a layout of goals, in the name space `name`. `publication` writes it for
+the goals whose reach is covered. -/
+def dataModule (s : Statements) (name : String) (layout : SubjectLayout s.claims) :
+    Except String String := do
   let subject ← layout.text
-  let ceilings ← s.ceilings goals
-  let fees := proof.method == .fees
-  let feeText := if fees then judgments layout else ""
-  let stated := ["admitted_exists"] ++ goals.map (s!"{·.label}_covered") ++ s.countNames goals ++ s.siteNames goals ++
-    (if fees then s.judgmentNames goals else []) ++
-    s.ceilingNames goals
-  let stating := header imports ++ s!"namespace {name}\n" ++
-    subjectPackage s.package ++ statementOpens ++ s.factsOf layout ++ "\n" ++ s.transfers goals ++
-    subject ++ claimTexts layout ++
-    coverage goals ++ s.counts goals ++ s.sites goals ++
-    feeText ++ ceilings ++ footer name stated
-  let statementsName : Lean.Name := statements.getD (.str name.toName "Stated")
-  let proofImports := proof.imports ++ after.flatMap (·.imports)
-  -- the proof module reopens the name space and the names that the statements were read with
-  let opening := header (toString statementsName :: proofImports) ++ s!"namespace {name}\n" ++ statementOpens
-  let text := opening ++ proof.text ++ "\n" ++ (if fees then s.conclusions goals else "") ++
-    s.closings goals ++ String.join (after.map (·.text)) ++ s!"end {name}\n"
+  return header dataImports ++ s!"namespace {name}\n" ++
+    subjectPackage s.package ++ s.factsOf layout ++ "\n" ++ lookups layout.publicGoals ++ subject ++
+    footer name ["admitted_exists"]
+
+/-- **Issue the goals of one scheme through the formal library** (`Publication`). It checks
+coverage before issuing each goal; a goal is issued at its bound, whatever its table of caps
+adds up to. `imports` are the modules that an author's text asks for beside the generated ones.
+`data` names the data module where it is not `<name>.Stated`: a control whose data differ from its
+subject's keeps the subject's name space and has a data module of its own. -/
+def publication (s : Statements) (name : String) (imports : List String := [])
+    (data : Option Lean.Name := none) : Except String Publication := do
+  let (retained, refusals) ← s.coveredOccurrences
+  let layout := SubjectLayout.ofGoals s.claims retained
+  let stated := ["admitted_exists"]
+  let dataName : Lean.Name := data.getD (.str name.toName "Stated")
+  let data ← s.dataModule name layout
+  let line (library command : String) :=
+    s!"import {dataName}\nimport {library}\n\n{command} {name}.written'subject\n"
+  let opening := header ([toString dataName, s!"{name}.Views", s!"{name}.Fees", "ZkcFormal.Written.Publish"] ++
+    statementOpenImports ++ imports) ++ s!"namespace {name}\n" ++
+    "set_option linter.dupNamespace false\n" ++ statementOpens
+  let published := layout.paths.flatMap fun path =>
+    let row := path.foldl (fun n c => Lean.Name.str n c) name.toName
+    [.str row "sound", .str row "met"]
   return {
-    space := name, statementsName, statements := stating, stated
-    proof := text
-    proved := proof.theorems ++ (if fees then s.conclusionNames goals else []) ++ s.closingNames goals ++
-      after.map (·.name)
-    textLine := (opening.splitOn "\n").length
-    textLines := (proof.text.splitOn "\n").length
-    published := s.publicationPairs name goals
-    consumers := after, refusals }
-
-/-- A module with the package of the claims and the propositions of the goals alone: the facts,
-the transfers and the propositions, with nothing proved. Lean elaborates the statements. -/
-def claimsModule (s : Statements) (name : String) :
-    Except String PlainModule := do
-  let (retained, refusals) ← s.coveredOccurrences
-  let layout := SubjectLayout.ofGoals s.claims retained
-  let text := header imports ++ s!"namespace {name}\n" ++
-    subjectPackage s.package ++ statementOpens ++ s.factsOf layout ++ "\n" ++ s.transfers layout.publicGoals ++
-    (← layout.text) ++ claimTexts layout ++ s!"end {name}\n"
-  return {text, theorems := [], refusals}
-
-/-- A module with the package of the claims and the coverage theorems of its issued goals. -/
-def coverageModule (s : Statements) (name : String) :
-    Except String PlainModule := do
-  let (retained, refusals) ← s.coveredOccurrences
-  let layout := SubjectLayout.ofGoals s.claims retained
-  let goals := layout.publicGoals
-  let theorems := goals.map (s!"{·.label}_covered")
-  let text := header imports ++ s!"namespace {name}\n" ++
-    subjectPackage s.package ++ statementOpens ++ s.factsOf layout ++ "\n" ++
-    coverage goals ++ footer name theorems
-  return {text, theorems, refusals}
-
-/-- A module with the package of the claims, its facts, and the comparison of each goal's total
-with the ceiling that it states. A goal whose ceiling is below its total gives no module. -/
-def ceilingModule (s : Statements) (name : String) : Except String PlainModule := do
-  let layout := SubjectLayout.ofGoals s.claims
-  let goals := layout.publicGoals
-  let ceilings ← s.ceilings goals
-  let text := header (subjectPackageImports ++ ["Zkc.Subject.WrittenGoal", "ZkcFormal.Written.SiteCaps"]) ++
-    s!"namespace {name}\n" ++ subjectPackage s.package ++ opens ++ s.factsOf layout ++ "\n" ++
-    ceilings ++ footer name (s.ceilingNames goals)
-  return { text, theorems := s.ceilingNames goals }
+    space := name, dataName, data, stated
+    challenge := line "ZkcFormal.Written.Publish" "publish_goals"
+    views := line "ZkcFormal.Written.Views" "publish_views"
+    fees := line "ZkcFormal.Written.FeeFacts" "publish_fees"
+    opening, published, refusals }
 
 end Statements
 

@@ -45,10 +45,6 @@ Then Lean is run on three modules for the two goals of the reference case `N-GL2
   those of the root's own package.
 - The control has, as the deployed package, the root of the same source with the guard of the
   verifier negated. Lean refuses it where it states that the deployed definitions come first.
-
-A fourth module has the claims of a goal whose relation has a witness, with the statements that
-`Written.Statements` writes for it and no proof: its premise quantifies the witness, and Lean
-elaborates it.
 -/
 
 open Zkc.Core Zkc.Frontend Zkc.Frontend.Written
@@ -253,31 +249,8 @@ def run (corpus : System.FilePath) (work : System.FilePath) : IO Unit := do
     (comparisonModule "ClaimsSource" count ["loose", "strict"] (Written.package (packageOf both)).text)
   let control ← startLakeLean work "ClaimsControl"
     (proofModule "ClaimsControl" (negated.emission.package noAssociation) (packageOf both) root.id relations)
-  -- The statement of a goal whose relation has a witness: the premise is that no valid witness
-  -- makes the relation return true at the statement. The promise pair has no charge, so
-  -- the bound of its statement is zero; Lean elaborates the statement.
-  let (_, pairClaims) ← read pair ["sound"]
-  let pairStated : Statements := { claims := pairClaims }
-  let module ← IO.ofExcept (pairStated.claimsModule "ClaimsWitness")
-  let client := "\nnamespace ClaimsWitness\n" ++ statementOpens ++
-    "open Zkc.Core\nexample (h : soundWitnessed) : ∃ x, functionResult (t := .bool)\n" ++
-    "    (fnMeaning StandardInterpretation.model installed soundMember (.cons x (.cons x .nil))) ≠ some true := by\n" ++
-    "  obtain ⟨x, valid, _, rejected⟩ := h\n  exact ⟨x, rejected (witness0 := x) valid⟩\nend ClaimsWitness\n"
-  let stated ← startLakeLean work "ClaimsWitness" (module.text ++ client)
-  -- Public definitions in an exposed module must be able to refer to the same library terms.
-  let publicModule ← IO.ofExcept (pairStated.claimsModule "ClaimsExposed")
-  let opening := Statements.header Statements.imports
-  unless publicModule.text.startsWith opening do throw (IO.userError "missing generated imports")
-  let exposed ← startLakeLean work "ClaimsExposed"
-    ("module\n" ++ String.join (Statements.imports.map (s!"public import {·}\n")) ++
-      "\n@[expose] public section\nopen Zkc.Core\n" ++ (publicModule.text.dropPrefix opening).toString)
-    (text := false)
   let (ok, output) ← finishLean proof
   acceptedOutput "Claims" ok output theorems
-  let (ok, output) ← finishLean stated
-  acceptedOutput "ClaimsWitness" ok output []
-  let (ok, output) ← finishLean exposed
-  acceptedOutput "ClaimsExposed" ok output []
   let (ok, output) ← finishLean comparison
   acceptedOutput "ClaimsSource" ok output []
   let (ok, output) ← finishLean control

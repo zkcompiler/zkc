@@ -1,6 +1,6 @@
 # Writing a subject of a written soundness goal
 
-A subject is a source with a soundness goal, the text of its proofs, and a check that runs Lean on the two. This page says what each of the three is, what is generated around a text, and what a text writes. The five charge checks under `lean/formal/checks/` read charges and goals from source. The direct proof in `GoalStatement.lean` supplies a text and a comparator challenge. [Status](status.md) says what the path supports and what it does not.
+A subject is a source with a soundness goal, the text of its proofs, and a check that runs Lean on the two. This page says what each of the three is, what the issuer and the formal library give a text, and what a text writes. The five charge checks under `lean/formal/checks/` read charges and goals from source. `WrittenViews.lean`, `WrittenFees.lean` and `GoalStatement.lean` supply texts that the comparator judges. [Status](status.md) says what the path supports and what it does not.
 
 ## The three parts
 
@@ -30,9 +30,9 @@ scheme Checked = Either:
 goal either = soundness(Checked, stage = written)
 ```
 
-The claim of the goal: on inputs at which no valid witness makes the relation return true, the verifier returns with probability at most the total of the charges that the root reaches along one run (here one quarter: the two draws are in the two arms of a choice, and the total takes the larger arm), against every service that draws each coin no more favourably than its law.
+The claim of the goal: on inputs at which no valid witness makes the relation return true, the verifier returns with probability at most the goal's bound, against every service that draws each coin no more favourably than its law. The bound is the ceiling that the goal writes after `<=`, and where it writes none, the total of the charges that the root reaches along one run (here one quarter: the two draws are in the two arms of a choice, and the total takes the larger arm).
 
-A fee proof supplies the judgment and a witness. A direct proof supplies the installed claim and a witness. The Operands example in `lean/formal/checks/GoalStatement.lean` uses the kernel to compute the deciding role and the relation.
+A text proves the installed bound on its view, directly or from the fee judgment on its view, and the receipt on its view; it then states the two published theorems. The texts of `lean/formal/checks/WrittenFees.lean` do it by fees (a draw followed for free, and a fee paid within its cap); those of `WrittenViews.lean` and `GoalStatement.lean` directly, with the kernel computing the deciding role and the relation.
 
 A `Reading` asserts the ports of the root, the clause that each goal reads, the inputs of the deployed header that the relation is applied to, the number of proof arguments, the roles of the scheme. A reading that is not what the check asserts is an error: the text is written against it. A relation with witness parameters is not a subject yet. What else a check asserts of the reading is its own; the five checks assert the table of caps, and the check of Either also the names of its draws:
 
@@ -47,28 +47,28 @@ A `Reading` asserts the ports of the root, the clause that each goal reads, the 
 
 ## What stands before the text
 
-The source check imports the issued statements module and compares its stored program and
-association with a fresh reading of the original source and goal selectors. Its package
-must have those same fields and the installation used by the author's proof.
+The issuer (`lean/compiler/Zkc/Frontend/Written/Statement.lean`, `Statements.publication`) writes four modules for the goals of a scheme, in one name space:
 
-The generator (`lean/compiler/Zkc/Frontend/Written/Statement.lean`) writes the printed package and, from what the frontend read, the names that a text uses. For a goal `either` of a root with the ports above:
+| Module | Holds |
+| --- | --- |
+| `<Name>.Stated`, the data module | the printed package and the names below; the typed subject `written'subject` with a row for each goal (the path of its declaration, its property, its deciding clause, its bound and its table of caps) and the source names of the root. It states no proposition about the protocol and imports no module of the formal library |
+| `<Name>.Challenge` | `publish_goals <Name>.written'subject`: for a goal at the path `p`, the theorems `p.sound` and `p.met` without a proof |
+| `<Name>.Views` | `publish_views <Name>.written'subject`: the named views `p.sound.view`, `p.met.view`, `p.installed.view`, each with `view_iff`; the coverage fact `p.covered`; the step `p.sound_of_installed` |
+| `<Name>.Fees` | `publish_fees <Name>.written'subject`: under `p.fees`, the count, the budget, the view `judged.view` of the fee judgment, and the step `installed_of_judged`; a goal whose budget is above its bound has none |
+
+The names of the data module that a text uses, for a goal `either` of the source above:
 
 | Name | What it is |
 | --- | --- |
 | `subjectPackage` | the stored program, its association and the installation, together with proofs of elaboration and successful admission |
 | `installed`, `rootMember`, `verifierRole`, `proverRole` | the program that the module installs from the package, the root in it, the two roles |
-| `at_either` | transfers a property of the root and relation to the admitted program |
 | `eitherMember` | the function of the relation at the goal's value, a member of `installed` |
-| `calleeProgram`, `<function>Member` | the program of the definitions before the root, and in it each function that the root or a protocol that it applies calls; a law of such a function is stated there |
-| `eitherCaps`, `either_budget` | the table of caps of the goal, and its budget as a number |
-| `site_x`, `site_y` | each named draw of the root, under its name in the source, charged or not |
-| `either_cap_x`, `either_cap_y` | the cap that the table gives each charged draw |
-| `site_<a>_<d>`, `<goal>_cap_site_<a>_<d>` | a charged draw below applications and its cap, named by the numbers of the keys of the applications and of the draw in the stored program (the module's comment on the name says which) |
-| `eitherJudged` | the judgment that the text proves |
-| `either_witnessed_of` | the theorem that gives `eitherWitnessed` from an input at which no valid witness makes the relation return true |
-| `eitherClaim`, `eitherGoal`, `eitherResult`, `eitherWitnessed` | the published propositions: the claim about the installed program, the goal for every admitted program, the result with the coverage, and that the hypotheses are met |
-| `either_installed`, `either_sound`, `either_result`, `either_met` | their theorems, written after the text from `either_judged` and `either_witnessed` |
+| `calleeProgram`, `<function>Member` | the program of the definitions before the root, and in it each function that the root or a protocol that it applies calls |
+| `eitherCaps` | the table of caps of the goal; a site's cap is read from it in the fee judgment's term |
+| `written'subject`, `written'application<i>`, `written'bound<i>` | the typed subject, the short application of a deciding clause and the bound of a goal |
+
+A text is the issuer's opening (the imports of the four modules' data, views and fees, the name space and the opened names) followed by the author's proofs. It states each published theorem itself, `theorem t.either.sound : published% written'subject t.either sound`, and closes it with `t.either.sound_of_installed`; nothing is generated after it. A published theorem is named by its goal's path, so a goal `sound` publishes `sound.sound`: the opening turns off the linter that reports a repeated component of a name (`linter.dupNamespace`), for the whole text.
 
 ## Checking a publication
 
-A check does not rest on Lean's acceptance of the proof module. A check writes its modules into a Lake project in its work folder (`ZkcFormalTests.SubjectProject`): the project requires the formal package, and its modules are files named by their module names. What the generator states before a text is a module of its own (`Module.statements`, named `<Name>.Stated`), which holds no text; the proof module (`Module.proof`) imports it; and the challenge of the pair (`Module.challenge`, `<Name>.Challenge`) states each published theorem over its proposition with no proof. A text is arbitrary Lean and can run a program while Lean reads it, so the project is settled in an order that leaves a text nothing to change. First the modules of the statements and the challenges are built, and the challenge of each judgment is exported by the toolchain's `leanexport`; then every other module is built, in one call of `lake build`; then a judgment exports its solutions and gives the two exports to `lake comparator`, which compares each judged theorem's statement with everything that it uses, replays the solution in the kernel and reads its axioms. Every process that reads a text, or the objects that a text's build left, runs confined (`bwrap`, which the host must have, with the profile of the comparator's own sandbox): the file system is read-only but for the project's `.lake`, the home and temporary folders and those of running services are covered, and there is no network of its own (a socket of the host whose path lies elsewhere can still be reached; `docs/status.md` says what that leaves). What a text can reach is then the objects of its build and the solution's export, which are what is judged; the exported challenge, the list of the pairs and the verdicts are beside `.lake`, where it cannot write (`checks/OutsideReading.lean` has the controls: a text that writes over each of them, and a text that replaces the objects of a pair). The checks register their modules before settling the project. Source comparisons and ceilings build with the statements. The comparator judges the accepted proof pairs and their consumers against the exported challenges. `OutsideReading.lean` submits the Honest pair and checks separately the fixtures that the comparator must refuse. `GoalClaim.lean` also checks modules assembled for tests of the generator by reading Lean's result.
+A check does not rest on Lean's acceptance of the proof module. A check writes its modules into a Lake project in its work folder (`ZkcFormalTests.SubjectProject`): the project requires the formal package, and its modules are files named by their module names. The data module (`<Name>.Stated`) holds no text; the proof module imports it; and the challenge (`<Name>.Challenge`) states each published theorem with no proof. The harness's record of such a pair is `ZkcFormalTests.WrittenSubject.Module`; it holds the views and the fees module that the proof module imports, which go into a project with the proof module. A text is arbitrary Lean and can run a program while Lean reads it, so the project is settled in an order that leaves a text nothing to change. First the modules of the statements and the challenges are built, and the challenge of each judgment is exported by the toolchain's `leanexport`; then every other module is built, in one call of `lake build`; then a judgment exports its solutions and gives the two exports to `lake comparator`, which compares each judged theorem's statement with everything that it uses, replays the solution in the kernel and reads its axioms. Every process that reads a text, or the objects that a text's build left, runs confined (`bwrap`, which the host must have, with the profile of the comparator's own sandbox): the file system is read-only but for the project's `.lake`, the home and temporary folders and those of running services are covered, and there is no network of its own (a socket of the host whose path lies elsewhere can still be reached; `docs/status.md` says what that leaves). What a text can reach is then the objects of its build and the solution's export, which are what is judged; the exported challenge, the list of the pairs and the verdicts are beside `.lake`, where it cannot write (`checks/OutsideReading.lean` has the controls: a text that writes over each of them, and a text that replaces the objects of a pair). The checks register their modules before settling the project. Source comparisons build with the data modules. The comparator judges the accepted proof pairs and their consumers against the exported challenges. `OutsideReading.lean` submits the Honest pair and checks separately the fixtures that the comparator must refuse. `GoalClaim.lean` also checks modules assembled for tests of the generator by reading Lean's result.

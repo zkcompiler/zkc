@@ -4,7 +4,6 @@ public import ZkcFormal.ChargedProbability
 public import Zkc.Core.World.Stack
 public import Zkc.Core.Program.Links
 public import Zkc.Subject.Charges
-public import ZkcFormal.WalkLabels
 
 @[expose] public section
 

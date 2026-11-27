@@ -7,8 +7,8 @@ bound.
 A judgment by fees has its own budget; the table of caps bounds each fee. A judgment within a
 budget gives `Soundness.Result` at every bound that is at least that budget, with a coverage
 fact, by two steps of the library. A bound below the budget is not reached by them: the step
-asks for the comparison. This is not the result that a goal publishes today (`Goal.Result`, at
-its table's total and with the table's count against the stored program).
+asks for the comparison. A goal publishes `Soundness.Result` at its row's bound; the fee facts of
+a row (`ZkcFormal.Written.FeeFacts`) give the step from a judgment within the table's budget.
 
 These theorems take a judgment as given. That a judgment exists within a budget other than its
 table's is shown on a subject: the guarded verifier of `checks/WrittenBoundGuard.lean` is
