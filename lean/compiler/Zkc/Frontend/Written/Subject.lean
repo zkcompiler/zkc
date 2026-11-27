@@ -171,7 +171,9 @@ def text (layout : SubjectLayout owner) : Except String String := do
       "  ⟨⟨rootHeader, rootMember, found'root⟩, ⟨proverRole, by decide +kernel⟩,\n" ++
       "   ⟨verifierRole, by decide +kernel⟩, by decide +kernel⟩\n",
     "noncomputable def written'origins : Zkc.Subject.RootOrigins written'root :=\n" ++
-      s!"  ⟨{reprStr file.path}, {reprStr (Static.qualifiedName program owner.scheme)}, #{list (owner.inputs.toList.map reprStr)}, rfl⟩\n"]
+      s!"  ⟨{reprStr file.path}, {reprStr (Static.qualifiedName program owner.scheme)}, #{list (owner.inputs.toList.map reprStr)}, rfl⟩\n",
+    -- the tools that name a library term's binders find the root's source names by this instance
+    "noncomputable instance : Zkc.Subject.SourceNames written'root := ⟨written'origins⟩\n"]
   for k in layout.functions do
     lines := lines.push (s!"noncomputable def written'fn{k} : " ++
       s!"Zkc.Subject.FunctionEntry subjectPackage := ⟨header{k}, member'fn{k}, found'fn{k}⟩\n")
