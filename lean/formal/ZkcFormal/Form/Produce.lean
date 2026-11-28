@@ -430,11 +430,14 @@ partial def instr (setting : Setting) (key i mid path : Expr) (scope : Scope) : 
     let empties ← mkAppOptM ``Zkc.Core.HList.empties #[none, some setting.values, some each]
     let start ← mkAppM ``Prod.mk #[initial, empties]
     let state ← inferType start
-    let range ← mkAppM ``List.range' #[mkNatLit 0, count]
+    let range := mkApp3 (mkConst ``List.range') (mkNatLit 0) count (mkNatLit 1)
     let body ← withLocalDeclD `j (mkConst ``Nat) fun j => withLocalDeclD `state state fun st => do
       let index ← value (← mkAppM ``Zkc.Core.Semantics.index #[s, w, j])
       let before ← mkAppM ``Prod.fst #[st]
-      let inputs ← mkAppM ``Zkc.Core.HList.cons #[index, before]
+      -- the iteration number and the carried values, at the types of the loop's input names
+      let names := i.getArg! 8
+      let inputs := mkApp6 (mkConst ``Zkc.Core.HList.cons) setting.index setting.values
+        (names.getArg! 2) (names.getArg! 3) index before
       let frame ← mkAppM ``Zkc.Core.Frame.iteration #[key, j]
       let inner ← termComputation setting (i.getArg! 9) (← deeper path frame)
         (← bound scope (i.getArg! 8) inputs)
@@ -450,7 +453,7 @@ partial def instr (setting : Setting) (key i mid path : Expr) (scope : Scope) : 
         #[some setting.monad, none, some state, none, some yield, some iteration]
       marked j (← marked st stepped)
     let looped ← mkAppOptM ``forIn
-      #[some setting.monad, none, none, none, some state, none, some range, some start, some body]
+      #[some setting.monad, none, none, none, some state, some range, some start, some body]
     let finish ← withLocalDeclD `state state fun st => do
       let collected ← mkAppM ``Zkc.Core.Semantics.collected
         #[s, size, ← mkAppM ``Prod.snd #[st]]
