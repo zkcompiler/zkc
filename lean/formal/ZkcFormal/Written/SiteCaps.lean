@@ -65,12 +65,23 @@ theorem _root_.Zkc.Subject.CapTable.capFrom_call (table : CapTable) (place : Nat
 def _root_.Zkc.Subject.CapTable.cap (table : CapTable) (site : Site) : ℚ≥0 :=
   table.capFrom table.root site.through site.key
 
-/-- What a table allows an effect of a run of the use at `place` that starts at `start`: the cap
-of the site of the effect below `start`. -/
+/-- What a table allows at an occurrence of a run of the use at `place` that starts at `start`:
+the cap of the occurrence's site below `start`. An allowance is of an occurrence: it reads
+where an effect occurs and nothing else of the effect. -/
+def _root_.Zkc.Subject.CapTable.allowedFrom (table : CapTable) (place : Nat) (start : List Frame)
+    (at_ : Occurrence) : ℚ≥0 :=
+  (at_.siteBelow start).elim 0 fun site => table.capFrom place site.through site.key
+
+/-- What a table allows at an occurrence of a run of the root that starts at `start`. -/
+abbrev _root_.Zkc.Subject.CapTable.allowed (table : CapTable) (start : List Frame)
+    (at_ : Occurrence) : ℚ≥0 :=
+  table.allowedFrom table.root start at_
+
+/-- What a table allows an effect of a run of the use at `place` that starts at `start`: what it
+allows where the effect occurs. -/
 def _root_.Zkc.Subject.CapTable.allowanceFrom {V : Vocabulary} (M : Model V)
     (table : CapTable) (place : Nat) (start : List Frame) (op : ROp M) : ℚ≥0 :=
-  ((ROp.occurrence M op).siteBelow start).elim 0 fun site =>
-    table.capFrom place site.through site.key
+  table.allowedFrom place start (ROp.occurrence M op)
 
 /-- What a table allows an effect of a run of the root that starts at `start`. -/
 abbrev _root_.Zkc.Subject.CapTable.allowance {V : Vocabulary} (M : Model V)
@@ -84,7 +95,7 @@ theorem _root_.Zkc.Subject.CapTable.allowanceFrom_at {V : Vocabulary} (M : Model
     (table : CapTable) (place : Nat) (start rest : List Frame) (key : Key) (op : ROp M)
     (occurs : ROp.occurrence M op = ⟨start ++ rest, key⟩) :
     table.allowanceFrom M place start op = table.capFrom place (Frame.applications rest) key := by
-  simp [CapTable.allowanceFrom, occurs, Occurrence.siteBelow_append]
+  simp [CapTable.allowanceFrom, CapTable.allowedFrom, occurs, Occurrence.siteBelow_append]
 
 /-- The total of a table, as a probability. -/
 noncomputable def _root_.Zkc.Subject.CapTable.total (table : CapTable) : ℝ≥0∞ :=

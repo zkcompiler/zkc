@@ -37,6 +37,25 @@ theorem result_at_total {covers : NamedProgram V → Key → Key → Bool}
     (judged : Fees.Judged M app draws caps) : Soundness.Result M app draws covers caps.total :=
   Soundness.result_of_installed M app draws covered (Fees.installed_at_total M app draws caps judged)
 
+/-- The judgment under a table is the judgment by fees at the table's allowance, spelled out:
+on every path and every valid rejected input, the verifier's process under the fees of the
+samplers of the laws within what the table allows each effect, never returning. -/
+example (budget : ℚ≥0) : Fees.JudgedWithin M app draws caps budget =
+    ∀ path : List Frame, Goal.Internal.inputs M scheme.verifier false scheme.entry.header.ins fun xs ↦
+      Soundness.Rejected M app pkg.installed app.relation.member xs →
+        (roleMeaning M pkg.installed scheme.entry.member scheme.verifier path xs).interpret
+          (.charged (Permitted M) (paysWithin (lawSamplers M draws) (caps.allowance M path)))
+          (fun _ _ ↦ False) (fun _ _ ↦ True) budget :=
+  rfl
+
+/-- A judgment within a budget, under any allowance, puts the value of the verifier within the
+budget; the installed bounds are the numbers at or above the value. -/
+example {allowance : List Frame → Occurrence → ℚ≥0} {budget : ℚ≥0}
+    (judged : Fees.JudgedUnder M app draws allowance budget) :
+    Soundness.ValueWithin M app draws (toProbability budget) ∧
+      (∀ b, Soundness.Installed M app draws b ↔ Soundness.ValueWithin M app draws b) :=
+  ⟨Fees.value_of_judged M app draws judged, Soundness.installed_iff M app draws⟩
+
 /-- A budget of one over four is the limit of the bound one over four. -/
 example : toProbability ((1 : ℕ) / (4 : ℕ)) = (⟨1, 4, by decide⟩ : Bound).limit :=
   Fees.toProbability_eq_limit (by decide)

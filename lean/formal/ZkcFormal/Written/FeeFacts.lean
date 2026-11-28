@@ -42,14 +42,15 @@ statement. The fee facts are those of a proof of soundness: a subject with a row
 that publishes nothing is refused, as `publish_goals` refuses it, and a row of another published
 property (there is none today) gets no fee facts and a line.
 
-A site's cap is read from the table in the judgment's term (`CapTable.allowance`): the command
+A site's cap is read from the table in the judgment's term (`CapTable.allowed`): the command
 declares no cap equation, no site's name and no label. A fees module is its imports and that line.
 It is for proofs, not for a challenge: the repository's challenges do not import it.
 
 The naming of views unfolds the fee judgment because this module registers it (`view_unfold`).
 -/
 
-attribute [view_unfold] ZkcFormal.Written.Fees.JudgedWithin ZkcFormal.Written.Fees.JudgedAt
+attribute [view_unfold] ZkcFormal.Written.Fees.JudgedUnder ZkcFormal.Written.Fees.JudgedWithin
+  ZkcFormal.Written.Fees.JudgedAt
 
 public meta section
 
