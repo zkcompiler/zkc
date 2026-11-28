@@ -34,6 +34,7 @@ def rootDescription (state : Compile.State) (root : InstanceId) (qualified : Boo
 the core admitted, or why it has none: refused (by the frontend or the core), waiting, not checked
 to the end, or without a package of its own (a specification item, a function bound to a row). -/
 def rootPackage (state : Compile.State) (root : InstanceId) : Except Lack CheckedPackage :=
+  if let some lack := state.rootModuleFailures[root]? then .error lack else
   let body := state.results.body? root
   let outcome : Option PackageOutcome :=
     (state.results.packageReports.find? (·.root == root)).map (·.outcome)
@@ -60,7 +61,13 @@ def admit (state : Compile.State) (root : InstanceId) : Option PackageOutcome :=
     | .ok emission =>
       let source := emission.package ⟨[], [], [], [], []⟩
       match source.check with
-      | .ok checked => some (.admitted checked)
+      | .ok checked =>
+        match state.rootModuleFailures[root]? with
+        | none => some (.admitted checked)
+        | some (.waiting why) => some (.waiting why)
+        | some (.exhausted e) => some (.exhausted e)
+        | some (.defect why) => some (.defect why)
+        | _ => none
       | .error refusals => some (.refused source refusals)
     | .error (.waiting reason) => some (.waiting reason)
     | .error (.defect message) => some (.defect message)

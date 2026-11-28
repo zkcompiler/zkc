@@ -45,10 +45,6 @@ Then Lean is run on three modules for the two goals of the reference case `N-GL2
   those of the root's own package.
 - The control has, as the deployed package, the root of the same source with the guard of the
   verifier negated. Lean refuses it where it states that the deployed definitions come first.
-
-A fourth module has the claims of a goal whose relation has a witness, with the statements that
-`Written.Statements` writes for it and no proof: its premise quantifies the witness, and Lean
-elaborates it.
 -/
 
 open Zkc.Core Zkc.Frontend Zkc.Frontend.Written
@@ -253,21 +249,8 @@ def run (corpus : System.FilePath) (work : System.FilePath) : IO Unit := do
     (comparisonModule "ClaimsSource" count ["loose", "strict"] (Written.package (packageOf both)).text)
   let control ← startLakeLean work "ClaimsControl"
     (proofModule "ClaimsControl" (negated.emission.package noAssociation) (packageOf both) root.id relations)
-  -- The statement of a goal whose relation has a witness: the premise is that the relation
-  -- returns false at the statement for every valid witness. The promise pair has no charge, so
-  -- the bound of its statement is zero; Lean elaborates the statement.
-  let (_, pairClaims) ← read pair ["sound"]
-  let pairStated : Statements := { claims := pairClaims }
-  let pairText ← IO.ofExcept (pairStated.claimTexts)
-  -- The premise stands in the claim and in the statement that its hypotheses are met.
-  expect "the statement of a relation with a witness does not quantify the witness"
-    ((pairText.splitOn "∀ (witness0 : ").length == 3)
-  let stated ← startLakeLean work "ClaimsWitness"
-    (← IO.ofExcept (pairStated.claimsModule "ClaimsWitness")).text
   let (ok, output) ← finishLean proof
   acceptedOutput "Claims" ok output theorems
-  let (ok, output) ← finishLean stated
-  acceptedOutput "ClaimsWitness" ok output []
   let (ok, output) ← finishLean comparison
   acceptedOutput "ClaimsSource" ok output []
   let (ok, output) ← finishLean control

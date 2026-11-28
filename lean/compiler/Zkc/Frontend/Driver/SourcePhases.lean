@@ -46,10 +46,12 @@ structure PhaseReport where
   duration : Nat := 0
   /-- The errors logged by the phase. -/
   errors : Nat := 0
-  /-- The diagnostics of every severity logged by the phase. -/
+  /-- The displayed diagnostics of every severity attributed to this phase in this session. -/
   diagnostics : Nat := 0
-  /-- The place in the log of the first diagnostic of the phase. -/
+  /-- The start of this phase's range in the current display log. -/
   firstDiagnostic : Nat := 0
+  /-- The same phase's display range if a later module check supersedes its early cutoffs. -/
+  retainedRange : Option (Nat × Nat) := none
   /-- The interrupt that ended the phase, when one did. -/
   interrupted : Option String := none
   /-- The lines of the traces that were on. -/
@@ -73,10 +75,15 @@ def runIn (phase : Phase) (context : Compile.Context) (state : Compile.State) :
   let interrupted := match outcome with
     | .ok _ => none
     | .error interrupt => some (describeInterrupt interrupt)
+  let retainedStart := state.log.cursor.retained
+  let first := if state.log.moduleDepthRevision != after.log.moduleDepthRevision then retainedStart
+    else state.log.entries.size
   ({ name := phase.name
      errors := after.log.errors - state.log.errors
-     diagnostics := after.log.entries.size - state.log.entries.size
-     firstDiagnostic := state.log.entries.size
+     diagnostics := after.log.entries.size - first
+     firstDiagnostic := first
+     retainedRange := after.log.moduleDepthRetry.map fun retry =>
+       (retainedStart, retry.retained.entries.size - retainedStart)
      interrupted, traces := after.traces },
    { after with traces := state.traces, stack := #[] })
 

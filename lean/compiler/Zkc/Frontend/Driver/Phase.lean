@@ -2,7 +2,7 @@ module
 
 public import Zkc.Frontend.Driver.SourcePhases
 public import Zkc.Frontend.Semantics.Typing
-public import Zkc.Frontend.Driver.Bodies
+public import Zkc.Frontend.Driver.ModuleUses
 
 @[expose] public section
 
@@ -34,6 +34,7 @@ def types : Phase where
   writes := #[.signatures, .bodies]
   run := do
     Typing.typeProgram
+    Typing.checkProgramModules (beforeDefaults := true)
     reportSilentRefusals
 
 /-- The default instances of the public declarations that no root reaches (SP7): formed once
@@ -53,6 +54,7 @@ def defaultBodies : Phase where
   writes := #[.signatures, .bodies]
   run := do
     Typing.typeBodies
+    Typing.checkProgramModules
     reportSilentRefusals
 
 /-- The package of every root that is a function or a protocol is emitted and admitted by the

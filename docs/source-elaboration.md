@@ -67,9 +67,9 @@ can have no diagnostic at this prefix while an instance is waiting or a scheme o
 has yet to be checked. The independent corpus, default-instance pass, construction and
 goal discharge are outside this measurement.
 
-Of the 177 positive programs, 175 had no error through body typing and two were refused.
-Of the 344 negative programs, 198 produced a listed rule, two produced a different rule
-and 144 produced no error at this prefix. One further reference case is marked skipped.
+All 177 positive programs had no error through body typing.
+Of the 344 negative programs, 200 produced a listed rule, two produced a different rule
+and 142 produced no error at this prefix. One further reference case is marked skipped.
 `just test-frontend` runs this inventory and fixes the five counts. The four cases of interface applications add two accepted programs and two SP8 refusals. In the earlier comparison with the 504-row inventory, only the three role cases below changed, and the two cases added since (`N-SX3c`, `N-GL2d`: the `where` of a relation where a clause applies it) are one more listed rule and one more case without an error at this prefix, whose rule refuses where a goal gives the value. On the
 separate 134-entry independent corpus all 69 positive cases had no error through this
 prefix. Of 53 negative cases, 50 produced a listed rule, two produced another rule and one
@@ -82,7 +82,8 @@ test than counting frontend diagnostics.
 | `N-TY14e`, `I-4d`, `V-F2` | P can now index the sent array after checking its length. The latter two programs produce TY4 at the shared binding, identifying V as the role with the bound and P as the role missing it. |
 | `N-SC1a` | The scheme tried to close a specification-only natural. Static argument binding now identifies an ordinary named argument for that parameter as SP11. SC1 checks an explicit `spec` argument at the scheme. Omitting the argument leaves it for the goal. This belongs at instantiation, before computing a deployment identity. |
 | `N-SC5a`, `V-C2` | An earlier group-operation typing diagnostic in a dependency masks the expected suite-key or goal diagnostic. Reproduce the point-by-nonzero-scalar operation in isolation and reconcile the vocabulary and its coercions before changing SC5 or GL4. |
-| `N-E1`, `N-E2` | Both carried algebra examples fail to resolve multiplication on `Bound`. One expects an accepted program and the other additionally expects evaluation to falsify a law. Resolve home-module operator lookup first, then test the two law outcomes separately. |
+| `N-E1`, `N-E2` | The generic `constraint` member resolves arithmetic through the operations of its `Algebra` parameter. Both bodies typecheck. The truth of the two stated degree laws belongs to a later judgment. |
+| `N-E3`, `N-E4` | The opaque typing of the same generic member rejects equality without an interface operation (SP12) and a numeric literal at the abstract carrier type (TY6). |
 
 A send keeps the wire type and all holders in the typed source and the emitted instruction.
 Core analyzes each role's projection. For a sender, every successful `give` returns its

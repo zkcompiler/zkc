@@ -5,14 +5,16 @@ namespace Zkc.Tools.Frontend
 
 open Zkc.Frontend Zkc.Frontend.Written
 
-/-- Write the trusted side of a goal. Both files use the same module names as the
-in-memory publication. The output directory belongs to this invocation. -/
-private def writeGoal (directory : System.FilePath) (publication : Written.Module) : IO Unit := do
+/-- Write what the issuer publishes for a goal: the trusted side (`Stated.lean`, the data module,
+and `Challenge.lean`) and the two modules for proofs and readers (`Views.lean`, `Fees.lean`). The
+files use the same module names as the in-memory publication. The output directory belongs to
+this invocation. -/
+private def writeGoal (directory : System.FilePath) (publication : Written.Publication) : IO Unit := do
   let pending := directory / ".pending"
   IO.FS.createDir pending
   try
-    for (file, source) in [("Stated.lean", publication.statements),
-        ("Challenge.lean", publication.challenge)] do
+    for (file, source) in [("Stated.lean", publication.data), ("Challenge.lean", publication.challenge),
+        ("Views.lean", publication.views), ("Fees.lean", publication.fees)] do
       let handle ← IO.FS.Handle.mk (pending / file) .write
       handle.putStr source
       -- A buffered final write can fail after putStr returns.
@@ -24,7 +26,8 @@ private def writeGoal (directory : System.FilePath) (publication : Written.Modul
     if ← pending.pathExists then IO.FS.removeDirAll pending
 
 /-- Report every requested occurrence in order, write each distinct challenge once, and
-return failure if any required goal was refused. -/
+return failure if any required goal was refused. A goal that is issued without a table of caps
+is issued: its result ends with the limit of a table that its charges met, and is no failure. -/
 def writtenGoals (options : Names.Options) : IO UInt32 := do
   if options.goals.isEmpty then
     IO.eprintln "written-goals requires at least one --goal"
@@ -57,9 +60,14 @@ def writtenGoals (options : Names.Options) : IO UInt32 := do
           continue
       let claims := issued.statements.claims
       for goal in claims.goals do
+        -- a goal with a ceiling whose charges a table has no place for is issued, and its result
+        -- says so
+        let limit := match goal.limit with
+          | some limit => s!"; no table of caps: {limit.describe}"
+          | none => ""
         IO.println (s!"{result.selector} -> {path}: issued {publication.space}.Challenge " ++
           s!"(scheme {claims.schemeName}, root {claims.root}, relation {goal.relation}, " ++
-          s!"spec {goal.specification})")
+          s!"spec {goal.specification}){limit}")
   return if exported && allGoalsIssued results then 0 else 1
 
 end Zkc.Tools.Frontend

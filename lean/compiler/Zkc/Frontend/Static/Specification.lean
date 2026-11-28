@@ -64,9 +64,22 @@ loop needs an occurrence-specific value and cannot force the loop to be stepped.
 def SpecificationClosure.checkApplication (closure : SpecificationClosure) (callee : InstanceId)
     (place : Syntax.Span) : CompileM Unit := do
   unless ← closure.isClosed do return
-  let (result, after) := (closure.close callee {} place).run (← read) (← get)
+  let saved ← get
+  let (result, after) := (captureModuleReads (closure.close callee {} place)).run (← read) saved
   match result with
-  | .ok _ | .error (.staticIndex _) => pure ()
+  | .ok (_, reads) =>
+    -- An application in the opaque typing still checks its proof arguments. Only its
+    -- concrete typing contributes uses to the enclosing program.
+    let concrete : StateM (Std.HashSet InstanceId) Bool := do
+      unless ← realInstance saved callee do return false
+      if let some receiver := closure.lexical.self? then
+        unless ← realValue saved receiver do return false
+      for (_, value) in closure.lexical.values do
+        unless ← realValue saved value do return false
+      return true
+    let keep : Bool := concrete.run' {}
+    if keep then publishDetachedObservations saved after reads
+  | .error (.staticIndex _) => pure ()
   | .error failure =>
     modify fun s => {s with log := after.log}
     throw failure

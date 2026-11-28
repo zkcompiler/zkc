@@ -188,6 +188,19 @@ inductive EventAudience where
   | unresolved
   deriving Inhabited
 
+/-- What an event is, as the text says it (EV1). An application has its callee's declaration
+where the text determines it (a callee given through a parameter is not determined there). -/
+inductive SourceEventKind where
+  | send
+  | oracleSend
+  | query
+  | opening
+  | draw
+  | sample
+  | attempt
+  | application (callee : Option DeclarationId)
+  deriving Inhabited
+
 /-- An event of a protocol as its text gives it, for every instance (EV3): its number is its
 place in this list. -/
 structure SourceEvent where
@@ -197,6 +210,9 @@ structure SourceEvent where
   /-- Its parts, in order: `value`, or `to R` per receiver of a send to several. -/
   parts : Array String
   audience : EventAudience := .unresolved
+  /-- What the event is. It is a fact of the declaration: the same for every instance, also for
+  an event of a loop that does not run. -/
+  kind : SourceEventKind
   deriving Inhabited
 
 end Zkc.Frontend

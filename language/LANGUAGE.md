@@ -2855,8 +2855,12 @@ with the largest charge counts; a written charge on an application replaces it w
 one. The charge of an `attempt` is the probability that one attempt aborts. A charge at a site
 between a deferred query and the `open` of its claim is stated for the runs in which the claim
 may be false. The charges of a contract are also the bound that a `knowledge` clause claims
-when it reads one run (SX6). **Messages:** "`sites.<x>` is a send; a charge belongs to a draw, an application or
-an attempt"; "a charge is over static terms; `<p>` is a port of `<X>`, a run-time value".
+when it reads one run (SX6). A charge is a probability: it is not negative and at most one.
+A site has one charge: a second `charge` on a site is an error.
+**Messages:** "`sites.<x>` is a send; a charge belongs to a draw, an application or
+an attempt"; "a charge is over static terms; `<p>` is a port of `<X>`, a run-time value"; "a
+charge is not negative"; "a charge is a probability, at most one; this one is `<3>`"; "a second
+charge on `sites.<x>`: a site has one cap".
 
 **SX9. Generated members.** A protocol, a scheme and a layout module have generated members,
 named through `::` (NL3 c) and nowhere declared. §8 lists every one with its definition.
@@ -3081,7 +3085,16 @@ property other than `completeness` of a `derived` scheme at the stage `construct
 the budget of the model of every commitment scheme that the scheme names (the queries of the
 random oracle for a scheme built on a hash, the operations of the group model for one built on a
 pairing). A ceiling is a request: nothing relates it to its budget before the bound is proved.
-**Messages:** "a ceiling needs a budget: write `random_oracle(queries = …)`"; "a ceiling on
+At the stage `written`, a soundness goal claims its bound: the ceiling where the goal writes one,
+and otherwise the total of the charges of its contract along one run (SX8). A ceiling below that
+total is a claim that the charges do not establish; the goal is issued, and a proof by the
+charges does not reach it. A probability is at most one, so a bound of one or more holds of
+every verifier and says nothing of this one: a goal whose bound is one or more is refused,
+whether the goal writes it as its ceiling or its charges add up to it.
+**Messages:** "the goal `<g>` writes the ceiling `<1>`: a bound of one or more holds of every
+verifier; a goal claims a bound below one"; "the goal `<g>` writes no ceiling, and the charges of
+its contract add up to `<1>`: a bound of one or more holds of every verifier; a goal claims a
+bound below one"; "a ceiling needs a budget: write `random_oracle(queries = …)`"; "a ceiling on
 `<soundness>` of a `derived` scheme at the stage `<serialized>` needs a query budget: write
 `model = random_oracle(queries = …)`, or state the goal at `stage = written`"; "a ceiling at
 `committed` needs the budget of the model of `<Tree<Keccak256>>`: write

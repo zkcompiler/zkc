@@ -1,0 +1,98 @@
+theorem relationValue (x : Bool) :
+    functionResult (t := .bool) (fnMeaning model installed member'fn0 (.cons x .nil)) = some x := by
+  kernel_rfl
+
+open scoped ZkcFormal.Written.FeeRules
+
+-- the register of the forms module, read from this module
+#registered_forms installed
+
+/-- What the function `same` of the source computes, from its registered form: the reading of
+its meaning is the form, and the form at two numbers is the reading of their comparison. -/
+theorem sameValue (a b : ℕ) :
+    fnMeaning model installed function1 (.cons a (.cons b .nil)) =
+      .done (.cons (Nat.beq a b) .nil) :=
+  Reading.read_injective ((function1.reads model _).trans rfl)
+
+/-- One contract of the round at the verifier's role: it returns no hit, for a fee of one
+quarter, which its draw needs. -/
+noncomputable def roundContract : Fees.Contract model installed protocol2 1 where
+  Ghost := Unit
+  pre _ _ := True
+  post _ _ outs := Form.headV outs = false
+  fee := 1 / 4
+  need site := if site = ⟨[], ⟨1⟩⟩ then 1 / 4 else 0
+
+set_option experimental.vcgen true in
+theorem roundHolds : roundContract.Holds StandardInterpretation.draws := by
+  intro allowance start covers _ ins _ budget fee
+  let context : FeeRules.Context model := ⟨StandardInterpretation.draws, allowance⟩
+  refine FeeRules.judged_of_triple context _ (protocol2.role1.form model start ins)
+    (protocol2.role1.reads model start ins) _ _ FeeRules.stopped ?proved
+  vcgen [protocol2.role1.form] invariants
+  | inv1 => (⟨1 / 4, fun r => r = v⟩ : FeeRules.DrawChoice ⟨start, ⟨1⟩⟩ ℕ)
+  case vc1 => exact (show (1 / 4 : ℚ≥0) ≤ budget from fee).trans (by assumption)
+  case vc2 =>
+    refine ⟨Or.inr ⟨_, rfl, ?_⟩, ?_⟩
+    · show Pr{let r ← drawPosition 3}[r = v] ≤ toProbability (1 / 4)
+      rw [prEvent_drawPosition, show (1 / 4 : ℚ≥0) = ((1 : ℕ) : ℚ≥0) / ((3 + 1 : ℕ) : ℚ≥0) by norm_num,
+        toProbability_natCast_div 1 (3 + 1) (Nat.succ_pos 3)]
+      have few : ({y : Fin (3 + 1) | (y : ℕ) = v} : Finset (Fin (3 + 1))).card ≤ 1 :=
+        Finset.card_le_one.mpr fun a ha b hb =>
+          Fin.ext ((Finset.mem_filter.mp ha).2.trans (Finset.mem_filter.mp hb).2.symm)
+      push_cast
+      calc _ ≤ (1 : ℝ≥0∞) / (3 + 1) := ENNReal.div_le_div_right (by exact_mod_cast few) _
+        _ = 1 / 4 := by norm_num
+    · show (1 / 4 : ℚ≥0) ≤ allowance ⟨start, ⟨1⟩⟩
+      have needed := covers ⟨start, ⟨1⟩⟩ ⟨[], ⟨1⟩⟩
+        (by simpa [Frame.applications] using Occurrence.siteBelow_append start [] ⟨1⟩)
+      simpa [roundContract] using needed
+  case vc3 =>
+    have computed := ‹fnMeaning _ _ _ _ = Process.done _›
+    rw [sameValue] at computed
+    cases computed
+    simp only [roundContract, Form.headV_cons]
+    exact Bool.eq_false_iff.mpr fun same => ‹¬_ = _› (Nat.eq_of_beq_eq_true same)
+  case vc4 => exact tsub_le_tsub_right (by assumption) _
+
+set_option experimental.vcgen true in
+theorem judged : t.twice.fees.judged.view := by
+  intro path input_claim valid_input_claim rejected
+  cases input_claim with
+  | true => exact False.elim (rejected (relationValue true))
+  | false =>
+    have covers (key : ℕ) (called : key = 0 ∨ key = 1) :
+        roundContract.Covers (written'caps0.allowed path) (path ++ [.application ⟨key⟩]) := by
+      intro at_ site below
+      show (if site = ⟨[], ⟨1⟩⟩ then (1 / 4 : ℚ≥0) else 0) ≤
+        written'caps0.allowedFrom written'caps0.root path at_
+      rw [CapTable.allowedFrom, Occurrence.siteBelow_application below]
+      split
+      · subst_vars
+        rcases called with rfl | rfl <;> decide +kernel
+      · exact zero_le
+    let context : FeeRules.Context model :=
+      ⟨StandardInterpretation.draws, written'caps0.allowed path⟩
+    refine FeeRules.judged_of_triple context _
+      (protocol3.role1.form model path (.cons false (.cons () (.cons () .nil))))
+      (protocol3.role1.reads model path _) _ _ FeeRules.stopped ?proved
+    have first := fun Q E halts => FeeRules.call roundContract roundHolds
+      (path ++ [.application ⟨0⟩]) (covers 0 (.inl rfl)) () (.cons () .nil) Q E halts
+    have second := fun Q E halts => FeeRules.call roundContract roundHolds
+      (path ++ [.application ⟨1⟩]) (covers 1 (.inr rfl)) () (.cons () .nil) Q E halts
+    vcgen [protocol3.role1.form, first, second]
+    case vc1 => trivial
+    case vc2 => exact (by decide +kernel : (1 / 4 : ℚ≥0) ≤ 1 / 2).trans (by assumption)
+    case vc3 => trivial
+    case vc4 _ below _ _ kept =>
+      exact (by decide +kernel : (1 / 4 : ℚ≥0) ≤ 1 / 2 - 1 / 4).trans
+        ((tsub_le_tsub_right below _).trans kept)
+    case vc5 => simp_all [roundContract]
+
+theorem t.twice.sound : published% written'subject t.twice sound :=
+  t.twice.sound_of_installed (t.twice.installed.view_iff.mpr (t.twice.fees.installed_of_judged judged))
+
+theorem t.twice.met : published% written'subject t.twice met :=
+  t.twice.met.view_iff.mp ⟨false, trivial, served, fun accepted => by
+    have := (relationValue false).symm.trans accepted
+    simp at this⟩

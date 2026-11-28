@@ -89,6 +89,43 @@ def raiseFirst (text start marker : String) : Option String := do
   let changed := toString (number + 1000) ++ (second.dropWhile Char.isDigit).toString
   return before ++ start ++ marker.intercalate (first :: changed :: rest)
 
+/-- Render the same source root with two substitutions for its family and with an unresolved
+definition key. Only full admission needs the family definition to exist. -/
+private def checkFamilyAssociations (work : System.FilePath) (p : SourcePackage) (root : Nat) :
+    IO Unit := do
+  let header := String.join (Written.subjectPackageImports.map (s!"import {·}\n")) ++
+    "\nopen Zkc.Core\nnamespace Families\n"
+  let render (argument definition : Nat) :=
+    let association : Association := { noAssociation with
+      families := [⟨⟨7⟩, [.nat argument], ⟨definition⟩⟩] }
+    Written.subjectPackage { p with association }
+  -- Write the expected value independently of the association printer.
+  let valid (name : String) (argument : Nat) := s!"namespace {name}\n" ++ render argument root ++
+    s!"def expected : Association := ⟨[⟨⟨7⟩, [.nat {argument}], ⟨{root}⟩⟩], [], [], [], []⟩\n" ++
+    "example : subjectPackage.association = expected := rfl\n" ++
+    "#guard association = expected\n#guard (admit stored association).isOk\n" ++
+    s!"#print axioms readback\n#print axioms admitted_exists\nend {name}\n"
+  let path := work / "Families.lean"
+  IO.FS.writeFile path (header ++ valid "First" 3 ++ valid "Second" 4 ++
+    "example : First.subjectPackage.installed = Second.subjectPackage.installed := rfl\n" ++
+    "example : First.subjectPackage.association ≠ Second.subjectPackage.association :=\n" ++
+    "  by decide +kernel\n" ++
+    "end Families\n")
+  let (ok, output) ← runLean path #["-DwarningAsError=true"]
+  acceptedOutput "Families" ok output
+    ["First.readback", "First.admitted_exists", "Second.readback", "Second.admitted_exists"]
+  let missing := (p.named.definitions.map (·.key.number)).foldl max root + 1
+  let path := work / "MissingFamily.lean"
+  IO.FS.writeFile path (header ++ render 3 missing ++
+    "example : elaborateProgram stored = .ok installed := elaborated.elaborates\n" ++
+    "#guard match admit stored association with\n" ++
+    s!"  | .error [.association e] => e == refuseWhole ⟨{missing}⟩ .association (.key ⟨{missing}⟩)\n" ++
+    "  | _ => false\nend Families\n")
+  let (ok, output) ← runLean path #["-DwarningAsError=true"]
+  refusedOutput "missing family definition" ok output ["(admit stored association).isOk = true"]
+    (only := true)
+  IO.println "soundness package: two family substitutions accepted, missing definition refused"
+
 def run (project work : System.FilePath) : IO Unit := do
   -- the fixture: every constructor of the program by names, printed and read back
   IO.FS.writeFile (work / "Fixture.lean") (fixtureModule ++
@@ -114,6 +151,8 @@ def run (project work : System.FilePath) : IO Unit := do
           (checkModule name text.text project subject.file subject.edits root noAssociation)
         expectAccepted name path ["readback", "admitted_exists"]
         IO.println s!"{name}: {text.definitions.length} definitions, {package.bindings.rows.length} external rows, accepted"
+        -- The first admitted root (Schnorr) has just one stored definition.
+        if printed == 0 then checkFamilyAssociations work package root
         printed := printed + 1
         if subject.label == "Sumcheck" then control := some (name, text.text, subject, root)
     unless admitted == subject.admitted && refused == subject.refused do

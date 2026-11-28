@@ -58,7 +58,14 @@ theorem sampled_iff_draws (t : Zkc.Vocabulary.Ty) (reply : Standard.Ty) :
   apply Eq.trans _ (ArithmeticModel.sampled_iff_draws F G (.uniform t) reply)
   change Coverage.sampledType t reply = ArithmeticModel.sampledType t reply
   unfold Coverage.sampledType ArithmeticModel.sampledType
-  split <;> rfl
+  -- the compiler's cases, then the model's where the compiler's is the last
+  split
+  · rfl
+  · rfl
+  · split
+    · simp_all
+    · simp_all
+    · rfl
 
 /-- A conservative syntactic bound on the row table. No nested collection row is implemented. -/
 def respectsPointStructure : Standard.RowKey → Bool

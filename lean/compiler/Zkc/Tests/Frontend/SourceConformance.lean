@@ -64,13 +64,16 @@ private def checkBodyTyping (repository : Repository) : TestM Unit := do
       s := (Typing.typeProgram.run context s).2
       let errors := (s.log.entries.filter (·.isError)).map (·.rule)
       let rules := refusalRules block.expect
+      if ["N-E1", "N-E2", "N-E3", "N-E4"].contains block.id then
+        expectTrue (if rules.isEmpty then errors.isEmpty else errors.any (rules.contains ·))
+          s!"{block.id}: expected `{block.expect}` through body typing, got {errors}"
       if rules.isEmpty then
         if errors.isEmpty then clean := clean + 1 else refused := refused + 1
       else if errors.isEmpty then silent := silent + 1
       else if errors.any (rules.contains ·) then listed := listed + 1
       else other := other + 1
   note s!"Through body typing: {clean} positive cases without an error and {refused} refused; {listed} negative cases refused by a listed rule, {other} by another rule, {silent} without an error"
-  expectTrue ((clean, refused, listed, other, silent) == (175, 2, 198, 2, 144))
+  expectTrue ((clean, refused, listed, other, silent) == (177, 0, 200, 2, 142))
     "the outcomes of the reference cases through body typing differ from the recorded counts"
 
 /-- SC1 and SP11 distinguish a scheme's deployment arguments from the goal's spec values. -/

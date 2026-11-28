@@ -320,13 +320,20 @@ def hasError : Body → Bool
 
 end Body
 
+/-- An opaque body whose instances belong to the session can be inspected as a tree.
+A method checked with private instances keeps its two debug views rendered in that scope. -/
+inductive GenericBody where
+  | tree (body : Body)
+  | printed (normal allTypes : String)
+  deriving Inhabited
+
 /-- What elaboration makes of the body of an instance. -/
 structure Definition where
   «instance» : InstanceId
   body : Body
   /-- For a definition generic over a module parameter, its opaque elaboration: the generic
   definition, in which an operator on a type member is the member of the interface (SP12). -/
-  generic : Option Body := none
+  generic : Option GenericBody := none
   /-- One more than the largest number of a local binder. -/
   locals : Nat := 0
   /-- The count of the nodes of the body, once they are numbered. -/

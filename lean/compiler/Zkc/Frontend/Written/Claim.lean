@@ -80,14 +80,24 @@ private def selectedClause (c : AdmittedRoot) (selected : Selection) : ExportM D
   return clause
 
 @[no_expose] def goalClause (c : AdmittedRoot) (goal : String) : ExportM DecidingClause := do
-  let (selected, _) ← selectNamedGoal c.state goal .soundness
+  let (selected, _) ← c.goalSource.selectNamed goal .soundness
   selectedClause c selected
+
+/-- **The number of a goal and the table that goes with it** (GL4). A goal that writes no ceiling
+takes its bound from its table of caps, so it has one. A goal that writes a ceiling has a table
+where every charge that its root reaches has a place in one, and else the limit that the walk of
+the charges met. -/
+inductive ClaimedNumber where
+  | total (table : CapTable)
+  | ceiling (value : Rat) (table : Except TableLimit CapTable)
 
 /-- What one written soundness goal claims, in the package of its claims. It is made by
 `goalClaims` alone. -/
 structure ClaimedGoal where
   private mk ::
   goal : String
+  /-- The resolved source declaration, shared by all selectors of this goal. -/
+  declaration : DeclarationId
   clause : DecidingClause
   /-- The relation of the clause at the static values of its application and the proof values
   of the goal: the key of its definition in the package. Two goals that give one value claim
@@ -104,14 +114,11 @@ structure ClaimedGoal where
   /-- The values of the goal's proof arguments, in the order of the specification-only static
   parameters of the scheme's protocol. -/
   specification : Array Nat
-  /-- The ceiling that the goal states, when it states one (GL4). -/
-  ceiling : Option Rat
-  /-- The table of caps of the root at the goal's proof arguments (SX8): every charge that the
-  root reaches, by use. The bound of the goal's statement is its total. -/
-  caps : CapTable
-  /-- The draws of the root by the names of their sites, each with the keys of the draws that
-  realize it: every named draw that is emitted, charged or not. -/
-  sites : SiteKeys
+  /-- The property that the goal names. -/
+  property : Security.Property
+  /-- The goal's number: its ceiling, when it states one, and the table of caps of the root at the
+  goal's proof arguments (SX8), every charge that the root reaches, by use. -/
+  number : ClaimedNumber
 
 /-- What written soundness goals of one scheme claim, as one package. It is made by
 `goalClaims` alone. -/
@@ -162,9 +169,50 @@ def operandPlace (body : Typed.ProtocolBody) (statement : Option (Nat × Nat))
     return place
   | other => refuse other.span "WK-CLAUSE" "an operand of the clause that is no port is not read yet"
 
+/-- **A coin of the verifier that the prover does not hear**, in an instance or in a protocol that
+it applies: the place of the event and its name. `verifiers` and `provers` are the roles of the
+instance that the scheme's verifier and prover play; an application gives the callee's roles
+through its role map. A `sample` of a verifier's role is such a coin, and so is a `draw` of one
+that no prover's role receives. -/
+partial def privateVerifierCoinIn (s : Compile.State) (instance_ : InstanceId)
+    (verifiers provers : List Nat) :
+    StateM (List (InstanceId × List Nat × List Nat)) (Option (Syntax.Span × String)) := do
+  -- A context is an instance with the roles of it that the verifier and the prover play. A
+  -- protocol that several applications share is searched once in each context, not once along
+  -- every path to it: a context that was searched held no such coin, or the search has ended.
+  if (← get).contains (instance_, verifiers, provers) then return none
+  modify ((instance_, verifiers, provers) :: ·)
+  let some checked := s.results.checked? instance_ | return none
+  let some key := s.table.allocatedKey? instance_ | return none
+  let named (id : EventId) : Syntax.Span × String :=
+    match s.env.modules.lowered? key.declaration with
+    | some {content := .protocol head .., ..} =>
+      ((head.events[id]?.map (·.span)).getD default,
+        ((head.events[id]?.bind (·.name)).getD s!"event {id}"))
+    | _ => (default, s!"event {id}")
+  for event in checked.events do
+    match event with
+    | .event _ id (.sample _ _ role) .. => if verifiers.contains role then return some (named id)
+    | .event _ id (.draw _ _ sender receivers) .. =>
+      if verifiers.contains sender && !receivers.any provers.contains then return some (named id)
+    | .event _ _ (.apply _ callee _ _ roleMap ..) .. =>
+      let played (roles : List Nat) := (roleMap.toList.zipIdx.filter fun (role, _) => roles.contains role).map (·.2)
+      unless (played verifiers).isEmpty do
+        if let some found ← privateVerifierCoinIn s callee (played verifiers) (played provers) then
+          return some found
+    | _ => pure ()
+  return none
+
+/-- The first coin of the verifier that the prover does not hear, in the instance and in what it
+applies (`privateVerifierCoinIn`). -/
+def privateVerifierCoin? (s : Compile.State) (instance_ : InstanceId)
+    (verifiers provers : List Nat) : Option (Syntax.Span × String) :=
+  (privateVerifierCoinIn s instance_ verifiers provers).run' []
+
 /-- What a goal claims, with its relation instantiated in `state` and the state after it, and
 the scheme that the goal names. -/
-private def readClaim (c : AdmittedRoot) (state : Compile.State) (goal : String) (selected : Selection) :
+private def readClaim (c : AdmittedRoot) (state : Compile.State) (goal : String)
+    (declaration : DeclarationId) (selected : Selection) :
     ExportM (ClaimedGoal × SchemeEntry × Compile.State) := do
   let clause ← selectedClause c selected
   let some application := clause.application
@@ -174,6 +222,13 @@ private def readClaim (c : AdmittedRoot) (state : Compile.State) (goal : String)
   let .protocol body := checked.definition.body
     | throw "the root of the scheme is no protocol"
   let parties ← schemeParties c selected.scheme
+  -- The statement runs the verifier against one service that answers its coins and the prover's
+  -- messages alike, so every coin of the verifier is one that the prover's side sees. That is
+  -- soundness for a verifier with public coins only.
+  if let some (place, name) := privateVerifierCoin? c.state c.id [parties.2] [parties.1] then
+    refuse place "WK-VIEW" (s!"the verifier's coin `{name}` is heard by no role of the prover: the " ++
+      "written soundness statement lets the prover's side answer after every coin of the " ++
+      "verifier, so a goal on a verifier with a private coin is not issued yet")
   let some key := c.state.results.key? c.id | throw "missing protocol key"
   let some {content := .protocol head .., ..} := c.state.env.modules.lowered? key.declaration
     | throw "missing the source ports of the protocol"
@@ -200,14 +255,61 @@ private def readClaim (c : AdmittedRoot) (state : Compile.State) (goal : String)
     if (node.witness.getD #[]).isEmpty then pure (some #[])
     else if application.witness.isEmpty then pure none
     else some <$> application.witness.mapM (operandPlace body none)
-  let (caps, sites) ← goalCaps c selected.specification
-  return ({ goal, clause, relation, statement, witness, specification := selected.specification,
-            ceiling := selected.ceiling, caps, sites }, selected.scheme, state)
+  let table ← goalCaps c selected.specification
+  let number ← match selected.ceiling, table with
+    | some value, table => pure (ClaimedNumber.ceiling value table)
+    | none, .ok table => pure (.total table)
+    | none, .error limit =>
+      throw (s!"GL4: the goal `{goal}` writes no ceiling, so its bound is the total of the charges " ++
+        s!"that its root reaches, and they are not read into a table of caps ({limit.describe}); " ++
+        "a goal that writes its ceiling is issued without a table")
+  -- A probability is at most one: a bound of one or more holds of every verifier and says
+  -- nothing of this one (GL4).
+  match number with
+  | .ceiling value _ =>
+    if value ≥ 1 then
+      throw (s!"GL4: the goal `{goal}` writes the ceiling {value}: a bound of one or more holds of " ++
+        "every verifier; a goal claims a bound below one")
+  | .total table =>
+    if table.ratio ≥ 1 then
+      throw (s!"GL4: the goal `{goal}` writes no ceiling, and the charges of its contract add up to " ++
+        s!"{table.ratio}: a bound of one or more holds of every verifier; a goal claims a bound below one")
+  let some property := selected.property | throw "the claim is of no goal"
+  return ({ goal, declaration, clause, relation, statement, witness, specification := selected.specification,
+            property, number }, selected.scheme, state)
+
+/-- The ceiling that the goal states, when it states one (GL4). -/
+def ClaimedGoal.ceiling (goal : ClaimedGoal) : Option Rat :=
+  match goal.number with
+  | .total _ => none
+  | .ceiling value _ => some value
+
+/-- The table of caps of the goal; none for a goal with a ceiling whose contract has a charge that
+a table has no place for. -/
+def ClaimedGoal.caps (goal : ClaimedGoal) : Option CapTable :=
+  match goal.number with
+  | .total table => some table
+  | .ceiling _ table => table.toOption
+
+/-- The limit of a table that the goal's charges met, for a goal that has no table. -/
+def ClaimedGoal.limit (goal : ClaimedGoal) : Option TableLimit :=
+  match goal.number with
+  | .ceiling _ (.error limit) => some limit
+  | _ => none
+
+/-- **The bound of a goal**: the ceiling that the goal writes, and where it writes none, the
+total of the charges of its contract as they add up along one run (SX8). It is not negative: a
+negative ceiling is refused where the goal is selected, and no charge is negative. -/
+def ClaimedGoal.bound (goal : ClaimedGoal) : Rat :=
+  match goal.number with
+  | .total table => table.ratio
+  | .ceiling value _ => value
 
 @[no_expose] def claimedGoal (c : AdmittedRoot) (state : Compile.State) (goal : String) :
     ExportM (ClaimedGoal × SchemeEntry × Compile.State) := do
-  let (selected, _) ← selectNamedGoal c.state goal .soundness
-  readClaim c state goal selected
+  let (id, _) ← selectDeclaration c.goalSource.state .goal goal "WK-GOAL"
+  let (selected, _) ← c.goalSource.selectId id .soundness
+  readClaim c state goal id selected
 
 /-- What written soundness goals of one scheme claim (GL3), as one package: for each goal its
 clause, the relation that the clause applies as a definition at the proof values of the goal,
@@ -220,8 +322,9 @@ private def collectClaims (c : AdmittedRoot) (goals : List (String × ExportM De
   let mut reversed := []
   let mut first : Option (String × SchemeEntry) := none
   for (goal, resolution) in goals do
-    let (selected, _) ← selectGoalId c.state (← resolution) .soundness
-    let (next, named, after) ← readClaim c state goal selected
+    let id ← resolution
+    let (selected, _) ← c.goalSource.selectId id .soundness
+    let (next, named, after) ← readClaim c state goal id selected
     match first with
     | some (earlierGoal, earlier) =>
       unless earlier.declaration == named.declaration do
@@ -252,7 +355,8 @@ private def collectClaims (c : AdmittedRoot) (goals : List (String × ExportM De
       throw "WK-CORE: the inputs of the deployed header are not the deployed ports of the protocol"
     -- the counts of each goal's table are those of the program that the module prints
     for goal in claimed do
-      unless goal.caps.counted package.named ⟨c.id⟩ do
+      let some table := goal.caps | continue
+      unless table.counted package.named ⟨c.id⟩ do
         throw s!"WK-CHARGE: the counts of the table of caps of `{goal.goal}` are not those of the package"
     return { root := c.id, scheme := scheme.declaration, schemeName := scheme.name, prover, verifier
              inputs := body.deployedPorts.map (·.binder.name)

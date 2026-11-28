@@ -39,10 +39,27 @@ def hasErrors (session : Session) : Bool := session.state.log.hasErrors
 /-- Whether a check was left incomplete: a budget of the compiler ran out (SP10). -/
 def hasIncomplete (session : Session) : Bool := session.state.log.hasIncomplete
 
+/-- Keep report offsets in the selected log when the module validator settles a pending
+retry. A session saved before the retry still has its original ranges and diagnostics. -/
+def finishPhase (session : Session) (report : PhaseReport) (state : Compile.State) : Session := Id.run do
+  let mut reports := session.reports
+  let replaced := state.log.moduleDepthRevision != session.state.log.moduleDepthRevision
+  if session.state.log.moduleDepthRetry.isSome && (replaced || state.log.moduleDepthRetry.isNone) then
+    let mut i := reports.size
+    while i > 0 do
+      i := i - 1
+      let prior := reports[i]!
+      let some (first, count) := prior.retainedRange | break
+      reports := reports.set! i {prior with
+        retainedRange := none
+        firstDiagnostic := if replaced then first else prior.firstDiagnostic
+        diagnostics := if replaced then count else prior.diagnostics}
+  return {session with state, reports := reports.push report}
+
 /-- Runs one phase. -/
 def run (session : Session) (phase : Phase) : Session :=
   let (report, state) := phase.runIn session.context session.state
-  { session with state, reports := session.reports.push report }
+  finishPhase session report state
 
 /-- Runs phases in order. With the option to stop at errors, a phase after one that logged an
 error is not run. -/
@@ -60,7 +77,7 @@ def runAllTimed {m : Type → Type} [Monad m] (clock : m Nat) (session : Session
   for phase in phases do
     if current.context.options.stopAtErrors && current.hasErrors then break
     let (report, state) ← phase.runTimed clock current.context current.state
-    current := { current with state, reports := current.reports.push report }
+    current := finishPhase current report state
   return current
 
 /-- Loads and assembles the sources of a program, and runs the phases up to one with a name.

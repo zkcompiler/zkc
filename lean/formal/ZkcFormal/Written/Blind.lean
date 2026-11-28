@@ -3,21 +3,17 @@ module
 public import ZkcFormal.Application
 public import ZkcFormal.Written.SiteCaps
 public import ZkcFormal.Written.LawSamplers
-public import ZkcFormal.WalkLabels
 
 @[expose] public section
 
 /-!
 The judgment with fees of a written goal reads no peer.
 
-What the world may give (`Permitted`), the samplers of the laws (`lawSamplers`) and what a
-table of caps allows an effect (`CapTable.allowanceFrom`, which reads where the effect occurs)
-do not read who gives, gets, hears or owns. So the judgment in which the statements of a goal
-are made is `Blind`: inside an application a walk states its goal under that judgment as it
-stands, and not under the judgment with its peers renamed. So are the judgments "on every
-permitted reply" and "on some permitted reply", in which a text states what a role returns. The
-theorems carry the label `walk_blind`, by which the walk finds that a judgment reads no peer.
-The judgment that records the trace of a run (`ProcessJudgment.trace`) reads the peers, and is
+The judgment by fees (`Fees.judgment`) is the judgment with fees at what the world may give
+(`Permitted`), the samplers of the laws (`lawSamplers`) and an allowance of occurrences: what
+each occurrence of an effect may be charged at most (a table of caps gives one,
+`CapTable.allowed`). None of the three reads who gives, gets, hears or owns. So the judgment
+in which the statements of a goal are made is blind. The judgment that records the trace of a run (`ProcessJudgment.trace`) reads the peers, and is
 not among them: under it the goal in a callee is stated under `ProcessJudgment.renamed`.
 -/
 
@@ -51,19 +47,27 @@ theorem permitted_blind (ρ : Role → Role) :
     ∀ op : ROp M, Permitted M (renameOp ρ op) = carryReply ρ op (Permitted M op) := by
   intro op; cases op <;> rfl
 
-/-- Fees of the samplers of the laws within the allowances of a table read no peer. -/
-theorem paysWithin_blind (ρ : Role → Role) (draws : LawDraws M) (table : CapTable) (place : Nat)
-    (start : List Frame) :
+/-- **The judgment by fees over an allowance of occurrences.** What the world may give is
+permitted; a fee is a fee of the samplers of the laws, and is at most what the allowance gives
+where the effect occurs. An allowance bounds the fee of one occurrence; the budget, which the
+judgment carries along a run, bounds their sum. -/
+def Fees.judgment (draws : LawDraws M) (allowance : Occurrence → ℚ≥0) :
+    ProcessJudgment (RSig M) (ℚ≥0 → Prop) :=
+  .charged (Permitted M) (paysWithin (lawSamplers M draws) fun op => allowance (ROp.occurrence M op))
+
+theorem Fees.judgment_monotone (draws : LawDraws M) (allowance : Occurrence → ℚ≥0) :
+    (Fees.judgment draws allowance).Monotone :=
+  ProcessJudgment.charged_mono _ _
+
+/-- Fees of the samplers of the laws within an allowance of occurrences read no peer. -/
+theorem paysWithin_blind (ρ : Role → Role) (draws : LawDraws M) (allowance : Occurrence → ℚ≥0) :
     ∀ (op : ROp M) fee bad,
-      paysWithin (lawSamplers M draws) (table.allowanceFrom M place start) (renameOp ρ op) fee
-          (carryReply ρ op bad) ↔
-        paysWithin (lawSamplers M draws) (table.allowanceFrom M place start) op fee bad := by
+      paysWithin (lawSamplers M draws) (fun op => allowance (ROp.occurrence M op)) (renameOp ρ op)
+          fee (carryReply ρ op bad) ↔
+        paysWithin (lawSamplers M draws) (fun op => allowance (ROp.occurrence M op)) op fee bad := by
   intro op fee bad
-  have allowance : table.allowanceFrom M place start (renameOp ρ op) =
-      table.allowanceFrom M place start op := by
-    simp only [CapTable.allowanceFrom, occurrence_renameOp]
   unfold paysWithin
-  rw [allowance]
+  simp only [occurrence_renameOp]
   cases op with
   | own kind => cases kind <;> exact Iff.rfl
   | _ => exact Iff.rfl
@@ -86,22 +90,17 @@ theorem possible_blind (ρ : Role → Role) (allowed : ∀ op, (RSig M).Reply op
 
 /-- **Every permitted reply**: the judgment in which a text states that a role returns on every
 run, at what the world may give, reads no peer. -/
-@[walk_blind]
 theorem every_permitted_blind (ρ : Role → Role) : Blind (M := M) ρ (.every (Permitted M)) :=
   every_blind ρ _ (permitted_blind ρ)
 
 /-- **Some permitted reply**: the judgment in which a text states that a role can return reads
 no peer. -/
-@[walk_blind]
 theorem possible_permitted_blind (ρ : Role → Role) : Blind (M := M) ρ (.possible (Permitted M)) :=
   possible_blind ρ _ (permitted_blind ρ)
 
-/-- **The judgment of a written goal reads no peer.** -/
-@[walk_blind]
-theorem judgment_blind (ρ : Role → Role) (draws : LawDraws M) (table : CapTable) (place : Nat)
-    (start : List Frame) :
-    Blind ρ (.charged (Permitted M)
-      (paysWithin (lawSamplers M draws) (table.allowanceFrom M place start))) :=
-  charged_blind ρ _ _ (permitted_blind ρ) (paysWithin_blind ρ draws table place start)
+/-- **The judgment by fees reads no peer**, at every allowance of occurrences. -/
+theorem Fees.judgment_blind (ρ : Role → Role) (draws : LawDraws M) (allowance : Occurrence → ℚ≥0) :
+    Blind ρ (Fees.judgment draws allowance) :=
+  charged_blind ρ _ _ (permitted_blind ρ) (paysWithin_blind ρ draws allowance)
 
 end ZkcFormal.Written

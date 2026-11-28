@@ -69,9 +69,42 @@ variable {V : Vocabulary} (M : Model V)
 /-- The value of a located type, for the protocol. -/
 abbrev LVal (a : LTy V) : Type := M.Val a.ty
 
+/-- Whether a role is among the holders of a value, by the cases of the list. On a role and
+holders that are written out it is decided by the reduction of reducible definitions alone. -/
+@[reducible] def holdsAmong : Role → List Role → Bool
+  | _, [] => false
+  | r, holder :: rest =>
+    match Nat.beq r holder with
+    | true => true
+    | false => holdsAmong r rest
+
+@[simp] theorem holdsAmong_eq (r : Role) (holders : List Role) :
+    holdsAmong r holders = decide (r ∈ holders) := by
+  induction holders with
+  | nil => simp [holdsAmong]
+  | cons holder rest ih =>
+    unfold holdsAmong
+    cases same : Nat.beq r holder
+    · have differ : r ≠ holder := fun eq => by simp [eq] at same
+      simp [ih, differ]
+    · have eq : r = holder := Nat.eq_of_beq_eq_true same
+      simp [eq]
+
+/-- A type where a condition holds, `Unit` where it does not. -/
+@[reducible] def HeldType : Bool → Type → Type
+  | true, T => T
+  | false, _ => Unit
+
+@[simp] theorem HeldType_true (T : Type) : HeldType true T = T := rfl
+
+@[simp] theorem HeldType_false (T : Type) : HeldType false T = Unit := rfl
+
 /-- The value of a located type, for a role: the value when the role holds it, nothing
-otherwise. -/
-def RV (r : Role) (a : LTy V) : Type := if r ∈ a.holders then M.Val a.ty else Unit
+otherwise. The type is reducible, and whether the role holds the value is decided by the cases
+of the holders: for a role and a located type that are written out it is the value's type or
+`Unit` without unfolding anything else, which is how a tactic compares types. So a value of a
+role's program is used at its own type: a boolean as a boolean, a number as a number. -/
+@[reducible] def RV (r : Role) (a : LTy V) : Type := HeldType (holdsAmong r a.holders) (M.Val a.ty)
 
 def hide (r : Role) (a : LTy V) (v : LVal M a) : RV M r a :=
   if h : r ∈ a.holders then cast (by simp [RV, h]) v else cast (by simp [RV, h]) ()

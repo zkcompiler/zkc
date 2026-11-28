@@ -19,8 +19,7 @@ followed by the rest is the callee's program, not renamed, under the judgment wi
 renamed (`ProcessJudgment.renamed`), whose condition at the end is the judgment of the rest on
 what the role holds of the results (`Process.interpret_applied`): the passage of a region, with
 one more equation. A judgment that reads no peer of an effect (`Blind`) is its own renaming,
-and the callee is then judged as the caller is (`Process.interpret_applied_blind`). The walk
-goes into an application by the rule, as it goes into the arm of a choice.
+and the callee is then judged as the caller is (`Process.interpret_applied_blind`).
 
 Inside the callee a function is read in the table of the definitions before the callee, and a
 law of the function is stated once, in another table. The core's `fnMeaning_entry`

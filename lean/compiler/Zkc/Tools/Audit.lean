@@ -47,7 +47,8 @@ its modules about one dialect or about the vocabulary (`concrete`): a module for
 imports no module about one dialect or about the vocabulary, directly or through other modules.
 A violation is found with the shortest path of imports from the module to one such module; a
 module that the lists name and the audit's environment does not have is a finding too, and so is
-a module that both lists name. The core
+a module that both lists name. A library may name other pairs of lists of modules that the
+same rule keeps apart, each with what they are (`apart`). The core
 gives the two lists of the audit (`coreGeneric`, `coreConcrete`).
 
 `run` audits the libraries, accepts the generated-helper fixture, then checks the negative
@@ -71,6 +72,13 @@ inductive Kind where
   | tests
   deriving BEq, Inhabited
 
+/-- Modules of a library that are kept apart: no module of `above` imports, directly or not, a
+module of `below`. `because` says what the two are, for the report. -/
+structure Apart where
+  above : Array Name
+  below : Array Name
+  because : String
+
 /-- A library to audit. -/
 structure Library where
   /-- The name of the library in the report. -/
@@ -92,6 +100,8 @@ structure Library where
   /-- The modules about one dialect or about the vocabulary, which no module for any dialect
   imports, directly or not. -/
   concrete : Array Name := #[]
+  /-- Other modules that the rule of layers keeps apart. -/
+  apart : Array Apart := #[]
 
 /-- Whether a module is of a library. -/
 def Library.contains (library : Library) (module : Name) : Bool :=
@@ -238,7 +248,7 @@ def Rule.describe : Rule → String
   | .fileNotLoaded => "every file of a library of tests is in the audit's environment"
   | .moduleMissing => "a library has a file"
   | .layers =>
-    "a module for any dialect imports, directly or not, no module about one dialect or about the vocabulary"
+    "a module imports, directly or not, no module that its library keeps it apart from (for any dialect: none about one dialect or about the vocabulary)"
 
 /-- One finding: the constant or the module it is about, its rule, and the line it prints. -/
 structure Finding where
@@ -558,6 +568,15 @@ def audit (env : Environment) (libraries : Array Library) (policy : Policy := {}
       let some path := importPath env module library.concrete | continue
       report := report.add module .layers
         s!"{module}: a module for any dialect, imports {path.back!}, a module about one dialect or about the vocabulary, by {" → ".intercalate (path.toList.map toString)}"
+    for separation in library.apart do
+      for module in separation.above ++ separation.below do
+        unless moduleNames.contains module do
+          report := report.add module .layers
+            s!"{module}: the rule of layers lists it among modules kept apart ({separation.because}), and the audit's environment does not have it"
+      for module in separation.above do
+        let some path := importPath env module separation.below | continue
+        report := report.add module .layers
+          s!"{module}: imports {path.back!}, by {" → ".intercalate (path.toList.map toString)}; kept apart: {separation.because}"
   -- the files of each library: imported by the root of a library proper, in the environment for
   -- a library of tests
   for library in libraries do

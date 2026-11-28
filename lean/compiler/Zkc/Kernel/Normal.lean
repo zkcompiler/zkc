@@ -98,8 +98,20 @@ where
       fields := fields.push value
     return mkAppN (mkConst name levels) (params ++ fields)
 
-/-- The normal form of a term of data at its type, by the kernel. -/
-def normal (e type : Expr) : MetaM Expr := (normalAt e type).run' {}
+/-- A term with every numeral written as Lean's elaborator writes one: `OfNat.ofNat` at a
+literal, where the kernel's normal form has the bare literal. A tactic that matches terms as
+they are written (a rule that an author states against a term made from this data) tells the two
+apart, and what an author writes has `OfNat.ofNat`. The literal inside an `OfNat.ofNat` stays. -/
+def numerals (e : Expr) : Expr :=
+  e.replace fun part =>
+    if part.isAppOfArity ``OfNat.ofNat 3 then some part
+    else match part with
+      | .lit (.natVal n) => some (mkNatLit n)
+      | _ => none
+
+/-- The normal form of a term of data at its type, by the kernel, with its numerals as Lean
+writes them. -/
+def normal (e type : Expr) : MetaM Expr := return numerals (← (normalAt e type).run' {})
 
 /-- A definition that the kernel checks. Its value is exported with it, in a module too: what
 these commands define is data that the modules after it read. It is not compiled, and it is

@@ -1,0 +1,14 @@
+module guard_bound
+use zkc::security::{soundness}
+
+relation IsSet(claim: bool): claim
+protocol Check roles(P,V)(hidden: bool @P, claim: bool @(P,V)):
+    r <- draw index<4> from V to P
+    guard @V claim
+spec for Check:
+    proves @V IsSet(claim)
+    charge sites.r <= 1 / 4
+scheme Checked = Check:
+    prover P
+    construction interactive
+goal loose = soundness(Checked, stage = written) <= 1 / 4

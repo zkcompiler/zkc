@@ -26,6 +26,12 @@ variable {κ ρ : Type} [BEq κ] [Hashable κ]
 /-- The number of allocated keys, including those kept from discarded trials. -/
 def allocatedCount (table : SignatureTable κ ρ) : Nat := table.keys.size
 
+/-- Reuse existing keys and requests in a private schedule. Only requests made by that
+schedule enter its work list, so queued defaults share the original table without copying
+its full request order. -/
+def withFreshOrder (table : SignatureTable κ ρ) : SignatureTable κ ρ :=
+  {table with order := #[]}
+
 /-- The key for an allocated number, even before its first request. -/
 def allocatedKey? (table : SignatureTable κ ρ) (id : Nat) : Option κ := table.keys.get? id
 
