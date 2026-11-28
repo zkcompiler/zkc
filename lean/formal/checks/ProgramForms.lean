@@ -1,16 +1,22 @@
 import ZkcFormalTests.WrittenSubject
+import Zkc.Tests.Frontend.SyntaxHarness
 
 /-!
-The form of a stored program, with its equation, on the issued subjects.
+The forms of a subject's programs, with their equations, on the issued subjects.
 
-For each source the issuer's data module is built, and `form_of_role` declares the form of the
-root's deciding role and the equation that it is the reading of the role's meaning, whose proof
-is one application of the library's theorem. The kernel accepts the equation, and it rests on
-`propext` and `Quot.sound` at most: the form holds for every model.
+For each source the issuer's data module is built, and `publish_forms` declares, for every
+definition in the subject's reach (the root's deciding role, the function of each clause's
+relation, and what their forms call), its form and the equation that the form is the reading of
+the definition's meaning, whose proof is one application of the library's theorem; each is
+registered. The check compares the register's rows with the rows that it expects of the source,
+and asks that every equation rests on `propext` and `Quot.sound` at most: a form holds for
+every model. Every form has passed the producer's check that it is type-correct as a tactic
+compares types.
 
 The sources between them have a loop with a carried value (Guess), a choice with a guard in each
-arm (Either), a stepped loop written out as blocks (Steps), and two applications of a protocol
-that calls a function (Twice).
+arm (Either), a stepped loop written out as blocks (Steps), two applications of a protocol that
+calls a function (Twice), a vector of scalars drawn and three applications of a function over
+matrices (Freivalds), and the conformance corpus's count of near-zero entries (Count).
 
 With `ZKC_WORK` naming a folder the check's project is kept there.
 -/
@@ -71,6 +77,24 @@ def twice : String :=
   "scheme Checked = Twice:\n    prover P\n    construction interactive\n" ++
   "goal twice = soundness(Checked, stage = written)\n"
 
+/-- The source of Freivalds' check of a product of matrices of size two. -/
+def freivalds : String :=
+  "module t\n" ++
+  "use zkc::security::{soundness}\n" ++
+  "type F = primitive(\"bls12-381.fr\")\n" ++
+  "section <n: nat>:\n" ++
+  "    def apply(m: [[F; n]; n], v: [F; n]) -> [F; n]: [∑ k ∈ 0..n, m[i][k] * v[k] for i in 0..n]\n" ++
+  "    relation Product(a: [[F; n]; n], b: [[F; n]; n], c: [[F; n]; n]):\n" ++
+  "        ∀ i ∈ 0..n, ∀ j ∈ 0..n, (∑ k ∈ 0..n, a[i][k] * b[k][j]) == c[i][j]\n" ++
+  "    protocol Freivalds roles(P, V)(a: [[F; n]; n] @(P, V), b: [[F; n]; n] @(P, V), c: [[F; n]; n] @(P, V)):\n" ++
+  "        r <- draw [F; n] from V to P\n" ++
+  "        guard @V apply(a, apply(b, r)) == apply(c, r)\n" ++
+  "    spec for Freivalds:\n" ++
+  "        proves @V Product(a, b, c)\n" ++
+  "        charge sites.r <= 1 / F::Order\n" ++
+  "scheme Checked = Freivalds<2>:\n    prover P\n    construction interactive\n" ++
+  "goal sound = soundness(Checked)\n"
+
 /-- The data module that the issuer writes for a goal of a source, in the name space `space`. -/
 def dataOf (text goal space : String) : IO Publication := do
   let assembly ← Driver.assembleFiles ⟨"source.zkc", Syntax.parseString "source.zkc" text⟩
@@ -81,27 +105,61 @@ def dataOf (text goal space : String) : IO Publication := do
   unless issued.refusals.isEmpty do throw (IO.userError s!"{issued.refusals}")
   return issued
 
-def run (work : System.FilePath) : IO Unit := do
+/-- A row of the register: a protocol at a role, or a function, by the key of its header. -/
+inductive Row where
+  | protocol (key role : Nat)
+  | function (key : Nat)
+
+/-- The line that `#registered_forms` prints for a row in the name space `space`. -/
+def Row.line (space : String) : Row → String
+  | .protocol key role => s!"protocol {key} role {role}: {space}.protocol{key}.role{role}.form"
+  | .function key => s!"function {key}: {space}.function{key}.form"
+
+/-- The equation of a row. -/
+def Row.equation : Row → String
+  | .protocol key role => s!"protocol{key}.role{role}.reads"
+  | .function key => s!"function{key}.reads"
+
+def run (corpus work : System.FilePath) : IO Unit := do
   let project := projectOf work
-  let subjects := [("Guess", guess, "guessing"), ("Either", either, "either"),
-    ("Steps", stepped, "stepped"), ("Twice", twice, "twice")]
-  for (space, text, goal) in subjects do
+  let blocks := readBlocks (← IO.FS.readFile corpus)
+  let some count := (blocks.find? (·.id == "N-GL2a")).bind (·.files[0]?)
+    | throw (IO.userError "missing the reference case N-GL2a")
+  -- each subject with the rows that its register is to hold, in the order of the listing
+  let subjects : List (String × String × String × List Row) := [
+    ("Guess", guess, "guessing", [.protocol 0 1, .function 1]),
+    ("Either", either, "either", [.function 0, .protocol 1 1]),
+    ("Steps", stepped, "stepped", [.function 0, .protocol 1 1]),
+    ("Twice", twice, "twice",
+      [.function 0, .function 1, .protocol 2 1, .protocol 3 1]),
+    ("Freivalds", freivalds, "sound", [.protocol 1 1, .function 2, .function 3]),
+    ("Count", count, "loose", [.protocol 1 1, .function 3])]
+  for (space, text, goal, rows) in subjects do
     let issued ← dataOf text goal space
     discard <| SubjectProject.add project issued.dataName issued.data .statements
     discard <| SubjectProject.add project s!"{space}Forms".toName
-      (s!"import {issued.dataName}\nimport ZkcFormal.Form.Produce\n\nopen Zkc.Core {space}\n\n" ++
-        "form_of_role Root : installed, rootMember, verifierRole\n\n#print axioms Root.reads\n")
+      (s!"import {issued.dataName}\nimport ZkcFormal.Form.Publish\n\nopen Zkc.Core\n" ++
+        s!"namespace {space}\n\npublish_forms written'subject\n\n#registered_forms installed\n\n" ++
+        "\n".intercalate (rows.map fun row => s!"#print axioms {row.equation}") ++
+        s!"\n\nend {space}\n")
       .statements
-  for (space, _, _) in subjects do
+  for (space, _, _, rows) in subjects do
     let (ok, output) ← SubjectProject.result project s!"{space}Forms".toName
-    unless ok do throw (IO.userError s!"{space}: the form of the root's deciding role is refused\n{output}")
-    unless output.contains "'Root.reads' depends on axioms: [propext, Quot.sound]" do
-      throw (IO.userError s!"{space}: the form's equation does not rest on propext and Quot.sound alone\n{output}")
-    IO.println s!"{space}: the root's form and its equation are accepted"
+    unless ok do throw (IO.userError s!"{space}: the forms of the subject are refused\n{output}")
+    let listing := "registered forms:\n" ++ "\n".intercalate (rows.map (·.line space)) ++ "\n"
+    unless (output ++ "\n").contains listing do
+      throw (IO.userError s!"{space}: the register does not hold the expected rows\n{output}")
+    for row in rows do
+      let rests := s!"'{space}.{row.equation}' depends on axioms: [propext, Quot.sound]"
+      unless output.contains rests do
+        throw (IO.userError
+          s!"{space}: the equation {row.equation} does not rest on propext and Quot.sound alone\n{output}")
+    IO.println s!"{space}: {rows.length} forms registered, each with its equation accepted"
 
 end ProgramForms
 
 #eval show IO Unit from do
+  let corpus := "../../language/conformance/layer-b.txt"
   match ← IO.getEnv "ZKC_WORK" with
-  | some work => ProgramForms.run work
-  | none => IO.FS.withTempDir ProgramForms.run
+  | some work => ProgramForms.run corpus work
+  | none => IO.FS.withTempDir (ProgramForms.run corpus)

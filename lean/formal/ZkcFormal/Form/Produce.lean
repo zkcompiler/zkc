@@ -230,26 +230,44 @@ def at_ (places : List Nat) (how : Expr → MetaM Expr) (args : Array Expr) :
 def member (e : Expr) : MetaM Expr := do
   Zkc.Kernel.normal e (← inferType e)
 
+/-- A definition that a form calls: a protocol at a role, or a function. -/
+structure Called where
+  /-- The declared member. -/
+  member : Lean.Name
+  /-- The key of the definition's header. -/
+  key : Nat
+  /-- The role, of a protocol. -/
+  role : Option Nat
+  deriving BEq, Inhabited
+
+/-- How the walk names the definitions that a form calls: the name under which their members
+are declared, and the calls met, which the command that runs the walk reads afterwards. The
+record is of one command. -/
+structure Naming where
+  space : Lean.Name
+  calls : IO.Ref (Array Called)
+
 /-- **A called definition as a name.** The member of the program that a call names is declared
-once, under `space`, by its kind and the key of its header, at the type that the call states
-for it and with the kernel's normal form as its value. A member that is written out is a member
-of a list of headers that is written out, which is the program's list only by unfolding the
-program: a tactic would not accept it in the call's place. The name is also what a contract of
-the callee is stated at, whoever applies it. -/
+once, under the naming's space, by its kind and the key of its header, at the type that the
+call states for it and with the kernel's normal form as its value. A member that is written out
+is a member of a list of headers that is written out, which is the program's list only by
+unfolding the program: a tactic would not accept it in the call's place. The name is also what
+a contract of the callee is stated at, whoever applies it. Gives the name and the key. -/
 def named (space : Lean.Name) (kind : String) (keyOf : Lean.Name) (header called : Expr) :
-    MetaM Expr := do
+    MetaM (Expr × Nat) := do
   let type ← inferType called
-  if type.hasFVar || type.hasMVar then return ← member called
   let number ← whnfD (← mkAppM ``Zkc.Core.Key.number #[← mkAppM keyOf #[header]])
   let some n := number.rawNatLit? <|> number.nat?
     | throwError "form: the key of a called definition is not a number:{indentExpr number}"
+  if type.hasFVar || type.hasMVar then
+    throwError "form: the member of a called definition is not of the program alone:{indentExpr type}"
   let name := space ++ Lean.Name.mkSimple s!"{kind}{n}"
   unless (← getEnv).contains name do
     withOptions (·.setBool `Elab.async false) do
       addDecl (.defnDecl {
         name, levelParams := [], type, value := ← member called
         hints := .regular 0, safety := .safe })
-  return mkConst name
+  return (mkConst name, n)
 
 /-- A list of values that is written out, with what a value of a type is stated anew. -/
 partial def restated (family list : Expr) : Expr :=
@@ -278,9 +296,9 @@ def calleeRoles (e : Expr) : MetaM Expr :=
     return .continue)
 
 /-- The computation of one operation, reduced: a small term. A called definition is named under
-`space`. -/
-partial def reduced (space : Lean.Name) (e : Expr) : MetaM Expr := do
-  let small := reduced space
+the naming's space and recorded as called. -/
+partial def reduced (naming : Naming) (e : Expr) : MetaM Expr := do
+  let small := reduced naming
   let e ← head e
   if e.isLambda then
     return ← lambdaTelescope e fun xs body => do mkLambdaFVars xs (← small body)
@@ -316,15 +334,21 @@ partial def reduced (space : Lean.Name) (e : Expr) : MetaM Expr := do
     let called ← whnfCore args.back!
     let parts := called.getAppArgs
     if called.isAppOfArity ``Zkc.Core.roleMeaning 8 then
-      let callee ← named space "protocol" ``Zkc.Core.ProtocolHeader.key parts[3]! parts[4]!
+      let (callee, key) ← named naming.space "protocol" ``Zkc.Core.ProtocolHeader.key
+        parts[3]! parts[4]!
       let parts ← at_ [6, 7] value (← at_ [5] roleNumber (parts.set! 4 callee))
+      let some role := parts[5]!.rawNatLit?
+        | throwError "form: the role of a called protocol is not decided:{indentExpr parts[5]!}"
+      naming.calls.modify (·.push ⟨callee.constName!, key, some role⟩)
       -- the callee's inputs are what its role has of each: stated at the role's number, as
       -- the callee's own meaning states them, and not at the role map applied
       let has := mkApp3 (mkConst ``Zkc.Core.RV) parts[0]! parts[1]! parts[5]!
       let parts := parts.set! 7 (restated has parts[7]!)
       return ← mkAppM ``ZkcFormal.Reading.read #[mkAppN called.getAppFn parts]
     if called.isAppOfArity ``Zkc.Core.fnMeaning 6 then
-      let callee ← named space "function" ``Zkc.Core.FnHeader.key parts[3]! parts[4]!
+      let (callee, key) ← named naming.space "function" ``Zkc.Core.FnHeader.key
+        parts[3]! parts[4]!
+      naming.calls.modify (·.push ⟨callee.constName!, key, none⟩)
       let parts ← at_ [5] value (parts.set! 4 callee)
       return ← mkAppM ``ZkcFormal.Reading.read #[mkAppN called.getAppFn parts]
     if called.isLambda || called.getAppFn.isLambda then
@@ -333,8 +357,8 @@ partial def reduced (space : Lean.Name) (e : Expr) : MetaM Expr := do
   throwError "form: the walk does not know this computation of an operation:{indentExpr e}"
 
 /-- The computation of one operation, reduced, with the roles of its callees as numbers. -/
-def small (space : Lean.Name) (e : Expr) : MetaM Expr := do
-  calleeRoles (← reduced space e)
+def small (naming : Naming) (e : Expr) : MetaM Expr := do
+  calleeRoles (← reduced naming e)
 
 /-! ## The walk
 
@@ -346,8 +370,8 @@ on the values of its operands, a condition, a count. -/
 /-- What the walk is given once: the semantics, its operations, the monad of the computation,
 the type of a stop, and the values of a type. -/
 structure Setting where
-  /-- The name under which the called definitions are named. -/
-  space : Lean.Name
+  /-- How the called definitions are named, and where the calls met are recorded. -/
+  naming : Naming
   semantics : Expr
   operations : Expr
   monad : Expr
@@ -559,12 +583,12 @@ partial def instr (setting : Setting) (key i mid path : Expr) (scope : Scope) : 
     let operands ← lookups setting scope (i.getArg! 5)
     let piece ← fragment (mkAppN setting.operations
       #[i.getArg! 2, i.getArg! 3, key, i.getArg! 4, path, operands])
-    if piece.isAppOfArity ``ZkcFormal.Form.Fragment.ready 4 then return .ready (← small setting.space piece.appArg!)
+    if piece.isAppOfArity ``ZkcFormal.Form.Fragment.ready 4 then return .ready (← small setting.naming piece.appArg!)
     if piece.isAppOfArity ``ZkcFormal.Form.Fragment.value 4 then return .value (← value piece.appArg!)
     if piece.isAppOfArity ``ZkcFormal.Form.Fragment.action 6 then
       -- the reply's type as the reduced query spells it, not as the fragment states it: the
       -- fragment states it over operands that are not yet values
-      let query ← small setting.space (piece.getArg! 4)
+      let query ← small setting.naming (piece.getArg! 4)
       return .action query (← returns query) (piece.getArg! 5)
     throwError "form: an operation's computation is no fragment:{indentExpr piece}"
   if i.isAppOfArity ``Zkc.Core.Instr.guard 7 then
@@ -648,7 +672,8 @@ end
 /-- The form of a definition from the library's stored-definition theorem at it: the value of
 the form with its type, the equation, and its proof, the theorem applied. `theorem_` is the
 theorem at the definition: a statement for every model, every path and every list of inputs. -/
-def formOf (theorem_ : Expr) (formName : Lean.Name) : MetaM (Expr × Expr × Expr × Expr) := do
+def formOf (naming : Naming) (theorem_ : Expr) (formName : Lean.Name) :
+    MetaM (Expr × Expr × Expr × Expr) := do
   forallTelescope (← inferType theorem_) fun xs equation => do
     let some (_, lhs, rhs) := equation.eq? | throwError "form: expected an equation"
     -- the right side is the library's recursion at the semantics, the operations, the stored
@@ -675,7 +700,7 @@ def formOf (theorem_ : Expr) (formName : Lean.Name) : MetaM (Expr × Expr × Exp
       | throwError "form: the semantics is not a definition:{indentExpr semantics}"
     let values ← whnfCore (.proj ``Zkc.Core.Semantics 0 (← whnfCore record))
     let setting : Setting := {
-      space := formName.getPrefix
+      naming
       semantics, operations, monad, values
       stop := monad.getArg! 0
       index := (← whnfR (← inferType values)).bindingDomain!
@@ -711,10 +736,10 @@ def withoutProofs (e : Expr) : MetaM Expr :=
 
 /-- Declare the form of a definition and its equation: `<name>.form` and `<name>.reads`. The
 form's type is the type of the reading that it equals, with the lists of types written out. -/
-def declare (name : Lean.Name) (theorem_ : Expr) : MetaM Unit := do
+def declare (naming : Naming) (name : Lean.Name) (theorem_ : Expr) : MetaM Unit := do
   let formName := name ++ `form
   let readsName := name ++ `reads
-  let (value, formType, claim, proof) ← formOf theorem_ formName
+  let (value, formType, claim, proof) ← formOf naming theorem_ formName
   -- A form is for tactics, and `simp` and `rw` compare types without unfolding a definition
   -- that is not reducible. The kernel would accept a form whose values fit their places only
   -- by such unfolding; a tactic would not rewrite in it. So the form is checked as a tactic
@@ -759,7 +784,8 @@ elab "form_of_role " name:ident " : " p:term ", " x:term ", " r:term : command =
   let r ← Term.elabTermAndSynthesize r (some (mkConst ``Zkc.Core.Role))
   let model ← mkAppM ``Zkc.Core.Model #[← vocabularyOf p]
   withLocalDeclD `M model fun M => do
-    declare name.getId (← mkLambdaFVars #[M] (← mkAppM ``ZkcFormal.Form.storedRole #[M, p, x, r]))
+    declare ⟨name.getId, ← IO.mkRef #[]⟩ name.getId
+      (← mkLambdaFVars #[M] (← mkAppM ``ZkcFormal.Form.storedRole #[M, p, x, r]))
 
 /-- **The form of a function of a program**: `form_of_function N : p, x` declares `N.form` and
 `N.reads` for the function `x` of the program `p`, for every model. -/
@@ -769,6 +795,7 @@ elab "form_of_function " name:ident " : " p:term ", " x:term : command =>
   let x ← Term.elabTermAndSynthesize x none
   let model ← mkAppM ``Zkc.Core.Model #[← vocabularyOf p]
   withLocalDeclD `M model fun M => do
-    declare name.getId (← mkLambdaFVars #[M] (← mkAppM ``ZkcFormal.Form.storedFunction #[M, p, x]))
+    declare ⟨name.getId, ← IO.mkRef #[]⟩ name.getId
+      (← mkLambdaFVars #[M] (← mkAppM ``ZkcFormal.Form.storedFunction #[M, p, x]))
 
 end ZkcFormal.Form.Produce

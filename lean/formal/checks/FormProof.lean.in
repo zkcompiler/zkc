@@ -2,8 +2,6 @@ theorem relationValue (x : Bool) :
     functionResult (t := .bool) (fnMeaning model installed member'fn1 (.cons x .nil)) = some x := by
   kernel_rfl
 
-form_of_role Root : installed, rootMember, verifierRole
-
 open scoped ZkcFormal.Written.FeeRules
 
 set_option experimental.vcgen true in
@@ -14,9 +12,10 @@ theorem judged : t.guessing.fees.judged.view := by
   | false =>
     let context : FeeRules.Context model :=
       ⟨StandardInterpretation.draws, written'caps0.allowed path⟩
-    refine FeeRules.judged_of_triple context _ (Root.form model path (.cons false (.cons () .nil)))
-      (Root.reads model path _) _ _ FeeRules.stopped ?proved
-    vcgen [Root.form] invariants
+    refine FeeRules.judged_of_triple context _
+      (protocol0.role1.form model path (.cons false (.cons () .nil)))
+      (protocol0.role1.reads model path _) _ _ FeeRules.stopped ?proved
+    vcgen [protocol0.role1.form] invariants
     | inv1 => fun _ rest state left =>
         ((rest.length : ℚ≥0) / 8 ≤ left ∧ Form.headV state.1 = false : Prop)
     | inv2 => (⟨1 / 8, fun r => r = v⟩ : FeeRules.DrawChoice _ ℕ)

@@ -36,10 +36,14 @@ def formalApart : Array Apart := #[
       `ZkcFormal.Value]
     because := "what a contract of a call says reads no rule of a generator, no reading of a program and no theorem to a probability" }]
 
-/-- The dependencies available to the formal semantics, for ordinary and meta imports. -/
+/-- The dependencies available to the formal semantics, for ordinary and meta imports. Of the
+compiler package beside the core, the vocabulary and the subject library: the commands that ask
+the kernel to compute (`Zkc.Kernel`), by which the producer of forms takes the normal form of a
+program's data. The frontend is not among them. -/
 def formalLibrary (directory : System.FilePath) : Library :=
   { name := "formal", root := `ZkcFormal, imports := some #[`Init, `Std, `Lean, `Zkc.Core,
-      `Zkc.Vocabulary, `Zkc.Subject, `Mathlib, `VCVio, `PolyFun], directory, apart := formalApart }
+      `Zkc.Vocabulary, `Zkc.Subject, `Zkc.Kernel, `Mathlib, `VCVio, `PolyFun], directory,
+    apart := formalApart }
 
 /-- The libraries of the package. -/
 def libraries (directory : System.FilePath) : Array Library := #[

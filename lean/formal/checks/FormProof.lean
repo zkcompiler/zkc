@@ -4,11 +4,12 @@ import ZkcFormalTests.WrittenSubject
 A goal proved on the form of its program.
 
 The subject is the guessing protocol of three rounds: in each round the verifier hears a
-position and draws one, and it returns where the claim holds or a round hit. The text
-(`checks/FormProof.lean.in`) declares the form of the verifier's program with its equation
-(`form_of_role`), and proves the goal's judgment by fees on that form by Lean's `vcgen` with the
-rule of each effect: an invariant of the loop and the choice at its draw are what the text
-gives. The pair is judged by `lake comparator` against the issuer's challenge.
+position and draws one, and it returns where the claim holds or a round hit. A module of one
+line publishes the forms of the subject (`publish_forms`), and the text
+(`checks/FormProof.lean.in`) proves the goal's judgment by fees on the registered form of the
+verifier's program by Lean's `vcgen` with the rule of each effect: an invariant of the loop and
+the choice at its draw are what the text gives, and its conditions are closed with `simp` and
+arithmetic. The pair is judged by `lake comparator` against the issuer's challenge.
 
 With `ZKC_WORK` naming a folder the check's project is kept there.
 -/
@@ -46,8 +47,12 @@ def run (work : System.FilePath) : IO Unit := do
   let add (name text : String) (kind : SubjectProject.Kind) : IO Unit :=
     discard <| SubjectProject.add project name.toName text kind
   let issued ← publicationOf guessSource "guessing" "Guess"
-    ["ZkcFormal.Written.FeeRules", "ZkcFormal.Form.Produce"]
+    ["ZkcFormal.Written.FeeRules", "Guess.Forms"]
   add (toString issued.dataName) issued.data .statements
+  -- the forms of the subject: one line, on the solution's side
+  add "Guess.Forms"
+    (s!"import {issued.dataName}\nimport ZkcFormal.Form.Publish\n\nopen Zkc.Core\n" ++
+      "namespace Guess\n\npublish_forms written'subject\n\nend Guess\n") .module
   add (toString issued.challengeName) issued.challenge .challenge
   add (toString issued.viewsName) issued.views .statements
   add (toString issued.feesName) issued.fees .statements
