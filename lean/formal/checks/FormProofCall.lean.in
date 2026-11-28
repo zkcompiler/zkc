@@ -7,11 +7,12 @@ open scoped ZkcFormal.Written.FeeRules
 -- the register of the forms module, read from this module
 #registered_forms installed
 
-/-- What the function `same` of the source computes. -/
+/-- What the function `same` of the source computes, from its registered form: the reading of
+its meaning is the form, and the form at two numbers is the reading of their comparison. -/
 theorem sameValue (a b : ℕ) :
     fnMeaning model installed function1 (.cons a (.cons b .nil)) =
-      .done (.cons (Nat.beq a b) .nil) := by
-  kernel_rfl
+      .done (.cons (Nat.beq a b) .nil) :=
+  Reading.read_injective ((function1.reads model _).trans rfl)
 
 /-- One contract of the round at the verifier's role: it returns no hit, for a fee of one
 quarter, which its draw needs. -/

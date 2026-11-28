@@ -61,7 +61,7 @@ def formed : List Lean.Name := [``Bind.bind, ``Pure.pure, ``MonadExcept.throw, `
   ``ZkcFormal.Form.Fragment.next, ``ZkcFormal.Form.Fragment.eval, ``ZkcFormal.Form.computed,
   ``ZkcFormal.Form.roleFragment, ``ZkcFormal.Form.localFragment, ``ZkcFormal.Form.ownedFragment,
   ``Zkc.Core.hide, ``Zkc.Core.reveal, ``Zkc.Core.carry, ``Zkc.Core.enter, ``Zkc.Core.leave,
-  ``Zkc.Core.nothing, ``Zkc.Core.collectRV, ``List.reverse,
+  ``Zkc.Core.nothing, ``Zkc.Core.collectRV, ``Zkc.Core.coverRV, ``Zkc.Core.cover, ``List.reverse,
   -- the operations of the core's own on values: a form names them as the source does
   ``or, ``and, ``not, ``BEq.beq, ``Nat.beq, ``Nat.blt, ``HAdd.hAdd, ``HSub.hSub, ``HMul.hMul,
   ``HDiv.hDiv, ``HMod.hMod, ``HPow.hPow, ``List.length, ``GetElem?.getElem?,
@@ -187,6 +187,10 @@ partial def value (e : Expr) : MetaM Expr := do
   if e.isAppOfArity ``Zkc.Core.reveal 6 || e.isAppOfArity ``Zkc.Core.carry 8 then
     return ← value e.appArg!
   if e.isAppOfArity ``Zkc.Core.nothing 5 then return unit
+  -- a value at a port of a called definition: what the role has of it at the port's type
+  if e.isAppOfArity ``Zkc.Core.coverRV 7 then
+    return ← if ← held (e.getArg! 2) (e.getArg! 4) then value e.appArg! else pure unit
+  if e.isAppOfArity ``Zkc.Core.cover 6 then return ← value e.appArg!
   if e.isAppOfArity ``Zkc.Core.collectRV 6 then
     unless ← held (e.getArg! 2) (e.getArg! 4) do return unit
     return mkApp e.appFn! (← value e.appArg!)
@@ -276,11 +280,20 @@ def named (space : Lean.Name) (kind : String) (keyOf : Lean.Name) (header called
   if type.hasFVar || type.hasMVar then
     throwError "form: the member of a called definition is not of the program alone:{indentExpr type}"
   let name := space ++ Lean.Name.mkSimple s!"{kind}{n}"
-  unless (← getEnv).contains name do
+  let value ← member called
+  match (← getEnv).find? name with
+  | none =>
     withOptions (·.setBool `Elab.async false) do
       addDecl (.defnDecl {
-        name, levelParams := [], type, value := ← member called
-        hints := .regular 0, safety := .safe })
+        name, levelParams := [], type, value, hints := .regular 0, safety := .safe })
+  | some (.defnInfo found) =>
+    -- the name is the member's when it was declared here before, for the same definition
+    unless found.type == type && found.value == value do
+      throwError "form: the name {name} is taken by another declaration; the forms of a \
+        program are published once, in a name space of their own"
+  | some _ =>
+    throwError "form: the name {name} is taken by another declaration; the forms of a \
+      program are published once, in a name space of their own"
   return (mkConst name, n)
 
 /-- A list of values that is written out, with what a value of a type is stated anew. -/
@@ -427,6 +440,31 @@ def marked (v body : Expr) : MetaM Expr := do
   return .lam decl.userName decl.type
     (.mdata (KVMap.empty.insert markKey (.ofName v.fvarId!.name)) body) .default
 
+/-- A `let` of a variable in scope at a value, whose body mentions the variable free. -/
+def kept (v value body : Expr) : MetaM Expr := do
+  let decl ← v.fvarId!.getDecl
+  return .letE decl.userName decl.type value
+    (.mdata (KVMap.empty.insert markKey (.ofName v.fvarId!.name)) body) true
+
+/-- Whether a value is written without an operation: a variable, a place of one, a constant, a
+numeral. Such a value is written again wherever it is used; every other is named once. -/
+partial def atom (e : Expr) : Bool :=
+  e.isFVar || e.isConst || e.isLit || e.isAppOfArity ``OfNat.ofNat 3 ||
+  ((e.isAppOfArity ``ZkcFormal.Form.headV 5 || e.isAppOfArity ``ZkcFormal.Form.tailV 5 ||
+    e.isAppOfArity ``Prod.fst 3 || e.isAppOfArity ``Prod.snd 3) && atom e.appArg!)
+
+/-- A list of values that is written out, with every value that is no atom named by a `let`
+around what `after` makes of the list. A value that the program uses twice is then written
+once: substituted, a chain of such values would double at each. -/
+partial def shared (list : Expr) (after : Expr → MetaM Expr) : MetaM Expr := do
+  unless list.isAppOfArity ``Zkc.Core.HList.cons 6 do return ← after list
+  let element := list.getArg! 4
+  let cell := list.appFn!.appFn!
+  if atom element then
+    return ← shared (list.getArg! 5) fun rest => after (mkApp2 cell element rest)
+  withLocalDeclD `x (← inferType element) fun x => do
+    kept x element (← shared (list.getArg! 5) fun rest => after (mkApp2 cell x rest))
+
 /-- A term with its marked binders closed. A result is kept by term and depth, which is right
 while every marked variable is bound at one depth; if one is met at another, the table is no
 longer read. -/
@@ -455,7 +493,17 @@ partial def closed (e : Expr) : MetaM Expr := do
         | _ => pure (.lam n (← go t depth bound) (← go b (depth + 1) bound) bi)
       | .forallE n t b bi => pure (.forallE n (← go t depth bound) (← go b (depth + 1) bound) bi)
       | .letE n t v b nd =>
-        pure (.letE n (← go t depth bound) (← go v depth bound) (← go b (depth + 1) bound) nd)
+        let inner ← match b with
+          | .mdata d body =>
+            match d.find markKey with
+            | some (.ofName y) =>
+              match (← depths.get)[(⟨y⟩ : FVarId)]? with
+              | some at_ => if at_ != depth then read.set false
+              | none => depths.modify (·.insert ⟨y⟩ depth)
+              go body (depth + 1) (bound.insert ⟨y⟩ depth)
+            | _ => go b (depth + 1) bound
+          | _ => go b (depth + 1) bound
+        pure (.letE n (← go t depth bound) (← go v depth bound) inner nd)
       | .app f a => pure (.app (← go f depth bound) (← go a depth bound))
       | .mdata d b => pure (.mdata d (← go b depth bound))
       | .proj s i b => pure (.proj s i (← go b depth bound))
@@ -574,7 +622,7 @@ partial def term (setting : Setting) (t path : Expr) (scope : Scope) : MetaM Pie
     let after (values : Expr) : MetaM Expr := do
       computationOf setting outs (← term setting rest path (← bound scope results values))
     match ← instr setting key (t.getArg! 5) (t.getArg! 3) path scope with
-    | .value a => return .ready (← after a)
+    | .value a => return .ready (← shared a after)
     | .ready x =>
       let given ← returns x
       return ← withLocalDeclD `vs given fun vs => do
@@ -751,11 +799,13 @@ def formOf (naming : Naming) (theorem_ : Expr) (formName : Lean.Name) :
         ← mkLambdaFVars xs (mkAppN theorem_ xs))
 
 /-- A term with every proof in it replaced by an unproved one of the same statement. -/
-def withoutProofs (e : Expr) : MetaM Expr :=
+partial def withoutProofs (e : Expr) : MetaM Expr :=
   Meta.transform e (pre := fun part => do
     -- an unproved statement that is not marked as made by an error: Lean does not show a
-    -- message that holds one that is
-    if ← isProof part then return .done (← mkSorry (← inferType part) false)
+    -- message that holds one that is. The statement of a proof can hold a proof in its turn
+    -- (a role map with the proof that its roles are distinct), which is masked as well.
+    if ← isProof part then
+      return .done (← mkSorry (← withoutProofs (← inferType part)) false)
     return .continue)
 
 /-- Declare the form of a definition and its equation: `<name>.form` and `<name>.reads`. The
@@ -812,6 +862,16 @@ elab "form_of_role " name:ident " : " p:term ", " x:term ", " r:term : command =
   let x ← Term.elabTermAndSynthesize x none
   let r ← Term.elabTermAndSynthesize r (some (mkConst ``Zkc.Core.Role))
   let model ← mkAppM ``Zkc.Core.Model #[← vocabularyOf p]
+  -- a role of the protocol: the form of a role that the protocol does not have is the form of
+  -- a program without effects, and of no use
+  let member_ ← whnfR (← inferType x)
+  let roles ← whnfD (← mkAppM ``Zkc.Core.ProtocolHeader.roles #[member_.appArg!])
+  let role ← whnfD r
+  match roles.rawNatLit? <|> roles.nat?, role.rawNatLit? <|> role.nat? with
+  | some count, some number =>
+    unless number < count do
+      throwError "form_of_role: the protocol has the roles 0 to {count - 1}, and {number} is none of them"
+  | _, _ => throwError "form_of_role: the role or the number of the protocol's roles is not written out"
   withLocalDeclD `M model fun M => do
     declare ⟨name.getId, ← IO.mkRef #[]⟩ name.getId
       (← mkLambdaFVars #[M] (← mkAppM ``ZkcFormal.Form.storedRole #[M, p, x, r]))

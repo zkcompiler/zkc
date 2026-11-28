@@ -16,8 +16,9 @@ compares types.
 The sources between them have a loop with a carried value (Guess), a choice with a guard in each
 arm (Either), a stepped loop written out as blocks (Steps), two applications of a protocol that
 calls a function (Twice), a protocol that two callers apply, which has one form (Nested), a
-callee whose roles are bound in another order (Swapped), a loop of a role that collects
-(Gather), a vector of scalars drawn and three applications of a function over matrices (Freivalds), and the
+callee whose roles are bound in another order (Swapped), one that is also passed a value that
+both roles hold (Seen), a chain of values each used twice (Chain), a loop of a role that
+collects (Gather), a vector of scalars drawn and three applications of a function over matrices (Freivalds), and the
 conformance corpus's count of near-zero entries (Count). Two controls: a construct that the
 walk does not read (a `match` on a variant) refuses the subject's forms by its name; and a data
 module whose headers are not marked reducible gives a form that fits its places only by
@@ -118,6 +119,37 @@ def swapped : String :=
   "scheme Checked = Swapped:\n    prover P\n    construction interactive\n" ++
   "goal swapped = soundness(Checked, stage = written)\n"
 
+/-- A value that both roles hold, passed into a callee whose roles are bound in another order:
+the callee's verifier reads it in a guard. -/
+def seen : String :=
+  "module t\nuse zkc::security::{soundness}\n" ++
+  "relation Holds(claim: bool): claim\n" ++
+  "protocol Round roles(B, A)(sent: index<4> @B, seen: bool @(A, B)) -> (hit: bool @(A, B), drawn: index<4> @(A, B)):\n" ++
+  "    x <- send sent from B to A\n    r <- draw index<4> from A to B\n" ++
+  "    guard @A seen or r != 7\n" ++
+  "    return (r == x, r)\n" ++
+  "spec for Round:\n    charge sites.r <= 1 / 4\n" ++
+  "protocol Seen roles(P, V)(claim: bool @(P, V), first: index<4> @P):\n" ++
+  "    a <- Round(first, claim) @(A = V, B = P)\n" ++
+  "    guard @V claim or a.hit\n" ++
+  "spec for Seen:\n    proves @V Holds(claim)\n" ++
+  "scheme Checked = Seen:\n    prover P\n    construction interactive\n" ++
+  "goal seen = soundness(Checked, stage = written)\n"
+
+/-- A chain of values each used twice by the next: twelve bindings. Written out by
+substitution, the last would hold the first four thousand times. -/
+def chained : String := Id.run do
+  let mut text := "module t\nuse zkc::security::{soundness}\n" ++
+    "relation Holds(claim: bool): claim\n" ++
+    "protocol Chain roles(P, V)(claim: bool @(P, V)):\n" ++
+    "    r <- draw index<2> from V to P\n    b0 = claim or r == 1\n"
+  for i in [1:13] do
+    text := text ++ s!"    b{i} = b{i - 1} and b{i - 1}\n"
+  return text ++ "    guard @V b12\n" ++
+    "spec for Chain:\n    proves @V Holds(claim)\n    charge sites.r <= 1 / 2\n" ++
+    "scheme Checked = Chain:\n    prover P\n    construction interactive\n" ++
+    "goal chained = soundness(Checked, stage = written)\n"
+
 /-- A loop of a role that collects: the positions drawn in three rounds are one sequence. -/
 def gathered : String :=
   "module t\nuse zkc::security::{soundness}\n" ++
@@ -212,6 +244,10 @@ def run (corpus work : System.FilePath) : IO Unit := do
       [.function 0, .function 1, .protocol 2 1, .protocol 3 1, .protocol 4 1]),
     -- the relation; `Round` at its role 0, which the root's verifier plays; the root `Swapped`
     ("Swapped", swapped, "swapped", [.function 0, .protocol 1 0, .protocol 2 1]),
+    -- the relation; `Round` at its role 1, which the root's verifier plays; the root `Seen`
+    ("Seen", seen, "seen", [.function 0, .protocol 1 1, .protocol 2 1]),
+    -- the relation `Holds`; the root `Chain` at the verifier
+    ("Chain", chained, "chained", [.function 0, .protocol 1 1]),
     -- the relation `Holds`; the root `Gather` at the verifier
     ("Gather", gathered, "gathered", [.function 0, .protocol 1 1]),
     -- the root `Freivalds` at the verifier; the function `apply`; the relation `Product`

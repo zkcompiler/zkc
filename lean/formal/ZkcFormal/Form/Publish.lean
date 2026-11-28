@@ -48,7 +48,10 @@ initialize registry : SimplePersistentEnvExtension Registered (Array Registered)
     addEntryFn := Array.push
     addImportedFn := fun imported => imported.foldl (· ++ ·) #[] }
 
-/-- The registered form of a definition of a program, by its key and its role. -/
+/-- The registered form of a definition of a program, by its key and its role. A row is names:
+what holds of a form is its equation (`reads`), which the kernel checked where it was declared,
+and a tool that takes a form from a row uses that theorem and nothing that the row says. Where a
+program was published in two name spaces, this is the first row that the imports give. -/
 def registered? (env : Environment) (program : Lean.Name) (key : Nat) (role : Option Nat) :
     Option Registered :=
   (registry.getState env).find? fun row =>
@@ -89,9 +92,9 @@ def relations (subject : Expr) : MetaM (Array (Expr × Expr)) := do
 end Publish
 
 open Publish Produce in
-/-- **The forms of a subject.** `publish_forms S` declares and registers the form of every
-definition in the reach of the written subject `S`, under the current name space. -/
-elab "publish_forms " subject:term : command => Command.liftTermElabM do
+/-- The forms of every definition in the reach of a written subject, declared and registered
+under the current name space. -/
+def Publish.publish (subject : Syntax) : TermElabM Unit := do
   let subject ← Term.elabTermAndSynthesize subject none
   let type ← whnfR (← inferType subject)
   unless type.isAppOfArity ``Zkc.Subject.WrittenSubject 3 do
@@ -133,6 +136,19 @@ elab "publish_forms " subject:term : command => Command.liftTermElabM do
       modifyEnv (registry.addEntry · {
         program := programName, key := called.key, role := called.role
         member := called.member, form := name ++ `form, reads := name ++ `reads })
+
+open Publish Produce in
+/-- **The forms of a subject.** `publish_forms S` declares and registers the form of every
+definition in the reach of the written subject `S`, under the current name space. A subject is
+published once: a second publication of it in the same name space is refused at the first name
+that is taken, and one in another name space gives every definition a second row. -/
+elab "publish_forms " subject:term : command => Command.liftTermElabM do
+  -- all the forms of the subject or none: a refusal leaves no declaration and no row behind
+  let before ← getEnv
+  try publish subject
+  catch refusal =>
+    setEnv before
+    throw refusal
 
 /-- `#registered_forms p` prints the register's rows of the program `p`, one a line, in the
 order of their keys and roles. -/
