@@ -68,6 +68,12 @@ def formed : List Lean.Name := [``Bind.bind, ``Pure.pure, ``MonadExcept.throw, `
   -- a path under a frame, and one list after another
   ``HAppend.hAppend]
 
+/-- The operations on values among what a form is made of: an application of one is kept, and
+its operands are values in their turn. -/
+def operations : List Lean.Name := [``or, ``and, ``not, ``BEq.beq, ``Nat.beq, ``Nat.blt,
+  ``HAdd.hAdd, ``HSub.hSub, ``HMul.hMul, ``HDiv.hDiv, ``HMod.hMod, ``HPow.hPow, ``List.length,
+  ``GetElem?.getElem?, ``HAppend.hAppend, ``List.reverse, ``List.cons, ``Zkc.Core.collectRV]
+
 /-- Head reduction that keeps what a form is made of. -/
 def head (e : Expr) : MetaM Expr :=
   withCanUnfoldPred (fun _ info => pure (!formed.contains info.name)) (whnf e)
@@ -182,7 +188,8 @@ partial def value (e : Expr) : MetaM Expr := do
     return ← value e.appArg!
   if e.isAppOfArity ``Zkc.Core.nothing 5 then return unit
   if e.isAppOfArity ``Zkc.Core.collectRV 6 then
-    return ← if ← held (e.getArg! 2) (e.getArg! 4) then pure e else pure unit
+    unless ← held (e.getArg! 2) (e.getArg! 4) do return unit
+    return mkApp e.appFn! (← value e.appArg!)
   if e.isAppOfArity ``Zkc.Core.enter 6 || e.isAppOfArity ``Zkc.Core.leave 6 then
     let callee ← mkAppM ``Zkc.Core.RoleMap.back #[e.getArg! 2, e.getArg! 3]
     return ← if ← held callee (e.getArg! 4) then value e.appArg! else pure unit
@@ -200,6 +207,13 @@ partial def value (e : Expr) : MetaM Expr := do
       let a := args[i]!
       unless (← isType a) || (← isProof a) do fields := fields.set! i (← value a)
     return mkAppN e.getAppFn fields
+  -- an operation on values that the form keeps: its operands are values
+  if let some name := e.getAppFn.constName? then
+    if operations.contains name then
+      let args ← e.getAppArgs.mapM fun a => do
+        let type ← inferType a
+        if (← isType a) || (← isProof a) || (← isClass? type).isSome then pure a else value a
+      return mkAppN e.getAppFn args
   return e
 
 /-- A fragment as a constructor. An operation's fragment is opened on the values of its
@@ -750,6 +764,11 @@ def declare (naming : Naming) (name : Lean.Name) (theorem_ : Expr) : MetaM Unit 
   let formName := name ++ `form
   let readsName := name ++ `reads
   let (value, formType, claim, proof) ← formOf naming theorem_ formName
+  -- A numeral of the form is written as Lean's elaborator writes one, as the stored program's
+  -- are: the generator of conditions matches a rule that an author gives against the form's
+  -- term as the two are written, and a value that the walk computed may hold a bare literal.
+  let (value, formType, claim) := (Zkc.Kernel.numerals value, Zkc.Kernel.numerals formType,
+    Zkc.Kernel.numerals claim)
   -- A form is for tactics, and `simp` and `rw` compare types without unfolding a definition
   -- that is not reducible. The kernel would accept a form whose values fit their places only
   -- by such unfolding; a tactic would not rewrite in it. So the form is checked as a tactic

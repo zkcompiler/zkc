@@ -4,6 +4,9 @@ theorem relationValue (x : Bool) :
 
 open scoped ZkcFormal.Written.FeeRules
 
+-- the register of the forms module, read from this module
+#registered_forms installed
+
 set_option experimental.vcgen true in
 theorem judged : t.guessing.fees.judged.view := by
   intro path input_claim valid_input_claim rejected

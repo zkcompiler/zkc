@@ -16,10 +16,12 @@ compares types.
 The sources between them have a loop with a carried value (Guess), a choice with a guard in each
 arm (Either), a stepped loop written out as blocks (Steps), two applications of a protocol that
 calls a function (Twice), a protocol that two callers apply, which has one form (Nested), a
-vector of scalars drawn and three applications of a function over matrices (Freivalds), and the
-conformance corpus's count of near-zero entries (Count). A control has a construct that the
-walk does not read (a `match` on a variant): its forms are refused, and the refusal names the
-construct.
+callee whose roles are bound in another order (Swapped), a loop of a role that collects
+(Gather), a vector of scalars drawn and three applications of a function over matrices (Freivalds), and the
+conformance corpus's count of near-zero entries (Count). Two controls: a construct that the
+walk does not read (a `match` on a variant) refuses the subject's forms by its name; and a data
+module whose headers are not marked reducible gives a form that fits its places only by
+unfolding them, which the producer's check refuses.
 
 With `ZKC_WORK` naming a folder the check's project is kept there.
 -/
@@ -100,6 +102,34 @@ def nested : String :=
   "scheme Checked = Nested:\n    prover P\n    construction interactive\n" ++
   "goal nested = soundness(Checked, stage = written)\n"
 
+/-- A callee whose roles are bound in another order: the round names the role that draws first,
+and the root's verifier plays it, so the verifier is the callee's role 0. -/
+def swapped : String :=
+  "module t\nuse zkc::security::{soundness}\n" ++
+  "relation Holds(claim: bool): claim\n" ++
+  "protocol Round roles(B, A)(sent: index<4> @A) -> (hit: bool @(A, B), drawn: index<4> @(A, B)):\n" ++
+  "    x <- send sent from A to B\n    r <- draw index<4> from B to A\n" ++
+  "    return (r == x, r)\n" ++
+  "spec for Round:\n    charge sites.r <= 1 / 4\n" ++
+  "protocol Swapped roles(P, V)(claim: bool @(P, V), first: index<4> @P):\n" ++
+  "    a <- Round(first) @(A = P, B = V)\n" ++
+  "    guard @V claim or a.hit\n" ++
+  "spec for Swapped:\n    proves @V Holds(claim)\n" ++
+  "scheme Checked = Swapped:\n    prover P\n    construction interactive\n" ++
+  "goal swapped = soundness(Checked, stage = written)\n"
+
+/-- A loop of a role that collects: the positions drawn in three rounds are one sequence. -/
+def gathered : String :=
+  "module t\nuse zkc::security::{soundness}\n" ++
+  "relation Holds(claim: bool): claim\n" ++
+  "protocol Gather roles(P, V)(claim: bool @(P, V), guess: index<8> @P):\n" ++
+  "    for i in 0..3 collect (rs = r):\n" ++
+  "        g <- send guess from P to V\n        r <- draw index<8> from V to P\n" ++
+  "    guard @V claim or rs[0] == rs[1]\n" ++
+  "spec for Gather:\n    proves @V Holds(claim)\n    charge sites.r <= 1 / 8\n" ++
+  "scheme Checked = Gather:\n    prover P\n    construction interactive\n" ++
+  "goal gathered = soundness(Checked, stage = written)\n"
+
 /-- A source with a choice among the alternatives of a variant, which the walk does not read
 yet: on one side a position is heard and one is drawn, on the other nothing happens. -/
 def sided : String :=
@@ -168,14 +198,25 @@ def run (corpus work : System.FilePath) : IO Unit := do
     | throw (IO.userError "missing the reference case N-GL2a")
   -- each subject with the rows that its register is to hold, in the order of the listing
   let subjects : List (String × String × String × List Row) := [
+    -- the root `Guess` at the verifier; the relation `Holds`
     ("Guess", guess, "guessing", [.protocol 0 1, .function 1]),
+    -- the relation `Holds`; the root `Either` at the verifier
     ("Either", either, "either", [.function 0, .protocol 1 1]),
+    -- the relation `Holds`; the root `Steps` at the verifier
     ("Steps", stepped, "stepped", [.function 0, .protocol 1 1]),
+    -- the relation `Holds`; the function `same`; `Round` at the verifier; the root `Twice`
     ("Twice", twice, "twice",
       [.function 0, .function 1, .protocol 2 1, .protocol 3 1]),
+    -- the relation; `same`; `Round`, `Pair` and the root `Nested`, each once, at the verifier
     ("Nested", nested, "nested",
       [.function 0, .function 1, .protocol 2 1, .protocol 3 1, .protocol 4 1]),
+    -- the relation; `Round` at its role 0, which the root's verifier plays; the root `Swapped`
+    ("Swapped", swapped, "swapped", [.function 0, .protocol 1 0, .protocol 2 1]),
+    -- the relation `Holds`; the root `Gather` at the verifier
+    ("Gather", gathered, "gathered", [.function 0, .protocol 1 1]),
+    -- the root `Freivalds` at the verifier; the function `apply`; the relation `Product`
     ("Freivalds", freivalds, "sound", [.protocol 1 1, .function 2, .function 3]),
+    -- the root `Count` at the verifier; the relation `NearZero`
     ("Count", count, "loose", [.protocol 1 1, .function 3])]
   for (space, text, goal, rows) in subjects do
     let issued ← dataOf text goal space
@@ -191,6 +232,18 @@ def run (corpus work : System.FilePath) : IO Unit := do
   discard <| SubjectProject.add project `SidedForms
     (s!"import {control.dataName}\nimport ZkcFormal.Form.Publish\n\nopen Zkc.Core\n" ++
       "namespace Sided\n\npublish_forms written'subject\n\nend Sided\n") .statements
+  -- A second control: the data module of Twice without the lines that mark its headers
+  -- reducible. The types of a definition's inputs and results are then not read by a tactic,
+  -- and the producer refuses the form before the kernel sees it.
+  let bare ← dataOf twice "twice" "Bare"
+  let unmarked := "\n".intercalate
+    ((bare.data.splitOn "\n").filter fun line => !line.startsWith "attribute [reducible] header")
+  if unmarked == bare.data then
+    throw (IO.userError "Bare: the data module has no line that marks a header reducible")
+  discard <| SubjectProject.add project bare.dataName unmarked .statements
+  discard <| SubjectProject.add project `BareForms
+    (s!"import {bare.dataName}\nimport ZkcFormal.Form.Publish\n\nopen Zkc.Core\n" ++
+      "namespace Bare\n\npublish_forms written'subject\n\nend Bare\n") .statements
   for (space, _, _, rows) in subjects do
     let (ok, output) ← SubjectProject.result project s!"{space}Forms".toName
     unless ok do throw (IO.userError s!"{space}: the forms of the subject are refused\n{output}")
@@ -211,6 +264,11 @@ def run (corpus work : System.FilePath) : IO Unit := do
       output.contains "`Instr.cases`" do
     throw (IO.userError s!"Sided: the refusal does not name the construct\n{output}")
   IO.println "Sided: refused (a choice among the alternatives of a variant is named as not read)"
+  let (ok, output) ← SubjectProject.result project `BareForms
+  if ok then throw (IO.userError "Bare: forms were published over headers that a tactic does not read")
+  unless output.contains "is not type-correct as a tactic compares types" do
+    throw (IO.userError s!"Bare: the refusal is not the producer's check of the form's types\n{output}")
+  IO.println "Bare: refused (a form over headers that are not reducible fails the producer's check of its types)"
 
 end ProgramForms
 

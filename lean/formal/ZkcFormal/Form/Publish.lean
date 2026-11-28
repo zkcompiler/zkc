@@ -127,7 +127,7 @@ elab "publish_forms " subject:term : command => Command.liftTermElabM do
         | none => called.member
       withLocalDeclD `M model fun M => do
         let stored ← match called.role with
-          | some r => mkAppM ``ZkcFormal.Form.storedRole #[M, program, member_, mkRawNatLit r]
+          | some r => mkAppM ``ZkcFormal.Form.storedRole #[M, program, member_, mkNatLit r]
           | none => mkAppM ``ZkcFormal.Form.storedFunction #[M, program, member_]
         declare naming name (← mkLambdaFVars #[M] stored)
       modifyEnv (registry.addEntry · {
