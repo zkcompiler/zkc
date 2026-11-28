@@ -23,11 +23,13 @@ Sources. The first three are judged by the comparator; the fourth's text is refu
   the guess, within the cap that the judgment's term reads from the table, and the proof is
   judged. Over the source with a cap of one quarter the same text is refused at the budget and
   at the draw's allowance.
-* The same verifier by the rules of the judgment on a reading (`ZkcFormal.Written.FeeRules`):
-  its computation written out by hand, the triple proved by Lean's `vcgen`, the choice at the
-  draw given where the generator asks for it, at a type that names the draw's occurrence; the
-  pair is judged. With the choice stated at another occurrence the draw's goal stays open and
-  the text is refused.
+* The same verifier by the rules of the judgment on a reading (`ZkcFormal.Written.FeeRules`),
+  as a callee: a contract of it (`ZkcFormal.Written.Contract`) is proved to hold, at every
+  start and under every allowance that covers it, on its computation written out by hand, the
+  triple proved by Lean's `vcgen`, the choice at the draw given where the generator asks for
+  it, at a type that names the draw's occurrence; the goal's judgment is what the contract
+  gives under the table's allowance, and the pair is judged. With the choice stated at another
+  occurrence the draw's goal stays open and the text is refused.
 
 Rows that the issuer does not print, built as typed rows over the first subject's root, clauses
 and origins:
@@ -147,58 +149,91 @@ def payingForm : String :=
   "    (.own (.coin (.uniform (.fin 2))) [0] ⟨path, ⟨1⟩⟩ [] .nil (.fin 2))\n" ++
   "  if Nat.beq r g then pure .nil else throw (.declared .reject ⟨path, ⟨6⟩⟩)\n\n"
 
-/-- The paying verifier's judgment by the rules of the judgment on a reading: the verifier's
-process is the process of the written computation (`reads`), and the computation's triple is
-proved by Lean's `vcgen` with the rule of each effect. The generator asks for one thing, the
-choice at the draw, as a goal whose type names the draw's occurrence (`key`, the key of the
-draw in that type): a fee of one half for the one reply that is the message. Three conditions
-are left: the fee is within the budget, it pays for that reply within the cap that the table
-gives the occurrence, and after every other reply the verifier stops. -/
-def payingByRules (key : Nat := 1) : String :=
+/-- The verifier of the root as a callee, by the rules of the judgment on a reading. A contract
+says what it does on a claim that is not set: it never returns, for a fee of one half, which
+its one draw needs. That the contract holds is proved once, at every start and under every
+allowance that covers it: the verifier's process is the process of the written computation, and
+the computation's triple is proved by Lean's `vcgen` with the rule of each effect. The generator
+asks for one thing, the choice at the draw, as a goal whose type names the draw's occurrence
+(`key`, the key of the draw in that type): a fee of one half for the one reply that is the
+message. The conditions left: the fee is within the budget; it pays for that reply within what
+the allowance gives the occurrence, which the cover says; and after every other reply the
+verifier stops. -/
+def payingContract (key : Nat := 1) : String :=
+  "/-- The verifier of the root as a callee: on a claim that is not set it never returns, for a fee\n" ++
+  "of one half, which its one draw needs. -/\n" ++
+  "noncomputable def checkContract : Contract model installed rootMember verifierRole where\n" ++
+  "  Ghost := Unit\n" ++
+  "  pre _ ins := ins = .cons () (.cons false .nil)\n" ++
+  "  post _ _ _ := False\n" ++
+  "  fee := 1 / 2\n" ++
+  "  need site := if site = ⟨[], ⟨1⟩⟩ then 1 / 2 else 0\n" ++
+  "\n" ++
+  "set_option experimental.vcgen true in\n" ++
+  "theorem checkHolds : checkContract.Holds StandardInterpretation.draws := by\n" ++
+  "  intro allowance start covers _ ins pre budget fee\n" ++
+  "  subst pre\n" ++
+  "  have shape : roleMeaning model installed rootMember verifierRole start\n" ++
+  "      (.cons () (.cons false .nil)) =\n" ++
+  "      .call (.get .message 0 ⟨start, ⟨0⟩⟩ (.fin 2)) (fun g ↦\n" ++
+  "        .call (.own (.coin (.uniform (.fin 2))) [0] ⟨start, ⟨1⟩⟩ [] .nil (.fin 2)) (fun r ↦\n" ++
+  "          Process.bind (A := HList (RV model verifierRole) [])\n" ++
+  "            (cond (Nat.beq r g) (Process.done HList.nil) (Process.halt (.declared .reject ⟨start, ⟨6⟩⟩)))\n" ++
+  "            fun _ ↦ .done .nil)) := by kernel_rfl\n" ++
+  "  rw [shape]\n" ++
+  "  let context : FeeRules.Context model := ⟨StandardInterpretation.draws, allowance⟩\n" ++
+  "  refine FeeRules.judged_of_triple context _ (form start) ?reads _ _ FeeRules.stopped ?proved\n" ++
+  "  case reads =>\n" ++
+  "    refine (Reading.read_call _ _).trans (bind_congr fun g => (Reading.read_call _ _).trans\n" ++
+  "      (bind_congr fun r => ?_))\n" ++
+  "    cases Nat.beq r g <;> rfl\n" ++
+  "  case proved =>\n" ++
+  "    vcgen [form] invariants\n" ++
+  s!"    | inv1 => (⟨1 / 2, fun r => r = g⟩ : FeeRules.DrawChoice ⟨start, ⟨{key}⟩⟩ ℕ)\n" ++
+  "    case vc1 => exact (show (1 / 2 : ℚ≥0) ≤ budget from fee).trans (by assumption)\n" ++
+  "    case vc2 =>\n" ++
+  "      refine ⟨Or.inr ⟨_, rfl, ?_⟩, ?_⟩\n" ++
+  "      · show Pr{let x ← drawPosition 1}[x = g] ≤ toProbability (1 / 2)\n" ++
+  "        rw [prEvent_drawPosition, show (1 / 2 : ℚ≥0) = ((1 : ℕ) : ℚ≥0) / ((1 + 1 : ℕ) : ℚ≥0) by norm_num,\n" ++
+  "          toProbability_natCast_div 1 (1 + 1) (Nat.succ_pos 1)]\n" ++
+  "        have few : ({x : Fin (1 + 1) | (x : ℕ) = g} : Finset (Fin (1 + 1))).card ≤ 1 :=\n" ++
+  "          Finset.card_le_one.mpr fun a ha b hb =>\n" ++
+  "            Fin.ext ((Finset.mem_filter.mp ha).2.trans (Finset.mem_filter.mp hb).2.symm)\n" ++
+  "        push_cast\n" ++
+  "        calc _ ≤ (1 : ℝ≥0∞) / (1 + 1) := ENNReal.div_le_div_right (by exact_mod_cast few) _\n" ++
+  "          _ = 1 / 2 := by norm_num\n" ++
+  "      · show (1 / 2 : ℚ≥0) ≤ allowance ⟨start, ⟨1⟩⟩\n" ++
+  "        have needed := covers ⟨start, ⟨1⟩⟩ ⟨[], ⟨1⟩⟩\n" ++
+  "          (by simpa [Frame.applications] using Occurrence.siteBelow_append start [] ⟨1⟩)\n" ++
+  "        simpa [checkContract] using needed\n" ++
+  "    all_goals exact absurd (Nat.eq_of_beq_eq_true ‹_›) ‹_›\n" ++
+  "\n"
+
+/-- The paying verifier's judgment from its contract: the table's allowance covers the contract
+at the path, and the judgment within one half is what the contract gives there. -/
+def payingByContract : String :=
   "  cases input_claim with\n" ++
   "  | true => exact False.elim (rejected (relationValue true))\n" ++
   "  | false =>\n" ++
-  "    have shape : roleMeaning model installed rootMember verifierRole path\n" ++
-  "        (.cons () (.cons false .nil)) =\n" ++
-  "        .call (.get .message 0 ⟨path, ⟨0⟩⟩ (.fin 2)) (fun g ↦\n" ++
-  "          .call (.own (.coin (.uniform (.fin 2))) [0] ⟨path, ⟨1⟩⟩ [] .nil (.fin 2)) (fun r ↦\n" ++
-  "            Process.bind (A := HList (RV model verifierRole) [])\n" ++
-  "              (cond (Nat.beq r g) (Process.done HList.nil) (Process.halt (.declared .reject ⟨path, ⟨6⟩⟩)))\n" ++
-  "              fun _ ↦ .done .nil)) := by kernel_rfl\n" ++
-  "    rw [shape]\n" ++
-  "    let context : FeeRules.Context model := ⟨StandardInterpretation.draws, written'caps0.allowed path⟩\n" ++
-  "    refine FeeRules.judged_of_triple context _ (form path) ?reads _ _ FeeRules.stopped ?proved\n" ++
-  "    case reads =>\n" ++
-  "      refine (Reading.read_call _ _).trans (bind_congr fun g => (Reading.read_call _ _).trans\n" ++
-  "        (bind_congr fun r => ?_))\n" ++
-  "      cases Nat.beq r g <;> rfl\n" ++
-  "    case proved =>\n" ++
-  "      vcgen [form] invariants\n" ++
-  s!"      | inv1 => (⟨1 / 2, fun r => r = g⟩ : FeeRules.DrawChoice ⟨path, ⟨{key}⟩⟩ ℕ)\n" ++
-  "      case vc1 => assumption\n" ++
-  "      case vc2 =>\n" ++
-  "        refine ⟨Or.inr ⟨_, rfl, ?_⟩, ?_⟩\n" ++
-  "        · show Pr{let x ← drawPosition 1}[x = g] ≤ toProbability (1 / 2)\n" ++
-  "          rw [prEvent_drawPosition, show (1 / 2 : ℚ≥0) = ((1 : ℕ) : ℚ≥0) / ((1 + 1 : ℕ) : ℚ≥0) by norm_num,\n" ++
-  "            toProbability_natCast_div 1 (1 + 1) (Nat.succ_pos 1)]\n" ++
-  "          have few : ({x : Fin (1 + 1) | (x : ℕ) = g} : Finset (Fin (1 + 1))).card ≤ 1 :=\n" ++
-  "            Finset.card_le_one.mpr fun a ha b hb =>\n" ++
-  "              Fin.ext ((Finset.mem_filter.mp ha).2.trans (Finset.mem_filter.mp hb).2.symm)\n" ++
-  "          push_cast\n" ++
-  "          calc _ ≤ (1 : ℝ≥0∞) / (1 + 1) := ENNReal.div_le_div_right (by exact_mod_cast few) _\n" ++
-  "            _ = 1 / 2 := by norm_num\n" ++
-  "        · show (1 / 2 : ℚ≥0) ≤ written'caps0.allowed path ⟨path, ⟨1⟩⟩\n" ++
-  "          rw [CapTable.allowed_here]\n" ++
-  "          decide +kernel\n" ++
-  "      case vc3 r _ different equal => exact different (Nat.eq_of_beq_eq_true equal)\n"
+  "    have covers : checkContract.Covers (written'caps0.allowed path) path := by\n" ++
+  "      intro at_ site below\n" ++
+  "      show (if site = ⟨[], ⟨1⟩⟩ then (1 / 2 : ℚ≥0) else 0) ≤\n" ++
+  "        written'caps0.allowedFrom written'caps0.root path at_\n" ++
+  "      rw [CapTable.allowedFrom, below]\n" ++
+  "      split\n" ++
+  "      · subst_vars; decide +kernel\n" ++
+  "      · exact zero_le\n" ++
+  "    exact Process.interpret_mono (Fees.judgment_monotone _ _) (fun _ _ ended => ended.1)\n" ++
+  "      (fun _ _ stopped => stopped) _ _\n" ++
+  "      (checkHolds (written'caps0.allowed path) path covers () _ rfl (1 / 2) le_rfl)\n"
 
 /-- An author's text for the goal at `path` of the subject `subject`: the judgment by fees proved
 on its declared view, and the two published theorems through the declared steps. `before` is what
-the text declares ahead of the judgment, and `option` an option of the judgment's proof. -/
-def authorText (subject path judgment : String) (before := "") (option := "") : String :=
+the text declares ahead of the judgment. -/
+def authorText (subject path judgment : String) (before := "") : String :=
   "theorem relationValue (x : Bool) :\n" ++
   "    functionResult (t := .bool) (fnMeaning model installed member'fn0 (.cons x .nil)) = some x := by\n" ++
-  "  kernel_rfl\n\n" ++ before ++ option ++
+  "  kernel_rfl\n\n" ++ before ++
   s!"theorem judged : {path}.fees.judged.view := by\n" ++
   "  intro path input_claim valid_input_claim rejected\n" ++ judgment ++ "\n" ++
   s!"theorem {path}.sound : published% {subject} {path} sound :=\n" ++
@@ -292,7 +327,7 @@ def run (work : System.FilePath) : IO Unit := do
   -- a source as the issuer publishes it (the data module, the challenge, the views and the fees
   -- module), with the author's text in the issuer's frame, judged
   let sourced (space text judgment : String) (judged := true) (imports : List String := [])
-      (before := "") (option := "") : IO Unit := do
+      (before := "") : IO Unit := do
     let issued ← publicationOf text ["loose"] space imports
     add (toString issued.dataName) issued.data .statements
     add s!"{space}Shape" (WrittenSubject.shapeControl issued.dataName space) .statements
@@ -301,7 +336,7 @@ def run (work : System.FilePath) : IO Unit := do
     add (toString issued.feesName) issued.fees .statements
     add s!"{space}Facts" (factsOf s!"{space}.Fees" s!"{space}.{path}.fees" ++
       s!"#check @{space}.{path}.fees.budget\n#check @{space}.{path}.fees.installed_of_judged\n") .statements
-    add s!"{space}.Proof" (issued.proof (authorText "written'subject" path judgment before option)) .module
+    add s!"{space}.Proof" (issued.proof (authorText "written'subject" path judgment before)) .module
     unless issued.published == [s!"{space}.{path}.sound".toName, s!"{space}.{path}.met".toName] do
       throw (IO.userError s!"{space}: the issuer's published theorems are {issued.published}")
     if judged then
@@ -316,11 +351,10 @@ def run (work : System.FilePath) : IO Unit := do
   -- the paying verifier again, by the rules of the judgment on a reading and Lean's generator;
   -- and with the draw's choice stated at the occurrence of the message, where no draw is
   let rules := ["ZkcFormal.Written.FeeRules"]
-  let generator := "set_option experimental.vcgen true in\n"
-  sourced "Ruled" (payingSource "1 / 2") (payingByRules 1) (imports := rules) (before := payingForm)
-    (option := generator)
-  sourced "Misplaced" (payingSource "1 / 2") (payingByRules 0) (judged := false) (imports := rules)
-    (before := payingForm) (option := generator)
+  sourced "Ruled" (payingSource "1 / 2") payingByContract (imports := rules)
+    (before := payingForm ++ payingContract 1)
+  sourced "Misplaced" (payingSource "1 / 2") payingByContract (judged := false) (imports := rules)
+    (before := payingForm ++ payingContract 0)
   -- the judgment's view, read by name and type from a second reading of the source
   let rows ← ViewRows.expectedRows source "loose" false
   add "AtBoundReads" (ViewRows.reader ["AtBound.Fees"]
