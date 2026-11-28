@@ -61,10 +61,12 @@ def formed : List Lean.Name := [``Bind.bind, ``Pure.pure, ``MonadExcept.throw, `
   ``ZkcFormal.Form.Fragment.next, ``ZkcFormal.Form.Fragment.eval, ``ZkcFormal.Form.computed,
   ``ZkcFormal.Form.roleFragment, ``ZkcFormal.Form.localFragment, ``ZkcFormal.Form.ownedFragment,
   ``Zkc.Core.hide, ``Zkc.Core.reveal, ``Zkc.Core.carry, ``Zkc.Core.enter, ``Zkc.Core.leave,
-  ``Zkc.Core.nothing,
+  ``Zkc.Core.nothing, ``Zkc.Core.collectRV, ``List.reverse,
   -- the operations of the core's own on values: a form names them as the source does
   ``or, ``and, ``not, ``BEq.beq, ``Nat.beq, ``Nat.blt, ``HAdd.hAdd, ``HSub.hSub, ``HMul.hMul,
-  ``HDiv.hDiv, ``HMod.hMod, ``HPow.hPow, ``List.length, ``GetElem?.getElem?]
+  ``HDiv.hDiv, ``HMod.hMod, ``HPow.hPow, ``List.length, ``GetElem?.getElem?,
+  -- a path under a frame, and one list after another
+  ``HAppend.hAppend]
 
 /-- Head reduction that keeps what a form is made of. -/
 def head (e : Expr) : MetaM Expr :=
@@ -121,6 +123,8 @@ partial def value (e : Expr) : MetaM Expr := do
   if e.isAppOfArity ``Zkc.Core.reveal 6 || e.isAppOfArity ``Zkc.Core.carry 8 then
     return ← value e.appArg!
   if e.isAppOfArity ``Zkc.Core.nothing 5 then return unit
+  if e.isAppOfArity ``Zkc.Core.collectRV 6 then
+    return ← if ← held (e.getArg! 2) (e.getArg! 4) then pure e else pure unit
   if e.isAppOfArity ``Zkc.Core.enter 6 || e.isAppOfArity ``Zkc.Core.leave 6 then
     let callee ← mkAppM ``Zkc.Core.RoleMap.back #[e.getArg! 2, e.getArg! 3]
     return ← if ← held callee (e.getArg! 4) then value e.appArg! else pure unit
@@ -129,10 +133,15 @@ partial def value (e : Expr) : MetaM Expr := do
     if list.isAppOfArity ``Zkc.Core.HList.cons 6 then
       return ← value (list.getArg! (if e.isAppOf ``ZkcFormal.Form.headV then 4 else 5))
     return mkApp e.appFn! list
-  if ← isConstructorApp e then
-    let args ← e.getAppArgs.mapM fun a => do
-      if (← isType a) || (← isProof a) then pure a else value a
-    return mkAppN e.getAppFn args
+  if let some constructor ← isConstructorApp? e then
+    -- the fields only: a parameter of the constructor (the vocabulary, the model) is a name
+    -- that the form keeps
+    let args := e.getAppArgs
+    let mut fields := args
+    for i in [constructor.numParams:args.size] do
+      let a := args[i]!
+      unless (← isType a) || (← isProof a) do fields := fields.set! i (← value a)
+    return mkAppN e.getAppFn fields
   return e
 
 /-- A fragment as a constructor. An operation's fragment is opened on the values of its
@@ -216,9 +225,45 @@ structure Setting where
   bind : Expr
   pure_ : Expr
 
+/-- A list of types that is written out, with the type of its elements spelled as the setting
+spells it: the stored syntax spells it through the dialect. -/
+partial def Setting.types (setting : Setting) (list : Expr) : Expr :=
+  if list.isAppOfArity ``List.cons 3 then
+    mkApp3 list.getAppFn setting.index (list.getArg! 1) (setting.types (list.getArg! 2))
+  else if list.isAppOfArity ``List.nil 1 then mkApp list.getAppFn setting.index
+  else list
+
+/-- The elements of a list of types that is written out. -/
+partial def cells (list : Expr) : MetaM (Array Expr) := do
+  if list.isAppOfArity ``List.cons 3 then return #[list.getArg! 1] ++ (← cells (list.getArg! 2))
+  if list.isAppOfArity ``List.nil 1 then return #[]
+  throwError "form: a list of types of the stored syntax is not written out:{indentExpr list}"
+
+/-- A list of values, written out: `family` is what a value of a type is, and the values are of
+the given types. -/
+def Setting.written (setting : Setting) (family : Expr) (types values : Array Expr) : Expr :=
+  Id.run do
+    let mut list := mkApp2 (mkConst ``Zkc.Core.HList.nil) setting.index family
+    let mut rest := mkApp (mkConst ``List.nil [0]) setting.index
+    for i in [0:types.size] do
+      let k := types.size - 1 - i
+      list := mkApp6 (mkConst ``Zkc.Core.HList.cons) setting.index family types[k]! rest
+        values[k]! list
+      rest := mkApp3 (mkConst ``List.cons [0]) setting.index types[k]! rest
+    return list
+
+/-- The first values of a list of values by their places, and the list after them. -/
+def places (list : Expr) (count : Nat) : MetaM (Array Expr × Expr) := do
+  let mut found := #[]
+  let mut rest := list
+  for _ in [0:count] do
+    found := found.push (← mkAppM ``ZkcFormal.Form.headV #[rest])
+    rest ← mkAppM ``ZkcFormal.Form.tailV #[rest]
+  return (found, rest)
+
 /-- The type of a list of values of the given types. -/
 def Setting.list (setting : Setting) (types : Expr) : Expr :=
-  mkApp3 (mkConst ``Zkc.Core.HList) setting.index setting.values types
+  mkApp3 (mkConst ``Zkc.Core.HList) setting.index setting.values (setting.types types)
 
 /-! A binder of a continuation is made without abstracting its variable in the continuation: the
 lambda's body still mentions the variable, and is marked with it. `closed` replaces every such
@@ -274,7 +319,8 @@ partial def closed (e : Expr) : MetaM Expr := do
 inductive Piece where
   | ready (x : Expr)
   | value (a : Expr)
-  | action (x f : Expr)
+  /-- A computation of a reply of the type `reply`, and what is made of the reply. -/
+  | action (x reply f : Expr)
 
 /-- The values in scope, by name. -/
 abbrev Scope := Lean.PersistentHashMap Nat Expr
@@ -301,14 +347,16 @@ def lookup (scope : Scope) (var : Expr) : MetaM Expr := do
   let some found := scope.find? name | throwError "form: the name {name} is not in scope"
   return found
 
-/-- The values of a list of variables, as a list of values of the given types. -/
+/-- The values of a list of variables, as a list of values of the given types. The type of the
+types is spelled as the setting spells it: the generator of conditions compares the types of a
+computation and of its continuation without unfolding a dialect. -/
 partial def lookups (setting : Setting) (scope : Scope) (vars : Expr) : MetaM Expr := do
   if vars.isAppOfArity ``Zkc.Core.HList.cons 6 then
     let rest ← lookups setting scope (vars.getArg! 5)
-    return mkApp6 (mkConst ``Zkc.Core.HList.cons) (vars.getArg! 0) setting.values
-      (vars.getArg! 2) (vars.getArg! 3) (← lookup scope (vars.getArg! 4)) rest
+    return mkApp6 (mkConst ``Zkc.Core.HList.cons) setting.index setting.values
+      (vars.getArg! 2) (setting.types (vars.getArg! 3)) (← lookup scope (vars.getArg! 4)) rest
   if vars.isAppOfArity ``Zkc.Core.HList.nil 2 then
-    return mkApp2 (mkConst ``Zkc.Core.HList.nil) (vars.getArg! 0) setting.values
+    return mkApp2 (mkConst ``Zkc.Core.HList.nil) setting.index setting.values
   throwError "form: a list of variables is not written out:{indentExpr vars}"
 
 /-- The scope with a list of names bound to a list of values: to its elements where the list is
@@ -335,17 +383,17 @@ def returned (setting : Setting) (type a : Expr) : Expr :=
 def followed (setting : Setting) (first second x k : Expr) : Expr :=
   mkApp4 setting.bind first second x k
 
-/-- The type of what a function of one argument takes. -/
-def domain (f : Expr) : MetaM Expr := do
-  if f.isLambda then return f.bindingDomain!
-  return (← whnf (← inferType f)).bindingDomain!
+/-- What a computation returns, as its own type spells it. A binder of a continuation has this
+type as it stands: the generator of conditions compares the types of a computation and of its
+continuation without evaluating them. -/
+def returns (x : Expr) : MetaM Expr := do
+  return (← whnfR (← inferType x)).appArg!
 
 /-- The computation of a piece, of values of the given type. -/
 def computationOf (setting : Setting) (type : Expr) : Piece → MetaM Expr
   | .ready x => pure x
   | .value a => pure (returned setting type a)
-  | .action x f => do
-    let reply ← domain f
+  | .action x reply f => do
     withLocalDeclD `v reply fun v => do
       return followed setting reply type x (← marked v (returned setting type (f.beta #[v])))
 
@@ -379,11 +427,10 @@ partial def term (setting : Setting) (t path : Expr) (scope : Scope) : MetaM Pie
     match ← instr setting key (t.getArg! 5) (t.getArg! 3) path scope with
     | .value a => return .ready (← after a)
     | .ready x =>
-      let returns := setting.list (t.getArg! 3)
-      return ← withLocalDeclD `vs returns fun vs => do
-        return .ready (followed setting returns outs x (← marked vs (← after vs)))
-    | .action x f =>
-      let reply ← domain f
+      let given ← returns x
+      return ← withLocalDeclD `vs given fun vs => do
+        return .ready (followed setting given outs x (← marked vs (← after vs)))
+    | .action x reply f =>
       return ← withLocalDeclD `v reply fun v => do
         return .ready (followed setting reply outs x (← marked v (← after (← value (f.beta #[v])))))
   throwError "form: the walk does not know this term of the stored syntax:{indentExpr t.getAppFn}"
@@ -404,7 +451,10 @@ partial def instr (setting : Setting) (key i mid path : Expr) (scope : Scope) : 
     if piece.isAppOfArity ``ZkcFormal.Form.Fragment.ready 4 then return .ready (← small piece.appArg!)
     if piece.isAppOfArity ``ZkcFormal.Form.Fragment.value 4 then return .value (← value piece.appArg!)
     if piece.isAppOfArity ``ZkcFormal.Form.Fragment.action 6 then
-      return .action (← small (piece.getArg! 4)) (piece.getArg! 5)
+      -- the reply's type as the reduced query spells it, not as the fragment states it: the
+      -- fragment states it over operands that are not yet values
+      let query ← small (piece.getArg! 4)
+      return .action query (← returns query) (piece.getArg! 5)
     throwError "form: an operation's computation is no fragment:{indentExpr piece}"
   if i.isAppOfArity ``Zkc.Core.Instr.guard 7 then
     let holds ← value (← mkAppM ``Zkc.Core.Semantics.holds #[s, i.getArg! 5, ← lookup scope (i.getArg! 4)])
@@ -433,10 +483,17 @@ partial def instr (setting : Setting) (key i mid path : Expr) (scope : Scope) : 
       if times.isAppOf ``Zkc.Core.Times.value then
         value (← mkAppM ``Zkc.Core.Semantics.count #[s, times.appArg!, ← lookup scope (times.getArg! 4)])
       else throwError "form: the count of a loop is not written out:{indentExpr times}"
-    let size ← mkAppM ``Zkc.Core.Times.size #[times]
+    let size ← value (← mkAppM ``Zkc.Core.Times.size #[times])
+    -- The state of the loop is the carried values and what was collected of each type. A list
+    -- that is a variable (the body's result, the state) is read by its places, as the
+    -- library's recursion reads it, so every list of the form is written out.
+    let carriedTypes ← cells carried
+    let eachTypes ← cells each
+    let lists ← withLocalDeclD `a setting.index fun a => do
+      mkLambdaFVars #[a] (← mkAppM ``List #[(mkApp setting.values a).headBeta])
+    let empty ← eachTypes.mapM fun a => mkAppOptM ``List.nil #[some (mkApp setting.values a).headBeta]
     let initial ← lookups setting scope (i.getArg! 7)
-    let empties ← mkAppOptM ``Zkc.Core.HList.empties #[none, some setting.values, some each]
-    let start ← mkAppM ``Prod.mk #[initial, empties]
+    let start ← mkAppM ``Prod.mk #[initial, setting.written lists eachTypes empty]
     let state ← inferType start
     let range := mkApp3 (mkConst ``List.range') (mkNatLit 0) count (mkNatLit 1)
     let body ← withLocalDeclD `j (mkConst ``Nat) fun j => withLocalDeclD `state state fun st => do
@@ -451,9 +508,12 @@ partial def instr (setting : Setting) (key i mid path : Expr) (scope : Scope) : 
         (← bound scope (i.getArg! 8) inputs)
       let outs := setting.list ((i.getArg! 9).getArg! 2)
       let step ← withLocalDeclD `out outs fun out => do
-        let parts ← mkAppOptM ``Zkc.Core.HList.split #[none, none, some carried, none, some out]
-        let next ← mkAppM ``Prod.mk #[← mkAppM ``Prod.fst #[parts],
-          ← mkAppM ``Zkc.Core.HList.push #[← mkAppM ``Prod.snd #[st], ← mkAppM ``Prod.snd #[parts]]]
+        let (kept, after) ← places out carriedTypes.size
+        let (added, _) ← places after eachTypes.size
+        let (held, _) ← places (← mkAppM ``Prod.snd #[st]) eachTypes.size
+        let longer ← (added.zip held).mapM fun (x, xs) => mkAppM ``List.cons #[x, xs]
+        let next ← mkAppM ``Prod.mk #[setting.written setting.values carriedTypes kept,
+          setting.written lists eachTypes longer]
         marked out (returned setting state next)
       let iteration := followed setting outs state inner step
       let yield ← mkAppOptM ``ForInStep.yield #[some state]
@@ -463,9 +523,11 @@ partial def instr (setting : Setting) (key i mid path : Expr) (scope : Scope) : 
     let looped ← mkAppOptM ``forIn
       #[some setting.monad, none, none, none, some state, some range, some start, some body]
     let finish ← withLocalDeclD `state state fun st => do
-      let collected ← mkAppM ``Zkc.Core.Semantics.collected
-        #[s, size, ← mkAppM ``Prod.snd #[st]]
-      let all ← mkAppM ``Zkc.Core.HList.append #[← mkAppM ``Prod.fst #[st], collected]
+      let (kept, _) ← places (← mkAppM ``Prod.fst #[st]) carriedTypes.size
+      let (held, _) ← places (← mkAppM ``Prod.snd #[st]) eachTypes.size
+      let collected ← (eachTypes.zip held).mapM fun (a, xs) => do
+        value (← mkAppM ``Zkc.Core.Semantics.collect #[s, size, a, ← mkAppM ``List.reverse #[xs]])
+      let all := setting.written setting.values (← cells (setting.types mid)) (kept ++ collected)
       marked st (returned setting (setting.list mid) all)
     return .ready (followed setting state (setting.list mid) looped finish)
   throwError "form: the walk does not know this instruction of the stored syntax:{indentExpr i.getAppFn}"
@@ -496,20 +558,39 @@ def formOf (theorem_ : Expr) (formName : Lean.Name) : MetaM (Expr × Expr × Exp
     let names ← member (extended.getArg! (extended.getAppNumArgs - 2))
     let type ← whnfR (← inferType lhs)
     let monad := type.appFn!
-    let values ← whnfR (← mkAppM ``Zkc.Core.Semantics.Val #[semantics])
+    -- the values of a type as the semantics names them (`RV M r`, `M.Val`): the field of the
+    -- semantics' record, read once and not unfolded further
+    let some record ← unfoldDefinition? semantics
+      | throwError "form: the semantics is not a definition:{indentExpr semantics}"
+    let values ← whnfCore (.proj ``Zkc.Core.Semantics 0 (← whnfCore record))
     let setting : Setting := {
       semantics, operations, monad, values
       stop := monad.getArg! 0
-      index := (← whnf (← inferType values)).bindingDomain!
+      index := (← whnfR (← inferType values)).bindingDomain!
       bind := ← mkAppOptM ``Bind.bind #[some monad, none]
       pure_ := ← mkAppOptM ``Pure.pure #[some monad, none] }
     let form ← closed (← termComputation setting syntax_ path (← bound {} names extended.appArg!))
-    return (← mkLambdaFVars xs form, ← mkForallFVars xs (← inferType lhs),
-      ← mkForallFVars xs (← mkEq lhs (mkAppN (mkConst formName) xs)),
-      ← mkLambdaFVars xs (mkAppN theorem_ xs))
+    -- The form's type is spelled as its body spells types: the lists of the types of the inputs
+    -- and of the results written out, as the stored syntax holds them, and not as fields of the
+    -- definition's header. The generator of conditions compares the type of a computation with
+    -- the type of what follows it without unfolding a header, so the two spellings must be one;
+    -- the kernel decides, with the equation, that the written lists are the header's.
+    let inputs := xs.back!
+    let inputTypes := if names.isAppOfArity ``Zkc.Core.HList.cons 6
+      then mkApp3 (mkConst ``List.cons [0]) setting.index (names.getArg! 2)
+        (setting.types (names.getArg! 3))
+      else mkApp (mkConst ``List.nil [0]) setting.index
+    let resultType := mkApp setting.monad (setting.list (syntax_.getArg! 2))
+    return ← withLocalDeclD `ins (setting.list inputTypes) fun written => do
+      let before := xs.pop
+      let stated := before.push written
+      return (← mkLambdaFVars stated (form.replaceFVar inputs written),
+        ← mkForallFVars stated resultType,
+        ← mkForallFVars xs (← mkEq lhs (mkAppN (mkConst formName) xs)),
+        ← mkLambdaFVars xs (mkAppN theorem_ xs))
 
 /-- Declare the form of a definition and its equation: `<name>.form` and `<name>.reads`. The
-form's type is the type of the reading that it equals. -/
+form's type is the type of the reading that it equals, with the lists of types written out. -/
 def declare (name : Lean.Name) (theorem_ : Expr) : MetaM Unit := do
   let formName := name ++ `form
   let readsName := name ++ `reads
@@ -523,6 +604,8 @@ def declare (name : Lean.Name) (theorem_ : Expr) : MetaM Unit := do
     value := value
     hints := .regular 0
     safety := .safe })
+  -- the form's own equation (`<name>.form.eq_1`) can then be made where a tactic unfolds it
+  enableRealizationsForConst formName
   addDecl (.thmDecl {
     name := readsName
     levelParams := []

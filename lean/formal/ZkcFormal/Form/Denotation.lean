@@ -94,9 +94,8 @@ mutual
             ForInStep.yield <$> (do
               let out ← (term body (path ++ [.iteration key j])
                 (extend env ns (.cons (s.index w j) state.1))).eval
-              let parts := HList.split _ out
-              pure (parts.1, state.2.push parts.2))
-        pure (state.1.append (s.collected times.size state.2))
+              pure ((splitV _ out).1, pushV state.2 (splitV _ out).2))
+        pure (appendV state.1 (collectedV s times.size state.2))
     | _, _, .block n body, path, env => term body (path ++ [.iteration key n]) env
     | _, _, .attempt w _ ns body, path, env => atomic <| do
         let n ← read (s.begin w key path)
@@ -144,7 +143,9 @@ theorem term_agrees {Γ outs} (t : Term D Γ outs) :
     congr 1
     apply congrArg (forIn _ _)
     funext j state
-    simp only [Semantics.loopStep, read_bind, ht, read_done, extend_eq]
+    · simp only [Semantics.loopStep, read_bind, ht, read_done, extend_eq, splitV_eq, pushV_eq]
+    · funext state
+      simp only [read_done, appendV_eq, collectedV_eq]
   | nil => rename_i p; exact nomatch p
   | cons ns t rest ht hr =>
     rename_i path env p
