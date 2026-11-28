@@ -6,6 +6,7 @@ public import Zkc.Core.Facts.Facts
 public import Zkc.Core.Program.EraseProgram
 public import Zkc.Core.Transform.Assured
 public import Zkc.Core.Admission.Programs
+public import Zkc.Core.Scheme.Deploy.Compile
 
 @[expose] public section
 
@@ -240,37 +241,37 @@ def deployMatches : Prop :=
       Stack.Takes (d.stack prover) = [] ∧ Stack.Gives (d.stack prover) = Stack.Takes (d.stack verifier)
 
 /-- Validity: a deployed role of an admitted program never stops `undefined`: its run, on
-valid inputs, valid values taken and every permitted reply. It is said of a program of which no
-function's summary has a requirement (`Headers.Unconditional`), whose functions are safe on every
-valid input. -/
+valid inputs, valid values taken and every permitted reply. -/
 def deployedSafe : Prop :=
   ∀ named assoc (a : Admitted V), c.admit named assoc = .ok a →
-    a.program.headers.Unconditional →
     ∀ declaration (d : Deployed V), c.deploy a declaration = .ok d →
       ∀ (M : Model V) (r : Role) (ins : HList (RV M r) d.entry.ins)
         (taken : HList M.Val (Stack.Takes (d.stack r))),
         ins.All (RV.Valid M r) → taken.All M.Valid →
         (d.run M r ins taken).StopsWhen (Permitted M) (· ≠ .undefined)
 
-/-- Progress: the compiler's completeness. On valid inputs, if every run of the entry's
-protocol against
-a world that gives what its laws allow returns, then against every such world that answers
-the protocol: the prover's run alone returns, with what its handlers give; the verifier's run
-alone on that returns; and some run of the protocol returns with both roles' results their
-parts of its results, against a world that gives what the laws allow and what this one gives
-at every occurrence that is not a coin that some role hears. -/
+/-- Progress: the compiler's completeness for every non-interactive deployment whose suite and
+layout satisfy their semantic laws (`SuiteLawful`, `LayoutLawful`). If every run of the entry's
+protocol against a world that gives what its laws allow returns, then against every world that
+satisfies the private-coin laws and answers the protocol: the prover's run alone returns with what
+its handlers give; the verifier's run alone on that returns; and some run of the protocol returns
+with both roles' results their parts of its results, against a world that gives what the laws
+allow and agrees with the given world at every occurrence that is not a coin some role hears. -/
 def complete : Prop :=
   ∀ named assoc (a : Admitted V), c.admit named assoc = .ok a →
     ∀ declaration (d : Deployed V), c.deploy a declaration = .ok d →
+      declaration.interactive = false →
       ∀ (prover verifier : Role), d.roles = some (prover, verifier) →
       ∀ (first : Stack.Takes (d.stack prover) = [])
         (matched : Stack.Gives (d.stack prover) = Stack.Takes (d.stack verifier))
         (M : Model V) (ins : HList (LVal M) d.entry.ins),
         ins.All (fun a v => M.Valid a.ty v) →
+        d.SuiteLawful M →
+        d.LayoutLawful M →
         (∀ source, Lawful M source (protocolMeaning M d.admitted.program d.callee [] ins) → ∀ e,
           GExec M source (protocolMeaning M d.admitted.program d.callee [] ins) e →
           ∃ out, e = .returned out) →
-        ∀ source, Lawful M source (protocolMeaning M d.admitted.program d.callee [] ins) →
+        ∀ source, LawfulPrivate M source (protocolMeaning M d.admitted.program d.callee [] ins) →
           Fed M source (protocolMeaning M d.admitted.program d.callee [] ins) →
           ∃ outP gives recordP outV givesV recordV,
             Alone M source prover
@@ -287,6 +288,92 @@ def complete : Prop :=
               GExec M source' (protocolMeaning M d.admitted.program d.callee [] ins)
                 (.returned out) ∧
               outP = hideAll M prover out.1 ∧ outV = hideAll M verifier out.1
+
+/-- Progress: completeness on the streaming fragment of non-interactive deployments (without
+retry, derived prover samples, or omitted-message recovery). This is the currently proved subset
+of `Statements.complete`. -/
+def completeStreaming : Prop :=
+  ∀ named assoc (a : Admitted V), c.admit named assoc = .ok a →
+    ∀ declaration (d : Deployed V), c.deploy a declaration = .ok d →
+      declaration.interactive = false →
+      declaration.retry = none →
+      declaration.samples = none →
+      (∀ l, declaration.layout = some l → l.recover = []) →
+      ∀ (prover verifier : Role), d.roles = some (prover, verifier) →
+      ∀ (first : Stack.Takes (d.stack prover) = [])
+        (matched : Stack.Gives (d.stack prover) = Stack.Takes (d.stack verifier))
+        (M : Model V) (ins : HList (LVal M) d.entry.ins),
+        ins.All (fun a v => M.Valid a.ty v) →
+        d.SuiteLawful M →
+        d.LayoutLawful M →
+        (∀ source, Lawful M source (protocolMeaning M d.admitted.program d.callee [] ins) → ∀ e,
+          GExec M source (protocolMeaning M d.admitted.program d.callee [] ins) e →
+          ∃ out, e = .returned out) →
+        ∀ source, LawfulPrivate M source (protocolMeaning M d.admitted.program d.callee [] ins) →
+          Fed M source (protocolMeaning M d.admitted.program d.callee [] ins) →
+          ∃ outP gives recordP outV givesV recordV,
+            Alone M source prover
+              (d.run M prover (hideAll M prover ins)
+                (cast (congrArg (HList M.Val) first.symm) .nil))
+              recordP (.returned (outP, gives)) ∧
+            Alone M source verifier
+              (d.run M verifier (hideAll M verifier ins)
+                (cast (congrArg (HList M.Val) matched) gives))
+              recordV (.returned (outV, givesV)) ∧
+            ∃ source' out,
+              Lawful M source' (protocolMeaning M d.admitted.program d.callee [] ins) ∧
+              (∀ at_ τ, at_.site ∉ d.entry.shape.heardCoins → source' at_ τ = source at_ τ) ∧
+              GExec M source' (protocolMeaning M d.admitted.program d.callee [] ins)
+                (.returned out) ∧
+              outP = hideAll M prover out.1 ∧ outV = hideAll M verifier out.1
+
+/-- Execution and state: ideal random-oracle verifier linkage on non-carry streaming ideal
+deployments without retry. Starting from the canonical initial ideal transcript path `st0`
+(pinned to the resolved session bytes and every statement input in signature order), answering
+`serviceKey` requests with any partial random oracle `ro` that answers the protocol's verifier
+draws makes the deployed ideal verifier return `outV` on a valid proof if and only if the bare
+verifier role program `roleMeaning` satisfies `BareIdealReturn` from `(st0, proof, 0)`. -/
+def idealLink (enc : VocabEncoder V) : Prop :=
+  ∀ (M : Model V) (serviceKey : Key) (a : Admitted V) (declaration : Declaration)
+    (suite : ModuleRef) (sessionTag : Option (List Nat)) (layout : Layout) (dIdeal : Deployed V),
+    deployIdeal enc serviceKey a declaration = .ok dIdeal →
+    declaration.construction = .derived suite sessionTag →
+    declaration.layout = some layout →
+    declaration.retry = none →
+    layout.carry = [] →
+    layout.recover = [] →
+    ∀ (prover verifier : Role), dIdeal.roles = some (prover, verifier) →
+    ∀ (ins : HList (RV M verifier) dIdeal.entry.ins), ins.All (RV.Valid M verifier) →
+      ∃ (suiteUnitTy unitTy : V.Ty)
+        (hSuiteFree : Ty.isLinear V suiteUnitTy = false)
+        (sessBytes : List Nat) (hSess : ∀ b, b ∈ sessBytes → b < 256)
+        (st0 : M.Val (LayerBuild.idealPathTy suiteUnitTy))
+        (hTakes : Stack.Takes (dIdeal.stack verifier) = [.seq unitTy none]),
+        findSuiteUnit a suite = some ⟨suiteUnitTy, ⟨hSuiteFree⟩⟩ ∧
+        resolveSessionBytes enc a declaration sessionTag = .ok ⟨sessBytes, hSess⟩ ∧
+        idealInitialPath M a suite suiteUnitTy prover verifier sessBytes ins = some st0 ∧
+        ∀ (proof : List (M.Val unitTy)), M.Valid (.seq unitTy none) proof →
+          ∀ (source : Source M) (ro : LayerBuild.IdealRO M suiteUnitTy),
+            ro.AnswersDraws M prover verifier (dIdeal.entry.shape.events [] id) →
+            ∀ (outV : HList (RV M verifier) dIdeal.entry.outs),
+              (∃ record givesV,
+                Alone M source verifier
+                  (Process.answerService serviceKey (LayerBuild.IdealRO.asOracle M ro)
+                    (dIdeal.run M verifier ins
+                      (cast (congrArg (HList M.Val) hTakes.symm) (.cons proof .nil))))
+                  record (.returned (outV, givesV))) ↔
+              BareIdealReturn M a suite layout serviceKey prover verifier
+                (dIdeal.entry.shape.eventsWithAbsorb prover verifier [] id false)
+                source ro
+                (roleMeaning M dIdeal.admitted.program dIdeal.callee verifier [] ins)
+                st0 proof 0 outV
+
+/-- Coverage: under a non-interactive deployment's stack, every online role asks the world only
+its own private coins, service requests, and local attempt marks. -/
+def deployCoverage : Prop :=
+  ∀ named assoc (a : Admitted V), c.admit named assoc = .ok a →
+    ∀ declaration (d : Deployed V), c.deploy a declaration = .ok d →
+      declaration.interactive = false → d.Covered
 
 /-- Execution and state: the retry of a deployed scheme has a scope: the attempt that it
 retries is an attempt of the entry's shape, and every guard with `abort` is inside an
@@ -329,10 +416,10 @@ def executorRuns : Prop :=
 
 /-! ## Formats -/
 
-/-- A view: the canonical format of every type has the two laws, for a model whose nominal
-carriers have lawful codecs: what is written reads back as it was. -/
+/-- A view: the canonical format of every type has the laws on valid values, for a model whose
+nominal carriers have lawful codecs: what is written reads back as it was. -/
 def formats : Prop :=
-  ∀ (M : Model V) (codecs : Codecs M) (τ : V.Ty), (c.format M codecs τ).Lawful
+  ∀ (M : Model V) (codecs : Codecs M) (τ : V.Ty), (c.format M codecs τ).Lawful (M.Valid τ)
 
 end Statements
 

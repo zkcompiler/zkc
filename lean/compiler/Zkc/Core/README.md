@@ -53,9 +53,9 @@ against those roots.
 | `Transform/` | functions, the judgments about them, and transformations of functions, on the analysis of `Facts/`: a function elaborated against the headers before it (`TypedFn`, `typeFn`), its meaning on inputs against callees, what it is for it to be safe (to satisfy its header's summary), to have its loops bounded, to be assured with bounds, and for two of them to mean the same, as propositions against every `Callees`, on the inputs that satisfy the requirements of its header's summary, the check of facts of a function and whether a second follows the analysis of a first, each under its header's summary, as decisions, and why a step is refused (`StepRefusal`) (`Step`); the two producers of assurance, the check of facts (`TypedFn.check_assured`) and following a function that is safe by any route (`TypedFn.follows_assured`), "the same meaning" symmetric and transitive, and that a function is safe exactly when its body is assured in the sense of `Evidence/` on the inputs that satisfy its requirements and returns what satisfies its guarantees (`StepSound`); an assured function, made only with its assurance, by admission (`admitFn`, the one path by which admission's check of a definition and transformations admit a function) or by a step from an assured function (`AssuredFn.step`), which never admits its source again, and the theorems of a step (`Assured`); two untrusted transformations of a stored function, which drop the operations whose results are not used and share repeated operations, accepted only through the step (`Passes`). The operations of a function that commute, each placed in the table with its two operands in one order, are the sum and the product of naturals and the equality of naturals and of truth values (`ownedContract`, `Facts/Local.lean`); the conjunction and the disjunction of truth values, whose meaning is symmetric too, keep the order written, since the check of facts learns their operands in that order |
 | `Admission/` | Named function and protocol elaboration, both round trips, and association resolution. The incremental checker and whole-program admission use the same function or projected-role checks. `Projections` collects each declared role's bounds. `CheckedTables` composes callee guarantees in declaration order, including calls at external roles. `Programs` proves loop bounds for all functions and role processes and validates function replacements. `Theorems` connects these results to the core statements. |
 | `World/` | the description of a layer (a handler of a role), whose code reads its inputs by position, in the one context of the core that binds inputs to the names `0, 1, 2, …` (`Ctx.positional`), and its meaning as a handler; the network of the roles, and the runs of a protocol and of one role alone |
-| `Scheme/` | the declaration of a scheme, who proves and who verifies, a deployed scheme, whose entry is the protocol that its declaration names, found in its program, and the run of a role under its handlers, and what deployment decides about scopes and keys |
-| `Run/` | how a run of the executor ends, the executor, and the prover's and the verifier's runs |
-| `Format/` | formats of values and the codecs of a model |
+| `Format/` | formats of values and the codecs of a model (`Format`), and the canonical wire format for every Core type with its prefix round-trip and canonicality proof (`Canonical`) |
+| `Scheme/` | the declaration of a scheme with optional law-specific module bindings (`Declaration`), who proves and who verifies (`Roles`), a deployed scheme and its semantic/lawfulness predicates (`Deployed`), canonical versioned byte identity and injective site/session labels (`Identity`); `Layer/` holds typed IR combinators, handler-layer builders (`Combinators`, `Builders`), and their denotation/validity lemmas (`CombinatorLemmas`, `StartLemmas`, `ClauseLemmas`); `Deploy/` holds distribution-aware slot lookup (`Lookup`), non-interactive and ideal random-oracle deployment (`Compile`), elimination witnesses (`Elim`), and structural theorems (`Structural`); `Proof/` holds generic role-process, shape-observation, and occurrence-uniqueness lemmas (`RoleProcess`, `ShapeObserve`, `UniqueOccs`), validity safety (`Safety`), effect coverage (`Coverage`), generalized completeness across streaming, derived-samples, compact carry/recover, and abort-and-retry deployments (`CompletenessHelpers`, `Completeness`, `CompactCompleteness`, `RetryCompleteness`), ideal random-oracle verifier linkage and compact proof canonicality (`IdealLink`), and random-oracle query uniqueness and cross-session/cross-statement domain separation (`QuerySeparation`); `Theorems` exports the top-level `Statements` proofs |
+| `Run/` | how a run of the executor ends, the executor interface, and the prover's and the verifier's runs (`Run`); the total fuel-bounded reference executor and interactive two-role runner (`Execute`); and `Specialize/` (`ClosedIR`, `HeldView`, `Compiler`, `CoreLemmas`, `AttemptSound`, `Sound`) implementing verified Core-level DAG-preserving multi-procedure handler specialization (`ClosedProcs` + `ClosedRole`) |
 
 `Functions.lean` and `Statements.lean` come after every directory: they may import any of them.
 
@@ -225,19 +225,50 @@ Proved, with no axiom beyond `propext` and `Quot.sound` (the audit checks every 
   validity (`replacedFunctionsSame`, which is `Defs.functionsFollow_sound`). An execution of the
   network is replayed from its record: a step with a given record has one successor under any
   source (`Step.unique`), so two executions from one configuration with one record end in one
-  configuration (`replayed`, which is `Reach.unique`, `World/Network.lean`).
+  configuration (`replayed`, which is `Reach.unique`, `World/Network.lean`);
+- canonical wire formats, scheme identity, deployment, ideal random-oracle linkage, query
+  separation, execution, and DAG-preserving handler specialization (`Format/Canonical.lean`,
+  `Scheme/Identity.lean`, `Scheme/Deploy/`, `Scheme/Proof/`, `Scheme/Theorems.lean`,
+  `Run/Execute.lean`, `Run/Specialize/`):
+  `canonicalFormat` satisfies `Statements.formats` (`canonicalFormat_formats`);
+  `deployedIdentity` emits canonical bytes, is injective under an injective vocabulary encoder
+  (committing `application` bytes and `ModuleRef.lawMembers`), and satisfies
+  `Statements.identityReads` (`deployedIdentity_identityReads`), with versioned injective
+  domain tags and full-site labels (`zkc.core.proof/0`, `zkc.core.stmt/0`, `zkc.core.msg/0`,
+  `zkc.core.draw/0`) and injective `resolveSessionBytes`;
+  `deploy` resolves distribution-specific `SuiteSlot.derive` bindings by canonical `V.LawKey`
+  encoding and satisfies `Statements.deployKeeps`, `deployFindsRoles`, `deployMatches`,
+  `deployScoped`, `deployFresh`, `deployedSafe`, `deployCoverage`, and `completeStreaming`,
+  together with `deploy_complete_samples` (deterministic prover sampling under `SamplesLawful`),
+  `deploy_complete_compact` (compact `carry`/`recover` layouts under `RecoveryLawful`), and
+  `deploy_complete_retry` / `deploy_complete_retry_nonaborting` (Fiat–Shamir with Aborts
+  rollback consistency from any succeeding attempt `k < bound` and non-aborting retried
+  completeness);
+  `deployIdeal` satisfies `Statements.idealLink` (`statements_idealLink`), giving a non-vacuous
+  equivalence between the deployed ideal verifier answered by any partial random oracle
+  (`LayerBuild.IdealRO`) that answers its verifier draws and the bare verifier role program
+  (`BareIdealReturn`) from the canonical initial ideal transcript path `st0`, together with
+  pure ideal-path step injectivity, compact proof wire-layout canonicality, and ideal
+  random-oracle query separation (`deployIdeal_queries_nodup`,
+  `deployIdeal_cross_scheme_disjoint`, `deployIdeal_cross_session_disjoint`,
+  `deployIdeal_cross_statement_disjoint`);
+  `execute` satisfies `Statements.executorRuns` (`execute_runs`); and `specialize` produces a
+  multi-procedure `ClosedRole` (`ClosedProcs` DAG table with `ClosedTerm.call` sharing across
+  unintercepted call sites) satisfying `specialize_sound` (`(specialize d r).denote = d.run`
+  for every well-nested retry site).
 
-Defined: everything else, from the terms and their meanings to deployment, the network and
-the runs.
+Defined: everything else, from the terms and their meanings to the network and its runs.
 
 Still to be built:
 
-- `elaborateProgram`, `admit` and `check` implement the entries of `Functions` for mixed programs.
-  The open entries are `eraseRole`, `format`, `deploy`, `identity`, `execute` and `schedule`;
+- `elaborateProgram`, `admit`, `check`, `format`, `deploy`, `identity` and `execute` implement
+  their entries of `Functions`. The open entries are `eraseRole` and `schedule`;
 - `rolesSafe` holds for every admitted open role on valid inputs and permitted replies.
   Its projection establishes the requirements of each function it calls.
   Remaining statements include `realized`, `anyOrder`, `recordsAreValid`,
-  `schedulerRuns`, deployment from `deployKeeps` to `identityReads`, `executorRuns` and `formats`.
+  `schedulerRuns`, and unified `Statements.complete` combining simultaneous retry + compact +
+  derived samples in one single theorem (each feature is proved in `deploy_complete`,
+  `deploy_complete_samples`, `deploy_complete_compact`, and `deploy_complete_retry`).
   A partial external source can leave the network quiescent while a role waits for a draw.
   The current scheduler contract then requires a report other than `limit`, but its `blocked`
   report recognizes only a missing message. This case needs a progress premise or a reporting rule.
@@ -248,7 +279,8 @@ Still to be built:
   correspondence of their places; the comparison of two programs whose functions have
   requirements (`Defs.functionsFollow_sound` asks that no summary has one: its general form needs
   that the requirements hold at every call that a run reaches); deployment for programs whose
-  functions have requirements (`deployedSafe` still assumes unconditional headers);
+  suite, layout, or sampling helper functions have requirements (`LayerBuild` currently resolves
+  unconditional helper headers);
   deciding, where a definition returns, a guarantee that names an application of a
   written operation (it is refused there: the analysis does not know that the application has a
   value); a guard whose condition is
@@ -267,10 +299,10 @@ Still to be built:
 `Process/`, `Program/`, `Meaning/` and `Projection/`, and the data of `Admission/`, are what
 the projection theorem and the meanings stand on; `Evidence/`, `Value/` and the analysis of
 `Facts/` are built for any dialect, with the instance of the function dialect in
-`Facts/Local.lean` and `Facts/LocalLaws.lean`; `Transform/` is built for functions. `World/`,
-`Scheme/`, `Run/` and `Format/` are defined and type-checked, and no implementation has
-exercised them yet: the code that first builds one of these parts changes its definitions here
-first.
+`Facts/Local.lean` and `Facts/LocalLaws.lean`; `Transform/` is built for functions; `Format/`,
+`Scheme/` and `Run/` hold the canonical wire format, deployment, ideal random-oracle linkage,
+specialization and execution implementations with their proofs. `World/` is defined and
+type-checked, with the network scheduler still to be built.
 
 ## Tests
 
@@ -472,7 +504,20 @@ kernel runs when they are built:
   one of elaboration; `check`, one definition at a time, giving the headers of the admitted
   program; an association whose key names a definition, resolved in the admitted program, and
   one whose key is no definition, refused by the rule `association`; a protocol refused. The headers
-are compared whole, by the kernel.
+  are compared whole, by the kernel;
+- `Deployment.lean` and `Deployment/{Fixtures,Behavior,Refusals,Witnesses}.lean`: end-to-end
+  checks of canonical wire formats, versioned scheme identity and domain separation
+  (`application`, `sessionTag`, full-site `through` path separation, law-keyed
+  `SuiteSlot.derive`, and trailing-message absorption elision), `deploy` and `deployIdeal`
+  across derived, authored, interactive, branching, multi-draw, looped, applied,
+  compact-layout, and retried protocols, hardened deterministic prover sampling (`samples`),
+  DAG-preserving multi-procedure `specialize` and `execute` agreement (including diamond-DAG
+  procedure sharing), direct `Process.answerService` execution with
+  `LayerBuild.IdealRO.asOracle`, concrete non-vacuous witness instantiations of the proved
+  Core theorems (including `Statements.*`, `canonicalFormat_lawful`, `deploy_complete`,
+  `deploy_complete_samples`, `deploy_complete_compact`, `deploy_complete_retry`,
+  `deployIdeal_link`, `deployIdeal_queries_nodup`, and cross-session/cross-statement
+  query disjointness), and fail-closed refusal controls asserting exact `Rule` identifiers.
 
 In `lean/compiler`, `lake build` builds the core, vocabulary, subject library, core and vocabulary tests, and audit;
 `lake test` builds the tests of the core (the library is the test driver), which need those of

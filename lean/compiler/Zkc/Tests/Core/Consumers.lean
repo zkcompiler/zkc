@@ -76,9 +76,9 @@ def sigmaScheme : Declaration where
   key := ⟨1⟩
   entry := ⟨0⟩
   kinds := [.online, .online]
-  construction := .derived ⟨[]⟩
+  construction := .derived ⟨[], []⟩
   prover := none
-  layout := some ⟨⟨[]⟩, [], []⟩
+  layout := some ⟨⟨[], []⟩, [], []⟩
   retry := none
   samples := none
   context := []
@@ -128,8 +128,8 @@ variable {V : Vocabulary}
 
 /-- The completeness of a protocol, which its author proves: on inputs in its relation,
 every run returns. It is about the protocol's process, found by key in the admitted
-program. With `Statements.complete` it gives the completeness of every scheme of the
-protocol. -/
+program. With `Statements.complete` it gives the completeness of every non-interactive
+scheme of the protocol whose suite and layout satisfy their laws. -/
 def protocolComplete (a : Admitted V) (M : Model V) (entry : Key)
     (related : ∀ hdr : ProtocolHeader V, HList (LVal M) hdr.ins → Prop) : Prop :=
   ∀ (hdr : ProtocolHeader V) (p : Member a.program.headers.protocols hdr),

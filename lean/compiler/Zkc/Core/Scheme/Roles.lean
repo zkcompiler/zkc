@@ -18,7 +18,8 @@ namespace Zkc.Core
 def Declaration.interactive (declaration : Declaration) : Bool :=
   match declaration.construction with
   | .interactive => true
-  | .derived _ => false
+  | .derived .. => false
+  | .authored => false
 
 /-- Who proves and who verifies: exactly two roles are online. For an interactive scheme
 nothing is inferred: the prover is the one written, the verifier the other online role. For
@@ -79,6 +80,14 @@ def Shape.heardCoins {V : Vocabulary} (s : Shape V) : List Site :=
   (s.events [] id).filterMap fun e =>
     match e.cls with
     | .given (.coin ..) _ (_ :: _) => some e.site
+    | _ => none
+
+/-- The sites of private coins owned by `prover` (with no hearers): the coins that
+`samples derived by` replaces deterministically. -/
+def Shape.proverPrivateCoins {V : Vocabulary} (prover : Role) (s : Shape V) : List Site :=
+  (s.events [] id).filterMap fun e =>
+    match e.cls with
+    | .given (.coin ..) owner [] => if owner = prover then some e.site else none
     | _ => none
 
 end Zkc.Core

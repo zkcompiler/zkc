@@ -71,6 +71,17 @@ def Lawful (source : Source M) {A : Type} : Protocol M A → Prop
   | .call (.given kind _ _ at_ ins payload τ) k =>
       ∀ v, source at_ τ = some v → Allows M kind ins payload τ v ∧ Lawful source (k v)
 
+/-- Every answer that the source gives at non-heard events (private coins and service requests) is
+lawful along every lawful branch of heard coins, matching `Fed`. -/
+def LawfulPrivate (source : Source M) {A : Type} : Protocol M A → Prop
+  | .done _ => True
+  | .halt _ => True
+  | .call (.flow ..) k => LawfulPrivate source (k ())
+  | .call (.given (.coin law) _ (_ :: _) _ ins payload τ) k =>
+      ∀ v, Allows M (.coin law) ins payload τ v → LawfulPrivate source (k v)
+  | .call (.given kind _ _ at_ ins payload τ) k =>
+      ∀ v, source at_ τ = some v → Allows M kind ins payload τ v ∧ LawfulPrivate source (k v)
+
 /-- Two events at the same occurrence, alike but for their values, which differ. -/
 def Event.Diverge : Event M → Event M → Prop
   | .flow kind giver getters at_ τ x, .flow kind' giver' getters' at' τ' x' =>
