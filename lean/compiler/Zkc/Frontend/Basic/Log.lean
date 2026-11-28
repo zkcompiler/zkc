@@ -21,7 +21,11 @@ apart from the errors: they refuse nothing (SP10).
 
 namespace Zkc.Frontend
 
-structure Log where
+/-- An incomplete depth check, including its structured budget. -/
+def Diagnostic.isDepthIncomplete (diagnostic : Diagnostic) : Bool :=
+  diagnostic.isIncomplete && diagnostic.exhaustion.any (·.budget == .instantiationDepth)
+
+structure DiagnosticLog where
   /-- The diagnostics shown, each once, in the order they were made. -/
   entries : Array Diagnostic := #[]
   /-- The severity, file, first byte and rule of every diagnostic shown. -/
@@ -30,20 +34,82 @@ structure Log where
   errors : Nat := 0
   /-- The number of incomplete checks given to the log, those not shown again included. -/
   incomplete : Nat := 0
+  /-- Instantiation-depth occurrences, including those deduplicated for display. -/
+  depthIncomplete : Nat := 0
+  deriving Inhabited
+
+namespace DiagnosticLog
+
+/-- The log with one more diagnostic. An error and an incomplete check are counted; the
+diagnostic is shown unless one of its severity and rule stands at its place already. -/
+def add (log : DiagnosticLog) (diagnostic : Diagnostic) : DiagnosticLog :=
+  let errors := if diagnostic.isError then log.errors + 1 else log.errors
+  let incomplete := if diagnostic.isIncomplete then log.incomplete + 1 else log.incomplete
+  let depthIncomplete := if diagnostic.isDepthIncomplete then
+    log.depthIncomplete + 1 else log.depthIncomplete
+  if log.seen.contains diagnostic.key then { log with errors, incomplete, depthIncomplete }
+  else
+    { entries := log.entries.push diagnostic
+      seen := log.seen.insert diagnostic.key
+      errors, incomplete, depthIncomplete }
+
+/-- Publish an isolated log, counting even the occurrences deduplicated for display. -/
+def append (log observed : DiagnosticLog) : DiagnosticLog :=
+  let merged := observed.entries.foldl add log
+  { merged with
+    errors := log.errors + observed.errors
+    incomplete := log.incomplete + observed.incomplete
+    depthIncomplete := log.depthIncomplete + observed.depthIncomplete }
+
+end DiagnosticLog
+
+/-- If default roots extend the module graph, its next validation replaces the preliminary
+depth cutoffs. This projection contains all other occurrences, even at the same display key. -/
+structure ModuleDepthRetry where
+  retained : DiagnosticLog
+  roots : Nat
+  depth : Nat
+  /-- Only the isolated program validation pass may publish provisional owner cutoffs. -/
+  collecting : Bool := false
+  deriving Inhabited
+
+structure Log extends DiagnosticLog where
+  moduleDepthRetry : Option ModuleDepthRetry := none
+  /-- Advances only when the program validator supersedes its preliminary depth cutoffs. -/
+  moduleDepthRevision : Nat := 0
   deriving Inhabited
 
 namespace Log
 
-/-- The log with one more diagnostic. An error and an incomplete check are counted; the
-diagnostic is shown unless one of its severity and rule stands at its place already. -/
 def add (log : Log) (diagnostic : Diagnostic) : Log :=
-  let errors := if diagnostic.isError then log.errors + 1 else log.errors
-  let incomplete := if diagnostic.isIncomplete then log.incomplete + 1 else log.incomplete
-  if log.seen.contains diagnostic.key then { log with errors, incomplete }
-  else
-    { entries := log.entries.push diagnostic
-      seen := log.seen.insert diagnostic.key
-      errors, incomplete }
+  { log with toDiagnosticLog := log.toDiagnosticLog.add diagnostic
+             moduleDepthRetry := log.moduleDepthRetry.map fun retry =>
+               {retry with retained := retry.retained.add diagnostic} }
+
+/-- Publish the local owner's log. Only a check that actually ended at the depth limit
+has retryable depth occurrences. Its other observations, and every other local outcome,
+remain in both projections. -/
+def append (log : Log) (observed : DiagnosticLog) (ownerDepthFailure : Bool := false) : Log :=
+  let retained (retry : ModuleDepthRetry) := Id.run do
+    unless retry.collecting && ownerDepthFailure && observed.depthIncomplete != 0 do
+      return retry.retained.append observed
+    let stable := observed.entries.foldl (init := retry.retained) fun kept d =>
+      if d.isDepthIncomplete then kept else kept.add d
+    return {stable with
+      errors := retry.retained.errors + observed.errors
+      incomplete := retry.retained.incomplete + (observed.incomplete - observed.depthIncomplete)}
+  { log with toDiagnosticLog := log.toDiagnosticLog.append observed
+             moduleDepthRetry := log.moduleDepthRetry.map fun retry =>
+               {retry with retained := retained retry} }
+
+/-- Display offsets can differ when a provisional observation wins a display key. -/
+structure Cursor where
+  visible : Nat
+  retained : Nat
+  deriving Inhabited, BEq
+
+def cursor (log : Log) : Cursor :=
+  ⟨log.entries.size, (log.moduleDepthRetry.map (·.retained.entries.size)).getD log.entries.size⟩
 
 def hasErrors (log : Log) : Bool := log.errors != 0
 

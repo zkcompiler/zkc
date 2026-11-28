@@ -10,7 +10,11 @@ unseal Zkc.Core.fnMeaning Zkc.Core.roleMeaning Zkc.Core.protocolMeaning
 
 private def pairOps (b : Zkc.Vocabulary.Project.Bindings) (i : Nat) : Operations b.vocabulary :=
   let message := if i == 0 then 13 else 15 + 8*i
-  let bind := if i == 0 then 16 else 17 + 8*i
+  -- The first and last rounds have distinct bind keys in the ten-round source fixture.
+  let bind := match i with
+    | 0 => 18
+    | 9 => 89
+    | _ => 19 + 8*i
   ⟨.call ⟨message⟩,.call ⟨15⟩,.call ⟨bind⟩,.call ⟨22⟩⟩
 
 private def gateOps (b : Zkc.Vocabulary.Project.Bindings) (i : Nat) : Operations b.vocabulary :=

@@ -199,11 +199,10 @@ def writtenPrimitiveSuite : TestM Unit := do
       let #[source] := block.files | throw "expected one source file"
       let root ← goalRoot source block.note
       let claims ← goalClaims root [block.note]
-      return ⟨claims, claims.functionsBeforeRoot⟩
+      return ⟨claims⟩
     match result with
     | .error why => failure s!"{block.id}: could not obtain the package: {why}"
     | .ok statements =>
-      let proof : ProofText := {text := "", theorems := []}
       let check (issue : Except String Unit) : TestM Unit :=
         match block.expect, issue with
         | "sort", .error message => expectTrue (message.contains "no carrier for sort") message
@@ -214,12 +213,7 @@ def writtenPrimitiveSuite : TestM Unit := do
         | name, .error message =>
           expectTrue (message.contains "links a project primitive" && message.contains name && message.contains "no model")
             s!"{block.id}: unexpected diagnostic: {message}"
-        | _, .ok () => failure s!"{block.id}: issued a statement for a project primitive"
-      check ((statements.module "Check" proof).map fun _ => ())
-      match statements.ceilingModule "Check" with
-      | .ok _ => pass
-      | .error why => failure s!"{block.id}: could not issue the ceiling: {why}"
-      check ((statements.claimsModule "Check").map fun _ => ())
-      check ((statements.coverageModule "Check").map fun _ => ())
+        | _, .ok () => failure s!"{block.id}: published the goals of a package with a project primitive"
+      check ((statements.publication "Check").map fun _ => ())
 
 end Zkc.Tests.Frontend

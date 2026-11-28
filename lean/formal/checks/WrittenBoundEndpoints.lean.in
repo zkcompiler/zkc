@@ -1,0 +1,77 @@
+import BoundTotal.Challenge
+import Lean
+
+/-! Read the issued propositions and the types printed in the challenge.
+The oracle lives outside their namespaces and does not use the issuer's question list. -/
+
+namespace WrittenBoundEndpoints
+open Lean Elab Command
+
+/-- Elaborate an ordinary definition so the kernel representation of numerals and local
+lets is the same as in a statements module. Lean names lifted numeral proofs under the
+definition; translate those names only after checking the auxiliary theorems themselves. -/
+private def expectedBody (stmt : Name) (rhs : TSyntax `term) : CommandElabM Expr := do
+  let name := `WrittenBoundEndpoints.Expected ++ stmt
+  elabCommand (← `(noncomputable def $(mkIdent name) : Prop := $rhs))
+  let .defnInfo expected ← getConstInfo name | throwError "expected a proposition definition"
+  let mut body := expected.value
+  for n in expected.value.getUsedConstants do
+    if n.getPrefix == name then
+      let issued := n.replacePrefix name stmt
+      let .thmInfo proof ← getConstInfo n | throwError "expected auxiliary proof {n}"
+      let .thmInfo actual ← getConstInfo issued | throwError "expected auxiliary proof {issued}"
+      unless proof.levelParams == actual.levelParams && Expr.equal proof.type actual.type &&
+          Expr.equal proof.value actual.value do throwError "{issued}: different numeral proof"
+      body := body.replace fun e =>
+        if e.isConstOf n then some (.const issued e.constLevels!) else none
+  return body
+
+private def checkBody (stmt : Name) (rhs : TSyntax `term) : CommandElabM Unit := do
+  let .defnInfo decl ← getConstInfo stmt | throwError "{stmt} must be a definition"
+  unless decl.levelParams.isEmpty && Expr.equal decl.type (.sort .zero) do
+    throwError "{stmt} must be a closed proposition"
+  let expected ← expectedBody stmt rhs
+  unless Expr.equal decl.value expected do
+    if decl.value.isApp && Expr.equal decl.value.getAppFn expected.getAppFn &&
+        decl.value.getAppNumArgs == expected.getAppNumArgs then
+      for i in [:expected.getAppNumArgs] do
+        let found := decl.value.getArg! i
+        let want := expected.getArg! i
+        unless Expr.equal found want do
+          throwError "{stmt} argument {i}: expected {want}, found {found}"
+    throwError "{stmt}: expected {expected}, found {decl.value}"
+
+syntax boundEndpoint := "|" ident+ ":" ident ":=" term
+
+elab "#check_endpoints" rows:boundEndpoint* : command => do
+  let env ← getEnv
+  let mut unchecked : NameSet := {}
+  for imp in env.header.imports do
+    if imp.module.getString! == "Challenge" then
+      let idx := (env.getModuleIdx? imp.module).get!
+      for n in env.header.moduleData[idx.toNat]!.constNames do
+        unchecked := unchecked.insert n
+  for row in rows do
+    let `(boundEndpoint| | $rs:ident* : $stmt:ident := $rhs:term) := row | throwUnsupportedSyntax
+    for role in rs do
+      unless unchecked.contains role.getId do
+        throwErrorAt role "expected a unique printed challenge role {role.getId}"
+      unchecked := unchecked.erase role.getId
+      let .thmInfo thm ← getConstInfo role.getId | throwErrorAt role "expected a challenge theorem"
+      unless thm.levelParams.isEmpty && Expr.equal thm.type (.const stmt.getId []) do
+        logErrorAt role m!"{thm.name}: expected type {stmt.getId}, found {thm.type}"
+    withLogging <| withRef rhs <| checkBody stmt.getId rhs
+  unless unchecked.isEmpty do throwError "unchecked challenge declarations {unchecked.toList}"
+
+end WrittenBoundEndpoints
+
+local notation "standardModel" => ZkcFormal.Written.StandardInterpretation.model
+local notation "standardDraws" => ZkcFormal.Written.StandardInterpretation.draws
+local notation "standardCoverage" => ZkcFormal.Written.StandardInterpretation.covers
+
+#check_endpoints
+  | BoundTotal.allBounds : BoundTotal.allBoundsStatement :=
+    ∀ b, ZkcFormal.Written.Soundness.Result standardModel BoundTotal.written'application0
+      standardDraws standardCoverage b
+  | BoundTotal.noWitness : BoundTotal.noWitnessStatement :=
+    ¬ ZkcFormal.Written.Soundness.Witnessed standardModel BoundTotal.written'application0 standardDraws

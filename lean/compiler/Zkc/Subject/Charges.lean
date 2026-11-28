@@ -167,9 +167,9 @@ application pays its callee's total, each multiplied by the occurrence count. Th
 adds consecutive instructions and takes the larger arm of a choice.
 
 The result is the table's total only at a type of numbers in which a fraction is exact and
-`max` is the larger of two numbers: the rationals, where the frontend compares it with a
-ceiling, and the nonnegative rationals, where the formal library reads the budget of a
-statement. At the naturals every proper fraction is zero, and the total is too small. -/
+`max` is the larger of two numbers: the rationals, where the frontend takes the bound of a goal
+without a ceiling from it, and the nonnegative rationals, where the formal library reads the
+budget of a table (for a challenge's decision of that bound and for a fee judgment). At the naturals every proper fraction is zero, and the total is too small. -/
 def totalsIn (table : CapTable) (α : Type) [NatCast α] [Zero α] [Add α] [Mul α]
     [Div α] [Max α] : List α :=
   totalsAfter table.uses []

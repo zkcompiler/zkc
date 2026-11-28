@@ -141,6 +141,11 @@ def genericOverModule (found : Declaration) : CompileM Bool := do
     if (← parameterClass reference) == .«module» then return true
   return false
 
+/-- A private tree must be displayed while its types and callees still have names. -/
+def privateTreeRenderer (state : Compile.State) : Renderer :=
+  { state.env.renderer with
+    type := renderType state, value := renderValue state, «instance» := fun id => renderInstance state id }
+
 /-- A body elaborated to the typed tree and emitted, at the types of its signature; for a
 definition generic over a module parameter, with the places its opaque elaboration resolved to
 members of the parameter's interface (SP12). The code, and those places. -/
@@ -155,7 +160,10 @@ def elaborateBody (inst : InstanceId) (description : String) (env : Env)
     { env, «instance» := inst, name := description, typeBody, specification, resolutions, «opaque» }
   let errors := (← get).log.errors
   let (tree, state) ← Elab.runElab context locals (Elab.elabFunctionBody parameters result body)
-  trace "elab.tree" fun _ => .ofText s!"{description}:\n{(Typed.Body.function tree).print}"
+  let compiled ← get
+  trace "elab.tree" fun _ =>
+    let renderer := if compiled.memberTyping == .validation then privateTreeRenderer compiled else .plain
+    .ofText s!"{description}:\n{(Typed.Body.function tree).print renderer}"
   if (← get).log.errors > errors || tree.firstError?.isSome then throw .abandoned
   unless specification do
     if let .error (span, message) := Linear.check tree then refuse "LN2" span message
@@ -275,12 +283,39 @@ def opaqueResolutions (inst : InstanceId) (description name : String) (found : D
       resultType body specification locals typeBody («opaque» := true)
     return (← placeResolutions name found values typings, tree)
 
+/-- The opaque typing of a method's own module parameters has no public instances. Resolve
+all names in its debug tree and diagnostics before discarding the private signature table. -/
+def checkPrivateMember (check : CompileM
+    (Std.HashMap Typing.ResolvedPlace ParameterRef × Typed.FunctionBody)) :
+    CompileM (Std.HashMap Typing.ResolvedPlace ParameterRef × Typed.GenericBody) := do
+  let saved ← get
+  let (outcome, checked) := check.run (← read) { saved with memberTyping := .validation }
+  let freeze ← restoreObservations saved checked (reports := false)
+  match outcome with
+  | .ok (resolutions, tree) =>
+    let body := Typed.Body.function tree
+    let renderer := privateTreeRenderer checked
+    return (resolutions, .printed (body.print renderer) (body.print renderer true))
+  | .error (.exhausted e) => throw (.exhausted (freeze e))
+  | .error failure => throw failure
+
+/-- Public keys already account for the receiver specialization and its callees. A method
+with fresh parameters of its own can dispatch differently. Use the former traversal only to
+reserve its keys: neither its intermediate typing nor its diagnostics decide this method. -/
+def reserveReceiverKeys (check : CompileM Unit) : CompileM Unit := do
+  let (outcome, checked) := check.run (← read) { ← get with memberTyping := .receiverKeys }
+  if let .error (.defect message) := outcome then throw (.defect message)
+  modifyResults (·.modifySignatures (·.reserveNewKeys checked.table))
+
 /-- Keeps the typed tree of a body: the request for the tree of the instance is done with it.
 The check of its facts and the emission of a package read it. -/
 def recordTree (definition : Typed.Definition) (place : Span) : CompileM Unit := do
   -- the tree is kept with its nodes numbered; the generic definition has numbers of its own
   let (body, nodes) := definition.body.numbered
-  let definition := { definition with body, nodes, generic := definition.generic.map (·.numbered.1) }
+  let generic := definition.generic.map fun
+    | .tree tree => .tree tree.numbered.1
+    | .printed normal detailed => .printed normal detailed
+  let definition := { definition with body, nodes, generic }
   let requested : ChainFrame := { subject := .ofPart (.instance definition.instance), span := place }
   modifyResults fun results => results.modifyTrees fun table =>
     (table.intern definition.instance requested none).1.setStateOf definition.instance (.done definition)
@@ -331,12 +366,12 @@ def functionBody (inst : InstanceId) (typeBody : InstanceId → Span → Compile
               specification lowered.locals typeBody fun values =>
                 let env := instanceEnv state.program found values instanceKey.specification
                 pure (env, env)
-            pure (resolutions, some generic)
+            pure (resolutions, some (.tree (.function generic)))
           else pure ({}, none)
         let (code, _, tree, locals) ← elaborateBody inst description env
           ((head.parameters.map (·.binder)).zip parameters) result expr specification lowered.locals typeBody
           resolutions
-        recordTree { «instance» := inst, body := .function tree, generic := generic.map .function, locals
+        recordTree { «instance» := inst, body := .function tree, generic, locals
                      waiting := code.waiting, specificationOnly := specification } place
         -- the instance keeps the resolutions of its generic definition
         let code := { code with specificationOnly := specification, resolved := resolutions.toArray }
@@ -350,7 +385,7 @@ def functionBody (inst : InstanceId) (typeBody : InstanceId → Span → Compile
       -- the module's values, then the values of the member's own static parameters (SP8)
       let moduleCount := (deployedParameters state.program found).size
       let moduleValues := instanceKey.arguments.extract 0 moduleCount
-      let ownValues := instanceKey.arguments.extract moduleCount instanceKey.arguments.size
+      let ownValues := instanceKey.arguments.extract moduleCount
       let some (moduleInst, memberId, member) ← memberOwner found moduleValues
         | throw (.waiting "a member definition whose module is not evaluated")
       let .member (.defMember _ modifier _ _ _ _ _) := member.node
@@ -359,14 +394,11 @@ def functionBody (inst : InstanceId) (typeBody : InstanceId → Span → Compile
         | throw (.defect "a member without its lowered form")
       let .function memberHead _ := memberLowered.content
         | throw (.waiting "a member definition of another kind")
-      let own := ownParameters state.program member
       let (interface, _, interfaceArgs) ← memberInterface moduleInst name
-      let interfaceDeclaration ← declaration interface
-      let ownEnv (env : Env) : Env :=
-        { env with values := (own.zip ownValues).foldl (init := env.values) fun map (reference, value) =>
-            map.insert reference value }
-      let env : Env := ownEnv { instanceEnv state.program interfaceDeclaration interfaceArgs with
-        file := member.file, self? := some (.«module» moduleInst) }
+      let signatureEnv (receiver : InstanceId) (interfaceArgs ownArgs : Array StaticValue) : Env :=
+        { instanceEnv state.program member (interfaceArgs ++ ownArgs) with
+          self? := some (.«module» receiver) }
+      let env := signatureEnv moduleInst interfaceArgs ownValues
       let types ← memberHead.parameters.mapM fun parameter => evalType env parameter.type
       let resultType ← match memberHead.result with
         | some type => evalType env type
@@ -381,25 +413,42 @@ def functionBody (inst : InstanceId) (typeBody : InstanceId → Span → Compile
         return .done (header description types resultType external)
       | .absent => throw (.defect "a member definition without a body")
       | .body expr =>
-        let bodyEnv := ownEnv (instanceEnv state.program found moduleValues instanceKey.specification)
-        -- a member definition generic over a module parameter of its module is elaborated twice:
-        -- the opaque elaboration first, with `Self` the module at the parameter's opaque module
-        let (resolutions, generic) ← if ← genericOverModule found then do
-            let some ns := state.program.namespaces[found.namespace]? | throw .abandoned
-            let (resolutions, generic) ← opaqueResolutions inst description name found moduleValues binders
-              (memberHead.parameters.map (·.type)) memberHead.result .unit expr node.spec lowered.locals
-              typeBody fun values => do
-                let opaqueInst ← instantiate ns.owner values { description := "", span := place }
-                let (opaqueInterface, _, opaqueArgs) ← memberInterface opaqueInst name
-                let opaqueDeclaration ← declaration opaqueInterface
-                let signatureEnv : Env := ownEnv { instanceEnv state.program opaqueDeclaration opaqueArgs with
-                  file := member.file, self? := some (.«module» opaqueInst) }
-                pure (signatureEnv, ownEnv (instanceEnv state.program found values instanceKey.specification))
-            pure (resolutions, some generic)
-          else pure ({}, none)
-        let (code, _, tree, locals) ← elaborateBody inst description bodyEnv (binders.zip types) resultType
-          expr node.spec lowered.locals typeBody resolutions
-        recordTree { «instance» := inst, body := .function tree, generic := generic.map .function, locals
+        -- Use the same scopes as name resolution, including the member's own equations.
+        let bodyDeclaration := { found with scopes := found.scopes ++ member.ownScope.toArray }
+        let bodyEnv (values : Array StaticValue) :=
+          instanceEnv state.program bodyDeclaration values instanceKey.specification
+        let receiverAt (args : Array StaticValue) : CompileM InstanceId := do
+          if args == moduleValues then return moduleInst
+          let some ns := state.program.namespaces[found.namespace]? | throw .abandoned
+          instantiate ns.owner args { description := "", span := place }
+        let checkOpaque (scope : Declaration) (abstractArgs fixedArgs : Array StaticValue) :=
+          opaqueResolutions inst description name scope abstractArgs binders (memberHead.parameters.map (·.type))
+            memberHead.result .unit expr node.spec lowered.locals typeBody fun fresh => do
+              let values := fresh ++ fixedArgs
+              let receiver ← receiverAt (values.extract 0 moduleCount)
+              let (_, _, applied) ← memberInterface receiver name
+              pure (signatureEnv receiver applied (values.extract moduleCount), bodyEnv values)
+        let checkReceiver := checkOpaque found moduleValues ownValues
+        let checkAll := checkOpaque bodyDeclaration instanceKey.arguments #[]
+        let ownModule := ownValues.any (· matches .«module» _)
+        let (resolutions, generic) ← if ownModule && state.memberTyping == .program then do
+            let checked ← checkPrivateMember checkAll
+            if ← genericOverModule found then
+              -- Receiver formation and its default members are existing program requests.
+              let (outer, _) ← opaqueValues found moduleValues
+              discard <| receiverAt outer
+              reserveReceiverKeys (discard checkReceiver)
+            pure (checked.1, some checked.2)
+          else do
+            let receiverOnly := state.memberTyping == .receiverKeys
+            let scope := if receiverOnly then found else bodyDeclaration
+            if !(← genericOverModule scope) then pure ({}, none)
+            else
+              let (resolved, tree) ← if receiverOnly then checkReceiver else checkAll
+              pure (resolved, some (.tree (.function tree)))
+        let (code, _, tree, locals) ← elaborateBody inst description (bodyEnv instanceKey.arguments)
+          (binders.zip types) resultType expr node.spec lowered.locals typeBody resolutions
+        recordTree { «instance» := inst, body := .function tree, generic, locals
                      waiting := code.waiting, specificationOnly := node.spec } place
         let code := { code with specificationOnly := node.spec, resolved := resolutions.toArray }
         if code.canStop && !(modifier matches some (.«partial» _)) then
@@ -424,11 +473,11 @@ def functionBody (inst : InstanceId) (typeBody : InstanceId → Span → Compile
               lowered.locals typeBody fun values =>
                 let env := instanceEnv state.program found values instanceKey.specification
                 pure (env, env)
-            pure (resolutions, some generic)
+            pure (resolutions, some (.tree (.function generic)))
           else pure ({}, none)
         let (code, _, tree, locals) ← elaborateBody inst description env
           ((head.parameters.map (·.binder)).zip parameters) .bool expr true lowered.locals typeBody resolutions
-        recordTree { «instance» := inst, body := .function tree, generic := generic.map .function, locals
+        recordTree { «instance» := inst, body := .function tree, generic, locals
                      waiting := code.waiting, specificationOnly := true } place
         -- the formula of a relation cannot stop (FN3, SX3)
         if code.canStop then
@@ -454,8 +503,9 @@ def functionBody (inst : InstanceId) (typeBody : InstanceId → Span → Compile
           let owner := (state.program.namespaces[found.namespace]?).map (·.owner)
           (owner.map state.program.nameOf).getD "?"
       let law ← describeInstance instanceKey.declaration instanceKey.arguments instanceKey.specification
-      let obligation : Typing.Obligation := { «module», law, place := node.name.span }
-      modifyResults fun results => { results with obligations := results.obligations.push obligation }
+      let some identity := state.results.obligationIdentity? inst
+        | throw (.defect "a law refers to an unknown instance")
+      modifyResults (·.addObligation { identity, «module», law, place := node.name.span })
       return .done { code with specificationOnly := true }
     | _, _ => throw (.defect s!"the typing of bodies does not expect the body of {Names.kindWord found.kind}")
   catch failure =>

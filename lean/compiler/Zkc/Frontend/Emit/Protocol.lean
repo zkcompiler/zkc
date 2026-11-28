@@ -287,20 +287,24 @@ def typedClauses (inst : InstanceId) (specification : Array Nat)
 The instances of relations that it asks for must not enter the program: deployed definitions
 are numbered by their instances, and what a specification says does not change the identity
 of deployed code. -/
-def aside {α : Type} (attempt : CompileM α) : CompileM α := do
-  let (result, after) := attempt.run (← read) (← get)
+def aside {α : Type} (attempt : CompileM α) (keepReads : Bool := false) : CompileM α := do
+  let saved ← get
+  let (result, after) := (captureModuleReads attempt).run (← read) saved
   match result with
-  | .ok value => return value
+  | .ok (value, reads) =>
+    if keepReads then publishDetachedObservations saved after reads
+    return value
   | .error failure =>
-    modify fun s => { s with log := after.log }
+    modify fun s => {s with log := after.log}
     throw failure
 
 /-- The check of what the deciding clauses of a contract apply, at values of the instance's
 specification-only parameters, run aside. -/
 def typeClauses (inst : InstanceId) (specification : Array Nat)
     (typeBody : InstanceId → Span → CompileM Unit)
-    (resolutions : Std.HashMap Typing.ResolvedPlace ParameterRef := {}) : CompileM Unit :=
-  discard <| aside (typedClauses inst specification typeBody resolutions)
+    (resolutions : Std.HashMap Typing.ResolvedPlace ParameterRef := {}) : CompileM Unit := do
+  let keep := (← read).allClauseReads && (realInstance (← get) inst).run' {}
+  discard <| aside (typedClauses inst specification typeBody resolutions) keep
 
 /-- The opaque typing of what the deciding clauses of the contract of a protocol generic over a
 module parameter apply (SP12), run aside: the typings of the places that it resolves. A

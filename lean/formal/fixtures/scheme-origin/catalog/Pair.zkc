@@ -1,0 +1,9 @@
+module catalog::Pair
+pub relation Never(): false
+pub protocol C roles(P,V)():
+    guard @V false
+spec for C:
+    proves @V Never()
+pub scheme S = C:
+    prover P
+    construction interactive

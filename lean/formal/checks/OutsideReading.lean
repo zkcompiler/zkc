@@ -46,10 +46,8 @@ def pair (name text : String) (proposition := "mark = mark") : Module where
   statementsName := .str (.str .anonymous name) "Stated"
   statements := s!"namespace {name}\ndef mark : Nat := 0\ndef gGoal : Prop := {proposition}\nend {name}\n"
   stated := []
-  statedImports := []
   proof := s!"import {name}.Stated\nnamespace {name}\n{text}\nend {name}\n"
   proved := ["g_sound"]
-  proofImports := []
   textLine := 3
   textLines := (text.splitOn "\n").length
   published := [(.str (.str .anonymous name) "g_sound", .str (.str .anonymous name) "gGoal")]

@@ -102,10 +102,8 @@ theorem Semantics.interpret_loopStep {D : Dialect} (sem : Semantics D) {Γ : Ctx
         halt :=
   Process.interpret_bind j _ halt _ _
 
-/-- A process as the walk of a program leaves it: the process itself, under a name that Lean's
-own reduction does not unfold. A goal that judges what is left of a program is stated on the
-sealed process, so that a tactic that normalizes its goal does not run the program; the walk
-reads through the name, and the kernel finds a sealed process equal to the process. -/
+/-- Seal a process so that normalizing a goal about it leaves its computation folded.
+The kernel can unfold the seal when checking an equation. -/
 @[irreducible] def Process.sealed (p : Process S H A) : Process S H A := p
 
 /-- A sealed process is the process. -/
@@ -115,7 +113,7 @@ theorem Process.sealed_eq (p : Process S H A) : p.sealed = p := by
 
 /-! ## The equations of a step
 
-The walk of a program passes from a goal to the next along an equation of processes. What is
+What is
 left of an instruction, followed by the rest of the program, is the rest on the values, a stop,
 or an effect with the rest after its reply; and a judgment of a process that has ended is what
 the judgment asks of the end. Each equation is about one instruction. The kernel checks it
@@ -203,8 +201,7 @@ theorem Term.interpret_loop_invariant {D : Dialect} (sem : Semantics D) {T : Typ
   simpa using iterated
 
 /-- The judgment of a process without effects: there is no effect to judge, and the process is
-judged by how it ends. The judgment of a function's process, which makes the walk of a role's
-program the walk of a function's. -/
+judged by how it ends. This is the judgment used for a function's process. -/
 def ProcessJudgment.silent : ProcessJudgment NoSig (Unit → Prop) where
   node op _ _ := nomatch op
 

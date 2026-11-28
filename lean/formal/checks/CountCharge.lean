@@ -10,80 +10,6 @@ import Zkc.Core.Admission.Theorems
 import Zkc.Kernel
 import Zkc.Vocabulary.Project
 
-/-!
-An admitted protocol judged within the table of caps that the frontend reads for its goal from
-the charges of its source, and the judgment taken to a probability.
-
-The subject is the reference case `N-GL2a`: `Count<8>` draws a position of a table of eight
-field elements and returns when the entry there is zero; its relation holds of a table with at
-most `e` entries that are not zero, and its charge on the draw is `1 - (e + 1) / n`. Two goals
-give `e` the values 4 and 1.
-
-The check reads the source with the frontend and writes two modules, on which Lean is run.
-
-- The proof module has the printed package of what the two goals claim: the protocol of the
-  scheme, then the relation of the clause at the value of each goal, as the functions that the
-  frontend emits (`Written.goalClaims`). Around the text of `CountCharge.lean.in` stands what
-  `Written.Statements` writes from what the frontend read: the facts (the key of the root, the
-  verifier and the prover of the scheme, and for each goal the value of its proof argument, its
-  table of caps (`looseCaps`, `strictCaps`: the root at the goal's proof arguments, with the cap
-  of its charged draw and how many times it runs) and its relation), that the counts of each
-  table are those of the stored program and what its budget is (`loose_counted`,
-  `loose_budget`), where the walks start, the transfer of a statement to every admitted program, the
-  claim of each goal about the installed program (`looseClaim`, `strictClaim`) with its goal
-  for every admitted program, its result with the coverage and the statement that its
-  hypotheses are met, all as propositions defined before the text; and after the text the
-  theorems of those (`loose_sound`, `loose_result`, `loose_met`, and the same for `strict`).
-  Before the text stands also the judgment that establishes each claim (`looseJudged`,
-  `strictJudged`) with the theorem that the claim follows from it. The text of the check proves
-  the judgments (`loose_judged`, `strict_judged`) and chooses nothing of them; it states neither
-  a claim nor where a walk starts. The module
-  imports nothing of the frontend but the records of a table of caps. Its theorems are about every
-  program that admission gives for the stored program of the package. The function of each
-  relation returns whether at most the goal's tolerance of the entries are not zero. On a table
-  on which that function returns false, the verifier is judged never to return within the
-  budget of the goal's table, with each fee within the cap that the table gives the draw that
-  pays it; against every service that is no more likely to answer a coin within a set of replies
-  than the sampler of the coin's law is to draw one there, it returns with probability at most
-  the total of the table. The statement names no port and no sampler: the
-  samplers are those of the laws of the model (`lawSamplers`). For each goal a concrete table
-  and a service meet every hypothesis, and there the verifier returns with probability exactly
-  the total of the table; a table that caps another instruction judges it at no budget and has
-  not the counts of the stored program, as a table of another definition has not; a service
-  that always gives one position does not follow the samplers.
-  The text has the two kinds of read of a sequence. In the relation the position is the
-  loop's, below the length of the table: the walk reads the entry by itself, and the text has
-  no case for a position outside the table. In the verifier the position is drawn, and nothing
-  in the context says that it is in the table: the read is a fork, whose open side the text
-  names (the entry found, and that it was found); a text that named a fork where the walk
-  meets none would be refused.
-- The statements module proves coverage separately for both goals. The frontend names the
-  field power when it occurs in a relation, and the kernel refuses coverage there.
-- The comparison module has the same printed package and the frontend: the program by names
-  and the association that Lean reads from the package are those that the frontend gives to
-  admission for the claims, and its first definitions are those of the root's own package.
-
-What the source says and the proof module takes as given is asserted here against the source:
-the clause that each goal reads, by `goalClause`, and the port that the relation is applied
-to. Nothing of the relation is bound by hand. Two more subjects show what the check
-distinguishes. With the roster reversed the verifier is the first role, and the same text
-proves the same theorems. With `<=` of the relation changed to `<`, the deployed definitions
-and both tables are what they were and the relation is another function: Lean refuses the
-theorems that say what the relation computes and those that rest on them.
-
-Six controls are refused by Lean: coverage for each of the two relations with a power in
-its loop, the relation changed, and three charges, each written in the source, since no caller
-gives a statement its table: a charge below the bound of its tolerance, a charge on the draw of
-a loop that does not run, and a charge in another protocol. The last two give the root no cap,
-which is asserted of the tables that the frontend reads. The deciding role of a statement is the
-verifier of the goals' scheme and no caller chooses it, so the roles are exchanged in the
-source: a scheme whose prover is `V` makes `P` the verifier, and the frontend refuses the goal,
-whose clause is decided by `V` (GL3). Two other sizes are read by the frontend alone: the charge of `Count<5>` at the tolerance 4 is zero, and the negative ceiling
-of `Count<4>` is no charge. A goal that states a ceiling at the total of its table is issued
-the comparison, which the kernel decides; one that states a ceiling below it is issued no
-statement.
--/
-
 open Zkc.Core Zkc.Frontend Zkc.Frontend.Written
 open Zkc.Subject (CapTable)
 open Zkc.Tests.Frontend Zkc.Tests.Frontend.PrintedPackageSupport
@@ -111,7 +37,7 @@ def places (s : Subject) : Nat × Nat × Nat :=
   (s.statements.claims.root, s.statements.claims.verifier, s.statements.claims.prover)
 
 /-- The name, the proof arguments and the table of caps of each goal. -/
-def tables (s : Subject) : List (String × Array Nat × CapTable) :=
+def tables (s : Subject) : List (String × Array Nat × Option CapTable) :=
   s.goals.map fun goal => (goal.goal, goal.specification, goal.caps)
 
 /-- The stored text of the definitions of the root's own package. -/
@@ -123,42 +49,17 @@ def deployed (s : Subject) : IO (List (Nat × String)) := do
 /-- The source with its one occurrence of `before` replaced. -/
 def edit (text before after : String) : IO String := replaceOnce text before after
 
-/-- The theorems of the text of the proofs. -/
-def ofText : List String := [
-  "loose_exact", "strict_exact", "loose_within", "strict_within", "walked_within",
-  "walked_excludes", "walk_reads_any_key", "loose_relation", "strict_relation",
-  "returns_installed", "loose_judged", "strict_judged", "Witness.loose_at_table",
-  "Witness.strict_at_table", "Witness.loose_attained", "Witness.strict_attained",
-  "Witness.misplaced_judges_nothing", "Witness.misplaced_not_counted",
-  "Witness.foreign_not_counted", "Witness.fixed_position_does_not_follow", "loose_witnessed",
-  "strict_witnessed"]
-
-/-- The theorems that say what the relations compute, and those that rest on them. -/
-def ofRelation : List String :=
-  ["loose_relation", "strict_relation", "loose_judged", "strict_judged", "loose_installed",
-    "strict_installed",
-    "Witness.loose_at_table", "Witness.strict_at_table", "loose_witnessed", "strict_witnessed",
-    "loose_sound", "loose_result", "loose_met", "strict_sound", "strict_result", "strict_met"]
-
-/-- What the text says of the caps of the two goals, and what rests on it. -/
-def ofCharge : List String :=
-  ["loose_judged", "strict_judged", "loose_installed", "strict_installed",
-    "Witness.loose_at_table", "Witness.strict_at_table",
-    "Witness.loose_attained", "Witness.strict_attained", "loose_exact", "strict_exact",
-    "loose_sound", "loose_result", "strict_sound", "strict_result"]
-
-def run (corpus template : System.FilePath) (work : System.FilePath) : IO Unit := do
+def run (corpus : System.FilePath) (work : System.FilePath) : IO Unit := do
   let blocks := readBlocks (← IO.FS.readFile corpus)
   let some source := (blocks.find? (·.id == "N-GL2a")).bind (·.files[0]?)
     | throw (IO.userError "missing the reference case N-GL2a")
-  let template ← IO.FS.readFile template
   let written ← read source
   unless places written == (1, 1, 0) do
     throw (IO.userError "the root and the roles of the source are not where they were")
   -- The tables of caps, as the frontend read them: the one draw of the root, once, at the
   -- charge of each goal's tolerance.
   unless (tables written).map (·.2.2) ==
-      [⟨[(.flat ⟨1⟩ [⟨⟨0⟩, 3, 8, 1⟩] [])]⟩, ⟨[(.flat ⟨1⟩ [⟨⟨0⟩, 3, 4, 1⟩] [])]⟩] do
+      [some ⟨[(.flat ⟨1⟩ [⟨⟨0⟩, 3, 8, 1⟩] [])]⟩, some ⟨[(.flat ⟨1⟩ [⟨⟨0⟩, 3, 4, 1⟩] [])]⟩] do
     throw (IO.userError s!"the tables of caps are not the draw of the root at 3/8 and at 3/4: {repr ((tables written).map (·.2.2))}")
 
   -- The roster reversed: the verifier is the first role, and the key of the root is as it was.
@@ -180,26 +81,26 @@ def run (corpus template : System.FilePath) (work : System.FilePath) : IO Unit :
   -- outside the relation has no zero entry, and the charge is zero; with four entries the
   -- ceiling that the source writes is negative, and no charge is read.
   let five ← read (← edit source "scheme Checked = Count<8>:" "scheme Checked = Count<5>:")
-  unless ((tables five).map fun (_, _, caps) => caps.ratio) == [0, (3 : Rat) / 5] do
+  unless ((tables five).map fun (_, _, caps) => caps.map (·.ratio)) == [some 0, some ((3 : Rat) / 5)] do
     throw (IO.userError "the charges of Count<5> are not 0 and 3/5")
   let four ← edit source "scheme Checked = Count<8>:" "scheme Checked = Count<4>:"
   let .error refusal := (goalRoot four "loose").bind (goalClaims · ["loose"])
     | throw (IO.userError "a negative ceiling was read as a charge")
-  unless refusal.contains "nonnegative" do
+  unless refusal.contains "WK-CHARGE: a charge is not negative" do
     throw (IO.userError s!"Count<4> was refused for another reason: {refusal}")
 
-  -- A goal that states a ceiling. At the total of its table, 3/8, the statement is issued with the
-  -- comparison, which the kernel decides; below it no statement is issued (GL4).
+  -- A goal that states a ceiling is issued at its ceiling, whatever its table adds up to: at the
+  -- total of its table, 3/8, and below it, at 1/4, where the fee facts of the row say that the
+  -- budget is above the bound (`checks/WrittenFees.lean`).
   let goalLine := "goal loose = soundness(Checked, spec e = 4)"
-  let atTotal ← read (← edit source goalLine (goalLine ++ " <= 3/8"))
-  let ceilingProof ← startLakeLean work "CeilingAtTotal"
-    (← IO.ofExcept (atTotal.statements.ceilingModule "CeilingAtTotal")).text (text := false)
-  let below ← read (← edit source goalLine (goalLine ++ " <= 1/4"))
-  match below.statements.ceilings with
-  | .ok _ => throw (IO.userError "a goal whose ceiling is below the total of its table was issued a statement")
-  | .error why =>
-    unless why.contains "GL4" && why.contains "1/4" && why.contains "3/8" do
-      throw (IO.userError s!"the ceiling below the total was refused for another reason: {why}")
+  for (ceiling, bound) in [(" <= 3/8", (3 : Rat) / 8), (" <= 1/4", (1 : Rat) / 4)] do
+    let stated ← read (← edit source goalLine (goalLine ++ ceiling))
+    let some goal := stated.goals.find? (·.goal == "loose") | throw (IO.userError "no goal loose")
+    unless goal.bound == bound && goal.total == some (3 / 8) do
+      throw (IO.userError s!"the goal with the ceiling{ceiling}: bound {goal.bound}, total {goal.total}")
+    let issued ← IO.ofExcept (stated.statements.publication "Ceiling")
+    unless issued.refusals.isEmpty && issued.published.length == 4 do
+      throw (IO.userError s!"the goal with the ceiling{ceiling} is not issued: {issued.refusals}")
 
   -- The roles exchanged in the source: with `V` the prover of the scheme the verifier is `P`,
   -- and the clause, which `V` decides, is not decided by the verifier of the scheme.
@@ -232,71 +133,46 @@ def run (corpus template : System.FilePath) (work : System.FilePath) : IO Unit :
     if tables control == tables written then
       throw (IO.userError s!"the charge {title}: the tables of caps are what they were")
   unless (tables small).map (·.2.2) ==
-      [⟨[(.flat ⟨1⟩ [⟨⟨0⟩, 1, 4, 1⟩] [])]⟩, ⟨[(.flat ⟨1⟩ [⟨⟨0⟩, 5, 8, 1⟩] [])]⟩] do
+      [some ⟨[(.flat ⟨1⟩ [⟨⟨0⟩, 1, 4, 1⟩] [])]⟩, some ⟨[(.flat ⟨1⟩ [⟨⟨0⟩, 5, 8, 1⟩] [])]⟩] do
     throw (IO.userError "the smaller charge is not 1/4 and 5/8 at the draw")
   for control in [elsewhere, foreign] do
-    unless (tables control).all (·.2.2 == ⟨[(.flat ⟨1⟩ [] [])]⟩) do
+    unless (tables control).all (·.2.2 == some ⟨[(.flat ⟨1⟩ [] [])]⟩) do
       throw (IO.userError s!"a charge that is not on the draw of the root gave a cap: {repr ((tables control).map (·.2.2))}")
   -- A row outside the table of the model, inside the loop of the relation: the power of a field
   -- element, which the standard model gives a constant.
   let uncovered ← WrittenSubject.read
     (← edit source "if xs[i] == 0 then 0 else 1" "if xs[i] ^ 2 == 0 then 0 else 1")
     reading
-  for issue in [(uncovered.statements.coverageModule "CoverageControl").map (fun _ => ()),
-      (uncovered.statements.module "UncoveredControl" {}).map (fun _ => ())] do
-    match issue with
-    | .ok _ => throw (IO.userError "issued a statement for an uninterpreted power")
-    | .error why => unless why.contains "pow" && why.contains "loose" && why.contains "strict" do
-        throw (IO.userError why)
+  match uncovered.statements.publication "UncoveredControl" with
+  | .ok _ => throw (IO.userError "issued the goals of an uninterpreted power")
+  | .error why => unless why.contains "pow" && why.contains "loose" && why.contains "strict" do
+      throw (IO.userError why)
 
-  -- Independently ask the kernel about the actual program, including the power in the relation.
-  let testCoverage (goal : ClaimedGoal) := Statements.header (Statements.imports false) ++ "namespace CoverageControl\n" ++
-    (Written.package uncovered.statements.package).text ++ statementOpens ++ uncovered.statements.facts ++
-    Statements.coverage [goal] ++ "end CoverageControl\n"
-  let coverageChecks ← uncovered.goals.mapM fun goal => do
-    let checked ← startLakeLean work (goal.goal ++ "CoverageControl") (testCoverage goal) (text := false)
-    return (goal.goal, checked)
-  let proof : Proof := { text := template, theorems := ofText }
-  -- Each of the three charges is refused where the text reads the cap of the draw from the
-  -- table.
-  let atCap := ["drawCap looseCaps = ", "drawCap strictCaps = "]
-  let count ← start work "Count" written proof [
-    -- With `<` for `<=` the function of the relation computes another comparison: what is
-    -- said of it, and what rests on that, is not proved; the theorems about the verifier
-    -- stand.
-    { title := "the relation changed", name := "RelationControl", subject := changed,
-      text := template, unproved := ofRelation },
-    -- The caps of both goals are below the bounds of their tolerances: the text reads another
-    -- cap from each table than the bound, and what rests on it is not proved.
-    { title := "a charge below the bound", name := "BoundControl", subject := small,
-      text := template, unproved := ofCharge, places := atCap },
-    -- In these two the root has no charged draw, so the module has no theorem of a draw's
-    -- cap. The draw has its name all the same: a site is named whether or not the source
-    -- charges it.
-    { title := "a charge on a loop that does not run", name := "SiteControl", subject := elsewhere,
-      text := template, unproved := ofCharge, places := atCap },
-    { title := "a charge of another protocol", name := "OwnerControl", subject := foreign,
-      text := template, unproved := ofCharge, places := atCap }]
-  -- The roster reversed: the same text proves the same theorems.
-  let turnedCount ← start work "CountTurned" turned proof
-  let _ ← count.finish
-  let _ ← turnedCount.finish
-  let (ok, output) ← finishLean ceilingProof
-  acceptedOutput "CeilingAtTotal" ok output ["loose_ceiling"] allowed
-  for (goal, checked) in coverageChecks do
-    let (covered, reason) ← finishLean checked
-    if covered then throw (IO.userError s!"accepted the power in the relation of {goal}")
-    unless reason.contains s!"covers stored rootKey {goal}Key = true" && reason.contains "is false" do
-      throw (IO.userError reason)
-  let charges := ", ".intercalate ((tables written).map fun (name, arguments, caps) =>
-    s!"{name} at tolerance {arguments[0]!} within {caps.ratio}")
-  IO.println (s!"Count<8> is judged within the tables of caps of its goals ({charges}), " ++
-    "on the tables on which the admitted relation returns false, in either order of the roster; " ++
-    "6 of 6 controls refused, including coverage of the power in each relation, and a scheme whose prover decides the clause is refused " ++
-    "by the frontend.")
+  -- The same rows given to the library without the issuer's filter: the kernel decides the
+  -- coverage of each, the views are declared, and the coverage fact and the step to the published
+  -- result are not.
+  let statements := uncovered.statements
+  let data ← IO.ofExcept (statements.dataModule "Uncovered" (SubjectLayout.ofGoals statements.claims))
+  let stated ← startLakeLean work "Uncovered.Stated" data (text := false)
+  let rows := ["loose", "strict"].map (s!"Uncovered.t.{·}")
+  let views ← startLakeLean work "Uncovered.Views"
+    ("import Uncovered.Stated\nimport ZkcFormal.Written.Views\n\npublish_views Uncovered.written'subject\n" ++
+      "open Lean in\nrun_cmd do\n" ++
+      s!"  for row in [{", ".intercalate (rows.map (s!"`{·}"))}] do\n" ++
+      "    for name in [`sound.view, `met.view, `installed.view, `sound.view_iff, `met.view_iff, `installed.view_iff] do\n" ++
+      "      unless (← getEnv).contains (row ++ name) do throwError \"no {row ++ name}\"\n" ++
+      "    for name in [`covered, `sound_of_installed] do\n" ++
+      "      if (← getEnv).contains (row ++ name) then throwError \"{row ++ name} is declared\"\n") (text := false)
+  let (ok, output) ← finishLean stated
+  unless ok do throw (IO.userError s!"the data module of the uncovered rows: {output}")
+  let (ok, output) ← finishLean views
+  unless ok do throw (IO.userError s!"the views of the uncovered rows: {output}")
+  for goal in ["loose", "strict"] do
+    unless output.contains s!"publish_views: t.{goal}: the standard interpretation does not cover the stored program of this goal" do
+      throw (IO.userError s!"no line for the uncovered row {goal}\n{output}")
 
 end CountCharge
 
 #eval show IO Unit from
   IO.FS.withTempDir fun work =>
-    CountCharge.run "../../language/conformance/layer-b.txt" "checks/CountCharge.lean.in" work
+    CountCharge.run "../../language/conformance/layer-b.txt" work

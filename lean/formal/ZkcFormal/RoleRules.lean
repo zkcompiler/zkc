@@ -9,10 +9,8 @@ set_option autoImplicit false
 /-!
 Rules of the program of a role, as equations of processes.
 
-The walk of a role's program takes an instruction by what it denotes. An instruction that
-computes a function need not be read through the function's body: where the value of the
-function on the operands is known, the step is the rest on that value. The walk applies the rule
-with `walk_compute`.
+An instruction that computes a function need not be read through the function's body: where
+the value of the function on the operands is known, the step is the rest on that value.
 -/
 
 namespace Zkc.Core

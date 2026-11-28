@@ -1,0 +1,15 @@
+private theorem neverRejected (x : Bool) :
+    ¬ Soundness.Rejected model written'application0 installed member'fn0 (.cons () (.cons x .nil)) := by
+  intro rejected
+  have accepts : functionResult (t := .bool) (fnMeaning model installed member'fn0 (.cons x .nil)) =
+      some true := by kernel_rfl
+  exact rejected accepts
+
+theorem allBounds : allBoundsStatement := by
+  intro b
+  refine ⟨by decide +kernel, (Soundness.installed_iff_admitted model written'application0 draws b).mp ?_⟩
+  exact fun _ x _ rejected ↦ (neverRejected x rejected).elim
+
+theorem noWitness : noWitnessStatement := by
+  rintro ⟨x, _, _, rejected⟩
+  exact neverRejected x rejected

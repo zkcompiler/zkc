@@ -2,7 +2,7 @@ module
 
 public import Zkc.Frontend.Written.Diagnostic
 public import Zkc.Frontend.Syntax.Spans
-public import Zkc.Frontend.Driver.Bodies
+public import Zkc.Frontend.Driver.ModuleUses
 public import Zkc.Frontend.Static.Rational
 
 @[expose] public section
@@ -12,15 +12,19 @@ namespace Zkc.Frontend.Written
 open Syntax
 
 /-- Ordinary protocol bodies resolve generated-member dependencies regardless of query order. -/
-def sourceContext : Compile.Context := Typing.withProtocolBodies {vocabulary}
+def sourceContext : Compile.Context := Typing.withProtocolBodies {vocabulary, allClauseReads := false}
 
 /-- Run an ordinary frontend request, preserving its nominal instance table for its consumers. -/
 def evaluate {α : Type} (s : Compile.State) (at_ : Span) (attempt : CompileM α) :
     ExportM (α × Compile.State) := do
-  let (result, after) := attempt.run sourceContext s
+  let checked : CompileM α := do
+    let (value, reads) ← captureModuleReads attempt
+    Typing.checkModuleReads reads
+    return value
+  let (result, after) := checked.run sourceContext s
   if let some d := (after.log.entries.extract s.log.entries.size after.log.entries.size).find?
       (fun d => d.isError || d.isIncomplete) then
-    refuse at_ "WK-TYPE" (d.render after.env.renderer)
+    refuse at_ "WK-TYPE" s!"{d.span.file}:{d.render after.env.renderer}"
   match result with
   | .ok a => pure (a, after)
   | .error (.waiting why) | .error (.defect why) => refuse at_ "WK-TYPE" why
@@ -52,6 +56,8 @@ structure Selection where
   goalPath : Option String := none
   specification : Array Nat := #[]
   ceiling : Option Rat := none
+  /-- The property that the goal names, where a goal was selected. -/
+  property : Option Security.Property := none
 
 def closedDeclaration (ref : Lowered.Reference) : ExportM DeclarationId := do
   if ref.hasStaticArguments then
@@ -224,6 +230,7 @@ def selectedGoal (state : Compile.State) (goal : Lowered.Goal) (path : String)
     (file : FileId) (kind : GoalKind) :
     ExportM (Selection × Compile.State) := do
   let (scheme, s) ← goalScheme state goal
+  let (_, s) ← evaluate s scheme.span (Typing.checkModuleReads (s.schemeReads.getD scheme.declaration #[]))
   let .reference ref := goal.property | refuse goal.property.span "WK-GOAL" "unresolved formal property"
   let some (.entry library property) := ref.lastStep?
     | refuse ref.span "WK-GOAL" "expected a formal library property"
@@ -272,7 +279,8 @@ def selectedGoal (state : Compile.State) (goal : Lowered.Goal) (path : String)
       if goal.ceiling.isSome then refuse goal.span "WK-GOAL" "the written fork property has no quantitative ceiling"
       pure none
     | .soundness => do
-      unless library == "zkc::security" && property == "soundness" && description.stages.contains requested do
+      unless library == "zkc::security" && description.property.published &&
+          description.stages.contains requested do
         refuse goal.property.span "GL3" "expected the written soundness property"
       if !fixed && scheme.lines.any (fun line => line matches .construction _ (.derived ..)) then
         refuse goal.span "GL3" "the written theorem requires a fixed statement"
@@ -284,7 +292,7 @@ def selectedGoal (state : Compile.State) (goal : Lowered.Goal) (path : String)
         if value < 0 then refuse expr.span "GL4" "a goal ceiling must be nonnegative"
         return value
   return (⟨scheme, label, Static.qualifiedName s.program scheme.declaration,
-    some goal, some path, specification, ceiling⟩, s)
+    some goal, some path, specification, ceiling, some description.property⟩, s)
 
 /-- Exact and file-relative spellings of input declarations of one kind. Two files can
 contribute the same qualified path through a nested module and a file module. -/
@@ -329,6 +337,7 @@ def selectGoalId (s : Compile.State) (id : DeclarationId) (kind : GoalKind) :
   let some decl := s.program.declarations[id]? | throw "WK-GOAL: missing goal"
   let some {content := .goal goal, ..} := s.env.modules.lowered? id
     | throw "WK-GOAL: missing resolved goal"
+  let (_, s) ← evaluate s goal.span (Static.observeEnclosingModules id #[] goal.span)
   selectedGoal s goal (Static.qualifiedName s.program id) decl.file kind
 
 def selectNamedGoal (s : Compile.State) (name : String) (kind : GoalKind) :
@@ -341,7 +350,8 @@ def select (s : Compile.State) : Request → ExportM (Selection × Compile.State
     let (id, path) ← selectDeclaration s .scheme name "WK-ROOT"
     let some scheme := s.results.schemes.find? (·.declaration == id)
       | throw s!"WK-ROOT: no closed scheme for {path}"
-    return (⟨scheme, label, path, none, none, #[], none⟩, s)
+    let (_, s) ← evaluate s scheme.span (Typing.checkModuleReads (s.schemeReads.getD id #[]))
+    return (⟨scheme, label, path, none, none, #[], none, none⟩, s)
   | .goal name => selectNamedGoal s name .fork
 
 structure WrittenParties where
