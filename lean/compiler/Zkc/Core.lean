@@ -54,6 +54,7 @@ public import Zkc.Core.Projection.Theorem
 public import Zkc.Core.Evidence.Claim
 public import Zkc.Core.Evidence.BlockReadback
 public import Zkc.Core.Evidence.FunctionEntry
+public import Zkc.Core.Evidence.EarlierMeaning
 public import Zkc.Core.Evidence.FunctionReadback
 public import Zkc.Core.Evidence.OperationSite
 public import Zkc.Core.Evidence.ProtocolReadback

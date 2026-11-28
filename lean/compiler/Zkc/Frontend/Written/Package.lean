@@ -257,6 +257,9 @@ def packageText (p : SourcePackage) (admission : List String) : String :=
     (lines ++ [
       s!"kernel_ok elaborated{k} with header{k} names{k} body{k} : " ++
         s!"Elaborated V program{before}.headers :=\n  elaborateDefinition program{before}.headers stored{k}",
+      -- the types of a definition's inputs and results are read from its header by a tactic,
+      -- which compares types without unfolding a definition that is not reducible
+      s!"attribute [reducible] header{k}",
       s!"def program{k} : Typed V := program{before}.add elaborated{k}"], k)
   let chain := named.foldr (fun d rest => s!".cons elaborated{suffix d}.eq ({rest})") ".nil _"
   let typed := ["noncomputable section", s!"def program{baseSuffix} : Typed V := Typed.empty"] ++ steps ++ [

@@ -1,0 +1,69 @@
+theorem relationValue (x : Bool) :
+    functionResult (t := .bool) (fnMeaning model installed member'fn1 (.cons x .nil)) = some x := by
+  kernel_rfl
+
+open scoped ZkcFormal.Written.FeeRules
+
+-- the register of the forms module, read from this module
+#registered_forms installed
+
+set_option experimental.vcgen true in
+theorem judged : t.guessing.fees.judged.view := by
+  intro path input_claim valid_input_claim rejected
+  cases input_claim with
+  | true => exact False.elim (rejected (relationValue true))
+  | false =>
+    let context : FeeRules.Context model :=
+      ⟨StandardInterpretation.draws, written'caps0.allowed path⟩
+    refine FeeRules.judged_of_triple context _
+      (protocol0.role1.form model path (.cons false (.cons () .nil)))
+      (protocol0.role1.reads model path _) _ _ FeeRules.stopped ?proved
+    vcgen [protocol0.role1.form] invariants
+    | inv1 => fun _ rest state left =>
+        ((rest.length : ℚ≥0) / 8 ≤ left ∧ Form.headV state.1 = false : Prop)
+    | inv2 => (⟨1 / 8, fun r => r = v⟩ : FeeRules.DrawChoice _ ℕ)
+    case vc1 => simpa using ‹_ ≤ _›
+    case vc2 => rfl
+    case vc3 => simp_all
+    case vc4 =>
+      obtain ⟨enough, -⟩ := ‹_ ≤ _ ∧ _›
+      refine le_trans ?_ enough
+      show (1 / 8 : ℚ≥0) ≤ _
+      rw [List.length_cons]
+      push_cast
+      gcongr
+      exact le_add_self
+    case vc5 =>
+      refine ⟨Or.inr ⟨_, rfl, ?_⟩, ?_⟩
+      · show Pr{let x ← drawPosition 7}[x = v] ≤ toProbability (1 / 8)
+        rw [prEvent_drawPosition, show (1 / 8 : ℚ≥0) = ((1 : ℕ) : ℚ≥0) / ((7 + 1 : ℕ) : ℚ≥0) by norm_num,
+          toProbability_natCast_div 1 (7 + 1) (Nat.succ_pos 7)]
+        have few : ({x : Fin (7 + 1) | (x : ℕ) = v} : Finset (Fin (7 + 1))).card ≤ 1 :=
+          Finset.card_le_one.mpr fun a ha b hb =>
+            Fin.ext ((Finset.mem_filter.mp ha).2.trans (Finset.mem_filter.mp hb).2.symm)
+        push_cast
+        calc _ ≤ (1 : ℝ≥0∞) / (7 + 1) := ENNReal.div_le_div_right (by exact_mod_cast few) _
+          _ = 1 / 8 := by norm_num
+      · show (1 / 8 : ℚ≥0) ≤ written'caps0.allowedFrom written'caps0.root path ⟨path ++ [_], ⟨3⟩⟩
+        rw [CapTable.allowedFrom_at]
+        exact (by decide +kernel : (1 / 8 : ℚ≥0) ≤ written'caps0.capFrom written'caps0.root [] ⟨3⟩)
+    case vc6 =>
+      obtain ⟨enough, clean⟩ := ‹_ ≤ _ ∧ _›
+      refine ⟨?_, ?_⟩
+      · apply le_tsub_of_add_le_right
+        refine le_trans (le_of_eq ?_) enough
+        show _ + (1 / 8 : ℚ≥0) = _
+        rw [List.length_cons]
+        push_cast
+        ring
+      · simp only [Form.headV_cons, clean, Bool.false_or]
+        exact Bool.eq_false_iff.mpr fun same => ‹¬_ = _› (Nat.eq_of_beq_eq_true same)
+
+theorem t.guessing.sound : published% written'subject t.guessing sound :=
+  t.guessing.sound_of_installed
+    (t.guessing.installed.view_iff.mpr (t.guessing.fees.installed_of_judged judged))
+
+theorem t.guessing.met : published% written'subject t.guessing met :=
+  t.guessing.met.view_iff.mp ⟨false, trivial, served, fun accepted => by
+    have := (relationValue false).symm.trans accepted
+    simp at this⟩

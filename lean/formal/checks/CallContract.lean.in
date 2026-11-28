@@ -1,0 +1,182 @@
+theorem relationValue (x : Bool) :
+    functionResult (t := .bool) (fnMeaning model installed member'fn0 (.cons x .nil)) = some x := by
+  kernel_rfl
+
+open scoped ZkcFormal.Written.FeeRules
+
+/-- The round among the protocols that the root applies. -/
+noncomputable abbrev roundMember : Member calleeProgram.headers.protocols header2 := Member.head
+
+theorem roundShape (start : List Frame) :
+    roleMeaning model calleeProgram roundMember verifierRole start (.cons () .nil) =
+      .call (.get .message 0 ⟨start, ⟨0⟩⟩ (.fin 4)) (fun x ↦
+        .call (.own (.coin (.uniform (.fin 4))) [0] ⟨start, ⟨1⟩⟩ [] .nil (.fin 4)) (fun r ↦
+          .done (.cons (Nat.beq r x) (.cons r .nil)))) := by
+  kernel_rfl
+
+/-- Whether a round hit, of what it returns to the verifier. -/
+def hitOf (outs : HList (RV model verifierRole) header2.outs) : Bool :=
+  match outs with
+  | .cons hit _ => hit
+
+/-- The root's verifier: the round at the two applications, then a stop unless the claim holds
+or a round hit. -/
+theorem rootShape (path : List Frame) (claim : Bool) :
+    roleMeaning model installed rootMember verifierRole path (.cons claim (.cons () (.cons () .nil))) =
+      (((mapR model id (roleMeaning model calleeProgram roundMember verifierRole
+          (path ++ [.application ⟨0⟩]) (.cons () .nil))).map id).bind fun a ↦
+        (((mapR model id (roleMeaning model calleeProgram roundMember verifierRole
+            (path ++ [.application ⟨1⟩]) (.cons () .nil))).map id).bind fun b ↦
+          Process.bind (A := HList (RV model verifierRole) [])
+            (cond (claim || hitOf a || hitOf b) (Process.done HList.nil)
+              (Process.halt (.declared .reject ⟨path, ⟨4⟩⟩))) fun _ ↦ .done .nil)) := by
+  kernel_rfl
+
+/-- The round's computation for the verifier, written out: a position heard, a position drawn,
+and whether they are the same with the position drawn. -/
+noncomputable def roundForm (start : List Frame) :
+    Reading.Comp (RSig model) Stop (HList (RV model verifierRole) header2.outs) := do
+  let x ← Reading.ask (RSig model) Stop (.get .message 0 ⟨start, ⟨0⟩⟩ (.fin 4))
+  let r ← Reading.ask (RSig model) Stop
+    (.own (.coin (.uniform (.fin 4))) [0] ⟨start, ⟨1⟩⟩ [] .nil (.fin 4))
+  pure (.cons (Nat.beq r x) (.cons r .nil))
+
+/-- One contract of the round: it returns no hit, for a fee of one quarter, which its draw
+needs. -/
+noncomputable def roundContract : Fees.Contract model calleeProgram roundMember verifierRole where
+  Ghost := Unit
+  pre _ _ := True
+  post _ _ outs := hitOf outs = false
+  fee := 1 / 4
+  need site := if site = ⟨[], ⟨1⟩⟩ then 1 / 4 else 0
+
+set_option experimental.vcgen true in
+theorem roundHolds : roundContract.Holds StandardInterpretation.draws := by
+  intro allowance start covers _ ins _ budget fee
+  have unit : ins = .cons () .nil := by
+    cases ins with | cons a rest => cases rest; rfl
+  subst unit
+  rw [roundShape]
+  let context : FeeRules.Context model := ⟨StandardInterpretation.draws, allowance⟩
+  refine FeeRules.judged_of_triple context _ (roundForm start) ?reads _ _ FeeRules.stopped ?proved
+  case reads =>
+    exact (Reading.read_call _ _).trans (bind_congr fun x => Reading.read_call _ _)
+  case proved =>
+    vcgen [roundForm] invariants
+    | inv1 => (⟨1 / 4, fun r => r = x⟩ : FeeRules.DrawChoice ⟨start, ⟨1⟩⟩ ℕ)
+    case vc1 => exact (show (1 / 4 : ℚ≥0) ≤ budget from fee).trans (by assumption)
+    case vc2 =>
+      refine ⟨Or.inr ⟨_, rfl, ?_⟩, ?_⟩
+      · show Pr{let r ← drawPosition 3}[r = x] ≤ toProbability (1 / 4)
+        rw [prEvent_drawPosition, show (1 / 4 : ℚ≥0) = ((1 : ℕ) : ℚ≥0) / ((3 + 1 : ℕ) : ℚ≥0) by norm_num,
+          toProbability_natCast_div 1 (3 + 1) (Nat.succ_pos 3)]
+        have few : ({y : Fin (3 + 1) | (y : ℕ) = x} : Finset (Fin (3 + 1))).card ≤ 1 :=
+          Finset.card_le_one.mpr fun a ha b hb =>
+            Fin.ext ((Finset.mem_filter.mp ha).2.trans (Finset.mem_filter.mp hb).2.symm)
+        push_cast
+        calc _ ≤ (1 : ℝ≥0∞) / (3 + 1) := ENNReal.div_le_div_right (by exact_mod_cast few) _
+          _ = 1 / 4 := by norm_num
+      · show (1 / 4 : ℚ≥0) ≤ allowance ⟨start, ⟨1⟩⟩
+        have needed := covers ⟨start, ⟨1⟩⟩ ⟨[], ⟨1⟩⟩
+          (by simpa [Frame.applications] using Occurrence.siteBelow_append start [] ⟨1⟩)
+        simpa [roundContract] using needed
+    case vc3 =>
+      show Nat.beq _ x = false
+      cases same : Nat.beq _ x
+      · rfl
+      · exact absurd (Nat.eq_of_beq_eq_true same) ‹_›
+    case vc4 =>
+      show budget - (1 / 4 : ℚ≥0) ≤ _ - (1 / 4 : ℚ≥0)
+      exact tsub_le_tsub_right (by assumption) _
+
+theorem judged : t.twice.fees.judged.view := by
+  intro path input_claim valid_input_claim rejected
+  cases input_claim with
+  | true => exact False.elim (rejected (relationValue true))
+  | false =>
+    rw [rootShape]
+    have covers (key : ℕ) (called : key = 0 ∨ key = 1) :
+        roundContract.Covers (written'caps0.allowed path) (path ++ [.application ⟨key⟩]) := by
+      intro at_ site below
+      show (if site = ⟨[], ⟨1⟩⟩ then (1 / 4 : ℚ≥0) else 0) ≤
+        written'caps0.allowedFrom written'caps0.root path at_
+      rw [CapTable.allowedFrom, Occurrence.siteBelow_application below]
+      split
+      · subst_vars
+        rcases called with rfl | rfl <;> decide +kernel
+      · exact zero_le
+    refine roundContract.call roundHolds _ _ (covers 0 (.inl rfl)) id id _ _ _
+      (fun _ _ => trivial) () _ trivial (1 / 2) (by decide +kernel) fun a left noHitA keptA => ?_
+    refine roundContract.call roundHolds _ _ (covers 1 (.inr rfl)) id id _ _ _
+      (fun _ _ => trivial) () _ trivial left ?_ fun b left' noHitB keptB => ?_
+    · exact (by decide +kernel : (1 / 4 : ℚ≥0) ≤ 1 / 2 - 1 / 4).trans keptA
+    · simp only [id, show hitOf a = false from noHitA, show hitOf b = false from noHitB]
+      exact trivial
+
+/-- The root's computation on a claim that is not set, written out: the round's computation at
+the two applications, with its roles as the root names them, then a stop unless a round hit. -/
+noncomputable def rootForm (path : List Frame) :
+    Reading.Comp (RSig model) Stop (HList (RV model verifierRole) []) := do
+  let a ← Form.renamed id (Reading.read (roleMeaning model calleeProgram roundMember verifierRole
+    (path ++ [.application ⟨0⟩]) (.cons () .nil)))
+  let b ← Form.renamed id (Reading.read (roleMeaning model calleeProgram roundMember verifierRole
+    (path ++ [.application ⟨1⟩]) (.cons () .nil)))
+  if false || hitOf a || hitOf b then pure .nil else throw (.declared .reject ⟨path, ⟨4⟩⟩)
+
+set_option experimental.vcgen true in
+/-- The same judgment on the root's computation, by the generator: the contract of the round is
+the rule of its call at each application. -/
+theorem judgedOnForm : t.twice.fees.judged.view := by
+  intro path input_claim valid_input_claim rejected
+  cases input_claim with
+  | true => exact False.elim (rejected (relationValue true))
+  | false =>
+    rw [rootShape]
+    let context : FeeRules.Context model := ⟨StandardInterpretation.draws, written'caps0.allowed path⟩
+    refine FeeRules.judged_of_triple context _ (rootForm path) ?reads _ _ FeeRules.stopped ?proved
+    case reads =>
+      have first (key : ℕ) :
+          Reading.read ((mapR model id (roleMeaning model calleeProgram roundMember verifierRole
+            (path ++ [.application ⟨key⟩]) (.cons () .nil))).map id) =
+            Form.renamed id (Reading.read (roleMeaning model calleeProgram roundMember
+              verifierRole (path ++ [.application ⟨key⟩]) (.cons () .nil))) :=
+        (Reading.read_map _ _).trans ((id_map _).trans (Form.read_mapR _ _))
+      refine (Reading.read_bind _ _).trans ((congrArg (· >>= _) (first 0)).trans
+        (bind_congr fun a => ?_))
+      refine (Reading.read_bind _ _).trans ((congrArg (· >>= _) (first 1)).trans
+        (bind_congr fun b => ?_))
+      show Reading.read (Process.bind (bif false || hitOf a || hitOf b then _ else _) _) = _
+      cases hitOf a <;> cases hitOf b <;> rfl
+    case proved =>
+      have covers (key : ℕ) (called : key = 0 ∨ key = 1) :
+          roundContract.Covers (written'caps0.allowed path) (path ++ [.application ⟨key⟩]) := by
+        intro at_ site below
+        show (if site = ⟨[], ⟨1⟩⟩ then (1 / 4 : ℚ≥0) else 0) ≤
+          written'caps0.allowedFrom written'caps0.root path at_
+        rw [CapTable.allowedFrom, Occurrence.siteBelow_application below]
+        split
+        · subst_vars
+          rcases called with rfl | rfl <;> decide +kernel
+        · exact zero_le
+      have first := fun Q E halts => FeeRules.call roundContract roundHolds
+        (path ++ [.application ⟨0⟩]) (covers 0 (.inl rfl)) () (.cons () .nil) Q E halts
+      have second := fun Q E halts => FeeRules.call roundContract roundHolds
+        (path ++ [.application ⟨1⟩]) (covers 1 (.inr rfl)) () (.cons () .nil) Q E halts
+      vcgen [rootForm, first, second]
+      case vc1 => trivial
+      case vc2 => exact (by decide +kernel : (1 / 4 : ℚ≥0) ≤ 1 / 2).trans (by assumption)
+      case vc3 => trivial
+      case vc4 _ below _ _ kept =>
+        exact (by decide +kernel : (1 / 4 : ℚ≥0) ≤ 1 / 2 - 1 / 4).trans
+          ((tsub_le_tsub_right below _).trans kept)
+      case vc5 _ _ _ noHitA _ _ noHitB _ hit =>
+        rw [show hitOf a = false from noHitA, show hitOf b = false from noHitB] at hit
+        exact Bool.false_ne_true hit
+
+theorem t.twice.sound : published% written'subject t.twice sound :=
+  t.twice.sound_of_installed (t.twice.installed.view_iff.mpr (t.twice.fees.installed_of_judged judged))
+
+theorem t.twice.met : published% written'subject t.twice met :=
+  t.twice.met.view_iff.mp ⟨false, trivial, served, fun accepted => by
+    have := (relationValue false).symm.trans accepted
+    simp at this⟩

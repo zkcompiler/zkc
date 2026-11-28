@@ -76,12 +76,7 @@ theorem run_eq_simulateQ (service : Service S σ) (p : Process S H A) (s : σ) :
         (OracleComp.queryBind (spec := specOf S) op fun reply => embed (next reply)) =
         handlerOf service op >>= fun reply => simulateQ (handlerOf service) (embed (next reply)) :=
       rfl
-    have runs : run service (.call op next) s = (do
-        let (reply, state) ← service op s
-        match reply with
-        | none => pure (.unavailable, state)
-        | some v => run service (next v) state) := rfl
-    rw [runs, embed, step]
+    rw [run_call, embed, step]
     simp only [OptionT.run_bind, handlerOf, Option.elimM, StateT.run_bind, map_bind]
     refine bind_congr fun out => ?_
     obtain ⟨reply, state⟩ := out

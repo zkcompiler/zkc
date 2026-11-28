@@ -72,7 +72,15 @@ choices on the final compiler, not an intermediate release description.
   process read as a computation (`ZkcFormal.Reading`) has the judgment as its weakest
   precondition, an instance made from PolyFun's specification of the operations of a free
   monad, with one rule for each effect (`ZkcFormal.Written.FeeRules`), so a triple proved by
-  `vcgen` is a judgment of the process and no engine of our own walks a program. The adapter is
+  `vcgen` is a judgment of the process and no engine of our own walks a program. The computation
+  that a proof walks is the form of the stored program (`ZkcFormal.Form`), and two things about
+  the tools decide how a form is written. `simp` and `rw` compare types without unfolding a
+  definition that is not reducible (Lean's own check is `Meta.check` at `implicit`
+  transparency), so the types of a program's values are reducible down to the plain types and
+  every form is checked at `instances` transparency when it is made. And `vcgen` matches a rule
+  against a program as the two are written: it tells a bare numeral from `OfNat.ofNat` and
+  compares implicit arguments, so the data that the kernel normalizes writes numerals as the
+  elaborator does. The adapter is
   outside the core: the assertion lattice of `Std.WP` depends on `Classical.choice`, and `vcgen`
   is still marked experimental (a proof that calls it sets `experimental.vcgen`). The core's
   theorems do not depend on it. WP is not a replacement for protocol processes, adversarial

@@ -12,19 +12,21 @@ A protocol that applies another is judged by fees without opening the callee, fr
 of the callee: what the callee is given, what it returns, what one run of it costs, and what
 each of its sites needs of the allowance. The contract and what it is for it to hold are
 definitions of the judgment by fees (`Fees.judgment`) and of nothing else: a statement that a
-contract holds reads no generator of proofs and no reading of a program into another form, so a
-library's protocol can publish it as a challenge.
+contract holds reads no generator of proofs, no reading of a program into another form and no
+theorem to a probability (the package audit keeps these modules apart), so a library's protocol
+can publish it as a challenge.
 
 Two numbers stay apart. **The fee** is what one run of the callee is charged at most: a sum
 along a run, with the larger arm of a choice. **The need** of a site is what an occurrence of
 that site may be charged: a bound of one fee. A callee with two arms that each draw once at a
 quarter has a fee of a quarter and needs a quarter at each of its two sites.
 
-`Contract.call` is the rule of a call: at an application, a contract that holds judges the
+The contract is `Fees.Contract`: the core has a contract of a function's values under the name
+`Zkc.Core.Contract`, and a text may open both. `Fees.Contract.call` is the rule of a call: at an application, a contract that holds judges the
 caller, for every rest that is judged from what the fee leaves.
 -/
 
-namespace ZkcFormal.Written
+namespace ZkcFormal.Written.Fees
 open Zkc.Core
 open scoped NNRat
 
@@ -80,4 +82,4 @@ theorem Contract.call (c : Contract M p callee role) {draws : LawDraws M} (holds
     (fun outs left ⟨post, kept⟩ => next outs left post kept) (fun stop left _ => halts stop left)
     _ budget (holds allowance start covers ghost ins pre budget fee)
 
-end ZkcFormal.Written
+end ZkcFormal.Written.Fees
