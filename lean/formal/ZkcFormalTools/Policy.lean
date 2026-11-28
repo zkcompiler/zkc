@@ -6,7 +6,7 @@ namespace ZkcFormalTools
 and their logical declarations are replayed locally. -/
 def policy : Zkc.Tools.Audit.Policy where
   axioms := Zkc.Tools.Audit.allowedAxioms.push ``Classical.choice
-  packages := #[`Mathlib, `VCVio]
+  packages := #[`Mathlib, `VCVio, `PolyFun]
   parts := Zkc.Tools.Audit.compilerParts ++
     #[(`ZkcFormal, .library), (`ZkcFormalTests, .tests), (`ZkcFormalTools, .tools)]
 

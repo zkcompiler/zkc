@@ -2,7 +2,7 @@
 
 Both Lake packages pin **Lean 4.36.0**, the final release at commit
 `611c117bfaf7b7ae1cfcf246ce6fba31e8f509e9`. The compiler package has no external Lake
-dependency; the formal package requires `../compiler`, Mathlib and VCVio. Install the pins through elan and
+dependency; the formal package requires `../compiler`, Mathlib and VCVio (and, through VCVio, PolyFun). Install the pins through elan and
 use the [development commands](development.md). Keep package pins identical and rebuild
 artifacts for the selected compiler; build caches from different Lean versions are incompatible.
 
@@ -68,12 +68,16 @@ choices on the final compiler, not an intermediate release description.
 - **Program logic:** `Std.WP` interprets any program type as a predicate transformer with a
   postcondition for exceptions, and `vcgen` walks a program with the specifications it is given.
   The core's "on every path" of a process is such a transformer and a claim about a definition
-  is its Hoare triple, so proofs about concrete definitions are to be discharged through an
-  adapter to `Std.WP` rather than through an engine of our own. The adapter is outside the
-  core: the assertion lattice of `Std.WP` depends on `Classical.choice`, and `vcgen` is still
-  marked experimental. It states that a triple is a claim of the core, so the core's theorems
-  do not depend on it. WP is not a replacement for protocol processes, adversarial interaction
-  or probabilistic security statements.
+  is its Hoare triple. The formal package has the adapter for the judgment by fees: a role's
+  process read as a computation (`ZkcFormal.Reading`) has the judgment as its weakest
+  precondition, an instance made from PolyFun's specification of the operations of a free
+  monad, with one rule for each effect (`ZkcFormal.Written.FeeRules`), so a triple proved by
+  `vcgen` is a judgment of the process and no engine of our own walks a program. The adapter is
+  outside the core: the assertion lattice of `Std.WP` depends on `Classical.choice`, and `vcgen`
+  is still marked experimental (a proof that calls it sets `experimental.vcgen`). The core's
+  theorems do not depend on it. WP is not a replacement for protocol processes, adversarial
+  interaction or probabilistic security statements: what a bound on a probability means is the
+  value of a process (`ZkcFormal.Value`), and the judgment by fees bounds it.
 - **Evaluation in proofs:** tests decide with `decide +kernel`, which depends on no axiom. The
   `cbv` tactic is an alternative where kernel evaluation of a decision is too slow; its proofs
   depend on `propext` only, which the policy allows.
@@ -88,8 +92,9 @@ choices on the final compiler, not an intermediate release description.
   Semantic fact caches still need their own scope/model/observation dependencies; Lean's
   environment generation is not a version of a zkc program.
 
-There is no new dependency on a mathematics or security library. Future adapters must pin a
-coherent 4.36-compatible dependency graph and preserve the core's import boundary. A package
+The formal package depends on Mathlib and VCVio and imports modules of PolyFun, which is
+VCVio's dependency at VCVio's pin. The three pin a coherent 4.36-compatible dependency graph,
+and the core's import boundary is unchanged: the core imports none of them. A package
 that remains pinned to 4.35 cannot supply `.olean` proofs to this compiler unchanged.
 
 ## Checking an upgrade

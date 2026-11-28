@@ -1,4 +1,4 @@
-import ZkcFormal.ChargedProbability
+import ZkcFormal.ChargedReturn
 import ZkcFormal.OracleProcess
 import ZkcFormal.Written.UniformChallenge
 import ZkcFormal.Written.SiteAllowance
@@ -7,10 +7,10 @@ import ZkcFormal.Written.SiteAllowance
 The judgment with fees meets the probability library on one uniform draw of a field of five
 elements. The process draws once and returns the draw; a bad return is zero.
 
-The hypotheses of the bridge are met by a service that answers: it draws uniformly at the one
-port (`follows`, `permitted`). The process is judged within one fifth (`judged`), so the
-probability of a bad return is at most one fifth (`bounded`); it is one fifth (`attained`), so
-the bound of the bridge is reached. No budget below one fifth judges the process
+The process is judged within one fifth (`judged`), so its value is at most one fifth
+(`value_le`), and so is the probability of a bad return against a service that answers: one
+that draws uniformly at the one port (`follows`, `permitted`, `bounded`). The probability is
+one fifth (`attained`), so the bound is reached. No budget below one fifth judges the process
 (`not_within_less`). The same probability is that of VCVio's simulation of the process by the
 service's handler (`simulation_attained`).
 
@@ -54,13 +54,28 @@ theorem answers_permitted (op : ROp M) (s : Unit) (reply : (RSig M).Reply op) (t
 theorem follows : (serveAt M (port peers at_) draw).Follows (samplers peers at_) :=
   serveAt_follows M (port peers at_) draw
 
+/-- A judgment within a budget bounds the value of the process by the budget. -/
+theorem value_le (budget : ℚ≥0)
+    (within : (ask peers at_).interpret (.charged (Permitted M) (paysBy (samplers peers at_)))
+      (fun a _ => ¬ a = 0) (fun _ _ => True) budget) :
+    Value.value (samplers peers at_) (Permitted M) (fun a => a = 0) (ask peers at_) ≤
+      toProbability budget :=
+  charged_bounds_value (samplers peers at_) (Permitted M) _ (fun _ _ _ paid => paid)
+    (fun a => a = 0) (ask peers at_) budget within
+
+/-- The probability of a bad return against the service is at most the value. -/
+theorem below_value :
+    Pr{let out ← run (serveAt M (port peers at_) draw) (ask peers at_) ()}[
+      ∃ a, out.1 = .returned a ∧ a = 0] ≤
+      Value.value (samplers peers at_) (Permitted M) (fun a => a = 0) (ask peers at_) :=
+  Value.sound _ (samplers peers at_) (Permitted M) (answers_permitted peers at_)
+    (follows peers at_) (ask peers at_) (fun a => a = 0) ()
+
 /-- The probability of a bad return is at most the budget of the judgment. -/
 theorem bounded :
     Pr{let out ← run (serveAt M (port peers at_) draw) (ask peers at_) ()}[
       ∃ a, out.1 = .returned a ∧ a = 0] ≤ 1 / 5 :=
-  (sampled_bounds_probability _ (samplers peers at_) (Permitted M) (fun a => a = 0)
-    (answers_permitted peers at_) (follows peers at_) (ask peers at_) (1 / 5) ()
-    (judged peers at_)).trans fifth.le
+  ((below_value peers at_).trans (value_le peers at_ (1 / 5) (judged peers at_))).trans fifth.le
 
 /-- The bound is reached. -/
 theorem attained :
@@ -86,8 +101,7 @@ theorem not_within_less (budget : ℚ≥0) (below : budget < 1 / 5) :
     ¬ (ask peers at_).interpret (.charged (Permitted M) (paysBy (samplers peers at_)))
       (fun a _ => ¬ a = 0) (fun _ _ => True) budget := by
   intro within
-  have bound := sampled_bounds_probability _ (samplers peers at_) (Permitted M) (fun a => a = 0)
-    (answers_permitted peers at_) (follows peers at_) (ask peers at_) budget () within
+  have bound := (below_value peers at_).trans (value_le peers at_ budget within)
   rw [attained, ← fifth] at bound
   exact absurd (toProbability_le_iff.mp bound) (not_le.mpr below)
 

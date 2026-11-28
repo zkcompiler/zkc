@@ -5,6 +5,12 @@ public import ZkcFormal.Written.GroupReplay
 public import ZkcFormal.Written.FiniteModel
 public import ZkcFormal.ModelComparison
 public import ZkcFormal.ChargedProbability
+public import ZkcFormal.ChargedReturn
+public import ZkcFormal.Value
+public import ZkcFormal.Written.Value
+public import ZkcFormal.Written.Contract
+public import ZkcFormal.Reading
+public import ZkcFormal.Written.FeeRules
 public import ZkcFormal.OracleProcess
 public import ZkcFormal.ReturnExperiment
 public import ZkcFormal.RoleRules

@@ -1,17 +1,19 @@
 module
 
-public import ZkcFormal.Written.Soundness
+public import ZkcFormal.Written.Value
 public import ZkcFormal.Written.Bound
-public import ZkcFormal.Written.SiteCaps
+public import ZkcFormal.Written.Blind
 public import ZkcFormal.ChargedReturn
 
 @[expose] public section
 set_option autoImplicit false
 
-/-! The judgment by fees of a written verifier at a short application: within a table of caps
-and a budget, the installed verifier is judged never to return at a rejected statement. A
-judgment within a budget gives the bound of `Soundness` at that budget, and so at every number
-above it. The statement of soundness does not read this module. -/
+/-! The judgment by fees of a written verifier at a short application: under an allowance of
+occurrences and within a budget, the installed verifier is judged never to return at a rejected
+statement (`JudgedUnder`); a table of caps gives an allowance (`JudgedWithin`). A judgment
+within a budget gives the value of the verifier within that budget (`value_of_judged`), and so
+the bound of `Soundness` at that budget and at every number above it. The statement of
+soundness does not read this module. -/
 
 namespace ZkcFormal.Written.Fees
 
@@ -23,25 +25,46 @@ variable {V : Vocabulary} (M : Model V)
 variable {pkg : Package V} {scheme : WrittenRoot pkg} (app : ShortApplication scheme)
 variable (draws : LawDraws M) (caps : CapTable)
 
-/-- **The fee judgment within a budget.** On every path and every valid verifier input at which
-the short application is rejected, the installed verifier is judged never to return: each fee
-is paid at its site within the table's allowance for that site, and the fees of a run add up to
-at most `budget`. The budget is the judgment's own number; the table bounds each fee. -/
-def JudgedWithin (budget : ℚ≥0) : Prop :=
+/-- **The fee judgment under an allowance, within a budget.** On every path and every valid
+verifier input at which the short application is rejected, the installed verifier is judged by
+fees never to return: each fee is paid within what the allowance gives, from the path, where its
+effect occurs, and the fees of a run add up to at most `budget`. The budget is the judgment's
+own number; the allowance bounds each fee. -/
+def JudgedUnder (allowance : List Frame → Occurrence → ℚ≥0) (budget : ℚ≥0) : Prop :=
   ∀ path : List Frame, inputs M scheme.verifier false scheme.entry.header.ins fun xs ↦
     Soundness.Rejected M app pkg.installed app.relation.member xs →
       (roleMeaning M pkg.installed scheme.entry.member scheme.verifier path xs).interpret
-        (.charged (Permitted M) (paysWithin (lawSamplers M draws) (caps.allowance M path)))
-        (fun _ _ ↦ False) (fun _ _ ↦ True) budget
+        (Fees.judgment draws (allowance path)) (fun _ _ ↦ False) (fun _ _ ↦ True) budget
+
+/-- **The fee judgment within a budget**, under a table of caps: each fee is paid at its site
+within the table's cap for that site. -/
+def JudgedWithin (budget : ℚ≥0) : Prop := JudgedUnder M app draws caps.allowed budget
 
 /-- The fee judgment within the table's own budget, the total of its caps along one run. -/
 def Judged : Prop := JudgedWithin M app draws caps caps.budget
 
-/-- A fee judgment within a budget gives the installed bound at that budget. -/
+/-- **A fee judgment within a budget gives the value within the budget**, under every
+allowance: an allowance only bounds each fee. -/
+theorem value_of_judged {allowance : List Frame → Occurrence → ℚ≥0} {budget : ℚ≥0}
+    (judged : JudgedUnder M app draws allowance budget) :
+    Soundness.ValueWithin M app draws (toProbability budget) :=
+  fun path ↦ mapInputs M _ _ _ _ (fun _ h rejected ↦
+    charged_bounds_value (lawSamplers M draws) (Permitted M)
+      (paysWithin (lawSamplers M draws) fun op ↦ allowance path (ROp.occurrence M op))
+      (fun _ _ _ paid ↦ paid.1) (fun _ ↦ True) _ budget
+      (by simpa [Fees.judgment] using h rejected)) (judged path)
+
+/-- A fee judgment within a budget gives the installed bound at that budget: the value is within
+the budget, and the installed bounds are those at or above the value. -/
+theorem installed_under {allowance : List Frame → Occurrence → ℚ≥0} {budget : ℚ≥0}
+    (judged : JudgedUnder M app draws allowance budget) :
+    Soundness.Installed M app draws (toProbability budget) :=
+  (Soundness.installed_iff M app draws _).mpr (value_of_judged M app draws judged)
+
+/-- A fee judgment within a budget, under a table, gives the installed bound at that budget. -/
 theorem installed_at_budget {budget : ℚ≥0} (judged : JudgedWithin M app draws caps budget) :
     Soundness.Installed M app draws (toProbability budget) :=
-  fun path ↦ mapInputs M _ _ _ _ (fun _ h rejected ↦
-    returnsWithin_of_never _ _ _ _ _ (h rejected)) (judged path)
+  installed_under M app draws judged
 
 /-- **The step of fees to the installed bound**: a fee judgment within a budget that is at most
 the bound. -/
