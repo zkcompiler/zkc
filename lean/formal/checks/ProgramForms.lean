@@ -15,10 +15,11 @@ compares types.
 
 The sources between them have a loop with a carried value (Guess), a choice with a guard in each
 arm (Either), a stepped loop written out as blocks (Steps), two applications of a protocol that
-calls a function (Twice), a vector of scalars drawn and three applications of a function over
-matrices (Freivalds), and the conformance corpus's count of near-zero entries (Count). A
-control has a construct that the walk does not read (a `match` on a variant): its forms are
-refused, and the refusal names the construct.
+calls a function (Twice), a protocol that two callers apply, which has one form (Nested), a
+vector of scalars drawn and three applications of a function over matrices (Freivalds), and the
+conformance corpus's count of near-zero entries (Count). A control has a construct that the
+walk does not read (a `match` on a variant): its forms are refused, and the refusal names the
+construct.
 
 With `ZKC_WORK` naming a folder the check's project is kept there.
 -/
@@ -78,6 +79,26 @@ def twice : String :=
   "spec for Twice:\n    proves @V Holds(claim)\n" ++
   "scheme Checked = Twice:\n    prover P\n    construction interactive\n" ++
   "goal twice = soundness(Checked, stage = written)\n"
+
+/-- A callee that two callers apply: `Pair` applies `Round` twice, and the root applies `Pair`
+twice. Each of `Round` and `Pair` has one form at the verifier's role, whoever applies it. -/
+def nested : String :=
+  "module t\nuse zkc::security::{soundness}\n" ++
+  "relation Holds(claim: bool): claim\n" ++
+  "def same(a: index<8>, b: index<8>) -> bool: a == b\n" ++
+  "protocol Round roles(P, V)(sent: index<8> @P) -> (hit: bool @(P, V), drawn: index<8> @(P, V)):\n" ++
+  "    x <- send sent from P to V\n    r <- draw index<8> from V to P\n" ++
+  "    return (same(r, x), r)\n" ++
+  "spec for Round:\n    charge sites.r <= 1 / 8\n" ++
+  "protocol Pair roles(P, V)(first: index<8> @P, second: index<8> @P) -> (hit: bool @(P, V), last: index<8> @(P, V)):\n" ++
+  "    a <- Round(first)\n    b <- Round(second)\n" ++
+  "    return (a.hit or b.hit, b.drawn)\n" ++
+  "protocol Nested roles(P, V)(claim: bool @(P, V), w: index<8> @P, x: index<8> @P, y: index<8> @P, z: index<8> @P):\n" ++
+  "    p <- Pair(w, x)\n    q <- Pair(y, z)\n" ++
+  "    guard @V claim or p.hit or q.hit\n" ++
+  "spec for Nested:\n    proves @V Holds(claim)\n" ++
+  "scheme Checked = Nested:\n    prover P\n    construction interactive\n" ++
+  "goal nested = soundness(Checked, stage = written)\n"
 
 /-- A source with a choice among the alternatives of a variant, which the walk does not read
 yet: on one side a position is heard and one is drawn, on the other nothing happens. -/
@@ -152,6 +173,8 @@ def run (corpus work : System.FilePath) : IO Unit := do
     ("Steps", stepped, "stepped", [.function 0, .protocol 1 1]),
     ("Twice", twice, "twice",
       [.function 0, .function 1, .protocol 2 1, .protocol 3 1]),
+    ("Nested", nested, "nested",
+      [.function 0, .function 1, .protocol 2 1, .protocol 3 1, .protocol 4 1]),
     ("Freivalds", freivalds, "sound", [.protocol 1 1, .function 2, .function 3]),
     ("Count", count, "loose", [.protocol 1 1, .function 3])]
   for (space, text, goal, rows) in subjects do
