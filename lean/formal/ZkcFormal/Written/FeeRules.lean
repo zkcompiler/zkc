@@ -1,6 +1,6 @@
 module
 
-public import ZkcFormal.Reading
+public import ZkcFormal.Form.Computation
 public import ZkcFormal.Written.Contract
 public import PolyFun.PFunctor.Free.Do
 public import Std.Tactic.Do
@@ -22,15 +22,16 @@ role's own (`coin`) is where a fee is paid: the rule takes the fee and the exclu
 one value of a type that the generator returns as a goal for the user to fill (`DrawChoice`),
 indexed by the occurrence of the coin, so that a tool finds the goal of a draw by where the draw
 occurs. Every other effect, a request to a service among them, excludes nothing and costs
-nothing. A call is judged from a contract of its callee that
-holds (`call`), under the renaming of the callee's roles (`renamed`).
+nothing. A computation without effects is judged by what it returns or how it stops
+(`lifted_option`, `lifted_local`). A call is judged from a contract of its callee that holds
+(`call`), under the renaming of the callee's roles (`renamed_spec`).
 
 The instance is scoped: it is the judgment by fees, and another judgment of the same
 computations (the value, a trace) is another instance.
 -/
 
 namespace ZkcFormal.Written.FeeRules
-open Zkc.Core ProbabilisticProcess Reading Std.WP
+open Zkc.Core ProbabilisticProcess Reading Form Std.WP
 open scoped NNRat
 
 /-- What a condition of the judgment by fees reads: the budget that is left. -/
@@ -156,28 +157,34 @@ one, and every permitted reply goes on with the budget. -/
       (fun left => ∀ reply, Permitted M (ROp.settle (M := M) at_) reply → Q reply left) Q E :=
   free _ _
 
+/-! ## A computation without effects -/
+
+/-- A value or a stop among a role's effects: the value goes on with the budget, and a stop is
+what the judgment asks of a stop. -/
+@[spec] theorem lifted_option {A B : Type} (o : Option A) (f : A → B) (stop : Stop → Stop)
+    (Q : B → Credit) {E} :
+    Triple (liftEmpty (RSig M) stop (optionE o f))
+      (fun left => (∀ a, o = some a → Q (f a) left) ∧ (o = none → E.1 (stop .undefined) left))
+      Q E := by
+  constructor
+  cases o <;> intro left holds
+  · exact holds.2 rfl
+  · exact holds.1 _ rfl
+
+/-- A local process among a role's effects, by what it is: where it returns a value the value
+goes on, and where it stops the judgment's condition on a stop is asked. An equation that says
+what a function of the source computes is used here. -/
+@[spec] theorem lifted_local {A : Type} (p : Local A) (stop : Stop → Stop) (Q : A → Credit) {E} :
+    Triple (liftEmpty (RSig M) stop (read p))
+      (fun left => (∀ a, p = .done a → Q a left) ∧ (∀ why, p = .halt why → E.1 (stop why) left))
+      Q E := by
+  constructor
+  cases p with
+  | done _ => exact fun _ holds => holds.1 _ rfl
+  | halt _ => exact fun _ holds => holds.2 _ rfl
+  | call op => exact nomatch op
+
 /-! ## A call -/
-
-/-- The renaming of a role's effects, as a map of the operations. -/
-def renameLens (M : Model V) (ρ : Role → Role) :
-    PFunctor.Lens (specOf (RSig M)).toPFunctor (specOf (RSig M)).toPFunctor :=
-  ⟨renameOp ρ, fun op => carryReply ρ op id⟩
-
-/-- A computation with the roles of its effects renamed: what a callee's computation is at a
-call. -/
-def renamed {A : Type} (ρ : Role → Role) (form : Comp (RSig M) Stop A) : Comp (RSig M) Stop A :=
-  ExceptT.mk (PFunctor.FreeM.mapLens (renameLens M ρ) form.run)
-
-omit c in
-/-- A process with its roles renamed reads as the reading renamed. -/
-theorem read_mapR {A : Type} (ρ : Role → Role) (p : Program M A) :
-    read (mapR M ρ p) = renamed ρ (read p) := by
-  induction p with
-  | done | halt => rfl
-  | call op next ih =>
-    cases op <;> apply ExceptT.ext <;>
-      change OracleComp.queryBind _ _ = OracleComp.queryBind _ _ <;>
-      congr 1 <;> funext reply <;> exact congrArg ExceptT.run (ih reply)
 
 open Lean.Order in
 /-- The judgment by fees reads no peer: a renamed computation is judged as the computation. -/

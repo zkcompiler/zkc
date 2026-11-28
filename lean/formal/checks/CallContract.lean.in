@@ -117,9 +117,9 @@ theorem judged : t.twice.fees.judged.view := by
 the two applications, with its roles as the root names them, then a stop unless a round hit. -/
 noncomputable def rootForm (path : List Frame) :
     Reading.Comp (RSig model) Stop (HList (RV model verifierRole) []) := do
-  let a ← FeeRules.renamed id (Reading.read (roleMeaning model calleeProgram roundMember verifierRole
+  let a ← Form.renamed id (Reading.read (roleMeaning model calleeProgram roundMember verifierRole
     (path ++ [.application ⟨0⟩]) (.cons () .nil)))
-  let b ← FeeRules.renamed id (Reading.read (roleMeaning model calleeProgram roundMember verifierRole
+  let b ← Form.renamed id (Reading.read (roleMeaning model calleeProgram roundMember verifierRole
     (path ++ [.application ⟨1⟩]) (.cons () .nil)))
   if false || hitOf a || hitOf b then pure .nil else throw (.declared .reject ⟨path, ⟨4⟩⟩)
 
@@ -138,9 +138,9 @@ theorem judgedOnForm : t.twice.fees.judged.view := by
       have first (key : ℕ) :
           Reading.read ((mapR model id (roleMeaning model calleeProgram roundMember verifierRole
             (path ++ [.application ⟨key⟩]) (.cons () .nil))).map id) =
-            FeeRules.renamed id (Reading.read (roleMeaning model calleeProgram roundMember
+            Form.renamed id (Reading.read (roleMeaning model calleeProgram roundMember
               verifierRole (path ++ [.application ⟨key⟩]) (.cons () .nil))) :=
-        (Reading.read_map _ _).trans ((id_map _).trans (FeeRules.read_mapR _ _))
+        (Reading.read_map _ _).trans ((id_map _).trans (Form.read_mapR _ _))
       refine (Reading.read_bind _ _).trans ((congrArg (· >>= _) (first 0)).trans
         (bind_congr fun a => ?_))
       refine (Reading.read_bind _ _).trans ((congrArg (· >>= _) (first 1)).trans
