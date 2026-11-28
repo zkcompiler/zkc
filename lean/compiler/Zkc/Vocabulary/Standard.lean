@@ -170,8 +170,9 @@ theorem decided (key : RowKey) (signature : RowSignature TypeKey RowKey) (domain
       cases hash <;> exact (pure_kind found kind).elim
   | pair => exact (pure_kind found kind).elim
 
-/-- The vocabulary. -/
-def standard : Core.Vocabulary where
+/-- The vocabulary. It is reducible: the types of its keys are `TypeKey`, `RowKey` and `LawKey`
+to a tactic, which compares types without unfolding a definition that is not. -/
+@[reducible] def standard : Core.Vocabulary where
   TypeKey := TypeKey
   RowKey := RowKey
   LawKey := LawKey

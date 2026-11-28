@@ -72,7 +72,11 @@ theorem decided (primitives : PurePrimitives V T R) (key sig domain)
       subst sig
       cases restricted
 
-def vocabulary [DecidableEq T] [DecidableEq R] (primitives : PurePrimitives V T R) : Vocabulary where
+/-- The vocabulary linked with the primitives. It is reducible, so that the types of its keys
+are the types that it names to a tactic, which compares types without unfolding more: a key
+written in a program is then a key of the vocabulary as it stands. -/
+@[reducible] def vocabulary [DecidableEq T] [DecidableEq R] (primitives : PurePrimitives V T R) :
+    Vocabulary where
   TypeKey := Sum V.TypeKey T
   RowKey := Sum V.RowKey R
   LawKey := V.LawKey

@@ -251,7 +251,7 @@ def roleFragment (r : Role) (key : Key) : {ins outs : List (LTy V)} →
     RoleOp V hs r ins outs → List Frame → HList (RV M r) ins →
     Fragment (RSig M) Stop (HList (RV M r) outs)
   | _, _, .compute R o _ types _ here, _, vs =>
-      computed (fun outs => hideAll M r (HList.located M R outs))
+      computed (fun outs => hideLocatedV M r R outs)
         (localFragment M called o (computeArgs M types (revealAll M here vs)))
   | _, _, .absent _ out, _, _ => .value (nothings M out)
   | _, _, .give (τ := τ) (H := H) kind getters here, path, .cons v .nil =>
@@ -272,7 +272,7 @@ def roleFragment (r : Role) (key : Key) : {ins outs : List (LTy V)} →
   | _, _, .apply callee roles distinct _ _ fits, path, vs =>
       let ρ := RoleMap.ofList roles distinct
       Fragment.ready (renamed ρ.to (read (applied callee (ρ.back r) (path ++ [.application key])
-        (enterAll M ρ r (fitAllRV M fits vs)))) >>= fun outs => pure (leaveAll M ρ r outs))
+        (enterAll M ρ r (fitAllRV M fits vs)))) >>= fun outs => pure (leaveAllV M ρ r outs))
 
 variable (sameFunction : ∀ {h : FnHeader V} (m : Member hs.fns h) (vs : HList M.Val h.ins),
     fnTable h m vs = called m vs)
@@ -289,10 +289,10 @@ theorem role_reads (r : Role) (k : Key) {ins outs} (o : RoleOp V hs r ins outs) 
   | keep | give => cases vs with | cons _ tail => cases tail; rfl
   | compute =>
     simp only [roleOp, roleFragment, Process.map_eq_bind, read_bind, read_liftLocal,
-      local_reads M fnTable called sameFunction, read_done, computed_reads]
+      local_reads M fnTable called sameFunction, read_done, ← computed_reads, hideLocatedV_eq]
   | apply callee =>
     simp only [roleOp, roleFragment, Process.map_eq_bind, read_bind, read_mapR, sameProtocol,
-      read_done, Fragment.eval]
+      read_done, Fragment.eval, leaveAllV_eq]
 
 end
 

@@ -180,6 +180,40 @@ theorem read_seqAt {fns : List (FnHeader V)} (table : FnTable M fns) (item : V.T
     | none => Process.halt Stop.undefined) = _
   cases v[i]? <;> rfl
 
+/-! ## The results of a call and of a computation, read by their places
+
+What a callee returns and what a computation without effects gives is one list of values, and
+where it is a variable the core's conversions of it (`leaveAll`, `hideAll` of `HList.located`)
+are stuck. These read the list by its places; each is the core's conversion. -/
+
+/-- What the callee's role has of the results, as what the caller's role has of them. -/
+def leaveAllV (M : Model V) (ρ : RoleMap) (r : Role) : {items : List (LTy V)} →
+    HList (RV M (ρ.back r)) items → HList (RV M r) (items.map (LTy.map ρ.to))
+  | [], _ => .nil
+  | a :: _, vs => .cons (leave M ρ r a (headV vs)) (leaveAllV M ρ r (tailV vs))
+
+theorem leaveAllV_eq (M : Model V) (ρ : RoleMap) (r : Role) : {items : List (LTy V)} →
+    (vs : HList (RV M (ρ.back r)) items) → leaveAllV M ρ r vs = leaveAll M ρ r vs
+  | [], .nil => rfl
+  | a :: _, .cons v rest => by
+    show HList.cons (leave M ρ r a v) (leaveAllV M ρ r rest) =
+      HList.cons (leave M ρ r a v) (leaveAll M ρ r rest)
+    rw [leaveAllV_eq M ρ r rest]
+
+/-- What a role has of the values of a computation, each held by `R`. -/
+def hideLocatedV (M : Model V) (r : Role) (R : Holders) : {outs : List V.Ty} →
+    HList M.Val outs → HList (RV M r) (outs.map fun τ => ⟨τ, R⟩)
+  | [], _ => .nil
+  | τ :: _, vs => .cons (hide M r ⟨τ, R⟩ (headV vs : M.Val τ)) (hideLocatedV M r R (tailV vs))
+
+theorem hideLocatedV_eq (M : Model V) (r : Role) (R : Holders) : {outs : List V.Ty} →
+    (vs : HList M.Val outs) → hideLocatedV M r R vs = hideAll M r (HList.located M R vs)
+  | [], .nil => rfl
+  | τ :: _, .cons v rest => by
+    show HList.cons (hide M r ⟨τ, R⟩ v) (hideLocatedV M r R rest) =
+      HList.cons (hide M r ⟨τ, R⟩ v) (hideAll M r (HList.located M R rest))
+    rw [hideLocatedV_eq M r R rest]
+
 /-! ## A callee's computation at a call -/
 
 /-- The renaming of a role's effects, as a map of the operations. -/

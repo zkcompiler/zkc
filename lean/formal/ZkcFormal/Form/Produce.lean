@@ -95,6 +95,36 @@ def held (role located : Expr) : MetaM Bool := do
   if decided.isConstOf ``Bool.false then return false
   throwError "form: whether the role {role} holds a value of{indentExpr located}\nis not decided"
 
+/-- The elements of a list of types that is written out. -/
+partial def cells (list : Expr) : MetaM (Array Expr) := do
+  if list.isAppOfArity ``List.cons 3 then return #[list.getArg! 1] ++ (← cells (list.getArg! 2))
+  if list.isAppOfArity ``List.nil 1 then return #[]
+  throwError "form: a list of types of the stored syntax is not written out:{indentExpr list}"
+
+/-- A list of values, written out: `index` is the type of the types, `family` what a value of
+a type is, and the values are of the given types. -/
+def written (index family : Expr) (types values : Array Expr) : Expr := Id.run do
+  let mut list := mkApp2 (mkConst ``Zkc.Core.HList.nil) index family
+  let mut rest := mkApp (mkConst ``List.nil [0]) index
+  for i in [0:types.size] do
+    let k := types.size - 1 - i
+    list := mkApp6 (mkConst ``Zkc.Core.HList.cons) index family types[k]! rest values[k]! list
+    rest := mkApp3 (mkConst ``List.cons [0]) index types[k]! rest
+  return list
+
+/-- The first values of a list of values by their places, and the list after them. -/
+def places (list : Expr) (count : Nat) : MetaM (Array Expr × Expr) := do
+  let mut found := #[]
+  let mut rest := list
+  for _ in [0:count] do
+    found := found.push (← mkAppM ``ZkcFormal.Form.headV #[rest])
+    rest ← mkAppM ``ZkcFormal.Form.tailV #[rest]
+  return (found, rest)
+
+/-- A term of the program's data by the kernel's normal form. -/
+def data (e : Expr) : MetaM Expr := do
+  Zkc.Kernel.normal e (← inferType e)
+
 /-- A value: constructors opened to their fields, a place of a list of values that is written
 out taken, what a role has of a value replaced by the value where the role holds it and by
 nothing where it does not, everything else as head reduction leaves it. The kernel decides,
@@ -116,6 +146,34 @@ partial def value (e : Expr) : MetaM Expr := do
   if e.isAppOf ``Zkc.Core.Ty.readLiteral then
     let read ← Zkc.Kernel.whnf e
     return ← if read.isAppOf ``Zkc.Core.Ty.readLiteral then pure read else value read
+  -- the results of a call and of a computation, by their places: on the written list of their
+  -- types, the written list of what the role has of each
+  if e.isAppOfArity ``ZkcFormal.Form.leaveAllV 6 then
+    let args := e.getAppArgs
+    let (V, M, ρ, r) := (args[0]!, args[1]!, args[2]!, args[3]!)
+    let items ← cells (← data args[4]!)
+    let (found, _) ← places (← value args[5]!) items.size
+    let mut types := #[]
+    let mut values := #[]
+    for (a, x) in items.zip found do
+      values := values.push (← value (← mkAppM ``Zkc.Core.leave #[M, ρ, r, a, x]))
+      types := types.push (← data (← mkAppM ``Zkc.Core.LTy.map
+        #[← mkAppM ``Zkc.Core.RoleMap.to #[ρ], a]))
+    return written (mkApp (mkConst ``Zkc.Core.LTy) V) (mkApp3 (mkConst ``Zkc.Core.RV) V M r)
+      types values
+  if e.isAppOfArity ``ZkcFormal.Form.hideLocatedV 6 then
+    let args := e.getAppArgs
+    let (V, M, r, R) := (args[0]!, args[1]!, args[2]!, args[3]!)
+    let outs ← cells (← data args[4]!)
+    let (found, _) ← places (← value args[5]!) outs.size
+    let mut types := #[]
+    let mut values := #[]
+    for (τ, x) in outs.zip found do
+      let located ← data (mkApp3 (mkConst ``Zkc.Core.LTy.mk) V τ R)
+      values := values.push (← value (← mkAppM ``Zkc.Core.hide #[M, r, located, x]))
+      types := types.push located
+    return written (mkApp (mkConst ``Zkc.Core.LTy) V) (mkApp3 (mkConst ``Zkc.Core.RV) V M r)
+      types values
   let e ← head e
   let unit := mkConst ``Unit.unit
   if e.isAppOfArity ``Zkc.Core.hide 5 then
@@ -172,36 +230,111 @@ def at_ (places : List Nat) (how : Expr → MetaM Expr) (args : Array Expr) :
 def member (e : Expr) : MetaM Expr := do
   Zkc.Kernel.normal e (← inferType e)
 
-/-- The computation of one operation, reduced: a small term. -/
-partial def small (e : Expr) : MetaM Expr := do
+/-- **A called definition as a name.** The member of the program that a call names is declared
+once, under `space`, by its kind and the key of its header, at the type that the call states
+for it and with the kernel's normal form as its value. A member that is written out is a member
+of a list of headers that is written out, which is the program's list only by unfolding the
+program: a tactic would not accept it in the call's place. The name is also what a contract of
+the callee is stated at, whoever applies it. -/
+def named (space : Lean.Name) (kind : String) (keyOf : Lean.Name) (header called : Expr) :
+    MetaM Expr := do
+  let type ← inferType called
+  if type.hasFVar || type.hasMVar then return ← member called
+  let number ← whnfD (← mkAppM ``Zkc.Core.Key.number #[← mkAppM keyOf #[header]])
+  let some n := number.rawNatLit? <|> number.nat?
+    | throwError "form: the key of a called definition is not a number:{indentExpr number}"
+  let name := space ++ Lean.Name.mkSimple s!"{kind}{n}"
+  unless (← getEnv).contains name do
+    withOptions (·.setBool `Elab.async false) do
+      addDecl (.defnDecl {
+        name, levelParams := [], type, value := ← member called
+        hints := .regular 0, safety := .safe })
+  return mkConst name
+
+/-- A list of values that is written out, with what a value of a type is stated anew. -/
+partial def restated (family list : Expr) : Expr :=
+  if list.isAppOfArity ``Zkc.Core.HList.cons 6 then
+    mkApp6 list.getAppFn (list.getArg! 0) family (list.getArg! 2) (list.getArg! 3)
+      (list.getArg! 4) (restated family (list.getArg! 5))
+  else if list.isAppOfArity ``Zkc.Core.HList.nil 2 then
+    mkApp2 list.getAppFn (list.getArg! 0) family
+  else list
+
+/-- A role as its number, where the program decides it. -/
+def roleNumber (role : Expr) : MetaM Expr := do
+  let reduced ← whnfD role
+  match reduced.rawNatLit? <|> reduced.nat? with
+  | some n => return mkRawNatLit n
+  | none => return role
+
+/-- A term with the role that a role is in a callee written as its number, in every place:
+what a role has of a value is a type that a tactic computes at a number, and not at a role map
+applied to a role. -/
+def calleeRoles (e : Expr) : MetaM Expr :=
+  Meta.transform e (pre := fun part => do
+    if part.isAppOf ``Zkc.Core.RoleMap.back && !part.hasLooseBVars then
+      let number ← roleNumber part
+      if number.isRawNatLit then return .done number
+    return .continue)
+
+/-- The computation of one operation, reduced: a small term. A called definition is named under
+`space`. -/
+partial def reduced (space : Lean.Name) (e : Expr) : MetaM Expr := do
+  let small := reduced space
   let e ← head e
   if e.isLambda then
     return ← lambdaTelescope e fun xs body => do mkLambdaFVars xs (← small body)
   let args := e.getAppArgs
   let n := args.size
   let rebuilt (args : Array Expr) := mkAppN e.getAppFn args
-  if e.isAppOfArity ``Bind.bind 6 then return rebuilt (← at_ [4, 5] small args)
-  if e.isAppOfArity ``Pure.pure 4 then return rebuilt (← at_ [3] value args)
+  -- The type arguments of a bind and of a `pure` are read again from their reduced parts: a
+  -- result that was a conversion of a list is now the list written out, and its type is the
+  -- written one, not the type that the conversion states.
+  if e.isAppOfArity ``Bind.bind 6 then
+    let first ← small args[4]!
+    let gives := (← inferType first).appArg!
+    let next ← head args[5]!
+    unless next.isLambda do
+      return rebuilt ((args.set! 4 first).set! 2 gives)
+    return ← withLocalDeclD next.bindingName! gives fun given => do
+      let after ← small (next.bindingBody!.instantiate1 given)
+      let ends := (← inferType after).appArg!
+      return rebuilt #[args[0]!, args[1]!, gives, ends, first, ← mkLambdaFVars #[given] after]
+  if e.isAppOfArity ``Pure.pure 4 then
+    let given ← value args[3]!
+    return rebuilt #[args[0]!, args[1]!, ← inferType given, given]
   if e.isAppOf ``MonadExcept.throw || e.isAppOf ``throw then
     return rebuilt (← at_ [n - 1] value args)
   if e.isAppOf ``ZkcFormal.Reading.ask then return rebuilt (← at_ [n - 1] value args)
-  if e.isAppOf ``ZkcFormal.Form.renamed then return rebuilt (← at_ [n - 1] small args)
-  if e.isAppOf ``ZkcFormal.Form.liftEmpty then return rebuilt (← at_ [n - 1] small args)
+  if e.isAppOf ``ZkcFormal.Form.renamed then
+    return ← mkAppM ``ZkcFormal.Form.renamed #[args[n - 2]!, ← small args[n - 1]!]
+  if e.isAppOf ``ZkcFormal.Form.liftEmpty then
+    return ← mkAppM ``ZkcFormal.Form.liftEmpty #[args[n - 3]!, args[n - 2]!, ← small args[n - 1]!]
   if e.isAppOf ``ZkcFormal.Form.optionE then return rebuilt (← at_ [n - 2] value args)
   if e.isAppOf ``ZkcFormal.Reading.read then
     -- a called definition: its member of the program by the kernel, its arguments as values
     let called ← whnfCore args.back!
     let parts := called.getAppArgs
     if called.isAppOfArity ``Zkc.Core.roleMeaning 8 then
-      let parts ← at_ [6, 7] value (← at_ [4] member parts)
-      return rebuilt (args.set! (n - 1) (mkAppN called.getAppFn parts))
+      let callee ← named space "protocol" ``Zkc.Core.ProtocolHeader.key parts[3]! parts[4]!
+      let parts ← at_ [6, 7] value (← at_ [5] roleNumber (parts.set! 4 callee))
+      -- the callee's inputs are what its role has of each: stated at the role's number, as
+      -- the callee's own meaning states them, and not at the role map applied
+      let has := mkApp3 (mkConst ``Zkc.Core.RV) parts[0]! parts[1]! parts[5]!
+      let parts := parts.set! 7 (restated has parts[7]!)
+      return ← mkAppM ``ZkcFormal.Reading.read #[mkAppN called.getAppFn parts]
     if called.isAppOfArity ``Zkc.Core.fnMeaning 6 then
-      let parts ← at_ [5] value (← at_ [4] member parts)
-      return rebuilt (args.set! (n - 1) (mkAppN called.getAppFn parts))
+      let callee ← named space "function" ``Zkc.Core.FnHeader.key parts[3]! parts[4]!
+      let parts ← at_ [5] value (parts.set! 4 callee)
+      return ← mkAppM ``ZkcFormal.Reading.read #[mkAppN called.getAppFn parts]
     if called.isLambda || called.getAppFn.isLambda then
       throwError "form: a called definition that the walk does not reach:{indentExpr called}"
     return e
   throwError "form: the walk does not know this computation of an operation:{indentExpr e}"
+
+/-- The computation of one operation, reduced, with the roles of its callees as numbers. -/
+def small (space : Lean.Name) (e : Expr) : MetaM Expr := do
+  calleeRoles (← reduced space e)
 
 /-! ## The walk
 
@@ -213,6 +346,8 @@ on the values of its operands, a condition, a count. -/
 /-- What the walk is given once: the semantics, its operations, the monad of the computation,
 the type of a stop, and the values of a type. -/
 structure Setting where
+  /-- The name under which the called definitions are named. -/
+  space : Lean.Name
   semantics : Expr
   operations : Expr
   monad : Expr
@@ -233,33 +368,9 @@ partial def Setting.types (setting : Setting) (list : Expr) : Expr :=
   else if list.isAppOfArity ``List.nil 1 then mkApp list.getAppFn setting.index
   else list
 
-/-- The elements of a list of types that is written out. -/
-partial def cells (list : Expr) : MetaM (Array Expr) := do
-  if list.isAppOfArity ``List.cons 3 then return #[list.getArg! 1] ++ (← cells (list.getArg! 2))
-  if list.isAppOfArity ``List.nil 1 then return #[]
-  throwError "form: a list of types of the stored syntax is not written out:{indentExpr list}"
-
-/-- A list of values, written out: `family` is what a value of a type is, and the values are of
-the given types. -/
+/-- A list of values, written out, at the setting's type of types. -/
 def Setting.written (setting : Setting) (family : Expr) (types values : Array Expr) : Expr :=
-  Id.run do
-    let mut list := mkApp2 (mkConst ``Zkc.Core.HList.nil) setting.index family
-    let mut rest := mkApp (mkConst ``List.nil [0]) setting.index
-    for i in [0:types.size] do
-      let k := types.size - 1 - i
-      list := mkApp6 (mkConst ``Zkc.Core.HList.cons) setting.index family types[k]! rest
-        values[k]! list
-      rest := mkApp3 (mkConst ``List.cons [0]) setting.index types[k]! rest
-    return list
-
-/-- The first values of a list of values by their places, and the list after them. -/
-def places (list : Expr) (count : Nat) : MetaM (Array Expr × Expr) := do
-  let mut found := #[]
-  let mut rest := list
-  for _ in [0:count] do
-    found := found.push (← mkAppM ``ZkcFormal.Form.headV #[rest])
-    rest ← mkAppM ``ZkcFormal.Form.tailV #[rest]
-  return (found, rest)
+  ZkcFormal.Form.Produce.written setting.index family types values
 
 /-- The type of a list of values of the given types. -/
 def Setting.list (setting : Setting) (types : Expr) : Expr :=
@@ -448,12 +559,12 @@ partial def instr (setting : Setting) (key i mid path : Expr) (scope : Scope) : 
     let operands ← lookups setting scope (i.getArg! 5)
     let piece ← fragment (mkAppN setting.operations
       #[i.getArg! 2, i.getArg! 3, key, i.getArg! 4, path, operands])
-    if piece.isAppOfArity ``ZkcFormal.Form.Fragment.ready 4 then return .ready (← small piece.appArg!)
+    if piece.isAppOfArity ``ZkcFormal.Form.Fragment.ready 4 then return .ready (← small setting.space piece.appArg!)
     if piece.isAppOfArity ``ZkcFormal.Form.Fragment.value 4 then return .value (← value piece.appArg!)
     if piece.isAppOfArity ``ZkcFormal.Form.Fragment.action 6 then
       -- the reply's type as the reduced query spells it, not as the fragment states it: the
       -- fragment states it over operands that are not yet values
-      let query ← small (piece.getArg! 4)
+      let query ← small setting.space (piece.getArg! 4)
       return .action query (← returns query) (piece.getArg! 5)
     throwError "form: an operation's computation is no fragment:{indentExpr piece}"
   if i.isAppOfArity ``Zkc.Core.Instr.guard 7 then
@@ -564,6 +675,7 @@ def formOf (theorem_ : Expr) (formName : Lean.Name) : MetaM (Expr × Expr × Exp
       | throwError "form: the semantics is not a definition:{indentExpr semantics}"
     let values ← whnfCore (.proj ``Zkc.Core.Semantics 0 (← whnfCore record))
     let setting : Setting := {
+      space := formName.getPrefix
       semantics, operations, monad, values
       stop := monad.getArg! 0
       index := (← whnfR (← inferType values)).bindingDomain!
@@ -589,12 +701,29 @@ def formOf (theorem_ : Expr) (formName : Lean.Name) : MetaM (Expr × Expr × Exp
         ← mkForallFVars xs (← mkEq lhs (mkAppN (mkConst formName) xs)),
         ← mkLambdaFVars xs (mkAppN theorem_ xs))
 
+/-- A term with every proof in it replaced by an unproved one of the same statement. -/
+def withoutProofs (e : Expr) : MetaM Expr :=
+  Meta.transform e (pre := fun part => do
+    -- an unproved statement that is not marked as made by an error: Lean does not show a
+    -- message that holds one that is
+    if ← isProof part then return .done (← mkSorry (← inferType part) false)
+    return .continue)
+
 /-- Declare the form of a definition and its equation: `<name>.form` and `<name>.reads`. The
 form's type is the type of the reading that it equals, with the lists of types written out. -/
 def declare (name : Lean.Name) (theorem_ : Expr) : MetaM Unit := do
   let formName := name ++ `form
   let readsName := name ++ `reads
   let (value, formType, claim, proof) ← formOf theorem_ formName
+  -- A form is for tactics, and `simp` and `rw` compare types without unfolding a definition
+  -- that is not reducible. The kernel would accept a form whose values fit their places only
+  -- by such unfolding; a tactic would not rewrite in it. So the form is checked as a tactic
+  -- checks a term, before the kernel sees it. A proof that the stored program holds (that the
+  -- roles of a call are distinct) is by evaluation, and no tactic reads inside it.
+  try Meta.check (← withoutProofs value) .instances
+  catch refusal =>
+    throwError "form: the form of {name} is not type-correct as a tactic compares types \
+      (without unfolding a definition that is not reducible):{indentD refusal.toMessageData}"
   -- the kernel checks the two declarations here, so that a refusal is this command's
   withOptions (·.setBool `Elab.async false) do
   addDecl (.defnDecl {
