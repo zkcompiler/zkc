@@ -12,6 +12,7 @@ public import ZkcFormal.Written.Contract
 public import ZkcFormal.Reading
 public import ZkcFormal.Form.Computation
 public import ZkcFormal.Form.Denotation
+public import ZkcFormal.Form.Produce
 public import ZkcFormal.Written.FeeRules
 public import ZkcFormal.OracleProcess
 public import ZkcFormal.ReturnExperiment
