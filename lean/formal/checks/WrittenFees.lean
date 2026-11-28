@@ -23,6 +23,11 @@ Sources. The first three are judged by the comparator; the fourth's text is refu
   the guess, within the cap that the judgment's term reads from the table, and the proof is
   judged. Over the source with a cap of one quarter the same text is refused at the budget and
   at the draw's allowance.
+* The same verifier by the rules of the judgment on a reading (`ZkcFormal.Written.FeeRules`):
+  its computation written out by hand, the triple proved by Lean's `vcgen`, the choice at the
+  draw given where the generator asks for it, at a type that names the draw's occurrence; the
+  pair is judged. With the choice stated at another occurrence the draw's goal stays open and
+  the text is refused.
 
 Rows that the issuer does not print, built as typed rows over the first subject's root, clauses
 and origins:
@@ -51,13 +56,14 @@ open ZkcFormalTests ZkcFormalTests.WrittenSubject
 namespace WrittenFees
 
 /-- What the issuer publishes for the goals of a source, in the name space `space`. -/
-def publicationOf (text : String) (goals : List String) (space : String) : IO Publication := do
+def publicationOf (text : String) (goals : List String) (space : String)
+    (imports : List String := []) : IO Publication := do
   let assembly ← Driver.assembleFiles ⟨"source.zkc", Syntax.parseString "source.zkc" text⟩
     ["../../libraries"]
   let some first := goals.head? | throw (IO.userError "no goal")
   let root ← IO.ofExcept (admitSoundnessGoal assembly first)
   let claims ← IO.ofExcept (goalClaims root goals)
-  let issued ← IO.ofExcept ((⟨claims⟩ : Statements).publication space)
+  let issued ← IO.ofExcept ((⟨claims⟩ : Statements).publication space imports)
   unless issued.refusals.isEmpty do throw (IO.userError s!"{issued.refusals}")
   return issued
 
@@ -130,12 +136,69 @@ def payingJudgment : String :=
   "      rw [unequal]\n" ++
   "      exact True.intro\n"
 
+/-- The paying verifier's computation on the rejected input, written out by hand as a computation
+that may stop: a message heard, a bit drawn, and a stop unless the bit is the message. -/
+def payingForm : String :=
+  "open scoped ZkcFormal.Written.FeeRules\n\n" ++
+  "noncomputable def form (path : List Frame) :\n" ++
+  "    Reading.Comp (RSig model) Stop (HList (RV model verifierRole) []) := do\n" ++
+  "  let g ← Reading.ask (RSig model) Stop (.get .message 0 ⟨path, ⟨0⟩⟩ (.fin 2))\n" ++
+  "  let r ← Reading.ask (RSig model) Stop\n" ++
+  "    (.own (.coin (.uniform (.fin 2))) [0] ⟨path, ⟨1⟩⟩ [] .nil (.fin 2))\n" ++
+  "  if Nat.beq r g then pure .nil else throw (.declared .reject ⟨path, ⟨6⟩⟩)\n\n"
+
+/-- The paying verifier's judgment by the rules of the judgment on a reading: the verifier's
+process is the process of the written computation (`reads`), and the computation's triple is
+proved by Lean's `vcgen` with the rule of each effect. The generator asks for one thing, the
+choice at the draw, as a goal whose type names the draw's occurrence (`key`, the key of the
+draw in that type): a fee of one half for the one reply that is the message. Three conditions
+are left: the fee is within the budget, it pays for that reply within the cap that the table
+gives the occurrence, and after every other reply the verifier stops. -/
+def payingByRules (key : Nat := 1) : String :=
+  "  cases input_claim with\n" ++
+  "  | true => exact False.elim (rejected (relationValue true))\n" ++
+  "  | false =>\n" ++
+  "    have shape : roleMeaning model installed rootMember verifierRole path\n" ++
+  "        (.cons () (.cons false .nil)) =\n" ++
+  "        .call (.get .message 0 ⟨path, ⟨0⟩⟩ (.fin 2)) (fun g ↦\n" ++
+  "          .call (.own (.coin (.uniform (.fin 2))) [0] ⟨path, ⟨1⟩⟩ [] .nil (.fin 2)) (fun r ↦\n" ++
+  "            Process.bind (A := HList (RV model verifierRole) [])\n" ++
+  "              (cond (Nat.beq r g) (Process.done HList.nil) (Process.halt (.declared .reject ⟨path, ⟨6⟩⟩)))\n" ++
+  "              fun _ ↦ .done .nil)) := by kernel_rfl\n" ++
+  "    rw [shape]\n" ++
+  "    let context : FeeRules.Context model := ⟨StandardInterpretation.draws, written'caps0.allowed path⟩\n" ++
+  "    refine FeeRules.judged_of_triple context _ (form path) ?reads _ _ FeeRules.stopped ?proved\n" ++
+  "    case reads =>\n" ++
+  "      refine (Reading.read_call _ _).trans (bind_congr fun g => (Reading.read_call _ _).trans\n" ++
+  "        (bind_congr fun r => ?_))\n" ++
+  "      cases Nat.beq r g <;> rfl\n" ++
+  "    case proved =>\n" ++
+  "      vcgen [form] invariants\n" ++
+  s!"      | inv1 => (⟨1 / 2, fun r => r = g⟩ : FeeRules.DrawChoice ⟨path, ⟨{key}⟩⟩ ℕ)\n" ++
+  "      case vc1 => assumption\n" ++
+  "      case vc2 =>\n" ++
+  "        refine ⟨Or.inr ⟨_, rfl, ?_⟩, ?_⟩\n" ++
+  "        · show Pr{let x ← drawPosition 1}[x = g] ≤ toProbability (1 / 2)\n" ++
+  "          rw [prEvent_drawPosition, show (1 / 2 : ℚ≥0) = ((1 : ℕ) : ℚ≥0) / ((1 + 1 : ℕ) : ℚ≥0) by norm_num,\n" ++
+  "            toProbability_natCast_div 1 (1 + 1) (Nat.succ_pos 1)]\n" ++
+  "          have few : ({x : Fin (1 + 1) | (x : ℕ) = g} : Finset (Fin (1 + 1))).card ≤ 1 :=\n" ++
+  "            Finset.card_le_one.mpr fun a ha b hb =>\n" ++
+  "              Fin.ext ((Finset.mem_filter.mp ha).2.trans (Finset.mem_filter.mp hb).2.symm)\n" ++
+  "          push_cast\n" ++
+  "          calc _ ≤ (1 : ℝ≥0∞) / (1 + 1) := ENNReal.div_le_div_right (by exact_mod_cast few) _\n" ++
+  "            _ = 1 / 2 := by norm_num\n" ++
+  "        · show (1 / 2 : ℚ≥0) ≤ written'caps0.allowed path ⟨path, ⟨1⟩⟩\n" ++
+  "          rw [CapTable.allowed_here]\n" ++
+  "          decide +kernel\n" ++
+  "      case vc3 r _ different equal => exact different (Nat.eq_of_beq_eq_true equal)\n"
+
 /-- An author's text for the goal at `path` of the subject `subject`: the judgment by fees proved
-on its declared view, and the two published theorems through the declared steps. -/
-def authorText (subject path judgment : String) : String :=
+on its declared view, and the two published theorems through the declared steps. `before` is what
+the text declares ahead of the judgment, and `option` an option of the judgment's proof. -/
+def authorText (subject path judgment : String) (before := "") (option := "") : String :=
   "theorem relationValue (x : Bool) :\n" ++
   "    functionResult (t := .bool) (fnMeaning model installed member'fn0 (.cons x .nil)) = some x := by\n" ++
-  "  kernel_rfl\n\n" ++
+  "  kernel_rfl\n\n" ++ before ++ option ++
   s!"theorem judged : {path}.fees.judged.view := by\n" ++
   "  intro path input_claim valid_input_claim rejected\n" ++ judgment ++ "\n" ++
   s!"theorem {path}.sound : published% {subject} {path} sound :=\n" ++
@@ -228,8 +291,9 @@ def run (work : System.FilePath) : IO Unit := do
     String.join (imports.map (s!"import {·}\n")) ++ s!"\n{before}{name} {subject}\n"
   -- a source as the issuer publishes it (the data module, the challenge, the views and the fees
   -- module), with the author's text in the issuer's frame, judged
-  let sourced (space text judgment : String) (judged := true) : IO Unit := do
-    let issued ← publicationOf text ["loose"] space
+  let sourced (space text judgment : String) (judged := true) (imports : List String := [])
+      (before := "") (option := "") : IO Unit := do
+    let issued ← publicationOf text ["loose"] space imports
     add (toString issued.dataName) issued.data .statements
     add s!"{space}Shape" (WrittenSubject.shapeControl issued.dataName space) .statements
     add (toString issued.challengeName) issued.challenge .challenge
@@ -237,7 +301,7 @@ def run (work : System.FilePath) : IO Unit := do
     add (toString issued.feesName) issued.fees .statements
     add s!"{space}Facts" (factsOf s!"{space}.Fees" s!"{space}.{path}.fees" ++
       s!"#check @{space}.{path}.fees.budget\n#check @{space}.{path}.fees.installed_of_judged\n") .statements
-    add s!"{space}.Proof" (issued.proof (authorText "written'subject" path judgment)) .module
+    add s!"{space}.Proof" (issued.proof (authorText "written'subject" path judgment before option)) .module
     unless issued.published == [s!"{space}.{path}.sound".toName, s!"{space}.{path}.met".toName] do
       throw (IO.userError s!"{space}: the issuer's published theorems are {issued.published}")
     if judged then
@@ -249,6 +313,14 @@ def run (work : System.FilePath) : IO Unit := do
   sourced "Paying" (payingSource "1 / 2") payingJudgment
   -- the same text over the source with a cap of one quarter: its fee of one half is above the cap
   sourced "Exchanged" (payingSource "1 / 4") payingJudgment (judged := false)
+  -- the paying verifier again, by the rules of the judgment on a reading and Lean's generator;
+  -- and with the draw's choice stated at the occurrence of the message, where no draw is
+  let rules := ["ZkcFormal.Written.FeeRules"]
+  let generator := "set_option experimental.vcgen true in\n"
+  sourced "Ruled" (payingSource "1 / 2") (payingByRules 1) (imports := rules) (before := payingForm)
+    (option := generator)
+  sourced "Misplaced" (payingSource "1 / 2") (payingByRules 0) (judged := false) (imports := rules)
+    (before := payingForm) (option := generator)
   -- the judgment's view, read by name and type from a second reading of the source
   let rows ← ViewRows.expectedRows source "loose" false
   add "AtBoundReads" (ViewRows.reader ["AtBound.Fees"]
@@ -285,7 +357,8 @@ def run (work : System.FilePath) : IO Unit := do
   add "PrintScoped" (printAll "Scoped.Fees") .statements
   add "ScopedFacts" (factsOf "Scoped.Fees" s!"AtBound.{path}.fees") .statements
   -- what Lean says
-  let accepted := ["AtBoundShape", "BelowShape", "PayingShape", "ExchangedShape", "AtBound.Fees", "AtBoundFacts", "AtBoundReads", "Below.Fees", "BelowFacts", "Paying.Fees",
+  let accepted := ["AtBoundShape", "BelowShape", "PayingShape", "ExchangedShape", "RuledShape", "MisplacedShape",
+    "Ruled.Fees", "RuledFacts", "Misplaced.Fees", "MisplacedFacts", "AtBound.Fees", "AtBoundFacts", "AtBoundReads", "Below.Fees", "BelowFacts", "Paying.Fees",
     "PayingFacts", "Exchanged.Fees", "ExchangedFacts", "Rows.Views", "Rows.Fees", "Rows.Challenge", "Scoped.Fees", "ScopedFacts",
     "PrintPlain", "PrintScoped"] ++ typed.map (s!"Rows{·}Facts")
   for name in accepted do
@@ -357,13 +430,20 @@ def run (work : System.FilePath) : IO Unit := do
     throw (IO.userError "the scope around the command changed a fee fact's term")
   IO.println "PrintPlain = PrintScoped: the six fee facts' terms (pp.all) are the same with the caller's scope around the command"
   -- the authors' texts: judged where the facts are and the fee is within its cap
-  for space in ["AtBound", "Below", "Paying"] do
+  for space in ["AtBound", "Below", "Paying", "Ruled"] do
     let (ok, output) ← result s!"{space}.Proof"
     unless ok do throw (IO.userError s!"{space}: Lean refused the author's text\n{output}")
     let (verdict, words) ← SubjectProject.judge project space
     unless verdict == .accepted do
       throw (IO.userError s!"{space}: the proof through the fee facts was not accepted\n{words}")
     IO.println s!"{space}: judgment {verdict.word}"
+  let (ok, output) ← result "Misplaced.Proof"
+  if ok then throw (IO.userError "a draw's choice stated at another occurrence was accepted")
+  -- Lean's generator does not say that the choice does not fit: it leaves the draw's goal open,
+  -- and the first condition that reads the choice is not proved
+  unless output.contains "FeeRules.DrawChoice.fee ?inv1 ≤" do
+    throw (IO.userError s!"the misplaced choice is not refused with the draw's goal left open\n{output}")
+  IO.println "Misplaced.Proof: refused (a choice stated at another occurrence does not fill the draw's goal)"
   let (ok, output) ← result "Exchanged.Proof"
   expectErrorsAt "a fee of one half paid at a draw whose cap is one quarter" ok output
     ["Tactic `decide` failed", "Tactic `decide` failed"]

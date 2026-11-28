@@ -77,6 +77,20 @@ abbrev _root_.Zkc.Subject.CapTable.allowed (table : CapTable) (start : List Fram
     (at_ : Occurrence) : ℚ≥0 :=
   table.allowedFrom table.root start at_
 
+/-- **What a table allows at an occurrence.** An occurrence at the start's path and a rest is
+allowed the cap of the site with the applications of the rest: under iterations alone, the cap
+of the use's own draw, whatever their numbers. -/
+theorem _root_.Zkc.Subject.CapTable.allowedFrom_at (table : CapTable) (place : Nat)
+    (start rest : List Frame) (key : Key) :
+    table.allowedFrom place start ⟨start ++ rest, key⟩ =
+      table.capFrom place (Frame.applications rest) key := by
+  simp [CapTable.allowedFrom, Occurrence.siteBelow_append]
+
+/-- At the start's own path a table allows the cap of the root's draw. -/
+theorem _root_.Zkc.Subject.CapTable.allowed_here (table : CapTable) (start : List Frame)
+    (key : Key) : table.allowed start ⟨start, key⟩ = table.capFrom table.root [] key := by
+  simpa [Frame.applications] using table.allowedFrom_at table.root start [] key
+
 /-- What a table allows an effect of a run of the use at `place` that starts at `start`: what it
 allows where the effect occurs. -/
 def _root_.Zkc.Subject.CapTable.allowanceFrom {V : Vocabulary} (M : Model V)
@@ -95,7 +109,7 @@ theorem _root_.Zkc.Subject.CapTable.allowanceFrom_at {V : Vocabulary} (M : Model
     (table : CapTable) (place : Nat) (start rest : List Frame) (key : Key) (op : ROp M)
     (occurs : ROp.occurrence M op = ⟨start ++ rest, key⟩) :
     table.allowanceFrom M place start op = table.capFrom place (Frame.applications rest) key := by
-  simp [CapTable.allowanceFrom, CapTable.allowedFrom, occurs, Occurrence.siteBelow_append]
+  rw [CapTable.allowanceFrom, occurs, CapTable.allowedFrom_at]
 
 /-- The total of a table, as a probability. -/
 noncomputable def _root_.Zkc.Subject.CapTable.total (table : CapTable) : ℝ≥0∞ :=
