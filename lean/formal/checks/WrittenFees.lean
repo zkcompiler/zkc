@@ -162,7 +162,7 @@ verifier stops. -/
 def payingContract (key : Nat := 1) : String :=
   "/-- The verifier of the root as a callee: on a claim that is not set it never returns, for a fee\n" ++
   "of one half, which its one draw needs. -/\n" ++
-  "noncomputable def checkContract : Contract model installed rootMember verifierRole where\n" ++
+  "noncomputable def checkContract : Fees.Contract model installed rootMember verifierRole where\n" ++
   "  Ghost := Unit\n" ++
   "  pre _ ins := ins = .cons () (.cons false .nil)\n" ++
   "  post _ _ _ := False\n" ++

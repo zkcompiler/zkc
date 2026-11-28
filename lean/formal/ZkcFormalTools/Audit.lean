@@ -26,14 +26,15 @@ def feeModules : Array Lean.Name := #[`ZkcFormal.ChargedJudgment, `ZkcFormal.Cha
 /-- What the formal library keeps apart. The value of a process and its reading are what a
 statement of soundness means and what every method of proof reads: they import nothing of the
 judgment by fees. What a contract of a call says is a statement that a library's protocol
-publishes: it imports neither the rules for the generator of proofs nor a theorem from the
-judgment to a probability. -/
+publishes: it imports neither the rules for the generator of proofs, nor the reading of a
+process as a computation, nor a theorem from the judgment to a probability. -/
 def formalApart : Array Apart := #[
   { above := #[`ZkcFormal.Value, `ZkcFormal.Written.Value, `ZkcFormal.Reading], below := feeModules
     because := "the value of a process and its reading do not read the judgment by fees" },
   { above := #[`ZkcFormal.Written.Contract]
-    below := #[`ZkcFormal.Written.FeeRules, `ZkcFormal.ChargedReturn, `ZkcFormal.Value]
-    because := "what a contract of a call says reads no rule of a generator and no theorem to a probability" }]
+    below := #[`ZkcFormal.Written.FeeRules, `ZkcFormal.Reading, `ZkcFormal.ChargedReturn,
+      `ZkcFormal.Value]
+    because := "what a contract of a call says reads no rule of a generator, no reading of a program and no theorem to a probability" }]
 
 /-- The dependencies available to the formal semantics, for ordinary and meta imports. -/
 def formalLibrary (directory : System.FilePath) : Library :=

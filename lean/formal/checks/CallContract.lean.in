@@ -43,7 +43,7 @@ noncomputable def roundForm (start : List Frame) :
 
 /-- One contract of the round: it returns no hit, for a fee of one quarter, which its draw
 needs. -/
-noncomputable def roundContract : Contract model calleeProgram roundMember verifierRole where
+noncomputable def roundContract : Fees.Contract model calleeProgram roundMember verifierRole where
   Ghost := Unit
   pre _ _ := True
   post _ _ outs := hitOf outs = false

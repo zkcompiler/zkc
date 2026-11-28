@@ -11,8 +11,9 @@ The value of a process.
 At an effect with a sampler the value is the mean of the continuation's value under the sampler,
 over the allowed replies (0 at the others); at an effect without one it is the supremum over
 the allowed replies; at a return it is 1 on the event `bad` and 0 off it; at a halt 0. It is
-what the best conforming service makes of the process: the party that answers the effects
-without a sampler hears every reply before it answers.
+the supremum of what a conforming service makes of the process: the party that answers the
+effects without a sampler hears every reply before it answers. The supremum need not be
+attained (an effect without a sampler may have infinitely many replies).
 
 - `sound`: every service that draws as the samplers do and answers only what is allowed
   returns a value of `bad` with probability at most the value.
@@ -21,8 +22,8 @@ without a sampler hears every reply before it answers.
 - `returnsWithin_iff`: the experiment of a bound on returns holds at a limit exactly when the
   value is at most the limit. So a statement of soundness is a statement about the value, and
   no limit below the value holds.
-- `exact`: a process whose every effect is a draw returns badly, against a service that
-  answers as the samplers draw, with probability the value.
+- `exact`: a process whose every effect has a sampler that draws only allowed replies returns
+  badly, against a service that answers as the samplers draw, with probability the value.
 
 Nothing here is of a judgment with fees: that a judgment with fees bounds the value is in
 `ZkcFormal.ChargedProbability`. The two inductions on a process are stated on `run`, the fold
