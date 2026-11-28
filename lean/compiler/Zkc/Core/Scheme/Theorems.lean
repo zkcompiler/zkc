@@ -9,6 +9,7 @@ public import Zkc.Core.Scheme.Proof.CompactCompleteness
 public import Zkc.Core.Scheme.Proof.RetryCompleteness
 public import Zkc.Core.Scheme.Proof.IdealLink
 public import Zkc.Core.Scheme.Proof.QuerySeparation
+public import Zkc.Core.Scheme.Statements
 public import Zkc.Core.Format.Canonical
 public import Zkc.Core.Statements
 
@@ -50,13 +51,14 @@ theorem canonicalFormat_formats (c : Functions V)
   rw [hfmt]
   exact canonicalFormat_lawful M codecs τ
 
-/-- `deployedIdentity` satisfies `Statements.identityReads`. -/
+/-- Bound `deployedIdentity` satisfies `Statements.identityReads` for any `c.deploy = deploy enc`. -/
 theorem deployedIdentity_identityReads (enc : VocabEncoder V) (c : Functions V)
-    (hid : c.identity = deployedIdentity enc) :
+    (hdep : c.deploy = deploy enc) (hid : c.identity = deployedIdentity) :
     Statements.identityReads c := by
-  intro d d' hdecl hdefs
+  intro a a' decl decl' d d' h₁ h₂ hdecl hdefs
+  rw [hdep] at h₁ h₂
   rw [hid]
-  exact deployedIdentity_reads enc d d' hdecl hdefs
+  exact deploy_identity_reads enc h₁ h₂ hdecl hdefs
 
 /-- `deploy` satisfies `Statements.deployKeeps`. -/
 theorem statements_deployKeeps (enc : VocabEncoder V) (c : Functions V)
@@ -114,8 +116,15 @@ theorem statements_completeStreaming (enc : VocabEncoder V) (c : Functions V)
   rw [hadm] at hA; rw [hdep] at hD
   exact deploy_complete M enc hA hD hNI hNR hNS hRec p v hR first matched ins hIns (hSL.toFor enc M) hLL hNH src hLP hFed
 
-/-- `deployIdeal` satisfies `Statements.idealLink`. -/
-theorem statements_idealLink (enc : VocabEncoder V) : Statements.idealLink enc := by
+/-- `deploy` satisfies `SchemeStatements.completeStreaming` (under selected-function
+`Deployed.SuiteLawfulFor enc M`). -/
+theorem statements_completeStreamingFor (enc : VocabEncoder V) :
+    SchemeStatements.completeStreaming enc := by
+  intro named assoc a hA decl d hD hNI hNR hNS hRec p v hR first matched M ins hIns hSL hLL hNH src hLP hFed
+  exact deploy_complete M enc hA hD hNI hNR hNS hRec p v hR first matched ins hIns hSL hLL hNH src hLP hFed
+
+/-- `deployIdeal` satisfies `SchemeStatements.idealLink`. -/
+theorem statements_idealLink (enc : VocabEncoder V) : SchemeStatements.idealLink enc := by
   intro M serviceKey a decl suite sessionTag layout dIdeal hDep hCon hLay hNoRetry hNoCarry hNoRec
     prover verifier hRoles ins hIns
   exact deployIdeal_link M enc serviceKey hDep hCon hLay hNoRetry hNoCarry hNoRec

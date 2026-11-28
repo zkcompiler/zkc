@@ -1,7 +1,6 @@
 module
 
 public import Zkc.Core.Run.Specialize.ClosedIR
-public import Zkc.Core.Scheme.Deploy.Elim
 
 @[expose] public section
 
@@ -485,9 +484,10 @@ def insertUniqueKey (k : FinPerm × Role) (ks : List (FinPerm × Role)) : List (
   if k ∈ ks then ks else k :: ks
 
 mutual
-  /-- Collect direct protocol applications in a protocol term (without recursing into callees). -/
+  /-- Collect direct protocol applications from a **role-projected** term (`Term (roleDialect V hs r)`),
+  skipping branches and loops that role `r` does not participate in (eliminating dead procedures). -/
   def collectDirectAppliesTerm {hs : Headers V} (perm : FinPerm) (r : Role) :
-      {Γ outs : _} → Term (protocolDialect V hs) Γ outs → List (SharedDemand V hs.protocols)
+      {Γ outs : _} → Term (roleDialect V hs r) Γ outs → List (SharedDemand V hs.protocols)
     | _, _, .ret _ => []
     | _, _, .op _ o _ _ rest =>
         let here := match o with
@@ -509,9 +509,9 @@ mutual
     | _, _, .attempt _ _ _ _ body _ rest =>
         collectDirectAppliesTerm perm r body ++ collectDirectAppliesTerm perm r rest
 
-  /-- Collect direct protocol applications across `Arms`. -/
+  /-- Collect direct protocol applications across role-projected `Arms`. -/
   def collectDirectAppliesArms {hs : Headers V} (perm : FinPerm) (r : Role) :
-      {Γ mid payloads : _} → Arms (protocolDialect V hs) Γ mid payloads →
+      {Γ mid payloads : _} → Arms (roleDialect V hs r) Γ mid payloads →
       List (SharedDemand V hs.protocols)
     | _, _, _, .nil => []
     | _, _, _, .cons _ arm rest =>
@@ -519,13 +519,14 @@ mutual
 end
 
 mutual
-  /-- Walk an entry protocol term along non-free call paths to collect the root shared demands
-  where `subtreeFree activeSites (through ++ [key])` first becomes true. -/
+  /-- Walk a **role-projected** entry term (`Term (roleDialect V hs r)`) along non-free call paths
+  to collect only reachable root shared demands where `subtreeFree activeSites (through ++ [key])`
+  first becomes true, ignoring branches erased by `project r`. -/
   def collectEntryDemandsTerm {hs : Headers V} (activeSites : List Site)
       (onNonFree : {hdr : ProtocolHeader V} → Member hs.protocols hdr →
         List Key → FinPerm → Role → List (SharedDemand V hs.protocols))
       (through : List Key) (perm : FinPerm) (r : Role) :
-      {Γ outs : _} → Term (protocolDialect V hs) Γ outs → List (SharedDemand V hs.protocols)
+      {Γ outs : _} → Term (roleDialect V hs r) Γ outs → List (SharedDemand V hs.protocols)
     | _, _, .ret _ => []
     | _, _, .op key o _ _ rest =>
         let here := match o with
@@ -564,7 +565,7 @@ mutual
       (onNonFree : {hdr : ProtocolHeader V} → Member hs.protocols hdr →
         List Key → FinPerm → Role → List (SharedDemand V hs.protocols))
       (through : List Key) (perm : FinPerm) (r : Role) :
-      {Γ mid payloads : _} → Arms (protocolDialect V hs) Γ mid payloads →
+      {Γ mid payloads : _} → Arms (roleDialect V hs r) Γ mid payloads →
       List (SharedDemand V hs.protocols)
     | _, _, _, .nil => []
     | _, _, _, .cons _ arm rest =>
@@ -577,7 +578,8 @@ def SharedDemand.tail {hdr : ProtocolHeader V} {protos : List (ProtocolHeader V)
     (d : SharedDemand V protos) : SharedDemand V (hdr :: protos) :=
   ⟨d.hdr, .tail d.callee, d.perm, d.role⟩
 
-/-- Collect root shared demands reachable from `(callee, through, perm, r)` structurally on `defs`. -/
+/-- Collect root shared demands reachable from `(callee, through, perm, r)` structurally on `defs`,
+walking `project r body` so unreachable branches never spawn dead procedures. -/
 def collectEntryDemands (activeSites : List Site) :
     {hs : Headers V} → Defs V hs → {hdr : ProtocolHeader V} → Member hs.protocols hdr →
     List Key → FinPerm → Role → List (SharedDemand V hs.protocols)
@@ -587,7 +589,7 @@ def collectEntryDemands (activeSites : List Site) :
   | _, .protocol (hs := hsRest) _ _ body _ rest, _, .head, through, perm, r =>
       let raw := collectEntryDemandsTerm activeSites
         (fun {_} m' th' p' r' => collectEntryDemands activeSites (hs := hsRest) rest m' th' p' r')
-        through perm r body
+        through perm r (project r body)
       raw.map SharedDemand.tail
   | _, .protocol (hs := hsRest) _ _ _ _ rest, _, .tail m, through, perm, r =>
       (collectEntryDemands activeSites (hs := hsRest) rest m through perm r).map SharedDemand.tail
@@ -668,7 +670,7 @@ def buildSharedProcs {fullFns : List (FnHeader V)} (σ : List V.Ty) :
       buildSharedProcs σ (hs := hsRest) rest (fun f => fnLift (.tail f)) demands
   | _, .protocol (hs := hsRest) hdrP inputsP bodyP _ rest, fnLift, demands =>
       let (here, later) := partitionDemands demands
-      let subDemands := here.flatMap fun (perm, r') => collectDirectAppliesTerm perm r' bodyP
+      let subDemands := here.flatMap fun (perm, r') => collectDirectAppliesTerm perm r' (project r' bodyP)
       let restPool := buildSharedProcs σ (hs := hsRest) rest fnLift (subDemands ++ later)
       let ⟨newSigs, newProcs, embed, headLookup⟩ :=
         addSharedForProto hdrP inputsP bodyP rest fnLift restPool here

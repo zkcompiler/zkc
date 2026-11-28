@@ -217,7 +217,7 @@ private theorem ideal_clauses_answer_flow_abs {a : Admitted V} {suite : ModuleRe
         declKey events idx es = .ok cV →
       ∀ (kind : FlowKind) (at_ : Occurrence) (τ : V.Ty) (st : M.Val (idealPathTy unitTy)),
         (∃ e, (e, true) ∈ es ∧ e.site = at_.site ∧ e.τ = τ ∧
-          ∃ getters, verifier ∈ getters ∧ e.cls = .flow kind prover getters) →
+          e.cls = .flow kind prover [verifier]) →
         ∃ (encRef : TypedFnRef V a.program.headers.fns [τ] [.seq unitTy none]),
           findSuiteEncode a suite unitTy τ = some encRef ∧
           Clause.answer M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs)
@@ -230,7 +230,7 @@ private theorem ideal_clauses_answer_flow_abs {a : Admitted V} {suite : ModuleRe
                 (values.1.single, values.2.single)
   | _, [], _, _, _, _, _, _, ⟨_, hc, _⟩ => nomatch hc
   | idx, (e, needAbs) :: rest, cV, h, kind, at_, τ, st,
-      ⟨e', he', hSite, hTy, gs', hVin, hECls⟩ => by
+      ⟨e', he', hSite, hTy, hECls⟩ => by
       unfold buildIdealVerifierClauses.go at h
       cases hRec : buildIdealVerifierClauses.go a suite unitTy hfree serviceKey prover
           verifier declKey events (idx + 1) rest with
@@ -266,7 +266,7 @@ private theorem ideal_clauses_answer_flow_abs {a : Admitted V} {suite : ModuleRe
                           · cases hEqP
                             rw [hCls] at hECls; cases hECls
                             exact absurd ⟨hSite, rfl, rfl, by cases hTy; rfl⟩ hMatch
-                          · obtain ⟨encR, hE, hAns⟩ := ih ⟨e', hmem, hSite, hTy, gs', hVin, hECls⟩
+                          · obtain ⟨encR, hE, hAns⟩ := ih ⟨e', hmem, hSite, hTy, hECls⟩
                             refine ⟨encR, hE, ?_⟩
                             unfold Clause.answer
                             exact (dite_eq_right hMatch).trans hAns
@@ -274,12 +274,12 @@ private theorem ideal_clauses_answer_flow_abs {a : Admitted V} {suite : ModuleRe
                     simp only [Bool.false_eq_true, ↓reduceIte] at h; cases h
                     rcases List.mem_cons.mp he' with hEqP | hmem
                     · cases hEqP
-                    · exact ih ⟨e', hmem, hSite, hTy, gs', hVin, hECls⟩
+                    · exact ih ⟨e', hmem, hSite, hTy, hECls⟩
               · split at h
                 · rename_i hOut; cases h
                   rcases List.mem_cons.mp he' with hEqP | hmem
                   · cases hEqP; rw [hCls] at hECls; cases hECls; exact absurd rfl hOut.1
-                  · exact ih ⟨e', hmem, hSite, hTy, gs', hVin, hECls⟩
+                  · exact ih ⟨e', hmem, hSite, hTy, hECls⟩
                 · cases h
           | given gkind _ _ =>
               rw [hCls] at h
@@ -302,7 +302,7 @@ private theorem ideal_clauses_answer_flow_abs {a : Admitted V} {suite : ModuleRe
                                   rw [hEnc] at h; cases h
                                   rcases List.mem_cons.mp he' with hEqP | hmem
                                   · cases hEqP; rw [hCls] at hECls; cases hECls
-                                  · obtain ⟨encR, hE, hAns⟩ := ih ⟨e', hmem, hSite, hTy, gs', hVin, hECls⟩
+                                  · obtain ⟨encR, hE, hAns⟩ := ih ⟨e', hmem, hSite, hTy, hECls⟩
                                     refine ⟨encR, hE, ?_⟩
                                     unfold Clause.answer
                                     rw [dite_eq_right (fun hm => by cases hm.2.1)]
@@ -312,7 +312,7 @@ private theorem ideal_clauses_answer_flow_abs {a : Admitted V} {suite : ModuleRe
                     · cases h
                       rcases List.mem_cons.mp he' with hEqP | hmem
                       · cases hEqP; rw [hCls] at hECls; cases hECls
-                      · exact ih ⟨e', hmem, hSite, hTy, gs', hVin, hECls⟩
+                      · exact ih ⟨e', hmem, hSite, hTy, hECls⟩
                     · cases h
               | request _ =>
                   dsimp only at h
@@ -320,7 +320,7 @@ private theorem ideal_clauses_answer_flow_abs {a : Admitted V} {suite : ModuleRe
                   · cases h
                     rcases List.mem_cons.mp he' with hEqP | hmem
                     · cases hEqP; rw [hCls] at hECls; cases hECls
-                    · exact ih ⟨e', hmem, hSite, hTy, gs', hVin, hECls⟩
+                    · exact ih ⟨e', hmem, hSite, hTy, hECls⟩
                   · cases h
 
 private theorem ideal_clauses_unmatched_elided_flow {a : Admitted V} {suite : ModuleRef}
@@ -333,7 +333,7 @@ private theorem ideal_clauses_unmatched_elided_flow {a : Admitted V} {suite : Mo
         declKey events idx es = .ok cV →
       ∀ (kind : FlowKind) (at_ : Occurrence) (τ : V.Ty),
         (∀ e b, (e, b) ∈ es → e.site = at_.site → e.τ = τ →
-          (∃ gs, verifier ∈ gs ∧ e.cls = .flow kind prover gs) → b = false) →
+          e.cls = .flow kind prover [verifier] → b = false) →
         ∀ c ∈ cV, ¬ ClauseMatches M c (.get kind prover at_ τ)
   | _, [], _, h, _, _, _, _ => by cases h; exact fun _ hc => nomatch hc
   | idx, (e, needAbs) :: rest, cV, h, kind, at_, τ, hNoAbs => by
@@ -365,7 +365,7 @@ private theorem ideal_clauses_unmatched_elided_flow {a : Admitted V} {suite : Mo
                             have hp := Option.some.inj hM.2.1; cases hp; rfl
                           have hTy : e.τ = τ := (List.cons.inj hM.2.2.2).1
                           have hF := hNoAbs e true List.mem_cons_self hSite hTy
-                            ⟨getters₀, hPV.2, hKind ▸ hPV.1 ▸ hCls⟩
+                            (hKind ▸ hPV.1 ▸ hPV.2 ▸ hCls)
                           cases hF
                         · exact ih c hm
                 | false =>
@@ -415,17 +415,17 @@ private theorem ideal_clauses_answer_coin {a : Admitted V} {suite : ModuleRef}
       ∀ {cV : List (Clause V a.program.headers verifier (idealPathTy unitTy))},
       buildIdealVerifierClauses.go a suite unitTy hfree serviceKey prover verifier
         declKey events idx es = .ok cV →
-      ∀ (law : V.LawKey) (hearers : List Role) (at_ : Occurrence) (τ : V.Ty)
+      ∀ (law : V.LawKey) (at_ : Occurrence) (τ : V.Ty)
         (st : M.Val (idealPathTy unitTy)),
-        (∃ p ∈ es, p.1.site = at_.site ∧ p.1.τ = τ ∧ prover ∈ hearers ∧
-          p.1.cls = .given (.coin law) verifier hearers) →
+        (∃ p ∈ es, p.1.site = at_.site ∧ p.1.τ = τ ∧
+          p.1.cls = .given (.coin law) verifier [prover]) →
         ∃ (idxV : Nat) (eV : ShapeEvent V)
           (encRef : TypedFnRef V a.program.headers.fns [τ] [.seq unitTy none]),
           events[idxV]? = some eV ∧ eV.site = at_.site ∧ eV.τ = τ ∧
-          eV.cls = .given (.coin law) verifier hearers ∧
+          eV.cls = .given (.coin law) verifier [prover] ∧
           findSuiteEncode a suite unitTy τ = some encRef ∧
           Clause.answer M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs)
-            cV (.own (.coin law) hearers at_ [] .nil τ) st =
+            cV (.own (.coin law) [prover] at_ [] .nil τ) st =
             .call (.own (.request serviceKey) [] ⟨at_.path, idealReqKey events idxV⟩
                 [idealQueryTy unitTy] (.cons (st, (drawLabel at_.site, ())) .nil) τ) fun coin =>
               .call (.give .message [prover] ⟨at_.path, drawToldKey events idxV⟩ τ coin) fun _ =>
@@ -434,9 +434,9 @@ private theorem ideal_clauses_answer_coin {a : Admitted V} {suite : ModuleRef}
                     fun why => (why, st)).map fun out =>
                   let values := HList.split [τ] (aloneOut M verifier out)
                   (values.1.single, values.2.single)
-  | _, [], _, _, _, _, _, _, _, _, ⟨_, hc, _⟩ => nomatch hc
-  | idx, (e, needAbs) :: rest, hSuf, cV, h, law, hearers, at_, τ, st,
-      ⟨p', hp', hSite, hTy, hPin, hECls⟩ => by
+  | _, [], _, _, _, _, _, _, _, ⟨_, hc, _⟩ => nomatch hc
+  | idx, (e, needAbs) :: rest, hSuf, cV, h, law, at_, τ, st,
+      ⟨p', hp', hSite, hTy, hECls⟩ => by
       unfold buildIdealVerifierClauses.go at h
       have hSufRest : ∀ k p'', rest[k]? = some p'' → events[(idx + 1) + k]? = some p''.1 := by
         intro k p'' hk; have := hSuf (k + 1) p'' hk
@@ -448,7 +448,7 @@ private theorem ideal_clauses_answer_coin {a : Admitted V} {suite : ModuleRef}
       | ok vRest =>
           rw [hRec] at h; dsimp only [bind, Except.bind] at h
           have ih := fun hIn => ideal_clauses_answer_coin (idx + 1) rest hSufRest hRec
-            law hearers at_ τ st hIn
+            law at_ τ st hIn
           cases hCls : e.cls with
           | flow _ _ _ =>
               rw [hCls] at h; dsimp only at h
@@ -463,19 +463,19 @@ private theorem ideal_clauses_answer_coin {a : Admitted V} {suite : ModuleRef}
                         rcases List.mem_cons.mp hp' with rfl | hmem
                         · rw [hCls] at hECls; cases hECls
                         · obtain ⟨idxV, eV, encR, h1, h2, h3, h4, h5, hAns⟩ :=
-                            ih ⟨p', hmem, hSite, hTy, hPin, hECls⟩
+                            ih ⟨p', hmem, hSite, hTy, hECls⟩
                           refine ⟨idxV, eV, encR, h1, h2, h3, h4, h5, ?_⟩
                           unfold Clause.answer; rw [dite_eq_right (fun hm => by cases hm.2.1)]; exact hAns
                 | false =>
                     simp only [Bool.false_eq_true, ↓reduceIte] at h; cases h
                     rcases List.mem_cons.mp hp' with rfl | hmem
                     · rw [hCls] at hECls; cases hECls
-                    · exact ih ⟨p', hmem, hSite, hTy, hPin, hECls⟩
+                    · exact ih ⟨p', hmem, hSite, hTy, hECls⟩
               · split at h
                 · cases h
                   rcases List.mem_cons.mp hp' with rfl | hmem
                   · rw [hCls] at hECls; cases hECls
-                  · exact ih ⟨p', hmem, hSite, hTy, hPin, hECls⟩
+                  · exact ih ⟨p', hmem, hSite, hTy, hECls⟩
                 · cases h
           | given gkind owner hearers₀ =>
               rw [hCls] at h
@@ -499,10 +499,10 @@ private theorem ideal_clauses_answer_coin {a : Admitted V} {suite : ModuleRef}
                                   rw [hEnc] at h; cases h
                                   by_cases hMatch :
                                       e.site = at_.site ∧
-                                      some (Part.own (.coin law₀) hearers₀) = some (.own (.coin law) hearers) ∧
+                                      some (Part.own (.coin law₀) hearers₀) = some (.own (.coin law) [prover]) ∧
                                       ([] : List V.Ty) = [] ∧ [e.τ] = [τ]
                                   · have hSiteEq : e.site = at_.site := hMatch.1
-                                    have hPartEq : Part.own (.coin law₀) hearers₀ = .own (.coin law) hearers :=
+                                    have hPartEq : Part.own (.coin law₀) hearers₀ = .own (.coin law) [prover] :=
                                       Option.some.inj hMatch.2.1
                                     cases hPartEq
                                     have hTyEq : e.τ = τ := List.cons.inj hMatch.2.2.2 |>.1
@@ -512,24 +512,24 @@ private theorem ideal_clauses_answer_coin {a : Admitted V} {suite : ModuleRef}
                                         subst eτ; subst eSite
                                         refine ⟨idx, ⟨at_.site, eCls, τ⟩, encRef, hIdx, rfl, rfl, hCoin.1 ▸ hCls, hEnc, ?_⟩
                                         unfold Clause.answer
-                                        have hM : (idealDeriveClause hfree verifier prover at_.site (.own (.coin law) hearers)
+                                        have hM : (idealDeriveClause hfree verifier prover at_.site (.own (.coin law) [prover])
                                             [] serviceKey (idealReqKey events idx) (drawToldKey events idx)
                                             (drawLabel at_.site) (drawLabel_bytes at_.site) encRef).site.site =
-                                            (ROp.occurrence M (.own (.coin law) hearers at_ [] .nil τ)).site ∧
-                                            some (idealDeriveClause hfree verifier prover at_.site (.own (.coin law) hearers)
+                                            (ROp.occurrence M (.own (.coin law) [prover] at_ [] .nil τ)).site ∧
+                                            some (idealDeriveClause hfree verifier prover at_.site (.own (.coin law) [prover])
                                             [] serviceKey (idealReqKey events idx) (drawToldKey events idx)
                                             (drawLabel at_.site) (drawLabel_bytes at_.site) encRef).site.part =
-                                            ROp.part M (.own (.coin law) hearers at_ [] .nil τ) ∧
-                                            (idealDeriveClause hfree verifier prover at_.site (.own (.coin law) hearers)
+                                            ROp.part M (.own (.coin law) [prover] at_ [] .nil τ) ∧
+                                            (idealDeriveClause hfree verifier prover at_.site (.own (.coin law) [prover])
                                             [] serviceKey (idealReqKey events idx) (drawToldKey events idx)
                                             (drawLabel at_.site) (drawLabel_bytes at_.site) encRef).site.takes =
-                                            ROp.takes M (.own (.coin law) hearers at_ [] .nil τ) ∧
-                                            (idealDeriveClause hfree verifier prover at_.site (.own (.coin law) hearers)
+                                            ROp.takes M (.own (.coin law) [prover] at_ [] .nil τ) ∧
+                                            (idealDeriveClause hfree verifier prover at_.site (.own (.coin law) [prover])
                                             [] serviceKey (idealReqKey events idx) (drawToldKey events idx)
                                             (drawLabel at_.site) (drawLabel_bytes at_.site) encRef).site.gives =
-                                            ROp.gives M (.own (.coin law) hearers at_ [] .nil τ) := ⟨rfl, rfl, rfl, rfl⟩
+                                            ROp.gives M (.own (.coin law) [prover] at_ [] .nil τ) := ⟨rfl, rfl, rfl, rfl⟩
                                         rw [dite_eq_left hM]
-                                        change (((idealDeriveClause hfree verifier prover at_.site (.own (.coin law) hearers)
+                                        change (((idealDeriveClause hfree verifier prover at_.site (.own (.coin law) [prover])
                                           [] serviceKey (idealReqKey events idx) (drawToldKey events idx)
                                           (drawLabel at_.site) (drawLabel_bytes at_.site) encRef).code.denote
                                           (roleSem M verifier _ _) at_.path
@@ -543,7 +543,7 @@ private theorem ideal_clauses_answer_coin {a : Admitted V} {suite : ModuleRef}
                                     · rw [hCls] at hECls; cases hECls
                                       exact absurd ⟨hSite, rfl, rfl, by cases hTy; rfl⟩ hMatch
                                     · obtain ⟨idxV, eV, encR, h1, h2, h3, h4, h5, hAns⟩ :=
-                                        ih ⟨p', hmem, hSite, hTy, hPin, hECls⟩
+                                        ih ⟨p', hmem, hSite, hTy, hECls⟩
                                       refine ⟨idxV, eV, encR, h1, h2, h3, h4, h5, ?_⟩
                                       unfold Clause.answer
                                       exact (dite_eq_right hMatch).trans hAns
@@ -552,8 +552,8 @@ private theorem ideal_clauses_answer_coin {a : Admitted V} {suite : ModuleRef}
                     · rename_i hNil
                       cases h
                       rcases List.mem_cons.mp hp' with rfl | hmem
-                      · rw [hCls] at hECls; cases hECls; subst hNil; cases hPin
-                      · exact ih ⟨p', hmem, hSite, hTy, hPin, hECls⟩
+                      · rw [hCls] at hECls; cases hECls; cases hNil
+                      · exact ih ⟨p', hmem, hSite, hTy, hECls⟩
                     · cases h
               | request _ =>
                   dsimp only at h
@@ -561,7 +561,7 @@ private theorem ideal_clauses_answer_coin {a : Admitted V} {suite : ModuleRef}
                   · cases h
                     rcases List.mem_cons.mp hp' with rfl | hmem
                     · rw [hCls] at hECls; cases hECls
-                    · exact ih ⟨p', hmem, hSite, hTy, hPin, hECls⟩
+                    · exact ih ⟨p', hmem, hSite, hTy, hECls⟩
                   · cases h
 
 private theorem ideal_clauses_unmatched_closed {a : Admitted V} {suite : ModuleRef}
@@ -632,7 +632,7 @@ private theorem ideal_clauses_unmatched_closed {a : Admitted V} {suite : ModuleR
                                             cases hs' with
                                             | nil =>
                                                 have hp := Option.some.inj hM.2.1; cases hp
-                                                exact nomatch hCoin.2
+                                                cases hCoin.2
                                             | cons _ _ => exact False.elim hCl
                                         | request _ =>
                                             have hp := Option.some.inj hM.2.1; cases hp
@@ -659,7 +659,7 @@ private theorem streaming_layout_answer_verifier_flow_full {a : Admitted V} {lay
         .ok (pCs, vCs) →
       ∀ (kind : FlowKind) (at_ : Occurrence) (τ : V.Ty) (buf : List (M.Val unitTy)) (off : Nat),
         (∃ e ∈ es, e.site = at_.site ∧ e.τ = τ ∧
-          ∃ getters, verifier ∈ getters ∧ e.cls = .flow kind prover getters) →
+          e.cls = .flow kind prover [verifier]) →
         ∃ (rRef : SafeFnRef V a.program.headers.fns [.seq unitTy none, .nat] [τ, .nat]),
           findLayoutRead a layout.module unitTy τ = some rRef ∧
           Clause.answer M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs)
@@ -670,7 +670,7 @@ private theorem streaming_layout_answer_verifier_flow_full {a : Admitted V} {lay
               fun why => (why, (buf, (off, ())))
   | _, [], _, _, _, _, _, _, _, _, ⟨_, hc, _⟩ => nomatch hc
   | idx, e :: rest, pCs, vCs, h, kind, at_, τ, buf, off,
-      ⟨e', he', hSite, hTy, gs', hVin, hECls⟩ => by
+      ⟨e', he', hSite, hTy, hECls⟩ => by
       unfold buildStreamingLayoutClauses.go at h
       cases hRec : buildStreamingLayoutClauses.go a layout unitTy hfree prover verifier declKey
           events (idx + 1) rest with
@@ -732,14 +732,14 @@ private theorem streaming_layout_answer_verifier_flow_full {a : Admitted V} {lay
                   · rcases List.mem_cons.mp he' with rfl | hmem
                     · rw [hCls] at hECls; cases hECls
                       exact absurd ⟨hSite, rfl, rfl, by cases hTy; rfl⟩ hMatch
-                    · obtain ⟨rR, h1, hAns⟩ := ih ⟨e', hmem, hSite, hTy, gs', hVin, hECls⟩
+                    · obtain ⟨rR, h1, hAns⟩ := ih ⟨e', hmem, hSite, hTy, hECls⟩
                       refine ⟨rR, h1, ?_⟩
                       unfold Clause.answer
                       exact (dite_eq_right hMatch).trans hAns
               · rename_i hNotPV; cases h
                 rcases List.mem_cons.mp he' with rfl | hmem
-                · rw [hCls] at hECls; cases hECls; exact absurd ⟨rfl, hVin⟩ hNotPV
-                · exact ih ⟨e', hmem, hSite, hTy, gs', hVin, hECls⟩
+                · rw [hCls] at hECls; cases hECls; exact absurd ⟨rfl, rfl⟩ hNotPV
+                · exact ih ⟨e', hmem, hSite, hTy, hECls⟩
           | given gkind _ _ =>
               rw [hCls] at h
               cases gkind with
@@ -761,7 +761,7 @@ private theorem streaming_layout_answer_verifier_flow_full {a : Admitted V} {lay
                       · cases h
                         rcases List.mem_cons.mp he' with rfl | hmem
                         · rw [hCls] at hECls; cases hECls
-                        · obtain ⟨rR, h1, hAns⟩ := ih ⟨e', hmem, hSite, hTy, gs', hVin, hECls⟩
+                        · obtain ⟨rR, h1, hAns⟩ := ih ⟨e', hmem, hSite, hTy, hECls⟩
                           refine ⟨rR, h1, ?_⟩
                           unfold Clause.answer
                           rw [dite_eq_right (fun hm => by cases hm.2.1)]
@@ -769,7 +769,7 @@ private theorem streaming_layout_answer_verifier_flow_full {a : Admitted V} {lay
                     · cases h
                       rcases List.mem_cons.mp he' with rfl | hmem
                       · rw [hCls] at hECls; cases hECls
-                      · obtain ⟨rR, h1, hAns⟩ := ih ⟨e', hmem, hSite, hTy, gs', hVin, hECls⟩
+                      · obtain ⟨rR, h1, hAns⟩ := ih ⟨e', hmem, hSite, hTy, hECls⟩
                         refine ⟨rR, h1, ?_⟩
                         unfold Clause.answer
                         rw [dite_eq_right (fun hm => by cases hm.2.1)]
@@ -777,12 +777,12 @@ private theorem streaming_layout_answer_verifier_flow_full {a : Admitted V} {lay
                   · cases h
                     rcases List.mem_cons.mp he' with rfl | hmem
                     · rw [hCls] at hECls; cases hECls
-                    · exact ih ⟨e', hmem, hSite, hTy, gs', hVin, hECls⟩
+                    · exact ih ⟨e', hmem, hSite, hTy, hECls⟩
               | request _ =>
                   cases h
                   rcases List.mem_cons.mp he' with rfl | hmem
                   · rw [hCls] at hECls; cases hECls
-                  · exact ih ⟨e', hmem, hSite, hTy, gs', hVin, hECls⟩
+                  · exact ih ⟨e', hmem, hSite, hTy, hECls⟩
 
 private theorem streaming_layout_answer_told_drop {a : Admitted V} {layout : Layout}
     (hNoCarry : layout.carry = []) {unitTy : V.Ty} {hfree : Ty.isLinear V unitTy = false}
@@ -794,15 +794,15 @@ private theorem streaming_layout_answer_told_drop {a : Admitted V} {layout : Lay
       buildStreamingLayoutClauses.go a layout unitTy hfree prover verifier declKey events idx es =
         .ok (pCs, vCs) →
       ∀ (k : Nat) (e₀ : ShapeEvent V), es[k]? = some e₀ →
-        ∀ (law : V.LawKey) (hearers : List Role) (at_ : Occurrence) (coin : M.Val e₀.τ),
-          e₀.cls = .given (.coin law) verifier hearers → prover ∈ hearers →
+        ∀ (law : V.LawKey) (at_ : Occurrence) (coin : M.Val e₀.τ),
+          e₀.cls = .given (.coin law) verifier [prover] →
           at_.site = ⟨e₀.site.through, drawToldKey events (idx + k)⟩ →
           ∀ buf off,
             Clause.answer M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs)
               vCs (.give .message [prover] at_ e₀.τ coin) (buf, (off, ())) =
               .done ((), (buf, (off, ())))
-  | _, [], _, _, _, _, _, _, hk, _, _, _, _, _, _, _, _, _ => by simp at hk
-  | idx, e :: rest, hSub, pCs, vCs, h, k, e₀, hk, law, hearers, at_, coin, hE₀Cls, hPin, hAtSite, buf, off => by
+  | _, [], _, _, _, _, _, _, hk, _, _, _, _, _, _, _ => by simp at hk
+  | idx, e :: rest, hSub, pCs, vCs, h, k, e₀, hk, law, at_, coin, hE₀Cls, hAtSite, buf, off => by
       unfold buildStreamingLayoutClauses.go at h
       have hSubRest : ∀ e'' ∈ rest, e'' ∈ events := fun e'' he'' => hSub e'' (List.mem_cons_of_mem _ he'')
       have hMemE : e ∈ events := hSub e List.mem_cons_self
@@ -820,7 +820,7 @@ private theorem streaming_layout_answer_told_drop {a : Admitted V} {layout : Lay
           | zero =>
               simp at hk; subst hk
               rw [hE₀Cls] at h; dsimp only at h
-              rw [ite_eq_left ⟨rfl, hPin⟩] at h
+              rw [ite_eq_left ⟨rfl, rfl⟩] at h
               rw [ite_eq_right (by simp [hNoCarry])] at h; cases h
               have hSiteEq : ⟨e.site.through, drawToldKey events idx⟩ = at_.site := by
                 simpa using hAtSite.symm
@@ -835,7 +835,7 @@ private theorem streaming_layout_answer_told_drop {a : Admitted V} {layout : Lay
                   rw [hAtSite] at this; exact this
                 simp only [drawToldKey] at hkEq; omega
               have ih := streaming_layout_answer_told_drop hNoCarry (idx + 1) rest hSubRest hRec k' e₀ hk
-                law hearers at_ coin hE₀Cls hPin hShiftSite buf off
+                law at_ coin hE₀Cls hShiftSite buf off
               cases hCls : e.cls with
               | flow _ _ _ =>
                   rw [hCls] at h; dsimp only at h
@@ -915,10 +915,10 @@ private theorem ideal_verifier_bare_iff {a : Admitted V} {suite : ModuleRef} {la
           have hIdealDisc : ∀ e ∈ events,
               match e.cls with
               | .flow _ giver getters =>
-                  (giver = prover ∧ verifier ∈ getters) ∨
+                  (giver = prover ∧ getters = [verifier]) ∨
                   (giver ≠ prover ∧ giver ≠ verifier ∧ prover ∉ getters ∧ verifier ∉ getters)
               | .given (.coin law) owner hearers =>
-                  (owner = verifier ∧ prover ∈ hearers ∧
+                  (owner = verifier ∧ hearers = [prover] ∧
                     ∃ sig, V.law law = some sig ∧ sig.out = e.τ ∧ sig.ins = []) ∨
                   hearers = []
               | .given (.request _) owner hearers =>
@@ -928,10 +928,10 @@ private theorem ideal_verifier_bare_iff {a : Admitted V} {suite : ModuleRef} {la
                   prover verifier declKey events idx es = .ok cV' →
                 ∀ p ∈ es, match p.1.cls with
                   | .flow _ giver getters =>
-                      (giver = prover ∧ verifier ∈ getters) ∨
+                      (giver = prover ∧ getters = [verifier]) ∨
                       (giver ≠ prover ∧ giver ≠ verifier ∧ prover ∉ getters ∧ verifier ∉ getters)
                   | .given (.coin law) owner hearers =>
-                      (owner = verifier ∧ prover ∈ hearers ∧
+                      (owner = verifier ∧ hearers = [prover] ∧
                         ∃ sig, V.law law = some sig ∧ sig.out = p.1.τ ∧ sig.ins = []) ∨
                       hearers = []
                   | .given (.request _) owner hearers =>
@@ -1088,11 +1088,11 @@ private theorem ideal_verifier_bare_iff {a : Admitted V} {suite : ModuleRef} {la
               | get kind giver at_ τ =>
                   obtain ⟨e, he, hGNeV, hSite, hTy, gs', hVin, hCls⟩ := hOpSh
                   have hD := hIdealDisc e he; rw [hCls] at hD
-                  have hGivP : giver = prover := by
-                    rcases hD with ⟨hEqP, _⟩ | ⟨_, _, _, hNotV⟩
-                    · exact hEqP
+                  have hGivP : giver = prover ∧ gs' = [verifier] := by
+                    rcases hD with ⟨hEqP, hEqGs⟩ | ⟨_, _, _, hNotV⟩
+                    · exact ⟨hEqP, hEqGs⟩
                     · exact absurd hVin hNotV
-                  subst hGivP
+                  rcases hGivP with ⟨rfl, rfl⟩
                   have hEInAbs : ∃ need, (e, need) ∈ eventsAbs := by
                     have hM : e ∈ eventsAbs.map Prod.fst := hFst.symm ▸ he
                     obtain ⟨⟨e₀, b₀⟩, hIn, hEq⟩ := List.mem_map.mp hM
@@ -1103,13 +1103,13 @@ private theorem ideal_verifier_bare_iff {a : Admitted V} {suite : ModuleRef} {la
                   | true =>
                       have hNeedTrue : needIdealAbsorb giver verifier eventsAbs at_.site kind τ = true := by
                         unfold needIdealAbsorb
-                        exact List.any_eq_true.mpr ⟨(e, true), hNeed, by simp [hSite, hTy, hCls, hVin]⟩
+                        exact List.any_eq_true.mpr ⟨(e, true), hNeed, by simp [hSite, hTy, hCls]⟩
                       obtain ⟨encRef, hEncFind, hConAns⟩ :=
                         ideal_clauses_answer_flow_abs M 0 eventsAbs hIV kind at_ τ st
-                          ⟨e, hNeed, hSite, hTy, gs', hVin, hCls⟩
+                          ⟨e, hNeed, hSite, hTy, hCls⟩
                       obtain ⟨rRef, hRFind, hLayAns⟩ :=
                         streaming_layout_answer_verifier_flow_full M 0 events hSL' kind ⟨at_.path, at_.site.key⟩ τ buf off
-                          ⟨e, he, hSite, hTy, gs', hVin, hCls⟩
+                          ⟨e, he, hSite, hTy, hCls⟩
                       have hReadSafe := rRef.eval_safe M a (.cons buf (.cons off .nil)) ⟨hBufV, trivial, trivial⟩
                       cases hREval : rRef.eval M fnTable (.cons buf (.cons off .nil)) with
                       | call op _ => cases op
@@ -1203,11 +1203,11 @@ private theorem ideal_verifier_bare_iff {a : Admitted V} {suite : ModuleRef} {la
                                             rw [hNeedTrue] at hNoNeed; cases hNoNeed
                   | false =>
                       have hNoAbs : ∀ e' b', (e', b') ∈ eventsAbs → e'.site = at_.site →
-                          e'.τ = τ → (∃ gs, verifier ∈ gs ∧ e'.cls = .flow kind giver gs) →
+                          e'.τ = τ → e'.cls = .flow kind giver [verifier] →
                           b' = false := by
-                        intro e' b' hIn hS hT ⟨gs, hVg, hC⟩
+                        intro e' b' hIn hS hT hC
                         exact eventsWithAbsorb_flow_consistent giver verifier [] id false shape
-                          hIn hNeed (hS.trans hSite.symm) (hT.trans hTy.symm) hC hVg hCls hVin
+                          hIn hNeed (hS.trans hSite.symm) (hT.trans hTy.symm) hC hCls
                       have hNeedFalse : needIdealAbsorb giver verifier eventsAbs at_.site kind τ = false := by
                         unfold needIdealAbsorb
                         apply Bool.eq_false_iff.mpr
@@ -1219,7 +1219,7 @@ private theorem ideal_verifier_bare_iff {a : Admitted V} {suite : ModuleRef} {la
                             rw [hC'] at hCond
                             simp only [decide_eq_true_eq] at hCond
                             have hbFalse := hNoAbs e' b' hIn hCond.1.1.2 hCond.1.2
-                              ⟨gs₀, hCond.2.2.2, hCond.2.1 ▸ hCond.2.2.1 ▸ hC'⟩
+                              (hCond.2.1 ▸ hCond.2.2.1 ▸ hCond.2.2.2 ▸ hC')
                             rw [hbFalse] at hCond; cases hCond.1.1.1
                         | given _ _ _ => rw [hC'] at hCond; cases hCond.2
                       have hConPass : Clause.answer M fnTable rTable cClauses (.get kind giver at_ τ) st =
@@ -1228,7 +1228,7 @@ private theorem ideal_verifier_bare_iff {a : Admitted V} {suite : ModuleRef} {la
                           (ideal_clauses_unmatched_elided_flow M 0 eventsAbs hIV kind at_ τ hNoAbs)
                       obtain ⟨rRef, hRFind, hLayAns⟩ :=
                         streaming_layout_answer_verifier_flow_full M 0 events hSL' kind at_ τ buf off
-                          ⟨e, he, hSite, hTy, gs', hVin, hCls⟩
+                          ⟨e, he, hSite, hTy, hCls⟩
                       cases hREval : rRef.eval M fnTable (.cons buf (.cons off .nil)) with
                       | call op _ => cases op
                       | halt why =>
@@ -1323,8 +1323,10 @@ private theorem ideal_verifier_bare_iff {a : Admitted V} {suite : ModuleRef} {la
                       | cons h0 hs =>
                           obtain ⟨e, he, hSite, hTy, hCls, hTyped⟩ := hOpSh
                           have hD := hIdealDisc e he; rw [hCls] at hD
-                          rcases hD with ⟨_, hPin, sig, hLaw, _, hSigIns⟩ | hNil
-                          · have hGInsNil : gIns = [] := by
+                          rcases hD with ⟨_, hHEq, sig, hLaw, _, hSigIns⟩ | hNil
+                          · obtain ⟨hH0, hHs⟩ := List.cons.inj hHEq
+                            subst h0; subst hs
+                            have hGInsNil : gIns = [] := by
                               obtain ⟨s, hsLaw, hsIns, _⟩ := hTyped
                               rw [hLaw] at hsLaw
                               cases Option.some.inj hsLaw
@@ -1340,8 +1342,8 @@ private theorem ideal_verifier_bare_iff {a : Admitted V} {suite : ModuleRef} {la
                               intro k p hk; rw [Nat.zero_add, ← hFst, List.getElem?_map, hk]; rfl
                             obtain ⟨idxV, eV, encRef, hIdxV, hSiteV, hTyV, hClsV, hEncFind, hConAns⟩ :=
                               ideal_clauses_answer_coin M 0 eventsAbs hSuf0 hIV
-                                law (h0 :: hs) at_ τ st
-                                ⟨pV, hpV, hpVEq.symm ▸ hSite, hpVEq.symm ▸ hTy, hPin, hpVEq.symm ▸ hCls⟩
+                                law at_ τ st
+                                ⟨pV, hpV, hpVEq.symm ▸ hSite, hpVEq.symm ▸ hTy, hpVEq.symm ▸ hCls⟩
                             have hToldSite : (⟨at_.path, drawToldKey events idxV⟩ : Occurrence).site =
                                 ⟨eV.site.through, drawToldKey events (0 + idxV)⟩ := by
                               simpa using site_told_from_match hSiteV (k := drawToldKey events idxV)
@@ -1350,8 +1352,8 @@ private theorem ideal_verifier_bare_iff {a : Admitted V} {suite : ModuleRef} {la
                                   (.give .message [prover] ⟨at_.path, drawToldKey events idxV⟩ τ coin)
                                   (buf, (off, ())) = .done ((), (buf, (off, ()))) := fun coin => by
                               have hd := streaming_layout_answer_told_drop M hNoCarry 0 events (fun _ h => h) hSL'
-                                idxV eV hIdxV law (h0 :: hs) ⟨at_.path, drawToldKey events idxV⟩
-                                (hTyV.symm ▸ coin) hClsV hPin hToldSite buf off
+                                idxV eV hIdxV law ⟨at_.path, drawToldKey events idxV⟩
+                                (hTyV.symm ▸ coin) hClsV hToldSite buf off
                               subst hTyV; exact hd
                             have hReqUnm : Clause.answer M fnTable rTable lClauses
                                 (.own (.request serviceKey) [] ⟨at_.path, idealReqKey events idxV⟩
@@ -1368,8 +1370,8 @@ private theorem ideal_verifier_bare_iff {a : Admitted V} {suite : ModuleRef} {la
                                   (.own (.request serviceKey) [] ⟨at_.path, idealReqKey events idxV⟩
                                     [idealQueryTy suiteUnitTy] (.cons (st, (drawLabel at_.site, ())) .nil) τ) trivial).2
                             have hCoinEx : ∃ coin, ro st (drawLabel at_.site) τ = some coin ∧ M.Valid τ coin := by
-                              obtain ⟨c, hRoC, hCV⟩ := hRo eV (List.mem_of_getElem? hIdxV) law (h0 :: hs)
-                                hClsV hPin st (drawLabel at_.site) hStV (drawLabel_bytes at_.site)
+                              obtain ⟨c, hRoC, hCV⟩ := hRo eV (List.mem_of_getElem? hIdxV) law [prover]
+                                hClsV List.mem_cons_self st (drawLabel at_.site) hStV (drawLabel_bytes at_.site)
                               subst hTyV
                               exact ⟨c, hRoC, hCV⟩
                             obtain ⟨coin, hRoCoin, hCoinV⟩ := hCoinEx
@@ -1401,14 +1403,14 @@ private theorem ideal_verifier_bare_iff {a : Admitted V} {suite : ModuleRef} {la
                                           st (HList.cons (a := streamStateTy unitTy) (buf, (off, ())) .nil))).bind
                                         fun out => Process.done (out.1.1, out.1.2, out.2)))
                                 have hClauseStep : (Stack.handler M fnTable rTable [idealConV', layV']).clause
-                                    (.own (.coin law) (h0 :: hs) at_ [] .nil τ)
+                                    (.own (.coin law) [prover] at_ [] .nil τ)
                                     (.cons st (.cons (buf, (off, ())) .nil)) =
                                     .call (.own (.request serviceKey) [] ⟨at_.path, idealReqKey events idxV⟩
                                         [idealQueryTy suiteUnitTy] (.cons (st, (drawLabel at_.site, ())) .nil) τ)
                                       stepCont := by
                                   change ((((Layer.handler M fnTable rTable idealConV').over
                                       (Stack.handler M fnTable rTable [layV'])).clause
-                                      (.own (.coin law) (h0 :: hs) at_ [] .nil τ)
+                                      (.own (.coin law) [prover] at_ [] .nil τ)
                                       (st, .cons (buf, (off, ())) .nil)).mapHalt _).map _ = _
                                   dsimp only [Layer.handler, Handler.over, idealConV']
                                   rw [hConAns]

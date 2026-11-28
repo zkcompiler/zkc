@@ -11,7 +11,7 @@
 
 | Path | Content |
 |---|---|
-| `lean/compiler/` | the Lake package of the compiler: the core (`Zkc/Core`), the vocabulary (`Zkc/Vocabulary`), the subject (`Zkc/Subject`), the frontend (`Zkc/Frontend`), their tests (`Zkc/Tests`) and tools (`Zkc/Tools`) |
+| `lean/compiler/` | the Lake package of the compiler: the core (`Zkc/Core`), the vocabulary (`Zkc/Vocabulary`), the subject (`Zkc/Subject`), the concrete cryptographic runtime (`Zkc/Runtime`), the frontend (`Zkc/Frontend`), their tests (`Zkc/Tests`) and tools (`Zkc/Tools`) |
 | `lean/formal/` | the Lake package of statements and proofs over the meaning of the core; it requires `../compiler`. Its modules have roots of their own: the library (`ZkcFormal`), its tests (`ZkcFormalTests`) and its tools (`ZkcFormalTools`) |
 | `language/` | the reference of the source language and its conformance tests |
 | `libraries/zkc/` | the library of the source language, in source |
@@ -40,6 +40,7 @@ Run every command from the root of the repository.
 | `just` | lists the recipes |
 | `just build` | `lake build --iofail` in `lean/compiler`: the package default targets |
 | `just test` | `lake build --iofail` and `lake test` in `lean/compiler`, then `just audit` |
+| `just test-runtime` | build `ZkcRuntime`, `ZkcRuntimeTests`, `zkc-runtime-tests` and `zkc-check` with `--iofail`, run the runtime unit/example suite (`zkc-runtime-tests`), and verify all 33 CFRG `draft-irtf-cfrg-fiat-shamir-04` vectors (`zkc-check cfrg-vectors`) |
 | `just test-interactive` | build the interactive formal modules, check emitted source entries and mutations, and audit the interactive library and its mathematical controls |
 | `just test-frontend` | build the three frontend libraries, check source contracts and generated views, then run the driver with its table of known failures |
 | `just test-packages` | print every admitted root of eight examples as a Lean module in which the kernel elaborates the program by names, compare that program with what the frontend gave to admission, read a fixture with every constructor back, and refuse four controls |

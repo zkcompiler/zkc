@@ -507,14 +507,26 @@ private theorem buildSamplesClauses_validSafe {a : Admitted V} {heldP : List V.T
                   | nil =>
                       dsimp only at h
                       split at h
-                      · cases hS : findTypedFnRef a sKey (heldP ++ [bytesTy, bytesTy, .nat, .nat]) [e.τ] with
-                        | none => rw [hS] at h; cases h
-                        | some sRef =>
-                            rw [hS] at h; cases h
-                            intro c hc
-                            rcases List.mem_cons.mp hc with rfl | hm
-                            · apply proverSampleClause_validSafe M a
-                            · exact ihS c hm
+                      · cases hLaw : V.law law with
+                        | none => rw [hLaw] at h; cases h
+                        | some sig =>
+                            rw [hLaw] at h
+                            cases sig with
+                            | mk sIns sOut =>
+                                cases sIns with
+                                | cons _ _ => cases h
+                                | nil =>
+                                    dsimp only at h
+                                    split at h
+                                    · cases hS : findTypedFnRef a sKey (heldP ++ [bytesTy, bytesTy, .nat, .nat]) [e.τ] with
+                                      | none => rw [hS] at h; cases h
+                                      | some sRef =>
+                                          rw [hS] at h; cases h
+                                          intro c hc
+                                          rcases List.mem_cons.mp hc with rfl | hm
+                                          · apply proverSampleClause_validSafe M a
+                                          · exact ihS c hm
+                                    · cases h
                       · cases h; exact ihS
 
 private theorem buildConstructionClauses_go_validSafe {enc : VocabEncoder V} {a : Admitted V}

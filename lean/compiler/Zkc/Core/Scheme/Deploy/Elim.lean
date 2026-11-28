@@ -64,127 +64,6 @@ theorem stack_gives_cast {hs : Headers V} {hdr₁ hdr₂ : ProtocolHeader V}
     Stack.Gives (hr ▸ hHdr ▸ layers) = Stack.Gives layers :=
   cast_layer_stack_elim hHdr hr layers (fun _ _ ls => Stack.Gives ls = Stack.Gives layers) rfl
 
-/-- `findSlotMember` returning `some x` witnesses a member `(slot, defKey) ∈ m.members`. -/
-theorem findSlotMember_some {α : Type} {m : ModuleRef} {slot : Key} {pick : Key → Option α}
-    {x : α} (h : findSlotMember m slot pick = some x) :
-    ∃ defKey, (slot, defKey) ∈ m.members ∧ pick defKey = some x := by
-  unfold findSlotMember at h
-  have hmem := List.exists_of_findSome?_eq_some h
-  obtain ⟨⟨s, defKey⟩, hIn, hPick⟩ := hmem
-  by_cases hs : s = slot
-  · subst hs
-    simp only [↓reduceIte] at hPick
-    exact ⟨defKey, hIn, hPick⟩
-  · simp only [hs, ↓reduceIte] at hPick
-    cases hPick
-
-theorem findLawSlotMember_some {α : Type} {m : ModuleRef} {slot : Key} {lawBytes : List Nat}
-    {pick : Key → Option α} {x : α} (h : findLawSlotMember m slot lawBytes pick = some x) :
-    ∃ defKey, (slot, lawBytes, defKey) ∈ m.lawMembers ∧ pick defKey = some x := by
-  unfold findLawSlotMember at h
-  obtain ⟨⟨s, lb, defKey⟩, hIn, hPick⟩ := List.exists_of_findSome?_eq_some h
-  by_cases hs : s = slot ∧ lb = lawBytes
-  · rcases hs with ⟨rfl, rfl⟩
-    simp only [and_self, ↓reduceIte] at hPick
-    exact ⟨defKey, hIn, hPick⟩
-  · simp only [hs, ↓reduceIte] at hPick
-    cases hPick
-
-theorem findTypedFnRef_some {a : Admitted V} {defKey : Key} {ins outs : List V.Ty}
-    {ref : TypedFnRef V a.program.headers.fns ins outs}
-    (h : findTypedFnRef a defKey ins outs = some ref) :
-    a.program.find defKey = some (.fn ref.member) := by
-  unfold findTypedFnRef at h
-  cases hf : a.program.find defKey with
-  | none => rw [hf] at h; cases h
-  | some found =>
-      rw [hf] at h
-      cases found with
-      | protocol _ => cases h
-      | fn member =>
-          dsimp only [bind, pure] at h
-          rw [Option.bind_some] at h
-          dsimp only at h
-          obtain ⟨⟨_⟩, _, h⟩ := Option.bind_eq_some_iff.mp h
-          obtain ⟨⟨_⟩, _, h⟩ := Option.bind_eq_some_iff.mp h
-          obtain ⟨⟨_⟩, _, h⟩ := Option.bind_eq_some_iff.mp h
-          obtain ⟨⟨_⟩, _, h⟩ := Option.bind_eq_some_iff.mp h
-          cases h; rfl
-
-theorem findSafeFnRef_some {a : Admitted V} {defKey : Key} {ins outs : List V.Ty}
-    {ref : SafeFnRef V a.program.headers.fns ins outs}
-    (h : findSafeFnRef a defKey ins outs = some ref) :
-    a.program.find defKey = some (.fn ref.member) := by
-  unfold findSafeFnRef at h
-  cases hf : a.program.find defKey with
-  | none => rw [hf] at h; cases h
-  | some found =>
-      rw [hf] at h
-      cases found with
-      | protocol _ => cases h
-      | fn member =>
-          dsimp only [bind, pure] at h
-          rw [Option.bind_some] at h
-          dsimp only at h
-          obtain ⟨⟨_⟩, _, h⟩ := Option.bind_eq_some_iff.mp h
-          obtain ⟨⟨_⟩, _, h⟩ := Option.bind_eq_some_iff.mp h
-          obtain ⟨⟨_⟩, _, h⟩ := Option.bind_eq_some_iff.mp h
-          cases h; rfl
-
-theorem findSuiteEncode_some {a : Admitted V} {suite : ModuleRef} {unitTy τ : V.Ty}
-    {ref : TypedFnRef V a.program.headers.fns [τ] [.seq unitTy none]}
-    (h : findSuiteEncode a suite unitTy τ = some ref) :
-    ∃ defKey, (SuiteSlot.encode, defKey) ∈ suite.members ∧
-      a.program.find defKey = some (.fn ref.member) := by
-  obtain ⟨defKey, hIn, hRef⟩ := findSlotMember_some h
-  exact ⟨defKey, hIn, findTypedFnRef_some hRef⟩
-
-theorem findSuiteDerive_some {enc : VocabEncoder V} {a : Admitted V} {suite : ModuleRef}
-    {stateTy : V.Ty} {law : V.LawKey} {drawIns : List V.Ty} {τ : V.Ty}
-    {ref : TypedFnRef V a.program.headers.fns (stateTy :: bytesTy :: drawIns) [τ, stateTy]}
-    (h : findSuiteDerive enc a suite stateTy law drawIns τ = some ref) :
-    ∃ defKey, ((SuiteSlot.derive, enc.lawKey law, defKey) ∈ suite.lawMembers ∨
-        (SuiteSlot.derive, defKey) ∈ suite.members) ∧
-      a.program.find defKey = some (.fn ref.member) := by
-  unfold findSuiteDerive at h
-  cases hLaw : findLawSlotMember suite SuiteSlot.derive (enc.lawKey law)
-      (fun defKey => findTypedFnRef a defKey (stateTy :: bytesTy :: drawIns) [τ, stateTy]) with
-  | some ref' =>
-      rw [hLaw] at h
-      have hEq : ref' = ref := Option.some.inj h
-      subst hEq
-      obtain ⟨defKey, hIn, hRef⟩ := findLawSlotMember_some hLaw
-      exact ⟨defKey, .inl hIn, findTypedFnRef_some hRef⟩
-  | none =>
-      rw [hLaw] at h
-      dsimp only [HOrElse.hOrElse, OrElse.orElse, Option.orElse] at h
-      obtain ⟨defKey, hIn, hRef⟩ := findSlotMember_some h
-      exact ⟨defKey, .inr hIn, findTypedFnRef_some hRef⟩
-
-theorem findLayoutWrite_some {a : Admitted V} {layout : ModuleRef} {unitTy τ : V.Ty}
-    {ref : TypedFnRef V a.program.headers.fns [τ] [.seq unitTy none]}
-    (h : findLayoutWrite a layout unitTy τ = some ref) :
-    ∃ defKey, (LayoutSlot.write, defKey) ∈ layout.members ∧
-      a.program.find defKey = some (.fn ref.member) := by
-  obtain ⟨defKey, hIn, hRef⟩ := findSlotMember_some h
-  exact ⟨defKey, hIn, findTypedFnRef_some hRef⟩
-
-theorem findLayoutRead_some {a : Admitted V} {layout : ModuleRef} {unitTy τ : V.Ty}
-    {ref : SafeFnRef V a.program.headers.fns [.seq unitTy none, .nat] [τ, .nat]}
-    (h : findLayoutRead a layout unitTy τ = some ref) :
-    ∃ defKey, (LayoutSlot.read, defKey) ∈ layout.members ∧
-      a.program.find defKey = some (.fn ref.member) := by
-  obtain ⟨defKey, hIn, hRef⟩ := findSlotMember_some h
-  exact ⟨defKey, hIn, findSafeFnRef_some hRef⟩
-
-theorem findLayoutEqual_some {a : Admitted V} {layout : ModuleRef} {τ : V.Ty}
-    {ref : TypedFnRef V a.program.headers.fns [τ, τ] [.bool]}
-    (h : findLayoutEqual a layout τ = some ref) :
-    ∃ defKey, (LayoutSlot.equal, defKey) ∈ layout.members ∧
-      a.program.find defKey = some (.fn ref.member) := by
-  obtain ⟨defKey, hIn, hRef⟩ := findSlotMember_some h
-  exact ⟨defKey, hIn, findTypedFnRef_some hRef⟩
-
 theorem hlist_all_cast {T : Type} {F : T → Type} {P : ∀ t, F t → Prop}
     {as bs : List T} (h : as = bs) {xs : HList F as} (hx : xs.All P) :
     (cast (congrArg (HList F) h) xs).All P := by
@@ -545,7 +424,7 @@ def buildLayoutLayers_ok_elim {a : Admitted V} {entry : ProtocolHeader V} {layou
               exact .compact ⟨hSites, uPair.1, uPair.2.down, hUnit, hEmp⟩ h
 
 /-- Witness for an interactive `deploy` result. -/
-structure DeployInteractive (a : Admitted V) (declaration : Declaration) where
+structure DeployInteractive (enc : VocabEncoder V) (a : Admitted V) (declaration : Declaration) where
   foundPair : (hdr : ProtocolHeader V) × Member a.program.headers.protocols hdr
   hFound : a.program.findProtocol declaration.entry = some foundPair
   hSupp : checkDeclarationSupported foundPair.1 declaration = true
@@ -553,15 +432,16 @@ structure DeployInteractive (a : Admitted V) (declaration : Declaration) where
   hInt : checkInteractive declaration = true
   hScope : checkInteractiveScope foundPair.1 declaration = true
 
-abbrev DeployInteractive.toDeployed {a : Admitted V} {declaration : Declaration}
-    (w : DeployInteractive a declaration) : Deployed V :=
+abbrev DeployInteractive.toDeployed {enc : VocabEncoder V} {a : Admitted V} {declaration : Declaration}
+    (w : DeployInteractive enc a declaration) : Deployed V :=
   { admitted := a
     declaration := declaration
     found := by rw [w.hFound]; rfl
-    stack := fun _ => [] }
+    stack := fun _ => []
+    identity := schemeIdentity enc a declaration }
 
 /-- Witness for an authored `deploy` result. -/
-structure DeployAuthored (a : Admitted V) (declaration : Declaration) where
+structure DeployAuthored (enc : VocabEncoder V) (a : Admitted V) (declaration : Declaration) where
   foundPair : (hdr : ProtocolHeader V) × Member a.program.headers.protocols hdr
   hFound : a.program.findProtocol declaration.entry = some foundPair
   hSupp : checkDeclarationSupported foundPair.1 declaration = true
@@ -581,8 +461,8 @@ structure DeployAuthored (a : Admitted V) (declaration : Declaration) where
   hLay : buildLayoutLayers a foundPair.1 layout prover verifier declaration.key
     (foundPair.1.shape.events [] id) = .ok (layP, layV)
 
-abbrev DeployAuthored.toDeployed {a : Admitted V} {declaration : Declaration}
-    (w : DeployAuthored a declaration) : Deployed V :=
+abbrev DeployAuthored.toDeployed {enc : VocabEncoder V} {a : Admitted V} {declaration : Declaration}
+    (w : DeployAuthored enc a declaration) : Deployed V :=
   let hIsSome : (a.program.findProtocol declaration.entry).isSome := by rw [w.hFound]; rfl
   let hEntryEq : ((a.program.findProtocol declaration.entry).get hIsSome).1 = w.foundPair.1 := by
     simp [w.hFound]
@@ -592,7 +472,8 @@ abbrev DeployAuthored.toDeployed {a : Admitted V} {declaration : Declaration}
     stack := fun r =>
       if hP : r = w.prover then hP ▸ hEntryEq ▸ [w.layP]
       else if hV : r = w.verifier then hV ▸ hEntryEq ▸ [w.layV]
-      else [] }
+      else []
+    identity := schemeIdentity enc a declaration }
 
 /-- Witness for a derived `deploy` result. -/
 structure DeployDerived (enc : VocabEncoder V) (a : Admitted V) (declaration : Declaration) where
@@ -683,13 +564,14 @@ abbrev DeployDerived.toDeployed {enc : VocabEncoder V} {a : Admitted V} {declara
     stack := fun r =>
       if hP : r = w.prep.prover then hP ▸ (congrArg ProtocolHeader.ins hEntryEq) ▸ proverStack
       else if hV : r = w.prep.verifier then hV ▸ (congrArg ProtocolHeader.ins hEntryEq) ▸ [conV, w.prep.layV]
-      else [] }
+      else []
+    identity := schemeIdentity enc a declaration }
 
 /-- Structured witness for a successful `deploy` call, eliminating all nested checks once. -/
 inductive DeployOk (enc : VocabEncoder V) (a : Admitted V) (declaration : Declaration)
     (d : Deployed V) where
-  | interactive (w : DeployInteractive a declaration) (hEq : d = w.toDeployed)
-  | authored (w : DeployAuthored a declaration) (hEq : d = w.toDeployed)
+  | interactive (w : DeployInteractive enc a declaration) (hEq : d = w.toDeployed)
+  | authored (w : DeployAuthored enc a declaration) (hEq : d = w.toDeployed)
   | derived (w : DeployDerived enc a declaration) (hEq : d = w.toDeployed)
 
 theorem eqRec_hdr_eq_ins {V : Vocabulary} {hs : Headers V} {r : Role}
@@ -768,7 +650,7 @@ def deploy_ok_elim (enc : VocabEncoder V) (a : Admitted V) (declaration : Declar
             | ok prep =>
                 rw [hPrep] at h; dsimp only [bind, Except.bind] at h
                 cases prep with
-                | mk prover verifier hPV hNe hScope layout hLayOpt sessBytes hSessBytes hSess
+                | mk prover verifier hPV hNe hScope hLawsDist layout hLayOpt sessBytes hSessBytes hSess
                     sampLayer hSamp layP layV hLay =>
                     dsimp only at h
                     cases hStart : findSuiteStart a suite with
@@ -798,7 +680,7 @@ def deploy_ok_elim (enc : VocabEncoder V) (a : Admitted V) (declaration : Declar
                                         rw [hCC] at h
                                         have hEqD : d = (DeployDerived.toDeployed
                                             ⟨foundPair, hFound, hSupp, suite, sessionTag, hCon,
-                                              ⟨prover, verifier, hPV, hNe, hScope, layout, hLayOpt,
+                                              ⟨prover, verifier, hPV, hNe, hScope, hLawsDist, layout, hLayOpt,
                                                sessBytes, hSessBytes, hSess, sampLayer, hSamp,
                                                layP, layV, hLay⟩, hPrep,
                                               stPair.1, stPair.2, hStart, absPair.1, absPair.2, hAbs,
@@ -816,7 +698,7 @@ def deploy_ok_elim (enc : VocabEncoder V) (a : Admitted V) (declaration : Declar
                                               refine eqRec_hdr_eq_ins ?_ _; simp [hFound]
                                             · simp only [hV, ↓reduceDIte]
                                         exact .derived ⟨foundPair, hFound, hSupp, suite, sessionTag, hCon,
-                                          ⟨prover, verifier, hPV, hNe, hScope, layout, hLayOpt,
+                                          ⟨prover, verifier, hPV, hNe, hScope, hLawsDist, layout, hLayOpt,
                                            sessBytes, hSessBytes, hSess, sampLayer, hSamp,
                                            layP, layV, hLay⟩, hPrep,
                                           stPair.1, stPair.2, hStart, absPair.1, absPair.2, hAbs,
@@ -834,6 +716,7 @@ structure DeployIdealWitness (enc : VocabEncoder V) (serviceKey : Key) (a : Admi
   hCon : declaration.construction = .derived suite sessionTag
   prep : DerivedPrepared enc a declaration foundPair.1 sessionTag
   hPrep : prepareDerivedBody enc a declaration foundPair.1 sessionTag = .ok prep
+  hFresh : checkServiceKeyFresh (foundPair.1.shape.events [] id) serviceKey = true
   suiteUnitTy : V.Ty
   hSuiteFree : Ty.isLinear V suiteUnitTy = false
   hUnit : findSuiteUnit a suite = some ⟨suiteUnitTy, ⟨hSuiteFree⟩⟩
@@ -889,7 +772,8 @@ abbrev DeployIdealWitness.toDeployed {enc : VocabEncoder V} {serviceKey : Key} {
     found := hIsSome
     stack := fun r =>
       if hV : r = w.prep.verifier then hV ▸ (congrArg ProtocolHeader.ins hEntryEq) ▸ [idealConV, w.prep.layV]
-      else [] }
+      else []
+    identity := schemeIdentity enc a declaration }
 
 /-- Packed witness + equality for `deployIdeal ... = .ok d`. -/
 structure DeployIdealOk (enc : VocabEncoder V) (serviceKey : Key) (a : Admitted V)
@@ -922,46 +806,51 @@ def deployIdeal_ok_elim (enc : VocabEncoder V) (serviceKey : Key) (a : Admitted 
             | ok prep =>
                 rw [hPrep] at h; dsimp only [bind, Except.bind] at h
                 cases prep with
-                | mk prover verifier hPV hNe hScope layout hLayOpt sessBytes hSessBytes hSess
+                | mk prover verifier hPV hNe hScope hLawsDist layout hLayOpt sessBytes hSessBytes hSess
                     sampLayer hSamp layP layV hLay =>
                     dsimp only at h
-                    cases hUnit : findSuiteUnit a suite with
-                    | none => rw [hUnit] at h; cases h
-                    | some uPair =>
-                        rw [hUnit] at h; dsimp only at h
-                        cases hSV : buildStmtAbsorbItems a suite uPair.1 verifier prover verifier
-                            (.inr rfl) foundPair.1.ins declaration.key with
-                        | error _ => rw [hSV] at h; cases h
-                        | ok stmtV =>
-                            rw [hSV] at h; dsimp only [bind, Except.bind] at h
-                            cases hIV : buildIdealVerifierClauses a suite uPair.1
-                                uPair.2.down serviceKey prover verifier declaration.key
-                                (foundPair.1.shape.events [] id)
-                                (foundPair.1.shape.eventsWithAbsorb prover verifier [] id false) with
-                            | error _ => rw [hIV] at h; cases h
-                            | ok idealVClauses =>
-                                rw [hIV] at h
-                                have hEqD : d = (DeployIdealWitness.toDeployed
-                                    ⟨foundPair, hFound, hSupp, suite, sessionTag, hCon,
-                                      ⟨prover, verifier, hPV, hNe, hScope, layout, hLayOpt,
+                    cases hFresh : checkServiceKeyFresh (foundPair.1.shape.events [] id) serviceKey with
+                    | false => rw [hFresh] at h; cases h
+                    | true =>
+                        rw [hFresh] at h
+                        simp only [Bool.not_true, Bool.false_eq_true, ↓reduceIte] at h
+                        cases hUnit : findSuiteUnit a suite with
+                        | none => rw [hUnit] at h; cases h
+                        | some uPair =>
+                            rw [hUnit] at h; dsimp only at h
+                            cases hSV : buildStmtAbsorbItems a suite uPair.1 verifier prover verifier
+                                (.inr rfl) foundPair.1.ins declaration.key with
+                            | error _ => rw [hSV] at h; cases h
+                            | ok stmtV =>
+                                rw [hSV] at h; dsimp only [bind, Except.bind] at h
+                                cases hIV : buildIdealVerifierClauses a suite uPair.1
+                                    uPair.2.down serviceKey prover verifier declaration.key
+                                    (foundPair.1.shape.events [] id)
+                                    (foundPair.1.shape.eventsWithAbsorb prover verifier [] id false) with
+                                | error _ => rw [hIV] at h; cases h
+                                | ok idealVClauses =>
+                                    rw [hIV] at h
+                                    have hEqD : d = (DeployIdealWitness.toDeployed
+                                        ⟨foundPair, hFound, hSupp, suite, sessionTag, hCon,
+                                          ⟨prover, verifier, hPV, hNe, hScope, hLawsDist, layout, hLayOpt,
+                                           sessBytes, hSessBytes, hSess, sampLayer, hSamp,
+                                           layP, layV, hLay⟩, hPrep, hFresh,
+                                          uPair.1, uPair.2.down, hUnit, stmtV, hSV,
+                                          idealVClauses, hIV⟩) := by
+                                      have he := (Except.ok.inj h).symm
+                                      cases he
+                                      congr 1
+                                      funext r
+                                      by_cases hV : r = verifier
+                                      · subst hV; simp only [↓reduceDIte]
+                                        refine eqRec_hdr_eq_ins ?_ _; simp [hFound]
+                                      · simp only [hV, ↓reduceDIte]
+                                    exact ⟨⟨foundPair, hFound, hSupp, suite, sessionTag, hCon,
+                                      ⟨prover, verifier, hPV, hNe, hScope, hLawsDist, layout, hLayOpt,
                                        sessBytes, hSessBytes, hSess, sampLayer, hSamp,
-                                       layP, layV, hLay⟩, hPrep,
+                                       layP, layV, hLay⟩, hPrep, hFresh,
                                       uPair.1, uPair.2.down, hUnit, stmtV, hSV,
-                                      idealVClauses, hIV⟩) := by
-                                  have he := (Except.ok.inj h).symm
-                                  cases he
-                                  congr 1
-                                  funext r
-                                  by_cases hV : r = verifier
-                                  · subst hV; simp only [↓reduceDIte]
-                                    refine eqRec_hdr_eq_ins ?_ _; simp [hFound]
-                                  · simp only [hV, ↓reduceDIte]
-                                exact ⟨⟨foundPair, hFound, hSupp, suite, sessionTag, hCon,
-                                  ⟨prover, verifier, hPV, hNe, hScope, layout, hLayOpt,
-                                   sessBytes, hSessBytes, hSess, sampLayer, hSamp,
-                                   layP, layV, hLay⟩, hPrep,
-                                  uPair.1, uPair.2.down, hUnit, stmtV, hSV,
-                                  idealVClauses, hIV⟩, hEqD⟩
+                                      idealVClauses, hIV⟩, hEqD⟩
 
 end Elimination
 

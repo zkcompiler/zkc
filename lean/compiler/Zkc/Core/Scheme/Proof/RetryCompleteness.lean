@@ -2622,7 +2622,7 @@ private theorem derived_step_flow {enc : VocabEncoder V} {d : Deployed V} {suite
     (hMsgV : M.Valid τ x) {st : M.Val stateTy} {buf : List (M.Val unitTy)}
     (hStV : M.Valid stateTy st) (hBufV : ∀ u ∈ buf, M.Valid unitTy u)
     {eP : ShapeEvent V} (hEP : eP ∈ d.entry.shape.events [] id)
-    (hSiteP : eP.site = at_.site) (hTyP : eP.τ = τ) (hVin : verifier ∈ getters)
+    (hSiteP : eP.site = at_.site) (hTyP : eP.τ = τ) (hGsEq : getters = [verifier])
     (hClsP : eP.cls = .flow kind prover getters) :
     let fnTable := Defs.fnTable M d.admitted.program.defs
     let rTable := Defs.rTable M d.admitted.program.defs
@@ -2639,6 +2639,7 @@ private theorem derived_step_flow {enc : VocabEncoder V} {d : Deployed V} {suite
           (.cons (hCVSt.symm ▸ st) (.cons (hLVSt.symm ▸ (buf ++ chunk ++ restBuf, (buf.length, ()))) .nil)) =
           .done (x, .cons (hCVSt.symm ▸ st')
             (.cons (hLVSt.symm ▸ (buf ++ chunk ++ restBuf, (buf.length + chunk.length, ()))) .nil))) := by
+  subst getters
   cases conP0 with | mk cPL cPSt cPT cPG cPCl cPA cPS cPF =>
   cases conV0 with | mk cVL cVSt cVT cVG cVCl cVA cVS cVF =>
   cases layP0 with | mk lPL lPSt lPT lPG lPCl lPA lPS lPF =>
@@ -2658,17 +2659,17 @@ private theorem derived_step_flow {enc : VocabEncoder V} {d : Deployed V} {suite
   have hAtEta : (⟨at_.path, at_.site.key⟩ : Occurrence) = at_ := by cases at_; rfl
   obtain ⟨wRef, chunk, hWFind, hWD, hChV, hLayPAns⟩ :=
     streaming_layout_answer_prover_flow M 0 events (fun _ h => h) hSL
-      kind getters at_ τ x buf hMsgV
-      ⟨eP, hEP, hSiteP, hTyP, hVin, hClsP⟩
+      kind [verifier] at_ τ x buf hMsgV
+      ⟨eP, hEP, hSiteP, hTyP, rfl, hClsP⟩
   cases needP with
   | true =>
       obtain ⟨encP, encVal, st', hEncFindP, hEncD, hAbsD, hSt'V, hConPAns⟩ :=
         construction_clauses_answer_prover_flow_abs M 0 eventsAbs hCC
-          kind getters at_ τ x st hMsgV hStV ⟨eP, hNeedP, hSiteP, hTyP, hClsP⟩
+          kind [verifier] at_ τ x st hMsgV hStV ⟨eP, hNeedP, hSiteP, hTyP, hClsP⟩
       rw [hAtEta] at hConPAns
       obtain ⟨encV, hEncFindV, hConVAns⟩ :=
         construction_clauses_answer_verifier_flow_abs M 0 eventsAbs hCC
-          kind at_ τ st ⟨eP, hNeedP, hSiteP, hTyP, getters, hVin, hClsP⟩
+          kind at_ τ st ⟨eP, hNeedP, hSiteP, hTyP, hClsP⟩
       rw [hAtEta] at hConVAns
       have hEncEq : encP = encV := Option.some.inj (hEncFindP.symm.trans hEncFindV)
       subst hEncEq
@@ -2682,7 +2683,7 @@ private theorem derived_step_flow {enc : VocabEncoder V} {d : Deployed V} {suite
         obtain ⟨rRef, hRFind, hLayVAns⟩ :=
           streaming_layout_answer_verifier_flow M 0 events hSL
             kind at_ τ (buf ++ chunk ++ restBuf) buf.length
-            ⟨eP, hEP, hSiteP, hTyP, getters, hVin, hClsP⟩
+            ⟨eP, hEP, hSiteP, hTyP, hClsP⟩
         have hRD := layoutLawful_roundTrip M hLayDecl hLayLaw hWFind hRFind hMsgV hBufV hRestV hWD
         have hLayVDone := hLayVAns x (buf.length + chunk.length) hRD
         have hKV :
@@ -2706,15 +2707,15 @@ private theorem derived_step_flow {enc : VocabEncoder V} {d : Deployed V} {suite
           x x _ hConVAns hLayVDone hKV
   | false =>
       have hNoAbs : ∀ e' b', (e', b') ∈ eventsAbs → e'.site = at_.site → e'.τ = τ →
-          (∃ gs, verifier ∈ gs ∧ e'.cls = .flow kind prover gs) → b' = false := by
-        intro e' b' hIn hS hT ⟨gs, hVg, hC⟩
+          e'.cls = .flow kind prover [verifier] → b' = false := by
+        intro e' b' hIn hS hT hC
         exact eventsWithAbsorb_flow_consistent prover verifier [] id false d.entry.shape
-          hIn hNeedP (hS.trans hSiteP.symm) (hT.trans hTyP.symm) hC hVg hClsP hVin
+          hIn hNeedP (hS.trans hSiteP.symm) (hT.trans hTyP.symm) hC hClsP
       obtain ⟨hUnmP, hUnmV⟩ :=
-        construction_clauses_unmatched_elided_flow M 0 eventsAbs hCC kind getters at_ τ x hNoAbs
+        construction_clauses_unmatched_elided_flow M 0 eventsAbs hCC kind [verifier] at_ τ x hNoAbs
       have hConPPass : Clause.answer M (Defs.fnTable M d.admitted.program.defs)
-          (Defs.rTable M d.admitted.program.defs) cPCl (.give kind getters at_ τ x) st =
-          .call (.give kind getters at_ τ x) fun reply => .done (reply, st) :=
+          (Defs.rTable M d.admitted.program.defs) cPCl (.give kind [verifier] at_ τ x) st =
+          .call (.give kind [verifier] at_ τ x) fun reply => .done (reply, st) :=
         clause_answer_unmatched_all M _ _ _ st cPCl hUnmP
       have hConVPass : Clause.answer M (Defs.fnTable M d.admitted.program.defs)
           (Defs.rTable M d.admitted.program.defs) cVCl (.get kind prover at_ τ) st =
@@ -2730,7 +2731,7 @@ private theorem derived_step_flow {enc : VocabEncoder V} {d : Deployed V} {suite
         obtain ⟨rRef, hRFind, hLayVAns⟩ :=
           streaming_layout_answer_verifier_flow M 0 events hSL
             kind at_ τ (buf ++ chunk ++ restBuf) buf.length
-            ⟨eP, hEP, hSiteP, hTyP, getters, hVin, hClsP⟩
+            ⟨eP, hEP, hSiteP, hTyP, hClsP⟩
         have hRD := layoutLawful_roundTrip M hLayDecl hLayLaw hWFind hRFind hMsgV hBufV hRestV hWD
         have hLayVDone := hLayVAns x (buf.length + chunk.length) hRD
         exact stack2_clause_step M (Defs.fnTable M d.admitted.program.defs)
@@ -2747,6 +2748,7 @@ uniformly, returning `chunk = []` when uncarried). -/
 private theorem derived_step_heard_coin {enc : VocabEncoder V} {d : Deployed V} {suite : ModuleRef}
     {sessionTag : Option (List Nat)} {layout : Layout} {stateTy suiteUnitTy unitTy : V.Ty}
     {hfree : Ty.isLinear V unitTy = false}
+    {startRef : TypedFnRef V d.admitted.program.headers.fns [bytesTy] [stateTy]}
     {absRef : TypedFnRef V d.admitted.program.headers.fns [stateTy, bytesTy, .seq suiteUnitTy none] [stateTy]}
     {prover verifier : Role} {declKey : Key}
     {conP0 : Layer V d.admitted.program.headers prover d.entry.ins}
@@ -2756,6 +2758,7 @@ private theorem derived_step_heard_coin {enc : VocabEncoder V} {d : Deployed V} 
     (hCPSt : conP0.state = stateTy) (hCVSt : conV0.state = stateTy)
     (hLPSt : layP0.state = .seq unitTy none) (hLVSt : layV0.state = streamStateTy unitTy)
     (hConDecl : d.declaration.construction = .derived suite sessionTag)
+    (hStart : findSuiteStart d.admitted suite = some ⟨stateTy, startRef⟩)
     (hLayDecl : d.declaration.layout = some layout)
     (hSuiteLaw : d.SuiteLawfulFor enc M) (hLayLaw : d.LayoutLawful M)
     (hCC : buildConstructionClauses.go enc d.admitted suite stateTy suiteUnitTy absRef prover verifier
@@ -2765,12 +2768,12 @@ private theorem derived_step_heard_coin {enc : VocabEncoder V} {d : Deployed V} 
     (hSL : buildStreamingLayoutClauses.go d.admitted layout unitTy hfree prover verifier declKey
       (d.entry.shape.events [] id) 0 (d.entry.shape.events [] id) =
       .ok (hLPSt ▸ layP0.clauses, hLVSt ▸ layV0.clauses))
-    {law : V.LawKey} {h0 : Role} {hs : List Role} {at_ : Occurrence} {τ : V.Ty}
+    {law : V.LawKey} {hearers : List Role} {at_ : Occurrence} {τ : V.Ty}
     {st : M.Val stateTy} {buf : List (M.Val unitTy)}
     (hStV : M.Valid stateTy st) (hBufV : ∀ u ∈ buf, M.Valid unitTy u)
     {eV : ShapeEvent V} (hEV : eV ∈ d.entry.shape.events [] id)
-    (hSiteV : eV.site = at_.site) (hTyV : eV.τ = τ) (hPin : prover ∈ h0 :: hs)
-    (hClsV : eV.cls = .given (.coin law) verifier (h0 :: hs)) :
+    (hSiteV : eV.site = at_.site) (hTyV : eV.τ = τ) (hHEq : hearers = [prover])
+    (hClsV : eV.cls = .given (.coin law) verifier hearers) :
     let fnTable := Defs.fnTable M d.admitted.program.defs
     let rTable := Defs.rTable M d.admitted.program.defs
     ∃ (coin : M.Val τ) (st' : M.Val stateTy) (chunk : List (M.Val unitTy)),
@@ -2785,10 +2788,11 @@ private theorem derived_step_heard_coin {enc : VocabEncoder V} {d : Deployed V} 
         .done (coin, .cons (hCPSt.symm ▸ st') (.cons (hLPSt.symm ▸ (buf ++ chunk)) .nil)) ∧
       (∀ (restBuf : List (M.Val unitTy)), (∀ u ∈ restBuf, M.Valid unitTy u) →
         (Stack.handler M fnTable rTable [conV0, layV0]).clause
-          (.own (.coin law) (h0 :: hs) at_ [] .nil τ)
+          (.own (.coin law) hearers at_ [] .nil τ)
           (.cons (hCVSt.symm ▸ st) (.cons (hLVSt.symm ▸ (buf ++ chunk ++ restBuf, (buf.length, ()))) .nil)) =
           .done (coin, .cons (hCVSt.symm ▸ st')
             (.cons (hLVSt.symm ▸ (buf ++ chunk ++ restBuf, (buf.length + chunk.length, ()))) .nil))) := by
+  subst hearers
   cases conP0 with | mk cPL cPSt cPT cPG cPCl cPA cPS cPF =>
   cases conV0 with | mk cVL cVSt cVT cVG cVCl cVA cVS cVF =>
   cases layP0 with | mk lPL lPSt lPT lPG lPCl lPA lPS lPF =>
@@ -2808,15 +2812,15 @@ private theorem derived_step_heard_coin {enc : VocabEncoder V} {d : Deployed V} 
   have hSuf0 : ∀ k p, eventsAbs[k]? = some p → events[0 + k]? = some p.1 := by
     intro k p hk; rw [Nat.zero_add, ← hFst, List.getElem?_map, hk]; rfl
   obtain ⟨idxP, ⟨ePSite, ePCls, ePτ⟩, derP, coinP, stP', hIdxP, hSiteP, hTyP,
-    ⟨hsP, hPinP, hClsP⟩, hDerFindP, hDerDP, hCoinPV, hStP'V, hConPAns⟩ :=
+    hClsP, hDerFindP, hDerDP, hCoinPV, hStP'V, hConPAns⟩ :=
     construction_clauses_answer_prover_coin M 0 eventsAbs hSuf0 hCC
       law at_ τ st hStV
-      ⟨pV, hpV, hpVEq.symm ▸ hSiteV, hpVEq.symm ▸ hTyV, h0 :: hs, hPin, hpVEq.symm ▸ hClsV⟩
+      ⟨pV, hpV, hpVEq.symm ▸ hSiteV, hpVEq.symm ▸ hTyV, hpVEq.symm ▸ hClsV⟩
   obtain ⟨idxV, ⟨eV'Site, eV'Cls, eV'τ⟩, derV, coinV, stV', hIdxV, hSiteV', hTyV',
     hClsV', hLawV', hDerFindV, hDerDV, hCoinVV, hStV'V, hConVAns⟩ :=
     construction_clauses_answer_verifier_coin M 0 eventsAbs hSuf0 hCC
-      law (h0 :: hs) at_ τ st hStV
-      ⟨pV, hpV, hpVEq.symm ▸ hSiteV, hpVEq.symm ▸ hTyV, hPin, hpVEq.symm ▸ hClsV⟩
+      law [prover] at_ τ st hStV
+      ⟨pV, hpV, hpVEq.symm ▸ hSiteV, hpVEq.symm ▸ hTyV, rfl, hpVEq.symm ▸ hClsV⟩
   dsimp only at hSiteP hTyP hClsP hSiteV' hTyV' hClsV'
   subst ePτ; subst eV'τ
   have hDerEq : derP = derV := Option.some.inj (hDerFindP.symm.trans hDerFindV)
@@ -2825,7 +2829,7 @@ private theorem derived_step_heard_coin {enc : VocabEncoder V} {d : Deployed V} 
       .done (.cons coinV (.cons stV' .nil)) := hDerDP.symm.trans hDerDV
   cases hEvalEq
   have hAllowsCoin : Allows M (.coin law) [] .nil τ coinP :=
-    suiteLawful_allows M hConDecl hSuiteLaw hDerFindV
+    suiteLawful_allows M hConDecl hSuiteLaw hStart hDerFindV
       (List.mem_of_getElem? hIdxV) hClsV' rfl hLawV' hStV (drawLabel_bytes at_.site) hDerDV
   have hAtHeard : at_.site ∈ d.entry.shape.heardCoins := by
     rw [← hSiteV']
@@ -2837,11 +2841,11 @@ private theorem derived_step_heard_coin {enc : VocabEncoder V} {d : Deployed V} 
       ⟨eV'Site.through, drawToldKey events (0 + idxV)⟩ := by
     simpa using site_told_from_match hSiteV' (k := drawToldKey events idxV)
   have hCarryP := streaming_layout_answer_told M 0 events (fun _ h => h) hSL
-    idxP ⟨ePSite, ePCls, τ⟩ hIdxP law hsP ⟨at_.path, drawToldKey events idxP⟩
-    coinP hClsP hPinP hToldSiteP hCoinPV
+    idxP ⟨ePSite, ePCls, τ⟩ hIdxP law [prover] ⟨at_.path, drawToldKey events idxP⟩
+    coinP hClsP rfl hToldSiteP hCoinPV
   have hCarryV := streaming_layout_answer_told M 0 events (fun _ h => h) hSL
-    idxV ⟨eV'Site, eV'Cls, τ⟩ hIdxV law (h0 :: hs) ⟨at_.path, drawToldKey events idxV⟩
-    coinP hClsV' hPin hToldSiteV hCoinPV
+    idxV ⟨eV'Site, eV'Cls, τ⟩ hIdxV law [prover] ⟨at_.path, drawToldKey events idxV⟩
+    coinP hClsV' rfl hToldSiteV hCoinPV
   by_cases hCar : at_.site ∈ layout.carry
   · have hCarP : ePSite ∈ layout.carry := hSiteP.symm ▸ hCar
     have hCarV : eV'Site ∈ layout.carry := hSiteV'.symm ▸ hCar
@@ -2885,6 +2889,29 @@ private theorem derived_step_heard_coin {enc : VocabEncoder V} {d : Deployed V} 
           _ _ st stP' (buf ++ restBuf, (buf.length, ())) (buf ++ restBuf, (buf.length, ()))
           () coinP _ hConVAns (hCarryV.2 (buf ++ restBuf) buf.length) rfl
 
+/-- Every `.given` step along `p` (including heard coins) is answered by `source`. -/
+def AllFed (source : Source M) {A : Type} : Protocol M A → Prop
+  | .done _ => True
+  | .halt _ => True
+  | .call (.flow ..) k => AllFed source (k ())
+  | .call (.given _ _ _ at_ _ _ τ) k =>
+      ∃ v, source at_ τ = some v ∧ AllFed source (k v)
+
+private theorem allFed_of_agree {A : Type} {P : Occurrence → Prop} {s₁ s₂ : Source M}
+    (hAg : ∀ at_ τ, P at_ → s₁ at_ τ = s₂ at_ τ) :
+    ∀ {p : Protocol M A},
+      Protocol.OccsIn M P p → AllFed M s₁ p → AllFed M s₂ p := by
+  intro p
+  induction p with
+  | done _ => intro _ _; trivial
+  | halt _ => intro _ _; trivial
+  | call op k ih =>
+      cases op with
+      | flow => intro ⟨_, hOcc⟩ hF; exact ih () (hOcc ()) hF
+      | given =>
+          intro ⟨hP, hOcc⟩ ⟨v, hv, hFk⟩
+          exact ⟨v, (hAg _ _ hP).symm.trans hv, ih v (hOcc v) hFk⟩
+
 /-- Step an aborting-attempt specification past a non-heard `.given` event (private coin or request),
 handling both `at_.site ∈ heardCoins` and `at_.site ∉ heardCoins` unconditionally. -/
 private theorem step_aborts_given {A : Type} {prover : Role} {heardCoins : List Site}
@@ -2894,14 +2921,16 @@ private theorem step_aborts_given {A : Type} {prover : Role} {heardCoins : List 
     (hSrc : src at_ τ = some v) (hAl : Allows M gkind gIns payload τ v)
     (hOccK : Protocol.OccsIn M (· ≠ at_) (k v))
     (hAborts : ∀ source₁, Lawful M source₁ (.call (.given gkind owner hearers at_ gIns payload τ) k) →
+      AllFed M source₁ (.call (.given gkind owner hearers at_ gIns payload τ) k) →
       (∀ at' τ', at'.site ∉ heardCoins → source₁ at' τ' = src at' τ') →
       ∃ evs who why, GRun M source₁ (.call (.given gkind owner hearers at_ gIns payload τ) k) evs (.stopped who why) ∧
         prover ∈ who ∧ why.isAbort = true) :
     ∀ source₁, Lawful M source₁ (k v) →
+      AllFed M source₁ (k v) →
       (∀ at' τ', at'.site ∉ heardCoins → source₁ at' τ' = src at' τ') →
       ∃ evs who why, GRun M source₁ (k v) evs (.stopped who why) ∧
         prover ∈ who ∧ why.isAbort = true := by
-  intro source₁ hL₁ hAg₁
+  intro source₁ hL₁ hAF₁ hAg₁
   by_cases hInH : at_.site ∈ heardCoins
   · let src₂ := patchSource M source₁ at_ τ v
     have hAg12 : ∀ at' τ', at' ≠ at_ → source₁ at' τ' = src₂ at' τ' :=
@@ -2910,12 +2939,14 @@ private theorem step_aborts_given {A : Type} {prover : Role} {heardCoins : List 
       intro w hw
       dsimp only [src₂] at hw; rw [patchSource_self] at hw; cases hw
       exact ⟨hAl, lawful_of_agree M hAg12 hOccK hL₁⟩
+    have hAF₂ : AllFed M src₂ (.call (.given gkind owner hearers at_ gIns payload τ) k) :=
+      ⟨v, patchSource_self M source₁ at_ τ v, allFed_of_agree M hAg12 hOccK hAF₁⟩
     have hAg₂ : ∀ at' τ', at'.site ∉ heardCoins → src₂ at' τ' = src at' τ' := by
       intro at' τ' hNotIn
       have hne : at' ≠ at_ := fun heq => hNotIn (heq ▸ hInH)
       dsimp only [src₂]; rw [patchSource_ne M source₁ at_ τ v hne τ']
       exact hAg₁ at' τ' hNotIn
-    obtain ⟨evs, who, why, hRun₂, hInWho, hIsAb⟩ := hAborts src₂ hL₂ hAg₂
+    obtain ⟨evs, who, why, hRun₂, hInWho, hIsAb⟩ := hAborts src₂ hL₂ hAF₂ hAg₂
     cases hRun₂ with
     | given hS2 hRk =>
         dsimp only [src₂] at hS2; rw [patchSource_self] at hS2; cases hS2
@@ -2923,7 +2954,9 @@ private theorem step_aborts_given {A : Type} {prover : Role} {heardCoins : List 
   · have hS1 : source₁ at_ τ = some v := (hAg₁ at_ τ hInH).trans hSrc
     have hL₂ : Lawful M source₁ (.call (.given gkind owner hearers at_ gIns payload τ) k) := by
       intro w hw; rw [hS1] at hw; cases hw; exact ⟨hAl, hL₁⟩
-    obtain ⟨evs, who, why, hRun₁, hInWho, hIsAb⟩ := hAborts source₁ hL₂ hAg₁
+    have hAF₂ : AllFed M source₁ (.call (.given gkind owner hearers at_ gIns payload τ) k) :=
+      ⟨v, hS1, hAF₁⟩
+    obtain ⟨evs, who, why, hRun₁, hInWho, hIsAb⟩ := hAborts source₁ hL₂ hAF₂ hAg₁
     cases hRun₁ with
     | given hS1' hRk =>
         rw [hS1] at hS1'; cases hS1'
@@ -2936,14 +2969,16 @@ private theorem step_aborts_heard_coin {A : Type} {prover : Role} {heardCoins : 
     (hAtH : at_.site ∈ heardCoins) (hAl : Allows M (.coin law) [] .nil τ coin)
     (hOccK : Protocol.OccsIn M (· ≠ at_) (k coin))
     (hAborts : ∀ source₁, Lawful M source₁ (.call (.given (.coin law) owner hearers at_ [] .nil τ) k) →
+      AllFed M source₁ (.call (.given (.coin law) owner hearers at_ [] .nil τ) k) →
       (∀ at' τ', at'.site ∉ heardCoins → source₁ at' τ' = src at' τ') →
       ∃ evs who why, GRun M source₁ (.call (.given (.coin law) owner hearers at_ [] .nil τ) k) evs (.stopped who why) ∧
         prover ∈ who ∧ why.isAbort = true) :
     ∀ source₁, Lawful M source₁ (k coin) →
+      AllFed M source₁ (k coin) →
       (∀ at' τ', at'.site ∉ heardCoins → source₁ at' τ' = src at' τ') →
       ∃ evs who why, GRun M source₁ (k coin) evs (.stopped who why) ∧
         prover ∈ who ∧ why.isAbort = true := by
-  intro source₁ hL₁ hAg₁
+  intro source₁ hL₁ hAF₁ hAg₁
   let src₂ := patchSource M source₁ at_ τ coin
   have hAg12 : ∀ at' τ', at' ≠ at_ → source₁ at' τ' = src₂ at' τ' :=
     fun at' τ' hne => (patchSource_ne M source₁ at_ τ coin hne τ').symm
@@ -2951,12 +2986,14 @@ private theorem step_aborts_heard_coin {A : Type} {prover : Role} {heardCoins : 
     intro w hw
     dsimp only [src₂] at hw; rw [patchSource_self] at hw; cases hw
     exact ⟨hAl, lawful_of_agree M hAg12 hOccK hL₁⟩
+  have hAF₂ : AllFed M src₂ (.call (.given (.coin law) owner hearers at_ [] .nil τ) k) :=
+    ⟨coin, patchSource_self M source₁ at_ τ coin, allFed_of_agree M hAg12 hOccK hAF₁⟩
   have hAg₂ : ∀ at' τ', at'.site ∉ heardCoins → src₂ at' τ' = src at' τ' := by
     intro at' τ' hNotIn
     have hne : at' ≠ at_ := fun heq => hNotIn (heq ▸ hAtH)
     dsimp only [src₂]; rw [patchSource_ne M source₁ at_ τ coin hne τ']
     exact hAg₁ at' τ' hNotIn
-  obtain ⟨evs, who, why, hRun₂, hInWho, hIsAb⟩ := hAborts src₂ hL₂ hAg₂
+  obtain ⟨evs, who, why, hRun₂, hInWho, hIsAb⟩ := hAborts src₂ hL₂ hAF₂ hAg₂
   cases hRun₂ with
   | given hS2 hRk =>
       dsimp only [src₂] at hS2; rw [patchSource_self] at hS2; cases hS2
@@ -3028,6 +3065,7 @@ reachable halts), a protocol that must abort at the prover on every lawful sourc
 private theorem after_noAbort_contradicts_abort {enc : VocabEncoder V} {d : Deployed V}
     {suite : ModuleRef} {sessionTag : Option (List Nat)} {layout : Layout}
     {stateTy suiteUnitTy unitTy : V.Ty} {hfree : Ty.isLinear V unitTy = false}
+    {startRef : TypedFnRef V d.admitted.program.headers.fns [bytesTy] [stateTy]}
     {absRef : TypedFnRef V d.admitted.program.headers.fns [stateTy, bytesTy, .seq suiteUnitTy none] [stateTy]}
     {prover verifier : Role} (hNe : prover ≠ verifier) {declKey : Key}
     {conP0 : Layer V d.admitted.program.headers prover d.entry.ins}
@@ -3037,6 +3075,7 @@ private theorem after_noAbort_contradicts_abort {enc : VocabEncoder V} {d : Depl
     (hCPSt : conP0.state = stateTy) (hCVSt : conV0.state = stateTy)
     (hLPSt : layP0.state = .seq unitTy none) (hLVSt : layV0.state = streamStateTy unitTy)
     (hConDecl : d.declaration.construction = .derived suite sessionTag)
+    (hStart : findSuiteStart d.admitted suite = some ⟨stateTy, startRef⟩)
     (hLayDecl : d.declaration.layout = some layout)
     (hSuiteLaw : d.SuiteLawfulFor enc M) (hLayLaw : d.LayoutLawful M)
     (hCC : buildConstructionClauses.go enc d.admitted suite stateTy suiteUnitTy absRef prover verifier
@@ -3062,7 +3101,7 @@ private theorem after_noAbort_contradicts_abort {enc : VocabEncoder V} {d : Depl
       Protocol.UniqueOccs M p →
       LawfulPrivate M src p →
       Fed M src p →
-      (∀ source₁, Lawful M source₁ p →
+      (∀ source₁, Lawful M source₁ p → AllFed M source₁ p →
         (∀ at' τ', at'.site ∉ d.entry.shape.heardCoins → source₁ at' τ' = src at' τ') →
         ∃ evs who why, GRun M source₁ p evs (.stopped who why) ∧ prover ∈ who ∧ why.isAbort = true) →
       False := by
@@ -3073,10 +3112,10 @@ private theorem after_noAbort_contradicts_abort {enc : VocabEncoder V} {d : Depl
   have hEventDisc : ∀ e ∈ events,
       match e.cls with
       | .flow _ giver getters =>
-          (giver = prover ∧ verifier ∈ getters) ∨
+          (giver = prover ∧ getters = [verifier]) ∨
           (giver ≠ prover ∧ giver ≠ verifier ∧ prover ∉ getters ∧ verifier ∉ getters)
       | .given (.coin law) owner hearers =>
-          (owner = verifier ∧ prover ∈ hearers ∧
+          (owner = verifier ∧ hearers = [prover] ∧
             ∃ sig, V.law law = some sig ∧ sig.out = e.τ ∧ sig.ins = []) ∨
           hearers = []
       | .given (.request _) owner hearers =>
@@ -3089,11 +3128,11 @@ private theorem after_noAbort_contradicts_abort {enc : VocabEncoder V} {d : Depl
   induction p with
   | done a =>
       intro _ _ _ _ _ src _ _ _ _ _ _ _ _ _ _ _ hAborts
-      obtain ⟨_, _, _, hRun, _, _⟩ := hAborts src trivial (fun _ _ _ => rfl)
+      obtain ⟨_, _, _, hRun, _, _⟩ := hAborts src trivial trivial (fun _ _ _ => rfl)
       cases hRun
   | halt payload =>
       intro postP postV qP qV st src hStV hPP hPV hSP hShP hShV hNoAb hPShape hUniq hLP hFed hAborts
-      obtain ⟨_, who, why, hRun, hInWho, hIsAb⟩ := hAborts src trivial (fun _ _ _ => rfl)
+      obtain ⟨_, who, why, hRun, hInWho, hIsAb⟩ := hAborts src trivial trivial (fun _ _ _ => rfl)
       cases hRun
       generalize hH : Process.halt (who, why) = p0 at hPP
       induction hPP with
@@ -3117,14 +3156,16 @@ private theorem after_noAbort_contradicts_abort {enc : VocabEncoder V} {d : Depl
           cases hP0
           obtain ⟨eP, hEP, hSiteP, hTyP, hClsP⟩ := hShP.1
           have hDisc := hEventDisc eP hEP; rw [hClsP] at hDisc
-          have hVin : verifier ∈ getters := by
+          have hGsEq : getters = [verifier] := by
             rcases hDisc with ⟨_, hV⟩ | ⟨hNotP, _, _, _⟩
             · exact hV
             · exact absurd rfl hNotP
+          subst getters
+          have hVin : verifier ∈ [verifier] := List.mem_singleton_self verifier
           obtain ⟨st', _, hSt'V, _, _, _⟩ :=
             derived_step_flow M hCPSt hCVSt hLPSt hLVSt hLayDecl hLayLaw hCC hSL
-              hSP.1 (buf := []) hStV (fun _ h => nomatch h) hEP hSiteP hTyP hVin hClsP
-          generalize hPV0 : (Process.call (GOp.flow kind prover getters at_ τ x) kG : Protocol M A) = pv0 at hPV
+              hSP.1 (buf := []) hStV (fun _ h => nomatch h) hEP hSiteP hTyP rfl hClsP
+          generalize hPV0 : (Process.call (GOp.flow kind prover [verifier] at_ τ x) kG : Protocol M A) = pv0 at hPV
           induction hPV with
           | begins _ ihV => exact ihV (hShV.2 0 trivial) hPV0
           | settles _ ihV => exact ihV (hShV.2 () trivial) hPV0
@@ -3137,8 +3178,8 @@ private theorem after_noAbort_contradicts_abort {enc : VocabEncoder V} {d : Depl
               cases hPV0
               exact ih () _ _ st' src hSt'V hPP' hPV' (hSP.2 () trivial) (hShP.2 () trivial)
                 (hShV.2 _ trivial) (hNoAb.2 () trivial) (hPShape.2 ()) (hUniq ()).2 hLP hFed
-                (fun s₁ hL₁ hAg₁ => by
-                  obtain ⟨_, who, why, hR, hW, hA⟩ := hAborts s₁ hL₁ hAg₁
+                (fun s₁ hL₁ hAF₁ hAg₁ => by
+                  obtain ⟨_, who, why, hR, hW, hA⟩ := hAborts s₁ hL₁ hAF₁ hAg₁
                   cases hR with | flow hR' => exact ⟨_, who, why, hR', hW, hA⟩)
           | _ => cases hPV0
       | got hGNeP hPIn _ =>
@@ -3174,8 +3215,8 @@ private theorem after_noAbort_contradicts_abort {enc : VocabEncoder V} {d : Depl
           | passed _ _ hPV' =>
               cases hPV0
               exact ih () _ _ st src hStV hPP' hPV' hSP hShP hShV hNoAb (hPShape.2 ()) (hUniq ()).2 hLP hFed
-                (fun s₁ hL₁ hAg₁ => by
-                  obtain ⟨_, who, why, hR, hW, hA⟩ := hAborts s₁ hL₁ hAg₁
+                (fun s₁ hL₁ hAF₁ hAg₁ => by
+                  obtain ⟨_, who, why, hR, hW, hA⟩ := hAborts s₁ hL₁ hAF₁ hAg₁
                   cases hR with | flow hR' => exact ⟨_, who, why, hR', hW, hA⟩)
           | _ => cases hPV0
       | @owned gkind hearers at_ gIns payload τ kG kP' hPP' =>
@@ -3225,15 +3266,9 @@ private theorem after_noAbort_contradicts_abort {enc : VocabEncoder V} {d : Depl
           cases gkind with
           | request svc => exact absurd hPin (hDisc.1.resolve_left hOwNe)
           | coin law =>
-              rcases hDisc with ⟨hOwV, _, sig, hLaw, _, hSigIns⟩ | hNil
-              · cases hOwV
-                have hNonEmpty : ∃ h0 hs, hearers = h0 :: hs := by
-                  cases hearers with
-                  | nil => cases hPin
-                  | cons h0 hs => exact ⟨h0, hs, rfl⟩
-                obtain ⟨h0, hs, hHCons⟩ := hNonEmpty
-                subst hHCons
-                generalize hPV0 : (Process.call (GOp.given (.coin law) verifier (h0 :: hs) at_ gIns payload τ) kG : Protocol M A) = pv0 at hPV
+              rcases hDisc with ⟨hOwV, hHEq, sig, hLaw, _, hSigIns⟩ | hNil
+              · cases hOwV; subst hearers
+                generalize hPV0 : (Process.call (GOp.given (.coin law) verifier [prover] at_ gIns payload τ) kG : Protocol M A) = pv0 at hPV
                 induction hPV with
                 | begins _ ihV => exact ihV (hShV.2 0 trivial) hPV0
                 | settles _ ihV => exact ihV (hShV.2 () trivial) hPV0
@@ -3250,8 +3285,8 @@ private theorem after_noAbort_contradicts_abort {enc : VocabEncoder V} {d : Depl
                       rw [hLaw] at hsLaw; cases hsLaw; rw [← hsIns, hSigIns]
                     subst hGInsNil; cases payload
                     obtain ⟨coin, st', _, hCoinV, hAl, hAtH, hSt'V, _, _, _⟩ :=
-                      derived_step_heard_coin M hCPSt hCVSt hLPSt hLVSt hConDecl hLayDecl hSuiteLaw hLayLaw
-                        hCC hSL (buf := []) hStV (fun _ h => nomatch h) hEV hSiteV hTyV hPin hClsV
+                      derived_step_heard_coin M hCPSt hCVSt hLPSt hLVSt hConDecl hStart hLayDecl hSuiteLaw hLayLaw
+                        hCC hSL (buf := []) hStV (fun _ h => nomatch h) hEV hSiteV hTyV rfl hClsV
                     exact ih coin (kP' coin) _ st' src hSt'V (hPP' coin) (hPV' coin)
                       (hSP.2 coin hCoinV) (hShP.2 coin trivial) (hShV.2 coin trivial)
                       (hNoAb.2 coin trivial) (hPShape.2 coin) (hUniq coin).2
@@ -3267,8 +3302,8 @@ private theorem after_noAbort_contradicts_abort {enc : VocabEncoder V} {d : Depl
               (∃ svc, gkind = .request svc ∧ (owner = verifier ∨ verifier ∉ hearers)) := by
             cases gkind with
             | coin law =>
-                rcases hDisc with ⟨_, hPin', _⟩ | hNil
-                · exact absurd hPin' hNotIn
+                rcases hDisc with ⟨_, hHEq', _⟩ | hNil
+                · exact absurd (hHEq' ▸ List.mem_singleton_self prover) hNotIn
                 · exact .inl ⟨law, rfl, hNil⟩
             | request svc => exact .inr ⟨svc, rfl, hDisc.2⟩
           generalize hPV0 : (Process.call (GOp.given gkind owner hearers at_ gIns payload τ) kG : Protocol M A) = pv0 at hPV
@@ -3312,6 +3347,7 @@ private theorem after_noAbort_contradicts_abort {enc : VocabEncoder V} {d : Depl
 private theorem simulate_prover_abort_inside {enc : VocabEncoder V} {d : Deployed V}
     {suite : ModuleRef} {sessionTag : Option (List Nat)} {layout : Layout}
     {stateTy suiteUnitTy unitTy : V.Ty} {hfree : Ty.isLinear V unitTy = false}
+    {startRef : TypedFnRef V d.admitted.program.headers.fns [bytesTy] [stateTy]}
     {absRef : TypedFnRef V d.admitted.program.headers.fns [stateTy, bytesTy, .seq suiteUnitTy none] [stateTy]}
     {prover verifier : Role} (hNe : prover ≠ verifier) {declKey : Key}
     {conP0 : Layer V d.admitted.program.headers prover d.entry.ins}
@@ -3321,6 +3357,7 @@ private theorem simulate_prover_abort_inside {enc : VocabEncoder V} {d : Deploye
     (hCPSt : conP0.state = stateTy) (hCVSt : conV0.state = stateTy)
     (hLPSt : layP0.state = .seq unitTy none) (hLVSt : layV0.state = streamStateTy unitTy)
     (hConDecl : d.declaration.construction = .derived suite sessionTag)
+    (hStart : findSuiteStart d.admitted suite = some ⟨stateTy, startRef⟩)
     (hLayDecl : d.declaration.layout = some layout)
     (hSuiteLaw : d.SuiteLawfulFor enc M) (hLayLaw : d.LayoutLawful M)
     (hCC : buildConstructionClauses.go enc d.admitted suite stateTy suiteUnitTy absRef prover verifier
@@ -3350,7 +3387,7 @@ private theorem simulate_prover_abort_inside {enc : VocabEncoder V} {d : Deploye
       Protocol.UniqueOccs M p →
       LawfulPrivate M (shiftAttemptSource M insideCoins (.attempt target.key j) source) p →
       Fed M (shiftAttemptSource M insideCoins (.attempt target.key j) source) p →
-      (∀ source₁, Lawful M source₁ p →
+      (∀ source₁, Lawful M source₁ p → AllFed M source₁ p →
         (∀ at' τ', at'.site ∉ d.entry.shape.heardCoins →
           source₁ at' τ' = shiftAttemptSource M insideCoins (.attempt target.key j) source at' τ') →
         ∃ evs who why, GRun M source₁ p evs (.stopped who why) ∧ prover ∈ who ∧ why.isAbort = true) →
@@ -3383,10 +3420,10 @@ private theorem simulate_prover_abort_inside {enc : VocabEncoder V} {d : Deploye
   have hEventDisc : ∀ e ∈ events,
       match e.cls with
       | .flow _ giver getters =>
-          (giver = prover ∧ verifier ∈ getters) ∨
+          (giver = prover ∧ getters = [verifier]) ∨
           (giver ≠ prover ∧ giver ≠ verifier ∧ prover ∉ getters ∧ verifier ∉ getters)
       | .given (.coin law) owner hearers =>
-          (owner = verifier ∧ prover ∈ hearers ∧
+          (owner = verifier ∧ hearers = [prover] ∧
             ∃ sig, V.law law = some sig ∧ sig.out = e.τ ∧ sig.ins = []) ∨
           hearers = []
       | .given (.request _) owner hearers =>
@@ -3400,12 +3437,12 @@ private theorem simulate_prover_abort_inside {enc : VocabEncoder V} {d : Deploye
   | done a =>
       intro _ _ _ _ _ _ source _ _ _ _ _ _ _ _ _ _ _ _ hAborts
       obtain ⟨_, _, _, hRun, _, _⟩ := hAborts (shiftAttemptSource M insideCoins (.attempt target.key j) source)
-        trivial (fun _ _ _ => rfl)
+        trivial trivial (fun _ _ _ => rfl)
       cases hRun
   | halt payload =>
       intro postP postV qP qV st buf source hStV hBufV hPP hPV hSP hShP hShV hRWF hPShape hUniq hLP hFed hAborts
       obtain ⟨_, who, why, hRun, hInWho, hIsAb⟩ :=
-        hAborts (shiftAttemptSource M insideCoins (.attempt target.key j) source) trivial (fun _ _ _ => rfl)
+        hAborts (shiftAttemptSource M insideCoins (.attempt target.key j) source) trivial trivial (fun _ _ _ => rfl)
       cases hRun
       generalize hH : Process.halt (who, why) = p0 at hPP
       induction hPP with
@@ -3426,7 +3463,7 @@ private theorem simulate_prover_abort_inside {enc : VocabEncoder V} {d : Deploye
             have hNoAb := Process.safeWith_mono M (fun _ _ h => h) (fun _ _ => trivial)
               (fun _ _ => trivial) (fun _ h => h) hAft
             exact False.elim (after_noAbort_contradicts_abort M hNe hCPSt hCVSt hLPSt hLVSt
-              hConDecl hLayDecl hSuiteLaw hLayLaw hCC hSL _ (kP' ()) qV st
+              hConDecl hStart hLayDecl hSuiteLaw hLayLaw hCC hSL _ (kP' ()) qV st
               (shiftAttemptSource M insideCoins (.attempt target.key j) source) hStV
               hPP' (hH ▸ hPV) (hSP.2 () trivial) (hShP.2 () trivial) hShV hNoAb
               (hH ▸ hPShape) (hH ▸ hUniq) (hH ▸ hLP) (hH ▸ hFed) (hH ▸ hAborts))
@@ -3455,7 +3492,7 @@ private theorem simulate_prover_abort_inside {enc : VocabEncoder V} {d : Deploye
             have hNoAb := Process.safeWith_mono M (fun _ _ h => h) (fun _ _ => trivial)
               (fun _ _ => trivial) (fun _ h => h) hAft
             exact False.elim (after_noAbort_contradicts_abort M hNe hCPSt hCVSt hLPSt hLVSt
-              hConDecl hLayDecl hSuiteLaw hLayLaw hCC hSL _ (kP' ()) qV st attemptSrc hStV
+              hConDecl hStart hLayDecl hSuiteLaw hLayLaw hCC hSL _ (kP' ()) qV st attemptSrc hStV
               hPP' (hP0 ▸ hPV) (hSP.2 () trivial) (hShP.2 () trivial) hShV hNoAb
               (hP0 ▸ hPShape) (hP0 ▸ hUniq) (hP0 ▸ hLP) (hP0 ▸ hFed) (hP0 ▸ hAborts))
           · dsimp only [Program.RetryWellFormed] at hRWF
@@ -3471,16 +3508,18 @@ private theorem simulate_prover_abort_inside {enc : VocabEncoder V} {d : Deploye
           cases hP0
           obtain ⟨eP, hEP, hSiteP, hTyP, hClsP⟩ := hShP.1
           have hDisc := hEventDisc eP hEP; rw [hClsP] at hDisc
-          have hVin : verifier ∈ getters := by
+          have hGsEq : getters = [verifier] := by
             rcases hDisc with ⟨_, hV⟩ | ⟨hNotP, _, _, _⟩
             · exact hV
             · exact absurd rfl hNotP
+          subst getters
+          have hVin : verifier ∈ [verifier] := List.mem_singleton_self verifier
           obtain ⟨st', chunk, hSt'V, hChV, hStepP, _⟩ :=
             derived_step_flow M hCPSt hCVSt hLPSt hLVSt hLayDecl hLayLaw hCC hSL
-              hSP.1 hStV hBufV hEP hSiteP hTyP hVin hClsP
+              hSP.1 hStV hBufV hEP hSiteP hTyP rfl hClsP
           have hBufChV : ∀ u ∈ buf ++ chunk, M.Valid unitTy u := fun u hu =>
             (List.mem_append.mp hu).elim (hBufV u) (hChV u)
-          generalize hPV0 : (Process.call (GOp.flow kind prover getters at_ τ x) kG : Protocol M A) = pv0 at hPV
+          generalize hPV0 : (Process.call (GOp.flow kind prover [verifier] at_ τ x) kG : Protocol M A) = pv0 at hPV
           induction hPV with
           | begins _ ihV => exact ihV (hShV.2 0 trivial) hPV0
           | settles _ ihV => exact ihV (hShV.2 () trivial) hPV0
@@ -3495,11 +3534,11 @@ private theorem simulate_prover_abort_inside {enc : VocabEncoder V} {d : Deploye
                 ih () (kP' ()) _ st' (buf ++ chunk) source hSt'V hBufChV hPP' hPV'
                   (hSP.2 () trivial) (hShP.2 () trivial) (hShV.2 x trivial) (hRWF ())
                   (hPShape.2 ()) (hUniq ()).2 hLP hFed
-                  (fun s₁ hL₁ hAg₁ => by
-                    obtain ⟨_, who, why, hR, hW, hA⟩ := hAborts s₁ hL₁ hAg₁
+                  (fun s₁ hL₁ hAF₁ hAg₁ => by
+                    obtain ⟨_, who, why, hR, hW, hA⟩ := hAborts s₁ hL₁ hAF₁ hAg₁
                     cases hR with | flow hR' => exact ⟨_, who, why, hR', hW, hA⟩)
               exact ⟨why', sAb, rec, hAb',
-                alone_eq_proc M (handler_inside_clause_done M hP bound target j (.give kind getters at_ τ x) rfl kP' _ _ () hStepP) hAl⟩
+                alone_eq_proc M (handler_inside_clause_done M hP bound target j (.give kind [verifier] at_ τ x) rfl kP' _ _ () hStepP) hAl⟩
           | _ => cases hPV0
       | got hGNeP hPIn _ =>
           cases hP0
@@ -3535,8 +3574,8 @@ private theorem simulate_prover_abort_inside {enc : VocabEncoder V} {d : Deploye
               cases hPV0
               exact ih () _ _ st buf source hStV hBufV hPP' hPV' hSP hShP hShV hRWF
                 (hPShape.2 ()) (hUniq ()).2 hLP hFed
-                (fun s₁ hL₁ hAg₁ => by
-                  obtain ⟨_, who, why, hR, hW, hA⟩ := hAborts s₁ hL₁ hAg₁
+                (fun s₁ hL₁ hAF₁ hAg₁ => by
+                  obtain ⟨_, who, why, hR, hW, hA⟩ := hAborts s₁ hL₁ hAF₁ hAg₁
                   cases hR with | flow hR' => exact ⟨_, who, why, hR', hW, hA⟩)
           | _ => cases hPV0
       | @owned gkind hearers at_ gIns payload τ kG kP' hPP' =>
@@ -3605,15 +3644,9 @@ private theorem simulate_prover_abort_inside {enc : VocabEncoder V} {d : Deploye
           cases gkind with
           | request svc => exact absurd hPin (hDisc.1.resolve_left hOwNe)
           | coin law =>
-              rcases hDisc with ⟨hOwV, _, sig, hLaw, _, hSigIns⟩ | hNil
-              · cases hOwV
-                have hNonEmpty : ∃ h0 hs, hearers = h0 :: hs := by
-                  cases hearers with
-                  | nil => cases hPin
-                  | cons h0 hs => exact ⟨h0, hs, rfl⟩
-                obtain ⟨h0, hs, hHCons⟩ := hNonEmpty
-                subst hHCons
-                generalize hPV0 : (Process.call (GOp.given (.coin law) verifier (h0 :: hs) at_ gIns payload τ) kG : Protocol M A) = pv0 at hPV
+              rcases hDisc with ⟨hOwV, hHEq, sig, hLaw, _, hSigIns⟩ | hNil
+              · cases hOwV; subst hearers
+                generalize hPV0 : (Process.call (GOp.given (.coin law) verifier [prover] at_ gIns payload τ) kG : Protocol M A) = pv0 at hPV
                 induction hPV with
                 | begins _ ihV => exact ihV (hShV.2 0 trivial) hPV0
                 | settles _ ihV => exact ihV (hShV.2 () trivial) hPV0
@@ -3630,8 +3663,8 @@ private theorem simulate_prover_abort_inside {enc : VocabEncoder V} {d : Deploye
                       rw [hLaw] at hsLaw; cases hsLaw; rw [← hsIns, hSigIns]
                     subst hGInsNil; cases payload
                     obtain ⟨coin, st', chunk, hCoinV, hAl, hAtH, hSt'V, hChV, hStepP, _⟩ :=
-                      derived_step_heard_coin M hCPSt hCVSt hLPSt hLVSt hConDecl hLayDecl hSuiteLaw hLayLaw
-                        hCC hSL hStV hBufV hEV hSiteV hTyV hPin hClsV
+                      derived_step_heard_coin M hCPSt hCVSt hLPSt hLVSt hConDecl hStart hLayDecl hSuiteLaw hLayLaw
+                        hCC hSL hStV hBufV hEV hSiteV hTyV rfl hClsV
                     have hBufChV : ∀ u ∈ buf ++ chunk, M.Valid unitTy u := fun u hu =>
                       (List.mem_append.mp hu).elim (hBufV u) (hChV u)
                     obtain ⟨why', sAb, rec, hAb', hAlP⟩ :=
@@ -3651,8 +3684,8 @@ private theorem simulate_prover_abort_inside {enc : VocabEncoder V} {d : Deploye
               (∃ svc, gkind = .request svc ∧ (owner = verifier ∨ verifier ∉ hearers)) := by
             cases gkind with
             | coin law =>
-                rcases hDisc with ⟨_, hPin', _⟩ | hNil
-                · exact absurd hPin' hNotIn
+                rcases hDisc with ⟨_, hHEq', _⟩ | hNil
+                · exact absurd (hHEq' ▸ List.mem_singleton_self prover) hNotIn
                 · exact .inl ⟨law, rfl, hNil⟩
             | request svc => exact .inr ⟨svc, rfl, hDisc.2⟩
           generalize hPV0 : (Process.call (GOp.given gkind owner hearers at_ gIns payload τ) kG : Protocol M A) = pv0 at hPV
@@ -3696,6 +3729,7 @@ private theorem simulate_prover_abort_inside {enc : VocabEncoder V} {d : Deploye
 private theorem simulate_retry_coupled_inside {enc : VocabEncoder V} {d : Deployed V}
     {suite : ModuleRef} {sessionTag : Option (List Nat)} {layout : Layout}
     {stateTy suiteUnitTy unitTy : V.Ty} {hfree : Ty.isLinear V unitTy = false}
+    {startRef : TypedFnRef V d.admitted.program.headers.fns [bytesTy] [stateTy]}
     {absRef : TypedFnRef V d.admitted.program.headers.fns [stateTy, bytesTy, .seq suiteUnitTy none] [stateTy]}
     {prover verifier : Role} (hNe : prover ≠ verifier) {declKey : Key}
     (conP0 : Layer V d.admitted.program.headers prover d.entry.ins)
@@ -3705,6 +3739,7 @@ private theorem simulate_retry_coupled_inside {enc : VocabEncoder V} {d : Deploy
     (hCPSt : conP0.state = stateTy) (hCVSt : conV0.state = stateTy)
     (hLPSt : layP0.state = .seq unitTy none) (hLVSt : layV0.state = streamStateTy unitTy)
     (hConDecl : d.declaration.construction = .derived suite sessionTag)
+    (hStart : findSuiteStart d.admitted suite = some ⟨stateTy, startRef⟩)
     (hLayDecl : d.declaration.layout = some layout)
     (hSuiteLaw : d.SuiteLawfulFor enc M) (hLayLaw : d.LayoutLawful M)
     (hCC : buildConstructionClauses.go enc d.admitted suite stateTy suiteUnitTy absRef prover verifier
@@ -3797,10 +3832,10 @@ private theorem simulate_retry_coupled_inside {enc : VocabEncoder V} {d : Deploy
   have hEventDisc : ∀ e ∈ events,
       match e.cls with
       | .flow _ giver getters =>
-          (giver = prover ∧ verifier ∈ getters) ∨
+          (giver = prover ∧ getters = [verifier]) ∨
           (giver ≠ prover ∧ giver ≠ verifier ∧ prover ∉ getters ∧ verifier ∉ getters)
       | .given (.coin law) owner hearers =>
-          (owner = verifier ∧ prover ∈ hearers ∧
+          (owner = verifier ∧ hearers = [prover] ∧
             ∃ sig, V.law law = some sig ∧ sig.out = e.τ ∧ sig.ins = []) ∨
           hearers = []
       | .given (.request _) owner hearers =>
@@ -3897,7 +3932,7 @@ private theorem simulate_retry_coupled_inside {enc : VocabEncoder V} {d : Deploy
       simulate_derived_gen M hNe (d := d) (hCPSt ▸ conP0.clauses) (hCVSt ▸ conV0.clauses)
         (hLPSt ▸ layP0.clauses) (hLVSt ▸ layV0.clauses)
         conP0 conV0 layP0 layV0 hCPSt hCVSt hLPSt hLVSt rfl rfl rfl rfl
-        hConDecl hLayDecl hSuiteLaw hLayLaw hCC hSL false adapter2
+        hConDecl hStart hLayDecl hSuiteLaw hLayLaw hCC hSL false adapter2
         p0 qP0 qV0 (.cons (hCPSt.symm ▸ st) (.cons (hLPSt.symm ▸ buf) .nil)) st buf source
         rfl hStV hBufV hPP0 hPV0 hSP0 hSV0 hShP0 hShV0 hPShape0 hUniq0
         (lawfulPrivate_to_lawfulFor_false M hLPSrc) (fed_to_fedFor_false M hFedSrc) hNoHaltSrc
@@ -4017,17 +4052,19 @@ private theorem simulate_retry_coupled_inside {enc : VocabEncoder V} {d : Deploy
           cases hP0
           obtain ⟨eP, hEP, hSiteP, hTyP, hClsP⟩ := hShP.1
           have hDisc := hEventDisc eP hEP; rw [hClsP] at hDisc
-          have hVin : verifier ∈ getters := by
+          have hGsEq : getters = [verifier] := by
             rcases hDisc with ⟨_, hV⟩ | ⟨hNotP, _, _, _⟩
             · exact hV
             · exact absurd rfl hNotP
+          subst getters
+          have hVin : verifier ∈ [verifier] := List.mem_singleton_self verifier
           have hMsgV : M.Valid τ x := hSP.1
           obtain ⟨st', chunk, hSt'V, hChV, hStepP, hStepV⟩ :=
             derived_step_flow M hCPSt hCVSt hLPSt hLVSt hLayDecl hLayLaw hCC hSL
-              hMsgV hStV hBufV hEP hSiteP hTyP hVin hClsP
+              hMsgV hStV hBufV hEP hSiteP hTyP rfl hClsP
           have hBufChV : ∀ u ∈ buf ++ chunk, M.Valid unitTy u := fun u hu =>
             (List.mem_append.mp hu).elim (hBufV u) (hChV u)
-          generalize hPV0 : (Process.call (GOp.flow kind prover getters at_ τ x) kG : Protocol M A) = pv0 at hPV
+          generalize hPV0 : (Process.call (GOp.flow kind prover [verifier] at_ τ x) kG : Protocol M A) = pv0 at hPV
           induction hPV with
           | @begins atV _ kV' _ ihV =>
               obtain ⟨a, outP, outV, fSt, suf, recP, src', h1, h2, h3, h4, h5, h6, h7, h8⟩ :=
@@ -4060,7 +4097,7 @@ private theorem simulate_retry_coupled_inside {enc : VocabEncoder V} {d : Deploy
               refine ⟨a, outP, outV, fSt, chunk ++ suf', recP, src',
                 (fun u hu => (List.mem_append.mp hu).elim (hChV u) (hSufV u)), ?_, ?_,
                 hPostP, hPostV, hLSrc', hAgSrc', ⟨_, .flow hRun'⟩⟩
-              · exact alone_eq_proc M (handler_inside_clause_done M hP bound target kIdx (.give kind getters at_ τ x) rfl kP' _ _ () hStepP)
+              · exact alone_eq_proc M (handler_inside_clause_done M hP bound target kIdx (.give kind [verifier] at_ τ x) rfl kP' _ _ () hStepP)
                   (by simpa [List.append_assoc] using hAlP)
               · intro post hPost
                 have hSufPostV : ∀ u ∈ suf' ++ post, M.Valid unitTy u := fun u hu =>
@@ -4249,15 +4286,9 @@ private theorem simulate_retry_coupled_inside {enc : VocabEncoder V} {d : Deploy
           cases gkind with
           | request svc => exact absurd hPin (hDisc.1.resolve_left hOwNe)
           | coin law =>
-              rcases hDisc with ⟨hOwV, _, sig, hLaw, _, hSigIns⟩ | hNil
-              · cases hOwV
-                have hNonEmpty : ∃ h0 hs, hearers = h0 :: hs := by
-                  cases hearers with
-                  | nil => cases hPin
-                  | cons h0 hs => exact ⟨h0, hs, rfl⟩
-                obtain ⟨h0, hs, hHCons⟩ := hNonEmpty
-                subst hHCons
-                generalize hPV0 : (Process.call (GOp.given (.coin law) verifier (h0 :: hs) at_ gIns payload τ) kG : Protocol M A) = pv0 at hPV
+              rcases hDisc with ⟨hOwV, hHEq, sig, hLaw, _, hSigIns⟩ | hNil
+              · cases hOwV; subst hearers
+                generalize hPV0 : (Process.call (GOp.given (.coin law) verifier [prover] at_ gIns payload τ) kG : Protocol M A) = pv0 at hPV
                 induction hPV with
                 | @begins atV _ kV' _ ihV =>
                     obtain ⟨a, outP, outV, fSt, suf, recP, src', h1, h2, h3, h4, h5, h6, h7, h8⟩ :=
@@ -4288,8 +4319,8 @@ private theorem simulate_retry_coupled_inside {enc : VocabEncoder V} {d : Deploy
                       rw [hLaw] at hsLaw; cases hsLaw; rw [← hsIns, hSigIns]
                     subst hGInsNil; cases payload
                     obtain ⟨coin, st', chunk, hCoinV, hAl, hAtH, hSt'V, hChV, hStepP, hStepV⟩ :=
-                      derived_step_heard_coin M hCPSt hCVSt hLPSt hLVSt hConDecl hLayDecl hSuiteLaw hLayLaw
-                        hCC hSL hStV hBufV hEV hSiteV hTyV hPin hClsV
+                      derived_step_heard_coin M hCPSt hCVSt hLPSt hLVSt hConDecl hStart hLayDecl hSuiteLaw hLayLaw
+                        hCC hSL hStV hBufV hEV hSiteV hTyV rfl hClsV
                     have hBufChV : ∀ u ∈ buf ++ chunk, M.Valid unitTy u := fun u hu =>
                       (List.mem_append.mp hu).elim (hBufV u) (hChV u)
                     obtain ⟨a, outP, outV, fSt, suf', recP, src', hSufV, hAlP, hAlV, hPostP, hPostV, hLSrc', hAgSrc', ⟨evs', hRun'⟩⟩ :=
@@ -4337,8 +4368,8 @@ private theorem simulate_retry_coupled_inside {enc : VocabEncoder V} {d : Deploy
               (∃ svc, gkind = .request svc ∧ (owner = verifier ∨ verifier ∉ hearers)) := by
             cases gkind with
             | coin law =>
-                rcases hDisc with ⟨_, hPin', _⟩ | hNil
-                · exact absurd hPin' hNotIn
+                rcases hDisc with ⟨_, hHEq', _⟩ | hNil
+                · exact absurd (hHEq' ▸ List.mem_singleton_self prover) hNotIn
                 · exact .inl ⟨law, rfl, hNil⟩
             | request svc => exact .inr ⟨svc, rfl, hDisc.2⟩
           have hOutC : at_.site ∉ insideCoins := by
@@ -4479,6 +4510,7 @@ private theorem simulate_retry_coupled_inside {enc : VocabEncoder V} {d : Deploy
 private theorem simulate_retry_coupled_before {enc : VocabEncoder V} {d : Deployed V}
     {suite : ModuleRef} {sessionTag : Option (List Nat)} {layout : Layout}
     {stateTy suiteUnitTy unitTy : V.Ty} {hfree : Ty.isLinear V unitTy = false}
+    {startRef : TypedFnRef V d.admitted.program.headers.fns [bytesTy] [stateTy]}
     {absRef : TypedFnRef V d.admitted.program.headers.fns [stateTy, bytesTy, .seq suiteUnitTy none] [stateTy]}
     {prover verifier : Role} (hNe : prover ≠ verifier) {declKey : Key}
     (conP0 : Layer V d.admitted.program.headers prover d.entry.ins)
@@ -4490,6 +4522,7 @@ private theorem simulate_retry_coupled_before {enc : VocabEncoder V} {d : Deploy
     (hCPA : conP0.again = restoreAgain conP0.state)
     (hLPA : layP0.again = restoreAgain layP0.state)
     (hConDecl : d.declaration.construction = .derived suite sessionTag)
+    (hStart : findSuiteStart d.admitted suite = some ⟨stateTy, startRef⟩)
     (hLayDecl : d.declaration.layout = some layout)
     (hSuiteLaw : d.SuiteLawfulFor enc M) (hLayLaw : d.LayoutLawful M)
     (hCC : buildConstructionClauses.go enc d.admitted suite stateTy suiteUnitTy absRef prover verifier
@@ -4524,7 +4557,7 @@ private theorem simulate_retry_coupled_before {enc : VocabEncoder V} {d : Deploy
       (∀ j, j < kIdx → LawfulPrivate M (shiftAttemptSource M insideCoins (.attempt target.key j) source) p) →
       (∀ j, j < kIdx → Fed M (shiftAttemptSource M insideCoins (.attempt target.key j) source) p) →
       (∀ j, j < kIdx →
-        ∀ source₁, Lawful M source₁ p →
+        ∀ source₁, Lawful M source₁ p → AllFed M source₁ p →
           (∀ at' τ', at'.site ∉ d.entry.shape.heardCoins →
             source₁ at' τ' = shiftAttemptSource M insideCoins (.attempt target.key j) source at' τ') →
           ∃ evs who why, GRun M source₁ p evs (.stopped who why) ∧ prover ∈ who ∧ why.isAbort = true) →
@@ -4590,10 +4623,10 @@ private theorem simulate_retry_coupled_before {enc : VocabEncoder V} {d : Deploy
   have hEventDisc : ∀ e ∈ events,
       match e.cls with
       | .flow _ giver getters =>
-          (giver = prover ∧ verifier ∈ getters) ∨
+          (giver = prover ∧ getters = [verifier]) ∨
           (giver ≠ prover ∧ giver ≠ verifier ∧ prover ∉ getters ∧ verifier ∉ getters)
       | .given (.coin law) owner hearers =>
-          (owner = verifier ∧ prover ∈ hearers ∧
+          (owner = verifier ∧ hearers = [prover] ∧
             ∃ sig, V.law law = some sig ∧ sig.out = e.τ ∧ sig.ins = []) ∨
           hearers = []
       | .given (.request _) owner hearers =>
@@ -4619,7 +4652,7 @@ private theorem simulate_retry_coupled_before {enc : VocabEncoder V} {d : Deploy
       (∀ j, j < kIdx → LawfulPrivate M (attemptSrc j) p0) →
       (∀ j, j < kIdx → Fed M (attemptSrc j) p0) →
       (∀ j, j < kIdx →
-        ∀ source₁, Lawful M source₁ p0 →
+        ∀ source₁, Lawful M source₁ p0 → AllFed M source₁ p0 →
           (∀ at' τ', at'.site ∉ d.entry.shape.heardCoins → source₁ at' τ' = attemptSrc j at' τ') →
           ∃ evs who why, GRun M source₁ p0 evs (.stopped who why) ∧ prover ∈ who ∧ why.isAbort = true) →
       LawfulPrivate M (attemptSrc kIdx) p0 →
@@ -4651,7 +4684,7 @@ private theorem simulate_retry_coupled_before {enc : VocabEncoder V} {d : Deploy
       rw [hIdxEq kIdx (Nat.le_refl _)]; exact hPP0
     obtain ⟨a, outP, outV, finalSt, suffix, recK, src', hSufV, hAlK, hAlV, hPostP, hPostV, hLSrc', hAgSrc', hGEx'⟩ :=
       simulate_retry_coupled_inside M hNe conP0 conV0 layP0 layV0 hCPSt hCVSt hLPSt hLVSt
-        hConDecl hLayDecl hSuiteLaw hLayLaw hCC hSL bound target kIdx hExcl
+        hConDecl hStart hLayDecl hSuiteLaw hLayLaw hCC hSL bound target kIdx hExcl
         p0 (kP' kIdx) qV0 st buf source hStV hBufV hKProj hPV0
         (hSP' kIdx) hSV0 (hShP' kIdx) hShV0 (hRWF' kIdx) hPShape0 hUniq0 hLPK hFedK hNoHaltK
     have hAbInside : ∀ j, j < kIdx → ∃ why sAbort rec,
@@ -4665,7 +4698,7 @@ private theorem simulate_retry_coupled_before {enc : VocabEncoder V} {d : Deploy
       have hJProj : Proj M prover postP p0 (kP' j) := by
         rw [hIdxEq j (Nat.le_of_lt hj)]; exact hPP0
       exact simulate_prover_abort_inside M hNe hCPSt hCVSt hLPSt hLVSt
-        hConDecl hLayDecl hSuiteLaw hLayLaw hCC hSL bound target j
+        hConDecl hStart hLayDecl hSuiteLaw hLayLaw hCC hSL bound target j
         p0 (kP' j) qV0 st buf source hStV hBufV hJProj hPV0
         (hSP' j) (hShP' j) hShV0 (hRWF' j) hPShape0 hUniq0
         (hLPAb j hj) (hFedAb j hj) (hAborts j hj)
@@ -4779,17 +4812,19 @@ private theorem simulate_retry_coupled_before {enc : VocabEncoder V} {d : Deploy
           cases hP0
           obtain ⟨eP, hEP, hSiteP, hTyP, hClsP⟩ := hShP.1
           have hDisc := hEventDisc eP hEP; rw [hClsP] at hDisc
-          have hVin : verifier ∈ getters := by
+          have hGsEq : getters = [verifier] := by
             rcases hDisc with ⟨_, hV⟩ | ⟨hNotP, _, _, _⟩
             · exact hV
             · exact absurd rfl hNotP
+          subst getters
+          have hVin : verifier ∈ [verifier] := List.mem_singleton_self verifier
           have hMsgV : M.Valid τ x := hSP.1
           obtain ⟨st', chunk, hSt'V, hChV, hStepP, hStepV⟩ :=
             derived_step_flow M hCPSt hCVSt hLPSt hLVSt hLayDecl hLayLaw hCC hSL
-              hMsgV hStV hBufV hEP hSiteP hTyP hVin hClsP
+              hMsgV hStV hBufV hEP hSiteP hTyP rfl hClsP
           have hBufChV : ∀ u ∈ buf ++ chunk, M.Valid unitTy u := fun u hu =>
             (List.mem_append.mp hu).elim (hBufV u) (hChV u)
-          generalize hPV0 : (Process.call (GOp.flow kind prover getters at_ τ x) kG : Protocol M A) = pv0 at hPV
+          generalize hPV0 : (Process.call (GOp.flow kind prover [verifier] at_ τ x) kG : Protocol M A) = pv0 at hPV
           induction hPV with
           | @begins atV _ kV' _ ihV =>
               obtain ⟨a, outP, outV, fSt, suf, recP, src', h1, h2, h3, h4, h5, h6, h7, h8⟩ :=
@@ -4819,15 +4854,15 @@ private theorem simulate_retry_coupled_before {enc : VocabEncoder V} {d : Deploy
                   (hSP.2 () trivial) (hSV.2 x hMsgV) (hShP.2 () trivial) (hShV.2 x trivial)
                   (hRWF ()) (fun j hj => hIdxFree j hj ()) (hPShape.2 ()) (hUniq ()).2
                   hLPAb hFedAb
-                  (fun j hj s₁ hL₁ hAg₁ => by
-                    obtain ⟨_, who, why, hR, hW, hA⟩ := hAborts j hj s₁ hL₁ hAg₁
+                  (fun j hj s₁ hL₁ hAF₁ hAg₁ => by
+                    obtain ⟨_, who, why, hR, hW, hA⟩ := hAborts j hj s₁ hL₁ hAF₁ hAg₁
                     cases hR with | flow hR' => exact ⟨_, who, why, hR', hW, hA⟩)
                   hLPK hFedK
                   (fun s₁ hL₁ hAg₁ e ⟨evs₁, hR₁⟩ => hNoHaltK s₁ hL₁ hAg₁ e ⟨_, .flow hR₁⟩)
               refine ⟨a, outP, outV, fSt, chunk ++ suf', recP, src',
                 (fun u hu => (List.mem_append.mp hu).elim (hChV u) (hSufV u)), ?_, ?_,
                 hPostP, hPostV, hLSrc', hAgSrc', ⟨_, .flow hRun'⟩⟩
-              · exact alone_eq_proc M (handler_run_retry_clause_done M hP bound target (.give kind getters at_ τ x) rfl kP' _ _ () hStepP)
+              · exact alone_eq_proc M (handler_run_retry_clause_done M hP bound target (.give kind [verifier] at_ τ x) rfl kP' _ _ () hStepP)
                   (by simpa [List.append_assoc] using hAlP)
               · intro post hPost
                 have hSufPostV : ∀ u ∈ suf' ++ post, M.Valid unitTy u := fun u hu =>
@@ -4895,8 +4930,8 @@ private theorem simulate_retry_coupled_before {enc : VocabEncoder V} {d : Deploy
               obtain ⟨a, outP, outV, fSt, suf, recP, src', h1, h2, h3, h4, h5, h6, h7, ⟨evs', hRun'⟩⟩ :=
                 ih () _ _ st buf source hStV hBufV hPP' hPV' hSP hSV hShP hShV hRWF hIdxFree
                   (hPShape.2 ()) (hUniq ()).2 hLPAb hFedAb
-                  (fun j hj s₁ hL₁ hAg₁ => by
-                    obtain ⟨_, who, why, hR, hW, hA⟩ := hAborts j hj s₁ hL₁ hAg₁
+                  (fun j hj s₁ hL₁ hAF₁ hAg₁ => by
+                    obtain ⟨_, who, why, hR, hW, hA⟩ := hAborts j hj s₁ hL₁ hAF₁ hAg₁
                     cases hR with | flow hR' => exact ⟨_, who, why, hR', hW, hA⟩)
                   hLPK hFedK
                   (fun s₁ hL₁ hAg₁ e ⟨evs₁, hR₁⟩ => hNoHaltK s₁ hL₁ hAg₁ e ⟨_, .flow hR₁⟩)
@@ -5036,15 +5071,9 @@ private theorem simulate_retry_coupled_before {enc : VocabEncoder V} {d : Deploy
           cases gkind with
           | request svc => exact absurd hPin (hDisc.1.resolve_left hOwNe)
           | coin law =>
-              rcases hDisc with ⟨hOwV, _, sig, hLaw, _, hSigIns⟩ | hNil
-              · cases hOwV
-                have hNonEmpty : ∃ h0 hs, hearers = h0 :: hs := by
-                  cases hearers with
-                  | nil => cases hPin
-                  | cons h0 hs => exact ⟨h0, hs, rfl⟩
-                obtain ⟨h0, hs, hHCons⟩ := hNonEmpty
-                subst hHCons
-                generalize hPV0 : (Process.call (GOp.given (.coin law) verifier (h0 :: hs) at_ gIns payload τ) kG : Protocol M A) = pv0 at hPV
+              rcases hDisc with ⟨hOwV, hHEq, sig, hLaw, _, hSigIns⟩ | hNil
+              · cases hOwV; subst hearers
+                generalize hPV0 : (Process.call (GOp.given (.coin law) verifier [prover] at_ gIns payload τ) kG : Protocol M A) = pv0 at hPV
                 induction hPV with
                 | @begins atV _ kV' _ ihV =>
                     obtain ⟨a, outP, outV, fSt, suf, recP, src', h1, h2, h3, h4, h5, h6, h7, h8⟩ :=
@@ -5075,8 +5104,8 @@ private theorem simulate_retry_coupled_before {enc : VocabEncoder V} {d : Deploy
                       rw [hLaw] at hsLaw; cases hsLaw; rw [← hsIns, hSigIns]
                     subst hGInsNil; cases payload
                     obtain ⟨coin, st', chunk, hCoinV, hAl, hAtH, hSt'V, hChV, hStepP, hStepV⟩ :=
-                      derived_step_heard_coin M hCPSt hCVSt hLPSt hLVSt hConDecl hLayDecl hSuiteLaw hLayLaw
-                        hCC hSL hStV hBufV hEV hSiteV hTyV hPin hClsV
+                      derived_step_heard_coin M hCPSt hCVSt hLPSt hLVSt hConDecl hStart hLayDecl hSuiteLaw hLayLaw
+                        hCC hSL hStV hBufV hEV hSiteV hTyV rfl hClsV
                     have hBufChV : ∀ u ∈ buf ++ chunk, M.Valid unitTy u := fun u hu =>
                       (List.mem_append.mp hu).elim (hBufV u) (hChV u)
                     obtain ⟨a, outP, outV, fSt, suf', recP, src', hSufV, hAlP, hAlV, hPostP, hPostV, hLSrc', hAgSrc', ⟨evs', hRun'⟩⟩ :=
@@ -5127,8 +5156,8 @@ private theorem simulate_retry_coupled_before {enc : VocabEncoder V} {d : Deploy
               (∃ svc, gkind = .request svc ∧ (owner = verifier ∨ verifier ∉ hearers)) := by
             cases gkind with
             | coin law =>
-                rcases hDisc with ⟨_, hPin', _⟩ | hNil
-                · exact absurd hPin' hNotIn
+                rcases hDisc with ⟨_, hHEq', _⟩ | hNil
+                · exact absurd (hHEq' ▸ List.mem_singleton_self prover) hNotIn
                 · exact .inl ⟨law, rfl, hNil⟩
             | request svc => exact .inr ⟨svc, rfl, hDisc.2⟩
           have hOutC : at_.site ∉ insideCoins := by
@@ -5389,6 +5418,7 @@ theorem deploy_complete_retry (enc : VocabEncoder V) {named : NamedProgram V} {a
         (protocolMeaning M d.admitted.program d.callee [] ins))
     (hAborts : ∀ j, j < k →
       ∀ source₁, Lawful M source₁ (protocolMeaning M d.admitted.program d.callee [] ins) →
+        AllFed M source₁ (protocolMeaning M d.admitted.program d.callee [] ins) →
         (∀ at' τ', at'.site ∉ d.entry.shape.heardCoins →
           source₁ at' τ' = shiftAttemptSource M (d.entry.shape.attemptPrivateCoins prover retrySite [] false)
             (.attempt retrySite.key j) source at' τ') →
@@ -5538,7 +5568,7 @@ theorem deploy_complete_retry (enc : VocabEncoder V) {named : NamedProgram V} {a
             hPostP, hPostV, hLSrc', hAgSrc', hGEx'⟩ :=
             simulate_retry_coupled_before M w.hNe (d := w.toDeployed)
               conP' conV' layP' layV' hCPSt hCVSt hLPSt hLVSt hCPA hLPA
-              w.hCon w.hLayOpt hSuiteLaw hLayLaw hCC' hSL' bound retrySite k hKLt hExcl
+              w.hCon w.hStart w.hLayOpt hSuiteLaw hLayLaw hCC' hSL' bound retrySite k hKLt hExcl
               (protocolMeaning M a.program _ [] ins)
               (roleMeaning M a.program _ w.prover [] (hideAll M w.prover ins))
               (roleMeaning M a.program _ w.verifier [] (hideAll M w.verifier ins))

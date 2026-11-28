@@ -15,6 +15,12 @@ test:
     cd lean/compiler && lake build --iofail && lake test
     just audit
 
+# Build the runtime library and run CFRG draft-04 and end-to-end example runtime verification tests.
+test-runtime:
+    cd lean/compiler && lake build --iofail ZkcRuntime ZkcRuntimeTests zkc-runtime-tests zkc-check
+    cd lean/compiler && lake exe zkc-runtime-tests
+    cd lean/compiler && lake exe zkc-check cfrg-vectors
+
 # Check source verifier certificates and replay the interactive formal library through the kernel.
 test-interactive:
     cd lean/compiler && lake build --iofail Zkc.Tools.Audit
@@ -45,6 +51,7 @@ _charge-checks:
 test-formal:
     cd lean/formal && lake build --iofail && lake test
     just _charge-checks
+    cd lean/formal && lake lean checks/ConstructedStage.lean
 
 # Build the frontend libraries and run the source, generated-view and frontend driver suites.
 test-frontend:

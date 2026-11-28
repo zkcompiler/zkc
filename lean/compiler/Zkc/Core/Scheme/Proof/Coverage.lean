@@ -222,13 +222,13 @@ private def LayoutInputP (prover verifier : Role) (events : List (ShapeEvent V))
   ROp.IsClosed M op ∨
   (∃ e ∈ events, match op with
     | .give kind getters at_ τ _ =>
-        e.site = at_.site ∧ e.τ = τ ∧ e.cls = .flow kind prover getters ∧ verifier ∈ getters
+        e.site = at_.site ∧ e.τ = τ ∧ e.cls = .flow kind prover getters ∧ getters = [verifier]
     | _ => False) ∨
   (∃ (idx : Nat) (e : ShapeEvent V), events[idx]? = some e ∧
     match op with
     | .give .message getters at_ τ _ =>
         getters = [verifier] ∧ at_.site = ⟨e.site.through, drawToldKey events idx⟩ ∧
-        e.τ = τ ∧ ∃ law hearers, e.cls = .given (.coin law) verifier hearers ∧ prover ∈ hearers
+        e.τ = τ ∧ ∃ law hearers, e.cls = .given (.coin law) verifier hearers ∧ hearers = [prover]
     | _ => False)
 
 /-- Effects permitted to reach verifier's layout layer. -/
@@ -237,13 +237,13 @@ private def LayoutInputV (prover verifier : Role) (events : List (ShapeEvent V))
   (∃ e ∈ events, match op with
     | .get kind giver at_ τ =>
         giver = prover ∧ e.site = at_.site ∧ e.τ = τ ∧
-        ∃ getters, verifier ∈ getters ∧ e.cls = .flow kind prover getters
+        ∃ getters, getters = [verifier] ∧ e.cls = .flow kind prover getters
     | _ => False) ∨
   (∃ (idx : Nat) (e : ShapeEvent V), events[idx]? = some e ∧
     match op with
     | .give .message getters at_ τ _ =>
         getters = [prover] ∧ at_.site = ⟨e.site.through, drawToldKey events idx⟩ ∧
-        e.τ = τ ∧ ∃ law hearers, e.cls = .given (.coin law) verifier hearers ∧ prover ∈ hearers
+        e.τ = τ ∧ ∃ law hearers, e.cls = .given (.coin law) verifier hearers ∧ hearers = [prover]
     | _ => False)
 
 private theorem layoutClause_emits_any_drop {hs : Headers V} (fnTable : FnTable M hs.fns)
@@ -442,14 +442,26 @@ private theorem buildSamplesClauses_emits_any {a : Admitted V} {heldP : List V.T
                   | nil =>
                       dsimp only at h
                       split at h
-                      · cases hS : findTypedFnRef a sKey (heldP ++ [bytesTy, bytesTy, .nat, .nat]) [e.τ] with
-                        | none => rw [hS] at h; cases h
-                        | some sRef =>
-                            rw [hS] at h; cases h
-                            intro c hc
-                            rcases List.mem_cons.mp hc with rfl | hm
-                            · apply proverSampleClause_emits_any M
-                            · exact ihS c hm
+                      · cases hLaw : V.law law with
+                        | none => rw [hLaw] at h; cases h
+                        | some sig =>
+                            rw [hLaw] at h
+                            cases sig with
+                            | mk sIns sOut =>
+                                cases sIns with
+                                | cons _ _ => cases h
+                                | nil =>
+                                    dsimp only at h
+                                    split at h
+                                    · cases hS : findTypedFnRef a sKey (heldP ++ [bytesTy, bytesTy, .nat, .nat]) [e.τ] with
+                                      | none => rw [hS] at h; cases h
+                                      | some sRef =>
+                                          rw [hS] at h; cases h
+                                          intro c hc
+                                          rcases List.mem_cons.mp hc with rfl | hm
+                                          · apply proverSampleClause_emits_any M
+                                          · exact ihS c hm
+                                    · cases h
                       · cases h; exact ihS
 
 private theorem buildSamplesLayer_covers {a : Admitted V} {entry : ProtocolHeader V}
@@ -1561,14 +1573,14 @@ private theorem buildStreamingLayoutClauses_go_covers {a : Admitted V} {layout :
       (∀ c ∈ vCs, ClauseEmits M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs)
         (ROp.IsClosed M) c) ∧
       (∀ e ∈ es, ∀ kind getters (at_ : Occurrence) τ x,
-        e.site = at_.site → e.τ = τ → e.cls = .flow kind prover getters → verifier ∈ getters →
+        e.site = at_.site → e.τ = τ → e.cls = .flow kind prover getters → getters = [verifier] →
         ∃ c ∈ pCs, ClauseMatches M c (.give kind getters at_ τ x)) ∧
       (∀ e ∈ es, ∀ kind getters (at_ : Occurrence) τ,
-        e.site = at_.site → e.τ = τ → e.cls = .flow kind prover getters → verifier ∈ getters →
+        e.site = at_.site → e.τ = τ → e.cls = .flow kind prover getters → getters = [verifier] →
         ∃ c ∈ vCs, ClauseMatches M c (.get kind prover at_ τ)) ∧
       (∀ (k : Nat) (e : ShapeEvent V), es[k]? = some e →
         ∀ law hearers (at_ : Occurrence) τ x,
-        e.cls = .given (.coin law) verifier hearers → prover ∈ hearers → e.τ = τ →
+        e.cls = .given (.coin law) verifier hearers → hearers = [prover] → e.τ = τ →
         at_.site = ⟨e.site.through, drawToldKey events (idx + k)⟩ →
         (∃ c ∈ pCs, ClauseMatches M c (.give .message [verifier] at_ τ x)) ∧
         (∃ c ∈ vCs, ClauseMatches M c (.give .message [prover] at_ τ x)))
@@ -1587,7 +1599,7 @@ private theorem buildStreamingLayoutClauses_go_covers {a : Admitted V} {layout :
             buildStreamingLayoutClauses_go_covers (idx + 1) rest hRec
           have ihToldShift : ∀ k e', rest[k]? = some e' →
               ∀ law hearers (at_ : Occurrence) τ x,
-              e'.cls = .given (.coin law) verifier hearers → prover ∈ hearers → e'.τ = τ →
+              e'.cls = .given (.coin law) verifier hearers → hearers = [prover] → e'.τ = τ →
               at_.site = ⟨e'.site.through, drawToldKey events (idx + (k + 1))⟩ →
               (∃ c ∈ pair.1, ClauseMatches M c (.give .message [verifier] at_ τ x)) ∧
               (∃ c ∈ pair.2, ClauseMatches M c (.give .message [prover] at_ τ x)) := by
@@ -1775,11 +1787,11 @@ private theorem collectCompactWire_covers {a : Admitted V} {layout : Layout} {un
       (∀ c ∈ pCs, ClauseEmits M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs)
         (ROp.IsClosed M) c) ∧
       (∀ e ∈ es, ∀ kind getters (at_ : Occurrence) τ x,
-        e.site = at_.site → e.τ = τ → e.cls = .flow kind prover getters → verifier ∈ getters →
+        e.site = at_.site → e.τ = τ → e.cls = .flow kind prover getters → getters = [verifier] →
         ∃ c ∈ pCs, ClauseMatches M c (.give kind getters at_ τ x)) ∧
       (∀ (k : Nat) (e : ShapeEvent V), es[k]? = some e →
         ∀ law hearers (at_ : Occurrence) τ x,
-        e.cls = .given (.coin law) verifier hearers → prover ∈ hearers → e.τ = τ →
+        e.cls = .given (.coin law) verifier hearers → hearers = [prover] → e.τ = τ →
         at_.site = ⟨e.site.through, drawToldKey events (idx + k)⟩ →
         ∃ c ∈ pCs, ClauseMatches M c (.give .message [verifier] at_ τ x))
   | _, [], _, _, h => by
@@ -1794,7 +1806,7 @@ private theorem collectCompactWire_covers {a : Admitted V} {layout : Layout} {un
           obtain ⟨ihEmP, ihFP, ihTold⟩ := collectCompactWire_covers (idx + 1) rest hRec
           have ihToldShift : ∀ k e', rest[k]? = some e' →
               ∀ law hearers (at_ : Occurrence) τ x,
-              e'.cls = .given (.coin law) verifier hearers → prover ∈ hearers → e'.τ = τ →
+              e'.cls = .given (.coin law) verifier hearers → hearers = [prover] → e'.τ = τ →
               at_.site = ⟨e'.site.through, drawToldKey events (idx + (k + 1))⟩ →
               ∃ c ∈ pair.2, ClauseMatches M c (.give .message [verifier] at_ τ x) := by
             intro k e' hk law hearers at_ τ x hC hIn hT hS
@@ -1951,11 +1963,11 @@ private theorem buildCompactVClauses_covers {a : Admitted V} {layout : Layout} {
       (∀ c ∈ vCs, ClauseEmits M (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs)
         (ROp.IsClosed M) c) ∧
       (∀ e ∈ es, ∀ kind getters (at_ : Occurrence) τ,
-        e.site = at_.site → e.τ = τ → e.cls = .flow kind prover getters → verifier ∈ getters →
+        e.site = at_.site → e.τ = τ → e.cls = .flow kind prover getters → getters = [verifier] →
         ∃ c ∈ vCs, ClauseMatches M c (.get kind prover at_ τ)) ∧
       (∀ (k : Nat) (e : ShapeEvent V), es[k]? = some e →
         ∀ law hearers (at_ : Occurrence) τ x,
-        e.cls = .given (.coin law) verifier hearers → prover ∈ hearers → e.τ = τ →
+        e.cls = .given (.coin law) verifier hearers → hearers = [prover] → e.τ = τ →
         at_.site = ⟨e.site.through, drawToldKey events (idx + k)⟩ →
         ∃ c ∈ vCs, ClauseMatches M c (.give .message [prover] at_ τ x))
   | _, [], _, h => by
@@ -1971,7 +1983,7 @@ private theorem buildCompactVClauses_covers {a : Admitted V} {layout : Layout} {
           obtain ⟨ihEmV, ihFV, ihTold⟩ := buildCompactVClauses_covers (idx + 1) rest hRec
           have ihToldShift : ∀ k e', rest[k]? = some e' →
               ∀ law hearers (at_ : Occurrence) τ x,
-              e'.cls = .given (.coin law) verifier hearers → prover ∈ hearers → e'.τ = τ →
+              e'.cls = .given (.coin law) verifier hearers → hearers = [prover] → e'.τ = τ →
               at_.site = ⟨e'.site.through, drawToldKey events (idx + (k + 1))⟩ →
               ∃ c ∈ vRest, ClauseMatches M c (.give .message [prover] at_ τ x) := by
             intro k e' hk law hearers at_ τ x hC hIn hT hS

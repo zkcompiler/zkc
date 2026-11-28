@@ -49,9 +49,10 @@ def encodeOption {A : Type} (f : A → List Nat) : Option A → List Nat
   | none => [0]
   | some a => 1 :: f a
 
-/-- Canonical length-prefixed ASCII domain tag `"zkc.core.proof/0"`. -/
+/-- Canonical length-prefixed ASCII domain tag `"zkc.core.proof/1"` (order-independent
+canonical reachability closure with `lawMembers` and stripped proof-only annotations). -/
 def proofDomainTag : List Nat :=
-  [16, 122, 107, 99, 46, 99, 111, 114, 101, 46, 112, 114, 111, 111, 102, 47, 48]
+  [16, 122, 107, 99, 46, 99, 111, 114, 101, 46, 112, 114, 111, 111, 102, 47, 49]
 
 /-- Canonical length-prefixed ASCII domain tag `"zkc.core.stmt/0"`. -/
 def stmtDomainTag : List Nat :=
@@ -367,38 +368,63 @@ def encodeDefinition {V : Vocabulary} (enc : VocabEncoder V) : Definition V → 
         encodeList (encodeLTy enc) outs ++
         encodeRegion (encodeProtocolRaw enc) (encodeList encodeNat) body
 
-/-- Versioned canonical identity bytes (`zkc.core.proof/0`) of a scheme over an admitted program:
-binds the declaration (including application context) and all reachable erased definitions in
-`closure`. -/
+/-- Deduplicate a list of keys preserving first-occurrence traversal order. -/
+def dedupFirst (seen : List Key) : List Key → List Key
+  | [] => []
+  | k :: ks =>
+      if k ∈ seen then dedupFirst seen ks
+      else k :: dedupFirst (k :: seen) ks
+
+/-- Strip proof-only analysis annotations from an erased definition before hashing into the
+deployment identity (preserving all executable code, headers, and summaries). -/
+def stripProofNotes {V : Vocabulary} : Definition V → Definition V
+  | .fn key ins outs canStop kernel summary body _ =>
+      .fn key ins outs canStop kernel summary body []
+  | .protocol key roles ins outs body =>
+      .protocol key roles ins outs body
+
+/-- Find an erased definition by its unique key. -/
+def lookupDefByKey {V : Vocabulary} (defs : List (Definition V)) (k : Key) :
+    Option (Definition V) :=
+  defs.find? fun d => decide (d.key = k)
+
+/-- Deterministic reference-order key list of all definitions reachable from `declaration.entry`
+followed by `declaration.definitions`. Independent of how unrelated or independent definitions
+are ordered inside `a.program`. -/
+def canonicalClosureKeys {V : Vocabulary} (a : Admitted V) (declaration : Declaration) : List Key :=
+  dedupFirst [] ((declaration.entry :: declaration.definitions).flatMap a.program.defs.closureOf)
+
+/-- Canonical, definition-order-independent, proof-note-stripped list of reachable erased
+definitions for `(a, declaration)`. -/
+def canonicalClosureDefs {V : Vocabulary} (a : Admitted V) (declaration : Declaration) :
+    List (Definition V) :=
+  let erased := (erase a.program).definitions
+  (canonicalClosureKeys a declaration).filterMap fun k =>
+    (lookupDefByKey erased k).map stripProofNotes
+
+/-- Versioned canonical identity bytes (`zkc.core.proof/1`) of a scheme over an admitted program:
+binds the declaration (including application context and `lawMembers`) and all reachable erased
+definitions in canonical reference order (`canonicalClosureDefs`), independent of package
+definition ordering, proof-only annotations, associations, and unreachable definitions. -/
 def schemeIdentity {V : Vocabulary} (enc : VocabEncoder V) (a : Admitted V)
     (declaration : Declaration) : List Nat :=
-  let closure := (declaration.entry :: declaration.definitions).flatMap a.program.defs.closureOf
-  let defs := (erase a.program).definitions.filter fun d => decide (d.key ∈ closure)
   proofDomainTag ++ encodeDeclaration declaration ++
-    encodeList (encodeDefinition enc) defs
+    encodeList (encodeDefinition enc) (canonicalClosureDefs a declaration)
 
-/-- Canonical identity bytes of a deployed scheme (`Functions.identity`). -/
-def deployedIdentity {V : Vocabulary} (enc : VocabEncoder V) (d : Deployed V) : List Nat :=
-  schemeIdentity enc d.admitted d.declaration
+/-- Canonical identity bytes committed inside a deployed scheme (`Functions.identity`).
+Reads the identity fixed at deployment time under the encoder that resolved `d.declaration`. -/
+def deployedIdentity {V : Vocabulary} (d : Deployed V) : List Nat :=
+  d.identity
 
-/-- `deployedIdentity` satisfies `Statements.identityReads`: it depends only on the declaration
-and the reachable erased definitions in `Deployed.closure`. -/
-theorem deployedIdentity_reads {V : Vocabulary} (enc : VocabEncoder V)
-    (d d' : Deployed V) (hdecl : d.declaration = d'.declaration)
-    (hdefs :
-      (erase d.admitted.program).definitions.filter (fun defn => decide (defn.key ∈ d.closure)) =
-      (erase d'.admitted.program).definitions.filter (fun defn => decide (defn.key ∈ d'.closure))) :
-    deployedIdentity enc d = deployedIdentity enc d' := by
-  unfold deployedIdentity schemeIdentity
-  dsimp only
-  have hcl :
-      (erase d.admitted.program).definitions.filter
-        (fun defn => decide (defn.key ∈ (d.declaration.entry :: d.declaration.definitions).flatMap
-          d.admitted.program.defs.closureOf)) =
-      (erase d'.admitted.program).definitions.filter
-        (fun defn => decide (defn.key ∈ (d'.declaration.entry :: d'.declaration.definitions).flatMap
-          d'.admitted.program.defs.closureOf)) := hdefs
-  rw [hcl, hdecl]
+/-- `schemeIdentity` reads only the declaration and `canonicalClosureDefs`. -/
+theorem schemeIdentity_reads {V : Vocabulary} (enc : VocabEncoder V)
+    (a₁ a₂ : Admitted V) (decl₁ decl₂ : Declaration)
+    (hdecl : decl₁ = decl₂)
+    (hdefs : canonicalClosureDefs a₁ decl₁ = canonicalClosureDefs a₂ decl₂) :
+    schemeIdentity enc a₁ decl₁ = schemeIdentity enc a₂ decl₂ := by
+  subst hdecl
+  unfold schemeIdentity
+  rw [hdefs]
 
 /-! ## Byte-range invariants (`< 256`) -/
 
@@ -955,11 +981,6 @@ theorem schemeIdentity_bytes {V : Vocabulary} (enc : VocabEncoder V) (a : Admitt
     (declaration : Declaration) : ∀ b, b ∈ schemeIdentity enc a declaration → b < 256 :=
   mem_append_lt (mem_append_lt proofDomainTag_bytes (encodeDeclaration_bytes declaration))
     (encodeList_bytes (encodeDefinition enc) (encodeDefinition_bytes enc) _)
-
-/-- Every element of `deployedIdentity` is a valid byte (`< 256`). -/
-theorem deployedIdentity_bytes {V : Vocabulary} (enc : VocabEncoder V) (d : Deployed V) :
-    ∀ b, b ∈ deployedIdentity enc d → b < 256 :=
-  schemeIdentity_bytes enc d.admitted d.declaration
 
 /-! ## Prefix-freeness and injectivity of canonical identity encoding -/
 
@@ -1695,100 +1716,22 @@ theorem encodeDefinition_prefixFree {V : Vocabulary} (enc : VocabEncoder V) (hEn
       (encodeProtocolRaw_prefixFree enc hEnc) (encodeList_prefixFree encodeNat_prefixFree) _ _ r₁ r₂ h4
     exact ⟨by rw [hk, hrol, hi, ho, hb], hr⟩
 
-/-- Exact converse of `deployedIdentity_reads` under an injective `VocabEncoder`: equal canonical
-identities imply literal equality of the declarations and of the reachable erased definitions. -/
+/-- Exact converse of `schemeIdentity_reads` under an injective `VocabEncoder`: equal canonical
+identities imply literal equality of the declarations and of `canonicalClosureDefs` (the reachable
+erased definitions in canonical reference order with proof-only annotations stripped). -/
 theorem schemeIdentity_injective {V : Vocabulary} (enc : VocabEncoder V) (hEnc : enc.Injective)
     (a₁ a₂ : Admitted V) (decl₁ decl₂ : Declaration)
     (hEq : schemeIdentity enc a₁ decl₁ = schemeIdentity enc a₂ decl₂) :
     decl₁ = decl₂ ∧
-    ((erase a₁.program).definitions.filter fun d =>
-      decide (d.key ∈ (decl₁.entry :: decl₁.definitions).flatMap a₁.program.defs.closureOf)) =
-    ((erase a₂.program).definitions.filter fun d =>
-      decide (d.key ∈ (decl₂.entry :: decl₂.definitions).flatMap a₂.program.defs.closureOf)) := by
+    canonicalClosureDefs a₁ decl₁ = canonicalClosureDefs a₂ decl₂ := by
   unfold schemeIdentity at hEq
-  dsimp only at hEq
   simp only [List.append_assoc] at hEq
   have h1 := List.append_cancel_left hEq
   obtain ⟨hDecl, hRest⟩ := encodeDeclaration_prefixFree decl₁ decl₂ _ _ h1
   obtain ⟨hDefs, _⟩ := encodeList_prefixFree (encodeDefinition_prefixFree enc hEnc)
-    ((erase a₁.program).definitions.filter fun d =>
-      decide (d.key ∈ (decl₁.entry :: decl₁.definitions).flatMap a₁.program.defs.closureOf))
-    ((erase a₂.program).definitions.filter fun d =>
-      decide (d.key ∈ (decl₂.entry :: decl₂.definitions).flatMap a₂.program.defs.closureOf))
+    (canonicalClosureDefs a₁ decl₁)
+    (canonicalClosureDefs a₂ decl₂)
     [] [] (by rw [List.append_nil, List.append_nil]; exact hRest)
   exact ⟨hDecl, hDefs⟩
-
-/-- Exact converse of `deployedIdentity_reads` (`Statements.identityReads`) under an injective
-`VocabEncoder`: two deployed schemes have equal identity bytes iff they agree on their declaration
-and reachable erased definitions (they may still differ in unreachable definitions, associations, or
-annotations). -/
-theorem deployedIdentity_injective {V : Vocabulary} (enc : VocabEncoder V) (hEnc : enc.Injective)
-    (d₁ d₂ : Deployed V) (hEq : deployedIdentity enc d₁ = deployedIdentity enc d₂) :
-    d₁.declaration = d₂.declaration ∧
-    ((erase d₁.admitted.program).definitions.filter fun d => decide (d.key ∈ d₁.closure)) =
-    ((erase d₂.admitted.program).definitions.filter fun d => decide (d.key ∈ d₂.closure)) :=
-  schemeIdentity_injective enc hEnc d₁.admitted d₂.admitted d₁.declaration d₂.declaration hEq
-
-/-- Distribution-aware (`V.LawKey`-keyed) semantic lawfulness of a deployment's Fiat–Shamir suite
-under vocabulary encoder `enc`:
-1. Every law-specific `(SuiteSlot.derive, enc.lawKey law, defKey) ∈ suite.lawMembers` entry only
-   needs to satisfy `Allows M (.coin law)` for that exact `law`, allowing distinct sampling laws
-   that share one Core signature to select distinct decoders.
-2. Every fallback `(SuiteSlot.derive, defKey) ∈ suite.members` entry satisfies `Allows M (.coin law)`
-   for every heard coin `law` of matching signature.
-3. Every `SuiteSlot.encode` function is injective on valid values. -/
-def Deployed.SuiteLawfulFor {V : Vocabulary} (enc : VocabEncoder V) (M : Model V)
-    (d : Deployed V) : Prop :=
-  ∀ suite sessionTag, d.declaration.construction = .derived suite sessionTag →
-    (∀ (e : ShapeEvent V) (law : V.LawKey) (owner h0 : Role) (hs : List Role)
-        (drawIns : List V.Ty) (defKey : Key),
-      e ∈ d.entry.shape.events [] id →
-      e.cls = .given (.coin law) owner (h0 :: hs) →
-      V.law law = some ⟨drawIns, e.τ⟩ →
-      ((SuiteSlot.derive, enc.lawKey law, defKey) ∈ suite.lawMembers ∨
-        (SuiteSlot.derive, defKey) ∈ suite.members) →
-      ∀ (hdr : FnHeader V) (f : Member d.admitted.program.headers.fns hdr),
-        d.admitted.program.find defKey = some (.fn f) →
-        ∀ (stateTy : V.Ty)
-          (hins : hdr.ins = stateTy :: .seq (.fin 256) none :: drawIns)
-          (houts : hdr.outs = [e.τ, stateTy])
-          (st : M.Val stateTy) (label : List (M.Val (.fin 256)))
-          (payload : HList M.Val drawIns) (coin : M.Val e.τ) (st' : M.Val stateTy),
-          M.Valid stateTy st →
-          (∀ b, b ∈ label → b < 256) →
-          payload.All M.Valid →
-          Defs.fnTable M d.admitted.program.defs hdr f
-            (cast (congrArg (HList M.Val) hins.symm) (.cons st (.cons label payload))) =
-            .done (cast (congrArg (HList M.Val) houts.symm) (.cons coin (.cons st' .nil))) →
-          Allows M (.coin law) drawIns payload e.τ coin) ∧
-    (∀ eKey, (SuiteSlot.encode, eKey) ∈ suite.members →
-      ∀ (hdr : FnHeader V) (f : Member d.admitted.program.headers.fns hdr),
-        d.admitted.program.find eKey = some (.fn f) →
-        ∀ (unitTy τ : V.Ty) (hIn : hdr.ins = [τ]) (hOut : hdr.outs = [.seq unitTy none])
-          (v₁ v₂ : M.Val τ) (u : List (M.Val unitTy)),
-          M.Valid τ v₁ → M.Valid τ v₂ →
-          Defs.fnTable M d.admitted.program.defs hdr f
-            (cast (congrArg (HList M.Val) hIn.symm) (.cons v₁ .nil)) =
-            .done (cast (congrArg (HList M.Val) hOut.symm) (.cons u .nil)) →
-          Defs.fnTable M d.admitted.program.defs hdr f
-            (cast (congrArg (HList M.Val) hIn.symm) (.cons v₂ .nil)) =
-            .done (cast (congrArg (HList M.Val) hOut.symm) (.cons u .nil)) →
-          v₁ = v₂)
-
-/-- Universal `SuiteLawful` implies the distribution-aware `SuiteLawfulFor` for every encoder `enc`. -/
-theorem Deployed.SuiteLawful.toFor {V : Vocabulary} (enc : VocabEncoder V) (M : Model V)
-    {d : Deployed V} (h : d.SuiteLawful M) : d.SuiteLawfulFor enc M := by
-  intro suite tag hCon
-  obtain ⟨hDer, hEnc⟩ := h suite tag hCon
-  refine ⟨?_, hEnc⟩
-  intro e law owner h0 hs drawIns defKey hE hCls hLaw hMem
-  have hMem' : (SuiteSlot.derive, defKey) ∈ suite.members ∨
-      ∃ lawBytes, (SuiteSlot.derive, lawBytes, defKey) ∈ suite.lawMembers := by
-    rcases hMem with hL | hM
-    · exact .inr ⟨enc.lawKey law, hL⟩
-    · exact .inl hM
-  intro hdr f hFind stateTy hins houts st label payload coin st' hSt hLbl hPay hRun
-  exact hDer defKey hMem' hdr f hFind stateTy drawIns e law owner h0 hs hE hCls hLaw
-    hins houts st label payload coin st' hSt hLbl hPay hRun
 
 end Zkc.Core

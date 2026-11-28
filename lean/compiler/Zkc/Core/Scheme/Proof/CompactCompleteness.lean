@@ -1652,6 +1652,7 @@ private theorem collectCompactWire_prefix_step {a : Admitted V} {layout : Layout
 
 private theorem simulate_compact_derived {enc : VocabEncoder V} {d : Deployed V} {suite : ModuleRef}
     {sessionTag : Option (List Nat)} {layout : Layout} {stateTy suiteUnitTy unitTy : V.Ty}
+    {startRef : TypedFnRef V d.admitted.program.headers.fns [bytesTy] [stateTy]}
     {absRef : TypedFnRef V d.admitted.program.headers.fns [stateTy, bytesTy, .seq suiteUnitTy none] [stateTy]}
     {prover verifier : Role} (hNe : prover ≠ verifier) {declKey : Key}
     (stmtTys : List V.Ty)
@@ -1671,6 +1672,7 @@ private theorem simulate_compact_derived {enc : VocabEncoder V} {d : Deployed V}
     (hCPCl : hCPSt ▸ conP'.clauses = cPClauses) (hCVCl : hCVSt ▸ conV'.clauses = cVClauses)
     (hLPCl : hLPSt ▸ layP'.clauses = lPClauses) (hLVCl : hLVSt ▸ layV'.clauses = lVClauses)
     (hConDecl : d.declaration.construction = .derived suite sessionTag)
+    (hStart : findSuiteStart d.admitted suite = some ⟨stateTy, startRef⟩)
     (hLayDecl : d.declaration.layout = some layout)
     (hSuiteLaw : d.SuiteLawfulFor enc M) (hLayLaw : d.LayoutLawful M)
     (hNodup : ((d.entry.shape.events [] id).map (·.site)).Nodup)
@@ -1785,10 +1787,10 @@ private theorem simulate_compact_derived {enc : VocabEncoder V} {d : Deployed V}
   have hEventDisc : ∀ e ∈ events,
       match e.cls with
       | .flow _ giver getters =>
-          (giver = prover ∧ verifier ∈ getters) ∨
+          (giver = prover ∧ getters = [verifier]) ∨
           (giver ≠ prover ∧ giver ≠ verifier ∧ prover ∉ getters ∧ verifier ∉ getters)
       | .given (.coin law) owner hearers =>
-          (owner = verifier ∧ prover ∈ hearers ∧
+          (owner = verifier ∧ hearers = [prover] ∧
             ∃ sig, V.law law = some sig ∧ sig.out = e.τ ∧ sig.ins = []) ∨
           hearers = []
       | .given (.request _) owner hearers =>
@@ -2025,9 +2027,10 @@ private theorem simulate_compact_derived {enc : VocabEncoder V} {d : Deployed V}
                           ∀ e', GExec M source₁ (k ()) e' → ∃ a, e' = .returned a := by
                         intro s₁ hL₁ hAg₁ e' ⟨evs', hRun'⟩
                         exact hNoHalt s₁ hL₁ hAg₁ e' ⟨_, .flow hRun'⟩
-                      rcases hDisc with ⟨hGeqP, hVin⟩ | ⟨hGNeP, hGNeV, hPOut, hVOut⟩
+                      rcases hDisc with ⟨hGeqP, hGsEq⟩ | ⟨hGNeP, hGNeV, hPOut, hVOut⟩
                       · -- Prover → Verifier flow
-                        subst giver
+                        subst giver; subst getters
+                        have hVin : verifier ∈ [verifier] := List.mem_singleton_self verifier
                         cases hPP with
                         | begins _ => exact False.elim (hNotMP trivial)
                         | settles _ => exact False.elim (hNotMP trivial)
@@ -2051,7 +2054,7 @@ private theorem simulate_compact_derived {enc : VocabEncoder V} {d : Deployed V}
                                 | ok remPair =>
                                     rw [hRemRec] at hRemW'; dsimp only [bind, Except.bind] at hRemW'
                                     rw [hECls] at hRemW'; dsimp only at hRemW'
-                                    rw [ite_eq_left ⟨rfl, hVin⟩] at hRemW'
+                                    rw [ite_eq_left ⟨rfl, rfl⟩] at hRemW'
                                     unfold buildCompactVClauses at hV2'
                                     cases hVRec : buildCompactVClauses d.admitted layout unitTy prover verifier
                                         declKey events stmtTys allSpecs htfree (pref.length + 1) rest with
@@ -2059,7 +2062,7 @@ private theorem simulate_compact_derived {enc : VocabEncoder V} {d : Deployed V}
                                     | ok vRest =>
                                         rw [hVRec] at hV2'; dsimp only [bind, Except.bind] at hV2'
                                         rw [hECls] at hV2'; dsimp only at hV2'
-                                        rw [ite_eq_left ⟨rfl, hVin⟩] at hV2'
+                                        rw [ite_eq_left ⟨rfl, rfl⟩] at hV2'
                                         -- Check whether `e` is absorbed by construction layer
                                         obtain ⟨needAbs, hNeedAbs⟩ := eventsWithAbsorb_mem_at hFst hEIn
                                         have hStepCon : ∀ (st' : M.Val stateTy) (hConStep :
@@ -2069,8 +2072,8 @@ private theorem simulate_compact_derived {enc : VocabEncoder V} {d : Deployed V}
                                                   encRef.eval M fnTable (.cons x .nil) = .done (.cons encVal .nil) ∧
                                                   absRef.eval M fnTable (.cons st (.cons (msgLabel at_.site) (.cons encVal .nil))) =
                                                     .done (.cons st' .nil) ∧
-                                                  Clause.answer M fnTable rTable cPCl (.give kind getters at_ e.τ x) st =
-                                                    .call (.give kind getters ⟨at_.path, at_.site.key⟩ e.τ x)
+                                                  Clause.answer M fnTable rTable cPCl (.give kind [verifier] at_ e.τ x) st =
+                                                    .call (.give kind [verifier] ⟨at_.path, at_.site.key⟩ e.τ x)
                                                       (fun _ => .done ((), st')) ∧
                                                   Clause.answer M fnTable rTable cVCl (.get kind prover at_ e.τ) st =
                                                     .call (.get kind prover ⟨at_.path, at_.site.key⟩ e.τ) fun msg =>
@@ -2082,8 +2085,8 @@ private theorem simulate_compact_derived {enc : VocabEncoder V} {d : Deployed V}
                                                         (values.1.single, values.2.single)) ∧
                                               (needAbs = false →
                                                 st' = st ∧
-                                                Clause.answer M fnTable rTable cPCl (.give kind getters at_ e.τ x) st =
-                                                  .call (.give kind getters at_ e.τ x) (fun u => .done (u, st)) ∧
+                                                Clause.answer M fnTable rTable cPCl (.give kind [verifier] at_ e.τ x) st =
+                                                  .call (.give kind [verifier] at_ e.τ x) (fun u => .done (u, st)) ∧
                                                 Clause.answer M fnTable rTable cVCl (.get kind prover at_ e.τ) st =
                                                   .call (.get kind prover at_ e.τ) (fun m => .done (m, st)))),
                                             M.Valid stateTy st' →
@@ -2095,7 +2098,7 @@ private theorem simulate_compact_derived {enc : VocabEncoder V} {d : Deployed V}
                                               compactWireArgs M prover verifier layout evs = wireSigmaList M remSpecs wireVals ∧
                                               Alone M source prover
                                                 ((Stack.handler M fnTable rTable [conP0, layP0]).run (retryOf M none)
-                                                  (.call (.give kind getters at_ e.τ x) kP')
+                                                  (.call (.give kind [verifier] at_ e.τ x) kP')
                                                   (.cons st (.cons buf .nil)))
                                                 recP (.returned (outP, .cons finalSt (.cons (buf ++ chunks.flatten) .nil))) ∧
                                               (∀ (stV : stateTys.Val M.toCarriers),
@@ -2117,16 +2120,16 @@ private theorem simulate_compact_derived {enc : VocabEncoder V} {d : Deployed V}
                                                     (.cons st (.cons stV .nil)))
                                                   recV (.returned (outV, .cons finalSt (.cons stV .nil)))) ∧
                                               postP a outP ∧ postV a outV ∧
-                                              Lawful M source' (.call (.flow kind prover getters at_ e.τ x) k) ∧
+                                              Lawful M source' (.call (.flow kind prover [verifier] at_ e.τ x) k) ∧
                                               (∀ at' τ', at'.site ∉ d.entry.shape.heardCoins → source' at' τ' = source at' τ') ∧
-                                              GRun M source' (.call (.flow kind prover getters at_ e.τ x) k) evs (.returned a) := by
+                                              GRun M source' (.call (.flow kind prover [verifier] at_ e.τ x) k) evs (.returned a) := by
                                           intro st' ⟨hNeedT, hNeedF⟩ hSt'V
                                           have hConP_to_step : ∀ (buf' : List (M.Val unitTy)),
                                               Clause.answer M fnTable rTable lPCl
-                                                (.give kind getters ⟨at_.path, at_.site.key⟩ e.τ x) buf =
+                                                (.give kind [verifier] ⟨at_.path, at_.site.key⟩ e.τ x) buf =
                                                 .done ((), buf') →
                                               (Stack.handler M fnTable rTable [conP0, layP0]).clause
-                                                (.give kind getters at_ e.τ x) (.cons st (.cons buf .nil)) =
+                                                (.give kind [verifier] at_ e.τ x) (.cons st (.cons buf .nil)) =
                                                 .done ((), .cons st' (.cons buf' .nil)) := by
                                             intro buf' hLayP
                                             cases needAbs with
@@ -2198,15 +2201,15 @@ private theorem simulate_compact_derived {enc : VocabEncoder V} {d : Deployed V}
                                                       (hShP.2 () trivial) (hShV.2 x trivial)
                                                       (hPShape.2 ()) (hUniq ()).2 hLP hFed hNoHalt'
                                                   have hLayPAns : Clause.answer M fnTable rTable lPCl
-                                                      (.give kind getters ⟨at_.path, at_.site.key⟩ e.τ x) buf = .done ((), buf) := by
+                                                      (.give kind [verifier] ⟨at_.path, at_.site.key⟩ e.τ x) buf = .done ((), buf) := by
                                                     rw [hpAllEq]
                                                     rw [clause_answer_append_right M fnTable rTable _ buf prefP _
-                                                      (hNoMatchPrefP_site (.give kind getters ⟨at_.path, at_.site.key⟩ e.τ x) hESite.symm)]
-                                                    exact layoutDropClause_answer M fnTable rTable prover e.site kind getters
+                                                      (hNoMatchPrefP_site (.give kind [verifier] ⟨at_.path, at_.site.key⟩ e.τ x) hESite.symm)]
+                                                    exact layoutDropClause_answer M fnTable rTable prover e.site kind [verifier]
                                                       ⟨at_.path, at_.site.key⟩ hESite x buf remPair.2
                                                   have hStepP := hConP_to_step buf hLayPAns
                                                   refine ⟨a, outP, outV, finalSt, wireVals, chunks, recP, src',
-                                                    Event.flow kind prover getters at_ e.τ x :: evs',
+                                                    Event.flow kind prover [verifier] at_ e.τ x :: evs',
                                                     hTr, ?_, ?_, ?_, hpP, hpV, hLSrc', hAgSrc', .flow hRun'⟩
                                                   · simp only [compactWireArgs, ← hESite, hLk]
                                                     rw [ite_eq_right (fun hm => by cases hm.2.2)]
@@ -2215,7 +2218,7 @@ private theorem simulate_compact_derived {enc : VocabEncoder V} {d : Deployed V}
                                                     exact hAlP
                                                   · intro stV hSlot hRecEv
                                                     have hRecEval : recRef.eval M fnTable (Tys.toHList M stateTys stV) = .done (.cons x .nil) :=
-                                                      hRecEv kind getters at_ e.τ x recKey recRef List.mem_cons_self hVin
+                                                      hRecEv kind [verifier] at_ e.τ x recKey recRef List.mem_cons_self hVin
                                                         (hESite ▸ hLk) hRecF
                                                     have hLayVAns : Clause.answer M fnTable rTable lVCl
                                                         (.get kind prover ⟨at_.path, at_.site.key⟩ e.τ) stV = .done (x, stV) := by
@@ -2276,15 +2279,15 @@ private theorem simulate_compact_derived {enc : VocabEncoder V} {d : Deployed V}
                                                     (hShP.2 () trivial) (hShV.2 x trivial)
                                                     (hPShape.2 ()) (hUniq ()).2 hLP hFed hNoHalt'
                                                 have hLayPAns : Clause.answer M fnTable rTable lPCl
-                                                    (.give kind getters ⟨at_.path, at_.site.key⟩ e.τ x) buf = .done ((), buf ++ chunk) := by
+                                                    (.give kind [verifier] ⟨at_.path, at_.site.key⟩ e.τ x) buf = .done ((), buf ++ chunk) := by
                                                   rw [hpAllEq]
                                                   rw [clause_answer_append_right M fnTable rTable _ buf prefP _
-                                                    (hNoMatchPrefP_site (.give kind getters ⟨at_.path, at_.site.key⟩ e.τ x) hESite.symm)]
-                                                  exact layoutPWriteClause_answer M fnTable rTable prover e.site kind getters wRef
+                                                    (hNoMatchPrefP_site (.give kind [verifier] ⟨at_.path, at_.site.key⟩ e.τ x) hESite.symm)]
+                                                  exact layoutPWriteClause_answer M fnTable rTable prover e.site kind [verifier] wRef
                                                     ⟨at_.path, at_.site.key⟩ hESite x buf chunk hWD remPair.2
                                                 have hStepP := hConP_to_step (buf ++ chunk) hLayPAns
                                                 refine ⟨a, outP, outV, finalSt, .cons x restWireVals, chunk :: restChunks, recP, src',
-                                                  Event.flow kind prover getters at_ e.τ x :: evs',
+                                                  Event.flow kind prover [verifier] at_ e.τ x :: evs',
                                                   .cons hW hR hMsgV hWD hChV.1.1 hTr, ?_, ?_, ?_, hpP, hpV, hLSrc', hAgSrc', .flow hRun'⟩
                                                 · simp only [compactWireArgs, ← hESite, hLk, hVin, and_self, ite_true,
                                                     List.singleton_append, wireSigmaList]
@@ -2381,22 +2384,22 @@ private theorem simulate_compact_derived {enc : VocabEncoder V} {d : Deployed V}
                                         | true =>
                                             obtain ⟨encP, encVal, st', hEncFindP, hEncD, hAbsD, hSt'V, hConPAns⟩ :=
                                               construction_clauses_answer_prover_flow_abs M 0 eventsAbs hCC
-                                                kind getters at_ e.τ x st hMsgV hStV ⟨e, hNeedAbs, hESite, rfl, hECls⟩
+                                                kind [verifier] at_ e.τ x st hMsgV hStV ⟨e, hNeedAbs, hESite, rfl, hECls⟩
                                             obtain ⟨encV, hEncFindV, hConVAns⟩ :=
                                               construction_clauses_answer_verifier_flow_abs M 0 eventsAbs hCC
-                                                kind at_ e.τ st ⟨e, hNeedAbs, hESite, rfl, getters, hVin, hECls⟩
+                                                kind at_ e.τ st ⟨e, hNeedAbs, hESite, rfl, hECls⟩
                                             have hEncEq : encP = encV := Option.some.inj (hEncFindP.symm.trans hEncFindV)
                                             subst hEncEq
                                             exact hStepCon st' ⟨fun _ => ⟨encP, encVal, hEncFindP, hEncD, hAbsD, hConPAns, hConVAns⟩,
                                               fun h => by cases h⟩ hSt'V
                                         | false =>
                                             have hNoAbsAll : ∀ e' b', (e', b') ∈ eventsAbs → e'.site = at_.site → e'.τ = e.τ →
-                                                (∃ gs, verifier ∈ gs ∧ e'.cls = .flow kind prover gs) → b' = false := by
-                                              intro e' b' hm' hS' hT' ⟨gs', hV', hC'⟩
+                                                e'.cls = .flow kind prover [verifier] → b' = false := by
+                                              intro e' b' hm' hS' hT' hC'
                                               exact eventsWithAbsorb_flow_consistent prover verifier [] id false d.entry.shape
-                                                hm' hNeedAbs (hS'.trans hESite.symm) hT' hC' hV' hECls hVin
+                                                hm' hNeedAbs (hS'.trans hESite.symm) hT' hC' hECls
                                             obtain ⟨hConPUnm, hConVUnm⟩ := construction_clauses_unmatched_elided_flow M 0 eventsAbs hCC
-                                              kind getters at_ e.τ x hNoAbsAll
+                                              kind [verifier] at_ e.τ x hNoAbsAll
                                             exact hStepCon st ⟨(fun h => by cases h), fun _ => ⟨rfl,
                                               clause_answer_unmatched_all M fnTable rTable _ st cPCl hConPUnm,
                                               clause_answer_unmatched_all M fnTable rTable _ st cVCl hConVUnm⟩⟩ hStV
@@ -2449,9 +2452,10 @@ private theorem simulate_compact_derived {enc : VocabEncoder V} {d : Deployed V}
                       rw [hECls] at hDisc
                       cases gkind with
                       | coin law =>
-                          rcases hDisc with ⟨hOwnEqV, hPin, sig, hLawSig, hSigOut, hSigIns⟩ | hNil
+                          rcases hDisc with ⟨hOwnEqV, hHEq, sig, hLawSig, hSigOut, hSigIns⟩ | hNil
                           · -- Verifier → Prover heard coin draw (derived from transcript!)
-                            subst owner
+                            subst owner; subst hearers
+                            have hPin : prover ∈ [prover] := List.mem_singleton_self prover
                             have hGInsNil : gIns = [] := by
                               cases hPP with
                               | begins _ => exact False.elim (hNotMP trivial)
@@ -2481,26 +2485,21 @@ private theorem simulate_compact_derived {enc : VocabEncoder V} {d : Deployed V}
                                 | heard hNeSelf _ _ => exact absurd rfl hNeSelf
                                 | unheard hNeSelf _ _ => exact absurd rfl hNeSelf
                                 | owned hPV' =>
-                                    have hH0 : ∃ h0 hs, hearers = h0 :: hs := by
-                                      cases hearers with
-                                      | nil => cases hPin
-                                      | cons h0 hs => exact ⟨h0, hs, rfl⟩
-                                    obtain ⟨h0, hs, rfl⟩ := hH0
                                     obtain ⟨bDraw, hDrawAt⟩ := eventsWithAbsorb_draw_index hFst hEvSplit
                                     have hSuf0 : ∀ k0 p0, eventsAbs[k0]? = some p0 → events[0 + k0]? = some p0.1 := by
                                       intro k0 p0 hk0
                                       rw [Nat.zero_add, ← hFst, List.getElem?_map, hk0]; rfl
                                     have hDrawMem : (e, bDraw) ∈ eventsAbs := List.mem_of_getElem? hDrawAt
                                     obtain ⟨idxP, ⟨ePSite, ePCls, ePτ⟩, derP, coinP, stP', hIdxP, hSiteP, hTyP,
-                                      ⟨hsP, hPinP, hClsP⟩, hDerFindP, hDerDP, hCoinPV, hStP'V, hConPAns⟩ :=
+                                      hClsP, hDerFindP, hDerDP, hCoinPV, hStP'V, hConPAns⟩ :=
                                       construction_clauses_answer_prover_coin M 0 eventsAbs hSuf0 hCC
                                         law at_ e.τ st hStV
-                                        ⟨(e, bDraw), hDrawMem, hESite, rfl, h0 :: hs, hPin, hECls⟩
+                                        ⟨(e, bDraw), hDrawMem, hESite, rfl, hECls⟩
                                     obtain ⟨idxV, ⟨eV'Site, eV'Cls, eV'τ⟩, derV, coinV, stV', hIdxV, hSiteV', hTyV',
                                       hClsV', hLawV', hDerFindV, hDerDV, hCoinVV, hStV'V, hConVAns⟩ :=
                                       construction_clauses_answer_verifier_coin M 0 eventsAbs hSuf0 hCC
-                                        law (h0 :: hs) at_ e.τ st hStV
-                                        ⟨(e, bDraw), hDrawMem, hESite, rfl, hPin, hECls⟩
+                                        law [prover] at_ e.τ st hStV
+                                        ⟨(e, bDraw), hDrawMem, hESite, rfl, rfl, hECls⟩
                                     dsimp only at hSiteP hTyP hClsP hSiteV' hTyV' hClsV'
                                     subst ePτ; subst eV'τ
                                     have hDerEq : derP = derV := Option.some.inj (hDerFindP.symm.trans hDerFindV)
@@ -2527,7 +2526,7 @@ private theorem simulate_compact_derived {enc : VocabEncoder V} {d : Deployed V}
                                     have hCoinV : M.Valid e.τ coin := hCoinPV
                                     have hSt'V : M.Valid stateTy st' := hStP'V
                                     have hAllows : Allows M (.coin law) [] .nil e.τ coin :=
-                                      suiteLawful_allows M hConDecl hSuiteLaw hDerFindV
+                                      suiteLawful_allows M hConDecl hSuiteLaw hStart hDerFindV
                                         (List.mem_of_getElem? hIdxV) hClsV' rfl hLawV'
                                         hStV (drawLabel_bytes at_.site) hDerDV
                                     have hAtHeard : at_.site ∈ d.entry.shape.heardCoins := by
@@ -2542,7 +2541,7 @@ private theorem simulate_compact_derived {enc : VocabEncoder V} {d : Deployed V}
                                       let s₂ := patchSource M s₁ at_ e.τ coin
                                       have hAg12 : ∀ at' τ', at' ≠ at_ → s₁ at' τ' = s₂ at' τ' :=
                                         fun at' τ' hne => (patchSource_ne M s₁ at_ e.τ coin hne τ').symm
-                                      have hL₂ : Lawful M s₂ (.call (.given (.coin law) verifier (h0 :: hs) at_ [] .nil e.τ) k) := by
+                                      have hL₂ : Lawful M s₂ (.call (.given (.coin law) verifier [prover] at_ [] .nil e.τ) k) := by
                                         intro v hv; dsimp only [s₂] at hv; rw [patchSource_self] at hv; cases hv
                                         exact ⟨hAllows, lawful_of_agree M hAg12 hOccK hL₁⟩
                                       have hAg₂ : ∀ at' τ', at'.site ∉ d.entry.shape.heardCoins → s₂ at' τ' = source at' τ' := by
@@ -2559,7 +2558,7 @@ private theorem simulate_compact_derived {enc : VocabEncoder V} {d : Deployed V}
                                     | ok remPair =>
                                         rw [hRemRec] at hRemW'; dsimp only [bind, Except.bind] at hRemW'
                                         rw [hECls] at hRemW'; dsimp only at hRemW'
-                                        rw [ite_eq_left ⟨rfl, hPin⟩] at hRemW'
+                                        rw [ite_eq_left ⟨rfl, rfl⟩] at hRemW'
                                         unfold buildCompactVClauses at hV2'
                                         cases hVRec : buildCompactVClauses d.admitted layout unitTy prover verifier
                                             declKey events stmtTys allSpecs htfree (pref.length + 1) rest with
@@ -2567,7 +2566,7 @@ private theorem simulate_compact_derived {enc : VocabEncoder V} {d : Deployed V}
                                         | ok vRest =>
                                             rw [hVRec] at hV2'; dsimp only [bind, Except.bind] at hV2'
                                             rw [hECls] at hV2'; dsimp only at hV2'
-                                            rw [ite_eq_left ⟨rfl, hPin⟩] at hV2'
+                                            rw [ite_eq_left ⟨rfl, rfl⟩] at hV2'
                                             have hToldSiteEq : (⟨e.site.through, drawToldKey events pref.length⟩ : Site) =
                                                 (⟨at_.path, drawToldKey events pref.length⟩ : Occurrence).site := by
                                               have hTh : e.site.through = Frame.applications at_.path :=
@@ -2646,7 +2645,7 @@ private theorem simulate_compact_derived {enc : VocabEncoder V} {d : Deployed V}
                                                     have hAgPatch : ∀ at' τ', at' ≠ at_ → src' at' τ' = src'' at' τ' :=
                                                       fun at' τ' hne => (patchSource_ne M src' at_ e.τ coin hne τ').symm
                                                     refine ⟨a, outP, outV, finalSt, .cons coin restWireVals, chunk :: restChunks,
-                                                      recP, src'', Event.given (.coin law) verifier (h0 :: hs) at_ e.τ coin :: evs',
+                                                      recP, src'', Event.given (.coin law) verifier [prover] at_ e.τ coin :: evs',
                                                       .cons hW hR hCoinV hWD hChV.1.1 hTr, ?_, ?_, ?_, hpP, hpV, ?_, ?_,
                                                       .given (patchSource_self M src' at_ e.τ coin) (grun_of_agree M hAgPatch hOccK hRun')⟩
                                                     · simp only [compactWireArgs, ← hESite, hPin, hCar, and_self, ite_true,
@@ -2698,7 +2697,7 @@ private theorem simulate_compact_derived {enc : VocabEncoder V} {d : Deployed V}
                                                           ⟨at_.path, drawToldKey events pref.length⟩ hToldSiteEq coin stV
                                                           (by rw [hSlotHead]; exact hEqRefl) vRest
                                                       have hStepV : (Stack.handler M fnTable rTable [conV0, layV0]).clause
-                                                          (.own (.coin law) (h0 :: hs) at_ [] .nil e.τ) (.cons st (.cons stV .nil)) =
+                                                          (.own (.coin law) [prover] at_ [] .nil e.τ) (.cons st (.cons stV .nil)) =
                                                           .done (coin, .cons st' (.cons stV .nil)) :=
                                                         stack2_clause_step M fnTable rTable conV0 layV0 _ _ st st' stV stV
                                                           () coin _ (by simpa using hConVAns) hLayVAns rfl
@@ -2787,7 +2786,7 @@ private theorem simulate_compact_derived {enc : VocabEncoder V} {d : Deployed V}
                                               have hAgPatch : ∀ at' τ', at' ≠ at_ → src' at' τ' = src'' at' τ' :=
                                                 fun at' τ' hne => (patchSource_ne M src' at_ e.τ coin hne τ').symm
                                               refine ⟨a, outP, outV, finalSt, wireVals, chunks, recP, src'',
-                                                Event.given (.coin law) verifier (h0 :: hs) at_ e.τ coin :: evs',
+                                                Event.given (.coin law) verifier [prover] at_ e.τ coin :: evs',
                                                 hTr, ?_, ?_, ?_, hpP, hpV, ?_, ?_,
                                                 .given (patchSource_self M src' at_ e.τ coin) (grun_of_agree M hAgPatch hOccK hRun')⟩
                                               · unfold compactWireArgs
@@ -2805,7 +2804,7 @@ private theorem simulate_compact_derived {enc : VocabEncoder V} {d : Deployed V}
                                                   exact layoutDropClause_answer M fnTable rTable verifier _ .message [prover]
                                                     ⟨at_.path, drawToldKey events pref.length⟩ hToldSiteEq coin stV vRest
                                                 have hStepV : (Stack.handler M fnTable rTable [conV0, layV0]).clause
-                                                    (.own (.coin law) (h0 :: hs) at_ [] .nil e.τ) (.cons st (.cons stV .nil)) =
+                                                    (.own (.coin law) [prover] at_ [] .nil e.τ) (.cons st (.cons stV .nil)) =
                                                     .done (coin, .cons st' (.cons stV .nil)) :=
                                                   stack2_clause_step M fnTable rTable conV0 layV0 _ _ st st' stV stV
                                                     () coin _ (by simpa using hConVAns) hLayVAns rfl
@@ -3303,7 +3302,7 @@ theorem deploy_complete_compact (enc : VocabEncoder V) {named : NamedProgram V} 
                       simulate_compact_derived M w.hNe (d := w.toDeployed)
                         stmtTys wireSpecs htfree w.cPClauses w.cVClauses pClauses vClauses
                         conP' conV' layP' layV' hCPSt hCVSt hLPSt hLVSt hCPCl hCVCl hLPCl hLVCl
-                        w.hCon w.hLayOpt hSuiteLaw hLayLaw hNodup hCC' hCW' hCV'
+                        w.hCon w.hStart w.hLayOpt hSuiteLaw hLayLaw hNodup hCC' hCW' hCV'
                         (protocolMeaning M a.program w.toDeployed.callee [] ins)
                         [] (w.toDeployed.entry.shape.events [] id) rfl
                         [] wireSpecs rfl ⟨[], rfl⟩ ⟨pClauses, hCW'⟩

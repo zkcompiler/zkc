@@ -26,6 +26,9 @@ structure Deployed (V : Vocabulary) where
   stack : (r : Role) →
     List (Layer V admitted.program.headers r
       ((admitted.program.findProtocol declaration.entry).get found).1.ins)
+  /-- Canonical deployment identity bytes bound at deployment time under the encoder that
+  resolved `declaration`. Populated by `deploy` and `deployIdeal`. -/
+  identity : List Nat := []
 
 section
 variable {V : Vocabulary}

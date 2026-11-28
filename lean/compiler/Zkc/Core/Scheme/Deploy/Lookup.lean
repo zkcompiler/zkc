@@ -6,16 +6,18 @@ public import Zkc.Core.World.Network
 @[expose] public section
 
 /-!
-Module slot resolution (including distribution-aware `V.LawKey`-keyed `SuiteSlot.derive` lookup),
-deterministic fresh-key allocation, and trailing-message absorption analysis
-(Chiesa and Orrù (2025), Construction 4.3).
+Strict unique module slot resolution (including distribution-aware `V.LawKey`-keyed
+`SuiteSlot.derive` lookup without silent fallback on invalid or duplicate explicit bindings),
+used-law encoder distinctness and ideal `serviceKey` freshness checks, deterministic fresh-key
+allocation, trailing-message absorption analysis (Chiesa and Orrù (2025), Construction 4.3),
+and selected-function suite lawfulness (`Deployed.SuiteLawfulFor`).
 -/
 
 namespace Zkc.Core
 
 open LayerBuild
 
-/-! ## Module lookup helpers -/
+/-! ## Strict unique module lookup helpers -/
 
 section
 variable {V : Vocabulary}
@@ -23,6 +25,12 @@ variable {V : Vocabulary}
 /-- Decide equality inside `Option`, returning a proof witness in `PLift`. -/
 def guardEq {α : Type} [DecidableEq α] (a b : α) : Option (PLift (a = b)) :=
   if h : a = b then some ⟨h⟩ else none
+
+/-- Return the unique matching result in `xs`, or `none` if zero or multiple entries match. -/
+def findUnique {α β : Type} (xs : List α) (pick : α → Option β) : Option β :=
+  match xs.filterMap pick with
+  | [x] => some x
+  | _ => none
 
 /-- Resolve a concrete total unconditional function reference by key and exact signature. -/
 def findTypedFnRef (a : Admitted V) (key : Key) (ins outs : List V.Ty) :
@@ -43,15 +51,10 @@ def findSafeFnRef (a : Admitted V) (key : Key) (ins outs : List V.Ty) :
   let ⟨hUncond⟩ ← guardEq hdr.summary.requires []
   pure ⟨hdr, member, hIn, hOut, hUncond⟩
 
-/-- Find the first member of `m` at `slot` matching a predicate `pick`. -/
+/-- Find the unique member of `m` at `slot` matching `pick`. Refuses ambiguity whenever more than
+one member at `slot` matches `pick`. -/
 def findSlotMember {α : Type} (m : ModuleRef) (slot : Key) (pick : Key → Option α) : Option α :=
-  m.members.findSome? fun (s, defKey) => if s = slot then pick defKey else none
-
-/-- Find the first law-specific member of `m` at `(slot, lawBytes)` matching `pick`. -/
-def findLawSlotMember {α : Type} (m : ModuleRef) (slot : Key) (lawBytes : List Nat)
-    (pick : Key → Option α) : Option α :=
-  m.lawMembers.findSome? fun (s, lb, defKey) =>
-    if s = slot ∧ lb = lawBytes then pick defKey else none
+  findUnique m.members fun (s, defKey) => if s = slot then pick defKey else none
 
 /-- Resolve `SuiteSlot.start : [bytesTy] → [stateTy]`. -/
 def findSuiteStart (a : Admitted V) (suite : ModuleRef) :
@@ -89,52 +92,73 @@ def findSuiteEncode (a : Admitted V) (suite : ModuleRef) (unitTy τ : V.Ty) :
     findTypedFnRef a defKey [τ] [.seq unitTy none]
 
 /-- Resolve `SuiteSlot.derive : (stateTy :: bytesTy :: drawIns) → [τ, stateTy]` for sampling law
-`law`. Prefers an explicit `(SuiteSlot.derive, enc.lawKey law, defKey)` binding in
-`suite.lawMembers`, falling back to `suite.members` when no law-specific entry matches. -/
+`law`:
+- If `suite.lawMembers` declares one or more `(SuiteSlot.derive, enc.lawKey law, defKey)` entries,
+  there must be exactly one such entry and it must resolve to the exact expected signature (never
+  silently falling back to `suite.members` on a wrong-typed or duplicate explicit binding).
+- Otherwise, there must be a unique matching `(SuiteSlot.derive, defKey)` entry in
+  `suite.members`. -/
 def findSuiteDerive (enc : VocabEncoder V) (a : Admitted V) (suite : ModuleRef)
     (stateTy : V.Ty) (law : V.LawKey) (drawIns : List V.Ty) (τ : V.Ty) :
     Option (TypedFnRef V a.program.headers.fns (stateTy :: bytesTy :: drawIns) [τ, stateTy]) :=
-  (findLawSlotMember suite SuiteSlot.derive (enc.lawKey law) fun defKey =>
-    findTypedFnRef a defKey (stateTy :: bytesTy :: drawIns) [τ, stateTy]) <|>
-  (findSlotMember suite SuiteSlot.derive fun defKey =>
-    findTypedFnRef a defKey (stateTy :: bytesTy :: drawIns) [τ, stateTy])
+  let explicitKeys : List Key :=
+    suite.lawMembers.filterMap fun (s, lb, defKey) =>
+      if s = SuiteSlot.derive ∧ lb = enc.lawKey law then some defKey else none
+  match explicitKeys with
+  | [defKey] => findTypedFnRef a defKey (stateTy :: bytesTy :: drawIns) [τ, stateTy]
+  | _ :: _ :: _ => none
+  | [] =>
+      findSlotMember suite SuiteSlot.derive fun defKey =>
+        findTypedFnRef a defKey (stateTy :: bytesTy :: drawIns) [τ, stateTy]
+
+/-- Return the unique unit type appearing in `us` (defaulting to `byteTy` when `us = []`),
+or `none` if entries disagree on the unit type. -/
+def uniqueUnitTy (us : List V.Ty) : Option V.Ty :=
+  match us with
+  | [] => some byteTy
+  | u :: rest => if rest.all (fun u' => decide (u' = u)) then some u else none
 
 /-- Determine the suite's absorbed unit type from its `SuiteSlot.encode` entries (defaulting to
-`byteTy`), requiring a non-linear unit type. Used by pure-path `deployIdeal` without touching any
-concrete `SuiteSlot.start` or `SuiteSlot.absorb` function. -/
+`byteTy` when no entries are present, refusing conflicting unit types), requiring a non-linear
+unit type. Used by pure-path `deployIdeal` without touching concrete `start` or `absorb`. -/
 def findSuiteUnit (a : Admitted V) (suite : ModuleRef) :
-    Option ((unitTy : V.Ty) × PLift (Ty.isLinear V unitTy = false)) :=
-  let inferred : Option V.Ty :=
-    findSlotMember suite SuiteSlot.encode fun defKey =>
+    Option ((unitTy : V.Ty) × PLift (Ty.isLinear V unitTy = false)) := do
+  let units := suite.members.filterMap fun (s, defKey) =>
+    if s = SuiteSlot.encode then
       match a.program.find defKey with
       | some (.fn (hdr := hdr) _) =>
           match hdr.outs with
           | [.seq unitTy none] => some unitTy
           | _ => none
       | _ => none
-  let u := inferred.getD byteTy
+    else none
+  let u ← uniqueUnitTy units
   if hfree : Ty.isLinear V u = false then some ⟨u, ⟨hfree⟩⟩ else none
 
-/-- Determine the layout's unit type from its `LayoutSlot.write` / `LayoutSlot.read` entries,
-defaulting to `byteTy` when the module has no typed entries. Requires a non-linear unit type. -/
+/-- Determine the layout's unit type from its `LayoutSlot.write` / `LayoutSlot.read` entries
+(defaulting to `byteTy` when no typed entries are present, refusing conflicting unit types),
+requiring a non-linear unit type. -/
 def findLayoutUnit (a : Admitted V) (layout : ModuleRef) :
-    Option ((unitTy : V.Ty) × PLift (Ty.isLinear V unitTy = false)) :=
-  let inferred : Option V.Ty :=
-    (findSlotMember layout LayoutSlot.write fun defKey =>
+    Option ((unitTy : V.Ty) × PLift (Ty.isLinear V unitTy = false)) := do
+  let writeUnits := layout.members.filterMap fun (s, defKey) =>
+    if s = LayoutSlot.write then
       match a.program.find defKey with
       | some (.fn (hdr := hdr) _) =>
           match hdr.outs with
           | [.seq unitTy none] => some unitTy
           | _ => none
-      | _ => none) <|>
-    (findSlotMember layout LayoutSlot.read fun defKey =>
+      | _ => none
+    else none
+  let readUnits := layout.members.filterMap fun (s, defKey) =>
+    if s = LayoutSlot.read then
       match a.program.find defKey with
       | some (.fn (hdr := hdr) _) =>
           match hdr.ins with
           | [.seq unitTy none, .nat] => some unitTy
           | _ => none
-      | _ => none)
-  let u := inferred.getD byteTy
+      | _ => none
+    else none
+  let u ← uniqueUnitTy (writeUnits ++ readUnits)
   if hfree : Ty.isLinear V u = false then some ⟨u, ⟨hfree⟩⟩ else none
 
 /-- Resolve `LayoutSlot.write : [τ] → [.seq unitTy none]`. -/
@@ -154,6 +178,184 @@ def findLayoutEqual (a : Admitted V) (layout : ModuleRef) (τ : V.Ty) :
     Option (TypedFnRef V a.program.headers.fns [τ, τ] [.bool]) :=
   findSlotMember layout LayoutSlot.equal fun defKey =>
     findTypedFnRef a defKey [τ, τ] [.bool]
+
+/-! ## Lookup soundness lemmas -/
+
+theorem findUnique_some {α β : Type} {xs : List α} {pick : α → Option β} {y : β}
+    (h : findUnique xs pick = some y) :
+    ∃ x, x ∈ xs ∧ pick x = some y := by
+  unfold findUnique at h
+  cases hfm : xs.filterMap pick with
+  | nil => rw [hfm] at h; cases h
+  | cons z rest =>
+      cases rest with
+      | cons _ _ => rw [hfm] at h; cases h
+      | nil =>
+          rw [hfm] at h
+          have hy : z = y := Option.some.inj h
+          subst hy
+          have hmem : z ∈ xs.filterMap pick := by rw [hfm]; exact List.mem_cons_self
+          exact List.mem_filterMap.mp hmem
+
+/-- `findSlotMember` returning `some x` witnesses a member `(slot, defKey) ∈ m.members`. -/
+theorem findSlotMember_some {α : Type} {m : ModuleRef} {slot : Key} {pick : Key → Option α}
+    {x : α} (h : findSlotMember m slot pick = some x) :
+    ∃ defKey, (slot, defKey) ∈ m.members ∧ pick defKey = some x := by
+  obtain ⟨⟨s, defKey⟩, hIn, hPick⟩ := findUnique_some h
+  by_cases hs : s = slot
+  · subst hs
+    simp only [↓reduceIte] at hPick
+    exact ⟨defKey, hIn, hPick⟩
+  · simp only [hs, ↓reduceIte] at hPick
+    cases hPick
+
+theorem findTypedFnRef_some {a : Admitted V} {defKey : Key} {ins outs : List V.Ty}
+    {ref : TypedFnRef V a.program.headers.fns ins outs}
+    (h : findTypedFnRef a defKey ins outs = some ref) :
+    a.program.find defKey = some (.fn ref.member) := by
+  unfold findTypedFnRef at h
+  cases hf : a.program.find defKey with
+  | none => rw [hf] at h; cases h
+  | some found =>
+      rw [hf] at h
+      cases found with
+      | protocol _ => cases h
+      | fn member =>
+          dsimp only [bind, pure] at h
+          rw [Option.bind_some] at h
+          dsimp only at h
+          obtain ⟨⟨_⟩, _, h⟩ := Option.bind_eq_some_iff.mp h
+          obtain ⟨⟨_⟩, _, h⟩ := Option.bind_eq_some_iff.mp h
+          obtain ⟨⟨_⟩, _, h⟩ := Option.bind_eq_some_iff.mp h
+          obtain ⟨⟨_⟩, _, h⟩ := Option.bind_eq_some_iff.mp h
+          cases h; rfl
+
+theorem findSafeFnRef_some {a : Admitted V} {defKey : Key} {ins outs : List V.Ty}
+    {ref : SafeFnRef V a.program.headers.fns ins outs}
+    (h : findSafeFnRef a defKey ins outs = some ref) :
+    a.program.find defKey = some (.fn ref.member) := by
+  unfold findSafeFnRef at h
+  cases hf : a.program.find defKey with
+  | none => rw [hf] at h; cases h
+  | some found =>
+      rw [hf] at h
+      cases found with
+      | protocol _ => cases h
+      | fn member =>
+          dsimp only [bind, pure] at h
+          rw [Option.bind_some] at h
+          dsimp only at h
+          obtain ⟨⟨_⟩, _, h⟩ := Option.bind_eq_some_iff.mp h
+          obtain ⟨⟨_⟩, _, h⟩ := Option.bind_eq_some_iff.mp h
+          obtain ⟨⟨_⟩, _, h⟩ := Option.bind_eq_some_iff.mp h
+          cases h; rfl
+
+theorem findSuiteEncode_some {a : Admitted V} {suite : ModuleRef} {unitTy τ : V.Ty}
+    {ref : TypedFnRef V a.program.headers.fns [τ] [.seq unitTy none]}
+    (h : findSuiteEncode a suite unitTy τ = some ref) :
+    ∃ defKey, (SuiteSlot.encode, defKey) ∈ suite.members ∧
+      a.program.find defKey = some (.fn ref.member) := by
+  obtain ⟨defKey, hIn, hRef⟩ := findSlotMember_some h
+  exact ⟨defKey, hIn, findTypedFnRef_some hRef⟩
+
+theorem findSuiteDerive_some {enc : VocabEncoder V} {a : Admitted V} {suite : ModuleRef}
+    {stateTy : V.Ty} {law : V.LawKey} {drawIns : List V.Ty} {τ : V.Ty}
+    {ref : TypedFnRef V a.program.headers.fns (stateTy :: bytesTy :: drawIns) [τ, stateTy]}
+    (h : findSuiteDerive enc a suite stateTy law drawIns τ = some ref) :
+    ∃ defKey, ((SuiteSlot.derive, enc.lawKey law, defKey) ∈ suite.lawMembers ∨
+        (SuiteSlot.derive, defKey) ∈ suite.members) ∧
+      a.program.find defKey = some (.fn ref.member) := by
+  unfold findSuiteDerive at h
+  dsimp only at h
+  cases hExp : suite.lawMembers.filterMap (fun x =>
+      if x.1 = SuiteSlot.derive ∧ x.2.1 = enc.lawKey law then some x.2.2 else none) with
+  | nil =>
+      rw [hExp] at h
+      obtain ⟨defKey, hIn, hRef⟩ := findSlotMember_some h
+      exact ⟨defKey, .inr hIn, findTypedFnRef_some hRef⟩
+  | cons defKey rest =>
+      cases rest with
+      | cons _ _ => rw [hExp] at h; cases h
+      | nil =>
+          rw [hExp] at h
+          have hMem : defKey ∈ suite.lawMembers.filterMap (fun x =>
+              if x.1 = SuiteSlot.derive ∧ x.2.1 = enc.lawKey law then some x.2.2 else none) := by
+            rw [hExp]; exact List.mem_cons_self
+          obtain ⟨⟨s, lb, dk⟩, hIn, hCond⟩ := List.mem_filterMap.mp hMem
+          by_cases hc : s = SuiteSlot.derive ∧ lb = enc.lawKey law
+          · rcases hc with ⟨rfl, rfl⟩
+            simp only [and_self, ↓reduceIte, Option.some.injEq] at hCond
+            subst hCond
+            exact ⟨dk, .inl hIn, findTypedFnRef_some h⟩
+          · simp only [hc, ↓reduceIte] at hCond
+            cases hCond
+
+theorem findLayoutWrite_some {a : Admitted V} {layout : ModuleRef} {unitTy τ : V.Ty}
+    {ref : TypedFnRef V a.program.headers.fns [τ] [.seq unitTy none]}
+    (h : findLayoutWrite a layout unitTy τ = some ref) :
+    ∃ defKey, (LayoutSlot.write, defKey) ∈ layout.members ∧
+      a.program.find defKey = some (.fn ref.member) := by
+  obtain ⟨defKey, hIn, hRef⟩ := findSlotMember_some h
+  exact ⟨defKey, hIn, findTypedFnRef_some hRef⟩
+
+theorem findLayoutRead_some {a : Admitted V} {layout : ModuleRef} {unitTy τ : V.Ty}
+    {ref : SafeFnRef V a.program.headers.fns [.seq unitTy none, .nat] [τ, .nat]}
+    (h : findLayoutRead a layout unitTy τ = some ref) :
+    ∃ defKey, (LayoutSlot.read, defKey) ∈ layout.members ∧
+      a.program.find defKey = some (.fn ref.member) := by
+  obtain ⟨defKey, hIn, hRef⟩ := findSlotMember_some h
+  exact ⟨defKey, hIn, findSafeFnRef_some hRef⟩
+
+theorem findLayoutEqual_some {a : Admitted V} {layout : ModuleRef} {τ : V.Ty}
+    {ref : TypedFnRef V a.program.headers.fns [τ, τ] [.bool]}
+    (h : findLayoutEqual a layout τ = some ref) :
+    ∃ defKey, (LayoutSlot.equal, defKey) ∈ layout.members ∧
+      a.program.find defKey = some (.fn ref.member) := by
+  obtain ⟨defKey, hIn, hRef⟩ := findSlotMember_some h
+  exact ⟨defKey, hIn, findTypedFnRef_some hRef⟩
+
+/-! ## Used-law encoder distinctness and ideal `serviceKey` freshness -/
+
+/-- Sampling laws of all verifier-owned coins heard exclusively by `prover` in `events`. -/
+def usedHeardLaws (prover verifier : Role) (events : List (ShapeEvent V)) : List V.LawKey :=
+  events.filterMap fun e =>
+    match e.cls with
+    | .given (.coin law) owner hearers =>
+        if owner = verifier ∧ hearers = [prover] then some law else none
+    | _ => none
+
+/-- Decidable check that `enc.lawKey` maps all distinct used laws to distinct byte sequences.
+Refuses non-injective encoders that collapse two distinct used sampling laws onto one key. -/
+def checkUsedLawsDistinct (enc : VocabEncoder V) (laws : List V.LawKey) : Bool :=
+  laws.all fun l₁ =>
+    laws.all fun l₂ =>
+      if enc.lawKey l₁ = enc.lawKey l₂ then decide (l₁ = l₂) else true
+
+theorem checkUsedLawsDistinct_sound (enc : VocabEncoder V) (laws : List V.LawKey)
+    (h : checkUsedLawsDistinct enc laws = true) :
+    ∀ l₁ ∈ laws, ∀ l₂ ∈ laws, enc.lawKey l₁ = enc.lawKey l₂ → l₁ = l₂ := by
+  intro l₁ hl₁ l₂ hl₂ hEq
+  have h1 := List.all_eq_true.mp h l₁ hl₁
+  have h2 := List.all_eq_true.mp h1 l₂ hl₂
+  simp only [hEq, ↓reduceIte, decide_eq_true_eq] at h2
+  exact h2
+
+/-- Decidable check that no `.given (.request svc)` event in `events` uses `serviceKey`,
+preventing collisions between application service requests and the ideal random-oracle service. -/
+def checkServiceKeyFresh (events : List (ShapeEvent V)) (serviceKey : Key) : Bool :=
+  events.all fun e =>
+    match e.cls with
+    | .given (.request svc) _ _ => decide (svc ≠ serviceKey)
+    | _ => true
+
+theorem checkServiceKeyFresh_sound (events : List (ShapeEvent V)) (serviceKey : Key)
+    (h : checkServiceKeyFresh events serviceKey = true) :
+    ∀ e ∈ events, ∀ svc owner hearers,
+      e.cls = .given (.request svc) owner hearers → svc ≠ serviceKey := by
+  intro e he svc owner hearers hCls
+  have hall := List.all_eq_true.mp h e he
+  rw [hCls] at hall
+  exact of_decide_eq_true hall
 
 /-! ## Event classification and fresh-key allocation -/
 
@@ -214,13 +416,13 @@ theorem idealReqKey_fresh (events : List (ShapeEvent V)) (idx : Nat) :
 /-! ## Trailing-message absorption analysis (Chiesa and Orrù (2025), Construction 4.3) -/
 
 mutual
-  /-- Whether `s` contains any verifier-owned coin draw heard by `prover` under role renaming
-  `rename`. -/
+  /-- Whether `s` contains any verifier-owned coin draw heard exclusively by `prover` under role
+  renaming `rename`. -/
   def Shape.hasHeardDraw (prover verifier : Role) (rename : Role → Role) : Shape V → Bool
     | .nil => false
     | .event _ cls _ rest =>
         (match cls.rename rename with
-         | .given (.coin _) owner hearers => decide (owner = verifier ∧ prover ∈ hearers)
+         | .given (.coin _) owner hearers => decide (owner = verifier ∧ hearers = [prover])
          | _ => false) || Shape.hasHeardDraw prover verifier rename rest
     | .choice _ _ arms rest =>
         Shapes.hasHeardDraw prover verifier rename arms ||
@@ -248,8 +450,8 @@ end
 
 mutual
   /-- Raw structural pass pairing every `ShapeEvent` of `s` with a boolean indicating whether a
-  verifier draw heard by `prover` can occur after it (conservatively `true` inside any loop
-  containing a draw). -/
+  verifier draw heard exclusively by `prover` can occur after it (conservatively `true` inside any
+  loop containing a draw). -/
   def Shape.eventsWithAbsorbRaw (prover verifier : Role) (through : List Key) (rename : Role → Role)
       (drawAfter : Bool) : Shape V → List (ShapeEvent V × Bool)
     | .nil => []
@@ -299,19 +501,19 @@ def closeAbsorbSites (prover verifier : Role) (es : List (ShapeEvent V × Bool))
     if p.2 then
       match p.1.cls with
       | .flow kind giver getters =>
-          if giver = prover ∧ verifier ∈ getters then some (p.1.site, kind, p.1.τ) else none
+          if giver = prover ∧ getters = [verifier] then some (p.1.site, kind, p.1.τ) else none
       | _ => none
     else none
   es.map fun p =>
     match p.1.cls with
     | .flow kind giver getters =>
-        if giver = prover ∧ verifier ∈ getters then
+        if giver = prover ∧ getters = [verifier] then
           (p.1, decide ((p.1.site, kind, p.1.τ) ∈ absorbed))
         else p
     | _ => p
 
 /-- Enumerate every `ShapeEvent` of `s` paired with a site-consistent boolean indicating whether
-a verifier draw heard by `prover` can occur after it. Trailing prover messages with
+a verifier draw heard exclusively by `prover` can occur after it. Trailing prover messages with
 `needAbsorb = false` are not hashed into the transcript (Chiesa and Orrù (2025), Construction 4.3). -/
 def Shape.eventsWithAbsorb (prover verifier : Role) (through : List Key) (rename : Role → Role)
     (drawAfter : Bool) (s : Shape V) : List (ShapeEvent V × Bool) :=
@@ -382,10 +584,10 @@ theorem eventsWithAbsorb_flow_consistent (prover verifier : Role) (through : Lis
     {e₁ e₂ : ShapeEvent V} {b₁ b₂ : Bool}
     (h₁ : (e₁, b₁) ∈ s.eventsWithAbsorb prover verifier through rename drawAfter)
     (h₂ : (e₂, b₂) ∈ s.eventsWithAbsorb prover verifier through rename drawAfter)
-    {kind : FlowKind} {gs₁ gs₂ : List Role}
+    {kind : FlowKind}
     (hSite : e₁.site = e₂.site) (hTy : e₁.τ = e₂.τ)
-    (hCls₁ : e₁.cls = .flow kind prover gs₁) (hV₁ : verifier ∈ gs₁)
-    (hCls₂ : e₂.cls = .flow kind prover gs₂) (hV₂ : verifier ∈ gs₂) :
+    (hCls₁ : e₁.cls = .flow kind prover [verifier])
+    (hCls₂ : e₂.cls = .flow kind prover [verifier]) :
     b₁ = b₂ := by
   unfold Shape.eventsWithAbsorb closeAbsorbSites at h₁ h₂
   obtain ⟨p₁, _, hp₁⟩ := List.mem_map.mp h₁
@@ -393,7 +595,7 @@ theorem eventsWithAbsorb_flow_consistent (prover verifier : Role) (through : Lis
   have hb₁ : b₁ = decide ((e₁.site, kind, e₁.τ) ∈
       (Shape.eventsWithAbsorbRaw prover verifier through rename drawAfter s).filterMap fun p =>
         if p.2 then match p.1.cls with
-          | .flow k g gs => if g = prover ∧ verifier ∈ gs then some (p.1.site, k, p.1.τ) else none
+          | .flow k g gs => if g = prover ∧ gs = [verifier] then some (p.1.site, k, p.1.τ) else none
           | _ => none
         else none) := by
     have hfst₁ : p₁.1 = e₁ := by
@@ -403,12 +605,12 @@ theorem eventsWithAbsorb_flow_consistent (prover verifier : Role) (through : Lis
           split at hp₁ <;> exact congrArg Prod.fst hp₁
       | given _ _ _ => rw [h] at hp₁; exact congrArg Prod.fst hp₁
     rw [hfst₁, hCls₁] at hp₁; dsimp only at hp₁
-    rw [ite_eq_left ⟨rfl, hV₁⟩] at hp₁
+    rw [ite_eq_left ⟨rfl, rfl⟩] at hp₁
     exact (congrArg Prod.snd hp₁).symm
   have hb₂ : b₂ = decide ((e₂.site, kind, e₂.τ) ∈
       (Shape.eventsWithAbsorbRaw prover verifier through rename drawAfter s).filterMap fun p =>
         if p.2 then match p.1.cls with
-          | .flow k g gs => if g = prover ∧ verifier ∈ gs then some (p.1.site, k, p.1.τ) else none
+          | .flow k g gs => if g = prover ∧ gs = [verifier] then some (p.1.site, k, p.1.τ) else none
           | _ => none
         else none) := by
     have hfst₂ : p₂.1 = e₂ := by
@@ -418,10 +620,71 @@ theorem eventsWithAbsorb_flow_consistent (prover verifier : Role) (through : Lis
           split at hp₂ <;> exact congrArg Prod.fst hp₂
       | given _ _ _ => rw [h] at hp₂; exact congrArg Prod.fst hp₂
     rw [hfst₂, hCls₂] at hp₂; dsimp only at hp₂
-    rw [ite_eq_left ⟨rfl, hV₂⟩] at hp₂
+    rw [ite_eq_left ⟨rfl, rfl⟩] at hp₂
     exact (congrArg Prod.snd hp₂).symm
   rw [hb₁, hb₂, hSite, hTy]
 
+/-! ## Selected-function suite lawfulness (`Deployed.SuiteLawfulFor`) -/
+
+/-- Selected-function lawfulness for a deployed Fiat–Shamir suite under `enc` in model `M`:
+1. For every heard coin event `e` in `d.entry.shape` and the suite's resolved `stateTy`, ONLY the
+   exact `SuiteSlot.derive` function selected by `findSuiteDerive enc d.admitted suite stateTy law
+   drawIns e.τ` is required to produce values in `Allows M (.coin law)` on valid inputs. Shadowed
+   generic defaults in `suite.members` are not charged when an explicit `suite.lawMembers` binding
+   overrides `law`.
+2. Every `SuiteSlot.encode` function in `suite.members` is injective on valid values. -/
+def Deployed.SuiteLawfulFor (enc : VocabEncoder V) (M : Model V) (d : Deployed V) : Prop :=
+  ∀ suite sessionTag, d.declaration.construction = .derived suite sessionTag →
+    (∀ (e : ShapeEvent V) (law : V.LawKey) (owner h0 : Role) (hs : List Role)
+        (drawIns : List V.Ty) (stateTy : V.Ty)
+        (startRef : TypedFnRef V d.admitted.program.headers.fns [bytesTy] [stateTy])
+        (derRef : TypedFnRef V d.admitted.program.headers.fns
+          (stateTy :: bytesTy :: drawIns) [e.τ, stateTy]),
+        findSuiteStart d.admitted suite = some ⟨stateTy, startRef⟩ →
+        e ∈ d.entry.shape.events [] id →
+        e.cls = .given (.coin law) owner (h0 :: hs) →
+        V.law law = some ⟨drawIns, e.τ⟩ →
+        findSuiteDerive enc d.admitted suite stateTy law drawIns e.τ = some derRef →
+        ∀ (st : M.Val stateTy) (label : List (M.Val (.fin 256)))
+          (payload : HList M.Val drawIns) (coin : M.Val e.τ) (st' : M.Val stateTy),
+          M.Valid stateTy st →
+          (∀ b, b ∈ label → b < 256) →
+          payload.All M.Valid →
+          Defs.fnTable M d.admitted.program.defs derRef.hdr derRef.member
+            (cast (congrArg (HList M.Val) derRef.insEq.symm) (.cons st (.cons label payload))) =
+            .done (cast (congrArg (HList M.Val) derRef.outsEq.symm) (.cons coin (.cons st' .nil))) →
+          Allows M (.coin law) drawIns payload e.τ coin) ∧
+    (∀ eKey, (SuiteSlot.encode, eKey) ∈ suite.members →
+      ∀ (hdr : FnHeader V) (f : Member d.admitted.program.headers.fns hdr),
+        d.admitted.program.find eKey = some (.fn f) →
+        ∀ (unitTy τ : V.Ty) (hIn : hdr.ins = [τ]) (hOut : hdr.outs = [.seq unitTy none])
+          (v₁ v₂ : M.Val τ) (u : List (M.Val unitTy)),
+          M.Valid τ v₁ → M.Valid τ v₂ →
+          Defs.fnTable M d.admitted.program.defs hdr f
+            (cast (congrArg (HList M.Val) hIn.symm) (.cons v₁ .nil)) =
+            .done (cast (congrArg (HList M.Val) hOut.symm) (.cons u .nil)) →
+          Defs.fnTable M d.admitted.program.defs hdr f
+            (cast (congrArg (HList M.Val) hIn.symm) (.cons v₂ .nil)) =
+            .done (cast (congrArg (HList M.Val) hOut.symm) (.cons u .nil)) →
+          v₁ = v₂)
+
+/-- The stronger encoder-independent `Deployed.SuiteLawful` implies `Deployed.SuiteLawfulFor`
+for every encoder `enc`. -/
+theorem Deployed.SuiteLawful.toFor {d : Deployed V} (enc : VocabEncoder V) (M : Model V)
+    (h : d.SuiteLawful M) : d.SuiteLawfulFor enc M := by
+  intro suite sessionTag hCon
+  obtain ⟨hDer, hEnc⟩ := h suite sessionTag hCon
+  refine ⟨?_, hEnc⟩
+  intro e law owner h0 hs drawIns stateTy _ derRef _ hE hCls hLaw hFind st label payload coin st'
+    hSt hLbl hPay hFn
+  obtain ⟨defKey, hInSuite, hProgFind⟩ := findSuiteDerive_some hFind
+  have hIn : (SuiteSlot.derive, defKey) ∈ suite.members ∨
+      ∃ lb, (SuiteSlot.derive, lb, defKey) ∈ suite.lawMembers := by
+    rcases hInSuite with hL | hM
+    · exact .inr ⟨enc.lawKey law, hL⟩
+    · exact .inl hM
+  exact hDer defKey hIn derRef.hdr derRef.member hProgFind stateTy drawIns e law owner h0 hs
+    hE hCls hLaw derRef.insEq derRef.outsEq st label payload coin st' hSt hLbl hPay hFn
 
 end
 

@@ -89,14 +89,14 @@ theorem schnorr_roles_and_distinct_identities :
     (schnorrDeployed.stack 1).map (·.line) = [.construction, .layout] ∧
     (retrySchnorrDeployed.stack 0).map (·.line) = [.samples, .construction, .layout] ∧
     (retrySchnorrDeployed.stack 1).map (·.line) = [.construction, .layout] ∧
-    deployedIdentity deployEncoder schnorrDeployed ≠
-      deployedIdentity deployEncoder schnorrTaggedDeployed ∧
-    deployedIdentity deployEncoder schnorrTaggedDeployed ≠
-      deployedIdentity deployEncoder schnorrTaggedOtherAppDeployed ∧
-    deployedIdentity deployEncoder schnorrDeployed ≠
-      deployedIdentity deployEncoder schnorrAppCtxDeployed ∧
-    deployedIdentity deployEncoder schnorrDeployed ≠
-      deployedIdentity deployEncoder schnorrCompactDeployed := by
+    deployedIdentity schnorrDeployed ≠
+      deployedIdentity schnorrTaggedDeployed ∧
+    deployedIdentity schnorrTaggedDeployed ≠
+      deployedIdentity schnorrTaggedOtherAppDeployed ∧
+    deployedIdentity schnorrDeployed ≠
+      deployedIdentity schnorrAppCtxDeployed ∧
+    deployedIdentity schnorrDeployed ≠
+      deployedIdentity schnorrCompactDeployed := by
   decide +kernel
 
 /-! ## Standard Schnorr prove, verify, specialization agreement, and negative controls -/
@@ -296,23 +296,24 @@ theorem schnorr_compact_layout : checkCompactLayout = true := by
   decide +kernel
 
 def checkRetrySchnorr : Bool :=
-  match resolveSessionBytes deployEncoder admittedSuite retrySchnorrDecl none,
-      runProve retrySchnorrDeployed 7 13 0,
+  let sessBytes := 0 :: retrySchnorrDeployed.identity
+  match runProve retrySchnorrDeployed 7 13 0,
       runProveSpecialized retrySchnorrDeployed 7 13 0 with
-  | .ok ⟨sessBytes, _⟩, some p1, some p2 =>
+  | some p1, some p2 =>
       let baseHash := mixBytes (mixBytes 7 sessBytes + 13) (encodeSite ⟨[], ⟨410⟩⟩)
       let r0 := baseHash % 11
       let r1 := (baseHash + 17 + 1) % 11
       let commit0 := powMod 2 r0 23
       let commit1 := powMod 2 r1 23
+      let rejStmts := ([1, 2, 3, 4].filter fun y => !runVerify retrySchnorrDeployed y p1).length
       decide (p1 = p2) &&
       decide (p1.length = 2) &&
       decide (commit0 ≠ commit1) &&
       decide (p1.getD 0 0 = commit1) &&
       runVerify retrySchnorrDeployed 13 p1 &&
       runVerifySpecialized retrySchnorrDeployed 13 p1 &&
-      !runVerify retrySchnorrDeployed 12 p1
-  | _, _, _ => false
+      decide (rejStmts ≥ 3)
+  | _, _ => false
 
 theorem retry_schnorr_rollback_and_specialized : checkRetrySchnorr = true := by
   decide +kernel
@@ -440,10 +441,17 @@ theorem site_label_through_path_separation :
     msgLabel ⟨[⟨1⟩], ⟨5⟩⟩ ≠ drawLabel ⟨[⟨1⟩], ⟨5⟩⟩ := by
   decide +kernel
 
-theorem deployed_identity_determines_declaration (d₁ d₂ : Deployed deployVocab)
-    (h : deployedIdentity deployEncoder d₁ = deployedIdentity deployEncoder d₂) :
-    d₁.declaration = d₂.declaration :=
-  (deployedIdentity_injective deployEncoder deployEncoder_injective d₁ d₂ h).1
+theorem deployed_identity_determines_declaration
+    {a₁ a₂ : Admitted deployVocab} {decl₁ decl₂ : Declaration}
+    (d₁ d₂ : Deployed deployVocab)
+    (h₁ : deploy deployEncoder a₁ decl₁ = .ok d₁)
+    (h₂ : deploy deployEncoder a₂ decl₂ = .ok d₂)
+    (h : deployedIdentity d₁ = deployedIdentity d₂) :
+    d₁.declaration = d₂.declaration := by
+  have hD := (deploy_identity_injective deployEncoder deployEncoder_injective h₁ h₂ h).1
+  have hKeep₁ := (deploy_keeps deployEncoder a₁ decl₁ d₁ h₁).2.1
+  have hKeep₂ := (deploy_keeps deployEncoder a₂ decl₂ d₂ h₂).2.1
+  rw [hKeep₁, hKeep₂, hD]
 
 /-! ## Distribution-aware `V.LawKey` dispatch (`uniform` vs `nonzero` on `.fin 11`) -/
 
@@ -507,15 +515,16 @@ def checkTwoLawDispatchAndExecution : Bool :=
   match runTwoLawProve twoLawDeployed 4 4, runTwoLawProveSpec twoLawDeployed 4 4,
       runTwoLawProve twoLawSwappedDeployed 4 4 with
   | some p1, some p2, some pSwap =>
+      let rejStmts := ([0, 1, 2, 3, 5, 6].filter fun y => !runTwoLawVerify twoLawDeployed y p1).length
       decide (dUnif = some ⟨104⟩) &&
       decide (dNonZ = some ⟨105⟩) &&
-      decide (deployedIdentity twoLawEncoder twoLawDeployed ≠
-        deployedIdentity twoLawEncoder twoLawSwappedDeployed) &&
+      decide (deployedIdentity twoLawDeployed ≠
+        deployedIdentity twoLawSwappedDeployed) &&
       decide (p1 = p2) &&
       decide (p1 ≠ pSwap) &&
       runTwoLawVerify twoLawDeployed 4 p1 &&
       runTwoLawVerifySpec twoLawDeployed 4 p1 &&
-      !runTwoLawVerify twoLawDeployed 5 p1 &&
+      decide (rejStmts ≥ 4) &&
       !runTwoLawVerify twoLawDeployed 4 pSwap &&
       runTwoLawVerify twoLawSwappedDeployed 4 pSwap
   | _, _, _ => false

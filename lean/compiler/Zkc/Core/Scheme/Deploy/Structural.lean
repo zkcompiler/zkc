@@ -20,6 +20,66 @@ section StructuralTheorems
 
 variable {V : Vocabulary}
 
+/-- `deploy` binds `deployedIdentity d = schemeIdentity enc a declaration`. -/
+theorem deploy_identity (enc : VocabEncoder V) (a : Admitted V) (declaration : Declaration)
+    (d : Deployed V) (h : deploy enc a declaration = .ok d) :
+    deployedIdentity d = schemeIdentity enc a declaration := by
+  cases deploy_ok_elim enc a declaration d h with
+  | interactive w hEq => subst hEq; rfl
+  | authored w hEq => subst hEq; rfl
+  | derived w hEq => subst hEq; rfl
+
+/-- `deployIdeal` binds `deployedIdentity d = schemeIdentity enc a declaration`. -/
+theorem deployIdeal_identity (enc : VocabEncoder V) (serviceKey : Key) (a : Admitted V)
+    (declaration : Declaration) (d : Deployed V)
+    (h : deployIdeal enc serviceKey a declaration = .ok d) :
+    deployedIdentity d = schemeIdentity enc a declaration := by
+  let ⟨w, hEq⟩ := deployIdeal_ok_elim enc serviceKey a declaration d h
+  subst hEq; rfl
+
+/-- Every byte in `deployedIdentity d` for a deployed scheme is a valid byte (`< 256`). -/
+theorem deploy_identity_bytes (enc : VocabEncoder V) (a : Admitted V) (declaration : Declaration)
+    (d : Deployed V) (h : deploy enc a declaration = .ok d) :
+    ∀ b, b ∈ deployedIdentity d → b < 256 := by
+  rw [deploy_identity enc a declaration d h]
+  exact schemeIdentity_bytes enc a declaration
+
+/-- Two schemes deployed under the same encoder with equal declarations and equal
+`canonicalClosureDefs` (order-independent, annotation-stripped reachable erased definitions) have
+identical bound identities. -/
+theorem deploy_identity_reads (enc : VocabEncoder V) {a₁ a₂ : Admitted V}
+    {decl₁ decl₂ : Declaration} {d₁ d₂ : Deployed V}
+    (h₁ : deploy enc a₁ decl₁ = .ok d₁) (h₂ : deploy enc a₂ decl₂ = .ok d₂)
+    (hDecl : decl₁ = decl₂)
+    (hDefs : canonicalClosureDefs a₁ decl₁ = canonicalClosureDefs a₂ decl₂) :
+    deployedIdentity d₁ = deployedIdentity d₂ := by
+  rw [deploy_identity enc a₁ decl₁ d₁ h₁, deploy_identity enc a₂ decl₂ d₂ h₂]
+  exact schemeIdentity_reads enc a₁ a₂ decl₁ decl₂ hDecl hDefs
+
+/-- Under an injective encoder, equal bound identities of two deployed schemes imply equal
+declarations and equal `canonicalClosureDefs`. -/
+theorem deploy_identity_injective (enc : VocabEncoder V) (hEnc : enc.Injective)
+    {a₁ a₂ : Admitted V} {decl₁ decl₂ : Declaration} {d₁ d₂ : Deployed V}
+    (h₁ : deploy enc a₁ decl₁ = .ok d₁) (h₂ : deploy enc a₂ decl₂ = .ok d₂)
+    (hEq : deployedIdentity d₁ = deployedIdentity d₂) :
+    decl₁ = decl₂ ∧ canonicalClosureDefs a₁ decl₁ = canonicalClosureDefs a₂ decl₂ := by
+  rw [deploy_identity enc a₁ decl₁ d₁ h₁, deploy_identity enc a₂ decl₂ d₂ h₂] at hEq
+  exact schemeIdentity_injective enc hEnc a₁ a₂ decl₁ decl₂ hEq
+
+/-- Every accepted ideal deployment guarantees that `serviceKey` never collides with any service
+request in `d.entry.shape` (enforced decidably at deploy time by `checkServiceKeyFresh`). -/
+theorem deployIdeal_serviceKey_fresh (enc : VocabEncoder V) (serviceKey : Key) (a : Admitted V)
+    (declaration : Declaration) (d : Deployed V)
+    (h : deployIdeal enc serviceKey a declaration = .ok d) :
+    ∀ e ∈ d.entry.shape.events [] id, ∀ svc owner hearers,
+      e.cls = .given (.request svc) owner hearers → svc ≠ serviceKey := by
+  let ⟨w, hEq⟩ := deployIdeal_ok_elim enc serviceKey a declaration d h
+  subst hEq
+  have hEntry : w.toDeployed.entry = w.foundPair.1 := by
+    unfold Deployed.entry; simp [w.hFound]
+  rw [hEntry]
+  exact checkServiceKeyFresh_sound (w.foundPair.1.shape.events [] id) serviceKey w.hFresh
+
 /-- `deploy` preserves `admitted`, `declaration`, and `entry.key`. -/
 theorem deploy_keeps (enc : VocabEncoder V) (a : Admitted V) (declaration : Declaration)
     (d : Deployed V) (h : deploy enc a declaration = .ok d) :
@@ -236,14 +296,26 @@ theorem buildSamplesClauses_fresh {a : Admitted V} {heldP : List V.Ty}
                   | nil =>
                       dsimp only at h
                       split at h
-                      · cases hS : findTypedFnRef a sKey (heldP ++ [bytesTy, bytesTy, .nat, .nat]) [e.τ] with
-                        | none => rw [hS] at h; cases h
-                        | some sRef =>
-                            rw [hS] at h; cases h
-                            intro c hc
-                            rcases List.mem_cons.mp hc with rfl | hm
-                            · intro key hk _; rw [proverSampleClause_eventKeys] at hk; cases hk
-                            · exact ihS c hm
+                      · cases hLaw : V.law law with
+                        | none => rw [hLaw] at h; cases h
+                        | some sig =>
+                            rw [hLaw] at h
+                            cases sig with
+                            | mk sIns sOut =>
+                                cases sIns with
+                                | cons _ _ => cases h
+                                | nil =>
+                                    dsimp only at h
+                                    split at h
+                                    · cases hS : findTypedFnRef a sKey (heldP ++ [bytesTy, bytesTy, .nat, .nat]) [e.τ] with
+                                      | none => rw [hS] at h; cases h
+                                      | some sRef =>
+                                          rw [hS] at h; cases h
+                                          intro c hc
+                                          rcases List.mem_cons.mp hc with rfl | hm
+                                          · intro key hk _; rw [proverSampleClause_eventKeys] at hk; cases hk
+                                          · exact ihS c hm
+                                    · cases h
                       · cases h; exact ihS
 
 theorem buildSamplesLayer_fresh {a : Admitted V} {entry : ProtocolHeader V} {prover : Role}

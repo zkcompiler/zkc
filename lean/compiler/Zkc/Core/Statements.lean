@@ -6,7 +6,7 @@ public import Zkc.Core.Facts.Facts
 public import Zkc.Core.Program.EraseProgram
 public import Zkc.Core.Transform.Assured
 public import Zkc.Core.Admission.Programs
-public import Zkc.Core.Scheme.Deploy.Compile
+public import Zkc.Core.Scheme.Identity
 
 @[expose] public section
 
@@ -327,47 +327,6 @@ def completeStreaming : Prop :=
                 (.returned out) ∧
               outP = hideAll M prover out.1 ∧ outV = hideAll M verifier out.1
 
-/-- Execution and state: ideal random-oracle verifier linkage on non-carry streaming ideal
-deployments without retry. Starting from the canonical initial ideal transcript path `st0`
-(pinned to the resolved session bytes and every statement input in signature order), answering
-`serviceKey` requests with any partial random oracle `ro` that answers the protocol's verifier
-draws makes the deployed ideal verifier return `outV` on a valid proof if and only if the bare
-verifier role program `roleMeaning` satisfies `BareIdealReturn` from `(st0, proof, 0)`. -/
-def idealLink (enc : VocabEncoder V) : Prop :=
-  ∀ (M : Model V) (serviceKey : Key) (a : Admitted V) (declaration : Declaration)
-    (suite : ModuleRef) (sessionTag : Option (List Nat)) (layout : Layout) (dIdeal : Deployed V),
-    deployIdeal enc serviceKey a declaration = .ok dIdeal →
-    declaration.construction = .derived suite sessionTag →
-    declaration.layout = some layout →
-    declaration.retry = none →
-    layout.carry = [] →
-    layout.recover = [] →
-    ∀ (prover verifier : Role), dIdeal.roles = some (prover, verifier) →
-    ∀ (ins : HList (RV M verifier) dIdeal.entry.ins), ins.All (RV.Valid M verifier) →
-      ∃ (suiteUnitTy unitTy : V.Ty)
-        (hSuiteFree : Ty.isLinear V suiteUnitTy = false)
-        (sessBytes : List Nat) (hSess : ∀ b, b ∈ sessBytes → b < 256)
-        (st0 : M.Val (LayerBuild.idealPathTy suiteUnitTy))
-        (hTakes : Stack.Takes (dIdeal.stack verifier) = [.seq unitTy none]),
-        findSuiteUnit a suite = some ⟨suiteUnitTy, ⟨hSuiteFree⟩⟩ ∧
-        resolveSessionBytes enc a declaration sessionTag = .ok ⟨sessBytes, hSess⟩ ∧
-        idealInitialPath M a suite suiteUnitTy prover verifier sessBytes ins = some st0 ∧
-        ∀ (proof : List (M.Val unitTy)), M.Valid (.seq unitTy none) proof →
-          ∀ (source : Source M) (ro : LayerBuild.IdealRO M suiteUnitTy),
-            ro.AnswersDraws M prover verifier (dIdeal.entry.shape.events [] id) →
-            ∀ (outV : HList (RV M verifier) dIdeal.entry.outs),
-              (∃ record givesV,
-                Alone M source verifier
-                  (Process.answerService serviceKey (LayerBuild.IdealRO.asOracle M ro)
-                    (dIdeal.run M verifier ins
-                      (cast (congrArg (HList M.Val) hTakes.symm) (.cons proof .nil))))
-                  record (.returned (outV, givesV))) ↔
-              BareIdealReturn M a suite layout serviceKey prover verifier
-                (dIdeal.entry.shape.eventsWithAbsorb prover verifier [] id false)
-                source ro
-                (roleMeaning M dIdeal.admitted.program dIdeal.callee verifier [] ins)
-                st0 proof 0 outV
-
 /-- Coverage: under a non-interactive deployment's stack, every online role asks the world only
 its own private coins, service requests, and local attempt marks. -/
 def deployCoverage : Prop :=
@@ -387,14 +346,15 @@ answers, has a key that is no key of the entry's events. -/
 def deployFresh : Prop :=
   ∀ (a : Admitted V) declaration (d : Deployed V), c.deploy a declaration = .ok d → d.Fresh
 
-/-- A view: the identity of a deployed scheme reads its declaration and the erased
-definitions that its entry and its declaration reach, and nothing else: not the association,
-not the annotation, not another definition. -/
+/-- A view: the bound identity of a deployed scheme reads its declaration and the canonical
+reachable erased definitions (`canonicalClosureDefs`, independent of package definition order,
+proof-only annotations, associations, and unreachable definitions). -/
 def identityReads : Prop :=
-  ∀ d d' : Deployed V, d.declaration = d'.declaration →
-    (erase d.admitted.program).definitions.filter (fun definition => decide (definition.key ∈ d.closure)) =
-      (erase d'.admitted.program).definitions.filter
-        (fun definition => decide (definition.key ∈ d'.closure)) →
+  ∀ (a a' : Admitted V) (declaration declaration' : Declaration) (d d' : Deployed V),
+    c.deploy a declaration = .ok d →
+    c.deploy a' declaration' = .ok d' →
+    declaration = declaration' →
+    canonicalClosureDefs a declaration = canonicalClosureDefs a' declaration' →
     c.identity d = c.identity d'
 
 /-! ## Runs of the executor -/

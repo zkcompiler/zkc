@@ -10,8 +10,9 @@ An unused entry also fails it and is reported for removal.
 
 From `lean/compiler`, use `lake exe zkc-syntax check <file>` or `lake exe zkc-syntax format <file>`
 for the syntax alone. Use `lake exe zkc-check types --library ../../libraries <file>` to see the
-status of each root's package. The other checker commands are `names`, `resolutions`, `instances`
-and `bench`. A successful core admission carries the program returned by the core.
+status of each root's package. The other checker commands are `names`, `resolutions`, `instances`,
+`bench`, `deploy` (derived scheme compilation and execution via `Zkc.Frontend.Deploy` and
+`Zkc.Runtime`), and `cfrg-vectors`. A successful core admission carries the program returned by the core.
 
 Run `just test-interactive` for the Sumcheck and GKR certificates and `just test-written-knowledge`
 for the written group proofs. The previous execution commands and derived schemes are documented

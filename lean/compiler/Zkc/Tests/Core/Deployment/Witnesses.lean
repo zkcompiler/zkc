@@ -47,7 +47,7 @@ def cDeploy : Functions deployVocab where
   admit := admit
   check := check
   deploy := deploy deployEncoder
-  identity := deployedIdentity deployEncoder
+  identity := deployedIdentity
   execute := execute
   schedule := fun _ _ _ _ _ _ _ => ([], fun _ => .limit)
 
@@ -62,10 +62,11 @@ theorem deploy_statements_instantiated :
     Statements.deployedSafe cDeploy ∧
     Statements.deployCoverage cDeploy ∧
     Statements.completeStreaming cDeploy ∧
-    Statements.idealLink deployEncoder ∧
+    SchemeStatements.completeStreaming deployEncoder ∧
+    SchemeStatements.idealLink deployEncoder ∧
     Statements.executorRuns cDeploy :=
   ⟨canonicalFormat_formats cDeploy rfl,
-   deployedIdentity_identityReads deployEncoder cDeploy rfl,
+   deployedIdentity_identityReads deployEncoder cDeploy rfl rfl,
    statements_deployKeeps deployEncoder cDeploy rfl,
    statements_deployFindsRoles deployEncoder cDeploy rfl,
    statements_deployMatches deployEncoder cDeploy rfl,
@@ -74,6 +75,7 @@ theorem deploy_statements_instantiated :
    statements_deployedSafe deployEncoder cDeploy rfl rfl,
    statements_deployCoverage deployEncoder cDeploy rfl,
    statements_completeStreaming deployEncoder cDeploy rfl rfl,
+   statements_completeStreamingFor deployEncoder,
    statements_idealLink deployEncoder,
    execute_runs cDeploy rfl⟩
 
@@ -918,7 +920,7 @@ private theorem wFnDefs_suiteLawful_of {d : Deployed deployVocab} {tag : Option 
     (hProg : d.admitted.program = witnessTyped ∨ d.admitted.program = retryWitnessTyped) :
     d.SuiteLawful deployModel := by
   cases d with
-  | mk adm decl found stack =>
+  | mk adm decl found stack _ident =>
       cases adm with
       | mk prog ann assoc assu =>
           dsimp only at hCon hProg
@@ -1022,7 +1024,7 @@ private theorem wFnDefs_layoutLawful_of {d : Deployed deployVocab} {lay : Layout
     (hProg : d.admitted.program = witnessTyped ∨ d.admitted.program = retryWitnessTyped) :
     d.LayoutLawful deployModel := by
   cases d with
-  | mk adm decl found stack =>
+  | mk adm decl found stack _ident =>
       cases adm with
       | mk prog ann assoc assu =>
           dsimp only at hLayDecl hProg
@@ -1141,7 +1143,7 @@ private theorem wFnDefs_layoutLawful_of {d : Deployed deployVocab} {lay : Layout
                     list_take_elem_drop buf off hlt⟩
                   have hW0 := hEvW (buf[off]'hlt % 11)
                   have hMod256 : (buf[off]'hlt % 11) % 256 = buf[off]'hlt := by omega
-                  erw [hW0]; simp only [hMod256]; rfl
+                  erw [hW0]; simp only [hMod256]
                 · simp only [hb, ↓reduceIte] at hR; cases hR
               · simp only [hlt, ↓reduceDIte] at hR; cases hR
             · obtain ⟨hwIn0, _, _⟩ := wfn102_deploy hProg wHdr fW hwFind
@@ -1177,7 +1179,7 @@ private theorem wFnDefs_layoutLawful_of {d : Deployed deployVocab} {lay : Layout
                     list_take_elem_drop buf off hlt⟩
                   have hW0 := hEvW (buf[off]'hlt % 23)
                   have hMod256 : (buf[off]'hlt % 23) % 256 = buf[off]'hlt := by omega
-                  erw [hW0]; simp only [hMod256]; rfl
+                  erw [hW0]; simp only [hMod256]
                 · simp only [hb, ↓reduceIte] at hR; cases hR
               · simp only [hlt, ↓reduceDIte] at hR; cases hR
           · intro eqKey hMem eqHdr fEq hFind τ hIn hOut v₁ v₂ b _ _ hEv
@@ -1204,7 +1206,7 @@ private theorem witness_samplesLawful_of {d : Deployed deployVocab}
     (hDecl : d.declaration = schnorrSamplesDecl) (hProg : d.admitted.program = witnessTyped) :
     d.SamplesLawful deployModel := by
   cases d with
-  | mk adm decl found stack =>
+  | mk adm decl found stack _ident =>
       cases adm with
       | mk prog ann assoc assu =>
           dsimp only at hDecl hProg
@@ -1369,7 +1371,7 @@ theorem witness_deploy_complete :
   have hSL := wFnDefs_suiteLawful_of (by rw [hDeclEq]; rfl) (.inl hDProg)
   have hLL := wFnDefs_layoutLawful_of (by rw [hDeclEq]; rfl) rfl (.inl hDProg)
   cases d with
-  | mk adm decl found stack =>
+  | mk adm decl found stack _ident =>
       cases adm with
       | mk prog ann assoc assu =>
           dsimp only at hDProg hDeclEq
@@ -1469,7 +1471,7 @@ theorem witness_deploy_complete_samples :
   have hLL := wFnDefs_layoutLawful_of (by rw [hDeclEq]; rfl) rfl (.inl hDProg)
   have hSampL := witness_samplesLawful_of hDeclEq hDProg
   cases d with
-  | mk adm decl found stack =>
+  | mk adm decl found stack _ident =>
       cases adm with
       | mk prog ann assoc assu =>
           dsimp only at hDProg hDeclEq
@@ -1487,7 +1489,7 @@ theorem witness_deploy_complete_samples :
             deploy_complete_samples deployModel deployEncoder hAdm hDep
               rfl rfl hNoRec
               0 1 hRoles hFirst hMatched (.cons (7 : Nat) (.cons (13 : Nat) .nil)) hInsV
-              (hSL.toFor deployEncoder deployModel) hLL hSampL
+              (hSL.toFor deployEncoder deployModel) hLL (hSampL.toFor deployEncoder deployModel)
               witness_noHalt (fun _ _ => none) witness_samples_lawful witness_samples_fed⟩
 
 /-! ## Witness 3: Compact carry/recover completeness (`deploy_complete_compact`) on `primeOrderModel` -/
@@ -1715,7 +1717,7 @@ private theorem compact_suiteLawful_of {d : Deployed deployVocab}
     (hDecl : d.declaration = schnorrCompactDecl) (hProg : d.admitted.program = compactWitnessTyped) :
     d.SuiteLawful primeOrderModel := by
   cases d with
-  | mk adm decl found stack =>
+  | mk adm decl found stack _ident =>
       cases adm with
       | mk prog ann assoc assu =>
           dsimp only at hDecl hProg
@@ -1800,7 +1802,7 @@ private theorem compact_layoutLawful_of {d : Deployed deployVocab}
     (hDecl : d.declaration = schnorrCompactDecl) (hProg : d.admitted.program = compactWitnessTyped) :
     d.LayoutLawful primeOrderModel := by
   cases d with
-  | mk adm decl found stack =>
+  | mk adm decl found stack _ident =>
       cases adm with
       | mk prog ann assoc assu =>
           dsimp only at hDecl hProg
@@ -1918,7 +1920,7 @@ private theorem compact_layoutLawful_of {d : Deployed deployVocab}
                   refine ⟨by rw [hbMod]; exact hb, Nat.le_succ off, hlt, [buf[off]'hlt], ?_,
                     list_take_elem_drop buf off hlt⟩
                   have hMod256 : (buf[off]'hlt % 11) % 256 = buf[off]'hlt := by omega
-                  erw [hEvW (buf[off]'hlt % 11)]; simp only [hMod256]; rfl
+                  erw [hEvW (buf[off]'hlt % 11)]; simp only [hMod256]
                 · simp only [hb, ↓reduceIte] at hR; cases hR
               · simp only [hlt, ↓reduceDIte] at hR; cases hR
             · obtain ⟨hwIn0, _, _⟩ := cwfn102_prime wHdr fW hwFind
@@ -1953,7 +1955,7 @@ private theorem compact_layoutLawful_of {d : Deployed deployVocab}
                   refine ⟨by rw [hbMod]; exact hb, Nat.le_succ off, hlt, [buf[off]'hlt], ?_,
                     list_take_elem_drop buf off hlt⟩
                   have hMod256 : (buf[off]'hlt % 11) % 256 = buf[off]'hlt := by omega
-                  erw [hEvW (buf[off]'hlt % 11)]; simp only [hMod256]; rfl
+                  erw [hEvW (buf[off]'hlt % 11)]; simp only [hMod256]
                 · simp only [hb, ↓reduceIte] at hR; cases hR
               · simp only [hlt, ↓reduceDIte] at hR; cases hR
           · intro eqKey hMem eqHdr fEq hFind τ hIn hOut v₁ v₂ b _ _ hEv
@@ -2005,7 +2007,7 @@ private theorem compact_recoveryLawful_of {d : Deployed deployVocab}
     (hDecl : d.declaration = schnorrCompactDecl) (hProg : d.admitted.program = compactWitnessTyped) :
     d.RecoveryLawful primeOrderModel := by
   cases d with
-  | mk adm decl found stack =>
+  | mk adm decl found stack _ident =>
       cases adm with
       | mk prog ann assoc assu =>
           dsimp only at hDecl hProg
@@ -2124,7 +2126,7 @@ theorem witness_deploy_complete_compact :
   have hLL := compact_layoutLawful_of hDeclEq hDProg
   have hRL := compact_recoveryLawful_of hDeclEq hDProg
   cases d with
-  | mk adm decl found stack =>
+  | mk adm decl found stack _ident =>
       cases adm with
       | mk prog ann assoc assu =>
           dsimp only at hDProg hDeclEq
@@ -2489,7 +2491,7 @@ theorem witness_deploy_complete_retry :
   have hSL := wFnDefs_suiteLawful_of (by rw [hDeclEq]; rfl) (.inr hDProg)
   have hLL := wFnDefs_layoutLawful_of (by rw [hDeclEq]; rfl) rfl (.inr hDProg)
   cases d with
-  | mk adm decl found stack =>
+  | mk adm decl found stack _ident =>
       cases adm with
       | mk prog ann assoc assu =>
           dsimp only at hDProg hDeclEq
@@ -2561,6 +2563,9 @@ theorem witness_deploy_complete_retry :
               ∀ source₁, Lawful deployModel source₁
                 (protocolMeaning deployModel retryWitnessTyped Member.head []
                   (.cons (7 : Nat) (.cons (13 : Nat) .nil))) →
+                AllFed deployModel source₁
+                  (protocolMeaning deployModel retryWitnessTyped Member.head []
+                    (.cons (7 : Nat) (.cons (13 : Nat) .nil))) →
                 (∀ at' τ', at'.site ∉ wRetrySchnorrHdr.shape.heardCoins →
                   source₁ at' τ' = shiftAttemptSource deployModel
                     (wRetrySchnorrHdr.shape.attemptPrivateCoins 0 ⟨[], ⟨409⟩⟩ [] false)
@@ -2570,7 +2575,7 @@ theorem witness_deploy_complete_retry :
                     (protocolMeaning deployModel retryWitnessTyped Member.head []
                       (.cons (7 : Nat) (.cons (13 : Nat) .nil))) evs (.stopped who why) ∧
                   0 ∈ who ∧ why.isAbort = true := by
-            intro j hj source₁ _ hAg
+            intro j hj source₁ _ _ hAg
             have hj0 : j = 0 := Nat.lt_one_iff.mp hj
             subst hj0
             have hS410 : source₁ ⟨[], ⟨410⟩⟩ dScalar = some (0 : Nat) :=
@@ -2707,7 +2712,7 @@ private theorem witness_deployIdeal_link_of (a : Admitted deployVocab) (dIdeal :
           (roleMeaning deployModel dIdeal.admitted.program dIdeal.callee 1 [] vIns)
           st0 ([9, 0] : List (deployModel.Val dByte)) 0 outV := by
   cases dIdeal with
-  | mk adm decl found stack =>
+  | mk adm decl found stack _ident =>
       cases adm with
       | mk prog ann assoc assu =>
           dsimp only at hDProg hDeclEq
@@ -2760,7 +2765,7 @@ private theorem witness_deployIdeal_link_of (a : Admitted deployVocab) (dIdeal :
                   rw [hSt]
                   dsimp only [DeployIdealWitness.toDeployed]
                   rw [dite_eq_left hV1.symm, hCastR, stack_takes_cast_ins (by simp [w.hFound]), hLVW]
-                  simp [Stack.Takes, hUL]; rfl
+                  simp [Stack.Takes, hUL]
             have hEq := List.cons.inj (hTakes.symm.trans hTak) |>.1
             injection hEq
           subst hSU; subst hLU
@@ -2817,13 +2822,6 @@ theorem witness_deployIdeal_link_concrete_ro :
 
 /-! ## Witnesses 6–8: Ideal RO query uniqueness, cross-session, and cross-statement separation -/
 
-private theorem wSchnorr_serviceKeyFresh :
-    ServiceKeyFresh wSchnorrHdr.shape idealServiceKey := by
-  intro e he _ _ _ hCls
-  simp only [wSchnorrTerm, shapeOf, ProtocolOp.shape, Shape.events,
-    List.mem_cons, List.not_mem_nil, or_false] at he
-  rcases he with rfl | rfl | rfl | rfl <;> cases hCls
-
 /-- Concrete witness of `deployIdeal_queries_nodup`: on EVERY execution path and EVERY proof buffer
 (honest or malicious), the emitted `idealServiceKey` queries are strictly duplicate-free (`qs.Nodup`)
 and every query extends the canonical initial path `st0`. -/
@@ -2846,7 +2844,7 @@ theorem witness_deployIdeal_queries_nodup :
   have hDeclEq : dIdeal.declaration = schnorrDecl := by rw [hWEq]
   have hDProg : dIdeal.admitted.program = witnessTyped := by rw [hAdmEq, hProg]
   cases dIdeal with
-  | mk adm decl found stack =>
+  | mk adm decl found stack _ident =>
       cases adm with
       | mk prog ann assoc assu =>
           dsimp only at hDProg hDeclEq
@@ -2859,7 +2857,7 @@ theorem witness_deployIdeal_queries_nodup :
               ⟨show (0 : Nat) < 11 by decide, show (13 : Nat) < 23 by decide, trivial⟩
           obtain ⟨suiteUnitTy, _, _, _, st0, hUnit, _, _, hAll⟩ :=
             deployIdeal_queries_nodup deployModel deployEncoder idealServiceKey
-              hDep rfl rfl hRoles wSchnorr_serviceKeyFresh vIns hVInsV
+              hDep rfl rfl hRoles vIns hVInsV
           have hSU : suiteUnitTy = dByte := by
             cases a with
             | mk progA annA assocA assuA =>
@@ -2899,9 +2897,9 @@ theorem witness_cross_session_disjoint :
   have hAdm₂ : d₂.admitted = a := by rw [hEq₂]
   have hDecl₂ : d₂.declaration = schnorrAppCtxDecl := by rw [hEq₂]
   cases d₁ with
-  | mk adm₁ decl₁ found₁ stack₁ =>
+  | mk adm₁ decl₁ found₁ stack₁ _ident₁ =>
       cases d₂ with
-      | mk adm₂ decl₂ found₂ stack₂ =>
+      | mk adm₂ decl₂ found₂ stack₂ _ident₂ =>
           dsimp only at hAdm₁ hDecl₁ hAdm₂ hDecl₂
           subst hAdm₁; subst hDecl₁; subst hAdm₂; subst hDecl₂
           cases adm₂ with
@@ -2917,10 +2915,10 @@ theorem witness_cross_session_disjoint :
                   ⟨show (0 : Nat) < 11 by decide, show (13 : Nat) < 23 by decide, trivial⟩
               obtain ⟨u₁, _, sess₁, hS₁, st₁, hU₁, hRes₁, hInit₁, _⟩ :=
                 deployIdeal_queries_nodup deployModel deployEncoder idealServiceKey
-                  hDep₁ rfl rfl hRoles₁ wSchnorr_serviceKeyFresh vIns hVInsV
+                  hDep₁ rfl rfl hRoles₁ vIns hVInsV
               obtain ⟨u₂, _, sess₂, hS₂, st₂, hU₂, hRes₂, hInit₂, _⟩ :=
                 deployIdeal_queries_nodup deployModel deployEncoder idealServiceKey
-                  hDep₂ rfl rfl hRoles₂ wSchnorr_serviceKeyFresh vIns hVInsV
+                  hDep₂ rfl rfl hRoles₂ vIns hVInsV
               have hSU₁ : u₁ = dByte :=
                 congrArg Sigma.fst (Option.some.inj (hU₁.symm.trans (rfl : findSuiteUnit a0 toySuite = some ⟨dByte, ⟨rfl⟩⟩)))
               have hSU₂ : u₂ = dByte :=
@@ -2957,7 +2955,7 @@ theorem witness_cross_statement_disjoint :
   have hDProg : dIdeal.admitted.program = witnessTyped := by rw [hAdmEq, hProg]
   have hSL := wFnDefs_suiteLawful_of (by rw [hDeclEq]; rfl) (.inl hDProg)
   cases dIdeal with
-  | mk adm decl found stack =>
+  | mk adm decl found stack _ident =>
       cases adm with
       | mk prog ann assoc assu =>
           dsimp only at hDProg hDeclEq hAdmEq
@@ -2975,10 +2973,10 @@ theorem witness_cross_statement_disjoint :
               ⟨show (0 : Nat) < 11 by decide, show (2 : Nat) < 23 by decide, trivial⟩
           obtain ⟨u₁, _, sessBytes, hSess, st₁, hU₁, hRes, hInit₁, _⟩ :=
             deployIdeal_queries_nodup deployModel deployEncoder idealServiceKey
-              hDep rfl rfl hRoles wSchnorr_serviceKeyFresh vIns₁ hV₁
+              hDep rfl rfl hRoles vIns₁ hV₁
           obtain ⟨u₂, _, sessBytes₂, _, st₂, hU₂, hRes₂, hInit₂, _⟩ :=
             deployIdeal_queries_nodup deployModel deployEncoder idealServiceKey
-              hDep rfl rfl hRoles wSchnorr_serviceKeyFresh vIns₂ hV₂
+              hDep rfl rfl hRoles vIns₂ hV₂
           have hSU₁ : u₁ = dByte := by
             cases a with
             | mk progA annA assocA assuA =>
@@ -3008,7 +3006,7 @@ theorem witness_cross_statement_disjoint :
           refine ⟨a, _, sessBytes, hSess, st₁, st₂, hAdm, hDep, hRes, hInit₁, hInit₂, ?_⟩
           intro q ⟨hD₁, hD₂⟩
           have hStmtEq := deployIdeal_cross_statement_disjoint deployModel deployEncoder
-            (d := ⟨⟨witnessTyped, ann, assoc, assu⟩, schnorrDecl, found, stack⟩)
+            (d := ⟨⟨witnessTyped, ann, assoc, assu⟩, schnorrDecl, found, stack, _ident⟩)
             (hCon := rfl) (hSuite := hSL.toFor deployEncoder deployModel)
             hV₁ hV₂ hInit₁' hInit₂' hD₁ hD₂
           have hMem : (⟨0, 0, dPoint, rfl⟩ : LayerBuild.StmtPos deployVocab 1 wSchnorrHdr.ins) ∈
@@ -3017,5 +3015,473 @@ theorem witness_cross_statement_disjoint :
           have hValEq := hStmtEq ⟨0, 0, dPoint, rfl⟩ hMem
           change (13 : Nat) = 2 at hValEq
           cases hValEq
+
+/-! ## Witness 9: Post-challenge abort-and-retry completeness (`deploy_complete_retry` via `AllFed`) -/
+
+/-- Post-challenge rejection-sampling body inside `.attempt ⟨409⟩ [0]`: draws private nonce `r`,
+sends commitment `A = g^r`, draws verifier public challenge `c` (`⟨413⟩`), and ONLY AFTER hearing
+`c` checks `r ≠ 0` (`guard ⟨417⟩ [0] .abort`). Discharging `hAborts` on this protocol requires the
+`AllFed` hypothesis of `deploy_complete_retry` to supply `c` at `⟨413⟩`. -/
+private def wPostChRetryBody {hs : Headers deployVocab} :
+    Term (protocolDialect deployVocab hs)
+      ((Ctx.positional [⟨dScalar, [0]⟩, ⟨dPoint, [0, 1]⟩]).extend
+        (.cons 2 .nil : Names [LTy.index [0]])) [] :=
+  .op ⟨410⟩ (.given (.coin ()) 0 [] [] dScalar ⟨⟨[], dScalar⟩, rfl, rfl, rfl⟩
+      (fun _ h => nomatch h) (by decide)) .nil (.cons 3 .nil) <|
+  .op ⟨411⟩ (.compute [0] (.row DeployRow.base _ rfl) [⟨dScalar, [0]⟩] rfl (by decide))
+      (.cons (wvar 3) .nil) (.cons 4 .nil) <|
+  .op ⟨412⟩ (.flow .message 0 [1] (by decide) (by decide)) (.cons (wvar 4) .nil) (.cons 5 .nil) <|
+  .op ⟨413⟩ (.given (.coin ()) 1 [0] [] dScalar ⟨⟨[], dScalar⟩, rfl, rfl, rfl⟩
+      (fun _ h => nomatch h) (by decide)) .nil (.cons 9 .nil) <|
+  .op ⟨414⟩ (.compute [0] (.literal (V := deployVocab) dScalar [0] rfl) [] rfl (by decide)) .nil (.cons 6 .nil) <|
+  .op ⟨415⟩ (.compute [0] (.row DeployRow.sameScalar _ rfl) [⟨dScalar, [0]⟩, ⟨dScalar, [0]⟩] rfl (by decide))
+      (.cons (wvar 3) (.cons (wvar 6) .nil)) (.cons 7 .nil) <|
+  .op ⟨416⟩ (.compute [0] (.owned .boolNot) [⟨.bool, [0]⟩] rfl (by decide))
+      (.cons (wvar 7) .nil) (.cons 8 .nil) <|
+  .guard ⟨417⟩ [0] (wvar 8) ⟨rfl, by decide, by decide⟩ .abort <|
+  .op ⟨418⟩ (.compute [0] (.row DeployRow.mul _ rfl) [⟨dScalar, [0, 1]⟩, ⟨dScalar, [0]⟩] rfl (by decide))
+      (.cons (wvar 9) (.cons (wvar 0) .nil)) (.cons 10 .nil) <|
+  .op ⟨419⟩ (.compute [0] (.row DeployRow.add _ rfl) [⟨dScalar, [0]⟩, ⟨dScalar, [0]⟩] rfl (by decide))
+      (.cons (wvar 3) (.cons (wvar 10) .nil)) (.cons 11 .nil) <|
+  .op ⟨420⟩ (.flow .message 0 [1] (by decide) (by decide)) (.cons (wvar 11) .nil) (.cons 12 .nil) <|
+  .op ⟨421⟩ (.compute [1] (.row DeployRow.base _ rfl) [⟨dScalar, [0, 1]⟩] rfl (by decide))
+      (.cons (wvar 12) .nil) (.cons 13 .nil) <|
+  .op ⟨422⟩ (.compute [1] (.row DeployRow.scale _ rfl) [⟨dScalar, [0, 1]⟩, ⟨dPoint, [0, 1]⟩] rfl (by decide))
+      (.cons (wvar 9) (.cons (wvar 1) .nil)) (.cons 14 .nil) <|
+  .op ⟨423⟩ (.compute [1] (.row DeployRow.plus _ rfl) [⟨dPoint, [0, 1]⟩, ⟨dPoint, [1]⟩] rfl (by decide))
+      (.cons (wvar 5) (.cons (wvar 14) .nil)) (.cons 15 .nil) <|
+  .op ⟨424⟩ (.compute [1] (.row DeployRow.same _ rfl) [⟨dPoint, [1]⟩, ⟨dPoint, [1]⟩] rfl (by decide))
+      (.cons (wvar 13) (.cons (wvar 15) .nil)) (.cons 16 .nil) <|
+  .guard ⟨425⟩ [1] (wvar 16) ⟨rfl, by decide, by decide⟩ .reject <|
+  .ret .nil
+
+private def wPostChRetryTerm {hs : Headers deployVocab} :
+    Term (protocolDialect deployVocab hs)
+      (Ctx.positional [⟨dScalar, [0]⟩, ⟨dPoint, [0, 1]⟩]) [] :=
+  .attempt ⟨409⟩ [0] ⟨0, rfl⟩ (.cons 2 .nil) wPostChRetryBody .nil (.ret .nil)
+
+private abbrev wPostChRetryHdr : ProtocolHeader deployVocab :=
+  ⟨⟨202⟩, 2, [⟨dScalar, [0]⟩, ⟨dPoint, [0, 1]⟩], [], shapeOf (wPostChRetryTerm (hs := ⟨wFnHeaders, []⟩))⟩
+
+private def postChRetryTyped : Typed deployVocab :=
+  ⟨⟨wFnHeaders, [wPostChRetryHdr]⟩,
+   .protocol wPostChRetryHdr (Names.counting 0 _) wPostChRetryTerm
+     ⟨by simp [Within, ProtocolOp.Within, wPostChRetryTerm, wPostChRetryBody, wPostChRetryHdr],
+      by decide,
+      by simp [Enclosed, wPostChRetryTerm, wPostChRetryBody],
+      (Term.repeatedAddress_eq_none _).mp (by decide +kernel),
+      rfl,
+      by unfold Term.UsedOnce; decide +kernel,
+      by decide +kernel,
+      (Term.rebound_eq_none _ _).mp (by decide +kernel)⟩ wFnDefs,
+   by decide⟩
+
+private theorem postChRetry_admit_isOk :
+    (admit (erase postChRetryTyped) noAssociation).isOk = true := by decide +kernel
+
+private theorem postChRetry_deploy_isOk :
+    (match admit (erase postChRetryTyped) noAssociation with
+     | .ok a => (deploy deployEncoder a retryNoSamplesDecl).isOk
+     | .error _ => false) = true := by decide +kernel
+
+private theorem postChRetry_protocol_unfold_gen
+    (fnTable : FnTable deployModel wFnHeaders) (gTable : GTable deployModel []) :
+    Term.observe deployModel fnTable gTable (wPostChRetryTerm (hs := ⟨wFnHeaders, []⟩)) []
+      (Env.empty.extend (Names.counting 0 ([⟨dScalar, [0]⟩, ⟨dPoint, [0, 1]⟩] : List (LTy deployVocab)))
+        (.cons (7 : Nat) (.cons (13 : Nat) .nil))) =
+      Process.call (GOp.given (.coin ()) 0 [] ⟨[], ⟨410⟩⟩ [] .nil dScalar) fun (r : Nat) =>
+        Process.call (GOp.flow .message 0 [1] ⟨[], ⟨412⟩⟩ dPoint (powMod 2 r 23)) fun _ =>
+          ((Process.call (GOp.given (.coin ()) 1 [0] ⟨[], ⟨413⟩⟩ [] .nil dScalar) fun (c : Nat) =>
+              ((bif !decide (r = 0) then
+                  Process.call (GOp.flow .message 0 [1] ⟨[], ⟨420⟩⟩ dScalar ((r + (c * 7) % 11) % 11))
+                    fun _ =>
+                      ((bif decide (powMod 2 ((r + (c * 7) % 11) % 11) 23 =
+                          (powMod 2 r 23 * powMod 13 c 23) % 23) then
+                        (Process.done (HList.nil, ()) :
+                          Protocol deployModel (HList (LVal deployModel) [] × Unit))
+                      else
+                        Process.halt ([1], Stop.declared .reject ⟨[], ⟨425⟩⟩)).map
+                        fun out => (out.1, (((r + (c * 7) % 11) % 11), out.2)))
+                else
+                  Process.halt ([0], Stop.declared .abort ⟨[], ⟨417⟩⟩)).map
+                fun out => (out.1, (c, out.2)))).map
+            fun out => (out.1, (powMod 2 r 23, out.2))).bind (fun inner =>
+              (Process.done (HList.nil, ()) :
+                Protocol deployModel (HList (LVal deployModel) [] × Unit)).map
+                  fun rest => (rest.1, (inner.2.1, inner.2.2.1, inner.2.2.2.1, ()))) := by
+  unfold wPostChRetryTerm wPostChRetryBody
+  simp only [Term.observe, observeOp, protocolOp, localOp, ownedOp,
+    asBool, computeArgs, liftLocal, Process.bind, Process.map]
+  rfl
+
+private theorem postChRetry_protocol_unfold :
+    protocolMeaning deployModel postChRetryTyped Member.head []
+      (.cons (7 : Nat) (.cons (13 : Nat) .nil)) =
+      (Process.call (GOp.given (.coin ()) 0 [] ⟨[], ⟨410⟩⟩ [] .nil dScalar) fun (r : Nat) =>
+        Process.call (GOp.flow .message 0 [1] ⟨[], ⟨412⟩⟩ dPoint (powMod 2 r 23)) fun _ =>
+          ((Process.call (GOp.given (.coin ()) 1 [0] ⟨[], ⟨413⟩⟩ [] .nil dScalar) fun (c : Nat) =>
+              ((bif !decide (r = 0) then
+                  Process.call (GOp.flow .message 0 [1] ⟨[], ⟨420⟩⟩ dScalar ((r + (c * 7) % 11) % 11))
+                    fun _ =>
+                      ((bif decide (powMod 2 ((r + (c * 7) % 11) % 11) 23 =
+                          (powMod 2 r 23 * powMod 13 c 23) % 23) then
+                        (Process.done (HList.nil, ()) :
+                          Protocol deployModel (HList (LVal deployModel) [] × Unit))
+                      else
+                        Process.halt ([1], Stop.declared .reject ⟨[], ⟨425⟩⟩)).map
+                        fun out => (out.1, (((r + (c * 7) % 11) % 11), out.2)))
+                else
+                  Process.halt ([0], Stop.declared .abort ⟨[], ⟨417⟩⟩)).map
+                fun out => (out.1, (c, out.2)))).map
+            fun out => (out.1, (powMod 2 r 23, out.2))).bind (fun inner =>
+              (Process.done (HList.nil, ()) :
+                Protocol deployModel (HList (LVal deployModel) [] × Unit)).map
+                  fun rest => (rest.1, (inner.2.1, inner.2.2.1, inner.2.2.2.1, ())))).map
+        fun out => (out.1, out.2) :=
+  congrArg (fun p => p.map fun out => (out.1, out.2)) (postChRetry_protocol_unfold_gen _ _)
+
+/-- Concrete non-vacuous witness of `deploy_complete_retry` on a **post-challenge abort** protocol:
+attempt 0 sends commitment `A`, derives the Fiat–Shamir challenge `c` (`⟨413⟩`), and ONLY THEN
+aborts at guard `⟨417⟩` (using `AllFed` to supply `c` in `hAborts`), rolls back transcript state and
+proof buffer, and succeeds honestly on attempt 1. -/
+theorem witness_post_challenge_abort_retry :
+    ∃ (a : Admitted deployVocab) (d : Deployed deployVocab)
+      (hIns : d.entry.ins = [⟨dScalar, [0]⟩, ⟨dPoint, [0, 1]⟩])
+      (hFirst : Stack.Takes (d.stack 0) = [])
+      (hMatched : Stack.Gives (d.stack 0) = Stack.Takes (d.stack 1)),
+      admit (erase postChRetryTyped) noAssociation = .ok a ∧
+      deploy deployEncoder a retryNoSamplesDecl = .ok d ∧
+      let ins := cast (congrArg (HList (LVal deployModel)) hIns.symm)
+        (.cons (7 : Nat) (.cons (13 : Nat) .nil))
+      ∃ outP gives recordP outV givesV recordV,
+        Alone deployModel retryAbortThenSucceedSource 0
+          (d.run deployModel 0 (hideAll deployModel 0 ins)
+            (cast (congrArg (HList deployModel.Val) hFirst.symm) .nil))
+          recordP (.returned (outP, gives)) ∧
+        Alone deployModel retryAbortThenSucceedSource 1
+          (d.run deployModel 1 (hideAll deployModel 1 ins)
+            (cast (congrArg (HList deployModel.Val) hMatched) gives))
+          recordV (.returned (outV, givesV)) ∧
+        ∃ source' out,
+          Lawful deployModel source'
+            (protocolMeaning deployModel d.admitted.program d.callee [] ins) ∧
+          (∀ at' τ', at'.site ∉ d.entry.shape.heardCoins →
+            source' at' τ' = shiftAttemptSource deployModel
+              (d.entry.shape.attemptPrivateCoins 0 ⟨[], ⟨409⟩⟩ [] false)
+              (.attempt ⟨409⟩ 1) retryAbortThenSucceedSource at' τ') ∧
+          GExec deployModel source'
+            (protocolMeaning deployModel d.admitted.program d.callee [] ins)
+            (.returned out) ∧
+          outP = hideAll deployModel 0 out.1 ∧ outV = hideAll deployModel 1 out.1 := by
+  have hAdmEx : ∃ a : Admitted deployVocab,
+      admit (erase postChRetryTyped) noAssociation = .ok a ∧ a.program = postChRetryTyped := by
+    cases h : admit (erase postChRetryTyped) noAssociation with
+    | error _ => have hOk := postChRetry_admit_isOk; rw [h] at hOk; cases hOk
+    | ok a => exact ⟨a, rfl, admitted_eq_of_readback h rfl⟩
+  obtain ⟨a, hAdm, hProg⟩ := hAdmEx
+  have hDepEx : ∃ d, deploy deployEncoder a retryNoSamplesDecl = .ok d := by
+    cases h : deploy deployEncoder a retryNoSamplesDecl with
+    | error _ =>
+        have hOk := postChRetry_deploy_isOk
+        rw [hAdm] at hOk; dsimp only at hOk; rw [h] at hOk; cases hOk
+    | ok d => exact ⟨d, rfl⟩
+  obtain ⟨d, hDep⟩ := hDepEx
+  obtain ⟨hAdmEq, hDeclEq, _⟩ := deploy_keeps deployEncoder a retryNoSamplesDecl d hDep
+  have hDProg : d.admitted.program = postChRetryTyped := by rw [hAdmEq, hProg]
+  cases d with
+  | mk adm decl found stack ident =>
+      cases adm with
+      | mk prog ann assoc assu =>
+          dsimp only at hDProg hDeclEq
+          subst hDProg; subst hDeclEq
+          have hRoles : proverAndVerifier wPostChRetryHdr retryNoSamplesDecl = some (0, 1) := by
+            decide +kernel
+          obtain ⟨hFirst, hMatched⟩ :=
+            deploy_matches deployEncoder a retryNoSamplesDecl _ hDep 0 1 hRoles
+          -- Reuse `wFnDefs` semantic laws via `retryWitness_deploy_exists` (definitionally identical `wFnHeaders`/`wFnDefs`)
+          obtain ⟨_, dR, _, hProgR, hDepR⟩ := retryWitness_deploy_exists
+          obtain ⟨hAdmR, hDeclR, _⟩ := deploy_keeps deployEncoder _ retryNoSamplesDecl dR hDepR
+          have hDProgR : dR.admitted.program = retryWitnessTyped := by rw [hAdmR, hProgR]
+          have hSLR := wFnDefs_suiteLawful_of (by rw [hDeclR]; rfl) (.inr hDProgR)
+          have hLLR := wFnDefs_layoutLawful_of (by rw [hDeclR]; rfl) rfl (.inr hDProgR)
+          cases dR with
+          | mk admR declR foundR stackR identR =>
+              cases admR with
+              | mk progR annR assocR assuR =>
+                  dsimp only at hDProgR hDeclR
+                  subst hDProgR; subst hDeclR
+                  have hFindMap : ∀ k, (k = ⟨102⟩ ∨ k = ⟨103⟩ ∨ k = ⟨104⟩ ∨ k = ⟨105⟩ ∨ k = ⟨106⟩ ∨ k = ⟨107⟩) →
+                      ∀ {hdr} {f : Member wFnHeaders hdr},
+                        postChRetryTyped.find k = some (.fn f) → retryWitnessTyped.find k = some (.fn f) := by
+                    intro k hk hdr f hFind
+                    rcases hk with rfl | rfl | rfl | rfl | rfl | rfl
+                    · obtain ⟨rfl, rfl⟩ := member_unique_of_find hFind
+                        (rfl : postChRetryTyped.find ⟨102⟩ = some (.fn (Member.tail (Member.tail (Member.tail (Member.tail (Member.tail (Member.tail Member.head))))))))
+                      rfl
+                    · obtain ⟨rfl, rfl⟩ := member_unique_of_find hFind
+                        (rfl : postChRetryTyped.find ⟨103⟩ = some (.fn (Member.tail (Member.tail (Member.tail (Member.tail (Member.tail Member.head)))))))
+                      rfl
+                    · obtain ⟨rfl, rfl⟩ := member_unique_of_find hFind
+                        (rfl : postChRetryTyped.find ⟨104⟩ = some (.fn (Member.tail (Member.tail (Member.tail (Member.tail Member.head))))))
+                      rfl
+                    · obtain ⟨rfl, rfl⟩ := member_unique_of_find hFind
+                        (rfl : postChRetryTyped.find ⟨105⟩ = some (.fn (Member.tail (Member.tail (Member.tail Member.head)))))
+                      rfl
+                    · obtain ⟨rfl, rfl⟩ := member_unique_of_find hFind
+                        (rfl : postChRetryTyped.find ⟨106⟩ = some (.fn (Member.tail (Member.tail Member.head))))
+                      rfl
+                    · obtain ⟨rfl, rfl⟩ := member_unique_of_find hFind
+                        (rfl : postChRetryTyped.find ⟨107⟩ = some (.fn (Member.tail Member.head)))
+                      rfl
+                  have hSL : Deployed.SuiteLawful deployModel
+                      ⟨⟨postChRetryTyped, ann, assoc, assu⟩, retryNoSamplesDecl, found, stack, ident⟩ := by
+                    intro suite _ hCon
+                    have hSEq : suite = toySuite := (Construction.derived.inj hCon).1.symm
+                    subst hSEq
+                    have hW := hSLR toySuite _ rfl
+                    constructor
+                    · intro defKey hMem hdr f hFind stateTy drawIns e law owner h0 hs _ _ hLaw hins houts
+                        st lbl pay coin st' hStV hLblV hPayV hEval
+                      have hK : defKey = ⟨104⟩ := by
+                        rcases hMem with hMem | ⟨_, hLM⟩
+                        · simp only [toySuite, List.mem_cons, List.not_mem_nil, or_false, Prod.mk.injEq] at hMem
+                          rcases hMem with ⟨h, _⟩ | ⟨h, _⟩ | ⟨h, _⟩ | ⟨h, _⟩ | ⟨_, h⟩ <;> first | exact h | cases h
+                        · cases hLM
+                      subst hK
+                      cases law
+                      have hF' := hFindMap ⟨104⟩ (.inr (.inr (.inl rfl))) hFind
+                      cases e with
+                      | mk eSite eCls eTau =>
+                          dsimp only at hLaw houts hEval ⊢
+                          cases Option.some.inj hLaw
+                          exact hW.1 ⟨104⟩ hMem hdr f hF' stateTy []
+                            ⟨⟨[], ⟨413⟩⟩, .given (.coin ()) 1 [0], dScalar⟩ () 1 0 []
+                            (show (⟨⟨[], ⟨413⟩⟩, .given (.coin ()) 1 [0], dScalar⟩ : ShapeEvent deployVocab) ∈
+                              wRetrySchnorrHdr.shape.events [] id by
+                                simp [wRetrySchnorrTerm, wRetryBody, shapeOf, ProtocolOp.shape, Shape.events, EventClass.rename])
+                            rfl rfl hins houts st lbl pay coin st' hStV hLblV hPayV hEval
+                    · intro eKey hMem hdr f hFind unitTy τ hIn hOut v₁ v₂ u hv₁ hv₂ hEv₁ hEv₂
+                      have hK : eKey = ⟨102⟩ ∨ eKey = ⟨103⟩ := by
+                        simp only [toySuite, List.mem_cons, List.not_mem_nil, or_false, Prod.mk.injEq] at hMem
+                        rcases hMem with ⟨h, _⟩ | ⟨h, _⟩ | ⟨_, h⟩ | ⟨_, h⟩ | ⟨h, _⟩ <;>
+                          first | exact .inl h | exact .inr h | cases h
+                      rcases hK with rfl | rfl
+                      · exact hW.2 ⟨102⟩ hMem hdr f (hFindMap ⟨102⟩ (.inl rfl) hFind) unitTy τ hIn hOut v₁ v₂ u hv₁ hv₂ hEv₁ hEv₂
+                      · exact hW.2 ⟨103⟩ hMem hdr f (hFindMap ⟨103⟩ (.inr (.inl rfl)) hFind) unitTy τ hIn hOut v₁ v₂ u hv₁ hv₂ hEv₁ hEv₂
+                  have hLL : Deployed.LayoutLawful deployModel
+                      ⟨⟨postChRetryTyped, ann, assoc, assu⟩, retryNoSamplesDecl, found, stack, ident⟩ := by
+                    intro layout hLay
+                    have hLEq : layout = ⟨toyLayoutModule, [], []⟩ := (Option.some.inj hLay).symm
+                    subst hLEq
+                    have hW := hLLR ⟨toyLayoutModule, [], []⟩ rfl
+                    refine ⟨?_, ?_, ?_⟩
+                    · intro wKey rKey hwMem hrMem wHdr rHdr fW fR hwFind hrFind unitTy τ hwIn hwOut hrIn hrOut
+                        v chunk pre post hv hPre hPost hWRun
+                      have hWK : wKey = ⟨102⟩ ∨ wKey = ⟨103⟩ := by
+                        simp only [toyLayoutModule, List.mem_cons, List.not_mem_nil, or_false, Prod.mk.injEq] at hwMem
+                        rcases hwMem with ⟨_, h⟩ | ⟨_, h⟩ | ⟨h, _⟩ | ⟨h, _⟩ | ⟨h, _⟩ <;>
+                          first | exact .inl h | exact .inr h | cases h
+                      have hRK : rKey = ⟨105⟩ ∨ rKey = ⟨106⟩ := by
+                        simp only [toyLayoutModule, List.mem_cons, List.not_mem_nil, or_false, Prod.mk.injEq] at hrMem
+                        rcases hrMem with ⟨h, _⟩ | ⟨h, _⟩ | ⟨_, h⟩ | ⟨_, h⟩ | ⟨h, _⟩ <;>
+                          first | exact .inl h | exact .inr h | cases h
+                      have hFW' : retryWitnessTyped.find wKey = some (.fn fW) := by
+                        rcases hWK with rfl | rfl
+                        · exact hFindMap ⟨102⟩ (.inl rfl) hwFind
+                        · exact hFindMap ⟨103⟩ (.inr (.inl rfl)) hwFind
+                      have hFR' : retryWitnessTyped.find rKey = some (.fn fR) := by
+                        rcases hRK with rfl | rfl
+                        · exact hFindMap ⟨105⟩ (.inr (.inr (.inr (.inl rfl)))) hrFind
+                        · exact hFindMap ⟨106⟩ (.inr (.inr (.inr (.inr (.inl rfl))))) hrFind
+                      exact hW.1 wKey rKey hwMem hrMem wHdr rHdr fW fR hFW' hFR' unitTy τ hwIn hwOut hrIn hrOut
+                        v chunk pre post hv hPre hPost hWRun
+                    · intro wKey rKey hwMem hrMem wHdr rHdr fW fR hwFind hrFind unitTy τ hwIn hwOut hrIn hrOut
+                        buf off v nextOff hBuf hRRun
+                      have hWK : wKey = ⟨102⟩ ∨ wKey = ⟨103⟩ := by
+                        simp only [toyLayoutModule, List.mem_cons, List.not_mem_nil, or_false, Prod.mk.injEq] at hwMem
+                        rcases hwMem with ⟨_, h⟩ | ⟨_, h⟩ | ⟨h, _⟩ | ⟨h, _⟩ | ⟨h, _⟩ <;>
+                          first | exact .inl h | exact .inr h | cases h
+                      have hRK : rKey = ⟨105⟩ ∨ rKey = ⟨106⟩ := by
+                        simp only [toyLayoutModule, List.mem_cons, List.not_mem_nil, or_false, Prod.mk.injEq] at hrMem
+                        rcases hrMem with ⟨h, _⟩ | ⟨h, _⟩ | ⟨_, h⟩ | ⟨_, h⟩ | ⟨h, _⟩ <;>
+                          first | exact .inl h | exact .inr h | cases h
+                      have hFW' : retryWitnessTyped.find wKey = some (.fn fW) := by
+                        rcases hWK with rfl | rfl
+                        · exact hFindMap ⟨102⟩ (.inl rfl) hwFind
+                        · exact hFindMap ⟨103⟩ (.inr (.inl rfl)) hwFind
+                      have hFR' : retryWitnessTyped.find rKey = some (.fn fR) := by
+                        rcases hRK with rfl | rfl
+                        · exact hFindMap ⟨105⟩ (.inr (.inr (.inr (.inl rfl)))) hrFind
+                        · exact hFindMap ⟨106⟩ (.inr (.inr (.inr (.inr (.inl rfl))))) hrFind
+                      exact hW.2.1 wKey rKey hwMem hrMem wHdr rHdr fW fR hFW' hFR' unitTy τ hwIn hwOut hrIn hrOut
+                        buf off v nextOff hBuf hRRun
+                    · intro eqKey hMem hdr f hFind τ hIn hOut v₁ v₂ b hv₁ hv₂ hEv
+                      have hEK : eqKey = ⟨107⟩ := by
+                        simp only [toyLayoutModule, List.mem_cons, List.not_mem_nil, or_false, Prod.mk.injEq] at hMem
+                        rcases hMem with ⟨h, _⟩ | ⟨h, _⟩ | ⟨h, _⟩ | ⟨h, _⟩ | ⟨_, h⟩ <;> first | exact h | cases h
+                      subst hEK
+                      exact hW.2.2 ⟨107⟩ hMem hdr f (hFindMap ⟨107⟩ (.inr (.inr (.inr (.inr (.inr rfl))))) hFind) τ hIn hOut v₁ v₂ b hv₁ hv₂ hEv
+                  have hInsV : (HList.cons (7 : Nat) (.cons (13 : Nat) .nil) :
+                      HList (LVal deployModel) wPostChRetryHdr.ins).All
+                      (fun a v => deployModel.Valid a.ty v) :=
+                    ⟨show (7 : Nat) < 11 by decide, show (13 : Nat) < 23 by decide, trivial⟩
+                  have hNoRec : ∀ l, retryNoSamplesDecl.layout = some l → l.recover = [] := fun _ h => by
+                    cases Option.some.inj h; rfl
+                  have hFnsNoAb : Defs.fnsNoAbort postChRetryTyped.defs = true := by decide +kernel
+                  have hOnce : wPostChRetryHdr.shape.retryAtMostOnce ⟨[], ⟨409⟩⟩ [] = true := by decide +kernel
+                  have hOwned : wPostChRetryHdr.shape.retryOwnedBy 0 ⟨[], ⟨409⟩⟩ [] = true := by decide +kernel
+                  have hExcl : wPostChRetryHdr.shape.attemptCoinsExclusive 0 ⟨[], ⟨409⟩⟩ = true := by decide +kernel
+                  have hVNoAtt : wPostChRetryHdr.shape.hasAttemptFor 1 ⟨[], ⟨409⟩⟩ [] = false := by decide +kernel
+                  have hShift0 :
+                      shiftAttemptSource deployModel
+                        (wPostChRetryHdr.shape.attemptPrivateCoins 0 ⟨[], ⟨409⟩⟩ [] false)
+                        (.attempt ⟨409⟩ 0) retryAbortThenSucceedSource ⟨[], ⟨410⟩⟩ dScalar = some (0 : Nat) := by
+                    have hIn : (⟨[], ⟨410⟩⟩ : Site) ∈
+                        wPostChRetryHdr.shape.attemptPrivateCoins 0 ⟨[], ⟨409⟩⟩ [] false := by decide +kernel
+                    unfold shiftAttemptSource; dsimp only [Occurrence.site, Frame.applications]
+                    erw [ite_eq_left hIn]; rfl
+                  have hShift1 :
+                      shiftAttemptSource deployModel
+                        (wPostChRetryHdr.shape.attemptPrivateCoins 0 ⟨[], ⟨409⟩⟩ [] false)
+                        (.attempt ⟨409⟩ 1) retryAbortThenSucceedSource ⟨[], ⟨410⟩⟩ dScalar = some (5 : Nat) := by
+                    have hIn : (⟨[], ⟨410⟩⟩ : Site) ∈
+                        wPostChRetryHdr.shape.attemptPrivateCoins 0 ⟨[], ⟨409⟩⟩ [] false := by decide +kernel
+                    unfold shiftAttemptSource; dsimp only [Occurrence.site, Frame.applications]
+                    erw [ite_eq_left hIn]; rfl
+                  have hNotHeard410 : (⟨[], ⟨410⟩⟩ : Site) ∉ wPostChRetryHdr.shape.heardCoins := by
+                    decide +kernel
+                  have hLPAb : ∀ j, j < 1 →
+                      LawfulPrivate deployModel
+                        (shiftAttemptSource deployModel
+                          (wPostChRetryHdr.shape.attemptPrivateCoins 0 ⟨[], ⟨409⟩⟩ [] false)
+                          (.attempt ⟨409⟩ j) retryAbortThenSucceedSource)
+                        (protocolMeaning deployModel postChRetryTyped Member.head []
+                          (.cons (7 : Nat) (.cons (13 : Nat) .nil))) := by
+                    intro j hj
+                    have hj0 : j = 0 := Nat.lt_one_iff.mp hj; subst hj0
+                    rw [postChRetry_protocol_unfold]
+                    dsimp only [Process.map, Process.bind, LawfulPrivate]
+                    intro v hv; rw [hShift0] at hv; cases Option.some.inj hv
+                    exact ⟨⟨show (0 : Nat) < 11 by decide, ⟨[], dScalar⟩, rfl, rfl, rfl,
+                      show (0 : Nat) < 11 by decide⟩, fun _ _ => trivial⟩
+                  have hFedAb : ∀ j, j < 1 →
+                      Fed deployModel
+                        (shiftAttemptSource deployModel
+                          (wPostChRetryHdr.shape.attemptPrivateCoins 0 ⟨[], ⟨409⟩⟩ [] false)
+                          (.attempt ⟨409⟩ j) retryAbortThenSucceedSource)
+                        (protocolMeaning deployModel postChRetryTyped Member.head []
+                          (.cons (7 : Nat) (.cons (13 : Nat) .nil))) := by
+                    intro j hj
+                    have hj0 : j = 0 := Nat.lt_one_iff.mp hj; subst hj0
+                    rw [postChRetry_protocol_unfold]
+                    dsimp only [Process.map, Process.bind, Fed]
+                    exact ⟨(0 : Nat), hShift0, fun _ _ => trivial⟩
+                  -- HERE `hAF : AllFed` is genuinely used to obtain the challenge `vC` at `⟨413⟩`!
+                  have hAborts : ∀ j, j < 1 →
+                      ∀ source₁, Lawful deployModel source₁
+                        (protocolMeaning deployModel postChRetryTyped Member.head []
+                          (.cons (7 : Nat) (.cons (13 : Nat) .nil))) →
+                        AllFed deployModel source₁
+                          (protocolMeaning deployModel postChRetryTyped Member.head []
+                            (.cons (7 : Nat) (.cons (13 : Nat) .nil))) →
+                        (∀ at' τ', at'.site ∉ wPostChRetryHdr.shape.heardCoins →
+                          source₁ at' τ' = shiftAttemptSource deployModel
+                            (wPostChRetryHdr.shape.attemptPrivateCoins 0 ⟨[], ⟨409⟩⟩ [] false)
+                            (.attempt ⟨409⟩ j) retryAbortThenSucceedSource at' τ') →
+                        ∃ evs who why,
+                          GRun deployModel source₁
+                            (protocolMeaning deployModel postChRetryTyped Member.head []
+                              (.cons (7 : Nat) (.cons (13 : Nat) .nil))) evs (.stopped who why) ∧
+                          0 ∈ who ∧ why.isAbort = true := by
+                    intro j hj source₁ _ hAF hAg
+                    have hj0 : j = 0 := Nat.lt_one_iff.mp hj; subst hj0
+                    have hS410 : source₁ ⟨[], ⟨410⟩⟩ dScalar = some (0 : Nat) :=
+                      (hAg ⟨[], ⟨410⟩⟩ dScalar hNotHeard410).trans hShift0
+                    rw [postChRetry_protocol_unfold] at hAF ⊢
+                    dsimp only [Process.map, Process.bind, AllFed] at hAF ⊢
+                    obtain ⟨vR, hSrcR, hAF1⟩ := hAF
+                    change Nat at vR
+                    have hrEq : vR = 0 := Option.some.inj (hSrcR.symm.trans hS410)
+                    subst hrEq
+                    obtain ⟨vC, hSrcC, _⟩ := hAF1
+                    exact ⟨[Event.given (.coin ()) 0 [] ⟨[], ⟨410⟩⟩ dScalar (0 : Nat),
+                      Event.flow .message 0 [1] ⟨[], ⟨412⟩⟩ dPoint (powMod 2 0 23),
+                      Event.given (.coin ()) 1 [0] ⟨[], ⟨413⟩⟩ dScalar vC],
+                      [0], Stop.declared .abort ⟨[], ⟨417⟩⟩,
+                      .given hS410 (.flow (.given hSrcC .halt)), List.mem_cons_self, rfl⟩
+                  have hLPK : LawfulPrivate deployModel
+                      (shiftAttemptSource deployModel
+                        (wPostChRetryHdr.shape.attemptPrivateCoins 0 ⟨[], ⟨409⟩⟩ [] false)
+                        (.attempt ⟨409⟩ 1) retryAbortThenSucceedSource)
+                      (protocolMeaning deployModel postChRetryTyped Member.head []
+                        (.cons (7 : Nat) (.cons (13 : Nat) .nil))) := by
+                    rw [postChRetry_protocol_unfold]
+                    dsimp only [Process.map, Process.bind, LawfulPrivate]
+                    intro v hv; rw [hShift1] at hv; cases Option.some.inj hv
+                    refine ⟨⟨show (5 : Nat) < 11 by decide, ⟨[], dScalar⟩, rfl, rfl, rfl,
+                      show (5 : Nat) < 11 by decide⟩, fun (c : Nat) _ => ?_⟩
+                    cases decide (powMod 2 ((5 + c * 7 % 11) % 11) 23 =
+                        (powMod 2 5 23 * powMod 13 c 23) % 23) <;> trivial
+                  have hFedK : Fed deployModel
+                      (shiftAttemptSource deployModel
+                        (wPostChRetryHdr.shape.attemptPrivateCoins 0 ⟨[], ⟨409⟩⟩ [] false)
+                        (.attempt ⟨409⟩ 1) retryAbortThenSucceedSource)
+                      (protocolMeaning deployModel postChRetryTyped Member.head []
+                        (.cons (7 : Nat) (.cons (13 : Nat) .nil))) := by
+                    rw [postChRetry_protocol_unfold]
+                    dsimp only [Process.map, Process.bind, Fed]
+                    refine ⟨(5 : Nat), hShift1, fun (c : Nat) _ => ?_⟩
+                    cases decide (powMod 2 ((5 + c * 7 % 11) % 11) 23 =
+                        (powMod 2 5 23 * powMod 13 c 23) % 23) <;> trivial
+                  have hNoHaltK : ∀ source₁,
+                      Lawful deployModel source₁
+                        (protocolMeaning deployModel postChRetryTyped Member.head []
+                          (.cons (7 : Nat) (.cons (13 : Nat) .nil))) →
+                      (∀ at' τ', at'.site ∉ wPostChRetryHdr.shape.heardCoins →
+                        source₁ at' τ' = shiftAttemptSource deployModel
+                          (wPostChRetryHdr.shape.attemptPrivateCoins 0 ⟨[], ⟨409⟩⟩ [] false)
+                          (.attempt ⟨409⟩ 1) retryAbortThenSucceedSource at' τ') →
+                      ∀ e, GExec deployModel source₁
+                        (protocolMeaning deployModel postChRetryTyped Member.head []
+                          (.cons (7 : Nat) (.cons (13 : Nat) .nil))) e →
+                      ∃ out, e = .returned out := by
+                    intro source₁ hLaw hAg e ⟨_, hRun⟩
+                    have hS410 : source₁ ⟨[], ⟨410⟩⟩ dScalar = some (5 : Nat) :=
+                      (hAg ⟨[], ⟨410⟩⟩ dScalar hNotHeard410).trans hShift1
+                    rw [postChRetry_protocol_unfold] at hLaw hRun
+                    dsimp only [Process.map, Process.bind] at hLaw hRun
+                    cases hRun with
+                    | @given _ _ _ _ _ _ _ vR _ _ _ hSrcR hRun1 =>
+                        change Nat at vR
+                        have hrEq : vR = 5 := Option.some.inj (hSrcR.symm.trans hS410)
+                        subst hrEq
+                        have hLaw1 := (hLaw _ hSrcR).2
+                        cases hRun1 with
+                        | flow hRun2 =>
+                            cases hRun2 with
+                            | @given _ _ _ _ _ _ _ vC _ _ _ hSrcC hRun3 =>
+                                have hcLt : deployModel.Valid dScalar vC := (hLaw1 _ hSrcC).1.1
+                                change Nat at vC; change vC < 11 at hcLt
+                                dsimp only [Bool.not_false, cond, Process.map, Process.bind] at hRun3
+                                cases hRun3 with
+                                | flow hRun4 =>
+                                    have hEq := schnorr_group_law_w7 5 vC (by decide) hcLt
+                                    have hAdd : ∀ r c : Nat, (r + c * 7 % 11) % 11 = (r + c * 7) % 11 :=
+                                      fun r c => by omega
+                                    have hDec : decide (powMod 2 ((5 + vC * 7 % 11) % 11) 23 =
+                                        (powMod 2 5 23 * powMod 13 vC 23) % 23) = true :=
+                                      decide_eq_true (by rw [hAdd, hEq])
+                                    erw [hDec] at hRun4
+                                    cases hRun4
+                                    exact ⟨_, rfl⟩
+                  refine ⟨a, _, rfl, hFirst, hMatched, hAdm, hDep, ?_⟩
+                  exact deploy_complete_retry deployModel deployEncoder hAdm retryNoSamplesDecl _ hDep
+                    rfl rfl rfl hNoRec
+                    (hSL.toFor deployEncoder deployModel) hLL hRoles hFirst hMatched
+                    (.cons (7 : Nat) (.cons (13 : Nat) .nil)) hInsV
+                    retryAbortThenSucceedSource 1 (by decide)
+                    hFnsNoAb hOnce hOwned hExcl hVNoAtt
+                    (fun j _ => attempt_attemptIndexFree _ _ j wPostChRetryBody (by decide +kernel))
+                    hLPAb hFedAb hAborts hLPK hFedK hNoHaltK
 
 end Zkc.Core.Tests.Deployment

@@ -116,12 +116,12 @@ def checkLayoutSites (entry : ProtocolHeader V) (events : List (ShapeEvent V))
   let heardSites := events.filterMap fun e =>
     match e.cls with
     | .given (.coin _) owner hearers =>
-        if owner = verifier ∧ prover ∈ hearers then some e.site else none
+        if owner = verifier ∧ hearers = [prover] then some e.site else none
     | _ => none
   let flowSites := events.filterMap fun e =>
     match e.cls with
     | .flow _ giver getters =>
-        if giver = prover ∧ verifier ∈ getters then some e.site else none
+        if giver = prover ∧ getters = [verifier] then some e.site else none
     | _ => none
   let carryOk := layout.carry.all (fun s => decide (s ∈ heardSites)) && listNodupBool layout.carry
   let recSites := layout.recover.map Prod.fst
@@ -163,12 +163,19 @@ def buildSamplesClauses (a : Admitted V) (heldP : List V.Ty)
       match e.cls with
       | .given (.coin law) owner [] =>
           if owner = prover then
-            match findTypedFnRef a sKey (heldP ++ [bytesTy, bytesTy, .nat, .nat]) [e.τ] with
-            | some sRef =>
-                let cS := proverSampleClause htfree prover e.site law
-                  sessBytes hSessBytes (encodeSite e.site) (encodeSite_bytes e.site) sRef
-                .ok (cS :: sRest)
-            | none => .error (deployErr declKey .callee)
+            match V.law law with
+            | some ⟨[], outTy⟩ =>
+                if outTy = e.τ then
+                  match findTypedFnRef a sKey (heldP ++ [bytesTy, bytesTy, .nat, .nat]) [e.τ] with
+                  | some sRef =>
+                      let cS := proverSampleClause htfree prover e.site law
+                        sessBytes hSessBytes (encodeSite e.site) (encodeSite_bytes e.site) sRef
+                      .ok (cS :: sRest)
+                  | none => .error (deployErr declKey .callee)
+                else
+                  .error (deployErr declKey .operands)
+            | some ⟨_ :: _, _⟩ => .error (deployErr declKey .operands)
+            | none => .error (deployErr declKey .row)
           else
             .ok sRest
       | _ => .ok sRest
@@ -225,7 +232,7 @@ where
         let (pRest, vRest) ← go (idx + 1) rest
         match e.cls with
         | .flow kind giver getters =>
-            if giver = prover ∧ verifier ∈ getters then
+            if giver = prover ∧ getters = [verifier] then
               if needAbs then
                 match findSuiteEncode a suite unitTy e.τ with
                 | none => .error (deployErr declKey .callee)
@@ -242,7 +249,7 @@ where
             else
               .error (deployErr declKey .protocol)
         | .given (.coin law) owner hearers =>
-            if owner = verifier ∧ prover ∈ hearers then
+            if owner = verifier ∧ hearers = [prover] then
               match V.law law with
               | none => .error (deployErr declKey .row)
               | some sig =>
@@ -293,7 +300,7 @@ where
         let vRest ← go (idx + 1) rest
         match e.cls with
         | .flow kind giver getters =>
-            if giver = prover ∧ verifier ∈ getters then
+            if giver = prover ∧ getters = [verifier] then
               if needAbs then
                 match findSuiteEncode a suite unitTy e.τ with
                 | none => .error (deployErr declKey .callee)
@@ -308,7 +315,7 @@ where
             else
               .error (deployErr declKey .protocol)
         | .given (.coin law) owner hearers =>
-            if owner = verifier ∧ prover ∈ hearers then
+            if owner = verifier ∧ hearers = [prover] then
               match V.law law with
               | none => .error (deployErr declKey .row)
               | some sig =>
@@ -356,7 +363,7 @@ where
         let (pRest, vRest) ← go (idx + 1) rest
         match e.cls with
         | .flow kind giver getters =>
-            if giver = prover ∧ verifier ∈ getters then
+            if giver = prover ∧ getters = [verifier] then
               match findLayoutWrite a layout.module unitTy e.τ,
                     findLayoutRead a layout.module unitTy e.τ with
               | some wRef, some rRef =>
@@ -367,7 +374,7 @@ where
             else
               .ok (pRest, vRest)
         | .given (.coin _) owner hearers =>
-            if owner = verifier ∧ prover ∈ hearers then
+            if owner = verifier ∧ hearers = [prover] then
               let toldSite : Site := ⟨e.site.through, drawToldKey events idx⟩
               if e.site ∈ layout.carry then
                 match findLayoutWrite a layout.module unitTy e.τ,
@@ -427,7 +434,7 @@ def collectCompactWire (a : Admitted V) (layout : Layout) (unitTy : V.Ty)
       let (wRest, pRest) ← collectCompactWire a layout unitTy prover verifier declKey events (idx + 1) rest
       match e.cls with
       | .flow kind giver getters =>
-          if giver = prover ∧ verifier ∈ getters then
+          if giver = prover ∧ getters = [verifier] then
             match layout.recover.lookup e.site with
             | some _ =>
                 let cP := layoutDropClause (stateTy := .seq unitTy none) prover e.site
@@ -443,7 +450,7 @@ def collectCompactWire (a : Admitted V) (layout : Layout) (unitTy : V.Ty)
           else
             .ok (wRest, pRest)
       | .given (.coin _) owner hearers =>
-          if owner = verifier ∧ prover ∈ hearers then
+          if owner = verifier ∧ hearers = [prover] then
             let toldSite : Site := ⟨e.site.through, drawToldKey events idx⟩
             if e.site ∈ layout.carry then
               match findLayoutWrite a layout.module unitTy e.τ,
@@ -474,7 +481,7 @@ def buildCompactVClauses (a : Admitted V) (layout : Layout) (unitTy : V.Ty)
         wireSpecs htfree (idx + 1) rest
       match e.cls with
       | .flow kind giver getters =>
-          if giver = prover ∧ verifier ∈ getters then
+          if giver = prover ∧ getters = [verifier] then
             match layout.recover.lookup e.site with
             | some recKey =>
                 match findSafeFnRef a recKey (tysOfList (stmtTys ++ wireSpecs.map (·.ty))).toList [e.τ] with
@@ -494,7 +501,7 @@ def buildCompactVClauses (a : Admitted V) (layout : Layout) (unitTy : V.Ty)
           else
             .ok vRest
       | .given (.coin _) owner hearers =>
-          if owner = verifier ∧ prover ∈ hearers then
+          if owner = verifier ∧ hearers = [prover] then
             let toldSite : Site := ⟨e.site.through, drawToldKey events idx⟩
             if e.site ∈ layout.carry then
               match findWireMember toldSite e.τ wireSpecs,
@@ -608,7 +615,7 @@ def resolveSessionBytes (enc : VocabEncoder V) (a : Admitted V) (declaration : D
         .error (deployErr declaration.key .literal)
 
 /-- `resolveSessionBytes` is injective: equal session bytes imply equal `sessionTag`, equal
-`declaration` (including `application`), and literally equal reachable erased definitions. -/
+`declaration` (including `application`), and literally equal `canonicalClosureDefs`. -/
 theorem resolveSessionBytes_injective (enc : VocabEncoder V) (hEnc : enc.Injective)
     {a₁ a₂ : Admitted V} {decl₁ decl₂ : Declaration}
     {tag₁ tag₂ : Option (List Nat)} {bs : List Nat}
@@ -616,10 +623,7 @@ theorem resolveSessionBytes_injective (enc : VocabEncoder V) (hEnc : enc.Injecti
     (hRes₁ : resolveSessionBytes enc a₁ decl₁ tag₁ = .ok ⟨bs, h₁⟩)
     (hRes₂ : resolveSessionBytes enc a₂ decl₂ tag₂ = .ok ⟨bs, h₂⟩) :
     tag₁ = tag₂ ∧ decl₁ = decl₂ ∧
-      ((erase a₁.program).definitions.filter fun d =>
-        decide (d.key ∈ (decl₁.entry :: decl₁.definitions).flatMap a₁.program.defs.closureOf)) =
-      ((erase a₂.program).definitions.filter fun d =>
-        decide (d.key ∈ (decl₂.entry :: decl₂.definitions).flatMap a₂.program.defs.closureOf)) := by
+      canonicalClosureDefs a₁ decl₁ = canonicalClosureDefs a₂ decl₂ := by
   unfold resolveSessionBytes at hRes₁ hRes₂
   cases tag₁ with
   | none =>
@@ -671,6 +675,45 @@ theorem resolveSessionBytes_injective (enc : VocabEncoder V) (hEnc : enc.Injecti
                     · cases hRes₂
           · cases hRes₁
 
+/-- Site- and session-bound lawfulness for a deployment's deterministic prover-sampling function
+(`samples derived by`) under encoder `enc` in model `M`: charges `sKey` only on the deployment's
+actual resolved `sessBytes` and each prover private coin's actual `encodeSite e.site` (accepting
+site-sensitive samplers that dispatch on site bytes). -/
+def Deployed.SamplesLawfulFor (enc : VocabEncoder V) (M : Model V) (d : Deployed V) : Prop :=
+  ∀ sKey prover verifier suite sessionTag sessBytes hSess,
+    d.declaration.samples = some sKey →
+    d.declaration.construction = .derived suite sessionTag →
+    d.roles = some (prover, verifier) →
+    resolveSessionBytes enc d.admitted d.declaration sessionTag = .ok ⟨sessBytes, hSess⟩ →
+    ∀ (hdr : FnHeader V) (f : Member d.admitted.program.headers.fns hdr),
+      d.admitted.program.find sKey = some (.fn f) →
+      ∀ (e : ShapeEvent V) (law : V.LawKey),
+        e ∈ d.entry.shape.events [] id →
+        e.cls = .given (.coin law) prover [] →
+        V.law law = some ⟨[], e.τ⟩ →
+        ∀ (hins : hdr.ins = held prover d.entry.ins ++ [.seq (.fin 256) none, .seq (.fin 256) none, .nat, .nat])
+          (houts : hdr.outs = [e.τ])
+          (heldVals : HList M.Val (held prover d.entry.ins))
+          (attemptNum callSeq : Nat) (coin : M.Val e.τ),
+          heldVals.All M.Valid →
+          Defs.fnTable M d.admitted.program.defs hdr f
+            (cast (congrArg (HList M.Val) hins.symm)
+              (HList.append heldVals
+                (.cons sessBytes (.cons (encodeSite e.site)
+                  (.cons (a := Ty.nat) attemptNum (.cons (a := Ty.nat) callSeq .nil)))))) =
+            .done (cast (congrArg (HList M.Val) houts.symm) (.cons coin .nil)) →
+          Allows M (.coin law) [] .nil e.τ coin
+
+/-- The stronger site-agnostic `Deployed.SamplesLawful` implies `Deployed.SamplesLawfulFor` for
+every encoder `enc`. -/
+theorem Deployed.SamplesLawful.toFor {d : Deployed V} (enc : VocabEncoder V) (M : Model V)
+    (h : d.SamplesLawful M) : d.SamplesLawfulFor enc M := by
+  intro sKey prover verifier _ _ sessBytes hSess hSamp _ hRoles _ hdr f hFind e law hE hCls
+    hLaw hins houts heldVals att seq coin hHeldV hFn
+  exact h sKey prover verifier hSamp hRoles hdr f hFind e law [] hE hCls hLaw hins houts heldVals
+    sessBytes (encodeSite e.site) att seq .nil coin hHeldV hSess (encodeSite_bytes e.site)
+    trivial hFn
+
 /-- Build the proof layout layers for prover and verifier (streaming when `recover = []`,
 compact when `recover ≠ []`), strictly validating `carry`, `recover`, and straight-line shape. -/
 def buildLayoutLayers (a : Admitted V) (entry : ProtocolHeader V) (layout : Layout)
@@ -710,8 +753,8 @@ def buildLayoutLayers (a : Admitted V) (entry : ProtocolHeader V) (layout : Layo
     else
       buildCompactLayoutLayers a entry layout unitTy hfree prover verifier declKey events
 
-/-- Validate authored-scheme event discipline: only prover→verifier flows, non-online flows,
-private coins (`hearers = []`), and properly scoped service requests may appear. -/
+/-- Validate authored-scheme event discipline: only single-recipient prover→verifier flows,
+non-online flows, private coins (`hearers = []`), and properly scoped service requests may appear. -/
 def checkAuthoredEvents (prover verifier : Role) (declKey : Key) : List (ShapeEvent V) →
     Except (List (ProgramRefusal V)) Unit
   | [] => .ok ()
@@ -719,7 +762,7 @@ def checkAuthoredEvents (prover verifier : Role) (declKey : Key) : List (ShapeEv
       checkAuthoredEvents prover verifier declKey rest
       match e.cls with
       | .flow _ giver getters =>
-          if (giver = prover ∧ verifier ∈ getters) ∨
+          if (giver = prover ∧ getters = [verifier]) ∨
               (giver ≠ prover ∧ giver ≠ verifier ∧
                 prover ∉ getters ∧ verifier ∉ getters) then
             .ok ()
@@ -735,8 +778,8 @@ def checkAuthoredEvents (prover verifier : Role) (declKey : Key) : List (ShapeEv
             .error (deployErr declKey .protocol)
 
 /-- Shared validated data produced by `prepareDerivedBody` for both `deploy` (`.derived`) and
-`deployIdeal`, ensuring identical role, retry-scope, session-tag, derived-sample, and layout
-validation across concrete and ideal deployments. -/
+`deployIdeal`, ensuring identical role, retry-scope, used-law encoder distinctness, session-tag,
+derived-sample, and layout validation across concrete and ideal deployments. -/
 structure DerivedPrepared (enc : VocabEncoder V) (a : Admitted V) (declaration : Declaration)
     (entry : ProtocolHeader V) (sessionTag : Option (List Nat)) where
   prover : Role
@@ -744,6 +787,7 @@ structure DerivedPrepared (enc : VocabEncoder V) (a : Admitted V) (declaration :
   hPV : proverAndVerifier entry declaration = some (prover, verifier)
   hNe : prover ≠ verifier
   hScope : checkNonInteractiveScope entry prover declaration = true
+  hLawsDist : checkUsedLawsDistinct enc (usedHeardLaws prover verifier (entry.shape.events [] id)) = true
   layout : Layout
   hLayOpt : declaration.layout = some layout
   sessBytes : List Nat
@@ -768,28 +812,32 @@ def prepareDerivedBody (enc : VocabEncoder V) (a : Admitted V) (declaration : De
       if hEq : prover = verifier then
         .error (deployErr declaration.key .protocol)
       else if hScope : checkNonInteractiveScope entry prover declaration then
-        match hLayOpt : declaration.layout with
-        | none => .error (deployErr declaration.key .callee)
-        | some layout =>
-            match hSess : resolveSessionBytes enc a declaration sessionTag with
-            | .error errs => .error errs
-            | .ok ⟨sessBytes, hSessBytes⟩ =>
-                let events := entry.shape.events [] id
-                match hSamp : buildSamplesLayer a entry prover declaration.samples
-                    sessBytes hSessBytes declaration.key events with
-                | .error errs => .error errs
-                | .ok sampLayer =>
-                    match hLay : buildLayoutLayers a entry layout prover verifier
-                        declaration.key events with
-                    | .error errs => .error errs
-                    | .ok (layP, layV) =>
-                        .ok ⟨prover, verifier, hPV, hEq, hScope, layout, hLayOpt,
-                          sessBytes, hSessBytes, hSess, sampLayer, hSamp, layP, layV, hLay⟩
+        let events := entry.shape.events [] id
+        if hLawsDist : checkUsedLawsDistinct enc (usedHeardLaws prover verifier events) then
+          match hLayOpt : declaration.layout with
+          | none => .error (deployErr declaration.key .callee)
+          | some layout =>
+              match hSess : resolveSessionBytes enc a declaration sessionTag with
+              | .error errs => .error errs
+              | .ok ⟨sessBytes, hSessBytes⟩ =>
+                  match hSamp : buildSamplesLayer a entry prover declaration.samples
+                      sessBytes hSessBytes declaration.key events with
+                  | .error errs => .error errs
+                  | .ok sampLayer =>
+                      match hLay : buildLayoutLayers a entry layout prover verifier
+                          declaration.key events with
+                      | .error errs => .error errs
+                      | .ok (layP, layV) =>
+                          .ok ⟨prover, verifier, hPV, hEq, hScope, hLawsDist, layout, hLayOpt,
+                            sessBytes, hSessBytes, hSess, sampLayer, hSamp, layP, layV, hLay⟩
+        else
+          .error (deployErr declaration.key .protocol)
       else
         .error (deployErr declaration.key .attempt)
 
 /-- Official core deployment (`Functions.deploy`): validates `declaration` fail-closed against
-`a : Admitted V` and generates the checked `Core.Layer` IR stack for every role inside `Deployed V`. -/
+`a : Admitted V`, binds `identity := schemeIdentity enc a declaration`, and generates the checked
+`Core.Layer` IR stack for every role inside `Deployed V`. -/
 def deploy (enc : VocabEncoder V) (a : Admitted V) (declaration : Declaration) :
     Except (List (ProgramRefusal V)) (Deployed V) := do
   match hFound : a.program.findProtocol declaration.entry with
@@ -814,6 +862,7 @@ def deploy (enc : VocabEncoder V) (a : Admitted V) (declaration : Declaration) :
                 declaration := declaration
                 found := hIsSome
                 stack := fun _ => []
+                identity := schemeIdentity enc a declaration
               }
         | .authored =>
             if !declaration.samples.isNone then
@@ -844,9 +893,10 @@ def deploy (enc : VocabEncoder V) (a : Admitted V) (declaration : Declaration) :
                             else if hV : r = verifier then
                               hV ▸ hEntryEq ▸ [layV]
                             else []
+                          identity := schemeIdentity enc a declaration
                         }
         | .derived suite sessionTag => do
-            let ⟨prover, verifier, _, _, _, _, _, sessBytes, hSessBytes, _, sampLayer, _, layP, layV, _⟩ ←
+            let ⟨prover, verifier, _, _, _, _, _, _, sessBytes, hSessBytes, _, sampLayer, _, layP, layV, _⟩ ←
               prepareDerivedBody enc a declaration entry sessionTag
             match findSuiteStart a suite with
             | none => .error (deployErr declaration.key .callee)
@@ -901,13 +951,16 @@ def deploy (enc : VocabEncoder V) (a : Admitted V) (declaration : Declaration) :
                         else if hV : r = verifier then
                           hV ▸ hEntryEq ▸ verifierStack
                         else []
+                      identity := schemeIdentity enc a declaration
                     }
 
-/-- Pure collision-free ideal random-oracle deployment: shares all declaration, scope, session,
-derived-sample, and layout validation with `deploy`, and constructs an injective
-`(metaLog, dataLog)` path over `idealPathTy suiteUnitTy` without calling any concrete
-`SuiteSlot.start` or `SuiteSlot.absorb`, answering every verifier draw via
-`.own (.request serviceKey)` on `(idealPath, drawLabel)`. -/
+/-- Pure collision-free ideal random-oracle deployment: shares all declaration, scope, used-law
+distinctness, session, derived-sample, and layout validation with `deploy`, enforces deploy-time
+freshness of `serviceKey` against all protocol service requests (`checkServiceKeyFresh`), binds
+`identity := schemeIdentity enc a declaration`, and constructs an injective `(metaLog, dataLog)`
+path over `idealPathTy suiteUnitTy` without calling any concrete `SuiteSlot.start` or
+`SuiteSlot.absorb`, answering every verifier draw via `.own (.request serviceKey)` on
+`(idealPath, drawLabel)`. -/
 def deployIdeal (enc : VocabEncoder V) (serviceKey : Key) (a : Admitted V)
     (declaration : Declaration) : Except (List (ProgramRefusal V)) (Deployed V) := do
   match hFound : a.program.findProtocol declaration.entry with
@@ -922,49 +975,54 @@ def deployIdeal (enc : VocabEncoder V) (serviceKey : Key) (a : Admitted V)
       else
         match declaration.construction with
         | .derived suite sessionTag => do
-            let ⟨prover, verifier, _, _, _, _, _, sessBytes, hSessBytes, _, _, _, _, layV, _⟩ ←
+            let ⟨prover, verifier, _, _, _, _, _, _, sessBytes, hSessBytes, _, _, _, _, layV, _⟩ ←
               prepareDerivedBody enc a declaration entry sessionTag
-            match findSuiteUnit a suite with
-            | none => .error (deployErr declaration.key .linear)
-            | some ⟨suiteUnitTy, ⟨hSuiteFree⟩⟩ => do
-                let events := entry.shape.events [] id
-                let eventsAbs := entry.shape.eventsWithAbsorb prover verifier [] id false
-                let stmtV ← buildStmtAbsorbItems a suite suiteUnitTy
-                  verifier prover verifier (.inr rfl) entry.ins declaration.key
-                let idealVClauses ←
-                  buildIdealVerifierClauses a suite suiteUnitTy hSuiteFree
-                    serviceKey prover verifier declaration.key events eventsAbs
-                let idealConV : Layer V a.program.headers verifier entry.ins := {
-                  line := .construction
-                  state := idealPathTy suiteUnitTy
-                  takes := []
-                  gives := []
-                  clauses := idealVClauses
-                  again := restoreAgain (idealPathTy suiteUnitTy)
-                  start := idealStart hSuiteFree sessBytes hSessBytes stmtV
-                  finish := emptyFinish (idealPathTy suiteUnitTy)
-                }
-                .ok {
-                  admitted := a
-                  declaration := declaration
-                  found := hIsSome
-                  stack := fun r =>
-                    if hV : r = verifier then
-                      hV ▸ hEntryEq ▸ [idealConV, layV]
-                    else []
-                }
+            let events := entry.shape.events [] id
+            if !checkServiceKeyFresh events serviceKey then
+              .error (deployErr declaration.key .protocol)
+            else
+              match findSuiteUnit a suite with
+              | none => .error (deployErr declaration.key .linear)
+              | some ⟨suiteUnitTy, ⟨hSuiteFree⟩⟩ => do
+                  let eventsAbs := entry.shape.eventsWithAbsorb prover verifier [] id false
+                  let stmtV ← buildStmtAbsorbItems a suite suiteUnitTy
+                    verifier prover verifier (.inr rfl) entry.ins declaration.key
+                  let idealVClauses ←
+                    buildIdealVerifierClauses a suite suiteUnitTy hSuiteFree
+                      serviceKey prover verifier declaration.key events eventsAbs
+                  let idealConV : Layer V a.program.headers verifier entry.ins := {
+                    line := .construction
+                    state := idealPathTy suiteUnitTy
+                    takes := []
+                    gives := []
+                    clauses := idealVClauses
+                    again := restoreAgain (idealPathTy suiteUnitTy)
+                    start := idealStart hSuiteFree sessBytes hSessBytes stmtV
+                    finish := emptyFinish (idealPathTy suiteUnitTy)
+                  }
+                  .ok {
+                    admitted := a
+                    declaration := declaration
+                    found := hIsSome
+                    stack := fun r =>
+                      if hV : r = verifier then
+                        hV ▸ hEntryEq ▸ [idealConV, layV]
+                      else []
+                    identity := schemeIdentity enc a declaration
+                  }
         | _ => .error (deployErr declaration.key .protocol)
 
 /-! ## Ideal random-oracle verifier specification -/
 
-/-- Whether the prover→verifier flow `(site, kind, τ)` is marked for transcript absorption in
-`eventsAbs` (false for trailing messages elided under Chiesa and Orrù (2025), Construction 4.3). -/
+/-- Whether the single-recipient prover→verifier flow `(site, kind, τ)` is marked for transcript
+absorption in `eventsAbs` (false for trailing messages elided under Chiesa and Orrù (2025),
+Construction 4.3). -/
 def needIdealAbsorb (prover verifier : Role) (eventsAbs : List (ShapeEvent V × Bool))
     (site : Site) (kind : FlowKind) (τ : V.Ty) : Bool :=
   eventsAbs.any fun p =>
     p.2 && decide (p.1.site = site) && decide (p.1.τ = τ) &&
       match p.1.cls with
-      | .flow k g gs => decide (k = kind ∧ g = prover ∧ verifier ∈ gs)
+      | .flow k g gs => decide (k = kind ∧ g = prover ∧ gs = [verifier])
       | _ => false
 
 /-- Pure specification of the canonical initial collision-free ideal transcript path: starts from

@@ -100,6 +100,7 @@ public import Zkc.Core.Scheme.Deploy.Lookup
 public import Zkc.Core.Scheme.Deploy.Compile
 public import Zkc.Core.Scheme.Deploy.Elim
 public import Zkc.Core.Scheme.Deploy.Structural
+public import Zkc.Core.Scheme.Materialize
 public import Zkc.Core.Scheme.Proof.RoleProcess
 public import Zkc.Core.Scheme.Proof.ShapeObserve
 public import Zkc.Core.Scheme.Proof.UniqueOccs
@@ -111,6 +112,7 @@ public import Zkc.Core.Scheme.Proof.CompactCompleteness
 public import Zkc.Core.Scheme.Proof.RetryCompleteness
 public import Zkc.Core.Scheme.Proof.IdealLink
 public import Zkc.Core.Scheme.Proof.QuerySeparation
+public import Zkc.Core.Scheme.Statements
 public import Zkc.Core.Scheme.Theorems
 public import Zkc.Core.Run.Run
 public import Zkc.Core.Run.Execute

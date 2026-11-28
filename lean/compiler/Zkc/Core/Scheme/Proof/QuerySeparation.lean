@@ -1402,9 +1402,10 @@ theorem idealInitialPath_stmt_injective {enc : VocabEncoder V} {d : Deployed V}
   exact ⟨hL1, hL2, fun hEq => (hImp hEq).2⟩
 
 /-- Main ideal random-oracle query-separation theorem: for ANY non-retried ideal deployment
-(streaming OR compact, carry OR non-carry) whose `serviceKey` is fresh from the protocol's own
-service requests, every execution path of `dIdeal.run M verifier ins taken` emits strictly growing
-`serviceKey` queries extending the canonical initial transcript path `st0`. -/
+(streaming OR compact, carry OR non-carry) — whose `serviceKey` freshness is enforced at deploy
+time (`deployIdeal_serviceKey_fresh`) — every execution path of `dIdeal.run M verifier ins taken`
+on valid verifier inputs emits strictly growing `serviceKey` queries extending the canonical
+initial transcript path `st0`. -/
 theorem deployIdeal_queries_growing (enc : VocabEncoder V) (serviceKey : Key)
     {a : Admitted V} {decl : Declaration} {suite : ModuleRef} {sessionTag : Option (List Nat)}
     {dIdeal : Deployed V}
@@ -1412,7 +1413,6 @@ theorem deployIdeal_queries_growing (enc : VocabEncoder V) (serviceKey : Key)
     (hCon : decl.construction = .derived suite sessionTag)
     (hNoRetry : decl.retry = none)
     {prover verifier : Role} (hRoles : dIdeal.roles = some (prover, verifier))
-    (hFresh : ServiceKeyFresh dIdeal.entry.shape serviceKey)
     (ins : HList (RV M verifier) dIdeal.entry.ins) (hIns : ins.All (RV.Valid M verifier)) :
     ∃ (suiteUnitTy : V.Ty) (hSuiteFree : Ty.isLinear V suiteUnitTy = false)
       (sessBytes : List Nat) (hSess : ∀ b, b ∈ sessBytes → b < 256)
@@ -1423,6 +1423,8 @@ theorem deployIdeal_queries_growing (enc : VocabEncoder V) (serviceKey : Key)
       ∀ (taken : HList M.Val (Stack.Takes (dIdeal.stack verifier))),
         (dIdeal.run M verifier ins taken).QueriesGrowing M suiteUnitTy serviceKey
           st0.1 st0.2.1 st0.1.length := by
+  have hFresh : ServiceKeyFresh dIdeal.entry.shape serviceKey :=
+    deployIdeal_serviceKey_fresh enc serviceKey a decl dIdeal hDep
   let ⟨w, hEqD⟩ := deployIdeal_ok_elim enc serviceKey a decl dIdeal hDep
   subst hEqD
   have hConEq : Construction.derived w.suite w.sessionTag = .derived suite sessionTag :=
@@ -1550,9 +1552,9 @@ theorem deployIdeal_queries_growing (enc : VocabEncoder V) (serviceKey : Key)
     (cast_heq _ _).symm
     (hBridge _ hEntryF w.toDeployed.callee ins hFresh hSt0Done _)
 
-/-- Corollary: along EVERY execution path of a non-retried ideal random-oracle verifier, the
-sequence `qs` of emitted `serviceKey` queries is strictly duplicate-free (`qs.Nodup`), and every
-query extends the canonical initial transcript path `st0`. -/
+/-- Corollary: along EVERY execution path of a non-retried ideal random-oracle verifier on valid
+verifier inputs, the sequence `qs` of emitted `serviceKey` queries is strictly duplicate-free
+(`qs.Nodup`), and every query extends the canonical initial transcript path `st0`. -/
 theorem deployIdeal_queries_nodup (enc : VocabEncoder V) (serviceKey : Key)
     {a : Admitted V} {decl : Declaration} {suite : ModuleRef} {sessionTag : Option (List Nat)}
     {dIdeal : Deployed V}
@@ -1560,7 +1562,6 @@ theorem deployIdeal_queries_nodup (enc : VocabEncoder V) (serviceKey : Key)
     (hCon : decl.construction = .derived suite sessionTag)
     (hNoRetry : decl.retry = none)
     {prover verifier : Role} (hRoles : dIdeal.roles = some (prover, verifier))
-    (hFresh : ServiceKeyFresh dIdeal.entry.shape serviceKey)
     (ins : HList (RV M verifier) dIdeal.entry.ins) (hIns : ins.All (RV.Valid M verifier)) :
     ∃ (suiteUnitTy : V.Ty) (hSuiteFree : Ty.isLinear V suiteUnitTy = false)
       (sessBytes : List Nat) (hSess : ∀ b, b ∈ sessBytes → b < 256)
@@ -1573,7 +1574,7 @@ theorem deployIdeal_queries_nodup (enc : VocabEncoder V) (serviceKey : Key)
         (dIdeal.run M verifier ins taken).ServiceQueries M suiteUnitTy serviceKey qs →
         qs.Nodup ∧ ∀ q ∈ qs, st0.1 <+: q.1.1 ∧ st0.2.1 <+: q.1.2.1 := by
   obtain ⟨u, hU, s, hS, st0, hFU, hRS, hI, hGrow⟩ :=
-    deployIdeal_queries_growing M enc serviceKey hDep hCon hNoRetry hRoles hFresh ins hIns
+    deployIdeal_queries_growing M enc serviceKey hDep hCon hNoRetry hRoles ins hIns
   refine ⟨u, hU, s, hS, st0, hFU, hRS, hI, fun taken qs hSQ => ?_⟩
   obtain ⟨hNd, hAll⟩ := Process.queriesGrowing_nodup M (hGrow taken) hSQ
   exact ⟨hNd, fun q hq => ⟨(hAll q hq).1, (hAll q hq).2.1⟩⟩
@@ -1581,7 +1582,7 @@ theorem deployIdeal_queries_nodup (enc : VocabEncoder V) (serviceKey : Key)
 /-- Cross-scheme / cross-session / cross-application domain separation: if two ideal deployments
 (under an injective `VocabEncoder`) share ANY random-oracle query `q` on ANY proofs, inputs, or
 rounds, then they MUST have the exact same `sessionTag`, `declaration` (including `application`
-and `lawMembers`), and reachable erased definitions. -/
+and `lawMembers`), and canonical reachable erased definitions (`canonicalClosureDefs`). -/
 theorem deployIdeal_cross_session_disjoint (enc : VocabEncoder V) (hEnc : enc.Injective)
     {a₁ a₂ : Admitted V} {decl₁ decl₂ : Declaration}
     {suite₁ suite₂ : ModuleRef} {tag₁ tag₂ : Option (List Nat)}
@@ -1597,10 +1598,7 @@ theorem deployIdeal_cross_session_disjoint (enc : VocabEncoder V) (hEnc : enc.In
     {q : M.Val (idealQueryTy unitTy)}
     (hP₁ : st₁.1 <+: q.1.1) (hP₂ : st₂.1 <+: q.1.1) :
     tag₁ = tag₂ ∧ decl₁ = decl₂ ∧
-      ((erase a₁.program).definitions.filter fun d =>
-        decide (d.key ∈ (decl₁.entry :: decl₁.definitions).flatMap a₁.program.defs.closureOf)) =
-      ((erase a₂.program).definitions.filter fun d =>
-        decide (d.key ∈ (decl₂.entry :: decl₂.definitions).flatMap a₂.program.defs.closureOf)) := by
+      canonicalClosureDefs a₁ decl₁ = canonicalClosureDefs a₂ decl₂ := by
   have hHead₁ := idealInitialPath_head M hInit₁
   have hHead₂ := idealInitialPath_head M hInit₂
   obtain ⟨t₁, ht₁⟩ := hP₁

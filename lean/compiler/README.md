@@ -25,14 +25,19 @@ Libraries:
   `Zkc.Tests.Frontend`): the lexer, the parser, the checker and the emitter of the source
   language ([guide](Zkc/Frontend/README.md)), the code of its executables and its tests; outside
   the default build.
+- `ZkcRuntime`, `ZkcRuntimeTests` (`Zkc.Runtime`, `Zkc.Tests.Runtime`): concrete cryptographic
+  primitives, verified standard/linked runtime models, specialized `ClosedRole` execution, and
+  CFRG Fiat–Shamir vector checks ([guide](Zkc/Runtime/README.md)); outside the default build.
 
 Executables:
 
 - `zkc-knowledge`: exports the written knowledge claim of an admitted protocol.
 - `zkc-audit`: exactly one library target for each compiler module and the audit of `ZkcCore`, `ZkcVocabulary`, `ZkcSubject`, `ZkcCoreTests` and
   `ZkcVocabularyTests`.
-- `zkc-syntax`, `zkc-check`, `zkc-frontend-tests`: the frontend's lexer, parser and canonical
-  printer on source files, its checks, and its test driver; outside the default build.
+- `zkc-syntax`, `zkc-check`, `zkc-frontend-tests`, `zkc-runtime-tests`: the frontend's lexer,
+  parser and canonical printer on source files, its checks (including `deploy` and
+  `cfrg-vectors`), its frontend test driver, and its runtime test driver; outside the default
+  build.
 
 ## Build, test and audit
 

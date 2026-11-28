@@ -52,10 +52,12 @@ this stage.
 ### Transcript discipline
 
 - The suite's domain separator is absorbed first and names the proof: it binds the
-  versioned canonical `zkc.core.proof/0` [proof identity](package.md#identities)
-  (fixing the declaration, including its `application` context, and the erased
-  reachability closure) together with any optional non-empty, byte-bounded
-  `sessionTag`. A `sessionTag` augments rather than overrides the proof identity.
+  versioned canonical `zkc.core.proof/1` [proof identity](package.md#identities)
+  (fixing the declaration, including its `application` context, and the canonical
+  definition-order- and proof-note-invariant erased reachability closure, bound directly onto
+  `Deployed.identity` under the encoder that resolved the deployment) together with any optional
+  non-empty, byte-bounded `sessionTag`. A `sessionTag` augments rather than overrides the proof
+  identity.
 - The statement is absorbed next, by an operation of the constructed program,
   each input prefixed with its versioned statement label (`zkc.core.stmt/0` and
   input index) and canonical encoding.
@@ -71,15 +73,28 @@ this stage.
   coin is derived from all prover-held inputs (witness and statement), the
   resolved session bytes, the full canonical `Site`, the retry attempt counter,
   and a monotonically increasing call sequence number preserved across retries.
+  Private coins carrying scalar or non-empty operands are rejected at deploy time
+  when `samples` is declared.
 - A suite may bind distribution-specific decoders by canonical sampling-law key
   (`ModuleRef.lawMembers`) so distinct sampling laws sharing one Core signature
   select distinct decoders; law-specific bindings are committed into the proof
-  identity alongside ordinary module members.
-- Under ideal random-oracle deployment (`deployIdeal`), every draw appends its
-  labeled coin onto the pure transcript path, guaranteeing strictly growing,
-  duplicate-free random-oracle queries within every execution path and
-  unconditional cross-scheme, cross-session, and (under injective encoding)
-  cross-statement query disjointness.
+  identity alongside ordinary module members. Explicit law bindings shadow
+  default members strictly, duplicate bindings for one `(slot, law)` or colliding
+  encoded law keys are rejected at deploy time, and proof obligations
+  (`SuiteLawfulFor`) bind to the exact selected function per reached law and
+  signature.
+- Prover-to-verifier flows and verifier-to-prover public draws are accepted only
+  for exact single-receiver/single-hearer recipient sets (`getters = [verifier]`
+  and `hearers = [prover]` after caller role mapping); extra listeners or
+  unsupported control shapes are refused at deploy time.
+- Under ideal random-oracle deployment (`deployIdeal`), `deployIdeal` verifies
+  that the ideal oracle's `serviceKey` is fresh from the entry protocol's shape
+  (`deployIdeal_serviceKey_fresh`), and every draw appends its labeled coin onto
+  the pure transcript path. On valid verifier inputs without retry (`d.retry =
+  none`), `deployIdeal_queries_nodup` guarantees strictly growing, duplicate-free
+  random-oracle queries within every execution path, and cross-scheme,
+  cross-session, and (under injective encoding) cross-statement query
+  disjointness theorems hold unconditionally.
 - Every value the suite absorbs is an explicit operation with an explicit
   encoding.
 - A decoder that rejects and retries is a sampling law with a stated factor; its
@@ -111,6 +126,14 @@ The row that takes is pure: its outputs are `bool`, the message type and the rea
 The flag says whether the reader had a value of the type, and the value is any value
 of the type when it had none. On a proof that is too short or malformed the verifier
 therefore stops `reject`.
+
+In the Core library, `Zkc.Core.deploy` / `Zkc.Core.specialize` implement Fiat–Shamir
+and serialization as composed handler layers over admitted programs (supporting
+control flow, subprotocols, compact `carry`/`recover` layouts, deterministic `samples`,
+bounded retry, and ideal random-oracle deployment), while `Zkc.Core.Scheme.Materialize`
+(`materializeConstructed`, `materializeSerialized`) provides prototype straight-line
+materializers that emit standalone, re-admittable `constructed Core` and streaming
+`serialized Core` programs matching the tables above.
 
 ### The canonical layout
 

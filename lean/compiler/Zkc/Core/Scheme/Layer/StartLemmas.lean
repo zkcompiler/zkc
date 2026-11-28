@@ -2,7 +2,7 @@ module
 
 public import Zkc.Core.Scheme.Layer.Builders
 public import Zkc.Core.Scheme.Layer.CombinatorLemmas
-public import Zkc.Core.Scheme.Deploy.Lookup
+public import Zkc.Core.Scheme.Deploy.Compile
 
 @[expose] public section
 

@@ -28,6 +28,12 @@ roots = ["Zkc.Subject"]
 globs = ["Zkc.Subject", "Zkc.Subject.+"]
 requiresModuleSystem = true
 
+[[lean_lib]]
+name = "ZkcRuntime"
+roots = ["Zkc.Runtime"]
+globs = ["Zkc.Runtime", "Zkc.Runtime.+"]
+requiresModuleSystem = true
+
 # A command that asks the kernel to compute. Meta code, outside the audited libraries: what it
 # adds to a module is checked by the kernel there.
 [[lean_lib]]
@@ -67,6 +73,12 @@ roots = ["Zkc.Tests.Frontend"]
 globs = ["Zkc.Tests.Frontend", "Zkc.Tests.Frontend.+"]
 allowNonModules = true
 
+[[lean_lib]]
+name = "ZkcRuntimeTests"
+roots = ["Zkc.Tests.Runtime"]
+globs = ["Zkc.Tests.Runtime", "Zkc.Tests.Runtime.+"]
+allowNonModules = true
+
 # Includes the executable and the negative controls it exercises.
 [[lean_lib]]
 name = "ZkcAudit"
@@ -98,4 +110,9 @@ needs = ["ZkcCore", "ZkcVocabulary", "ZkcSubject", "ZkcCoreTests", "ZkcVocabular
 [[lean_exe]]
 name = "zkc-knowledge"
 root = "Zkc.Tools.WrittenKnowledge"
+allowNonModules = true
+
+[[lean_exe]]
+name = "zkc-runtime-tests"
+root = "Zkc.Tests.Runtime.Main"
 allowNonModules = true

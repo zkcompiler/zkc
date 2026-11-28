@@ -2,6 +2,8 @@ import Zkc.Tests.Core.Deployment.Fixtures
 import Zkc.Tests.Core.Deployment.Behavior
 import Zkc.Tests.Core.Deployment.Refusals
 import Zkc.Tests.Core.Deployment.Witnesses
+import Zkc.Tests.Core.Deployment.Hardening
+import Zkc.Tests.Core.Deployment.Materialize
 
 /-!
 Core deployment, ideal random-oracle, and DAG-preserving handler specialization test suite.

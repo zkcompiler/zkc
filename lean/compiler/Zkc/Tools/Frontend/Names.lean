@@ -36,6 +36,10 @@ structure Options where
   files : Array String := #[]
   /-- `instances` prints every instance with what it holds. -/
   contents : Bool := false
+  /-- `deploy` selects a specific scheme name (empty means deploy all schemes). -/
+  scheme : Option String := none
+  /-- `deploy` runs runtime model & specialization self-checks when true. -/
+  selfTest : Bool := false
 
 /-- `[--library <dir>]… [--repeat <n>] <files>…` -/
 def readOptions : List String → Options → Except String Options
@@ -47,6 +51,10 @@ def readOptions : List String → Options → Except String Options
   | "--output" :: directory :: rest, options =>
     if options.output.isSome || directory.startsWith "--" then .error "--output requires one directory"
     else readOptions rest { options with output := some directory }
+  | "--scheme" :: name :: rest, options =>
+    if name.startsWith "--" then .error "--scheme requires a scheme name"
+    else readOptions rest { options with scheme := some name }
+  | "--self-test" :: rest, options => readOptions rest { options with selfTest := true }
   | "--contents" :: rest, options => readOptions rest { options with contents := true }
   | "--repeat" :: count :: rest, options =>
     match count.toNat? with

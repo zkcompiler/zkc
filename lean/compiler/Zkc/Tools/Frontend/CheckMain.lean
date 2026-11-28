@@ -1,4 +1,5 @@
 import Zkc.Tools.Frontend.WrittenGoals
+import Zkc.Tools.Frontend.Deploy
 
 open Zkc.Tools.Frontend
 
@@ -8,6 +9,8 @@ def usage : String :=
        zkc-check instances [--library <dir>]… [--contents] <files>…
        zkc-check types [--library <dir>]… <files>…
        zkc-check written-goals (--goal NAME)… [--output NEW_DIR] [--library <dir>]… <files>…
+       zkc-check deploy [--library <dir>]… [--scheme <name>] [--self-test] <files>…
+       zkc-check cfrg-vectors
        zkc-check bench [--library <dir>]… [--repeat <n>] <files>…
 a module `zkc::a::b` that no given file has is read from `<dir>/zkc/a/b.zkc`"
 
@@ -17,6 +20,7 @@ def optionsOf : String → Array String
   | "instances" => #["--library", "--contents"]
   | "types" => #["--library"]
   | "written-goals" => #["--library", "--goal", "--output"]
+  | "deploy" => #["--library", "--scheme", "--self-test"]
   | "bench" => #["--library", "--repeat"]
   | _ => #[]
 
@@ -39,6 +43,9 @@ def main (args : List String) : IO UInt32 := do
   | "instances" :: rest => run "instances" Names.instances rest
   | "types" :: rest => run "types" Names.types rest
   | "written-goals" :: rest => run "written-goals" writtenGoals rest
+  | "deploy" :: rest => run "deploy" deployCommand rest
+  | "cfrg-vectors" :: [] => cfrgVectorsCommand
+  | "cfrg-vectors" :: _ => wrong "`cfrg-vectors` takes no arguments"
   | "bench" :: rest => run "bench" Names.bench rest
   | [] => wrong ""
   | command :: _ => wrong s!"no command `{command}`"

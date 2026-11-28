@@ -1352,7 +1352,7 @@ private theorem buildSharedProcs_sound {fullFns : List (FnHeader V)} {σ : List 
   | _, .protocol (hs := hsRest) hdrP inputsP bodyP okP rest, fnLift, hLift, demands => by
       dsimp only [buildSharedProcs]
       let part := partitionDemands demands
-      let subDemands := part.1.flatMap fun (perm, r') => collectDirectAppliesTerm perm r' bodyP
+      let subDemands := part.1.flatMap fun (perm, r') => collectDirectAppliesTerm perm r' (project r' bodyP)
       let restPool := buildSharedProcs σ (hs := hsRest) rest fnLift (subDemands ++ part.2)
       have hRestPool : SharedLookupSound M (restPool.procs.denote M fullTable) h freeCond rest restPool.lookup :=
         buildSharedProcs_sound fullTable h freeCond hPRFree hUnhandled (hs := hsRest) rest fnLift hLift (subDemands ++ part.2)

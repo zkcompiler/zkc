@@ -231,24 +231,37 @@ private theorem buildSamplesClauses_unmatched {a : Admitted V} {heldP : List V.T
                   | nil =>
                       dsimp only at h
                       split at h
-                      · cases hRef : findTypedFnRef a sKey
-                            (heldP ++ [bytesTy, bytesTy, .nat, .nat]) [e.τ] with
-                        | none => rw [hRef] at h; cases h
-                        | some sRef =>
-                            rw [hRef] at h; cases h
-                            intro c hc
-                            rcases List.mem_cons.mp hc with rfl | hm
-                            · intro hM
-                              cases op with
-                              | give | get | hear | «begin» | settle => cases hM.2.1
-                              | own gkind' hearers' at_' gIns' payload' τ' =>
-                                  have hP := Option.some.inj hM.2.1
-                                  cases hP
-                                  have hT : ([] : List V.Ty) = gIns' := hM.2.2.1
-                                  subst hT
-                                  cases payload'
-                                  exact hNotCoin law at_' τ' rfl
-                            · exact ih c hm
+                      · cases hLaw : V.law law with
+                        | none => rw [hLaw] at h; cases h
+                        | some sig =>
+                            rw [hLaw] at h
+                            cases hSig : sig with
+                            | mk sIns sOut =>
+                                rw [hSig] at h
+                                cases sIns with
+                                | cons _ _ => cases h
+                                | nil =>
+                                    dsimp only at h
+                                    split at h
+                                    · cases hRef : findTypedFnRef a sKey
+                                          (heldP ++ [bytesTy, bytesTy, .nat, .nat]) [e.τ] with
+                                      | none => rw [hRef] at h; cases h
+                                      | some sRef =>
+                                          rw [hRef] at h; cases h
+                                          intro c hc
+                                          rcases List.mem_cons.mp hc with rfl | hm
+                                          · intro hM
+                                            cases op with
+                                            | give | get | hear | «begin» | settle => cases hM.2.1
+                                            | own gkind' hearers' at_' gIns' payload' τ' =>
+                                                have hP := Option.some.inj hM.2.1
+                                                cases hP
+                                                have hT : ([] : List V.Ty) = gIns' := hM.2.2.1
+                                                subst hT
+                                                cases payload'
+                                                exact hNotCoin law at_' τ' rfl
+                                          · exact ih c hm
+                                    · cases h
                       · cases h; exact ih
 
 private theorem buildSamplesClauses_answer_coin {a : Admitted V} {heldP : List V.Ty}
@@ -307,87 +320,100 @@ private theorem buildSamplesClauses_answer_coin {a : Admitted V} {heldP : List V
                       dsimp only at h
                       split at h
                       · rename_i hOw
-                        cases hRef : findTypedFnRef a sKey
-                            (heldP ++ [bytesTy, bytesTy, .nat, .nat]) [e.τ] with
-                        | none => rw [hRef] at h; cases h
-                        | some sRef =>
-                            rw [hRef] at h; cases h
-                            by_cases hM : e.site = at_.site ∧
-                                some (Part.own (.coin law₀) []) = some (.own (.coin law) []) ∧
-                                ([] : List V.Ty) = [] ∧ [e.τ] = [τ]
-                            · have hSEq : e.site = at_.site := hM.1
-                              have hLEq : law₀ = law := by cases Option.some.inj hM.2.1; rfl
-                              have hTEq : e.τ = τ := (List.cons.inj hM.2.2.2).1
-                              subst hLEq; subst hTEq
-                              let heldTuple := Tys.ofHList M (tysOfList heldP)
-                                (cast (congrArg (HList M.Val) (tysOfList_toList heldP).symm) heldVals)
-                              have hTupleRound :
-                                  cast (congrArg (HList M.Val) (tysOfList_toList heldP))
-                                    (Tys.toHList M (tysOfList heldP) heldTuple) = heldVals := by
-                                dsimp only [heldTuple]
-                                rw [Tys.toHList_ofHList]
-                                exact cast_cast _ _ _
-                              have hAllAppend : ∀ {as bs : List V.Ty} (xs : HList M.Val as)
-                                  (ys : HList M.Val bs), xs.All M.Valid → ys.All M.Valid →
-                                  (HList.append xs ys).All M.Valid := by
-                                intro as bs xs ys hx hy
-                                induction xs with
-                                | nil => exact hy
-                                | cons _ _ ihx => exact ⟨hx.1, ihx hx.2⟩
-                              have hArgsV : (HList.append heldVals
-                                  (.cons (a := bytesTy) sessBytes
-                                    (.cons (a := bytesTy) (encodeSite at_.site)
-                                      (.cons (a := Ty.nat) att (.cons (a := Ty.nat) seq .nil))))).All M.Valid :=
-                                hAllAppend _ _ hHeldV
-                                  ⟨⟨hSess, fun _ hm => nomatch hm⟩,
-                                   ⟨encodeSite_bytes at_.site, fun _ hm => nomatch hm⟩,
-                                   trivial, trivial, trivial⟩
-                              obtain ⟨resH, hEv, hResV⟩ := sRef.eval_done M a _ hArgsV
-                              cases resH with
-                              | cons coin rNil =>
-                                  cases rNil
-                                  refine ⟨sRef, coin, hRef, hEv, hResV.1, ?_⟩
-                                  unfold Clause.answer
-                                  split
-                                  · have hEvE : sRef.eval M (Defs.fnTable M a.program.defs)
-                                        (HList.append heldVals (.cons (a := bytesTy) sessBytes
-                                          (.cons (a := bytesTy) (encodeSite e.site)
-                                            (.cons (a := Ty.nat) att (.cons (a := Ty.nat) seq .nil))))) =
-                                        .done (.cons coin .nil) := by
-                                      rw [hSEq]; exact hEv
-                                    have hDen : (proverSampleClause htfree prover e.site law₀
-                                          sessBytes hSess (encodeSite e.site) (encodeSite_bytes e.site) sRef).code.denote
-                                        (roleSem M prover (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs))
-                                        at_.path
-                                        (Env.positional (aloneIn M prover
-                                          (.cons (a := samplesStateTy heldP) (att, (seq, (heldTuple, ()))) .nil))) =
-                                        .done (aloneIn M prover
-                                          (.cons coin (.cons (a := samplesStateTy heldP) (att, (seq + 1, (heldTuple, ()))) .nil))) := by
-                                      rw [proverSampleClause_denote, hTupleRound, hEvE]; rfl
-                                    have hMapArg : Process.mapHalt
-                                        (fun why => (why, att, seq, heldTuple, ()))
-                                        ((proverSampleClause htfree prover e.site law₀
-                                          sessBytes hSess (encodeSite e.site) (encodeSite_bytes e.site) sRef).code.denote
-                                        (roleSem M prover (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs))
-                                        at_.path
-                                        (Env.positional (aloneIn M prover
-                                          (.cons (a := samplesStateTy heldP) (att, (seq, (heldTuple, ()))) .nil)))) =
-                                        .done (aloneIn M prover
-                                          (.cons coin (.cons (a := samplesStateTy heldP) (att, (seq + 1, (heldTuple, ()))) .nil))) := by
-                                      rw [hDen]; rfl
-                                    erw [hMapArg]
-                                    dsimp only [Process.map]
-                                    erw [aloneOut_aloneIn]
-                                    rfl
-                                  · rename_i hNo
-                                    exact absurd hM hNo
-                            · rcases List.mem_cons.mp he' with rfl | hm
-                              · rw [hCls] at hCls'; cases hCls'
-                                exact absurd ⟨hSite', rfl, rfl, by cases hTy'; rfl⟩ hM
-                              · obtain ⟨sRef', coin', h1, h2, h3, hAns⟩ := ih ⟨e', hm, hSite', hTy', hCls'⟩
-                                refine ⟨sRef', coin', h1, h2, h3, ?_⟩
-                                unfold Clause.answer
-                                exact (dite_eq_right hM).trans hAns
+                        cases hLaw : V.law law₀ with
+                        | none => rw [hLaw] at h; cases h
+                        | some sig =>
+                            rw [hLaw] at h
+                            cases hSig : sig with
+                            | mk sIns sOut =>
+                                rw [hSig] at h
+                                cases sIns with
+                                | cons _ _ => cases h
+                                | nil =>
+                                    dsimp only at h
+                                    split at h
+                                    · cases hRef : findTypedFnRef a sKey
+                                          (heldP ++ [bytesTy, bytesTy, .nat, .nat]) [e.τ] with
+                                      | none => rw [hRef] at h; cases h
+                                      | some sRef =>
+                                          rw [hRef] at h; cases h
+                                          by_cases hM : e.site = at_.site ∧
+                                              some (Part.own (.coin law₀) []) = some (.own (.coin law) []) ∧
+                                              ([] : List V.Ty) = [] ∧ [e.τ] = [τ]
+                                          · have hSEq : e.site = at_.site := hM.1
+                                            have hLEq : law₀ = law := by cases Option.some.inj hM.2.1; rfl
+                                            have hTEq : e.τ = τ := (List.cons.inj hM.2.2.2).1
+                                            subst hLEq; subst hTEq
+                                            let heldTuple := Tys.ofHList M (tysOfList heldP)
+                                              (cast (congrArg (HList M.Val) (tysOfList_toList heldP).symm) heldVals)
+                                            have hTupleRound :
+                                                cast (congrArg (HList M.Val) (tysOfList_toList heldP))
+                                                  (Tys.toHList M (tysOfList heldP) heldTuple) = heldVals := by
+                                              dsimp only [heldTuple]
+                                              rw [Tys.toHList_ofHList]
+                                              exact cast_cast _ _ _
+                                            have hAllAppend : ∀ {as bs : List V.Ty} (xs : HList M.Val as)
+                                                (ys : HList M.Val bs), xs.All M.Valid → ys.All M.Valid →
+                                                (HList.append xs ys).All M.Valid := by
+                                              intro as bs xs ys hx hy
+                                              induction xs with
+                                              | nil => exact hy
+                                              | cons _ _ ihx => exact ⟨hx.1, ihx hx.2⟩
+                                            have hArgsV : (HList.append heldVals
+                                                (.cons (a := bytesTy) sessBytes
+                                                  (.cons (a := bytesTy) (encodeSite at_.site)
+                                                    (.cons (a := Ty.nat) att (.cons (a := Ty.nat) seq .nil))))).All M.Valid :=
+                                              hAllAppend _ _ hHeldV
+                                                ⟨⟨hSess, fun _ hm => nomatch hm⟩,
+                                                 ⟨encodeSite_bytes at_.site, fun _ hm => nomatch hm⟩,
+                                                 trivial, trivial, trivial⟩
+                                            obtain ⟨resH, hEv, hResV⟩ := sRef.eval_done M a _ hArgsV
+                                            cases resH with
+                                            | cons coin rNil =>
+                                                cases rNil
+                                                refine ⟨sRef, coin, hRef, hEv, hResV.1, ?_⟩
+                                                unfold Clause.answer
+                                                split
+                                                · have hEvE : sRef.eval M (Defs.fnTable M a.program.defs)
+                                                      (HList.append heldVals (.cons (a := bytesTy) sessBytes
+                                                        (.cons (a := bytesTy) (encodeSite e.site)
+                                                          (.cons (a := Ty.nat) att (.cons (a := Ty.nat) seq .nil))))) =
+                                                      .done (.cons coin .nil) := by
+                                                    rw [hSEq]; exact hEv
+                                                  have hDen : (proverSampleClause htfree prover e.site law₀
+                                                        sessBytes hSess (encodeSite e.site) (encodeSite_bytes e.site) sRef).code.denote
+                                                      (roleSem M prover (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs))
+                                                      at_.path
+                                                      (Env.positional (aloneIn M prover
+                                                        (.cons (a := samplesStateTy heldP) (att, (seq, (heldTuple, ()))) .nil))) =
+                                                      .done (aloneIn M prover
+                                                        (.cons coin (.cons (a := samplesStateTy heldP) (att, (seq + 1, (heldTuple, ()))) .nil))) := by
+                                                    rw [proverSampleClause_denote, hTupleRound, hEvE]; rfl
+                                                  have hMapArg : Process.mapHalt
+                                                      (fun why => (why, att, seq, heldTuple, ()))
+                                                      ((proverSampleClause htfree prover e.site law₀
+                                                        sessBytes hSess (encodeSite e.site) (encodeSite_bytes e.site) sRef).code.denote
+                                                      (roleSem M prover (Defs.fnTable M a.program.defs) (Defs.rTable M a.program.defs))
+                                                      at_.path
+                                                      (Env.positional (aloneIn M prover
+                                                        (.cons (a := samplesStateTy heldP) (att, (seq, (heldTuple, ()))) .nil)))) =
+                                                      .done (aloneIn M prover
+                                                        (.cons coin (.cons (a := samplesStateTy heldP) (att, (seq + 1, (heldTuple, ()))) .nil))) := by
+                                                    rw [hDen]; rfl
+                                                  erw [hMapArg]
+                                                  dsimp only [Process.map]
+                                                  erw [aloneOut_aloneIn]
+                                                  rfl
+                                                · rename_i hNo
+                                                  exact absurd hM hNo
+                                          · rcases List.mem_cons.mp he' with rfl | hm
+                                            · rw [hCls] at hCls'; cases hCls'
+                                              exact absurd ⟨hSite', rfl, rfl, by cases hTy'; rfl⟩ hM
+                                            · obtain ⟨sRef', coin', h1, h2, h3, hAns⟩ := ih ⟨e', hm, hSite', hTy', hCls'⟩
+                                              refine ⟨sRef', coin', h1, h2, h3, ?_⟩
+                                              unfold Clause.answer
+                                              exact (dite_eq_right hM).trans hAns
+                                    · cases h
                       · rename_i hNeOw
                         cases h
                         rcases List.mem_cons.mp he' with rfl | hm
@@ -405,10 +431,10 @@ theorem construction_event_disc {enc : VocabEncoder V} {a : Admitted V} {suite :
         prover verifier declKey events idx es = .ok (cP', cV') →
       ∀ p ∈ es, match p.1.cls with
         | .flow _ giver getters =>
-            (giver = prover ∧ verifier ∈ getters) ∨
+            (giver = prover ∧ getters = [verifier]) ∨
             (giver ≠ prover ∧ giver ≠ verifier ∧ prover ∉ getters ∧ verifier ∉ getters)
         | .given (.coin law) owner hearers =>
-            (owner = verifier ∧ prover ∈ hearers ∧
+            (owner = verifier ∧ hearers = [prover] ∧
               ∃ sig, V.law law = some sig ∧ sig.out = p.1.τ ∧ sig.ins = []) ∨
             hearers = []
         | .given (.request _) owner hearers =>
@@ -466,7 +492,7 @@ theorem authored_event_disc {prover verifier : Role} {declKey : Key} :
       checkAuthoredEvents prover verifier declKey es = .ok () →
       ∀ e ∈ es, match e.cls with
         | .flow _ giver getters =>
-            (giver = prover ∧ verifier ∈ getters) ∨
+            (giver = prover ∧ getters = [verifier]) ∨
             (giver ≠ prover ∧ giver ≠ verifier ∧ prover ∉ getters ∧ verifier ∉ getters)
         | .given (.coin _) _ hearers => hearers = []
         | .given (.request _) owner hearers =>
@@ -540,6 +566,7 @@ structure ProverAdapter {stateTy unitTy : V.Ty}
 theorem simulate_derived_gen {enc : VocabEncoder V} {d : Deployed V} {suite : ModuleRef}
     {sessionTag : Option (List Nat)} {layout : Layout} {stateTy suiteUnitTy unitTy : V.Ty}
     {hfree : Ty.isLinear V unitTy = false}
+    {startRef : TypedFnRef V d.admitted.program.headers.fns [bytesTy] [stateTy]}
     {absRef : TypedFnRef V d.admitted.program.headers.fns [stateTy, bytesTy, .seq suiteUnitTy none] [stateTy]}
     {prover verifier : Role} (hNe : prover ≠ verifier) {declKey : Key}
     (cPClauses : List (Clause V d.admitted.program.headers prover stateTy))
@@ -555,6 +582,7 @@ theorem simulate_derived_gen {enc : VocabEncoder V} {d : Deployed V} {suite : Mo
     (hCPCl : hCPSt ▸ conP'.clauses = cPClauses) (hCVCl : hCVSt ▸ conV'.clauses = cVClauses)
     (hLPCl : hLPSt ▸ layP'.clauses = lPClauses) (hLVCl : hLVSt ▸ layV'.clauses = lVClauses)
     (hConDecl : d.declaration.construction = .derived suite sessionTag)
+    (hStart : findSuiteStart d.admitted suite = some ⟨stateTy, startRef⟩)
     (hLayDecl : d.declaration.layout = some layout)
     (hSuiteLaw : d.SuiteLawfulFor enc M) (hLayLaw : d.LayoutLawful M)
     (hCC : buildConstructionClauses.go enc d.admitted suite stateTy suiteUnitTy absRef prover verifier
@@ -658,10 +686,10 @@ theorem simulate_derived_gen {enc : VocabEncoder V} {d : Deployed V} {suite : Mo
                   have hEventDisc : ∀ e ∈ events,
                       match e.cls with
                       | .flow _ giver getters =>
-                          (giver = prover ∧ verifier ∈ getters) ∨
+                          (giver = prover ∧ getters = [verifier]) ∨
                           (giver ≠ prover ∧ giver ≠ verifier ∧ prover ∉ getters ∧ verifier ∉ getters)
                       | .given (.coin law) owner hearers =>
-                          (owner = verifier ∧ prover ∈ hearers ∧
+                          (owner = verifier ∧ hearers = [prover] ∧
                             ∃ sig, V.law law = some sig ∧ sig.out = e.τ ∧ sig.ins = []) ∨
                           hearers = []
                       | .given (.request _) owner hearers =>
@@ -800,10 +828,12 @@ theorem simulate_derived_gen {enc : VocabEncoder V} {d : Deployed V} {suite : Mo
                               obtain ⟨eP, hEP, hSiteP, hTyP, hClsP⟩ := hShP.1
                               have hDisc := hEventDisc eP hEP
                               rw [hClsP] at hDisc
-                              have hVin : verifier ∈ getters := by
+                              have hGsEq : getters = [verifier] := by
                                 rcases hDisc with ⟨_, hV⟩ | ⟨hNotP, _, _, _⟩
                                 · exact hV
                                 · exact absurd rfl hNotP
+                              subst getters
+                              have hVin : verifier ∈ [verifier] := List.mem_singleton_self verifier
                               have hMsgV : M.Valid τ x := hSP.1
                               cases hPV with
                               | begins _ => exact False.elim (hNotMV trivial)
@@ -819,8 +849,8 @@ theorem simulate_derived_gen {enc : VocabEncoder V} {d : Deployed V} {suite : Mo
                                   obtain ⟨needP, hNeedP⟩ := hEPInAbs
                                   obtain ⟨wRef, chunk, hWFind, hWD, hChV, hLayPAns⟩ :=
                                     streaming_layout_answer_prover_flow M 0 events (fun _ h => h) hSL
-                                      kind getters ⟨at_.path, at_.site.key⟩ τ x buf hMsgV
-                                      ⟨eP, hEP, hSiteP, hTyP, hVin, hClsP⟩
+                                      kind [verifier] ⟨at_.path, at_.site.key⟩ τ x buf hMsgV
+                                      ⟨eP, hEP, hSiteP, hTyP, rfl, hClsP⟩
                                   have hBufChV : ∀ u ∈ buf ++ chunk, M.Valid unitTy u := by
                                     intro u hu
                                     rcases List.mem_append.mp hu with h1 | h2
@@ -830,23 +860,23 @@ theorem simulate_derived_gen {enc : VocabEncoder V} {d : Deployed V} {suite : Mo
                                   | true =>
                                       obtain ⟨encP, encVal, st', hEncFindP, hEncD, hAbsD, hSt'V, hConPAns⟩ :=
                                         construction_clauses_answer_prover_flow_abs M 0 eventsAbs hCC
-                                          kind getters at_ τ x st hMsgV hStV ⟨eP, hNeedP, hSiteP, hTyP, hClsP⟩
+                                          kind [verifier] at_ τ x st hMsgV hStV ⟨eP, hNeedP, hSiteP, hTyP, hClsP⟩
                                       obtain ⟨encV, hEncFindV, hConVAns⟩ :=
                                         construction_clauses_answer_verifier_flow_abs M 0 eventsAbs hCC
-                                          kind at_ τ st ⟨eP, hNeedP, hSiteP, hTyP, getters, hVin, hClsP⟩
+                                          kind at_ τ st ⟨eP, hNeedP, hSiteP, hTyP, hClsP⟩
                                       have hEncEq : encP = encV := Option.some.inj (hEncFindP.symm.trans hEncFindV)
                                       subst hEncEq
                                       obtain ⟨rRef, hRFind, _⟩ :=
                                         streaming_layout_answer_verifier_flow M 0 events hSL
                                           kind ⟨at_.path, at_.site.key⟩ τ buf buf.length
-                                          ⟨eP, hEP, hSiteP, hTyP, getters, hVin, hClsP⟩
+                                          ⟨eP, hEP, hSiteP, hTyP, hClsP⟩
                                       have hBaseStepP : (Stack.handler M fnTable rTable [conP0, layP0]).clause
-                                          (.give kind getters at_ τ x) (.cons st (.cons buf .nil)) =
+                                          (.give kind [verifier] at_ τ x) (.cons st (.cons buf .nil)) =
                                           .done ((), .cons st' (.cons (buf ++ chunk) .nil)) :=
                                         stack2_clause_step M fnTable rTable conP0 layP0 _ _ st st' buf (buf ++ chunk)
                                           () () _ hConPAns hLayPAns rfl
                                       obtain ⟨sP1, hInv1, hStepP⟩ :=
-                                        adapter.stepBelow (.give kind getters at_ τ x) sP st buf st' (buf ++ chunk) ()
+                                        adapter.stepBelow (.give kind [verifier] at_ τ x) sP st buf st' (buf ++ chunk) ()
                                           hInv (fun _ _ _ h => nomatch h) hBaseStepP
                                       obtain ⟨a, outP, outV, sP', fSt, suf', recP, src', hInv', hSufV, hAlP, hAlV,
                                         hPostP, hPostV, hLSrc', hAgSrc', ⟨evs', hRun'⟩⟩ :=
@@ -876,7 +906,7 @@ theorem simulate_derived_gen {enc : VocabEncoder V} {d : Deployed V} {suite : Mo
                                           streaming_layout_answer_verifier_flow M 0 events hSL
                                             kind ⟨at_.path, at_.site.key⟩ τ
                                             (buf ++ chunk ++ (suf' ++ post)) buf.length
-                                            ⟨eP, hEP, hSiteP, hTyP, getters, hVin, hClsP⟩
+                                            ⟨eP, hEP, hSiteP, hTyP, hClsP⟩
                                         have hREq : rRef = rRef' := Option.some.inj (hRFind.symm.trans hRFind')
                                         subst hREq
                                         have hLayVDone := hLayVAns' x (buf.length + chunk.length) hRD
@@ -916,18 +946,18 @@ theorem simulate_derived_gen {enc : VocabEncoder V} {d : Deployed V} {suite : Mo
                                         exact hAlV'
                                   | false =>
                                       have hNoAbs : ∀ e' b', (e', b') ∈ eventsAbs → e'.site = at_.site →
-                                          e'.τ = τ → (∃ gs, verifier ∈ gs ∧ e'.cls = .flow kind prover gs) →
+                                          e'.τ = τ → e'.cls = .flow kind prover [verifier] →
                                           b' = false := by
-                                        intro e' b' hIn hS hT ⟨gs, hVg, hC⟩
+                                        intro e' b' hIn hS hT hC
                                         exact eventsWithAbsorb_flow_consistent prover verifier [] id false
                                           d.entry.shape hIn hNeedP (hS.trans hSiteP.symm)
-                                          (hT.trans hTyP.symm) hC hVg hClsP hVin
+                                          (hT.trans hTyP.symm) hC hClsP
                                       obtain ⟨hUnmP, hUnmV⟩ :=
                                         construction_clauses_unmatched_elided_flow M 0 eventsAbs hCC
-                                          kind getters at_ τ x hNoAbs
+                                          kind [verifier] at_ τ x hNoAbs
                                       have hConPPass : Clause.answer M fnTable rTable cPCl
-                                          (.give kind getters at_ τ x) st =
-                                          .call (.give kind getters at_ τ x) fun reply => .done (reply, st) :=
+                                          (.give kind [verifier] at_ τ x) st =
+                                          .call (.give kind [verifier] at_ τ x) fun reply => .done (reply, st) :=
                                         clause_answer_unmatched_all M fnTable rTable _ st cPCl hUnmP
                                       have hConVPass : Clause.answer M fnTable rTable cVCl
                                           (.get kind prover at_ τ) st =
@@ -935,20 +965,20 @@ theorem simulate_derived_gen {enc : VocabEncoder V} {d : Deployed V} {suite : Mo
                                         clause_answer_unmatched_all M fnTable rTable _ st cVCl hUnmV
                                       obtain ⟨wRef', chunk', hWFind', hWD', hChV', hLayPAns'⟩ :=
                                         streaming_layout_answer_prover_flow M 0 events (fun _ h => h) hSL
-                                          kind getters at_ τ x buf hMsgV
-                                          ⟨eP, hEP, hSiteP, hTyP, hVin, hClsP⟩
+                                          kind [verifier] at_ τ x buf hMsgV
+                                          ⟨eP, hEP, hSiteP, hTyP, rfl, hClsP⟩
                                       have hBufChV' : ∀ u ∈ buf ++ chunk', M.Valid unitTy u := by
                                         intro u hu
                                         rcases List.mem_append.mp hu with h1 | h2
                                         · exact hBufV u h1
                                         · exact hChV' u h2
                                       have hBaseStepP : (Stack.handler M fnTable rTable [conP0, layP0]).clause
-                                          (.give kind getters at_ τ x) (.cons st (.cons buf .nil)) =
+                                          (.give kind [verifier] at_ τ x) (.cons st (.cons buf .nil)) =
                                           .done ((), .cons st (.cons (buf ++ chunk') .nil)) :=
                                         stack2_clause_step M fnTable rTable conP0 layP0 _ _ st st buf (buf ++ chunk')
                                           () () _ hConPPass hLayPAns' rfl
                                       obtain ⟨sP1, hInv1, hStepP⟩ :=
-                                        adapter.stepBelow (.give kind getters at_ τ x) sP st buf st (buf ++ chunk') ()
+                                        adapter.stepBelow (.give kind [verifier] at_ τ x) sP st buf st (buf ++ chunk') ()
                                           hInv (fun _ _ _ h => nomatch h) hBaseStepP
                                       obtain ⟨a, outP, outV, sP', fSt, suf', recP, src', hInv', hSufV, hAlP, hAlV,
                                         hPostP, hPostV, hLSrc', hAgSrc', ⟨evs', hRun'⟩⟩ :=
@@ -973,7 +1003,7 @@ theorem simulate_derived_gen {enc : VocabEncoder V} {d : Deployed V} {suite : Mo
                                         obtain ⟨rRef', hRFind', hLayVAns'⟩ :=
                                           streaming_layout_answer_verifier_flow M 0 events hSL
                                             kind at_ τ (buf ++ chunk' ++ (suf' ++ post)) buf.length
-                                            ⟨eP, hEP, hSiteP, hTyP, getters, hVin, hClsP⟩
+                                            ⟨eP, hEP, hSiteP, hTyP, hClsP⟩
                                         have hRD := layoutLawful_roundTrip M hLayDecl hLayLaw hWFind' hRFind'
                                           hMsgV hBufV hSufPostV hWD'
                                         have hLayVDone := hLayVAns' x (buf.length + chunk'.length) hRD
@@ -1034,17 +1064,13 @@ theorem simulate_derived_gen {enc : VocabEncoder V} {d : Deployed V} {suite : Mo
                             match gkind with
                             | .coin law => isTrue ⟨law, rfl⟩
                             | .request _ => isFalse fun ⟨_, h⟩ => nomatch h
-                          have hHeardDec : Decidable ((∃ law, gkind = .coin law) ∧ owner = verifier ∧ prover ∈ hearers) :=
+                          have hHeardDec : Decidable ((∃ law, gkind = .coin law) ∧ owner = verifier ∧ hearers = [prover]) :=
                             @instDecidableAnd _ _ hCoinDec (@instDecidableAnd _ _ inferInstance inferInstance)
                           cases hHeardDec with
                           | isTrue hHeardCoin =>
-                            obtain ⟨⟨law, rfl⟩, hOwV, hPin⟩ := hHeardCoin
-                            subst owner
-                            have hNonEmpty : ∃ h0 hs, hearers = h0 :: hs := by
-                              cases hearers with
-                              | nil => cases hPin
-                              | cons h0 hs => exact ⟨h0, hs, rfl⟩
-                            obtain ⟨h0, hs, hHCons⟩ := hNonEmpty
+                            obtain ⟨⟨law, rfl⟩, hOwV, hHEq⟩ := hHeardCoin
+                            subst owner; subst hearers
+                            have hPin : prover ∈ [prover] := List.mem_singleton_self prover
                             cases hPP with
                             | begins _ => exact False.elim (hNotMP trivial)
                             | settles _ => exact False.elim (hNotMP trivial)
@@ -1065,7 +1091,7 @@ theorem simulate_derived_gen {enc : VocabEncoder V} {d : Deployed V} {suite : Mo
                                       · obtain ⟨s, hsLaw, hsIns, _⟩ := hTypedV
                                         rw [hLaw] at hsLaw; cases hsLaw
                                         rw [← hsIns, hSigIns]
-                                      · subst hNil; cases hPin
+                                      · cases hNil
                                     subst hGInsNil
                                     cases payload
                                     have hEVAbs : ∃ p ∈ eventsAbs, p.1 = eV := by
@@ -1077,17 +1103,17 @@ theorem simulate_derived_gen {enc : VocabEncoder V} {d : Deployed V} {suite : Mo
                                       intro k p hk
                                       rw [Nat.zero_add, ← hFst, List.getElem?_map, hk]; rfl
                                     obtain ⟨idxP, ⟨ePSite, ePCls, ePτ⟩, derP, coinP, stP', hIdxP, hSiteP, hTyP,
-                                      ⟨hsP, hPinP, hClsP⟩, hDerFindP, hDerDP, hCoinPV, hStP'V, hConPAns⟩ :=
+                                      hClsP, hDerFindP, hDerDP, hCoinPV, hStP'V, hConPAns⟩ :=
                                       construction_clauses_answer_prover_coin M 0 eventsAbs hSuf0 hCC
                                         law at_ τ st hStV
                                         ⟨pV, hpV, hpVEq.symm ▸ hSiteV, hpVEq.symm ▸ hTyV,
-                                          hearers, hPin, hpVEq.symm ▸ hClsV⟩
+                                          hpVEq.symm ▸ hClsV⟩
                                     obtain ⟨idxV, ⟨eV'Site, eV'Cls, eV'τ⟩, derV, coinV, stV', hIdxV, hSiteV', hTyV',
                                       hClsV', hLawV', hDerFindV, hDerDV, hCoinVV, hStV'V, hConVAns⟩ :=
                                       construction_clauses_answer_verifier_coin M 0 eventsAbs hSuf0 hCC
-                                        law hearers at_ τ st hStV
+                                        law [prover] at_ τ st hStV
                                         ⟨pV, hpV, hpVEq.symm ▸ hSiteV, hpVEq.symm ▸ hTyV,
-                                          hPin, hpVEq.symm ▸ hClsV⟩
+                                          rfl, hpVEq.symm ▸ hClsV⟩
                                     dsimp only at hSiteP hTyP hClsP hSiteV' hTyV' hClsV'
                                     subst ePτ; subst eV'τ
                                     have hDerEq : derP = derV := Option.some.inj (hDerFindP.symm.trans hDerFindV)
@@ -1096,17 +1122,17 @@ theorem simulate_derived_gen {enc : VocabEncoder V} {d : Deployed V} {suite : Mo
                                         .done (.cons coinV (.cons stV' .nil)) := hDerDP.symm.trans hDerDV
                                     cases hEvalEq
                                     have hAllowsCoin : Allows M (.coin law) [] .nil τ coinP :=
-                                      suiteLawful_allows M hConDecl hSuiteLaw hDerFindV
-                                        (List.mem_of_getElem? hIdxV) (hHCons ▸ hClsV') rfl hLawV'
+                                      suiteLawful_allows M hConDecl hSuiteLaw hStart hDerFindV
+                                        (List.mem_of_getElem? hIdxV) hClsV' rfl hLawV'
                                         hStV (drawLabel_bytes at_.site) hDerDV
                                     have hAtSkip : at_.site ∈ skipSites := by
                                       apply hHeardInSkip
                                       rw [← hSiteV']
-                                      exact mem_heardCoins_of_event (List.mem_of_getElem? hIdxV) (hHCons ▸ hClsV')
-                                    have hLP' : LawfulFor M prover useSamples source (k coinP) := by
-                                      subst hHCons; exact hLP coinP hAllowsCoin
-                                    have hFed' : FedFor M prover useSamples source (k coinP) := by
-                                      subst hHCons; exact hFed coinP hAllowsCoin
+                                      exact mem_heardCoins_of_event (List.mem_of_getElem? hIdxV) hClsV'
+                                    have hLP' : LawfulFor M prover useSamples source (k coinP) :=
+                                      hLP coinP hAllowsCoin
+                                    have hFed' : FedFor M prover useSamples source (k coinP) :=
+                                      hFed coinP hAllowsCoin
                                     have hOccK : Protocol.OccsIn M (· ≠ at_) (k coinP) := (hUniq coinP).1
                                     have hNoHalt' : ∀ source₁, Lawful M source₁ (k coinP) →
                                         (∀ at' τ', at'.site ∉ skipSites → source₁ at' τ' = source at' τ') →
@@ -1115,7 +1141,7 @@ theorem simulate_derived_gen {enc : VocabEncoder V} {d : Deployed V} {suite : Mo
                                       let source₂ := patchSource M source₁ at_ τ coinP
                                       have hAgree12 : ∀ at' τ', at' ≠ at_ → source₁ at' τ' = source₂ at' τ' :=
                                         fun at' τ' hne => (patchSource_ne M source₁ at_ τ coinP hne τ').symm
-                                      have hL₂ : Lawful M source₂ (.call (.given (.coin law) verifier hearers at_ [] .nil τ) k) := by
+                                      have hL₂ : Lawful M source₂ (.call (.given (.coin law) verifier [prover] at_ [] .nil τ) k) := by
                                         intro v hv
                                         dsimp only [source₂] at hv
                                         rw [patchSource_self] at hv; cases hv
@@ -1128,7 +1154,7 @@ theorem simulate_derived_gen {enc : VocabEncoder V} {d : Deployed V} {suite : Mo
                                         rw [patchSource_ne M source₁ at_ τ coinP hne τ']
                                         exact hAg₁ at' τ' hNotIn
                                       have hRun₂ : GRun M source₂
-                                          (.call (.given (.coin law) verifier hearers at_ [] .nil τ) k) _ e :=
+                                          (.call (.given (.coin law) verifier [prover] at_ [] .nil τ) k) _ e :=
                                         .given (patchSource_self M source₁ at_ τ coinP)
                                           (grun_of_agree M hAgree12 hOccK hRun₁)
                                       exact hNoHalt source₂ hL₂ hAg₂ e ⟨_, hRun₂⟩
@@ -1139,11 +1165,11 @@ theorem simulate_derived_gen {enc : VocabEncoder V} {d : Deployed V} {suite : Mo
                                         ⟨eV'Site.through, drawToldKey events (0 + idxV)⟩ := by
                                       simpa using site_told_from_match hSiteV' (k := drawToldKey events idxV)
                                     have hCarryP := streaming_layout_answer_told M 0 events (fun _ h => h) hSL
-                                      idxP ⟨ePSite, ePCls, τ⟩ hIdxP law hsP ⟨at_.path, drawToldKey events idxP⟩
-                                      coinP hClsP hPinP hToldSiteP hCoinPV
+                                      idxP ⟨ePSite, ePCls, τ⟩ hIdxP law [prover] ⟨at_.path, drawToldKey events idxP⟩
+                                      coinP hClsP rfl hToldSiteP hCoinPV
                                     have hCarryV := streaming_layout_answer_told M 0 events (fun _ h => h) hSL
-                                      idxV ⟨eV'Site, eV'Cls, τ⟩ hIdxV law hearers ⟨at_.path, drawToldKey events idxV⟩
-                                      coinP hClsV' hPin hToldSiteV hCoinPV
+                                      idxV ⟨eV'Site, eV'Cls, τ⟩ hIdxV law [prover] ⟨at_.path, drawToldKey events idxV⟩
+                                      coinP hClsV' rfl hToldSiteV hCoinPV
                                     by_cases hCar : at_.site ∈ layout.carry
                                     · have hCarP : ePSite ∈ layout.carry := hSiteP.symm ▸ hCar
                                       have hCarV : eV'Site ∈ layout.carry := hSiteV'.symm ▸ hCar
@@ -1195,7 +1221,7 @@ theorem simulate_derived_gen {enc : VocabEncoder V} {d : Deployed V} {suite : Mo
                                         have hLayVDone := hLayVAns (buf ++ chunk ++ (suf' ++ post))
                                           buf.length (buf.length + chunk.length) hRD hEqD
                                         have hStepV : (Stack.handler M fnTable rTable [conV0, layV0]).clause
-                                            (.own (.coin law) hearers at_ [] .nil τ)
+                                            (.own (.coin law) [prover] at_ [] .nil τ)
                                             (.cons st (.cons (buf ++ chunk ++ (suf' ++ post), (buf.length, ())) .nil)) =
                                             .done (coinP, .cons stP' (.cons (buf ++ chunk ++ (suf' ++ post),
                                               (buf.length + chunk.length, ())) .nil)) :=
@@ -1255,7 +1281,7 @@ theorem simulate_derived_gen {enc : VocabEncoder V} {d : Deployed V} {suite : Mo
                                         exact hAlP
                                       · intro post hPost
                                         have hStepV : (Stack.handler M fnTable rTable [conV0, layV0]).clause
-                                            (.own (.coin law) hearers at_ [] .nil τ)
+                                            (.own (.coin law) [prover] at_ [] .nil τ)
                                             (.cons st (.cons (buf ++ suf' ++ post, (buf.length, ())) .nil)) =
                                             .done (coinP, .cons stP' (.cons (buf ++ suf' ++ post, (buf.length, ())) .nil)) :=
                                           stack2_clause_step M fnTable rTable conV0 layV0 _ _ st stP'
@@ -1744,10 +1770,12 @@ private theorem simulate_authored {d : Deployed V} {layout : Layout} {unitTy : V
                       obtain ⟨eP, hEP, hSiteP, hTyP, hClsP⟩ := hShP.1
                       have hDisc := hEventDisc eP hEP
                       rw [hClsP] at hDisc
-                      have hVin : verifier ∈ getters := by
+                      have hGsEq : getters = [verifier] := by
                         rcases hDisc with ⟨_, hV⟩ | ⟨hNotP, _, _, _⟩
                         · exact hV
                         · exact absurd rfl hNotP
+                      subst getters
+                      have hVin : verifier ∈ [verifier] := List.mem_singleton_self verifier
                       have hMsgV : M.Valid τ x := hSP.1
                       cases hPV with
                       | begins _ => exact False.elim (hNotMV trivial)
@@ -1757,8 +1785,8 @@ private theorem simulate_authored {d : Deployed V} {layout : Layout} {unitTy : V
                       | got _ _ hPV' =>
                           obtain ⟨wRef, chunk, hWFind, hWD, hChV, hLayPAns⟩ :=
                             streaming_layout_answer_prover_flow M 0 events (fun _ h => h) hSL
-                              kind getters at_ τ x buf hMsgV
-                              ⟨eP, hEP, hSiteP, hTyP, hVin, hClsP⟩
+                              kind [verifier] at_ τ x buf hMsgV
+                              ⟨eP, hEP, hSiteP, hTyP, rfl, hClsP⟩
                           have hBufChV : ∀ u ∈ buf ++ chunk, M.Valid unitTy u := by
                             intro u hu
                             rcases List.mem_append.mp hu with h1 | h2
@@ -1770,9 +1798,9 @@ private theorem simulate_authored {d : Deployed V} {layout : Layout} {unitTy : V
                               (hSP.2 () trivial) (hSV.2 x hMsgV) (hShP.2 () trivial) (hShV.2 x trivial)
                               (hPShape.2 ()) (hUniq ()).2 hLP hFed hNoHalt'
                           have hStepP : (Stack.handler M fnTable rTable [layP']).clause
-                              (.give kind getters at_ τ x) (.cons buf .nil) =
+                              (.give kind [verifier] at_ τ x) (.cons buf .nil) =
                               .done ((), .cons (buf ++ chunk) .nil) :=
-                            stack1_clause_done M fnTable rTable layP' (.give kind getters at_ τ x) buf (buf ++ chunk) () hLayPAns
+                            stack1_clause_done M fnTable rTable layP' (.give kind [verifier] at_ τ x) buf (buf ++ chunk) () hLayPAns
                           refine ⟨a, outP, outV, chunk ++ suf', recP, src', ?_, ?_, ?_,
                             hPostP, hPostV, hLSrc', hAgSrc', ⟨_, .flow hRun'⟩⟩
                           · intro u hu
@@ -1790,7 +1818,7 @@ private theorem simulate_authored {d : Deployed V} {layout : Layout} {unitTy : V
                             obtain ⟨rRef, hRFind, hLayVAns⟩ :=
                               streaming_layout_answer_verifier_flow M 0 events hSL
                                 kind at_ τ (buf ++ chunk ++ (suf' ++ post)) buf.length
-                                ⟨eP, hEP, hSiteP, hTyP, getters, hVin, hClsP⟩
+                                ⟨eP, hEP, hSiteP, hTyP, hClsP⟩
                             have hRD := layoutLawful_roundTrip M hLayDecl hLayLaw hWFind hRFind
                               hMsgV hBufV hSufPostV hWD
                             have hLayVDone := hLayVAns x (buf.length + chunk.length) hRD
@@ -2317,7 +2345,7 @@ theorem deploy_complete (enc : VocabEncoder V) {named : NamedProgram V} {assoc :
               simulate_derived_gen M w.hNe (d := w.toDeployed)
                 w.cPClauses w.cVClauses wL.pClauses wL.vClauses
                 cP0 conV' lP0 layV' rfl hCVSt rfl hLVSt rfl hCVCl rfl hLVCl
-                w.hCon w.hLayOpt hSuiteLaw hLayLaw hCC' hSL' false adapter2
+                w.hCon w.hStart w.hLayOpt hSuiteLaw hLayLaw hCC' hSL' false adapter2
                 (protocolMeaning M a.program _ [] ins)
                 (roleMeaning M a.program _ w.prover [] (hideAll M w.prover ins))
                 (roleMeaning M a.program _ w.verifier [] (hideAll M w.verifier ins))
@@ -2532,7 +2560,7 @@ theorem deploy_complete_samples (enc : VocabEncoder V) {named : NamedProgram V} 
     (first : Stack.Takes (d.stack prover) = [])
     (matched : Stack.Gives (d.stack prover) = Stack.Takes (d.stack verifier))
     (ins : HList (LVal M) d.entry.ins) (hIns : ins.All (fun a v => M.Valid a.ty v))
-    (hSuiteLaw : d.SuiteLawfulFor enc M) (hLayLaw : d.LayoutLawful M) (hSampLaw : d.SamplesLawful M)
+    (hSuiteLaw : d.SuiteLawfulFor enc M) (hLayLaw : d.LayoutLawful M) (hSampLaw : d.SamplesLawfulFor enc M)
     (hNoHalt : ∀ source, Lawful M source (protocolMeaning M d.admitted.program d.callee [] ins) →
       ∀ e, GExec M source (protocolMeaning M d.admitted.program d.callee [] ins) e →
       ∃ out, e = .returned out)
@@ -2836,8 +2864,8 @@ theorem deploy_complete_samples (enc : VocabEncoder V) {named : NamedProgram V} 
                                       hv0.All M.Valid → (cast (congrArg (HList M.Val) heq.symm) hv0).All M.Valid := by
                                     intro _ _ heq _ h0; subst heq; exact h0
                                   exact hG hHeldEq heldValsP hHeldPV
-                                exact samplesLawful_allows M hSamp hRoles hSampLaw hFindCast hE hClsE hTyE hLaw
-                                  hValidCast w.hSessBytes (encodeSite_bytes at_.site) trivial hEvCast
+                                exact samplesLawful_allows M hSamp w.hCon hRoles w.hSess hSampLaw hFindCast hE hClsE hTyE hLaw
+                                  hValidCast (by rw [hSiteE]; exact hEvCast)
                               refine ⟨coin, .cons (att, (seq + 1, (heldTupleP, ()))) (.cons st (.cons buf .nil)),
                                 hAllows, ⟨att, seq + 1, rfl⟩, ?_⟩
                               exact stack3_clause_samp_done M _ _ sP0 cP0 lP0
@@ -2848,7 +2876,7 @@ theorem deploy_complete_samples (enc : VocabEncoder V) {named : NamedProgram V} 
                             simulate_derived_gen M w.hNe (d := w.toDeployed)
                               w.cPClauses w.cVClauses wL.pClauses wL.vClauses
                               cP0 conV' lP0 layV' rfl hCVSt rfl hLVSt rfl hCVCl rfl hLVCl
-                              w.hCon w.hLayOpt hSuiteLaw hLayLaw hCC' hSL' true adapter3
+                              w.hCon w.hStart w.hLayOpt hSuiteLaw hLayLaw hCC' hSL' true adapter3
                               (protocolMeaning M a.program _ [] ins)
                               (roleMeaning M a.program _ w.prover [] (hideAll M w.prover ins))
                               (roleMeaning M a.program _ w.verifier [] (hideAll M w.verifier ins))

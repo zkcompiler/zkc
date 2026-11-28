@@ -62,8 +62,10 @@ abbrev dPoint : Ty DeployType := .nominal .point
 abbrev dByte : Ty DeployType := .fin 256
 abbrev dBytes : Ty DeployType := .seq dByte none
 
-/-- A vocabulary with a prime-order group, byte codecs, and a transcript sponge. -/
-def deployVocab : Vocabulary where
+/-- A vocabulary with a prime-order group, byte codecs, and a transcript sponge.
+Marked `@[reducible]` (like `Zkc.Vocabulary.standard`) so tactic-level type checks such as
+`ZkcFormal.Form.Produce` see `deployVocab.TypeKey = DeployType` without unfolding opaque defs. -/
+@[reducible] def deployVocab : Vocabulary where
   TypeKey := DeployType
   RowKey := DeployRow
   LawKey := Unit

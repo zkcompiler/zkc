@@ -134,24 +134,36 @@ stores the row name of each function member. Calls use the member's interface fo
 static arguments and operands. A concrete call checks the selected row against that signature.
 In a generic definition the opaque pass uses the interface alone.
 
-The Core library (`Zkc.Core`) now implements canonical wire formats (`canonicalFormat`),
-canonical scheme identity (`deployedIdentity`), distribution-aware non-interactive and ideal
-random-oracle deployment (`deploy`, `deployIdeal`), DAG-preserving multi-procedure handler
-specialization (`specialize`), and a total fuel-bounded reference executor (`execute`), with
-kernel-checked proofs of `Statements.formats`, `identityReads`, `deployKeeps`,
-`deployFindsRoles`, `deployMatches`, `deployScoped`, `deployFresh`, `deployedSafe`,
-`deployCoverage`, `completeStreaming`, `idealLink`, `executorRuns`, plus
-`deploy_complete_samples`, `deploy_complete_compact`, `deploy_complete_retry`,
-`deployIdeal_queries_nodup`, cross-scheme/session/statement query disjointness,
-and `specialize_sound`. Frontend emission
-of derived scheme declarations, a standard runtime model for participant programs, and CLI
-execution commands remain pending.
-The historical commands to run, prove, verify and read trees have been removed. Frontend
-derived construction awaits emitting scheme declarations against the Core deployment stage.
+The Core library (`Zkc.Core`) implements canonical wire formats (`canonicalFormat`),
+deployment-bound canonical scheme identity (`Deployed.identity`, `deployedIdentity`, `zkc.core.proof/1`
+over definition-order- and proof-note-invariant `canonicalClosureDefs`), strict distribution-aware
+non-interactive and ideal random-oracle deployment (`deploy`, `deployIdeal` with automatic
+`serviceKey` freshness verification `deployIdeal_serviceKey_fresh`, exact single-receiver/single-hearer
+recipient validation, and deploy-time encoder distinctness checks), DAG-preserving multi-procedure
+handler specialization (`specialize`), a total fuel-bounded reference executor (`execute`), and
+prototype straight-line `constructed Core` / `serialized Core` materializers
+(`materializeConstructed`, `materializeSerialized` in `Zkc.Core.Scheme.Materialize`). Kernel-checked
+theorems cover `Statements.formats`, `identityReads`, `deployKeeps`, `deployFindsRoles`,
+`deployMatches`, `deployScoped`, `deployFresh`, `deployedSafe`, `deployCoverage`, `completeStreaming`,
+`idealLink`, `executorRuns`, plus `deploy_complete_samples` (under site-sensitive `SamplesLawfulFor`),
+`deploy_complete_compact`, `deploy_complete_retry` (under honest-challenge-fed `AllFed` retry premises),
+`deployIdeal_queries_nodup`, cross-scheme/session/statement query disjointness, and `specialize_sound`
+(with direct `Reading.read` and `Value.value` preservation verified in `lean/formal/checks/ConstructedStage.lean`).
+
+The compiler package now also includes the signature-binding linked vocabulary encoder
+(`Zkc.Vocabulary.Encoder`), package-rooted deployed scheme bridge (`Zkc.Subject.Deployed`), frontend
+derived scheme compilation (`Zkc.Frontend.Deploy`), concrete cryptographic runtime (`Zkc.Runtime`,
+covering KoalaBear, KoalaBear4, BLS12-381 `Fr`/`Fq`/`G1`, SHA-256, Keccak-256, SHAKE128/256,
+TurboSHAKE128, Poseidon2-KoalaBear, Merlin 1.0, CFRG `draft-irtf-cfrg-fiat-shamir-04` Duplex, verified
+`standardModel`/`linkedModel?`, and direct `runClosed` execution), and CLI commands `zkc-check deploy`
+and `zkc-check cfrg-vectors`. Run `just test-runtime` for the 99 runtime/example tests and 33 CFRG
+draft-04 vectors. Native Rust/WASM/EVM code generation, control-flow/compact `materializeSerialized`,
+and a single unified theorem combining simultaneous retry, compact layout, and derived samples remain
+open.
 Written scheme selection checks the deployed roles (SC3) and checks that the statement operands
 of a written claim come from inputs held by both prover and verifier (SC4). The scheme-wide SC4
 requirement to mark a verifier-only input private currently has no checker. The frontend
-construction-time check of draws (SC5) awaits that stage too.
+construction-time check of draws (SC5) awaits full source-level draw checking.
 
 ## Earlier source and execution pipeline
 
