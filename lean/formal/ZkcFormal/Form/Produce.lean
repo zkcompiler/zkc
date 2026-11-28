@@ -665,6 +665,16 @@ partial def instr (setting : Setting) (key i mid path : Expr) (scope : Scope) : 
       let all := setting.written setting.values (← cells (setting.types mid)) (kept ++ collected)
       marked st (returned setting (setting.list mid) all)
     return .ready (followed setting state (setting.list mid) looped finish)
+  -- Not read yet, and refused by name. A choice among the alternatives of a variant: the
+  -- semantics gives the alternative as a `Pick` made from the variant's own value, which is a
+  -- conversion stuck on a variable, as a loop's state was; the library's recursion has to read
+  -- the value by its alternatives first. An attempt: the source language has no construct that
+  -- the frontend lowers to one, so a form of it could not be checked on an issued subject.
+  if i.isAppOfArity ``Zkc.Core.Instr.cases 10 then
+    throwError "form: the walk does not read a choice among the alternatives of a variant \
+      (`Instr.cases`) yet"
+  if i.isAppOfArity ``Zkc.Core.Instr.attempt 7 then
+    throwError "form: the walk does not read an attempt (`Instr.attempt`) yet"
   throwError "form: the walk does not know this instruction of the stored syntax:{indentExpr i.getAppFn}"
 
 end

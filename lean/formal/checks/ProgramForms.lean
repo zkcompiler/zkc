@@ -16,7 +16,9 @@ compares types.
 The sources between them have a loop with a carried value (Guess), a choice with a guard in each
 arm (Either), a stepped loop written out as blocks (Steps), two applications of a protocol that
 calls a function (Twice), a vector of scalars drawn and three applications of a function over
-matrices (Freivalds), and the conformance corpus's count of near-zero entries (Count).
+matrices (Freivalds), and the conformance corpus's count of near-zero entries (Count). A
+control has a construct that the walk does not read (a `match` on a variant): its forms are
+refused, and the refusal names the construct.
 
 With `ZKC_WORK` naming a folder the check's project is kept there.
 -/
@@ -76,6 +78,24 @@ def twice : String :=
   "spec for Twice:\n    proves @V Holds(claim)\n" ++
   "scheme Checked = Twice:\n    prover P\n    construction interactive\n" ++
   "goal twice = soundness(Checked, stage = written)\n"
+
+/-- A source with a choice among the alternatives of a variant, which the walk does not read
+yet: on one side a position is heard and one is drawn, on the other nothing happens. -/
+def sided : String :=
+  "module t\nuse zkc::security::{soundness}\n" ++
+  "enum Side:\n    Left\n    Right\n" ++
+  "relation Holds(claim: bool): claim\n" ++
+  "protocol Sided roles(P, V)(claim: bool @(P, V), side: Side @(P, V), first: index<4> @P):\n" ++
+  "    mut hit = false\n" ++
+  "    match side:\n" ++
+  "        case Left:\n" ++
+  "            a <- send first from P to V\n            x <- draw index<4> from V to P\n" ++
+  "            hit := x == a\n" ++
+  "        case Right:\n            ()\n" ++
+  "    guard @V claim or hit\n" ++
+  "spec for Sided:\n    proves @V Holds(claim)\n    charge sites.x <= 1 / 4\n" ++
+  "scheme Checked = Sided:\n    prover P\n    construction interactive\n" ++
+  "goal sided = soundness(Checked, stage = written)\n"
 
 /-- The source of Freivalds' check of a product of matrices of size two. -/
 def freivalds : String :=
@@ -143,6 +163,11 @@ def run (corpus work : System.FilePath) : IO Unit := do
         "\n".intercalate (rows.map fun row => s!"#print axioms {row.equation}") ++
         s!"\n\nend {space}\n")
       .statements
+  let control ← dataOf sided "sided" "Sided"
+  discard <| SubjectProject.add project control.dataName control.data .statements
+  discard <| SubjectProject.add project `SidedForms
+    (s!"import {control.dataName}\nimport ZkcFormal.Form.Publish\n\nopen Zkc.Core\n" ++
+      "namespace Sided\n\npublish_forms written'subject\n\nend Sided\n") .statements
   for (space, _, _, rows) in subjects do
     let (ok, output) ← SubjectProject.result project s!"{space}Forms".toName
     unless ok do throw (IO.userError s!"{space}: the forms of the subject are refused\n{output}")
@@ -155,6 +180,14 @@ def run (corpus work : System.FilePath) : IO Unit := do
         throw (IO.userError
           s!"{space}: the equation {row.equation} does not rest on propext and Quot.sound alone\n{output}")
     IO.println s!"{space}: {rows.length} forms registered, each with its equation accepted"
+  -- A control: a construct that the walk does not read refuses the subject's forms, and the
+  -- refusal names the construct.
+  let (ok, output) ← SubjectProject.result project `SidedForms
+  if ok then throw (IO.userError "Sided: forms were published of a program with a construct that the walk does not read")
+  unless output.contains "the walk does not read a choice among the alternatives of a variant" &&
+      output.contains "`Instr.cases`" do
+    throw (IO.userError s!"Sided: the refusal does not name the construct\n{output}")
+  IO.println "Sided: refused (a choice among the alternatives of a variant is named as not read)"
 
 end ProgramForms
 
