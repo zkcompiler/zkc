@@ -10,8 +10,28 @@ An unused entry also fails it and is reported for removal.
 
 From `lean/compiler`, use `lake exe zkc-syntax check <file>` or `lake exe zkc-syntax format <file>`
 for the syntax alone. Use `lake exe zkc-check types --library ../../libraries <file>` to see the
-status of each root's package. The other checker commands are `names`, `resolutions`, `instances`
-and `bench`. A successful core admission carries the program returned by the core.
+status of each root's package, `lake exe zkc-check deploy --library ../../libraries [--scheme <name>] [--self-test] <file>`
+to lower and deploy schemes through `Core.deploy` / `Core.deployIdeal` / `Core.specialize`, and
+`lake exe zkc-check cfrg-vectors` to run the CFRG `draft-irtf-cfrg-fiat-shamir-04` test vectors.
+The other checker commands are `names`, `resolutions`, `instances`, `written-goals` and `bench`.
+A successful core admission carries the program returned by the core.
+
+## Scheme deployment (`Zkc.Frontend.Deploy`)
+
+The `Zkc.Frontend.Deploy` modules (`SuitePlan.lean`, `Emit.lean`, `Compile.lean`) lower compiled
+`scheme` declarations and concrete protocol roots into Core deployment artifacts (`CompiledScheme`):
+
+- `SuitePlan.lean` resolves `construction` clauses (`interactive`, `authored`, catalogue suites
+  such as `Merlin3Bls12381`, `Poseidon2KoalaBear`, `signature::Suite`, CFRG SHAKE128 /
+  TurboSHAKE128, and the pure Core IR source suite `zkc::suites::HashChain<H, F>`), `context`
+  statement extensions, `layout canonical` (`carry`/`recover`), `samples derived by`, and bounded
+  `retry`.
+- `Emit.lean` injects `context` ports directly as `@(P, V)` entry protocol ports, emits pure Core
+  IR helper functions for `HashChain<H, F>` and Schnorr commitment recovery (`base * z - point * c`),
+  and binds monomorphized canonical layout and suite rows into `Project.Bindings`.
+- `Compile.lean` drives `Core.admit`, `Core.deploy`, `Core.deployIdeal`, `Core.schemeIdentity`,
+  and `Core.specialize` (`CompiledScheme.specializationStats`), producing artifacts consumable by
+  both `ZkcRuntime` (`just test-runtime`) and `Zkc.Subject.Deployed`.
 
 Run `just test-interactive` for the Sumcheck and GKR certificates and `just test-written-knowledge`
 for the written group proofs. The previous execution commands and derived schemes are documented

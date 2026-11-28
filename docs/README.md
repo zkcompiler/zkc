@@ -19,6 +19,7 @@ theorems:
 |---|---|
 | [Compiler package](../lean/compiler/README.md) | the Lake package of the core and the frontend |
 | [Core](../lean/compiler/Zkc/Core/README.md) | admission, construction, projection, the executor and their theorems |
+| [Runtime](../lean/compiler/Zkc/Runtime/README.md) | concrete cryptography, linked Core models, `runClosed` execution and CFRG vector verification |
 | [Frontend](../lean/compiler/Zkc/Frontend/README.md) | source checking and emission, frontend commands and their test driver |
 | [Formal package](../lean/formal/README.md) | statements and proofs over the meaning of the core |
 

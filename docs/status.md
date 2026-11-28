@@ -132,7 +132,7 @@ stores the row name of each function member. Calls use the member's interface fo
 static arguments and operands. A concrete call checks the selected row against that signature.
 In a generic definition the opaque pass uses the interface alone.
 
-The Core library (`Zkc.Core`) now implements canonical wire formats (`canonicalFormat`),
+The Core library (`Zkc.Core`) implements canonical wire formats (`canonicalFormat`),
 canonical scheme identity (`deployedIdentity`), distribution-aware non-interactive and ideal
 random-oracle deployment (`deploy`, `deployIdeal`), DAG-preserving multi-procedure handler
 specialization (`specialize`), and a total fuel-bounded reference executor (`execute`), with
@@ -141,15 +141,34 @@ kernel-checked proofs of `Statements.formats`, `identityReads`, `deployKeeps`,
 `deployCoverage`, `completeStreaming`, `idealLink`, `executorRuns`, plus
 `deploy_complete_samples`, `deploy_complete_compact`, `deploy_complete_retry`,
 `deployIdeal_queries_nodup`, cross-scheme/session/statement query disjointness,
-and `specialize_sound`. Frontend emission
-of derived scheme declarations, a standard runtime model for participant programs, and CLI
-execution commands remain pending.
-The historical commands to run, prove, verify and read trees have been removed. Frontend
-derived construction awaits emitting scheme declarations against the Core deployment stage.
+and `specialize_sound`.
+
+The vocabulary library (`Zkc.Vocabulary.Encoder`) provides injective canonical encoders
+(`standardEncoder`, `Project.linkedEncoder`) proved strictly within `[propext, Quot.sound]`,
+and the subject library (`Zkc.Subject.Deployed`) bridges deployed and ideal random-oracle
+schemes over `Zkc.Subject.Package`. The frontend deployment pipeline
+(`Zkc.Frontend.Deploy.{SuitePlan,Emit,Compile}`) lowers `scheme` declarations and protocol
+roots—including catalogue suites (`Merlin3Bls12381`, `Poseidon2KoalaBear`,
+`signature::Suite`, CFRG SHAKE128/TurboSHAKE128), pure Core IR `zkc::suites::HashChain<H, F>`,
+`context` statement extensions, `samples derived by`, `layout canonical` (`carry`/`recover`,
+with pure Core IR Schnorr commitment recovery), `interactive` schemes, and bounded `retry`—into
+admitted `Core.Deployed` and `Core.deployIdeal` artifacts.
+
+The runtime library (`Zkc.Runtime`, [guide](../lean/compiler/Zkc/Runtime/README.md)) implements
+concrete field arithmetic (`KoalaBear`, `KoalaBear4`, `BLS12-381 Fr/Fq`), BLS12-381 `G1`
+Jacobian curve operations and canonical 48-byte ZCash compression, SHA-256 / Keccak-256 /
+SHAKE128 / SHAKE256 / TurboSHAKE128 / Poseidon2-KoalaBear, Merlin 1.0 / CFRG
+`draft-irtf-cfrg-fiat-shamir-04` / Poseidon2 duplex transcripts, a verified `Core.Model`
+constructor (`linkedModel?`), deterministic `Core.Source` drivers (`emptySource`, `seededSource`),
+and direct execution of specialized `ClosedRole` programs (`runClosed`) alongside `Core.execute`.
+Run `just test-runtime` to check the cryptographic primitives, all 33 CFRG draft-04 test vectors
+(direct and end-to-end Core), and differential `Core.execute == runClosed` verification across
+the worked examples (`zkc-check deploy` and `zkc-check cfrg-vectors` expose deployment and
+vector verification from the CLI).
 Written scheme selection checks the deployed roles (SC3) and checks that the statement operands
 of a written claim come from inputs held by both prover and verifier (SC4). The scheme-wide SC4
 requirement to mark a verifier-only input private currently has no checker. The frontend
-construction-time check of draws (SC5) awaits that stage too.
+construction-time check of draws (SC5) and frontend elaboration of `attempt` remain open.
 
 ## Earlier source and execution pipeline
 

@@ -18,6 +18,7 @@ program, and a key at which a row has no instance has no signature.
 | `Keys` | the fields (KoalaBear, its extension of degree four, the scalar field of BLS12-381) with their numbers, and the groups of BLS12-381; the keys of the nominal types (the elements of a field, those that are not zero, the elements of a group); what the group family is at (`Atom`) and what the collection family is at (`Element`); the keys of the rows (of a field, at all its elements or at those that are not zero; of a group; of collections, of a size or of any length; the hashes; the pairing) and of the laws (the uniform one on a type) |
 | `Standard` | the table: the signature and the kind of each row at its key, none where the row has no instance there; the literals of each nominal type; the signature of the uniform law on the types that TY15 lists (`bool`, a `fin` of a bound that is not zero, the elements of a field, those that are not zero, the elements of a group, a tuple of such types, and a sized sequence of one or of size zero), and on no other: not `nat`, a sequence of any length, a record or a variant; the law that the domain row of each restricted row decides it (`decided`); and the vocabulary `standard` |
 | `Project` | the vocabulary of a package: the name and the static arguments of a primitive that a project binds, its signature over the standard nominal types and the project's own, the bindings of a package, and the standard vocabulary linked with them. A proof about a package reads its vocabulary from here |
+| `Encoder` | injective canonical byte encoders (`standardEncoder` and `Project.linkedEncoder`) with kernel-checked `VocabEncoder.Injective` proofs for `Core.deploy`, `Core.deployIdeal`, and `Core.schemeIdentity`, proved strictly within `[propext, Quot.sound]` |
 
 ## Tests
 
@@ -27,6 +28,9 @@ whose checks the kernel runs when they are built; the tests of the core need the
 core. They state what the reference says, not what the table computes: every expected
 signature is written out from the reference's types.
 
+- `Encoder.lean`: kernel-checked checks of `standardEncoder` and `Project.linkedEncoder`
+  injectivity, tag separation across standard and project keys, and determinism of canonical
+  encoding.
 - `Table.lean`: the signature of each row of the field, group and collection families at a
   prime field, at the extension, at a group with a generator and at the target group, at all
   elements and at those that are not zero, of a size and of any length, and at an element that

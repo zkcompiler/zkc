@@ -95,3 +95,6 @@ public import Zkc.Frontend.Driver.Files
 public import Zkc.Frontend.Written.Export
 public import Zkc.Frontend.Written.Goals
 public import Zkc.Frontend.Written.Statement
+public import Zkc.Frontend.Deploy.SuitePlan
+public import Zkc.Frontend.Deploy.Emit
+public import Zkc.Frontend.Deploy.Compile

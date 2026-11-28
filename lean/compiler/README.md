@@ -11,8 +11,13 @@ Libraries:
   ([guide](Zkc/Core/README.md)).
 - `ZkcVocabulary` (`Zkc.Vocabulary`): the standard vocabulary of the core, its keys and its
   table ([guide](Zkc/Vocabulary/README.md)).
-- `ZkcSubject` (`Zkc.Subject`) holds the stored package and its admission evidence, source
-  coverage, charge tables and Lean term printers shared by the frontend and formal package.
+- `ZkcSubject` (`Zkc.Subject`) holds the stored package and its admission evidence, deployed
+  and ideal random-oracle scheme bridges (`Deployed`), source coverage, charge tables and Lean
+  term printers shared by the frontend and formal package.
+- `ZkcRuntime` (`Zkc.Runtime`): concrete cryptographic primitives, verified `Core.Model`
+  construction (`linkedModel?`), deterministic `Core.Source` drivers, direct `ClosedRole`
+  execution (`runClosed`), and CFRG draft-04 vector verification ([guide](Zkc/Runtime/README.md));
+  outside the default build.
 - `ZkcCoreTests` (`Zkc.Tests.Core`): the checks of the core, which the kernel runs when they are
   built; the test driver of the package.
 - `ZkcVocabularyTests` (`Zkc.Tests.Vocabulary`): the checks of the vocabulary's table against
@@ -22,17 +27,20 @@ Libraries:
 - `ZkcAudit` (`Zkc.Tools.Audit`): the audit of the declarations and the imports of a library,
   with the replay of its declarations through the kernel.
 - `ZkcFrontend`, `ZkcFrontendTools`, `ZkcFrontendTests` (`Zkc.Frontend`, `Zkc.Tools.Frontend`,
-  `Zkc.Tests.Frontend`): the lexer, the parser, the checker and the emitter of the source
-  language ([guide](Zkc/Frontend/README.md)), the code of its executables and its tests; outside
-  the default build.
+  `Zkc.Tests.Frontend`): the lexer, the parser, the checker, scheme deployment and the emitter of
+  the source language ([guide](Zkc/Frontend/README.md)), the code of its executables and its tests;
+  outside the default build.
+- `ZkcRuntimeTests` (`Zkc.Tests.Runtime`): cryptographic unit checks, CFRG draft-04 vectors, and
+  end-to-end differential runtime checks across worked examples; outside the default build.
 
 Executables:
 
 - `zkc-knowledge`: exports the written knowledge claim of an admitted protocol.
 - `zkc-audit`: exactly one library target for each compiler module and the audit of `ZkcCore`, `ZkcVocabulary`, `ZkcSubject`, `ZkcCoreTests` and
   `ZkcVocabularyTests`.
-- `zkc-syntax`, `zkc-check`, `zkc-frontend-tests`: the frontend's lexer, parser and canonical
-  printer on source files, its checks, and its test driver; outside the default build.
+- `zkc-syntax`, `zkc-check`, `zkc-frontend-tests`, `zkc-runtime-tests`: the frontend's lexer,
+  parser and canonical printer on source files, its checks (`deploy`, `cfrg-vectors`, `types`,
+  etc.), its frontend test driver, and its runtime verification driver; outside the default build.
 
 ## Build, test and audit
 

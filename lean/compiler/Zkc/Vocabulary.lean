@@ -4,6 +4,7 @@ public import Zkc.Vocabulary.Keys
 public import Zkc.Vocabulary.Standard
 public import Zkc.Vocabulary.Security
 public import Zkc.Vocabulary.Project
+public import Zkc.Vocabulary.Encoder
 
 /-!
 # The vocabulary
