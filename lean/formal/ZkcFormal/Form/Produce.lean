@@ -49,8 +49,9 @@ open Lean Meta Elab
 /-- **What a form is made of.** The constants that the walk does not unfold: the monad's
 operations and the exception's, a query, a `for`, the reading of a called definition, a renamed
 computation, a computation without effects among effects, a partial operation's value or stop,
-the model's operations, a list of values read by its place, a choice among alternatives; and the
-library's functions that decide by cases, which the walk opens itself. -/
+the model's operations, the core's own operations on values, a list of values read by its place,
+a choice among alternatives; and the library's functions that decide by cases, which the walk
+opens itself. -/
 def formed : List Lean.Name := [``Bind.bind, ``Pure.pure, ``MonadExcept.throw, ``throw,
   ``Functor.map, ``ForIn.forIn, ``ite, ``List.range',
   ``ZkcFormal.Reading.ask, ``ZkcFormal.Reading.read, ``Zkc.Core.roleMeaning, ``Zkc.Core.fnMeaning,
@@ -60,7 +61,10 @@ def formed : List Lean.Name := [``Bind.bind, ``Pure.pure, ``MonadExcept.throw, `
   ``ZkcFormal.Form.Fragment.next, ``ZkcFormal.Form.Fragment.eval, ``ZkcFormal.Form.computed,
   ``ZkcFormal.Form.roleFragment, ``ZkcFormal.Form.localFragment, ``ZkcFormal.Form.ownedFragment,
   ``Zkc.Core.hide, ``Zkc.Core.reveal, ``Zkc.Core.carry, ``Zkc.Core.enter, ``Zkc.Core.leave,
-  ``Zkc.Core.nothing]
+  ``Zkc.Core.nothing,
+  -- the operations of the core's own on values: a form names them as the source does
+  ``or, ``and, ``not, ``BEq.beq, ``Nat.beq, ``Nat.blt, ``HAdd.hAdd, ``HSub.hSub, ``HMul.hMul,
+  ``HDiv.hDiv, ``HMod.hMod, ``HPow.hPow, ``List.length, ``GetElem?.getElem?]
 
 /-- Head reduction that keeps what a form is made of. -/
 def head (e : Expr) : MetaM Expr :=
@@ -106,6 +110,10 @@ partial def value (e : Expr) : MetaM Expr := do
       let opened ← Zkc.Kernel.whnf converted
       if opened.getAppFn.constName? == some name then return opened
       return ← value opened
+  -- a literal of the stored program: its value by the kernel
+  if e.isAppOf ``Zkc.Core.Ty.readLiteral then
+    let read ← Zkc.Kernel.whnf e
+    return ← if read.isAppOf ``Zkc.Core.Ty.readLiteral then pure read else value read
   let e ← head e
   let unit := mkConst ``Unit.unit
   if e.isAppOfArity ``Zkc.Core.hide 5 then
